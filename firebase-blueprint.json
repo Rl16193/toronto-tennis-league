@@ -1,0 +1,79 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores detailed information about a tennis player.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique ID of the user (UID from Firebase Auth)." },
+        "name": { "type": "string", "description": "The full name of the user." },
+        "email": { "type": "string", "format": "email", "description": "The email address of the user." },
+        "phone": { "type": "string", "description": "The phone number of the user." },
+        "contactMode": { "type": "string", "enum": ["email", "phone"], "description": "Preferred mode of contact." },
+        "skillLevel": { "type": "number", "description": "NTRP skill level (1-5)." },
+        "skillDescription": { "type": "string", "description": "Dynamic description of the skill level." },
+        "preferredCourts": { "type": "array", "items": { "type": "string" }, "description": "List of preferred courts." },
+        "customCourts": { "type": "array", "items": { "type": "string" }, "description": "List of user-added custom courts." },
+        "tournamentType": { "type": "string", "enum": ["Beginners", "Challengers", "Masters"], "description": "Preferred tournament category." },
+        "favouritePlayers": { "type": "array", "items": { "type": "string" }, "description": "List of favourite players." },
+        "customPlayers": { "type": "array", "items": { "type": "string" }, "description": "List of user-added custom players." },
+        "availabilityDay": { "type": "array", "items": { "type": "string" }, "description": "Preferred playing days (e.g., MON, TUE)." },
+        "availabilityTime": { "type": "array", "items": { "type": "string" }, "description": "Preferred playing times (e.g., AM, PM)." },
+        "matchStats": {
+          "type": "object",
+          "properties": {
+            "played": { "type": "number" },
+            "won": { "type": "number" },
+            "pointsWonPercentage": { "type": "number" }
+          }
+        },
+        "organizer": { "type": "boolean", "description": "Whether the user wants to be an organizer." },
+        "schedulingPreference": { "type": "string", "description": "How the user prefers to schedule matches." },
+        "avatar": { "type": "string", "format": "uri", "description": "URL to the user's profile image." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the profile was created." }
+      },
+      "required": ["id", "name", "email", "phone", "skillLevel", "tournamentType"]
+    },
+    "TennisEvent": {
+      "title": "Tennis Event",
+      "description": "Represents a tournament or social mixer.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string" },
+        "location": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "image": { "type": "string", "format": "uri" },
+        "description": { "type": "string" }
+      },
+      "required": ["title", "type", "location", "date", "image"]
+    },
+    "EventParticipant": {
+      "title": "Event Participant",
+      "description": "Links a user to an event they have joined.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "event_id": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user_id", "event_id", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile documents."
+    },
+    "/events/{eventId}": {
+      "schema": "TennisEvent",
+      "description": "Tennis event documents."
+    },
+    "/event_participants/{participantId}": {
+      "schema": "EventParticipant",
+      "description": "Records of users joining events."
+    }
+  }
+}

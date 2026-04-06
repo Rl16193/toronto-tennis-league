@@ -1,376 +1,638 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { auth, db, storage } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
-import { Camera, CheckCircle2, Loader2 } from 'lucide-react';
+import { SKILL_DESCRIPTIONS, SKILL_LEVELS } from '../lib/skillLevels';
+import { Button } from '../components/Button';
+import { Input } from '../components/Input';
+import { 
+  User, Mail, Lock, Phone, Trophy, MapPin, 
+  CheckCircle2, ChevronRight, ChevronLeft, 
+  Camera, AlertCircle, Info, Star, Calendar, Clock
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { UserData, UserStats, UserPreferences } from '../types';
 
-const COURTS = [
-  'Trinity Bellwoods',
-  'High Park',
-  'Riverdale Park East',
-  'Ramsden Park',
-  'Eglinton Flats',
-  'Marilyn Bell',
-  'Sorauren Park',
+const PRELOADED_COURTS = [
+  "Sorauren Park", "High Park", "Riverdale", "Trinity Bellwoods", 
+  "Ramsden Park", "Stanley Park", "Moss Park", "Dovercourt"
 ];
 
-export const Signup = () => {
-  const navigate = useNavigate();
-  const { signup, login, loginWithGoogle } = useAuth();
-  const [step, setStep] = useState(1);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [motto, setMotto] = useState('');
+const FAVOURITE_PLAYERS = [
+  "Jannik Sinner", "Carlos Alcaraz", "Rafael Nadal", 
+  "Roger Federer", "Novak Djokovic"
+];
 
+export const Signup: React.FC = () => {
+  const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
+  // Form State
   const [formData, setFormData] = useState({
     name: '',
-    displayName: '',
     email: '',
     password: '',
     phone: '',
-    skillLevel: 3.0,
+    contactMode: 'email' as 'email' | 'phone',
+    skillLevel: 2,
     preferredCourts: [] as string[],
-    joinLeague: true,
-    acceptRules: false,
+    customCourt: '',
+    tournamentType: 'Challengers' as 'Beginners' | 'Challengers' | 'Masters',
+    favouritePlayers: [] as string[],
+    customPlayer: '',
+    availabilityDay: [] as string[],
+    availabilityTime: [] as string[],
+    organizer: false,
+    schedulingPreference: 'I will schedule matches on my own' as any,
+    agreeToRules: false,
   });
+  const selectedSkillIndex = Math.max(0, SKILL_LEVELS.indexOf(formData.skillLevel as typeof SKILL_LEVELS[number]));
 
-  const handleCourtToggle = (court: string) => {
-    setFormData(prev => ({
-      ...prev,
-      preferredCourts: prev.preferredCourts.includes(court)
-        ? prev.preferredCourts.filter(c => c !== court)
-        : [...prev.preferredCourts, court]
-    }));
+  // Validation
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate('/events');
+    }
+  }, [authLoading, navigate, user]);
+
+  const validateStep1 = () => {
+    const newErrors: Record<string, string> = {};
+    if (formData.name.length < 3 || formData.name.length > 80) newErrors.name = 'Name must be 3-80 characters';
+    if (/\d/.test(formData.name)) newErrors.name = 'Name cannot contain numbers';
+    if (!formData.email.includes('@')) newErrors.email = 'Invalid email address';
+    if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters';
+    
+    // Sequential check
+    const sequential = "1234567890abcdefghijklmnopqrstuvwxyz";
+    if (sequential.includes(formData.password.toLowerCase())) newErrors.password = 'Password cannot be sequential';
+    
+    if (formData.phone.replace(/\D/g, '').length !== 10) newErrors.phone = 'Phone must be exactly 10 digits';
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  const handleGoogleSignup = () => {
-    loginWithGoogle();
-    navigate('/events');
+  const validateStep2 = () => {
+    return true; // Mostly selection based
   };
 
-  const handleFinalize = async () => {
-    setIsGenerating(true);
-    // Simulate AI motto generation
-    setTimeout(() => {
-      const generatedMotto = "Play with heart, win with grace.";
-      setMotto(generatedMotto);
-      setIsGenerating(false);
+  const handleNext = () => {
+    if (step === 1 && validateStep1()) setStep(2);
+    else if (step === 2 && validateStep2()) setStep(3);
+  };
+
+  const handleBack = () => setStep(step - 1);
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAvatarFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setAvatarPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const formatPhone = (value: string) => {
+    const numbers = value.replace(/\D/g, '');
+    if (numbers.length <= 3) return numbers;
+    if (numbers.length <= 6) return `(${numbers.slice(0, 3)})-${numbers.slice(3)}`;
+    return `(${numbers.slice(0, 3)})-${numbers.slice(3, 6)}-${numbers.slice(6, 10)}`;
+  };
+
+  const handleSignup = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+      const user = userCredential.user;
+
+      let avatarUrl = '';
+      if (avatarFile) {
+        const storageRef = ref(storage, `avatars/${user.uid}`);
+        await uploadBytes(storageRef, avatarFile);
+        avatarUrl = await getDownloadURL(storageRef);
+      }
+
+      await updateProfile(user, { displayName: formData.name, photoURL: avatarUrl });
+
+      // Create users collection document
+      const userData: UserData = {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        preferred_mode_of_contact: formData.contactMode,
+        avatar: avatarUrl,
+        created_at: new Date().toISOString(),
+      };
+
+      // Create stats collection document
+      const userStats: UserStats = {
+        skill_level: formData.skillLevel,
+        tournament_preference: formData.tournamentType,
+        matches_played: 0,
+        matches_won: 0,
+        points_won_percentage: 0,
+      };
+
+      // Create preferences collection document
+      const userPreferences: UserPreferences = {
+        availability_day: formData.availabilityDay,
+        availability_time: formData.availabilityTime,
+        preferred_courts: formData.preferredCourts,
+        custom_courts: formData.customCourt ? [formData.customCourt] : [],
+        favourite_players: formData.favouritePlayers.concat(formData.customPlayer ? [formData.customPlayer] : []),
+        scheduling_preference: formData.schedulingPreference,
+        event_creator: formData.organizer,
+      };
+
+      // Write to all three collections
+      console.log('Creating documents for user:', user.uid);
       
-      setTimeout(() => {
-        signup({
-          ...formData,
-          motto: generatedMotto,
-          avatar: `https://picsum.photos/seed/${formData.displayName || 'user'}/200/200`
-        });
-        navigate('/events');
-      }, 2000);
-    }, 1500);
+      try {
+        console.log('Creating users document:', userData);
+        await setDoc(doc(db, 'users', user.uid), userData);
+        console.log('Users document created successfully');
+      } catch (err) {
+        console.error("Failed to create users document:", err);
+        throw new Error("Failed to create user profile. Please try again.");
+      }
+
+      try {
+        console.log('Creating stats document:', userStats);
+        await setDoc(doc(db, 'stats', user.uid), userStats);
+        console.log('Stats document created successfully');
+      } catch (err) {
+        console.error("Failed to create stats document:", err);
+        throw new Error("Failed to create user stats. Please try again.");
+      }
+
+      try {
+        console.log('Creating preferences document:', userPreferences);
+        await setDoc(doc(db, 'preferences', user.uid), userPreferences);
+        console.log('Preferences document created successfully');
+      } catch (err) {
+        console.error("Failed to create preferences document:", err);
+        throw new Error("Failed to create user preferences. Please try again.");
+      }
+
+      console.log('All documents created successfully');
+      setStatusMessage('Your account is ready. Redirecting to events...');
+      sessionStorage.setItem(`profile-bootstrap-pending:${user.uid}`, '1');
+      sessionStorage.removeItem(`profile-bootstrap-retry:${user.uid}`);
+      window.setTimeout(() => {
+        window.location.assign('/events');
+      }, 3000);
+    } catch (err: any) {
+      setError(err.message || 'Signup failed.');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const skillMismatch = (formData.tournamentType === 'Beginners' && formData.skillLevel > 2) ||
+                        (formData.tournamentType === 'Challengers' && (formData.skillLevel < 3 || formData.skillLevel > 4)) ||
+                        (formData.tournamentType === 'Masters' && formData.skillLevel < 4.5);
 
   return (
-    <div className="min-h-screen bg-rg-deep py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
-      <div className="max-w-md w-full space-y-8 bg-rg-green p-8 rounded-3xl shadow-sm border border-white/10">
-        <div className="text-center">
-          <h2 className="text-3xl font-extrabold text-white">
-            {step === 1 && "Create your profile"}
-            {step === 2 && "Tennis details"}
-            {step === 3 && "Finalize"}
-            {step === 4 && "Welcome to the League"}
-          </h2>
-          <div className="mt-4 flex justify-center space-x-2">
-            {[1, 2, 3].map((s) => (
-              <div
-                key={s}
-                className={`h-2 w-12 rounded-full ${
-                  s <= step ? 'bg-clay' : 'bg-white/10'
-                } transition-colors duration-300`}
-              />
+    <div className="min-h-screen py-20 px-4 relative overflow-hidden">
+      {/* Background Glows */}
+      <div className="absolute top-0 right-0 w-96 h-96 bg-clay/5 blur-[120px] -z-10 rounded-full" />
+      <div className="absolute bottom-0 left-0 w-96 h-96 bg-tennis-surface/20 blur-[100px] -z-10 rounded-full" />
+
+      <div className="max-w-4xl mx-auto">
+        {/* Progress Bar */}
+        <div className="mb-12">
+          <div className="flex justify-between items-center mb-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex flex-col items-center space-y-2">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg transition-all duration-300 ${
+                  step >= i ? 'clay-gradient text-white shadow-lg shadow-clay/20' : 'bg-tennis-surface/50 text-gray-500 border border-white/5'
+                }`}>
+                  {step > i ? <CheckCircle2 className="w-6 h-6" /> : i}
+                </div>
+                <span className={`text-xs font-bold uppercase tracking-widest ${step >= i ? 'text-clay' : 'text-gray-500'}`}>
+                  {i === 1 ? 'Personal' : i === 2 ? 'Skills' : 'Review'}
+                </span>
+              </div>
             ))}
+          </div>
+          <div className="h-1.5 w-full bg-tennis-surface/50 rounded-full overflow-hidden">
+            <motion.div 
+              className="h-full clay-gradient"
+              initial={{ width: '33.33%' }}
+              animate={{ width: `${(step / 3) * 100}%` }}
+              transition={{ duration: 0.5 }}
+            />
           </div>
         </div>
 
-        <AnimatePresence mode="wait">
-          {step === 1 && (
-            <motion.div
-              key="step1"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
-            >
-              <div className="flex justify-center">
-                <div className="relative w-24 h-24 bg-rg-deep rounded-full flex items-center justify-center border-2 border-dashed border-white/10 cursor-pointer hover:bg-rg-deep/80 transition-colors">
-                  <Camera className="w-8 h-8 text-slate-400" />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 bg-black/5 rounded-full transition-opacity">
-                    <span className="text-xs font-medium text-slate-200">Upload</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-200">Full Name</label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                    className="mt-1 block w-full rounded-xl border-white/10 shadow-sm focus:border-clay focus:ring-clay sm:text-sm px-4 py-3 bg-rg-deep border text-white placeholder-slate-500"
-                    placeholder="Roger Federer"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-200">Display Name</label>
-                  <input
-                    type="text"
-                    value={formData.displayName}
-                    onChange={e => setFormData({...formData, displayName: e.target.value})}
-                    className="mt-1 block w-full rounded-xl border-white/10 shadow-sm focus:border-clay focus:ring-clay sm:text-sm px-4 py-3 bg-rg-deep border text-white placeholder-slate-500"
-                    placeholder="RogerF"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-200">Email</label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={e => setFormData({...formData, email: e.target.value})}
-                    className="mt-1 block w-full rounded-xl border-white/10 shadow-sm focus:border-clay focus:ring-clay sm:text-sm px-4 py-3 bg-rg-deep border text-white placeholder-slate-500"
-                    placeholder="roger@example.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-200">Password</label>
-                  <input
-                    type="password"
-                    value={formData.password}
-                    onChange={e => setFormData({...formData, password: e.target.value})}
-                    className="mt-1 block w-full rounded-xl border-white/10 shadow-sm focus:border-clay focus:ring-clay sm:text-sm px-4 py-3 bg-rg-deep border text-white placeholder-slate-500"
-                    placeholder="••••••••"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-200">Phone</label>
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={e => setFormData({...formData, phone: e.target.value})}
-                    className="mt-1 block w-full rounded-xl border-white/10 shadow-sm focus:border-clay focus:ring-clay sm:text-sm px-4 py-3 bg-rg-deep border text-white placeholder-slate-500"
-                    placeholder="416-555-0123"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <button
-                  onClick={() => setStep(2)}
-                  disabled={!formData.name || !formData.email || !formData.password}
-                  className="w-full inline-flex justify-center py-3 px-6 border border-transparent shadow-sm text-sm font-medium rounded-full text-white bg-clay hover:bg-clay-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-clay disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next Step
-                </button>
-
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-white/10"></div>
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-rg-green text-slate-400">Or sign up with</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={handleGoogleSignup}
-                    className="w-full inline-flex justify-center py-2.5 px-4 border border-white/10 rounded-xl shadow-sm bg-rg-deep text-sm font-medium text-slate-200 hover:bg-rg-deep/80 transition-colors"
-                  >
-                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5 mr-2" />
-                    Google
-                  </button>
-                  <button
-                    onClick={handleGoogleSignup}
-                    className="w-full inline-flex justify-center py-2.5 px-4 border border-white/10 rounded-xl shadow-sm bg-rg-deep text-sm font-medium text-slate-200 hover:bg-rg-deep/80 transition-colors"
-                  >
-                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/facebook.svg" alt="Facebook" className="w-5 h-5 mr-2" />
-                    Facebook
-                  </button>
-                </div>
-              </div>
-
-              <div className="pt-4 text-center">
-                <button
-                  type="button"
-                  onClick={() => navigate('/login')}
-                  className="text-sm font-medium text-slate-400 hover:text-white"
-                >
-                  Already have an account? Log in
-                </button>
-              </div>
-            </motion.div>
+        <motion.div
+          key={step}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          className="bg-tennis-surface/40 backdrop-blur-xl border border-white/5 p-8 md:p-12 rounded-[3rem] shadow-2xl"
+        >
+          {error && (
+            <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center space-x-3">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+          {statusMessage && (
+            <div className="mb-8 p-4 rounded-2xl bg-green-500/10 border border-green-500/20 text-green-400 flex items-center space-x-3">
+              <CheckCircle2 className="w-5 h-5 shrink-0" />
+              <span>{statusMessage}</span>
+            </div>
           )}
 
+          {/* STEP 1: CONTACT & PERSONAL INFO */}
+          {step === 1 && (
+            <div className="space-y-8">
+              <div className="flex flex-col md:flex-row gap-10 items-start">
+                {/* Avatar Upload */}
+                <div className="flex flex-col items-center space-y-4">
+                  <div className="relative group">
+                    <div className="w-32 h-32 rounded-[2.5rem] bg-tennis-surface border-2 border-dashed border-white/10 flex items-center justify-center overflow-hidden transition-all group-hover:border-clay/50">
+                      {avatarPreview ? (
+                        <img src={avatarPreview} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <User className="w-12 h-12 text-gray-600" />
+                      )}
+                    </div>
+                    <label className="absolute -bottom-2 -right-2 w-10 h-10 clay-gradient rounded-xl flex items-center justify-center cursor-pointer shadow-lg hover:scale-110 transition-transform">
+                      <Camera className="w-5 h-5 text-white" />
+                      <input type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} />
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-500 font-medium">Profile Image (Optional)</p>
+                </div>
+
+                <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Input 
+                    label="Full Name" 
+                    placeholder="Roger Federer" 
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    error={errors.name}
+                    required
+                  />
+                  <Input 
+                    label="Email Address" 
+                    type="email" 
+                    placeholder="roger@goat.com" 
+                    value={formData.email}
+                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    error={errors.email}
+                    required
+                  />
+                  <Input 
+                    label="Password" 
+                    type="password" 
+                    placeholder="••••••••" 
+                    value={formData.password}
+                    onChange={(e) => setFormData({...formData, password: e.target.value})}
+                    error={errors.password}
+                    required
+                  />
+                  <Input 
+                    label="Phone Number" 
+                    placeholder="(416)-555-0123" 
+                    value={formData.phone}
+                    onChange={(e) => setFormData({...formData, phone: formatPhone(e.target.value)})}
+                    error={errors.phone}
+                    required
+                  />
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-300">Preferred Contact Mode</label>
+                    <div className="flex space-x-4">
+                      {['email', 'phone'].map((mode) => (
+                        <label key={mode} className={`flex-1 flex items-center justify-center p-3 rounded-2xl border cursor-pointer transition-all ${
+                          formData.contactMode === mode ? 'bg-clay/10 border-clay text-clay' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
+                        }`}>
+                          <input 
+                            type="radio" 
+                            className="hidden" 
+                            name="contactMode" 
+                            value={mode} 
+                            checked={formData.contactMode === mode}
+                            onChange={() => setFormData({...formData, contactMode: mode as any})}
+                          />
+                          <span className="capitalize font-bold">{mode}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: SKILLS & PREFERENCES */}
           {step === 2 && (
-            <motion.div
-              key="step2"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
-            >
-              <div>
-                <label className="block text-sm font-medium text-slate-200 mb-2">
-                  NTRP Skill Level: {formData.skillLevel.toFixed(1)}
-                </label>
-                <input
-                  type="range"
-                  min="1.0"
-                  max="5.0"
-                  step="0.5"
-                  value={formData.skillLevel}
-                  onChange={e => setFormData({...formData, skillLevel: parseFloat(e.target.value)})}
-                  className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-clay"
-                />
-                <div className="flex justify-between text-xs text-slate-400 mt-2">
-                  <span>Beginner (1.0)</span>
-                  <span>Advanced (5.0)</span>
+            <div className="space-y-10">
+              {/* Skill Level Slider */}
+              <div className="space-y-6 bg-white/5 p-8 rounded-[2rem] border border-white/5">
+                <div className="flex justify-between items-end">
+                  <div className="space-y-1">
+                    <h3 className="text-xl font-bold text-white flex items-center">
+                      <Trophy className="w-5 h-5 mr-2 text-clay" />
+                      NTRP Skill Level
+                    </h3>
+                  </div>
+                  <div className="text-4xl font-black text-clay">{formData.skillLevel}</div>
+                </div>
+                <div className="relative pt-6">
+                  <input 
+                    type="range" 
+                    min="0" max={SKILL_LEVELS.length - 1} step="1" 
+                    value={selectedSkillIndex}
+                    onChange={(e) => setFormData({...formData, skillLevel: SKILL_LEVELS[Number(e.target.value)]})}
+                    className="w-full h-3 bg-tennis-dark rounded-full appearance-none cursor-pointer accent-clay"
+                  />
+                  <div className="mt-4 flex items-start justify-between gap-2 text-center">
+                    {SKILL_LEVELS.map((level) => (
+                      <div key={level} className="flex flex-col items-center gap-2">
+                        <span className={`w-2.5 h-2.5 rounded-full ${formData.skillLevel === level ? 'bg-clay' : 'bg-white/20'}`} />
+                        <span className={`text-[10px] font-black tracking-widest ${formData.skillLevel === level ? 'text-clay' : 'text-gray-500'}`}>
+                          {level.toFixed(1)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3 p-4 rounded-2xl bg-clay/10 border border-clay/20">
+                  <Info className="w-5 h-5 text-clay shrink-0" />
+                  <p className="text-sm font-medium text-white italic">"{SKILL_DESCRIPTIONS[formData.skillLevel]}"</p>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-200 mb-3">
-                  Preferred Courts (Select up to 3)
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                {/* Court Selection */}
+                <div className="space-y-4">
+                  <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider">Preferred Courts</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {PRELOADED_COURTS.map(court => (
+                      <button
+                        key={court}
+                        onClick={() => {
+                          const current = formData.preferredCourts;
+                          setFormData({...formData, preferredCourts: current.includes(court) ? current.filter(c => c !== court) : [...current, court]});
+                        }}
+                        className={`text-left px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                          formData.preferredCourts.includes(court) ? 'bg-clay text-white shadow-lg shadow-clay/20' : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/5'
+                        }`}
+                      >
+                        {court}
+                      </button>
+                    ))}
+                  </div>
+                  <Input 
+                    placeholder="Add your own court..." 
+                    value={formData.customCourt}
+                    onChange={(e) => setFormData({...formData, customCourt: e.target.value})}
+                  />
+                </div>
+
+                {/* Tournament Type */}
+                <div className="space-y-4">
+                  <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider">Tournament Type</label>
+                  <div className="space-y-3">
+                    {[
+                      { name: 'Beginners', range: '1–2.5' },
+                      { name: 'Challengers', range: '3–4' },
+                      { name: 'Masters', range: '4.5+' }
+                    ].map(type => (
+                      <button
+                        key={type.name}
+                        onClick={() => setFormData({...formData, tournamentType: type.name as any})}
+                        className={`w-full flex justify-between items-center p-4 rounded-2xl border transition-all ${
+                          formData.tournamentType === type.name ? 'bg-clay/10 border-clay text-clay' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
+                        }`}
+                      >
+                        <span className="font-bold">{type.name}</span>
+                        <span className="text-xs opacity-60">NTRP {type.range}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {skillMismatch && (
+                    <div className="flex items-center space-x-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>Selected tournament does not match your skill level</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center">
+                  <Star className="w-4 h-4 mr-2 text-clay" />
+                  Favourite Players
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {COURTS.map(court => (
+                  {FAVOURITE_PLAYERS.map((player) => (
                     <button
-                      key={court}
-                      onClick={() => handleCourtToggle(court)}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
-                        formData.preferredCourts.includes(court)
-                          ? 'bg-clay/20 border-clay text-clay'
-                          : 'bg-rg-deep border-white/10 text-slate-300 hover:border-white/20'
+                      key={player}
+                      onClick={() => {
+                        const current = formData.favouritePlayers;
+                        setFormData({
+                          ...formData,
+                          favouritePlayers: current.includes(player)
+                            ? current.filter((p) => p !== player)
+                            : [...current, player],
+                        });
+                      }}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                        formData.favouritePlayers.includes(player)
+                          ? 'bg-clay text-white shadow-lg shadow-clay/20'
+                          : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/5'
                       }`}
                     >
-                      {court}
+                      {player}
                     </button>
                   ))}
                 </div>
+                <Input
+                  placeholder="Add your own player..."
+                  value={formData.customPlayer}
+                  onChange={(e) => setFormData({ ...formData, customPlayer: e.target.value })}
+                />
               </div>
 
-              <div className="pt-4 flex justify-between">
-                <button
-                  onClick={() => setStep(1)}
-                  className="text-sm font-medium text-slate-400 hover:text-white"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={() => setStep(3)}
-                  disabled={formData.preferredCourts.length === 0}
-                  className="inline-flex justify-center py-3 px-6 border border-transparent shadow-sm text-sm font-medium rounded-full text-white bg-clay hover:bg-clay-dark disabled:opacity-50 transition-colors"
-                >
-                  Next Step
-                </button>
+              {/* Availability */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10 pt-6 border-t border-white/5">
+                <div className="space-y-4">
+                  <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center">
+                    <Calendar className="w-4 h-4 mr-2 text-clay" />
+                    Availability Day
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map(day => (
+                      <button
+                        key={day}
+                        onClick={() => {
+                          const current = formData.availabilityDay;
+                          setFormData({
+                            ...formData, 
+                            availabilityDay: current.includes(day) ? current.filter(d => d !== day) : [...current, day]
+                          });
+                        }}
+                        className={`w-12 h-12 flex items-center justify-center rounded-xl text-xs font-black transition-all ${
+                          formData.availabilityDay.includes(day) ? 'bg-clay text-white shadow-lg shadow-clay/20' : 'bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10'
+                        }`}
+                      >
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center">
+                    <Clock className="w-4 h-4 mr-2 text-clay" />
+                    Availability Time
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {['AM', 'PM'].map(time => (
+                      <button
+                        key={time}
+                        onClick={() => {
+                          const current = formData.availabilityTime;
+                          setFormData({
+                            ...formData, 
+                            availabilityTime: current.includes(time) ? current.filter(t => t !== time) : [...current, time]
+                          });
+                        }}
+                        className={`w-16 h-12 flex items-center justify-center rounded-xl text-xs font-black transition-all ${
+                          formData.availabilityTime.includes(time) ? 'bg-clay text-white shadow-lg shadow-clay/20' : 'bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10'
+                        }`}
+                      >
+                        {time}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </motion.div>
+            </div>
           )}
 
+          {/* STEP 3: REVIEW & SUBMIT */}
           {step === 3 && (
-            <motion.div
-              key="step3"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-6"
-            >
-              <div className="bg-rg-deep p-6 rounded-2xl border border-white/10 space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-200">Join Seasonal League</span>
-                  <button
-                    onClick={() => setFormData({...formData, joinLeague: !formData.joinLeague})}
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      formData.joinLeague ? 'bg-clay' : 'bg-white/10'
-                    }`}
-                  >
-                    <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      formData.joinLeague ? 'translate-x-5' : 'translate-x-0'
-                    }`} />
-                  </button>
+            <div className="space-y-10">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                  <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
+                    <h4 className="text-clay font-bold text-xs uppercase tracking-widest mb-4">Personal Info</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 text-sm">Name</span>
+                        <span className="text-white font-medium">{formData.name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 text-sm">Email</span>
+                        <span className="text-white font-medium">{formData.email}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 text-sm">Phone</span>
+                        <span className="text-white font-medium">{formData.phone}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
+                    <h4 className="text-clay font-bold text-xs uppercase tracking-widest mb-4">Skill & Tournament</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 text-sm">Skill Level</span>
+                        <span className="text-white font-medium">{formData.skillLevel}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 text-sm">Tournament</span>
+                        <span className="text-white font-medium">{formData.tournamentType}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                
-                <div className="flex items-start">
-                  <div className="flex h-5 items-center">
-                    <input
-                      id="rules"
-                      type="checkbox"
-                      checked={formData.acceptRules}
-                      onChange={e => setFormData({...formData, acceptRules: e.target.checked})}
-                      className="h-4 w-4 rounded border-white/10 text-clay focus:ring-clay bg-rg-deep"
+
+                <div className="space-y-6">
+                  <div className="bg-white/5 p-6 rounded-3xl border border-white/5">
+                    <h4 className="text-clay font-bold text-xs uppercase tracking-widest mb-4">Preferences</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500 text-sm">Availability</span>
+                        <span className="text-white font-medium">{formData.availabilityDay.join(', ') || 'None'}</span>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-gray-500 text-sm">Courts</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {formData.preferredCourts.map(c => (
+                            <span key={c} className="px-2 py-1 bg-clay/10 text-clay text-[10px] font-bold rounded-md">{c}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-gray-500 text-sm">Favourite Players</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {formData.favouritePlayers.concat(formData.customPlayer ? [formData.customPlayer] : []).map(player => (
+                            <span key={player} className="px-2 py-1 bg-clay/10 text-clay text-[10px] font-bold rounded-md">{player}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 p-6 rounded-3xl bg-clay/5 border border-clay/20">
+                    <input 
+                      type="checkbox" 
+                      id="agree" 
+                      className="w-5 h-5 rounded-md border-clay text-clay focus:ring-clay"
+                      checked={formData.agreeToRules}
+                      onChange={(e) => setFormData({...formData, agreeToRules: e.target.checked})}
                     />
-                  </div>
-                  <div className="ml-3 text-sm">
-                    <label htmlFor="rules" className="font-medium text-slate-200">
-                      I accept the community rules
+                    <label htmlFor="agree" className="text-sm text-gray-300 font-medium cursor-pointer">
+                      I agree to the league rules and code of conduct
                     </label>
-                    <p className="text-slate-400">Play fair, respect others, and have fun.</p>
                   </div>
                 </div>
               </div>
-
-              <div className="pt-4 flex justify-between">
-                <button
-                  onClick={() => setStep(2)}
-                  className="text-sm font-medium text-slate-400 hover:text-white"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={() => {
-                    setStep(4);
-                    handleFinalize();
-                  }}
-                  disabled={!formData.acceptRules}
-                  className="inline-flex justify-center py-3 px-6 border border-transparent shadow-sm text-sm font-medium rounded-full text-white bg-clay hover:bg-clay-dark disabled:opacity-50 transition-colors"
-                >
-                  Complete Profile
-                </button>
-              </div>
-            </motion.div>
+            </div>
           )}
 
-          {step === 4 && (
-            <motion.div
-              key="step4"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="py-8 text-center space-y-6"
-            >
-              {isGenerating ? (
-                <div className="flex flex-col items-center space-y-4">
-                  <Loader2 className="w-12 h-12 text-clay animate-spin" />
-                  <p className="text-slate-300 font-medium animate-pulse">
-                    AI is generating your player motto...
-                  </p>
-                </div>
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-6"
-                >
-                  <div className="w-20 h-20 bg-clay/20 rounded-full flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-10 h-10 text-clay" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-white">Your AI Motto</h3>
-                    <p className="mt-4 text-2xl font-serif italic text-clay">
-                      "{motto}"
-                    </p>
-                  </div>
-                  <p className="text-sm text-slate-400">Redirecting to events...</p>
-                </motion.div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
+          {/* Navigation Buttons */}
+          <div className="flex justify-between items-center mt-12 pt-8 border-t border-white/5">
+            {step > 1 ? (
+              <Button variant="ghost" onClick={handleBack} disabled={loading}>
+                <ChevronLeft className="mr-2 w-5 h-5" />
+                Back
+              </Button>
+            ) : (
+              <div />
+            )}
+            
+            {step < 3 ? (
+              <Button onClick={handleNext} className="group">
+                Continue
+                <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </Button>
+            ) : (
+              <Button onClick={handleSignup} isLoading={loading} disabled={!formData.agreeToRules}>
+                Complete Signup
+                <CheckCircle2 className="ml-2 w-5 h-5" />
+              </Button>
+            )}
+          </div>
+        </motion.div>
       </div>
     </div>
   );

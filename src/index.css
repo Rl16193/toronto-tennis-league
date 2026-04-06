@@ -1,26 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-clay: #C25E44;
-  --color-clay-dark: #A64D36;
-  --color-rg-green: #143D34; /* Replacing Purple with Dark Green */
-  --color-rg-deep: #0B3027; /* Dark Green */
-  --color-rg-white: #FFFFFF;
-  
-  --color-rose-400: #fb7185;
-  --color-rose-500: #f43f5e;
-  --color-lime-400: #C25E44; /* Mapping lime to clay for consistency */
-  --color-lime-500: #A64D36;
-  --color-slate-50: #f8fafc;
-  --color-slate-100: #f1f5f9;
-  --color-slate-800: #1e293b;
-  --color-slate-900: #0f172a;
-
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --color-clay: #FF6B35;
+  --color-clay-dark: #E84A27;
+  --color-tennis-dark: #0B3027;
+  --color-tennis-surface: #143D34;
 }
 
 @layer base {
   body {
-    @apply bg-rg-deep text-white;
+    @apply bg-tennis-dark text-white font-sans antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-bold;
   }
 }
+
+.clay-gradient {
+  background: linear-gradient(135deg, #FF6B35 0%, #E84A27 100%);
+}
+
+.dark-gradient {
+  background: linear-gradient(180deg, #0B3027 0%, #143D34 100%);
+}
+
