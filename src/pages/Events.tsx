@@ -235,7 +235,7 @@ const getRecurringEventLabel = (event: TennisEvent) => {
 };
 
 export const Events: React.FC = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [events, setEvents] = useState<DisplayEvent[]>([]);
   const [joinedRegistrations, setJoinedRegistrations] = useState<JoinedRegistration[]>([]);
@@ -624,11 +624,11 @@ export const Events: React.FC = () => {
               transition={{ delay: i * 0.08 }}
               className="group bg-tennis-surface/30 border border-white/5 rounded-[2.5rem] overflow-hidden hover:border-clay/30 transition-all duration-300 flex flex-col shadow-xl"
             >
-            <div className="relative h-[420px] md:h-[500px] overflow-hidden rounded-t-3xl">
+            <div className="relative h-[460px] md:h-[540px] overflow-hidden rounded-t-3xl">
                 <img
                   src={event.image}
                   alt={event.title}
-                  className="w-full h-full object-cover object-[center_top_15%] group-hover:scale-105 transition-transform duration-500"
+                  className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
                   referrerPolicy="no-referrer"
                   loading="lazy"
                 />
@@ -680,9 +680,11 @@ export const Events: React.FC = () => {
                     >
                       {isFullyJoinedEvent(event)
                         ? 'Joined'
-                        : user
-                          ? 'Join Event'
-                          : 'Log In to Join'}
+                        : authLoading
+                          ? 'Loading...'
+                          : user
+                            ? 'Join Event'
+                            : 'Log In to Join'}
                     </Button>
                   </div>
                   {canAddToCalendar(event) && (
