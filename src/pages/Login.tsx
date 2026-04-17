@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
-import { auth, googleProvider } from '../lib/firebase';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { getAdditionalUserInfo, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
+import { auth, googleProvider, setAuthPersistence } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { ensureUserProfileDocuments } from '../lib/profileBootstrap';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Mail, Lock, Chrome, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import mailcheck from 'mailcheck';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,36 +20,114 @@ export const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [showForgot, setShowForgot] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [stayLoggedIn, setStayLoggedIn] = useState(false);
+  const [emailSuggestion, setEmailSuggestion] = useState<any>(null);
+  const returnTo = searchParams.get('returnTo') || '/events';
+  const intent = searchParams.get('intent') || '';
 
   React.useEffect(() => {
     if (!authLoading && user) {
-      navigate('/events');
+      navigate(returnTo);
     }
-  }, [authLoading, navigate, user]);
+  }, [authLoading, navigate, returnTo, user]);
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newEmail = e.target.value;
+    setEmail(newEmail);
+    setEmailSuggestion(null);
+    mailcheck.run({
+      email: newEmail,
+      suggested: (suggestion) => setEmailSuggestion(suggestion),
+      empty: () => setEmailSuggestion(null)
+    });
+  };
+
+  const getAuthErrorMessage = (error: any, context: 'login' | 'reset' | 'google' = 'login') => {
+    const code = (error?.code || error?.message || '').toString().toLowerCase();
+    if (context === 'login') {
+      if (code.includes('wrong-password') || code.includes('user-not-found') || code.includes('invalid-email')) {
+        return 'Invalid credentials';
+      }
+      if (code.includes('too-many-requests')) {
+        return 'Too many login attempts. Please try again later.';
+      }
+      if (code.includes('user-disabled')) {
+        return 'This account has been disabled. Please contact support.';
+      }
+      return 'Invalid credentials';
+    }
+
+    if (context === 'reset') {
+      if (code.includes('invalid-email')) {
+        return 'Please enter a valid email address.';
+      }
+      if (code.includes('user-not-found')) {
+        return 'No account found with that email.';
+      }
+      return 'Unable to send reset email. Please try again.';
+    }
+
+    return 'Unable to sign in. Please try again.';
+  };
+
+  const getGoogleSignInErrorMessage = async (error: any) => {
+    const code = (error?.code || error?.message || '').toString().toLowerCase();
+    if (code.includes('popup-closed-by-user')) {
+      return 'Google sign-in was cancelled.';
+    }
+    if (code.includes('account-exists-with-different-credential')) {
+      const emailFromError = error?.customData?.email || email;
+      if (emailFromError && emailRegex.test(emailFromError)) {
+        try {
+          const methods = await fetchSignInMethodsForEmail(auth, emailFromError);
+          if (methods.includes('password')) {
+            return 'An account already exists for this email. Sign in with your password, then connect Google from your profile.';
+          }
+          if (methods.includes('google.com')) {
+            return 'This Google account is already linked. Please sign in with Google.';
+          }
+        } catch (fetchError) {
+          console.error('Error checking sign-in methods:', fetchError);
+        }
+      }
+      return 'An account already exists with this email. Please use the same sign-in provider.';
+    }
+    return getAuthErrorMessage(error, 'google');
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     try {
+      await setAuthPersistence(stayLoggedIn);
       await signInWithEmailAndPassword(auth, email, password);
-      navigate('/events');
     } catch (err: any) {
-      setError(err.message || 'Failed to login. Please check your credentials.');
+      setError(getAuthErrorMessage(err, 'login'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError('');
     try {
+      await setAuthPersistence(stayLoggedIn);
       const result = await signInWithPopup(auth, googleProvider);
+      const isNewGoogleUser = getAdditionalUserInfo(result)?.isNewUser === true;
       await ensureUserProfileDocuments(result.user);
       sessionStorage.setItem(`profile-bootstrap-pending:${result.user.uid}`, '1');
       sessionStorage.removeItem(`profile-bootstrap-retry:${result.user.uid}`);
-      navigate('/events');
+      if (isNewGoogleUser) {
+        navigate(`/signup?returnTo=${encodeURIComponent(returnTo)}&intent=${encodeURIComponent(intent || 'join-league')}`);
+      }
     } catch (err: any) {
-      setError(err.message || 'Google login failed.');
+      setError(await getGoogleSignInErrorMessage(err));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -57,13 +137,17 @@ export const Login: React.FC = () => {
       setError('Please enter your email address.');
       return;
     }
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
       await sendPasswordResetEmail(auth, email);
       setResetSent(true);
     } catch (err: any) {
-      setError(err.message || 'Failed to send reset email.');
+      setError(getAuthErrorMessage(err, 'reset'));
     } finally {
       setLoading(false);
     }
@@ -81,17 +165,22 @@ export const Login: React.FC = () => {
         className="w-full max-w-md bg-tennis-surface/40 backdrop-blur-xl border border-white/5 p-10 rounded-[3rem] shadow-2xl"
       >
         <div className="text-center space-y-4 mb-10">
-          <div className="w-16 h-16 clay-gradient rounded-2xl mx-auto flex items-center justify-center shadow-xl mb-6">
-            <span className="text-3xl font-bold text-white">T</span>
-          </div>
-          <h2 className="text-3xl font-display font-bold text-white">
-            {showForgot ? 'Reset Password' : 'Welcome Back'}
-          </h2>
-          <p className="text-gray-400">
-            {showForgot 
-              ? 'Enter your email to receive a reset link.' 
-              : 'Sign in to access your tennis profile.'}
-          </p>
+          <img
+            src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FLogo.jpg?alt=media&token=b5a4d010-e93c-423a-b823-24c01c8918ce"
+            alt="Toronto Tennis League"
+            className="mx-auto h-32 w-40 rounded-3xl object-cover shadow-xl"
+            referrerPolicy="no-referrer"
+          />
+          {intent === 'join-event' && (
+            <p className="text-sm text-gray-400">
+              Sign in to join an event. New here? Use sign up to create your league profile first.
+            </p>
+          )}
+          {intent === 'join-league' && (
+            <p className="text-sm text-gray-400">
+              Sign in to continue, or create a league profile to get updates and event access.
+            </p>
+          )}
         </div>
 
         <AnimatePresence mode="wait">
@@ -130,9 +219,22 @@ export const Login: React.FC = () => {
                   type="email"
                   placeholder="name@example.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={handleEmailChange}
                   required
                 />
+                {emailSuggestion && (
+                  <div className="text-sm text-blue-400 mt-1">
+                    Did you mean <button 
+                      className="underline hover:text-blue-300" 
+                      onClick={() => {
+                        setEmail(emailSuggestion.full);
+                        setEmailSuggestion(null);
+                      }}
+                    >
+                      {emailSuggestion.full}
+                    </button>?
+                  </div>
+                )}
                 {!showForgot && (
                   <Input
                     label="Password"
@@ -146,7 +248,16 @@ export const Login: React.FC = () => {
               </div>
 
               {!showForgot && (
-                <div className="flex justify-end">
+                <div className="flex items-center justify-between gap-4">
+                  <label className="flex items-center gap-3 text-sm text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={stayLoggedIn}
+                      onChange={(e) => setStayLoggedIn(e.target.checked)}
+                      className="h-4 w-4 rounded border-white/10 bg-tennis-surface/50 text-clay focus:ring-clay"
+                    />
+                    <span>Stay logged in</span>
+                  </label>
                   <button
                     type="button"
                     onClick={() => setShowForgot(true)}
@@ -198,7 +309,10 @@ export const Login: React.FC = () => {
                   ) : (
                     <>
                       Don't have an account?{' '}
-                      <Link to="/signup" className="text-clay font-bold hover:underline">
+                      <Link
+                        to={`/signup?returnTo=${encodeURIComponent(returnTo)}${intent ? `&intent=${encodeURIComponent(intent)}` : ''}`}
+                        className="text-clay font-bold hover:underline"
+                      >
                         Sign Up
                       </Link>
                     </>

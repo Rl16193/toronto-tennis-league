@@ -1,9 +1,8 @@
 {
   "projectId": "toronto-tennis-league",
-  "appId": "1:42115754868:web:f6e6c165ec375c62605a21",
+  "appId": "1:42115754868:web:2a15f00c2e4eba13605a21",
   "apiKey": "AIzaSyA362zakGeFqMBTZpM7brUd83psK5lbzWE",
   "authDomain": "toronto-tennis-league.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-e0a0a863-92e8-49db-8a8b-807cadab393c",
   "storageBucket": "toronto-tennis-league.firebasestorage.app",
   "messagingSenderId": "42115754868",
   "measurementId": ""

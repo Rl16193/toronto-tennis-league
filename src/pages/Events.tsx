@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, query, getDocs, addDoc, where, onSnapshot } from 'firebase/firestore';
 import { getDownloadURL, ref } from 'firebase/storage';
-import { db, storage } from '../lib/firebase';
+import { db, storage } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { TennisEvent } from '../types';
 import { Button } from '../components/Button';
@@ -10,7 +10,6 @@ import {
   Calendar,
   MapPin,
   Users,
-  Search,
   X,
   CheckCircle2,
   AlertCircle,
@@ -22,6 +21,7 @@ import { motion, AnimatePresence } from 'motion/react';
 
 type JoinFormState = {
   tournamentChoice: 'Singles' | 'Doubles';
+  division: '' | "Men's" | "Women's" | 'Mixed Doubles';
   partnerName: string;
   partnerInApp: 'yes' | 'no' | '';
   combinedSkill: string;
@@ -37,8 +37,13 @@ type JoinedRegistration = {
   tournamentChoice: '' | 'Singles' | 'Doubles';
 };
 
+type DisplayEvent = TennisEvent & {
+  imagePath?: string;
+};
+
 const INITIAL_JOIN_FORM: JoinFormState = {
   tournamentChoice: 'Singles',
+  division: '',
   partnerName: '',
   partnerInApp: '',
   combinedSkill: '',
@@ -53,6 +58,12 @@ const isRecurringWeekly = (event: TennisEvent) =>
 const isTournamentEvent = (event: TennisEvent) => event.type.toLowerCase().includes('tournament');
 const isMeetupEvent = (event: TennisEvent) => event.type.toLowerCase().includes('meetup');
 const isSpecialEvent = (event: TennisEvent) => event.type.toLowerCase().includes('special');
+const isSeasonOpener = (event: TennisEvent) => event.title.toLowerCase().includes('season opener 2026');
+const isWeekendMatchdaysEvent = (event: TennisEvent) => event.title.toLowerCase().includes('weekend matchdays');
+const isTopspinMeetupEvent = (event: TennisEvent) => {
+  const title = event.title.toLowerCase();
+  return title.includes('topspin tuesdays') || title.includes('topspin thursdays');
+};
 
 const WEEKDAY_MAP: Record<string, number> = {
   sunday: 0,
@@ -218,38 +229,40 @@ const canAddToCalendar = (event: TennisEvent) => {
 
 const getRecurringEventLabel = (event: TennisEvent) => {
   if (!isRecurringWeekly(event)) return null;
-  if (isMeetupEvent(event)) return 'Weekly recurring event';
-  if (isSpecialEvent(event)) return 'Weekly recurring event while the tournament is in session';
+  if (isMeetupEvent(event)) return 'Weekly Skill-Based Meetups';
+  if (isSpecialEvent(event)) return 'Play Tourney Matches on Selected Matchdays';
   return null;
 };
 
 export const Events: React.FC = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
-  const [events, setEvents] = useState<TennisEvent[]>([]);
+  const [events, setEvents] = useState<DisplayEvent[]>([]);
   const [joinedRegistrations, setJoinedRegistrations] = useState<JoinedRegistration[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedEvent, setSelectedEvent] = useState<TennisEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<DisplayEvent | null>(null);
   const [joining, setJoining] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [joinForm, setJoinForm] = useState<JoinFormState>(INITIAL_JOIN_FORM);
   const [joinError, setJoinError] = useState('');
   const [authPrompt, setAuthPrompt] = useState('');
+  const loginRoute = '/login?returnTo=%2Fevents&intent=join-event';
+  const signupRoute = '/signup?returnTo=%2Fevents&intent=join-event';
   const participantName = profile?.user.name?.trim() || user?.displayName || user?.email || '';
 
   useEffect(() => {
     const fetchEvents = async () => {
       try {
         const snapshot = await getDocs(collection(db, 'events'));
-        const eventsData = await Promise.all(
-          snapshot.docs.map(async (doc) => {
-            const event = { id: doc.id, ...doc.data() } as TennisEvent;
-            return {
-              ...event,
-              image: await resolveStorageUrl(event.image),
-            };
-          })
-        );
+        const eventsData = snapshot.docs.map((doc) => {
+          const event = { id: doc.id, ...doc.data() } as TennisEvent;
+          const rawImage = event.image || '';
+
+          return {
+            ...event,
+            image: rawImage.startsWith('gs://') ? '' : rawImage,
+            imagePath: rawImage.startsWith('gs://') ? rawImage : undefined,
+          } as DisplayEvent;
+        });
 
         eventsData.sort((a, b) => {
           const aTime = parseValidDate(getEventStartDate(a))?.getTime() ?? Number.MAX_SAFE_INTEGER;
@@ -269,6 +282,49 @@ export const Events: React.FC = () => {
 
     fetchEvents();
   }, []);
+
+  useEffect(() => {
+    const unresolvedEvents = events.filter((event) => event.imagePath && !event.image);
+    if (unresolvedEvents.length === 0) return;
+
+    let isCancelled = false;
+
+    unresolvedEvents.forEach((event) => {
+      resolveStorageUrl(event.imagePath!)
+        .then((imageUrl) => {
+          if (isCancelled || !imageUrl) return;
+
+          setEvents((currentEvents) =>
+            currentEvents.map((currentEvent) =>
+              currentEvent.id === event.id
+                ? {
+                    ...currentEvent,
+                    image: imageUrl,
+                    imagePath: undefined,
+                  }
+                : currentEvent
+            )
+          );
+
+          setSelectedEvent((currentSelectedEvent) =>
+            currentSelectedEvent?.id === event.id
+              ? {
+                  ...currentSelectedEvent,
+                  image: imageUrl,
+                  imagePath: undefined,
+                }
+              : currentSelectedEvent
+          );
+        })
+        .catch((error) => {
+          console.error('Error resolving event image:', error);
+        });
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [events]);
 
   useEffect(() => {
     if (!user) return;
@@ -296,26 +352,13 @@ export const Events: React.FC = () => {
     }
   }, [selectedEvent]);
 
-  const filteredEvents = useMemo(() => {
-    return events.filter((event) => {
-      const matchesSearch =
-        event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        event.location.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesSearch;
-    });
-  }, [events, searchTerm]);
-
-  const calendarEvents = useMemo(() => {
-    const now = new Date();
-    const rangeStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const rangeEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59, 999);
-
-    return events
-      .flatMap((event) => getEventOccurrences(event))
-      .filter((occurrence) => occurrence.date >= rangeStart && occurrence.date <= rangeEnd)
-      .sort((a, b) => a.date.getTime() - b.date.getTime())
-      .slice(0, 12);
+  const visibleEvents = useMemo(() => {
+    return events.filter((event) => !isTopspinMeetupEvent(event));
   }, [events]);
+
+  const featuredEvents = useMemo(() => {
+    return visibleEvents.filter((event) => isSeasonOpener(event) || isWeekendMatchdaysEvent(event));
+  }, [visibleEvents]);
 
   const getJoinedChoices = (eventId: string) => {
     return new Set(
@@ -335,6 +378,36 @@ export const Events: React.FC = () => {
     );
   };
 
+  const hasJoinedAnyTournament = () => {
+    return joinedRegistrations.some((entry) => entry.tournamentChoice === 'Singles' || entry.tournamentChoice === 'Doubles');
+  };
+
+  const registerForRegularEvent = async (event: DisplayEvent) => {
+    if (isWeekendMatchdaysEvent(event) && !hasJoinedAnyTournament()) {
+      const weekendMatchdaysMessage = 'Please join a tournament before joining matchdays';
+      if (selectedEvent?.id === event.id) {
+        setJoinError(weekendMatchdaysMessage);
+      } else {
+        setAuthPrompt(weekendMatchdaysMessage);
+      }
+      return false;
+    }
+
+    await addDoc(collection(db, 'event_participants'), {
+      user_id: user!.uid,
+      user_name: participantName,
+      event_id: event.id,
+      event_name: event.title,
+      tournament_choice: '',
+      doubles: '',
+      partner_in_app: '',
+      skill: Number(profile?.stats.skill_level || 0),
+      createdAt: new Date().toISOString(),
+    });
+
+    return true;
+  };
+
   const isFullyJoinedEvent = (event: TennisEvent) => {
     if (isTournamentEvent(event)) {
       const joinedChoices = getJoinedChoices(event.id);
@@ -344,11 +417,11 @@ export const Events: React.FC = () => {
     return hasJoinedRegularEvent(event.id);
   };
 
-  const handleStartJoin = async (event: TennisEvent) => {
+  const handleStartJoin = async (event: DisplayEvent) => {
     if (!user) {
-      setAuthPrompt('Please log in to continue');
+      setAuthPrompt('Join the league to get updates and reserve your spot.');
       window.setTimeout(() => {
-        navigate('/login');
+        navigate(loginRoute);
       }, 1200);
       return;
     }
@@ -361,17 +434,7 @@ export const Events: React.FC = () => {
 
       setJoining(true);
       try {
-        await addDoc(collection(db, 'event_participants'), {
-          user_id: user.uid,
-          user_name: participantName,
-          event_id: event.id,
-          event_name: event.title,
-          tournament_choice: '',
-          doubles: '',
-          partner_in_app: '',
-          skill: Number(profile?.stats.skill_level || 0),
-          createdAt: new Date().toISOString(),
-        });
+        await registerForRegularEvent(event);
       } catch (error) {
         console.error('Error joining event:', error);
       } finally {
@@ -391,11 +454,11 @@ export const Events: React.FC = () => {
     setJoinError('');
   };
 
-  const handleAddToCalendar = (event: TennisEvent) => {
+  const handleAddToCalendar = (event: DisplayEvent) => {
     if (!user) {
-      setAuthPrompt('Please log in to continue');
+      setAuthPrompt('Join the league to get updates and save events to your calendar.');
       window.setTimeout(() => {
-        navigate('/login');
+        navigate(loginRoute);
       }, 1200);
       return;
     }
@@ -411,16 +474,49 @@ export const Events: React.FC = () => {
     if (!selectedEvent) return;
 
     if (!user) {
-      setAuthPrompt('Please log in to continue');
+      setAuthPrompt('Join the league to get updates and reserve your spot.');
       setSelectedEvent(null);
       window.setTimeout(() => {
-        navigate('/login');
+        navigate(loginRoute);
       }, 1200);
       return;
     }
 
     if (hasJoinedTournamentChoice(selectedEvent.id, joinForm.tournamentChoice)) {
       setJoinError(`You are already registered for ${joinForm.tournamentChoice.toLowerCase()} in this event.`);
+      return;
+    }
+
+    if (!isTournamentEvent(selectedEvent)) {
+      if (hasJoinedRegularEvent(selectedEvent.id)) {
+        setJoinError('You are already registered for this event.');
+        return;
+      }
+
+      setJoining(true);
+      setJoinError('');
+
+      try {
+        const joined = await registerForRegularEvent(selectedEvent);
+        if (joined) {
+          setSelectedEvent(null);
+        }
+      } catch (error) {
+        console.error('Error joining event:', error);
+        setJoinError('Could not join the event right now. Please try again.');
+      } finally {
+        setJoining(false);
+      }
+      return;
+    }
+
+    if (!joinForm.division) {
+      setJoinError('Please select a division.');
+      return;
+    }
+
+    if (joinForm.tournamentChoice === 'Singles' && joinForm.division === 'Mixed Doubles') {
+      setJoinError('Mixed Doubles is locked for singles.');
       return;
     }
 
@@ -449,6 +545,7 @@ export const Events: React.FC = () => {
         event_id: selectedEvent.id,
         event_name: selectedEvent.title,
         tournament_choice: joinForm.tournamentChoice,
+        division: joinForm.division,
         doubles: joinForm.tournamentChoice === 'Doubles' ? joinForm.partnerName.trim() : '',
         partner_in_app: joinForm.tournamentChoice === 'Doubles' ? joinForm.partnerInApp : '',
         skill: joinForm.tournamentChoice === 'Singles'
@@ -466,27 +563,41 @@ export const Events: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-32 pt-4 md:pt-6">
-      <div className="space-y-8 mb-12">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
+      <div className="space-y-6 mb-8">
         {authPrompt && (
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-amber-300">
-            {authPrompt}
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-amber-300 space-y-3">
+            <p>{authPrompt}</p>
+            {!user && (
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link to={loginRoute} className="w-full sm:w-auto">
+                  <Button size="sm" className="w-full sm:w-auto">
+                    Log In
+                  </Button>
+                </Link>
+                <Link to={signupRoute} className="w-full sm:w-auto">
+                  <Button variant="outline" size="sm" className="w-full sm:w-auto">
+                    Join the League
+                  </Button>
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
-        <div className="rounded-[2rem] border border-clay/20 bg-gradient-to-r from-clay/10 via-tennis-surface/40 to-tennis-surface/20 p-6 md:p-7 shadow-xl">
+        <div className="rounded-[2rem] border border-clay/20 bg-gradient-to-r from-clay/10 via-tennis-surface/40 to-tennis-surface/20 p-5 md:p-6 shadow-xl">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
             <div className="space-y-2">
               <h1 className="text-3xl md:text-4xl font-display font-black text-white">Upcoming Events</h1>
               <p className="text-gray-300 text-base md:text-lg max-w-xl">Explore Toronto events, save the dates, and join the right draw for your level.</p>
             </div>
-            <div className="rounded-[1.75rem] border border-white/10 bg-white/5 p-5 max-w-xl">
-              <p className="text-white font-semibold mb-2">Want to create events? Contact us to learn more.</p>
+            <div className="rounded-[1.75rem] border border-white/10 bg-white/5 p-4 max-w-xl">
+              <p className="text-white font-semibold mb-2">Want to create events?</p>
               <p className="text-gray-400 text-sm mb-4">
-                Tell us about the type of event you want to organize, whether it is a meetup or tournament, or send general feedback. Events require admin approval before they go live.
+                Tell us what you want to organize and we will review it before it goes live.
               </p>
               <Link to="/contact">
-                <Button>
+                <Button size="sm">
                   <Mail className="w-4 h-4 mr-2" />
                   Contact Us
                 </Button>
@@ -495,52 +606,6 @@ export const Events: React.FC = () => {
           </div>
         </div>
 
-        <div className="rounded-[2.5rem] border border-white/5 bg-tennis-surface/30 p-8 shadow-xl">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-white">Event Calendar</h2>
-            <p className="text-gray-400 text-sm">Events depend on weather and participation level. Check back often for updates.</p>
-          </div>
-          {calendarEvents.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4">
-              {calendarEvents.map((occurrence, index) => {
-                const { event, date } = occurrence;
-                return (
-                  <button
-                    key={`${event.id}-${date.toISOString()}-${index}`}
-                    onClick={() => setSelectedEvent(event)}
-                    className="text-left rounded-[1.5rem] border border-white/5 bg-white/5 p-4 hover:border-clay/30 transition-all"
-                  >
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
-                      {date.toLocaleDateString('en-US', { month: 'short' })}
-                    </p>
-                    <p className="text-3xl font-black text-clay mt-1">
-                      {date.toLocaleDateString('en-US', { day: '2-digit' })}
-                    </p>
-                    <p className="text-white text-sm font-semibold mt-3 line-clamp-2">{event.title}</p>
-                    <p className="text-gray-400 text-xs mt-1 line-clamp-1">{event.time || event.location}</p>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="rounded-[2rem] border border-dashed border-white/10 p-8 text-center text-gray-400">
-              No events are live yet. Once admin-approved events are added to Firestore, they will appear here.
-            </div>
-          )}
-        </div>
-
-        <div className="flex w-full md:w-auto">
-          <div className="relative flex-grow sm:w-72">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-            <input
-              type="text"
-              placeholder="Search events..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-tennis-surface/50 border border-white/5 rounded-2xl text-white focus:border-clay outline-none transition-all"
-            />
-          </div>
-        </div>
       </div>
 
       {loading ? (
@@ -549,9 +614,9 @@ export const Events: React.FC = () => {
             <div key={i} className="h-96 bg-tennis-surface/30 rounded-[2.5rem] animate-pulse" />
           ))}
         </div>
-      ) : filteredEvents.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredEvents.map((event, i) => (
+      ) : featuredEvents.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+          {featuredEvents.map((event, i) => (
             <motion.div
               key={event.id}
               initial={{ opacity: 0, y: 20 }}
@@ -559,31 +624,46 @@ export const Events: React.FC = () => {
               transition={{ delay: i * 0.08 }}
               className="group bg-tennis-surface/30 border border-white/5 rounded-[2.5rem] overflow-hidden hover:border-clay/30 transition-all duration-300 flex flex-col shadow-xl"
             >
-              <div className="relative h-80 md:h-[22rem] overflow-hidden">
+            <div className="relative h-80 md:h-[420px] overflow-hidden rounded-t-3xl">
+              {event.image ? (
                 <img
                   src={event.image}
                   alt={event.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   referrerPolicy="no-referrer"
+                  loading="lazy"
                 />
-                <div className="absolute top-4 left-4 px-3 py-1 bg-tennis-dark/80 backdrop-blur-md rounded-lg text-xs font-bold text-clay uppercase tracking-wider">
-                  {event.type}
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-tennis-dark via-tennis-surface to-clay/20 px-6 text-center text-white">
+                  <span className="text-lg font-bold">{event.title}</span>
                 </div>
-                {isFullyJoinedEvent(event) && (
-                  <div className="absolute top-4 right-4 w-10 h-10 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
-                    <CheckCircle2 className="w-6 h-6 text-white" />
-                  </div>
-                )}
+              )}
+
+              <div className="absolute top-4 left-4 px-3 py-1 bg-tennis-dark/80 backdrop-blur-md rounded-lg text-xs font-bold text-clay uppercase tracking-wider">
+                {event.type}
               </div>
 
-              <div className="p-6 flex-grow flex flex-col gap-4">
+              {isFullyJoinedEvent(event) && (
+                <div className="absolute top-4 right-4 w-10 h-10 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
+                  <CheckCircle2 className="w-6 h-6 text-white" />
+                </div>
+              )}
+            </div>
+
+              <div className="p-5 flex-grow flex flex-col gap-4">
                 <div className="space-y-2">
-                  <h3 className="text-2xl font-bold text-white group-hover:text-clay transition-colors leading-tight">{event.title}</h3>
+                  <h3 className="text-xl md:text-2xl font-bold text-white group-hover:text-clay transition-colors leading-tight">{event.title}</h3>
+                  {isSeasonOpener(event) && (
+                    <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">First Tournament of 2026</p>
+                  )}
                   {isTournamentEvent(event) && formatTournamentRange(event) && (
                     <p className="text-clay font-semibold">{formatTournamentRange(event)}</p>
                   )}
                   {getRecurringEventLabel(event) && (
                     <p className="text-gray-400 text-sm font-medium">{getRecurringEventLabel(event)}</p>
+                  )}
+                  {isWeekendMatchdaysEvent(event) && (
+                    <p className="text-sm text-amber-200">Join Tournament to access weekend matchdays</p>
                   )}
                 </div>
 
@@ -599,7 +679,7 @@ export const Events: React.FC = () => {
                       isLoading={joining && !selectedEvent}
                       disabled={isFullyJoinedEvent(event)}
                     >
-                      {isFullyJoinedEvent(event) ? 'Joined' : 'Join Event'}
+                      {isFullyJoinedEvent(event) ? 'Joined' : 'Log In to Join'}
                     </Button>
                   </div>
                   {canAddToCalendar(event) && (
@@ -622,16 +702,10 @@ export const Events: React.FC = () => {
         </div>
       ) : (
         <div className="text-center py-24 space-y-5">
-          <div className="w-20 h-20 bg-tennis-surface/50 rounded-full flex items-center justify-center mx-auto">
-            <Search className="w-10 h-10 text-gray-600" />
-          </div>
           <div>
-            <h3 className="text-2xl font-bold text-white">No events found</h3>
-            <p className="text-gray-400">Try adjusting your search or filters.</p>
+            <h3 className="text-2xl font-bold text-white">Featured events are coming soon</h3>
+            <p className="text-gray-400">Season opener and weekend matchdays will appear here when they are live.</p>
           </div>
-          <Button variant="outline" onClick={() => { setSearchTerm(''); }}>
-            Clear All Filters
-          </Button>
         </div>
       )}
 
@@ -659,12 +733,18 @@ export const Events: React.FC = () => {
               </button>
 
               <div className="h-64 relative">
-                <img
-                  src={selectedEvent.image}
-                  alt={selectedEvent.title}
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
+                {selectedEvent.image ? (
+                  <img
+                    src={selectedEvent.image}
+                    alt={selectedEvent.title}
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-tennis-dark via-tennis-surface to-clay/20 px-8 text-center text-white">
+                    <span className="text-2xl font-bold">{selectedEvent.title}</span>
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-tennis-surface via-transparent to-transparent" />
               </div>
 
@@ -674,6 +754,9 @@ export const Events: React.FC = () => {
                     {selectedEvent.type}
                   </div>
                   <h2 className="text-4xl font-display font-black text-white">{selectedEvent.title}</h2>
+                  {isSeasonOpener(selectedEvent) && (
+                    <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">First Tournament of 2026</p>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-300">
                     <div className="flex items-center">
                       <Calendar className="w-5 h-5 mr-2 text-clay" />
@@ -718,7 +801,13 @@ export const Events: React.FC = () => {
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                       <h4 className="text-white font-bold">Join Event</h4>
-                      <p className="text-gray-400 text-sm">Choose singles or doubles before we register you.</p>
+                      <p className="text-gray-400 text-sm">
+                        {isTournamentEvent(selectedEvent)
+                          ? 'Choose singles or doubles before we register you.'
+                          : isWeekendMatchdaysEvent(selectedEvent)
+                            ? 'Play Tourney Matches on Selected Matchdays. Join Tournament to access weekend matchdays.'
+                            : 'Reserve your spot for this event.'}
+                      </p>
                     </div>
                     {canAddToCalendar(selectedEvent) && (
                       <button
@@ -736,6 +825,12 @@ export const Events: React.FC = () => {
                     <div className="flex items-center space-x-3 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
                       <AlertCircle className="w-5 h-5 shrink-0" />
                       <span>{joinError}</span>
+                    </div>
+                  )}
+
+                  {!user && (
+                    <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
+                      Guest event join is not available with the current signup system. Join the league to get updates and register for events.
                     </div>
                   )}
 
@@ -762,6 +857,10 @@ export const Events: React.FC = () => {
                                   onClick={() => setJoinForm({
                                     ...joinForm,
                                     tournamentChoice: choice,
+                                    division:
+                                      choice === 'Singles' && joinForm.division === 'Mixed Doubles'
+                                        ? ''
+                                        : joinForm.division,
                                     partnerName: choice === 'Singles' ? '' : joinForm.partnerName,
                                     partnerInApp: choice === 'Singles' ? '' : joinForm.partnerInApp,
                                     combinedSkill: choice === 'Singles' ? '' : joinForm.combinedSkill,
@@ -776,6 +875,37 @@ export const Events: React.FC = () => {
                                   {choice}
                                 </button>
                               ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="block text-sm font-medium text-gray-300">Select Division</label>
+                            <div className="flex flex-wrap gap-3">
+                              {(["Men's", "Women's", 'Mixed Doubles'] as const).map((division) => {
+                                const isLocked =
+                                  joinForm.tournamentChoice === 'Singles' && division === 'Mixed Doubles';
+
+                                return (
+                                  <button
+                                    key={division}
+                                    type="button"
+                                    onClick={() => {
+                                      if (isLocked) return;
+                                      setJoinForm({ ...joinForm, division });
+                                    }}
+                                    disabled={isLocked}
+                                    className={`px-4 py-3 rounded-2xl border font-semibold transition-all ${
+                                      joinForm.division === division
+                                        ? 'bg-clay/10 border-clay text-clay'
+                                        : isLocked
+                                          ? 'bg-tennis-dark/70 border-white/5 text-gray-600 cursor-not-allowed opacity-70'
+                                          : 'bg-tennis-surface/50 border-white/10 text-gray-400'
+                                    }`}
+                                  >
+                                    {division}
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
 
@@ -830,9 +960,20 @@ export const Events: React.FC = () => {
                         <Button variant="ghost" onClick={() => setSelectedEvent(null)}>
                           Cancel
                         </Button>
-                        <Button onClick={handleSubmitJoin} isLoading={joining}>
-                          Join Event
-                        </Button>
+                        {user ? (
+                          <Button onClick={handleSubmitJoin} isLoading={joining}>
+                            Join Event
+                          </Button>
+                        ) : (
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            <Link to={loginRoute}>
+                              <Button>Log In</Button>
+                            </Link>
+                            <Link to={signupRoute}>
+                              <Button variant="outline">Join the League</Button>
+                            </Link>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

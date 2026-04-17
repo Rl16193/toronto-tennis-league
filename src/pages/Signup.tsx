@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth, db, storage } from '../lib/firebase';
+import { auth, db, setAuthPersistence, storage } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
-import { SKILL_DESCRIPTIONS, SKILL_LEVELS } from '../lib/skillLevels';
+import { SKILL_DESCRIPTIONS, SKILL_LEVELS, TOURNAMENT_OPTIONS } from '../lib/skillLevels';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { 
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserData, UserStats, UserPreferences } from '../types';
+import mailcheck from 'mailcheck';
 
 const PRELOADED_COURTS = [
   "Sorauren Park", "High Park", "Riverdale", "Trinity Bellwoods", 
@@ -28,6 +29,7 @@ const FAVOURITE_PLAYERS = [
 
 export const Signup: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -35,6 +37,10 @@ export const Signup: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [shouldRedirectToProfile, setShouldRedirectToProfile] = useState(false);
+  const [emailSuggestion, setEmailSuggestion] = useState<any>(null);
+  const returnTo = searchParams.get('returnTo') || '/profile';
+  const intent = searchParams.get('intent') || '';
 
   // Form State
   const [formData, setFormData] = useState({
@@ -45,10 +51,10 @@ export const Signup: React.FC = () => {
     contactMode: 'email' as 'email' | 'phone',
     skillLevel: 2,
     preferredCourts: [] as string[],
-    customCourt: '',
+    customCourtEntry: '',
     tournamentType: 'Challengers' as 'Beginners' | 'Challengers' | 'Masters',
     favouritePlayers: [] as string[],
-    customPlayer: '',
+    customPlayerEntry: '',
     availabilityDay: [] as string[],
     availabilityTime: [] as string[],
     organizer: false,
@@ -61,16 +67,23 @@ export const Signup: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!authLoading && user) {
-      navigate('/events');
+    if (!authLoading && user && shouldRedirectToProfile) {
+      navigate(returnTo);
     }
-  }, [authLoading, navigate, user]);
+  }, [authLoading, navigate, returnTo, shouldRedirectToProfile, user]);
+
+  useEffect(() => {
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth',
+  });
+}, [step]);
 
   const validateStep1 = () => {
     const newErrors: Record<string, string> = {};
     if (formData.name.length < 3 || formData.name.length > 80) newErrors.name = 'Name must be 3-80 characters';
     if (/\d/.test(formData.name)) newErrors.name = 'Name cannot contain numbers';
-    if (!formData.email.includes('@')) newErrors.email = 'Invalid email address';
+    if (!emailRegex.test(formData.email)) newErrors.email = 'Please enter a valid email address';
     if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters';
     
     // Sequential check
@@ -88,8 +101,11 @@ export const Signup: React.FC = () => {
   };
 
   const handleNext = () => {
-    if (step === 1 && validateStep1()) setStep(2);
-    else if (step === 2 && validateStep2()) setStep(3);
+    if (step === 1 && validateStep1()) {
+      setStep(2);
+    } else if (step === 2 && validateStep2()) {
+      setStep(3);
+    }
   };
 
   const handleBack = () => setStep(step - 1);
@@ -111,10 +127,85 @@ export const Signup: React.FC = () => {
     return `(${numbers.slice(0, 3)})-${numbers.slice(3, 6)}-${numbers.slice(6, 10)}`;
   };
 
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const nameOnlyRegex = /^[A-Za-z ]+$/;
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newEmail = e.target.value;
+    setFormData({ ...formData, email: newEmail });
+    setEmailSuggestion(null);
+    mailcheck.run({
+      email: newEmail,
+      suggested: (suggestion) => setEmailSuggestion(suggestion),
+      empty: () => setEmailSuggestion(null)
+    });
+  };
+
+  const addCustomCourt = () => {
+    const court = formData.customCourtEntry.trim();
+    if (!court) return;
+    if (!nameOnlyRegex.test(court)) {
+      setErrors({
+        ...errors,
+        customCourtEntry: 'Preferred court names can only contain letters and spaces.',
+      });
+      return;
+    }
+    setFormData({
+      ...formData,
+      preferredCourts: formData.preferredCourts.includes(court)
+        ? formData.preferredCourts
+        : [...formData.preferredCourts, court],
+      customCourtEntry: '',
+    });
+    setErrors({ ...errors, customCourtEntry: '' });
+  };
+
+  const addCustomPlayer = () => {
+    const player = formData.customPlayerEntry.trim();
+    if (!player) return;
+    if (!nameOnlyRegex.test(player)) {
+      setErrors({
+        ...errors,
+        customPlayerEntry: 'Favourite player names can only contain letters and spaces.',
+      });
+      return;
+    }
+    setFormData({
+      ...formData,
+      favouritePlayers: formData.favouritePlayers.includes(player)
+        ? formData.favouritePlayers
+        : [...formData.favouritePlayers, player],
+      customPlayerEntry: '',
+    });
+    setErrors({ ...errors, customPlayerEntry: '' });
+  };
+
+  const getSignupErrorMessage = (error: any) => {
+    const code = (error?.code || error?.message || '').toString().toLowerCase();
+    if (code.includes('account-exists-with-different-credential')) {
+      return 'An account already exists with this email. Please sign in with Google or use the same provider.';
+    }
+    if (code.includes('email-already-in-use')) {
+      return 'That email is already registered.';
+    }
+    if (code.includes('invalid-email')) {
+      return 'Please enter a valid email address.';
+    }
+    if (code.includes('weak-password')) {
+      return 'Password is too weak. Please use at least 6 characters.';
+    }
+    if (code.includes('network-request-failed')) {
+      return 'Network error. Please try again.';
+    }
+    return 'Signup failed. Please try again.';
+  };
+
   const handleSignup = async () => {
     setLoading(true);
     setError('');
     try {
+      await setAuthPersistence(false);
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
 
@@ -139,6 +230,8 @@ export const Signup: React.FC = () => {
 
       // Create stats collection document
       const userStats: UserStats = {
+        user_id: user.uid,
+        name: formData.name,
         skill_level: formData.skillLevel,
         tournament_preference: formData.tournamentType,
         matches_played: 0,
@@ -148,62 +241,53 @@ export const Signup: React.FC = () => {
 
       // Create preferences collection document
       const userPreferences: UserPreferences = {
+        user_id: user.uid,
+        name: formData.name,
         availability_day: formData.availabilityDay,
         availability_time: formData.availabilityTime,
         preferred_courts: formData.preferredCourts,
-        custom_courts: formData.customCourt ? [formData.customCourt] : [],
-        favourite_players: formData.favouritePlayers.concat(formData.customPlayer ? [formData.customPlayer] : []),
+        favourite_players: formData.favouritePlayers,
         scheduling_preference: formData.schedulingPreference,
         event_creator: formData.organizer,
       };
 
       // Write to all three collections
-      console.log('Creating documents for user:', user.uid);
       
       try {
-        console.log('Creating users document:', userData);
         await setDoc(doc(db, 'users', user.uid), userData);
-        console.log('Users document created successfully');
       } catch (err) {
         console.error("Failed to create users document:", err);
         throw new Error("Failed to create user profile. Please try again.");
       }
 
       try {
-        console.log('Creating stats document:', userStats);
         await setDoc(doc(db, 'stats', user.uid), userStats);
-        console.log('Stats document created successfully');
       } catch (err) {
         console.error("Failed to create stats document:", err);
         throw new Error("Failed to create user stats. Please try again.");
       }
 
       try {
-        console.log('Creating preferences document:', userPreferences);
         await setDoc(doc(db, 'preferences', user.uid), userPreferences);
-        console.log('Preferences document created successfully');
       } catch (err) {
         console.error("Failed to create preferences document:", err);
         throw new Error("Failed to create user preferences. Please try again.");
       }
-
-      console.log('All documents created successfully');
-      setStatusMessage('Your account is ready. Redirecting to events...');
+      setShouldRedirectToProfile(true);
+      setStatusMessage('Your account is ready. Taking you to your profile...');
       sessionStorage.setItem(`profile-bootstrap-pending:${user.uid}`, '1');
       sessionStorage.removeItem(`profile-bootstrap-retry:${user.uid}`);
-      window.setTimeout(() => {
-        window.location.assign('/events');
-      }, 3000);
     } catch (err: any) {
-      setError(err.message || 'Signup failed.');
+      setError(getSignupErrorMessage(err));
+      setShouldRedirectToProfile(false);
     } finally {
       setLoading(false);
     }
   };
 
-  const skillMismatch = (formData.tournamentType === 'Beginners' && formData.skillLevel > 2) ||
-                        (formData.tournamentType === 'Challengers' && (formData.skillLevel < 3 || formData.skillLevel > 4)) ||
-                        (formData.tournamentType === 'Masters' && formData.skillLevel < 4.5);
+  const skillMismatch = (formData.tournamentType === 'Beginners' && formData.skillLevel > 2.5) ||
+                        (formData.tournamentType === 'Challengers' && (formData.skillLevel < 3 || formData.skillLevel > 3.5)) ||
+                        (formData.tournamentType === 'Masters' && formData.skillLevel < 4);
 
   return (
     <div className="min-h-screen py-20 px-4 relative overflow-hidden">
@@ -214,6 +298,11 @@ export const Signup: React.FC = () => {
       <div className="max-w-4xl mx-auto">
         {/* Progress Bar */}
         <div className="mb-12">
+          {intent === 'join-event' && (
+            <div className="mb-6 rounded-2xl border border-clay/20 bg-clay/10 px-5 py-4 text-sm text-gray-200">
+              Create your league profile to join events and receive updates.
+            </div>
+          )}
           <div className="flex justify-between items-center mb-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex flex-col items-center space-y-2">
@@ -294,10 +383,23 @@ export const Signup: React.FC = () => {
                     type="email" 
                     placeholder="roger@goat.com" 
                     value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    onChange={handleEmailChange}
                     error={errors.email}
                     required
                   />
+                  {emailSuggestion && (
+                    <div className="text-sm text-blue-400 mt-1">
+                      Did you mean <button 
+                        className="underline hover:text-blue-300" 
+                        onClick={() => {
+                          setFormData({ ...formData, email: emailSuggestion.full });
+                          setEmailSuggestion(null);
+                        }}
+                      >
+                        {emailSuggestion.full}
+                      </button>?
+                    </div>
+                  )}
                   <Input 
                     label="Password" 
                     type="password" 
@@ -384,7 +486,7 @@ export const Signup: React.FC = () => {
                 <div className="space-y-4">
                   <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider">Preferred Courts</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {PRELOADED_COURTS.map(court => (
+                    {[...new Set([...PRELOADED_COURTS, ...formData.preferredCourts])].map(court => (
                       <button
                         key={court}
                         onClick={() => {
@@ -399,22 +501,35 @@ export const Signup: React.FC = () => {
                       </button>
                     ))}
                   </div>
-                  <Input 
-                    placeholder="Add your own court..." 
-                    value={formData.customCourt}
-                    onChange={(e) => setFormData({...formData, customCourt: e.target.value})}
-                  />
+                  <div className="flex gap-3">
+                    <Input 
+                      placeholder="Add your own court..." 
+                      value={formData.customCourtEntry}
+                      error={errors.customCourtEntry}
+                      onChange={(e) => {
+                        setFormData({...formData, customCourtEntry: e.target.value});
+                        if (errors.customCourtEntry) {
+                          setErrors({ ...errors, customCourtEntry: '' });
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addCustomCourt();
+                        }
+                      }}
+                    />
+                    <Button type="button" variant="secondary" size="sm" onClick={addCustomCourt} disabled={!formData.customCourtEntry.trim()}>
+                      Add
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Tournament Type */}
                 <div className="space-y-4">
                   <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider">Tournament Type</label>
                   <div className="space-y-3">
-                    {[
-                      { name: 'Beginners', range: '1–2.5' },
-                      { name: 'Challengers', range: '3–4' },
-                      { name: 'Masters', range: '4.5+' }
-                    ].map(type => (
+                    {TOURNAMENT_OPTIONS.map((type) => (
                       <button
                         key={type.name}
                         onClick={() => setFormData({...formData, tournamentType: type.name as any})}
@@ -442,7 +557,7 @@ export const Signup: React.FC = () => {
                   Favourite Players
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {FAVOURITE_PLAYERS.map((player) => (
+                  {[...new Set([...FAVOURITE_PLAYERS, ...formData.favouritePlayers])].map((player) => (
                     <button
                       key={player}
                       onClick={() => {
@@ -464,11 +579,28 @@ export const Signup: React.FC = () => {
                     </button>
                   ))}
                 </div>
-                <Input
-                  placeholder="Add your own player..."
-                  value={formData.customPlayer}
-                  onChange={(e) => setFormData({ ...formData, customPlayer: e.target.value })}
-                />
+                <div className="flex gap-3">
+                  <Input
+                    placeholder="Add your own player..."
+                    value={formData.customPlayerEntry}
+                    error={errors.customPlayerEntry}
+                    onChange={(e) => {
+                      setFormData({ ...formData, customPlayerEntry: e.target.value });
+                      if (errors.customPlayerEntry) {
+                        setErrors({ ...errors, customPlayerEntry: '' });
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addCustomPlayer();
+                      }
+                    }}
+                  />
+                  <Button type="button" variant="secondary" size="sm" onClick={addCustomPlayer} disabled={!formData.customPlayerEntry.trim()}>
+                    Add
+                  </Button>
+                </div>
               </div>
 
               {/* Availability */}
@@ -584,7 +716,7 @@ export const Signup: React.FC = () => {
                       <div className="space-y-1">
                         <span className="text-gray-500 text-sm">Favourite Players</span>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {formData.favouritePlayers.concat(formData.customPlayer ? [formData.customPlayer] : []).map(player => (
+                          {formData.favouritePlayers.map(player => (
                             <span key={player} className="px-2 py-1 bg-clay/10 text-clay text-[10px] font-bold rounded-md">{player}</span>
                           ))}
                         </div>

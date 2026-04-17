@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Shield, FileText, Gavel, CheckCircle2, Mail, MessageSquare } from 'lucide-react';
 import { Button } from '../components/Button';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const PageWrapper: React.FC<{ title: string; icon: any; children: React.ReactNode }> = ({ title, icon: Icon, children }) => (
   <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-32">
@@ -209,6 +211,8 @@ export const Privacy: React.FC = () => (
 );
 
 export const Contact: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [message, setMessage] = useState('');
   const [subjectValue, setSubjectValue] = useState('Meetups');
 
@@ -216,6 +220,14 @@ export const Contact: React.FC = () => {
   const body = encodeURIComponent(
     `Hi Toronto Tennis League,\n\nSubject: ${subjectValue}\n\nMessage:\n${message}\n`
   );
+
+  const handleSendMessage = () => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    // The mailto link will be handled by the anchor
+  };
 
   return (
     <PageWrapper title="Contact Us" icon={Mail}>
@@ -267,8 +279,14 @@ export const Contact: React.FC = () => {
               />
             </div>
           </div>
-          <a href={`mailto:tenniscommunity.tbtc@gmail.com?subject=${subject}&body=${body}`}>
-            <Button>Send Message</Button>
+          <a
+            href={user ? `mailto:tenniscommunity.tbtc@gmail.com?subject=${subject}&body=${body}` : undefined}
+            onClick={!user ? handleSendMessage : undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center rounded-2xl bg-clay hover:bg-clay-dark text-white shadow-lg shadow-clay/20 px-6 py-2.5 font-semibold transition-all duration-200"
+          >
+            Send Message
           </a>
         </section>
       </div>

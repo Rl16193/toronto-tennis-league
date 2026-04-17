@@ -76,7 +76,7 @@ export const Navbar: React.FC = () => {
                 <Link to="/profile">
                   <div className="w-10 h-10 rounded-full border-2 border-clay p-0.5 overflow-hidden hover:scale-105 transition-transform">
                     <img
-                      src={profile?.avatar || `https://ui-avatars.com/api/?name=${profile?.name || user.email}&background=C25E44&color=fff`}
+                      src={profile?.user.avatar || `https://ui-avatars.com/api/?name=${profile?.user.name || user.email}&background=C25E44&color=fff`}
                       alt="Profile"
                       className="w-full h-full rounded-full object-cover"
                       referrerPolicy="no-referrer"

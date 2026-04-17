@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
@@ -8,6 +8,24 @@ import { Signup } from './pages/Signup';
 import { Events } from './pages/Events';
 import { Profile } from './pages/Profile';
 import { Rules, Terms, Privacy, Contact } from './pages/StaticPages';
+
+const ScrollToTop: React.FC = () => {
+  const location = useLocation();
+
+  React.useEffect(() => {
+    const { history } = window;
+    const previousScrollRestoration = history.scrollRestoration;
+
+    history.scrollRestoration = 'manual';
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+
+    return () => {
+      history.scrollRestoration = previousScrollRestoration;
+    };
+  }, [location.pathname, location.search]);
+
+  return null;
+};
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -27,6 +45,7 @@ export default function App() {
   return (
     <AuthProvider>
       <Router>
+        <ScrollToTop />
         <Layout>
           <Routes>
             <Route path="/" element={<Home />} />

@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
-import { ensureUserProfileDocuments } from '../lib/profileBootstrap';
+import { auth, db } from '../services/firebase';
+import { ensureUserProfileDocuments } from '../services/profileBootstrap';
 import { UserProfile, UserData, UserStats, UserPreferences } from '../types';
 
 interface AuthContextType {
@@ -43,31 +43,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       setProfileError(null);
-      console.log('Fetching profile data for user:', activeUser.uid);
       await ensureUserProfileDocuments(activeUser);
 
-      const userDataDoc = await getDoc(doc(db, 'users', activeUser.uid));
-      const statsDoc = await getDoc(doc(db, 'stats', activeUser.uid));
-      const preferencesDoc = await getDoc(doc(db, 'preferences', activeUser.uid));
-
-      console.log('Users doc exists:', userDataDoc.exists());
-      console.log('Stats doc exists:', statsDoc.exists());
-      console.log('Preferences doc exists:', preferencesDoc.exists());
+      const [userDataDoc, statsDoc, preferencesDoc] = await Promise.all([
+        getDoc(doc(db, 'users', activeUser.uid)),
+        getDoc(doc(db, 'stats', activeUser.uid)),
+        getDoc(doc(db, 'preferences', activeUser.uid)),
+      ]);
 
       if (!userDataDoc.exists()) {
-        console.warn('User profile document does not exist:', activeUser.uid);
         setProfile(null);
         setProfileError('Your user profile document is missing from Firestore.');
       } else if (!statsDoc.exists()) {
-        console.warn('Stats document does not exist:', activeUser.uid);
         setProfile(null);
         setProfileError('Your stats document is missing from Firestore.');
       } else if (!preferencesDoc.exists()) {
-        console.warn('Preferences document does not exist:', activeUser.uid);
         setProfile(null);
         setProfileError('Your preferences document is missing from Firestore.');
       } else {
-        console.log('All documents exist, setting profile');
         const userData = userDataDoc.data() as UserData;
         if (activeUser.email && userData.email !== activeUser.email) {
           await updateDoc(doc(db, 'users', activeUser.uid), {
@@ -92,7 +85,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      console.log('Auth state changed:', currentUser ? currentUser.uid : 'null');
       setUser(currentUser);
       if (currentUser) {
         await refreshProfile(currentUser);
