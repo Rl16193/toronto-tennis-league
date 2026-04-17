@@ -71,7 +71,7 @@ export const Profile: React.FC = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-8">
       {/* Toast Message */}
       <AnimatePresence>
         {message.text && (
@@ -99,7 +99,7 @@ export const Profile: React.FC = () => {
       )}
 
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center mb-8 lg:mb-10">
         <h1 className="text-3xl md:text-4xl font-display font-black text-white tracking-tight">My Profile</h1>
         <Button variant="danger" size="sm" onClick={() => auth.signOut()}>
           <LogOut className="w-4 h-4 mr-2" />
@@ -116,8 +116,8 @@ export const Profile: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] gap-6 lg:gap-8">
-        <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] gap-6 lg:gap-8">
+        <div className="space-y-6 lg:space-y-8">
           <ProfileInfo
             isEditing={isEditingInfo}
             setIsEditing={setIsEditingInfo}
@@ -158,7 +158,7 @@ export const Profile: React.FC = () => {
           />
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-6 lg:space-y-8">
           <ProfileSkills
             isEditing={isEditingSkills}
             setIsEditing={setIsEditingSkills}
