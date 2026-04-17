@@ -624,12 +624,11 @@ export const Events: React.FC = () => {
               transition={{ delay: i * 0.08 }}
               className="group bg-tennis-surface/30 border border-white/5 rounded-[2.5rem] overflow-hidden hover:border-clay/30 transition-all duration-300 flex flex-col shadow-xl"
             >
-            <div className="relative h-80 md:h-[420px] overflow-hidden rounded-t-3xl">
-              {event.image ? (
+            <div className="relative h-[420px] md:h-[500px] overflow-hidden rounded-t-3xl">
                 <img
                   src={event.image}
                   alt={event.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  className="w-full h-full object-cover object-[center_top_15%] group-hover:scale-105 transition-transform duration-500"
                   referrerPolicy="no-referrer"
                   loading="lazy"
                 />
@@ -679,7 +678,11 @@ export const Events: React.FC = () => {
                       isLoading={joining && !selectedEvent}
                       disabled={isFullyJoinedEvent(event)}
                     >
-                      {isFullyJoinedEvent(event) ? 'Joined' : 'Log In to Join'}
+                      {isFullyJoinedEvent(event)
+                        ? 'Joined'
+                        : user
+                          ? 'Join Event'
+                          : 'Log In to Join'}
                     </Button>
                   </div>
                   {canAddToCalendar(event) && (
