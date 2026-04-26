@@ -45,11 +45,13 @@ export const Navbar: React.FC = () => {
         <div className="flex justify-between items-center">
           <Link to="/" className="flex items-center group">
             <img
-              src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FLogo.jpg?alt=media&token=b5a4d010-e93c-423a-b823-24c01c8918ce"
-              alt="Toronto Tennis League logo"
-              className={`h-16 md:h-20 lg:h-24 w-auto max-w-[260px] object-contain group-hover:scale-105 transition-all duration-300 ${
-                scrolled ? 'opacity-80 saturate-90' : 'opacity-95'
-              }`}
+              src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FScreenshot%202026-04-26%20165830.png?alt=media&token=6f61bcf6-6424-4852-83ba-a8f1865849dd"
+              alt="Racquets&Strings logo"
+              className={`h-16 md:h-20 lg:h-24 w-full max-w-[360px] object-contain mx-auto transition-all duration-300 ${
+            scrolled 
+              ? 'opacity-70 saturate-75 scale-[0.98]' 
+              : 'opacity-85 saturate-90'
+          }`}
               referrerPolicy="no-referrer"
             />
           </Link>

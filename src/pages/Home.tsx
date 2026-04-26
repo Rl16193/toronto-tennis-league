@@ -51,7 +51,7 @@ export const Home: React.FC = () => {
               </h1>
             </div>
             <p className="text-lg md:text-xl text-gray-400 leading-relaxed max-w-xl mx-auto text-center">
-              Join a thriving community of tennis enthusiasts in Toronto. Let's talk tennis!!
+              Join a thriving community of Racquet Sports enthusiasts in Toronto.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
               {user ? (
@@ -82,7 +82,7 @@ export const Home: React.FC = () => {
       {/* Features Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center space-y-3 mb-10">
-          <h2 className="text-3xl md:text-4xl font-display font-bold text-white">Test Your Tennis Skills</h2>
+          <h2 className="text-3xl md:text-4xl font-display font-bold text-white">Test Your Racquet Skills</h2>
           <p className="text-gray-400 max-w-2xl mx-auto text-base md:text-lg">
             Join the league to get event updates and access to your player profile.
           </p>

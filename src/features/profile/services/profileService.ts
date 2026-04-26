@@ -90,3 +90,8 @@ export const linkGoogleAccount = async (user: any) => {
 export const removeEventParticipant = async (participantId: string) => {
   await deleteDoc(doc(db, 'event_participants', participantId));
 };
+
+export const updateEventParticipantDates = async (participantId: string, dateselected: string[]) => {
+  const participantRef = doc(db, 'event_participants', participantId);
+  await updateDoc(participantRef, { dateselected });
+};

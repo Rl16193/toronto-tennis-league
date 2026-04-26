@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../../../components/Button';
-import { Calendar, Plus, Trash2 } from 'lucide-react';
+import { Calendar, Plus, Trash2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { JoinedEventCard } from '../types';
 
@@ -30,6 +30,7 @@ const parseEventDate = (value?: string | { toDate?: () => Date; seconds?: number
 };
 
 const isTournamentEvent = (event: JoinedEventCard) => event.type.toLowerCase().includes('tournament');
+const isWeekendMatchdaysEvent = (event: JoinedEventCard) => event.title.toLowerCase().includes('weekend matchdays');
 
 export const ProfileEvents: React.FC<ProfileEventsProps> = ({
   joinedEvents,

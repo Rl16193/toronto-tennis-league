@@ -166,9 +166,9 @@ export const Login: React.FC = () => {
       >
         <div className="text-center space-y-4 mb-10">
           <img
-            src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FLogo.jpg?alt=media&token=b5a4d010-e93c-423a-b823-24c01c8918ce"
-            alt="Toronto Tennis League"
-            className="mx-auto h-32 w-40 rounded-3xl object-cover shadow-xl"
+            src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FScreenshot%202026-04-26%20165830.png?alt=media&token=6f61bcf6-6424-4852-83ba-a8f1865849dd"
+            alt="Racquets&Strings"
+            className="mx-auto h-32 w-full max-w-xs object-contain opacity-80 mix-blend-lighten"
             referrerPolicy="no-referrer"
           />
           {intent === 'join-event' && (

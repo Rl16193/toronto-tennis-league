@@ -78,6 +78,7 @@ export const useProfileData = () => {
               ...event,
               image,
               participantId: participant.id,
+              dateselected: participant.dateselected || [],
             } as JoinedEventCard;
           })
         );

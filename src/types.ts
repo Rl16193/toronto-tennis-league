@@ -71,5 +71,6 @@ export interface EventParticipant {
   doubles?: string;
   partner_in_app?: 'yes' | 'no' | '';
   skill?: number;
+  dateselected?: string[];
   createdAt: string;
 }

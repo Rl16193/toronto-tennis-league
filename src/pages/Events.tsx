@@ -25,6 +25,7 @@ type JoinFormState = {
   partnerName: string;
   partnerInApp: 'yes' | 'no' | '';
   combinedSkill: string;
+  dateselected: string[];
 };
 
 type CalendarOccurrence = {
@@ -47,7 +48,19 @@ const INITIAL_JOIN_FORM: JoinFormState = {
   partnerName: '',
   partnerInApp: '',
   combinedSkill: '',
+  dateselected: [],
 };
+
+const WEEKEND_MATCHDAYS_DATES = [
+  'May 9, 2026',
+  'May 10, 2026',
+  'May 16, 2026',
+  'May 17, 2026',
+  'May 23, 2026',
+  'May 24, 2026',
+  'May 30, 2026',
+  'May 31, 2026',
+];
 
 type FirestoreDateLike = string | { toDate?: () => Date; seconds?: number; nanoseconds?: number } | undefined;
 
@@ -402,6 +415,7 @@ export const Events: React.FC = () => {
       doubles: '',
       partner_in_app: '',
       skill: Number(profile?.stats.skill_level || 0),
+      dateselected: [],
       createdAt: new Date().toISOString(),
     });
 
@@ -431,26 +445,9 @@ export const Events: React.FC = () => {
         setAuthPrompt('You are already registered for this event.');
         return;
       }
-
-      setJoining(true);
-      try {
-        await registerForRegularEvent(event);
-      } catch (error) {
-        console.error('Error joining event:', error);
-      } finally {
-        setJoining(false);
-      }
-      return;
     }
 
-    const joinedChoices = getJoinedChoices(event.id);
-    const defaultChoice = joinedChoices.has('Singles') && !joinedChoices.has('Doubles') ? 'Doubles' : 'Singles';
-
     setSelectedEvent(event);
-    setJoinForm({
-      ...INITIAL_JOIN_FORM,
-      tournamentChoice: defaultChoice,
-    });
     setJoinError('');
   };
 
@@ -539,6 +536,7 @@ export const Events: React.FC = () => {
     setJoinError('');
 
     try {
+      const isWeekendEvent = isWeekendMatchdaysEvent(selectedEvent);
       await addDoc(collection(db, 'event_participants'), {
         user_id: user.uid,
         user_name: participantName,
@@ -551,6 +549,7 @@ export const Events: React.FC = () => {
         skill: joinForm.tournamentChoice === 'Singles'
           ? Number(profile?.stats.skill_level || 0)
           : Number(joinForm.combinedSkill),
+        ...(isWeekendEvent && { dateselected: joinForm.dateselected }),
         createdAt: new Date().toISOString(),
       });
       setSelectedEvent(null);
@@ -636,7 +635,7 @@ export const Events: React.FC = () => {
                 <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-tennis-dark via-tennis-surface to-clay/20 px-6 text-center text-white">
                   <span className="text-lg font-bold">{event.title}</span>
                 </div>
-              )}
+              )
 
               <div className="absolute top-4 left-4 px-3 py-1 bg-tennis-dark/80 backdrop-blur-md rounded-lg text-xs font-bold text-clay uppercase tracking-wider">
                 {event.type}
@@ -668,9 +667,6 @@ export const Events: React.FC = () => {
 
                 <div className="mt-auto pt-3 border-t border-white/5 space-y-2">
                   <div className="flex items-center justify-between gap-3">
-                    <Button variant="secondary" size="sm" onClick={() => setSelectedEvent(event)}>
-                      Details
-                    </Button>
                     <Button
                       variant={isFullyJoinedEvent(event) ? 'secondary' : 'primary'}
                       size="sm"
@@ -959,9 +955,38 @@ export const Events: React.FC = () => {
                             </div>
                           )}
                         </>
-                      )}
+)}
 
-                      <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+                          {isWeekendMatchdaysEvent(selectedEvent) && (
+                            <div className="space-y-2">
+                              <label className="block text-sm font-medium text-gray-300">Select Matchdays</label>
+                              <p className="text-gray-500 text-xs mb-2">Select one or more dates you can play</p>
+                              <div className="flex flex-wrap gap-2">
+                                {WEEKEND_MATCHDAYS_DATES.map((date) => (
+                                  <button
+                                    key={date}
+                                    type="button"
+                                    onClick={() => {
+                                      const current = joinForm.dateselected;
+                                      const newDates = current.includes(date)
+                                        ? current.filter((d) => d !== date)
+                                        : [...current, date];
+                                      setJoinForm({ ...joinForm, dateselected: newDates });
+                                    }}
+                                    className={`px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                                      joinForm.dateselected.includes(date)
+                                        ? 'bg-clay/20 border border-clay text-clay'
+                                        : 'bg-white/5 border border-white/10 text-gray-400 hover:border-white/20'
+                                    }`}
+                                  >
+                                    {date}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
                         <Button variant="ghost" onClick={() => setSelectedEvent(null)}>
                           Cancel
                         </Button>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { reload } from 'firebase/auth';
 import { useAuth } from '../../../context/AuthContext';
-import { updateUserInfo, updateSkills, updateAvailability, changeEmail, linkGoogleAccount, removeEventParticipant } from '../services/profileService';
+import { updateUserInfo, updateSkills, updateAvailability, changeEmail, linkGoogleAccount, removeEventParticipant, updateEventParticipantDates } from '../services/profileService';
 
 export const useProfileActions = () => {
   const { user, refreshProfile } = useAuth();
@@ -132,6 +132,16 @@ export const useProfileActions = () => {
     }
   };
 
+  const handleUpdateEventDates = async (participantId: string, dateselected: string[]) => {
+    try {
+      await updateEventParticipantDates(participantId, dateselected);
+      showMessage('Matchday dates updated!', 'success');
+    } catch (error) {
+      console.error("Error updating dates:", error);
+      showMessage('Could not update dates right now.', 'error');
+    }
+  };
+
   return {
     updateLoading,
     message,
@@ -143,6 +153,7 @@ export const useProfileActions = () => {
       refreshEmailChange: handleRefreshEmailChange,
       linkGoogle: handleLinkGoogle,
       removeEvent: handleRemoveEvent,
+      updateEventDates: handleUpdateEventDates,
     },
   };
 };
