@@ -44,9 +44,9 @@ export const Home: React.FC = () => {
             className="flex flex-col items-center"
           >
             <img
-              src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FScreenshot%202026-04-26%20165830.png?alt=media&token=6f61bcf6-6424-4852-83ba-a8f1865849dd"
+              src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FLogo(2).png?alt=media&token=845e0265-3b63-4a5b-871b-a9d23fafb8b6"
               alt="Racquets & Strings"
-              className="w-full max-w-sm md:max-w-md lg:max-w-lg object-contain opacity-85 mix-blend-lighten mb-6"
+              className="mx-auto w-64 sm:w-80 md:w-96 lg:w-[520px] object-contain opacity-85 mix-blend-lighten mb-6"
               referrerPolicy="no-referrer"
             />
             <p className="text-base md:text-lg text-gray-400 leading-relaxed max-w-xl mx-auto text-center mb-6">
