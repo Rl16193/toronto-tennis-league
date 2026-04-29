@@ -7,7 +7,7 @@ import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { EventParticipant, TennisEvent, UserData } from '../types';
 import {
-  DrawConfig, DrawTab, ScoreForm, ScoreSubmission, SkillGroup, TournamentMatch, TournamentTemplate,
+  DrawConfig, DrawTab, ScoreForm, ScoreSubmission, SkillGroup, TournamentMatch, TournamentPlayer, TournamentTemplate,
 } from './tournament/types';
 import {
   BYE, PLAYER_LOADING,
@@ -54,6 +54,7 @@ export const Tournament: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [updatingDraw, setUpdatingDraw] = useState(false);
   const [resettingDraw, setResettingDraw] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   const isCreator = !!user && !!event?.creator_id && event.creator_id === user.uid;
   const started = isTournamentStarted(event);
@@ -123,6 +124,42 @@ export const Tournament: React.FC = () => {
   }, [participants, user, userMap]);
 
   // ── Derived data ──────────────────────────────────────────────────────────
+
+  const userParticipant = useMemo(
+    () => participants.find((p) => p.user_id === user?.uid) ?? null,
+    [participants, user],
+  );
+
+  const userDraw = useMemo<DrawConfig | undefined>(() => {
+    if (!userParticipant) return undefined;
+    const skillGroup: SkillGroup =
+      userParticipant.tournament_choice === 'Doubles'
+        ? 'All'
+        : Number(userParticipant.skill || 0) >= 4
+          ? 'Masters'
+          : 'Challengers';
+    return VISIBLE_DRAWS.find(
+      (d) =>
+        d.tournamentChoice === userParticipant.tournament_choice &&
+        d.division === userParticipant.division &&
+        d.skillGroup === skillGroup,
+    );
+  }, [userParticipant]);
+
+  const visibleDraws = useMemo(
+    () => (isCreator || !userDraw ? VISIBLE_DRAWS : [userDraw]),
+    [isCreator, userDraw],
+  );
+
+  useEffect(() => {
+    if (isCreator || !userDraw) return;
+    setActiveTab(userDraw.tab);
+    if (userDraw.tab === 'doubles') {
+      setActiveDoubles(userDraw.division);
+    } else {
+      setActiveSkill(userDraw.skillGroup as SkillGroup);
+    }
+  }, [isCreator, userDraw]);
 
   const currentDraw = useMemo<DrawConfig | undefined>(() => {
     if (activeTab === 'doubles') {
@@ -410,6 +447,28 @@ export const Tournament: React.FC = () => {
     }
   };
 
+  const editPlayers = useMemo(() => {
+    if (!editMode || !currentDraw) return [];
+    return mapParticipantsToPlayers(filterParticipantsForDraw(participants, currentDraw), userMap);
+  }, [editMode, currentDraw, participants, userMap]);
+
+  const handleEditPlayer = async (
+    matchId: string,
+    slot: 'player_1' | 'player_2',
+    player: TournamentPlayer | null,
+  ) => {
+    try {
+      await updateDoc(doc(db, 'tournament_matches', matchId), {
+        [`${slot}_name`]: player?.name || BYE,
+        [`${slot}_user_id`]: player?.user_id || '',
+        [`${slot}_contact`]: player?.contact || '',
+      });
+    } catch (err) {
+      console.error('Edit player failed:', err);
+      setMessage({ type: 'error', text: 'Could not update player.' });
+    }
+  };
+
   const handleSubmitScore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!scoreForm || !user || !profile) return;
@@ -510,10 +569,13 @@ export const Tournament: React.FC = () => {
         updatingDraw={updatingDraw}
         resettingDraw={resettingDraw}
         canReset={!started && currentMatches.length > 0}
+        editMode={editMode}
+        canEdit={currentMatches.length > 0}
         onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw')}
         onGenerateAll={handleGenerateAll}
         onUpdateDraw={handleCreatorUpdateDraw}
         onResetDraw={handleResetDraw}
+        onToggleEdit={() => setEditMode((v) => !v)}
       />
 
       {message && (
@@ -549,13 +611,20 @@ export const Tournament: React.FC = () => {
         activeSkill={activeSkill}
         activeDoubles={activeDoubles}
         currentDraw={currentDraw}
+        visibleDraws={visibleDraws}
         onTabChange={setActiveTab}
         onSkillChange={setActiveSkill}
         onDoublesChange={setActiveDoubles}
       />
 
       <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw')}>
-        <BracketView matches={displayMatches} drawTitle={currentDraw?.label || 'Draw'} />
+        <BracketView
+          matches={displayMatches}
+          drawTitle={currentDraw?.label || 'Draw'}
+          editMode={editMode}
+          editPlayers={editPlayers}
+          onEditPlayer={handleEditPlayer}
+        />
       </BracketErrorBoundary>
 
       {isCreator && (
