@@ -570,7 +570,6 @@ export const Tournament: React.FC = () => {
         resettingDraw={resettingDraw}
         canReset={!started && currentMatches.length > 0}
         editMode={editMode}
-        canEdit={currentMatches.length > 0}
         onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw')}
         onGenerateAll={handleGenerateAll}
         onUpdateDraw={handleCreatorUpdateDraw}

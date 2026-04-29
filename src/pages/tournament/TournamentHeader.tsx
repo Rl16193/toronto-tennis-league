@@ -10,7 +10,6 @@ type Props = {
   resettingDraw: boolean;
   canReset: boolean;
   editMode: boolean;
-  canEdit: boolean;
   onDownload: () => void;
   onGenerateAll: () => void;
   onUpdateDraw: () => void;
@@ -20,7 +19,7 @@ type Props = {
 
 export const TournamentHeader: React.FC<Props> = ({
   title, isCreator, generating, updatingDraw, resettingDraw, canReset,
-  editMode, canEdit,
+  editMode,
   onDownload, onGenerateAll, onUpdateDraw, onResetDraw, onToggleEdit,
 }) => (
   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-8">
@@ -45,15 +44,13 @@ export const TournamentHeader: React.FC<Props> = ({
             <RefreshCw className="w-4 h-4 mr-2" />
             Update Draw
           </Button>
-          {canEdit && (
-            <Button variant={editMode ? 'danger' : 'outline'} onClick={onToggleEdit}>
-              {editMode ? (
-                <><X className="w-4 h-4 mr-2" />Done Editing</>
-              ) : (
-                <><Pencil className="w-4 h-4 mr-2" />Edit Draw</>
-              )}
-            </Button>
-          )}
+          <Button variant={editMode ? 'danger' : 'outline'} onClick={onToggleEdit}>
+            {editMode ? (
+              <><X className="w-4 h-4 mr-2" />Done Editing</>
+            ) : (
+              <><Pencil className="w-4 h-4 mr-2" />Edit Draw</>
+            )}
+          </Button>
           <Button variant="danger" onClick={onResetDraw} isLoading={resettingDraw} disabled={!canReset}>
             Reset Draw
           </Button>
