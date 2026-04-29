@@ -1,6 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
     // ===============================================================
     // Helper Functions
     // ===============================================================
@@ -11,12 +12,29 @@ service cloud.firestore {
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
+    function isGlobalEventCreator() {
+      return isAuthenticated() &&
+        (
+          request.auth.uid == "7PvfzNtDmsOq5GLMieId7QRT7wH3" ||
+          get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.event_creator == true
+        );
+    }
+
+    function isCreatorOfEvent(eventId) {
+      return isAuthenticated() &&
+        (
+          isGlobalEventCreator() ||
+          get(/databases/$(database)/documents/events/$(eventId)).data.creator_id == request.auth.uid
+        );
+    }
+
+
 
     // ===============================================================
     // Users Collection
     // ===============================================================
     match /users/{userId} {
-      allow read: if isOwner(userId); // Owner can read their profile
+      allow read: if isAuthenticated(); // allow opponent viewing
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if false;
@@ -26,7 +44,7 @@ service cloud.firestore {
     // Stats Collection
     // ===============================================================
     match /stats/{userId} {
-      allow read: if isOwner(userId);
+      allow read: if isAuthenticated(); // allow opponent stats
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if false;
@@ -36,7 +54,7 @@ service cloud.firestore {
     // Preferences Collection
     // ===============================================================
     match /preferences/{userId} {
-      allow read: if isOwner(userId);
+      allow read: if isAuthenticated(); // allow opponent availability viewing
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if false;
@@ -46,25 +64,67 @@ service cloud.firestore {
     // Events Collection
     // ===============================================================
     match /events/{eventId} {
-      allow read: if true; // Events are public
-      allow write: if false; // Only backend/admin can manage events
+      allow read: if true;
+      allow write: if false; // admin/backend only
     }
 
     // ===============================================================
-    // Event Participants Collection
+    // Event Participants
     // ===============================================================
     match /event_participants/{docId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
+
       allow create: if isAuthenticated() &&
-                       request.resource.data.user_id == request.auth.uid &&
-                       request.resource.data.event_id is string &&
-                       request.resource.data.tournament_choice is string &&
-                       request.resource.data.doubles is string &&
-                       request.resource.data.partner_in_app is string &&
-                       request.resource.data.skill is number &&
-                       request.resource.data.createdAt is string;
-      allow update: if isAuthenticated() && resource.data.user_id == request.auth.uid;
-      allow delete: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+        request.resource.data.user_id == request.auth.uid &&
+        request.resource.data.event_id is string &&
+        request.resource.data.createdAt is string;
+
+      allow update: if isAuthenticated() &&
+        resource.data.user_id == request.auth.uid;
+
+      allow delete: if isAuthenticated() &&
+        resource.data.user_id == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Tournament Templates (admin only write)
+    // ===============================================================
+    match /tournament_template/{templateId} {
+      allow read: if true;
+      allow write: if isGlobalEventCreator();
+    }
+
+    // ===============================================================
+    // Tournament Matches (draw + results)
+    // ===============================================================
+
+    match /tournament_matches/{matchId} {
+      allow read:  if isAuthenticated();
+
+      allow create: if isCreatorOfEvent(request.resource.data.event_id);
+
+      allow update: if isCreatorOfEvent(resource.data.event_id);
+
+      allow delete: if isCreatorOfEvent(resource.data.event_id);
+    }
+
+    // ===============================================================
+    // Score Submissions
+    // ===============================================================
+    
+    match /score_submissions/{submissionId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuth()
+        && request.auth.uid == request.resource.data.submitted_by
+        && (
+          request.auth.uid == get(/databases/$(database)/documents/tournament_matches/$(request.resource.data.match_doc_id)).data.player_1_user_id
+          || request.auth.uid == get(/databases/$(database)/documents/tournament_matches/$(request.resource.data.match_doc_id)).data.player_2_user_id
+        );
+      allow update: if isAuth() && (
+        request.auth.uid == resource.data.submitted_by
+        || request.auth.uid == eventCreatorId(resource.data.event_id)
+      );
     }
   }
 }

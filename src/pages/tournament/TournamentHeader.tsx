@@ -1,0 +1,51 @@
+import React from 'react';
+import { Download, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Button } from '../../components/Button';
+
+type Props = {
+  title: string;
+  isCreator: boolean;
+  generating: boolean;
+  updatingDraw: boolean;
+  resettingDraw: boolean;
+  canReset: boolean;
+  onDownload: () => void;
+  onGenerateAll: () => void;
+  onUpdateDraw: () => void;
+  onResetDraw: () => void;
+};
+
+export const TournamentHeader: React.FC<Props> = ({
+  title, isCreator, generating, updatingDraw, resettingDraw, canReset,
+  onDownload, onGenerateAll, onUpdateDraw, onResetDraw,
+}) => (
+  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-8">
+    <div>
+      <h1 className="text-3xl md:text-5xl font-display font-black text-white">{title}</h1>
+      <p className="text-gray-400 mt-3 max-w-2xl">
+        Draw updates after scores are submitted and the organizer approves it.
+      </p>
+    </div>
+    <div className="flex flex-col sm:flex-row gap-3">
+      <Button variant="outline" onClick={onDownload}>
+        <Download className="w-4 h-4 mr-2" />
+        Download Draw
+      </Button>
+      {isCreator && (
+        <>
+          <Button onClick={onGenerateAll} isLoading={generating}>
+            <ShieldCheck className="w-4 h-4 mr-2" />
+            Finalize Draw
+          </Button>
+          <Button variant="outline" onClick={onUpdateDraw} isLoading={updatingDraw}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Update Draw
+          </Button>
+          <Button variant="danger" onClick={onResetDraw} isLoading={resettingDraw} disabled={!canReset}>
+            Reset Draw
+          </Button>
+        </>
+      )}
+    </div>
+  </div>
+);

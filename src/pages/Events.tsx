@@ -850,7 +850,7 @@ export const Events: React.FC = () => {
                             </div>
                           )}
                           <div className="space-y-2">
-                            <label className="block text-sm font-medium text-gray-300">Tournament Choice</label>
+                            <label className="block text-sm font-medium text-gray-300">Format</label>
                             <div className="flex gap-3">
                               {(['Singles', 'Doubles'] as const).map((choice) => (
                                 <button

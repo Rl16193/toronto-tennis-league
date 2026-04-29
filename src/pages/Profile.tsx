@@ -158,79 +158,92 @@ export const Profile: React.FC = () => {
           />
 
           {(() => {
-            const weekendMatchdaysEvent = joinedEvents.find(
-              (event) => event.title.toLowerCase().includes('weekend matchdays')
+            const parseMayKey = (val: any): string | null => {
+              if (typeof val === 'string') return val.startsWith('May') ? val : null;
+              let d: Date | null = null;
+              if (typeof (val as any)?.toDate === 'function') d = (val as any).toDate();
+              else if ((val as any)?.seconds) d = new Date((val as any).seconds * 1000);
+              if (!d) return null;
+              return d.getFullYear() === 2026 && d.getMonth() === 4 ? `May ${d.getDate()}, 2026` : null;
+            };
+
+            const tournamentEvent = joinedEvents.find(
+              (e) => e.type === 'tournament' || e.title.toLowerCase().includes('tournament')
             );
-            const selectedDates: string[] = (weekendMatchdaysEvent as any)?.dateselected || [];
-            const participantId = weekendMatchdaysEvent?.participantId;
-            
-            const today = new Date();
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-              'July', 'August', 'September', 'October', 'November', 'December'];
-            
-            const matchdayDates: number[] = [];
-            for (let day = 9; day <= 31; day++) {
-              matchdayDates.push(day);
-            }
-            
-            const isDateSelected = (day: number) => {
-              const dateKey = `May ${day}, 2026`;
-              return selectedDates.some(d => d === dateKey);
-            };
-            
+            const matchdaysEvent = joinedEvents.find(
+              (e) => e.title.toLowerCase().includes('weekend matchdays')
+            );
+
+            if (!tournamentEvent && !matchdaysEvent) return null;
+
+            const participantId = tournamentEvent?.participantId ?? matchdaysEvent?.participantId;
+
+            const savedDates = new Set<string>();
+            joinedEvents.forEach((e) => {
+              ((e as any).dateselected || []).forEach((v: any) => {
+                const k = parseMayKey(v);
+                if (k) savedDates.add(k);
+              });
+            });
+
+            const tournamentStartKey = tournamentEvent?.start_date
+              ? parseMayKey(tournamentEvent.start_date)
+              : null;
+
+            const isDateSelected = (day: number) => savedDates.has(`May ${day}, 2026`);
+            const isDefaultDate = (day: number) =>
+              !!tournamentStartKey &&
+              tournamentStartKey === `May ${day}, 2026` &&
+              !savedDates.has(tournamentStartKey);
+
             const isPast = (day: number) => {
-              const checkDate = new Date(2026, 4, day);
-              const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-              return checkDate < todayDate;
+              const now = new Date();
+              return new Date(2026, 4, day) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
             };
-            
+
             const handleToggleDate = async (day: number) => {
               if (!participantId || isPast(day)) return;
-              
               const dateKey = `May ${day}, 2026`;
-              let newDates: string[];
-              
-              if (selectedDates.includes(dateKey)) {
-                newDates = selectedDates.filter(d => d !== dateKey);
+              const current = new Set(savedDates);
+              if (current.has(dateKey)) {
+                current.delete(dateKey);
               } else {
-                newDates = [...selectedDates, dateKey];
+                current.add(dateKey);
               }
-              
-              await actions.updateEventDates(participantId, newDates);
+              await actions.updateEventDates(participantId, [...current]);
             };
-            
+
+            const calendarDays: number[] = [];
+            for (let day = 9; day <= 31; day++) calendarDays.push(day);
+
             return (
               <div className="bg-tennis-surface/30 border border-white/5 rounded-[2.5rem] shadow-xl p-8">
-                <h2 className="text-2xl font-bold text-white mb-2 flex items-center">
-                    Events Calendar
-                </h2>
-                <p className="text-gray-500 text-xs mb-4">May 9 - May 31, 2026</p>
+                <h2 className="text-2xl font-bold text-white mb-1">Events Calendar</h2>
+                <p className="text-gray-400 text-sm mb-1">Mark availability during the tournament</p>
+                <p className="text-gray-500 text-xs mb-4">May 9 – May 31, 2026</p>
                 <div className="grid grid-cols-7 gap-2">
-                  {['Sat','Sun','Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((day) => (
-                    <div
-                      key={day}
-                      className="text-gray-500 text-xs font-medium text-center py-1"
-                    >
-                      {day}
-                    </div>
+                  {['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((d) => (
+                    <div key={d} className="text-gray-500 text-xs font-medium text-center py-1">{d}</div>
                   ))}
-                  {matchdayDates.map((day) => {
+                  {calendarDays.map((day) => {
                     const selected = isDateSelected(day);
+                    const deflt = isDefaultDate(day);
                     const past = isPast(day);
-                    
                     return (
                       <button
                         key={day}
                         disabled={past || !participantId}
                         onClick={() => handleToggleDate(day)}
                         className={`p-2 text-xs rounded-lg transition-colors ${
-                          selected 
-                            ? 'bg-orange-500 text-white font-bold' 
-                            : past 
-                              ? 'text-gray-600 bg-gray-800/30 cursor-not-allowed'
-                              : participantId
-                                ? 'text-gray-300 bg-gray-800/30 hover:bg-white/10 cursor-pointer'
-                                : 'text-gray-600 bg-gray-800/30'
+                          selected
+                            ? 'bg-orange-500 text-white font-bold'
+                            : deflt
+                              ? 'border border-orange-500/60 text-orange-300 font-semibold hover:bg-orange-500/20 cursor-pointer'
+                              : past
+                                ? 'text-gray-600 bg-gray-800/30 cursor-not-allowed'
+                                : participantId
+                                  ? 'text-gray-300 bg-gray-800/30 hover:bg-white/10 cursor-pointer'
+                                  : 'text-gray-600 bg-gray-800/30'
                         }`}
                       >
                         {day}
@@ -238,12 +251,9 @@ export const Profile: React.FC = () => {
                     );
                   })}
                 </div>
-                {participantId && (
-                  <p className="text-gray-500 text-xs mt-3">Feel free to schedule your match outside of weekend matchdays</p>
-                )}
-                {selectedDates.length > 0 && (
+                {savedDates.size > 0 && (
                   <div className="mt-4 pt-4 border-t border-white/5">
-                    <p className="text-gray-500 text-xs">Selected: {selectedDates.join(', ')}</p>
+                    <p className="text-gray-500 text-xs">Selected: {[...savedDates].sort().join(', ')}</p>
                   </div>
                 )}
               </div>

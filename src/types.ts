@@ -44,6 +44,7 @@ export interface TennisEvent {
   title: string;
   type: string;
   location: string;
+  creator_id?: string;
   date?: string | { toDate?: () => Date; seconds?: number; nanoseconds?: number };
   start_date?: string | { toDate?: () => Date; seconds?: number; nanoseconds?: number };
   end_date?: string | { toDate?: () => Date; seconds?: number; nanoseconds?: number };
