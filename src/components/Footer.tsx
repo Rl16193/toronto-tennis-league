@@ -12,10 +12,12 @@ export const Footer: React.FC = () => {
           {/* Brand */}
           <div className="space-y-6">
             <Link to="/" className="inline-block text-lg font-display font-bold tracking-tight text-white hover:text-clay transition-colors">
-              Toronto Tennis League
+              <span className="text-white">RACQUETS</span>
+              <span className="text-clay"> &</span>
+              <span className="text-white"> STRINGS</span>
             </Link>
             <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
-              Toronto Tennis League is a community-driven, non-profit platform designed to help players connect and participate in matches, meetups, and tournaments.
+              Racquets & Strings is a community-driven, non-profit platform designed to help players connect and participate in matches, meetups, and tournaments.
             </p>
             <div className="flex items-center space-x-4">
               <a href="https://www.instagram.com/tbtc.to/" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 hover:bg-clay hover:text-white transition-all">
@@ -62,7 +64,7 @@ export const Footer: React.FC = () => {
 
         <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
           <p className="text-gray-500 text-xs">
-            © {currentYear} Toronto Tennis League. All rights reserved.
+            © {currentYear} Racquets & Strings. All rights reserved.
           </p>
           <div className="flex items-center space-x-6">
             <span className="text-gray-500 text-xs flex items-center">

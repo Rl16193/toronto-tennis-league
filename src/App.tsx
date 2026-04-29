@@ -7,6 +7,8 @@ import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { Events } from './pages/Events';
 import { Profile } from './pages/Profile';
+import { Tournament } from './pages/Tournament';
+import { PlayerProfile } from './pages/PlayerProfile';
 import { Rules, Terms, Privacy, Contact } from './pages/StaticPages';
 
 const ScrollToTop: React.FC = () => {
@@ -52,7 +54,9 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/events" element={<Events />} />
+            <Route path="/tournament" element={<PrivateRoute><Tournament /></PrivateRoute>} />
             <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+            <Route path="/players/:userId" element={<PrivateRoute><PlayerProfile /></PrivateRoute>} />
             <Route path="/rules" element={<Rules />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/privacy" element={<Privacy />} />

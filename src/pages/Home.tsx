@@ -29,31 +29,31 @@ export const Home: React.FC = () => {
   }, []);
 
   return (
-    <div className="space-y-16 pb-20 overflow-hidden">
+    <div className="space-y-12 pb-16 overflow-hidden">
       {/* Hero Section */}
-      <section className="relative min-h-[72vh] flex items-center pt-16">
+      <section className="relative min-h-[55vh] flex items-center pt-12">
         {/* Background Elements */}
         <div className="absolute top-0 right-0 w-1/2 h-full bg-clay/5 blur-[120px] -z-10 rounded-full translate-x-1/4 -translate-y-1/4" />
         <div className="absolute bottom-0 left-0 w-1/3 h-full bg-tennis-surface/20 blur-[100px] -z-10 rounded-full -translate-x-1/4 translate-y-1/4" />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 gap-10 items-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 gap-6 items-center">
           <motion.div
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className="space-y-6"
+            className="flex flex-col items-center"
           >
-            <div className="flex justify-center">
-              <h1 className="text-5xl md:text-7xl lg:text-8xl font-display font-black leading-[1.05] tracking-tighter text-white text-center">
-                <span>Game</span> <br />
-                <span className="text-clay">Set</span> <br />
-                <span>Events</span>
-              </h1>
-            </div>
-            <p className="text-lg md:text-xl text-gray-400 leading-relaxed max-w-xl mx-auto text-center">
-              Join a thriving community of Racquet Sports enthusiasts in Toronto.
+            <img
+              src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FScreenshot%202026-04-26%20165830.png?alt=media&token=6f61bcf6-6424-4852-83ba-a8f1865849dd"
+              alt="Racquets & Strings"
+              className="w-full max-w-sm md:max-w-md lg:max-w-lg object-contain opacity-85 mix-blend-lighten mb-6"
+              referrerPolicy="no-referrer"
+            />
+            <p className="text-base md:text-lg text-gray-400 leading-relaxed max-w-xl mx-auto text-center mb-6">
+              Join a thriving community of Tennis Enthusiasts in Toronto.
             </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
               {user ? (
                 <Link to="/events" className="w-full sm:w-auto">
                   <Button size="lg" className="w-full sm:w-auto">
@@ -81,9 +81,9 @@ export const Home: React.FC = () => {
 
       {/* Features Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center space-y-3 mb-10">
-          <h2 className="text-3xl md:text-4xl font-display font-bold text-white">Test Your Racquet Skills</h2>
-          <p className="text-gray-400 max-w-2xl mx-auto text-base md:text-lg">
+        <div className="text-center space-y-2 mb-6">
+          <h2 className="text-2xl md:text-3xl font-display font-bold text-white">Test Your Racquet Skills</h2>
+          <p className="text-gray-400 max-w-2xl mx-auto text-sm md:text-base">
             Join the league to get event updates and access to your player profile.
           </p>
         </div>
@@ -129,7 +129,7 @@ export const Home: React.FC = () => {
         <div className="text-center space-y-3 mb-8">
           <h2 className="text-3xl md:text-4xl font-display font-bold text-white">2025</h2>
           <p className="text-gray-400 max-w-2xl mx-auto text-base md:text-lg">
-            A look back at some of our past events.
+            Our past events.
           </p>
         </div>
 

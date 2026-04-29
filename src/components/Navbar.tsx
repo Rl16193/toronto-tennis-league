@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, LogOut, User, Calendar, Home } from 'lucide-react';
+import { Menu, X, LogOut, User, Calendar, Home, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -32,6 +32,7 @@ export const Navbar: React.FC = () => {
   const navLinks = [
     { name: 'Home', path: '/', icon: Home },
     { name: 'Events', path: '/events', icon: Calendar },
+    { name: 'Tournaments', path: '/tournament', icon: Trophy },
     ...(user ? [{ name: 'Profile', path: '/profile', icon: User }] : []),
   ];
 
@@ -42,22 +43,19 @@ export const Navbar: React.FC = () => {
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center">
-          <Link to="/" className="flex items-center group">
-            <img
-              src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FScreenshot%202026-04-26%20165830.png?alt=media&token=6f61bcf6-6424-4852-83ba-a8f1865849dd"
-              alt="Racquets&Strings logo"
-              className={`h-16 md:h-20 lg:h-24 w-full max-w-[360px] object-contain mx-auto transition-all duration-300 ${
-            scrolled 
-              ? 'opacity-70 saturate-75 scale-[0.98]' 
-              : 'opacity-85 saturate-90'
-          }`}
-              referrerPolicy="no-referrer"
-            />
-          </Link>
+        <div className="grid grid-cols-3 items-center">
+          <div className="flex items-center">
+            <Link to="/" className="flex items-center group">
+              <span className="text-xl md:text-xl font-bold font-['Montserrat'] tracking-tight">
+                <span className="text-white">RACQUETS</span>
+                <span className="text-clay"> &</span>
+                <span className="text-white"> STRINGS</span>
+              </span>
+            </Link>
+          </div>
 
           {/* Desktop Nav */}
-          <div className="hidden md:flex items-center space-x-8">
+          <div className="hidden md:flex items-center justify-center space-x-10">
             {navLinks.map((link) => (
               <Link
                 key={link.path}
@@ -69,6 +67,10 @@ export const Navbar: React.FC = () => {
                 {link.name}
               </Link>
             ))}
+          </div>
+
+          {/* Auth - Right Side */}
+          <div className="hidden md:flex items-center justify-end space-x-4">
             {user ? (
               <div className="flex items-center space-x-4">
                 <Button variant="ghost" size="sm" onClick={handleLogout} className="text-gray-400 hover:text-white">
