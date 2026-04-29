@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Download, Pencil, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { Button } from '../../components/Button';
 
 type Props = {
@@ -9,15 +9,18 @@ type Props = {
   updatingDraw: boolean;
   resettingDraw: boolean;
   canReset: boolean;
+  editMode: boolean;
   onDownload: () => void;
   onGenerateAll: () => void;
   onUpdateDraw: () => void;
   onResetDraw: () => void;
+  onToggleEdit: () => void;
 };
 
 export const TournamentHeader: React.FC<Props> = ({
   title, isCreator, generating, updatingDraw, resettingDraw, canReset,
-  onDownload, onGenerateAll, onUpdateDraw, onResetDraw,
+  editMode,
+  onDownload, onGenerateAll, onUpdateDraw, onResetDraw, onToggleEdit,
 }) => (
   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-8">
     <div>
@@ -40,6 +43,13 @@ export const TournamentHeader: React.FC<Props> = ({
           <Button variant="outline" onClick={onUpdateDraw} isLoading={updatingDraw}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Update Draw
+          </Button>
+          <Button variant={editMode ? 'danger' : 'outline'} onClick={onToggleEdit}>
+            {editMode ? (
+              <><X className="w-4 h-4 mr-2" />Done Editing</>
+            ) : (
+              <><Pencil className="w-4 h-4 mr-2" />Edit Draw</>
+            )}
           </Button>
           <Button variant="danger" onClick={onResetDraw} isLoading={resettingDraw} disabled={!canReset}>
             Reset Draw
