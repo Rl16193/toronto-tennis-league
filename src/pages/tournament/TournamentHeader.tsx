@@ -26,7 +26,7 @@ export const TournamentHeader: React.FC<Props> = ({
     <div>
       <h1 className="text-3xl md:text-5xl font-display font-black text-white">{title}</h1>
       <p className="text-gray-400 mt-3 max-w-2xl">
-        Draw updates after scores are submitted and the organizer approves it.
+        Draw updates after scores are submitted either in person or online.
       </p>
     </div>
     <div className="flex flex-col sm:flex-row gap-3">

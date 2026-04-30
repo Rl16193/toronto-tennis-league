@@ -116,6 +116,18 @@ export const Profile: React.FC = () => {
         </div>
       )}
 
+      {incompleteFields.length === 0 && joinedEvents.length > 0 && (
+        <div className="mb-8 p-5 rounded-2xl bg-green-500/10 border border-green-500/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="w-5 h-5 text-green-400 shrink-0" />
+            <p className="text-green-300 font-semibold">You're all set for the tournament!</p>
+          </div>
+          <Button onClick={() => navigate('/tournament')} size="sm">
+            Check Draw for Updates
+          </Button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] gap-6 lg:gap-8">
         <div className="space-y-6">
           <ProfileInfo

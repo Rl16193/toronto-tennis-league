@@ -1,17 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, LogOut, User, Calendar, Home, Trophy } from 'lucide-react';
+import { LogOut, User, Calendar, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 import { Button } from './Button';
-import { motion, AnimatePresence } from 'motion/react';
+
+const ALL_NAV_LINKS = [
+  { name: 'Events', path: '/events', icon: Calendar },
+  { name: 'Draw', path: '/tournament', icon: Trophy },
+  { name: 'Profile', path: '/profile', icon: User },
+] as const;
 
 export const Navbar: React.FC = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -29,34 +33,37 @@ export const Navbar: React.FC = () => {
     }
   };
 
-  const navLinks = [
-    { name: 'Home', path: '/', icon: Home },
-    { name: 'Events', path: '/events', icon: Calendar },
-    { name: 'Tournaments', path: '/tournament', icon: Trophy },
-    ...(user ? [{ name: 'Profile', path: '/profile', icon: User }] : []),
-  ];
+  // Desktop: all main links for logged-in, nothing for logged-out (they use auth buttons)
+  const desktopNavLinks = user ? ALL_NAV_LINKS : [];
+
+  // Mobile: only the pages the user is NOT currently on
+  const mobileNavLinks = user
+    ? ALL_NAV_LINKS.filter((link) => link.path !== location.pathname)
+    : [];
 
   return (
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? 'bg-tennis-dark/90 backdrop-blur-md py-3 shadow-xl border-b border-white/5' : 'bg-transparent py-5'
+        scrolled
+          ? 'bg-tennis-dark/90 backdrop-blur-md py-2 shadow-xl border-b border-white/5'
+          : 'bg-transparent py-4'
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-3 items-center">
-          <div className="flex items-center">
-            <Link to="/" className="flex items-center group">
-              <span className="text-xl md:text-xl font-bold font-['Montserrat'] tracking-tight">
-                <span className="text-white">RACQUETS</span>
-                <span className="text-clay"> &</span>
-                <span className="text-white"> STRINGS</span>
-              </span>
-            </Link>
-          </div>
+        <div className="flex items-center justify-between">
+
+          {/* Logo */}
+          <Link to={user ? '/profile' : '/'} className="flex items-center shrink-0">
+            <span className="text-lg md:text-xl font-bold font-['Montserrat'] tracking-tight">
+              <span className="text-white">RACQUETS</span>
+              <span className="text-clay"> &</span>
+              <span className="text-white"> STRINGS</span>
+            </span>
+          </Link>
 
           {/* Desktop Nav */}
-          <div className="hidden md:flex items-center justify-center space-x-10">
-            {navLinks.map((link) => (
+          <div className="hidden md:flex items-center gap-8">
+            {desktopNavLinks.map((link) => (
               <Link
                 key={link.path}
                 to={link.path}
@@ -69,16 +76,16 @@ export const Navbar: React.FC = () => {
             ))}
           </div>
 
-          {/* Auth - Right Side */}
-          <div className="hidden md:flex items-center justify-end space-x-4">
+          {/* Desktop Auth */}
+          <div className="hidden md:flex items-center gap-4 shrink-0">
             {user ? (
-              <div className="flex items-center space-x-4">
+              <>
                 <Button variant="ghost" size="sm" onClick={handleLogout} className="text-gray-400 hover:text-white">
                   <LogOut className="w-4 h-4 mr-2" />
                   Logout
                 </Button>
                 <Link to="/profile">
-                  <div className="w-10 h-10 rounded-full border-2 border-clay p-0.5 overflow-hidden hover:scale-105 transition-transform">
+                  <div className="w-9 h-9 rounded-full border-2 border-clay p-0.5 overflow-hidden hover:scale-105 transition-transform">
                     <img
                       src={profile?.user.avatar || `https://ui-avatars.com/api/?name=${profile?.user.name || user.email}&background=C25E44&color=fff`}
                       alt="Profile"
@@ -87,86 +94,57 @@ export const Navbar: React.FC = () => {
                     />
                   </div>
                 </Link>
-              </div>
+              </>
             ) : (
-              <div className="flex items-center space-x-4">
+              <>
                 <Link to="/login">
                   <Button variant="ghost" size="sm">Login</Button>
                 </Link>
                 <Link to="/signup">
                   <Button size="sm">Sign Up</Button>
                 </Link>
-              </div>
+              </>
             )}
           </div>
 
-          {/* Mobile Menu Button */}
-          <div className="md:hidden">
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className="p-2 text-gray-400 hover:text-white transition-colors"
-            >
-              {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
+          {/* Mobile Nav */}
+          <div className="md:hidden flex items-center gap-1 shrink-0">
+            {user ? (
+              <>
+                {mobileNavLinks.map((link) => (
+                  <Link
+                    key={link.path}
+                    to={link.path}
+                    className={`p-2 rounded-xl transition-colors ${
+                      'text-gray-400 hover:text-white hover:bg-white/5'
+                    }`}
+                    aria-label={link.name}
+                  >
+                    <link.icon className="w-5 h-5" />
+                  </Link>
+                ))}
+                <button
+                  onClick={handleLogout}
+                  className="p-2 rounded-xl text-gray-500 hover:text-red-400 hover:bg-red-500/5 transition-colors"
+                  aria-label="Logout"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="ghost" size="sm" className="text-sm px-3">Login</Button>
+                </Link>
+                <Link to="/signup">
+                  <Button size="sm" className="text-sm px-3">Sign Up</Button>
+                </Link>
+              </>
+            )}
           </div>
+
         </div>
       </div>
-
-      {/* Mobile Nav */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="md:hidden bg-tennis-surface border-b border-white/5 shadow-2xl"
-          >
-            <div className="px-4 pt-2 pb-6 space-y-2">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.path}
-                  to={link.path}
-                  onClick={() => setIsOpen(false)}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-medium ${
-                    location.pathname === link.path ? 'bg-clay/10 text-clay' : 'text-gray-300 hover:bg-white/5'
-                  }`}
-                >
-                  <link.icon className="w-5 h-5" />
-                  <span>{link.name}</span>
-                </Link>
-              ))}
-              <div className="pt-4 border-t border-white/5 space-y-2">
-                {user ? (
-                  <button
-                    onClick={handleLogout}
-                    className="flex w-full items-center space-x-3 px-4 py-3 rounded-xl text-base font-medium text-red-400 hover:bg-red-500/10"
-                  >
-                    <LogOut className="w-5 h-5" />
-                    <span>Logout</span>
-                  </button>
-                ) : (
-                  <>
-                    <Link
-                      to="/login"
-                      onClick={() => setIsOpen(false)}
-                      className="block px-4 py-3 rounded-xl text-base font-medium text-gray-300 hover:bg-white/5"
-                    >
-                      Login
-                    </Link>
-                    <Link
-                      to="/signup"
-                      onClick={() => setIsOpen(false)}
-                      className="block px-4 py-3 rounded-xl text-base font-medium text-white bg-clay text-center"
-                    >
-                      Sign Up
-                    </Link>
-                  </>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </nav>
   );
 };

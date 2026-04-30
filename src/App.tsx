@@ -31,7 +31,7 @@ const ScrollToTop: React.FC = () => {
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-tennis-dark">
@@ -39,8 +39,14 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       </div>
     );
   }
-  
+
   return user ? <>{children}</> : <Navigate to="/login" />;
+};
+
+const HomeRoute: React.FC = () => {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  return user ? <Navigate to="/profile" replace /> : <Home />;
 };
 
 export default function App() {
@@ -50,7 +56,7 @@ export default function App() {
         <ScrollToTop />
         <Layout>
           <Routes>
-            <Route path="/" element={<Home />} />
+            <Route path="/" element={<HomeRoute />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/events" element={<Events />} />
