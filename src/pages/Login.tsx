@@ -22,7 +22,7 @@ export const Login: React.FC = () => {
   const [resetSent, setResetSent] = useState(false);
   const [stayLoggedIn, setStayLoggedIn] = useState(false);
   const [emailSuggestion, setEmailSuggestion] = useState<any>(null);
-  const returnTo = searchParams.get('returnTo') || '/events';
+  const returnTo = searchParams.get('returnTo') || '/profile';
   const intent = searchParams.get('intent') || '';
 
   React.useEffect(() => {
