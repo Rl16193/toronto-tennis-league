@@ -55,6 +55,9 @@ export const Tournament: React.FC = () => {
   const [updatingDraw, setUpdatingDraw] = useState(false);
   const [resettingDraw, setResettingDraw] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  // Per-draw slot overrides for the preview bracket (before finalization)
+  // Keyed by draw label → seed slot number → player (or null for BYE)
+  const [previewSlotOverrides, setPreviewSlotOverrides] = useState<Record<string, Record<number, TournamentPlayer | null>>>({});
 
   const isCreator = !!user && !!event?.creator_id && event.creator_id === user.uid;
   const started = isTournamentStarted(event);
@@ -197,6 +200,13 @@ export const Tournament: React.FC = () => {
     );
     const slotMap = new Map<number, (typeof players)[0]>();
     players.slice(0, drawsize).forEach((p, i) => slotMap.set(i + 1, p));
+    // Apply any preview edits the creator made before finalizing
+    const drawOverrides = previewSlotOverrides[currentDraw.label] ?? {};
+    Object.entries(drawOverrides).forEach(([slotStr, player]) => {
+      const slotNum = Number(slotStr);
+      if (player === null) slotMap.delete(slotNum);
+      else slotMap.set(slotNum, player);
+    });
 
     return templateMatches.map<TournamentMatch>((tm, index) => {
       const p1 = typeof tm.player_1 === 'number' ? slotMap.get(tm.player_1) : null;
@@ -227,7 +237,7 @@ export const Tournament: React.FC = () => {
         started,
       };
     });
-  }, [currentDraw, currentMatches, event?.id, participants, started, templates, userMap]);
+  }, [currentDraw, currentMatches, event?.id, participants, previewSlotOverrides, started, templates, userMap]);
 
   const myActiveMatch = useMemo(
     () =>
@@ -281,6 +291,13 @@ export const Tournament: React.FC = () => {
     );
     const slotMap = new Map<number, (typeof players)[0]>();
     players.forEach((p, i) => slotMap.set(i + 1, p));
+    // Honour any preview edits the creator made before clicking Finalize
+    const drawOverrides = previewSlotOverrides[draw.label] ?? {};
+    Object.entries(drawOverrides).forEach(([slotStr, player]) => {
+      const slotNum = Number(slotStr);
+      if (player === null) slotMap.delete(slotNum);
+      else slotMap.set(slotNum, player as (typeof players)[0]);
+    });
 
     const batch = writeBatch(db);
     const drawKey = getDrawKey(draw.tournamentChoice, draw.division, draw.skillGroup);
@@ -371,6 +388,8 @@ export const Tournament: React.FC = () => {
     setMessage(null);
     try {
       for (const draw of VISIBLE_DRAWS) await generateDraw(draw);
+      setEditMode(false);
+      setPreviewSlotOverrides({});
       setMessage({ type: 'success', text: 'Tournament draws generated.' });
     } catch (err) {
       console.error('Draw generation failed:', err);
@@ -427,6 +446,12 @@ export const Tournament: React.FC = () => {
       const batch = writeBatch(db);
       currentMatches.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
       await batch.commit();
+      setEditMode(false);
+      setPreviewSlotOverrides((prev) => {
+        const next = { ...prev };
+        delete next[currentDraw.label];
+        return next;
+      });
       setMessage({ type: 'success', text: `${currentDraw.label} reset to live preview.` });
     } catch (err) {
       console.error('Draw reset failed:', err);
@@ -452,11 +477,40 @@ export const Tournament: React.FC = () => {
     return mapParticipantsToPlayers(filterParticipantsForDraw(participants, currentDraw), userMap);
   }, [editMode, currentDraw, participants, userMap]);
 
+  // Players whose current skill maps to a different bracket than where they're assigned
+  const skillMismatchedCount = useMemo(() => {
+    if (!isCreator || matches.length === 0) return 0;
+    const mismatched = new Set<string>();
+    for (const match of matches) {
+      for (const uid of [match.player_1_user_id, match.player_2_user_id]) {
+        if (!uid) continue;
+        const p = participants.find((x) => x.user_id === uid && x.tournament_choice === 'Singles');
+        if (!p) continue;
+        if ((Number(p.skill || 0) >= 4 ? 'Masters' : 'Challengers') !== match.skill_group) {
+          mismatched.add(uid);
+        }
+      }
+    }
+    return mismatched.size;
+  }, [isCreator, matches, participants]);
+
   const handleEditPlayer = async (
     matchId: string,
     slot: 'player_1' | 'player_2',
     player: TournamentPlayer | null,
   ) => {
+    if (matchId.startsWith('preview_')) {
+      // Preview mode: store override locally; applied on Finalize
+      const match = displayMatches.find((m) => m.id === matchId);
+      if (!match || !currentDraw) return;
+      const slotNum = slot === 'player_1' ? match.player_1_slot : match.player_2_slot;
+      if (typeof slotNum !== 'number') return;
+      setPreviewSlotOverrides((prev) => ({
+        ...prev,
+        [currentDraw.label]: { ...(prev[currentDraw.label] ?? {}), [slotNum]: player },
+      }));
+      return;
+    }
     try {
       await updateDoc(doc(db, 'tournament_matches', matchId), {
         [`${slot}_name`]: player?.name || BYE,
@@ -587,6 +641,18 @@ export const Tournament: React.FC = () => {
             ? <CheckCircle2 className="w-5 h-5 mt-0.5" />
             : <AlertCircle className="w-5 h-5 mt-0.5" />}
           <p className="font-semibold">{message.text}</p>
+        </div>
+      )}
+
+      {isCreator && skillMismatchedCount > 0 && (
+        <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 flex items-start gap-3 text-amber-300">
+          <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-semibold">Bracket mismatch detected</p>
+            <p className="text-sm mt-1">
+              {skillMismatchedCount} player{skillMismatchedCount > 1 ? 's have' : ' has'} updated their skill level since the draw was finalized and may be in the wrong bracket. Re-run <strong>Finalize Draw</strong> to move them to the correct bracket.
+            </p>
+          </div>
         </div>
       )}
 

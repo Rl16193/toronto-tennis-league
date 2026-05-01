@@ -43,11 +43,11 @@ export const ProfileEvents: React.FC<ProfileEventsProps> = ({
     const eventStartDate = parseEventDate(event.startDate || event.start_date || event.date);
 
     if (isTournamentEvent(event) && eventStartDate) {
-      const oneWeekBeforeStart = new Date(eventStartDate);
-      oneWeekBeforeStart.setDate(oneWeekBeforeStart.getDate() - 7);
+      const twoDaysBeforeStart = new Date(eventStartDate);
+      twoDaysBeforeStart.setDate(twoDaysBeforeStart.getDate() - 2);
 
-      if (new Date() >= oneWeekBeforeStart) {
-        alert('Tournament withdrawal is unavailable within 7 days of the start date.');
+      if (new Date() >= twoDaysBeforeStart) {
+        alert('Tournament withdrawal is unavailable within 2 days of the start date.');
         return;
       }
     }
