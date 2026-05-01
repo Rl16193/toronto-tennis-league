@@ -5,6 +5,7 @@ import { getDownloadURL, ref } from 'firebase/storage';
 import { db, storage } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { TennisEvent } from '../types';
+import { parseDateValue } from './tournament/utils';
 import { Button } from '../components/Button';
 import {
   Calendar,
@@ -537,6 +538,14 @@ export const Events: React.FC = () => {
 
     try {
       const isWeekendEvent = isWeekendMatchdaysEvent(selectedEvent);
+      const dateselected = (() => {
+        if (isWeekendEvent) return joinForm.dateselected;
+        if (isSeasonOpener(selectedEvent)) {
+          const d = parseDateValue(selectedEvent.start_date || selectedEvent.startDate || selectedEvent.date);
+          return d ? [`May ${d.getDate()}, ${d.getFullYear()}`] : [];
+        }
+        return [];
+      })();
       await addDoc(collection(db, 'event_participants'), {
         user_id: user.uid,
         user_name: participantName,
@@ -549,7 +558,7 @@ export const Events: React.FC = () => {
         skill: joinForm.tournamentChoice === 'Singles'
           ? Number(profile?.stats.skill_level || 0)
           : Number(joinForm.combinedSkill),
-        ...(isWeekendEvent && { dateselected: joinForm.dateselected }),
+        dateselected,
         createdAt: new Date().toISOString(),
       });
       setSelectedEvent(null);

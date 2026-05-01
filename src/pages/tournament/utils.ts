@@ -141,19 +141,68 @@ export const scoresMatch = (a: ScoreSubmission, b: ScoreSubmission) =>
   a.set_3_player_1 === b.set_3_player_1 &&
   a.set_3_player_2 === b.set_3_player_2;
 
-export const filterParticipantsForDraw = (participants: EventParticipant[], draw: DrawConfig): EventParticipant[] =>
-  participants.filter((p) => {
+// Normalise a name string for fuzzy partner matching (case, whitespace, punctuation)
+const normalizeForMatch = (name?: string) =>
+  (name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+/**
+ * For doubles draws: collapses mutual partner pairs into a single representative
+ * entry and normalises the `doubles` field to the partner's actual registered name.
+ * Participants whose partner has not registered (external partners) are kept as-is.
+ */
+export const deduplicateDoublesTeams = (participants: EventParticipant[]): EventParticipant[] => {
+  const processed = new Set<string>();
+  const result: EventParticipant[] = [];
+
+  for (const p of participants) {
+    if (processed.has(p.id)) continue;
+
+    const myNorm = normalizeForMatch(p.user_name);
+    const partnerNorm = normalizeForMatch(p.doubles);
+
+    // Find the matching partner registration (both must name each other)
+    const partner = partnerNorm
+      ? participants.find(
+          (o) =>
+            !processed.has(o.id) &&
+            o.id !== p.id &&
+            normalizeForMatch(o.user_name) === partnerNorm &&
+            normalizeForMatch(o.doubles) === myNorm,
+        )
+      : undefined;
+
+    // Use the partner's actual registered name so the bracket shows the real spelling
+    result.push(
+      partner
+        ? { ...p, doubles: formatPlayerName(partner.user_name) || p.doubles }
+        : p,
+    );
+    processed.add(p.id);
+    if (partner) processed.add(partner.id);
+  }
+
+  return result;
+};
+
+export const filterParticipantsForDraw = (participants: EventParticipant[], draw: DrawConfig): EventParticipant[] => {
+  const filtered = participants.filter((p) => {
     if (p.tournament_choice !== draw.tournamentChoice || p.division !== draw.division) return false;
     if (draw.tournamentChoice === 'Doubles') return true;
     return (Number(p.skill || 0) >= 4 ? 'Masters' : 'Challengers') === draw.skillGroup;
   });
+  return draw.tournamentChoice === 'Doubles' ? deduplicateDoublesTeams(filtered) : filtered;
+};
 
 export const mapParticipantsToPlayers = (participants: EventParticipant[], userMap: Record<string, UserData>): TournamentPlayer[] =>
   participants.map((p) => {
     const userData = userMap[p.user_id];
+    const baseName = getParticipantDisplayName(p, userData) || 'Player';
+    // For doubles: append partner name as "P1 / P2"
+    const partnerName = p.doubles ? formatPlayerName(p.doubles) : null;
+    const name = partnerName ? `${baseName} / ${partnerName}` : baseName;
     return {
       user_id: p.user_id,
-      name: getParticipantDisplayName(p, userData) || 'Player',
+      name,
       contact: getContactValue(userData),
       preferredContact: userData?.preferred_mode_of_contact || 'email',
       participantId: p.id,

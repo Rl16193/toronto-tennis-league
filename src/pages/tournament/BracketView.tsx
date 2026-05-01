@@ -84,7 +84,11 @@ export const BracketView: React.FC<Props> = ({ matches, drawTitle, editMode, edi
             {round.matches.map((match, matchIndex) => {
               const rowSpan = 2 ** (roundIndex + 1);
               const gridRowStart = matchIndex * 2 ** roundIndex * 2 + 2;
-              const isEditable = editMode && !match.id.startsWith('preview_') && !!onEditPlayer;
+              const isPreviewFirstRound = match.id.startsWith('preview_') &&
+                typeof match.player_1_slot === 'number' &&
+                typeof match.player_2_slot === 'number';
+              const isEditable = editMode && !!onEditPlayer &&
+                (!match.id.startsWith('preview_') || isPreviewFirstRound);
 
               return (
                 <div
