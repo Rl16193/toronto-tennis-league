@@ -1,4 +1,4 @@
-import { EventParticipant, UserData } from '../../types';
+import { EventParticipant, UserData, UserStats } from '../../types';
 import { DrawConfig, ScoreSubmission, SkillGroup, TemplateMatch, TournamentPlayer } from './types';
 
 export const PLAYER_LOADING = 'Player Loading';
@@ -184,11 +184,16 @@ export const deduplicateDoublesTeams = (participants: EventParticipant[]): Event
   return result;
 };
 
-export const filterParticipantsForDraw = (participants: EventParticipant[], draw: DrawConfig): EventParticipant[] => {
+export const filterParticipantsForDraw = (
+  participants: EventParticipant[],
+  draw: DrawConfig,
+  statsMap: Record<string, UserStats> = {},
+): EventParticipant[] => {
   const filtered = participants.filter((p) => {
     if (p.tournament_choice !== draw.tournamentChoice || p.division !== draw.division) return false;
     if (draw.tournamentChoice === 'Doubles') return true;
-    return (Number(p.skill || 0) >= 4 ? 'Masters' : 'Challengers') === draw.skillGroup;
+    const effectiveSkill = statsMap[p.user_id]?.skill_level ?? Number(p.skill || 0);
+    return (effectiveSkill >= 4 ? 'Masters' : 'Challengers') === draw.skillGroup;
   });
   return draw.tournamentChoice === 'Doubles' ? deduplicateDoublesTeams(filtered) : filtered;
 };

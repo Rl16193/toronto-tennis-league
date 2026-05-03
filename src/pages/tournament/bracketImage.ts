@@ -15,11 +15,19 @@ const escapeSvg = (value: string) =>
 const truncate = (value: string, max = 20) =>
   value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
+const ROUND_DEADLINES: Record<string, string> = {
+  R32: 'Avail. till Sat May 16',
+  R16: 'Avail. till Sat May 16',
+  QF: 'Avail. till Sat May 23',
+  SF: 'Avail. till Sun May 30',
+  F: 'Avail. till Sun May 30',
+};
+
 const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string): string => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
   const rowHeight = 46;
-  const topOffset = 72;
+  const topOffset = 80;
   const width = Math.max(900, roundLabels.length * 190 + 80);
   const height = Math.max(520, topOffset + drawSize * rowHeight + 40);
   const colWidth = (width - 80) / roundLabels.length;
@@ -32,8 +40,9 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string): string => 
   const cells = rounds.flatMap((round, ri) => {
     const x = 40 + ri * colWidth;
     const colColor = round.round === 'SF' || round.round === 'F' ? '#ecfdf3' : '#eff6ff';
-    const col = `<rect x="${x - 12}" y="48" width="${colWidth - 24}" height="${height - 70}" rx="14" fill="${colColor}" stroke="#d1d5db" />`;
-    const label = `<text x="${x + (colWidth - 24) / 2}" y="34" text-anchor="middle" font-size="13" font-weight="800" fill="#374151">${round.round}</text>`;
+    const col = `<rect x="${x - 12}" y="56" width="${colWidth - 24}" height="${height - 78}" rx="14" fill="${colColor}" stroke="#d1d5db" />`;
+    const deadline = ROUND_DEADLINES[round.round] || '';
+    const label = `<text x="${x + (colWidth - 24) / 2}" y="32" text-anchor="middle" font-size="13" font-weight="800" fill="#374151">${round.round}</text>${deadline ? `<text x="${x + (colWidth - 24) / 2}" y="47" text-anchor="middle" font-size="9" fill="#6b7280">${deadline}</text>` : ''}`;
 
     const items = round.matches.map((match, mi) => {
       const rowSpan = 2 ** ri;
@@ -68,33 +77,49 @@ export const downloadDrawAsPng = (matches: TournamentMatch[], drawTitle: string)
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
   const width = Math.max(900, roundLabels.length * 190 + 80);
-  const height = Math.max(520, 72 + drawSize * 46 + 40);
+  const height = Math.max(520, 80 + drawSize * 46 + 40);
   const svg = buildDrawSvg(matches, drawTitle);
   const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const svgUrl = URL.createObjectURL(svgBlob);
-  const img = new Image(width, height);
+  const svgImg = new Image(width, height);
 
-  img.onload = () => {
+  const logoImg = new Image();
+  logoImg.src = '/logo.png';
+
+  svgImg.onload = () => {
     const canvas = document.createElement('canvas');
     canvas.width = width * 2;
     canvas.height = height * 2;
     const ctx = canvas.getContext('2d')!;
     ctx.scale(2, 2);
-    ctx.drawImage(img, 0, 0, width, height);
+    ctx.drawImage(svgImg, 0, 0, width, height);
     URL.revokeObjectURL(svgUrl);
 
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const pngUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = pngUrl;
-      link.download = `${drawTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(pngUrl);
-    }, 'image/png');
+    const finish = () => {
+      const logoSize = 56;
+      if (logoImg.complete && logoImg.naturalWidth > 0) {
+        ctx.drawImage(logoImg, width - logoSize - 14, 8, logoSize, logoSize);
+      }
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const pngUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = pngUrl;
+        link.download = `${drawTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(pngUrl);
+      }, 'image/png');
+    };
+
+    if (logoImg.complete) {
+      finish();
+    } else {
+      logoImg.onload = finish;
+      logoImg.onerror = finish;
+    }
   };
 
-  img.src = svgUrl;
+  svgImg.src = svgUrl;
 };
