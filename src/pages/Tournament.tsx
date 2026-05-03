@@ -400,10 +400,14 @@ export const Tournament: React.FC = () => {
   };
 
   const handleCreatorUpdateDraw = async () => {
-    if (!isCreator) return;
+    if (!isCreator || !event) return;
     setUpdatingDraw(true);
     setMessage(null);
     try {
+      // Step 1: Re-generate all brackets from current participant skill levels
+      for (const draw of VISIBLE_DRAWS) await generateDraw(draw);
+
+      // Step 2: Process pending score submissions and advance winners
       const pendingByMatch = new Map<string, ScoreSubmission[]>();
       submissions
         .filter((s) => s.status === 'pending')
@@ -428,7 +432,9 @@ export const Tournament: React.FC = () => {
           }
         }
       }
-      setMessage({ type: 'success', text: 'Draw update finished.' });
+
+      setEditMode(false);
+      setMessage({ type: 'success', text: 'Draw updated: brackets re-evaluated and scores processed.' });
     } catch (err) {
       console.error('Draw update failed:', err);
       setMessage({ type: 'error', text: 'Could not update the draw.' });
@@ -477,21 +483,26 @@ export const Tournament: React.FC = () => {
     return mapParticipantsToPlayers(filterParticipantsForDraw(participants, currentDraw), userMap);
   }, [editMode, currentDraw, participants, userMap]);
 
-  // Players whose current skill maps to a different bracket than where they're assigned
+  // Players whose current skill maps to a different bracket and have NO match in the correct bracket
   const skillMismatchedCount = useMemo(() => {
     if (!isCreator || matches.length === 0) return 0;
-    const mismatched = new Set<string>();
-    for (const match of matches) {
-      for (const uid of [match.player_1_user_id, match.player_2_user_id]) {
-        if (!uid) continue;
-        const p = participants.find((x) => x.user_id === uid && x.tournament_choice === 'Singles');
-        if (!p) continue;
-        if ((Number(p.skill || 0) >= 4 ? 'Masters' : 'Challengers') !== match.skill_group) {
-          mismatched.add(uid);
-        }
-      }
-    }
-    return mismatched.size;
+    const allUids = new Set<string>();
+    matches.forEach((m) => {
+      if (m.player_1_user_id) allUids.add(m.player_1_user_id);
+      if (m.player_2_user_id) allUids.add(m.player_2_user_id);
+    });
+    let count = 0;
+    allUids.forEach((uid) => {
+      const p = participants.find((x) => x.user_id === uid && x.tournament_choice === 'Singles');
+      if (!p) return;
+      const correctGroup = Number(p.skill || 0) >= 4 ? 'Masters' : 'Challengers';
+      const inCorrectBracket = matches.some(
+        (m) => m.skill_group === correctGroup &&
+          (m.player_1_user_id === uid || m.player_2_user_id === uid),
+      );
+      if (!inCorrectBracket) count += 1;
+    });
+    return count;
   }, [isCreator, matches, participants]);
 
   const handleEditPlayer = async (
@@ -650,7 +661,7 @@ export const Tournament: React.FC = () => {
           <div>
             <p className="font-semibold">Bracket mismatch detected</p>
             <p className="text-sm mt-1">
-              {skillMismatchedCount} player{skillMismatchedCount > 1 ? 's have' : ' has'} updated their skill level since the draw was finalized and may be in the wrong bracket. Re-run <strong>Finalize Draw</strong> to move them to the correct bracket.
+              {skillMismatchedCount} player{skillMismatchedCount > 1 ? 's have' : ' has'} updated their skill level since the draw was finalized and may be in the wrong bracket. Click <strong>Update Draw</strong> to move them to the correct bracket.
             </p>
           </div>
         </div>
