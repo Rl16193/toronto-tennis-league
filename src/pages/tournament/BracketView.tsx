@@ -8,6 +8,14 @@ const getRoundTone = (round: string) => {
   return 'bg-sky-50 border-sky-200';
 };
 
+const ROUND_DEADLINES: Record<string, string> = {
+  R32: 'Avail. till Sat May 16',
+  R16: 'Avail. till Sat May 16',
+  QF: 'Avail. till Sat May 23',
+  SF: 'Avail. till Sun May 30',
+  F: 'Avail. till Sun May 30',
+};
+
 const BracketPlayer: React.FC<{ name: string; winner: boolean }> = ({ name, winner }) => (
   <div className={`h-8 border-b border-gray-300 flex items-center px-2 text-sm font-semibold ${winner ? 'text-clay' : 'text-black'}`}>
     <span className="truncate">{formatPlayerName(name) || ' '}</span>
@@ -78,9 +86,14 @@ export const BracketView: React.FC<Props> = ({ matches, drawTitle, editMode, edi
             className={`grid rounded-xl border p-3 ${getRoundTone(round.round)}`}
             style={{ gridTemplateRows: `auto repeat(${drawSize}, minmax(24px, 1fr))`, rowGap: '0.35rem' }}
           >
-            <p className="sticky top-0 z-10 bg-inherit text-center text-xs uppercase tracking-widest text-gray-600 font-black pb-2">
-              {round.round}
-            </p>
+            <div className="sticky top-0 z-10 bg-inherit pb-2">
+              <p className="text-center text-xs uppercase tracking-widest text-gray-600 font-black">
+                {round.round}
+              </p>
+              {ROUND_DEADLINES[round.round] && (
+                <p className="text-center text-[10px] text-gray-400 mt-0.5">{ROUND_DEADLINES[round.round]}</p>
+              )}
+            </div>
             {round.matches.map((match, matchIndex) => {
               const rowSpan = 2 ** (roundIndex + 1);
               const gridRowStart = matchIndex * 2 ** roundIndex * 2 + 2;
