@@ -524,11 +524,20 @@ export const useTournament = () => {
     setGenerating(true);
     setMessage(null);
     try {
-      for (const draw of effectiveDraws) await generateDraw(draw);
+      for (const draw of effectiveDraws) {
+        // Preserve the saved drawsize for already-generated draws so subsequent
+        // finalize calls on other draws don't overwrite the size.
+        const existingMatches = matches.filter(
+          (m) => m.tournament_choice === draw.tournamentChoice &&
+            m.division === draw.division &&
+            m.skill_group === draw.skillGroup,
+        );
+        const lockedSize = existingMatches.length > 0 ? existingMatches[0].drawsize : undefined;
+        await generateDraw(draw, lockedSize);
+      }
       setEditMode(false);
       setPreviewSlotOverrides({});
       setPreviewDrawSize({});
-      setSkillOverrides({});
       setMessage({ type: 'success', text: 'Tournament draws generated.' });
     } catch (err) {
       console.error('Draw generation failed:', err);
