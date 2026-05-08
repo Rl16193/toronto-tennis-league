@@ -27,9 +27,11 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string): string => 
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
   const rowHeight = 46;
-  const topOffset = 80;
+  const colStart = 44;   // top of colored columns
+  const topOffset = 105; // where match cards begin (leaves room for labels inside column header)
+  const footerHeight = 30;
   const width = Math.max(900, roundLabels.length * 190 + 80);
-  const height = Math.max(520, topOffset + drawSize * rowHeight + 40);
+  const height = Math.max(580, topOffset + drawSize * rowHeight + footerHeight + 20);
   const colWidth = (width - 80) / roundLabels.length;
 
   const rounds = roundLabels.map((round) => ({
@@ -40,9 +42,15 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string): string => 
   const cells = rounds.flatMap((round, ri) => {
     const x = 40 + ri * colWidth;
     const colColor = round.round === 'SF' || round.round === 'F' ? '#ecfdf3' : '#eff6ff';
-    const col = `<rect x="${x - 12}" y="56" width="${colWidth - 24}" height="${height - 78}" rx="14" fill="${colColor}" stroke="#d1d5db" />`;
+    const colH = height - colStart - footerHeight - 10;
+    const colCenterX = x - 12 + (colWidth - 24) / 2;
+
+    const col = `<rect x="${x - 12}" y="${colStart}" width="${colWidth - 24}" height="${colH}" rx="14" fill="${colColor}" stroke="#d1d5db" />`;
+
     const deadline = ROUND_DEADLINES[round.round] || '';
-    const label = `<text x="${x + (colWidth - 24) / 2}" y="32" text-anchor="middle" font-size="13" font-weight="800" fill="#374151">${round.round}</text>${deadline ? `<text x="${x + (colWidth - 24) / 2}" y="47" text-anchor="middle" font-size="9" fill="#6b7280">${deadline}</text>` : ''}`;
+    const label = `<text x="${colCenterX}" y="${colStart + 22}" text-anchor="middle" font-size="13" font-weight="800" fill="#374151">${round.round}</text>${
+      deadline ? `<text x="${colCenterX}" y="${colStart + 36}" text-anchor="middle" font-size="9" fill="#6b7280">${deadline}</text>` : ''
+    }`;
 
     const items = round.matches.map((match, mi) => {
       const rowSpan = 2 ** ri;
@@ -68,8 +76,9 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string): string => 
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <rect width="100%" height="100%" fill="#ede9fe" />
-  <text x="${width / 2}" y="24" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="24" font-weight="900" fill="#111827">${escapeSvg(drawTitle)}</text>
+  <text x="${width / 2}" y="26" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="22" font-weight="900" fill="#111827">${escapeSvg(drawTitle)}</text>
   <g font-family="Montserrat,Arial,sans-serif">${cells}</g>
+  <text x="${width / 2}" y="${height - 10}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="11" fill="#6b7280">Presented by Racquets &amp; Strings</text>
 </svg>`;
 };
 
@@ -77,14 +86,11 @@ export const downloadDrawAsPng = (matches: TournamentMatch[], drawTitle: string)
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
   const width = Math.max(900, roundLabels.length * 190 + 80);
-  const height = Math.max(520, 80 + drawSize * 46 + 40);
+  const height = Math.max(580, 105 + drawSize * 46 + 50);
   const svg = buildDrawSvg(matches, drawTitle);
   const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const svgUrl = URL.createObjectURL(svgBlob);
   const svgImg = new Image(width, height);
-
-  const logoImg = new Image();
-  logoImg.src = '/logo.png';
 
   svgImg.onload = () => {
     const canvas = document.createElement('canvas');
@@ -94,31 +100,17 @@ export const downloadDrawAsPng = (matches: TournamentMatch[], drawTitle: string)
     ctx.scale(2, 2);
     ctx.drawImage(svgImg, 0, 0, width, height);
     URL.revokeObjectURL(svgUrl);
-
-    const finish = () => {
-      const logoSize = 56;
-      if (logoImg.complete && logoImg.naturalWidth > 0) {
-        ctx.drawImage(logoImg, width - logoSize - 14, 8, logoSize, logoSize);
-      }
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const pngUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = pngUrl;
-        link.download = `${drawTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(pngUrl);
-      }, 'image/png');
-    };
-
-    if (logoImg.complete) {
-      finish();
-    } else {
-      logoImg.onload = finish;
-      logoImg.onerror = finish;
-    }
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const pngUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = pngUrl;
+      link.download = `${drawTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(pngUrl);
+    }, 'image/png');
   };
 
   svgImg.src = svgUrl;
