@@ -9,6 +9,7 @@ type Props = {
   updatingDraw: boolean;
   resettingDraw: boolean;
   canReset: boolean;
+  canFinalize: boolean;
   editMode: boolean;
   started: boolean;
   mergeWomensSingles: boolean;
@@ -23,7 +24,7 @@ type Props = {
 };
 
 export const TournamentHeader: React.FC<Props> = ({
-  title, isCreator, generating, updatingDraw, resettingDraw, canReset,
+  title, isCreator, generating, updatingDraw, resettingDraw, canReset, canFinalize,
   editMode, started, mergeWomensSingles, consolidateDoubles,
   onDownload, onGenerateAll, onUpdateDraw, onResetDraw, onToggleEdit,
   onToggleMergeWomens, onToggleConsolidateDoubles,
@@ -58,7 +59,7 @@ export const TournamentHeader: React.FC<Props> = ({
               </Button>
             </>
           )}
-          <Button onClick={onGenerateAll} isLoading={generating}>
+          <Button onClick={onGenerateAll} isLoading={generating} disabled={!canFinalize}>
             <ShieldCheck className="w-4 h-4 mr-2" />
             Finalize Draw
           </Button>
