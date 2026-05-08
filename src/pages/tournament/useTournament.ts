@@ -123,7 +123,15 @@ export const useTournament = () => {
     if (!event) return;
     return onSnapshot(
       query(collection(db, 'tournament_matches'), where('event_id', '==', event.id)),
-      (snap) => setMatches(snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentMatch))),
+      (snap) => {
+        const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentMatch));
+        setMatches(loaded);
+        // Auto-enable merge/consolidate toggles if that draw data already exists in Firestore
+        if (loaded.some((m) => m.tournament_choice === 'Singles' && m.division === "Women's" && m.skill_group === 'All'))
+          setMergeWomensSingles(true);
+        if (loaded.some((m) => m.tournament_choice === 'Doubles' && m.division === 'All'))
+          setConsolidateDoubles(true);
+      },
     );
   }, [event]);
 
