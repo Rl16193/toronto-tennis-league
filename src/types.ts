@@ -50,6 +50,7 @@ export interface TennisEvent {
   end_date?: string | { toDate?: () => Date; seconds?: number; nanoseconds?: number };
   startDate?: string | { toDate?: () => Date; seconds?: number; nanoseconds?: number };
   endDate?: string | { toDate?: () => Date; seconds?: number; nanoseconds?: number };
+  join_last_date?: string | { toDate?: () => Date; seconds?: number; nanoseconds?: number };
   recurring_weekly?: boolean;
   recurring?: boolean | string;
   day?: string | string[];
