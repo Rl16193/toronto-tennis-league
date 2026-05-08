@@ -8,9 +8,9 @@ import { EventParticipant, TennisEvent, UserData, UserStats } from '../../types'
 import { DrawConfig, DrawTab, ScoreForm, ScoreSubmission, SkillGroup, TournamentMatch, TournamentPlayer, TournamentTemplate } from './types';
 import {
   BYE, PLAYER_LOADING,
-  fallbackTemplate, filterParticipantsForDraw,
+  buildPlayerList, fallbackTemplate, filterParticipantsForDraw,
   getDrawKey, getDrawSize, getEventDate, getWinnerPlaceholder,
-  isTournamentStarted, mapParticipantsToPlayers, normalizeTemplateMatches, scoresMatch,
+  isTournamentStarted, normalizeTemplateMatches, parseDateValue, scoresMatch,
 } from './utils';
 
 export const VISIBLE_DRAWS: DrawConfig[] = [
@@ -22,6 +22,19 @@ export const VISIBLE_DRAWS: DrawConfig[] = [
   { tab: 'doubles', label: "Women's Doubles", tournamentChoice: 'Doubles', division: "Women's", skillGroup: 'All' },
   { tab: 'doubles', label: 'Mixed Doubles', tournamentChoice: 'Doubles', division: 'Mixed Doubles', skillGroup: 'All' },
 ];
+
+const WOMENS_MERGED_DRAW: DrawConfig = {
+  tab: 'womens', label: "Women's Masters", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'All',
+};
+const CONSOLIDATED_DOUBLES_DRAW: DrawConfig = {
+  tab: 'doubles', label: 'Doubles', tournamentChoice: 'Doubles', division: 'All', skillGroup: 'All',
+};
+
+const deleteKey = <T extends Record<string, unknown>>(obj: T, key: string): T => {
+  const next = { ...obj };
+  delete next[key];
+  return next;
+};
 
 export const useTournament = () => {
   const { user, profile, loading: authLoading } = useAuth();
@@ -46,9 +59,37 @@ export const useTournament = () => {
   const [resettingDraw, setResettingDraw] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [previewSlotOverrides, setPreviewSlotOverrides] = useState<Record<string, Record<number, TournamentPlayer | null>>>({});
+  const [mergeWomensSingles, setMergeWomensSingles] = useState(false);
+  const [consolidateDoubles, setConsolidateDoubles] = useState(false);
+  const [previewDrawSize, setPreviewDrawSize] = useState<Record<string, number>>({});
+  const [skillOverrides, setSkillOverrides] = useState<Record<string, SkillGroup>>({});
 
   const isCreator = !!user && !!event?.creator_id && event.creator_id === user.uid;
   const started = isTournamentStarted(event);
+
+  const joinLastDate = useMemo(() => (event?.join_last_date ? parseDateValue(event.join_last_date) : null), [event]);
+  const drawLocked = joinLastDate ? new Date() >= joinLastDate : false;
+
+  const effectiveStatsMap = useMemo(() => {
+    if (Object.keys(skillOverrides).length === 0) return statsMap;
+    const copy = { ...statsMap };
+    Object.entries(skillOverrides).forEach(([uid, group]) => {
+      copy[uid] = { ...(copy[uid] ?? {}), skill_level: group === 'Masters' ? 4 : 3 } as typeof copy[string];
+    });
+    return copy;
+  }, [statsMap, skillOverrides]);
+
+  const effectiveDraws = useMemo<DrawConfig[]>(() => {
+    let draws = VISIBLE_DRAWS.filter((d) => {
+      if (mergeWomensSingles && d.tab === 'womens' && d.tournamentChoice === 'Singles') return false;
+      if (consolidateDoubles && d.tab === 'doubles') return false;
+      return true;
+    });
+    if (mergeWomensSingles) draws = [...draws, WOMENS_MERGED_DRAW];
+    if (consolidateDoubles) draws = [...draws, CONSOLIDATED_DOUBLES_DRAW];
+    const tabOrder = { mens: 0, womens: 1, doubles: 2 };
+    return draws.sort((a, b) => tabOrder[a.tab] - tabOrder[b.tab]);
+  }, [mergeWomensSingles, consolidateDoubles]);
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -129,6 +170,12 @@ export const useTournament = () => {
 
   const userDraw = useMemo<DrawConfig | undefined>(() => {
     if (!userParticipant) return undefined;
+    if (mergeWomensSingles && userParticipant.tournament_choice === 'Singles' && userParticipant.division === "Women's") {
+      return WOMENS_MERGED_DRAW;
+    }
+    if (consolidateDoubles && userParticipant.tournament_choice === 'Doubles') {
+      return CONSOLIDATED_DOUBLES_DRAW;
+    }
     const effectiveSkill = statsMap[userParticipant.user_id]?.skill_level ?? Number(userParticipant.skill || 0);
     const skillGroup: SkillGroup =
       userParticipant.tournament_choice === 'Doubles' ? 'All'
@@ -139,11 +186,11 @@ export const useTournament = () => {
         d.division === userParticipant.division &&
         d.skillGroup === skillGroup,
     );
-  }, [userParticipant, statsMap]);
+  }, [userParticipant, statsMap, mergeWomensSingles, consolidateDoubles]);
 
   const visibleDraws = useMemo(
-    () => (isCreator || !userDraw ? VISIBLE_DRAWS : [userDraw]),
-    [isCreator, userDraw],
+    () => (isCreator || !userDraw ? effectiveDraws : [userDraw]),
+    [isCreator, userDraw, effectiveDraws],
   );
 
   useEffect(() => {
@@ -155,11 +202,11 @@ export const useTournament = () => {
 
   const currentDraw = useMemo<DrawConfig | undefined>(() => {
     if (activeTab === 'doubles')
-      return VISIBLE_DRAWS.find((d) => d.tab === 'doubles' && d.division === activeDoubles)
-        ?? VISIBLE_DRAWS.find((d) => d.tab === 'doubles');
-    return VISIBLE_DRAWS.find((d) => d.tab === activeTab && d.skillGroup === activeSkill)
-      ?? VISIBLE_DRAWS.find((d) => d.tab === activeTab);
-  }, [activeDoubles, activeSkill, activeTab]);
+      return effectiveDraws.find((d) => d.tab === 'doubles' && d.division === activeDoubles)
+        ?? effectiveDraws.find((d) => d.tab === 'doubles');
+    return effectiveDraws.find((d) => d.tab === activeTab && d.skillGroup === activeSkill)
+      ?? effectiveDraws.find((d) => d.tab === activeTab);
+  }, [activeDoubles, activeSkill, activeTab, effectiveDraws]);
 
   const currentMatches = useMemo(() => {
     if (!currentDraw) return [];
@@ -172,22 +219,28 @@ export const useTournament = () => {
       .sort((a, b) => a.position - b.position);
   }, [currentDraw, matches]);
 
+  // Full sorted player list for the current draw — shared by displayMatches, editPlayers, and reservesPlayers.
+  const currentDrawAllPlayers = useMemo(() => {
+    if (!currentDraw) return [];
+    return buildPlayerList(
+      filterParticipantsForDraw(participants, currentDraw, effectiveStatsMap),
+      currentDraw,
+      effectiveStatsMap,
+      userMap,
+    );
+  }, [currentDraw, participants, effectiveStatsMap, userMap]);
+
   const displayMatches = useMemo(() => {
     if (!currentDraw) return [];
     if (currentMatches.length > 0) return currentMatches;
 
-    const drawParticipants = filterParticipantsForDraw(participants, currentDraw, statsMap);
-    const drawsize = getDrawSize(drawParticipants.length, currentDraw.tournamentChoice);
-    const players = mapParticipantsToPlayers(drawParticipants, userMap)
-      .filter((p) => p.name)
-      .sort((a, b) => a.name.localeCompare(b.name));
-
+    const drawsize = previewDrawSize[currentDraw.label] ?? getDrawSize(currentDrawAllPlayers.length, currentDraw.tournamentChoice);
     const template = templates.find((t) => Number(t.size || t.drawsize || t.draw_size) === drawsize);
     const templateMatches = normalizeTemplateMatches(
       template?.matches?.length ? template.matches : fallbackTemplate(drawsize),
     );
-    const slotMap = new Map<number, (typeof players)[0]>();
-    players.slice(0, drawsize).forEach((p, i) => slotMap.set(i + 1, p));
+    const slotMap = new Map<number, TournamentPlayer>();
+    currentDrawAllPlayers.slice(0, drawsize).forEach((p, i) => slotMap.set(i + 1, p));
 
     const drawOverrides = previewSlotOverrides[currentDraw.label] ?? {};
     Object.entries(drawOverrides).forEach(([slotStr, player]) => {
@@ -225,7 +278,7 @@ export const useTournament = () => {
         started,
       };
     });
-  }, [currentDraw, currentMatches, event?.id, participants, previewSlotOverrides, started, statsMap, templates, userMap]);
+  }, [currentDraw, currentDrawAllPlayers, currentMatches, event?.id, previewDrawSize, previewSlotOverrides, started, templates]);
 
   const myActiveMatch = useMemo(
     () => user
@@ -256,10 +309,41 @@ export const useTournament = () => {
     [myActiveMatch, submissions, user],
   );
 
-  const editPlayers = useMemo(() => {
-    if (!editMode || !currentDraw) return [];
-    return mapParticipantsToPlayers(filterParticipantsForDraw(participants, currentDraw, statsMap), userMap);
-  }, [editMode, currentDraw, participants, statsMap, userMap]);
+  const editPlayers = editMode ? currentDrawAllPlayers : [];
+
+  const currentDrawSize = displayMatches[0]?.drawsize ?? 16;
+
+  const reservesPlayers = useMemo(() => {
+    if (currentMatches.length > 0) return [];
+    const placedIds = new Set(
+      displayMatches.flatMap((m) => [m.player_1_user_id, m.player_2_user_id]).filter(Boolean),
+    );
+    return currentDrawAllPlayers.filter((p) => !placedIds.has(p.user_id));
+  }, [currentDrawAllPlayers, currentMatches, displayMatches]);
+
+  // All singles players for the active tab with their current bracket — used by the move panel.
+  // Only populated when two skill-group draws exist (i.e. not merged).
+  const moveablePlayers = useMemo(() => {
+    if (activeTab === 'doubles') return [];
+    const tabDraws = effectiveDraws.filter((d) => d.tab === activeTab);
+    if (tabDraws.length < 2) return [];
+    const seenIds = new Set<string>();
+    const result: Array<TournamentPlayer & { currentGroup: SkillGroup }> = [];
+    tabDraws.forEach((draw) => {
+      buildPlayerList(
+        filterParticipantsForDraw(participants, draw, effectiveStatsMap),
+        draw,
+        effectiveStatsMap,
+        userMap,
+      ).forEach((p) => {
+        if (seenIds.has(p.user_id)) return;
+        seenIds.add(p.user_id);
+        const effectiveSkill = effectiveStatsMap[p.user_id]?.skill_level ?? 0;
+        result.push({ ...p, currentGroup: effectiveSkill >= 4 ? 'Masters' : 'Challengers' });
+      });
+    });
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  }, [activeTab, effectiveDraws, participants, effectiveStatsMap, userMap]);
 
   const skillMismatchedCount = useMemo(() => {
     if (!isCreator || matches.length === 0) return 0;
@@ -275,7 +359,7 @@ export const useTournament = () => {
       const effectiveSkill = statsMap[uid]?.skill_level ?? Number(p.skill || 0);
       const correctGroup = effectiveSkill >= 4 ? 'Masters' : 'Challengers';
       const inCorrectBracket = matches.some(
-        (m) => m.skill_group === correctGroup && (m.player_1_user_id === uid || m.player_2_user_id === uid),
+        (m) => (m.skill_group === correctGroup || m.skill_group === 'All') && (m.player_1_user_id === uid || m.player_2_user_id === uid),
       );
       if (!inCorrectBracket) count += 1;
     });
@@ -291,26 +375,25 @@ export const useTournament = () => {
 
   // ── Internal helpers ──────────────────────────────────────────────────────
 
-  const generateDraw = async (draw: DrawConfig) => {
+  const generateDraw = async (draw: DrawConfig, lockedDrawsize?: number) => {
     if (!event) return;
-    const drawParticipants = filterParticipantsForDraw(participants, draw, statsMap);
-    const drawsize = getDrawSize(drawParticipants.length, draw.tournamentChoice);
-    const players = mapParticipantsToPlayers(drawParticipants, userMap)
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .slice(0, drawsize);
+    const drawParticipants = filterParticipantsForDraw(participants, draw, effectiveStatsMap);
+    const players = buildPlayerList(drawParticipants, draw, effectiveStatsMap, userMap);
+    const drawsize = lockedDrawsize ?? previewDrawSize[draw.label] ?? getDrawSize(players.length, draw.tournamentChoice);
+    const slicedPlayers = players.slice(0, drawsize);
 
     const template = templates.find((t) => Number(t.size || t.drawsize || t.draw_size) === drawsize);
     const templateMatches = normalizeTemplateMatches(
       template?.matches?.length ? template.matches : fallbackTemplate(drawsize),
     );
-    const slotMap = new Map<number, (typeof players)[0]>();
-    players.forEach((p, i) => slotMap.set(i + 1, p));
+    const slotMap = new Map<number, TournamentPlayer>();
+    slicedPlayers.forEach((p, i) => slotMap.set(i + 1, p));
 
     const drawOverrides = previewSlotOverrides[draw.label] ?? {};
     Object.entries(drawOverrides).forEach(([slotStr, player]) => {
       const slotNum = Number(slotStr);
       if (player === null) slotMap.delete(slotNum);
-      else slotMap.set(slotNum, player as (typeof players)[0]);
+      else slotMap.set(slotNum, player);
     });
 
     const batch = writeBatch(db);
@@ -390,16 +473,62 @@ export const useTournament = () => {
     await batch.commit();
   };
 
+  const advancePlayerByBye = async (match: TournamentMatch) => {
+    const byeIsPlayer1 = match.player_1_name === BYE;
+    const winnerName = byeIsPlayer1 ? match.player_2_name : match.player_1_name;
+    const winnerUserId = byeIsPlayer1 ? match.player_2_user_id : match.player_1_user_id;
+    const winnerContact = byeIsPlayer1 ? match.player_2_contact : match.player_1_contact;
+
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'tournament_matches', match.id), {
+      winner_name: winnerName,
+      winner_user_id: winnerUserId,
+      status: 'complete',
+      completed_at: new Date().toISOString(),
+    });
+    if (match.next_match_id && match.next_slot) {
+      const nextMatch = matches.find(
+        (m) => m.event_id === match.event_id &&
+          m.tournament_choice === match.tournament_choice &&
+          m.division === match.division &&
+          m.skill_group === match.skill_group &&
+          m.match_id === match.next_match_id,
+      );
+      if (nextMatch) {
+        batch.update(doc(db, 'tournament_matches', nextMatch.id), {
+          [`${match.next_slot}_name`]: winnerName,
+          [`${match.next_slot}_user_id`]: winnerUserId,
+          [`${match.next_slot}_contact`]: winnerContact,
+        });
+      }
+    }
+    await batch.commit();
+  };
+
   // ── Action handlers ───────────────────────────────────────────────────────
+
+  const handleSetPreviewDrawSize = (drawLabel: string, size: number) => {
+    setPreviewDrawSize((prev) => ({ ...prev, [drawLabel]: size }));
+  };
+
+  const handleMovePlayer = (userIds: string[], target: SkillGroup) => {
+    setSkillOverrides((prev) => {
+      const next = { ...prev };
+      userIds.forEach((id) => { next[id] = target; });
+      return next;
+    });
+  };
 
   const handleGenerateAll = async () => {
     if (!isCreator || !event) return;
     setGenerating(true);
     setMessage(null);
     try {
-      for (const draw of VISIBLE_DRAWS) await generateDraw(draw);
+      for (const draw of effectiveDraws) await generateDraw(draw);
       setEditMode(false);
       setPreviewSlotOverrides({});
+      setPreviewDrawSize({});
+      setSkillOverrides({});
       setMessage({ type: 'success', text: 'Tournament draws generated.' });
     } catch (err) {
       console.error('Draw generation failed:', err);
@@ -414,7 +543,23 @@ export const useTournament = () => {
     setUpdatingDraw(true);
     setMessage(null);
     try {
-      for (const draw of VISIBLE_DRAWS) await generateDraw(draw);
+      for (const draw of effectiveDraws) {
+        // After join cutoff, preserve existing drawsize so new joiners fill PLAYER_LOADING slots
+        const existingDrawMatches = matches.filter(
+          (m) => m.tournament_choice === draw.tournamentChoice &&
+            m.division === draw.division &&
+            m.skill_group === draw.skillGroup,
+        );
+        const lockedSize = drawLocked && existingDrawMatches.length > 0 ? existingDrawMatches[0].drawsize : undefined;
+        await generateDraw(draw, lockedSize);
+      }
+
+      const byeMatches = matches.filter((m) => {
+        if (m.status === 'complete') return false;
+        return (m.player_1_name === BYE && !!m.player_2_user_id) ||
+          (m.player_2_name === BYE && !!m.player_1_user_id);
+      });
+      await Promise.all(byeMatches.map(advancePlayerByBye));
 
       const pendingByMatch = new Map<string, ScoreSubmission[]>();
       submissions
@@ -459,11 +604,11 @@ export const useTournament = () => {
       currentMatches.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
       await batch.commit();
       setEditMode(false);
-      setPreviewSlotOverrides((prev) => {
-        const next = { ...prev };
-        delete next[currentDraw.label];
-        return next;
-      });
+      setPreviewSlotOverrides((prev) => deleteKey(prev, currentDraw.label));
+      setPreviewDrawSize((prev) => deleteKey(prev, currentDraw.label));
+      setSkillOverrides({});
+      if (currentDraw.skillGroup === 'All' && currentDraw.tournamentChoice === 'Singles') setMergeWomensSingles(false);
+      if (currentDraw.tournamentChoice === 'Doubles' && currentDraw.division === 'All') setConsolidateDoubles(false);
       setMessage({ type: 'success', text: `${currentDraw.label} reset to live preview.` });
     } catch (err) {
       console.error('Draw reset failed:', err);
@@ -508,7 +653,7 @@ export const useTournament = () => {
     }
   };
 
-  const handleSubmitScore = async (e: React.FormEvent) => {
+  const handleSubmitScore = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!scoreForm || !user || !profile) return;
 
@@ -603,6 +748,8 @@ export const useTournament = () => {
     hasSubmittedScore,
     opponent,
     editPlayers,
+    reservesPlayers,
+    currentDrawSize,
     skillMismatchedCount,
     message,
     scoreForm,
@@ -612,12 +759,19 @@ export const useTournament = () => {
     resettingDraw,
     editMode,
     setEditMode,
+    mergeWomensSingles,
+    setMergeWomensSingles,
+    consolidateDoubles,
+    setConsolidateDoubles,
     activeTab,
     setActiveTab,
     activeSkill,
     setActiveSkill,
     activeDoubles,
     setActiveDoubles,
+    moveablePlayers,
+    handleSetPreviewDrawSize,
+    handleMovePlayer,
     handleGenerateAll,
     handleCreatorUpdateDraw,
     handleResetDraw,

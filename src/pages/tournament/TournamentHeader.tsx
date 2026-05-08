@@ -10,17 +10,23 @@ type Props = {
   resettingDraw: boolean;
   canReset: boolean;
   editMode: boolean;
+  started: boolean;
+  mergeWomensSingles: boolean;
+  consolidateDoubles: boolean;
   onDownload: () => void;
   onGenerateAll: () => void;
   onUpdateDraw: () => void;
   onResetDraw: () => void;
   onToggleEdit: () => void;
+  onToggleMergeWomens: () => void;
+  onToggleConsolidateDoubles: () => void;
 };
 
 export const TournamentHeader: React.FC<Props> = ({
   title, isCreator, generating, updatingDraw, resettingDraw, canReset,
-  editMode,
+  editMode, started, mergeWomensSingles, consolidateDoubles,
   onDownload, onGenerateAll, onUpdateDraw, onResetDraw, onToggleEdit,
+  onToggleMergeWomens, onToggleConsolidateDoubles,
 }) => (
   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-8">
     <div>
@@ -29,13 +35,29 @@ export const TournamentHeader: React.FC<Props> = ({
         Draw updates after scores are submitted either in person or online.
       </p>
     </div>
-    <div className="flex flex-col sm:flex-row gap-3">
+    <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
       <Button variant="outline" onClick={onDownload}>
         <Download className="w-4 h-4 mr-2" />
         Download Draw
       </Button>
       {isCreator && (
         <>
+          {!started && (
+            <>
+              <Button
+                variant={mergeWomensSingles ? 'danger' : 'outline'}
+                onClick={onToggleMergeWomens}
+              >
+                {mergeWomensSingles ? "Unmerge Women's" : "Merge Women's"}
+              </Button>
+              <Button
+                variant={consolidateDoubles ? 'danger' : 'outline'}
+                onClick={onToggleConsolidateDoubles}
+              >
+                {consolidateDoubles ? 'Split Doubles' : 'Consolidate Doubles'}
+              </Button>
+            </>
+          )}
           <Button onClick={onGenerateAll} isLoading={generating}>
             <ShieldCheck className="w-4 h-4 mr-2" />
             Finalize Draw

@@ -35,14 +35,14 @@ export const Rules: React.FC = () => (
           1. Sportsmanship and Match Play
         </h2>
         <p className="text-gray-400 leading-relaxed text-lg">
-          Toronto Tennis League is built on fair play, respect, and player-led coordination. All members are expected to treat opponents, partners, and the public courteously and to resolve issues calmly and in good faith.
+          Racquets & Strings is built on fair play, respect, and player-led coordination. All members are expected to treat opponents, partners, and the public courteously and to resolve issues calmly and in good faith.
         </p>
         <ul className="list-disc list-inside text-gray-400 space-y-2 ml-4">
           <li>Treat others with respect and avoid harassment, aggression, or abusive language.</li>
           <li>Follow public court rules, booking limits, and time restrictions.</li>
           <li>Keep courts and shared spaces clean and leave them in good condition.</li>
           <li>Players are responsible for bringing their own tennis balls unless otherwise arranged.</li>
-          <li>Toronto Tennis League does not officiate matches, reserve courts, or supervise play unless explicitly stated for a specific event.</li>
+          <li>Racquets & Strings does not officiate matches, reserve courts, or supervise play unless explicitly stated for a specific event.</li>
         </ul>
       </section>
 
@@ -73,7 +73,7 @@ export const Rules: React.FC = () => (
         </p>
         <ul className="list-disc list-inside text-gray-400 space-y-2 ml-4">
           <li>Do not intentionally understate or overstate your level to gain an advantage.</li>
-          <li>Toronto Tennis League may review and adjust ratings or event placement where needed to support fair and balanced competition.</li>
+          <li>Racquets & Strings may review and adjust ratings or event placement where needed to support fair and balanced competition.</li>
           <li>Repeated misrepresentation of skill level or unsportsmanlike conduct may lead to warnings, removal from events, or account suspension.</li>
         </ul>
       </section>
@@ -97,14 +97,14 @@ export const Terms: React.FC = () => (
       <section className="space-y-4">
         <h2 className="text-2xl font-bold text-white">1. Acceptance of Terms</h2>
         <p className="text-gray-400 leading-relaxed">
-          By accessing or using the Toronto Tennis League platform (the "Platform"), you agree to be bound by these Terms of Service and all applicable laws and regulations. If you do not agree with these Terms, you should not access or use the Platform.
+          By accessing or using the Racquets & Strings platform (the "Platform"), you agree to be bound by these Terms of Service and all applicable laws and regulations. If you do not agree with these Terms, you should not access or use the Platform.
         </p>
       </section>
 
       <section className="space-y-4">
         <h2 className="text-2xl font-bold text-white">2. About the Platform</h2>
         <p className="text-gray-400 leading-relaxed">
-          Toronto Tennis League is a community-driven, non-profit platform designed to help players connect and participate in matches, meetups, and tournaments. Unless explicitly stated for a specific event or service, we do not act as referees, supervisors, or organizers of play, and we do not reserve courts on behalf of users.
+          Racquets & Strings is a community-driven, non-profit platform designed to help players connect and participate in matches, meetups, and tournaments. Unless explicitly stated for a specific event or service, we do not act as referees, supervisors, or organizers of play, and we do not reserve courts on behalf of users.
         </p>
       </section>
 
@@ -135,13 +135,13 @@ export const Terms: React.FC = () => (
       <section className="space-y-4">
         <h2 className="text-2xl font-bold text-white">6. Liability Waiver and Platform Limitations</h2>
         <p className="text-gray-400 leading-relaxed">
-          To the fullest extent permitted by law, Toronto Tennis League is not responsible for injuries, accidents, disputes between players, missed connections, scheduling conflicts, cancellations, weather issues, court conditions, lost property, or the conduct of users or third parties.
+          To the fullest extent permitted by law, Racquets & Strings is not responsible for injuries, accidents, disputes between players, missed connections, scheduling conflicts, cancellations, weather issues, court conditions, lost property, or the conduct of users or third parties.
         </p>
         <p className="text-gray-400 leading-relaxed">
           The Platform is provided on an "as is" and "as available" basis for community use. We do not guarantee the availability of matches or opponents, the accuracy of user-provided information, uninterrupted service, or that the Platform will always be error-free or secure.
         </p>
         <p className="text-gray-400 leading-relaxed">
-          By using the Platform, you agree to release and hold harmless Toronto Tennis League and its volunteers, organizers, and representatives from claims, damages, losses, or liabilities arising from or related to your participation, except where such limitation is prohibited by law.
+          By using the Platform, you agree to release and hold harmless Racquets & Strings and its volunteers, organizers, and representatives from claims, damages, losses, or liabilities arising from or related to your participation, except where such limitation is prohibited by law.
         </p>
       </section>
 
@@ -216,9 +216,9 @@ export const Contact: React.FC = () => {
   const [message, setMessage] = useState('');
   const [subjectValue, setSubjectValue] = useState('Meetups');
 
-  const subject = encodeURIComponent(`Toronto Tennis League - ${subjectValue}`);
+  const subject = encodeURIComponent(`Racquets & Strings - ${subjectValue}`);
   const body = encodeURIComponent(
-    `Hi Toronto Tennis League,\n\nSubject: ${subjectValue}\n\nMessage:\n${message}\n`
+    `Hi Racquets & Strings,\n\nSubject: ${subjectValue}\n\nMessage:\n${message}\n`
   );
 
   const handleSendMessage = () => {

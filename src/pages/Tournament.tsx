@@ -9,6 +9,7 @@ import { OpponentCard } from './tournament/OpponentCard';
 import { DrawTabs } from './tournament/DrawTabs';
 import { ScoreModal } from './tournament/ScoreModal';
 import { FlaggedResults } from './tournament/FlaggedResults';
+import { PlayerMovePanel } from './tournament/PlayerMovePanel';
 
 export const Tournament: React.FC = () => {
   const {
@@ -17,10 +18,12 @@ export const Tournament: React.FC = () => {
     isCreator, started, userParticipant,
     currentDraw, currentMatches, displayMatches, visibleDraws,
     myActiveMatch, hasSubmittedScore, opponent,
-    editPlayers, skillMismatchedCount,
+    editPlayers, reservesPlayers, currentDrawSize, skillMismatchedCount,
     message, scoreForm, setScoreForm,
     generating, updatingDraw, resettingDraw, editMode, setEditMode,
+    mergeWomensSingles, setMergeWomensSingles, consolidateDoubles, setConsolidateDoubles,
     activeTab, setActiveTab, activeSkill, setActiveSkill, activeDoubles, setActiveDoubles,
+    moveablePlayers, handleSetPreviewDrawSize, handleMovePlayer,
     handleGenerateAll, handleCreatorUpdateDraw, handleResetDraw,
     handleResolveDispute, handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
   } = useTournament();
@@ -43,11 +46,16 @@ export const Tournament: React.FC = () => {
         resettingDraw={resettingDraw}
         canReset={!started && currentMatches.length > 0}
         editMode={editMode}
+        started={started}
+        mergeWomensSingles={mergeWomensSingles}
+        consolidateDoubles={consolidateDoubles}
         onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw')}
         onGenerateAll={handleGenerateAll}
         onUpdateDraw={handleCreatorUpdateDraw}
         onResetDraw={handleResetDraw}
         onToggleEdit={() => setEditMode((v) => !v)}
+        onToggleMergeWomens={() => setMergeWomensSingles((v) => !v)}
+        onToggleConsolidateDoubles={() => setConsolidateDoubles((v) => !v)}
       />
 
       {message && (
@@ -104,6 +112,36 @@ export const Tournament: React.FC = () => {
         onDoublesChange={setActiveDoubles}
       />
 
+      {editMode && isCreator && (
+        <PlayerMovePanel players={moveablePlayers} onMove={handleMovePlayer} />
+      )}
+
+      {editMode && currentDraw && (
+        <div className="mb-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Draw Size</span>
+            {(currentDraw.tournamentChoice === 'Singles' ? [8, 16, 32] : [8, 16]).map((size) => (
+              <button
+                key={size}
+                onClick={() => handleSetPreviewDrawSize(currentDraw.label, size)}
+                className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
+                  currentDrawSize === size
+                    ? 'bg-clay text-white'
+                    : 'bg-tennis-surface/60 text-gray-300 hover:text-white'
+                }`}
+              >
+                R{size}
+              </button>
+            ))}
+          </div>
+          {currentMatches.length > 0 && (
+            <p className="text-xs text-amber-400/80 mt-2">
+              Matches already created. Reset the draw first to change the draw size.
+            </p>
+          )}
+        </div>
+      )}
+
       <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw')}>
         <BracketView
           matches={displayMatches}
@@ -113,6 +151,29 @@ export const Tournament: React.FC = () => {
           onEditPlayer={handleEditPlayer}
         />
       </BracketErrorBoundary>
+
+      {reservesPlayers.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-xl font-bold text-white mb-4">
+            Reserves <span className="text-gray-400 text-base font-normal">({reservesPlayers.length})</span>
+          </h3>
+          <div className="bg-tennis-surface/30 border border-white/5 rounded-2xl p-6">
+            <ol className="space-y-2">
+              {reservesPlayers.map((player, i) => (
+                <li key={player.user_id} className="flex items-center gap-3 text-gray-300">
+                  <span className="text-gray-500 text-sm w-6 text-right shrink-0">{i + 1}.</span>
+                  <span className="font-semibold">{player.name}</span>
+                </li>
+              ))}
+            </ol>
+            {editMode && (
+              <p className="text-xs text-gray-500 mt-4 border-t border-white/5 pt-4">
+                Use the slot dropdowns in the draw above to assign reserves players.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {isCreator && (
         <FlaggedResults

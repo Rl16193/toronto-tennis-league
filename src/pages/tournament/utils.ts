@@ -190,19 +190,45 @@ export const filterParticipantsForDraw = (
   statsMap: Record<string, UserStats> = {},
 ): EventParticipant[] => {
   const filtered = participants.filter((p) => {
-    if (p.tournament_choice !== draw.tournamentChoice || p.division !== draw.division) return false;
+    if (p.tournament_choice !== draw.tournamentChoice) return false;
+    if (draw.tournamentChoice === 'Doubles' && draw.division === 'All') return true;
+    if (p.division !== draw.division) return false;
     if (draw.tournamentChoice === 'Doubles') return true;
+    if (draw.skillGroup === 'All') return true;
     const effectiveSkill = statsMap[p.user_id]?.skill_level ?? Number(p.skill || 0);
     return (effectiveSkill >= 4 ? 'Masters' : 'Challengers') === draw.skillGroup;
   });
   return draw.tournamentChoice === 'Doubles' ? deduplicateDoublesTeams(filtered) : filtered;
 };
 
+// True for merged/consolidated draws that need BYE-placement ordering.
+export const isSpecialDraw = (draw: DrawConfig): boolean =>
+  (draw.tournamentChoice === 'Singles' && draw.skillGroup === 'All') ||
+  (draw.tournamentChoice === 'Doubles' && draw.division === 'All');
+
+// Orders participants by skill/division so early slots face empty high slots → first-round BYEs.
+export const sortParticipantsForDraw = (
+  participants: EventParticipant[],
+  draw: DrawConfig,
+  statsMap: Record<string, UserStats> = {},
+): EventParticipant[] => {
+  if (draw.tournamentChoice === 'Singles' && draw.skillGroup === 'All') {
+    const masters = participants.filter((p) => (statsMap[p.user_id]?.skill_level ?? Number(p.skill || 0)) >= 4);
+    const challengers = participants.filter((p) => (statsMap[p.user_id]?.skill_level ?? Number(p.skill || 0)) < 4);
+    return [...masters, ...challengers];
+  }
+  if (draw.tournamentChoice === 'Doubles' && draw.division === 'All') {
+    const byeFirst = participants.filter((p) => p.division === "Women's" || p.division === 'Mixed Doubles');
+    const mens = participants.filter((p) => p.division === "Men's");
+    return [...byeFirst, ...mens];
+  }
+  return participants;
+};
+
 export const mapParticipantsToPlayers = (participants: EventParticipant[], userMap: Record<string, UserData>): TournamentPlayer[] =>
   participants.map((p) => {
     const userData = userMap[p.user_id];
     const baseName = getParticipantDisplayName(p, userData) || 'Player';
-    // For doubles: append partner name as "P1 / P2"
     const partnerName = p.doubles ? formatPlayerName(p.doubles) : null;
     const name = partnerName ? `${baseName} / ${partnerName}` : baseName;
     return {
@@ -213,3 +239,19 @@ export const mapParticipantsToPlayers = (participants: EventParticipant[], userM
       participantId: p.id,
     };
   });
+
+// Returns the full sorted player list for a draw (no size limit — callers slice as needed).
+export const buildPlayerList = (
+  drawParticipants: EventParticipant[],
+  draw: DrawConfig,
+  statsMap: Record<string, UserStats>,
+  userMap: Record<string, UserData>,
+): TournamentPlayer[] => {
+  if (isSpecialDraw(draw)) {
+    return mapParticipantsToPlayers(sortParticipantsForDraw(drawParticipants, draw, statsMap), userMap)
+      .filter((p) => p.name);
+  }
+  return mapParticipantsToPlayers(drawParticipants, userMap)
+    .filter((p) => p.name)
+    .sort((a, b) => a.name.localeCompare(b.name));
+};
