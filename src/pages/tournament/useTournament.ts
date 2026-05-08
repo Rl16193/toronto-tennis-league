@@ -778,6 +778,7 @@ export const useTournament = () => {
       }
     }
 
+    setSkillOverrides((prev) => ({ ...prev, [userId]: currentDraw.skillGroup }));
     setMessage({ type: 'success', text: `${userData.name} added to ${currentDraw.label}.` });
   };
 
