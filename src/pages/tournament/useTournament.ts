@@ -36,9 +36,10 @@ const deleteKey = <T extends Record<string, unknown>>(obj: T, key: string): T =>
   return next;
 };
 
-export const useTournament = () => {
+export const useTournament = (eventIdOverride?: string) => {
   const { user, profile, loading: authLoading } = useAuth();
 
+  const [allTournamentEvents, setAllTournamentEvents] = useState<TennisEvent[]>([]);
   const [event, setEvent] = useState<TennisEvent | null>(null);
   const [participants, setParticipants] = useState<EventParticipant[]>([]);
   const [matches, setMatches] = useState<TournamentMatch[]>([]);
@@ -103,7 +104,7 @@ export const useTournament = () => {
           .map((d) => ({ id: d.id, ...d.data() } as TennisEvent))
           .filter((e) => e.type?.toLowerCase().includes('tournament'))
           .sort((a, b) => (getEventDate(b)?.getTime() || 0) - (getEventDate(a)?.getTime() || 0));
-        setEvent(tournamentEvents[0] || null);
+        setAllTournamentEvents(tournamentEvents);
         setTemplates(templatesSnap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentTemplate)));
       } finally {
         setLoading(false);
@@ -111,6 +112,23 @@ export const useTournament = () => {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    if (allTournamentEvents.length === 0) return;
+    const target = eventIdOverride
+      ? (allTournamentEvents.find((e) => e.id === eventIdOverride) ?? allTournamentEvents[0])
+      : allTournamentEvents[0];
+    setEvent(target ?? null);
+    setParticipants([]);
+    setMatches([]);
+    setSubmissions([]);
+    setEditMode(false);
+    setSkillOverrides({});
+    setPreviewSlotOverrides({});
+    setPreviewDrawSize({});
+    setMergeWomensSingles(false);
+    setConsolidateDoubles(false);
+  }, [eventIdOverride, allTournamentEvents]);
 
   useEffect(() => {
     if (!event) return;
@@ -774,6 +792,7 @@ export const useTournament = () => {
   return {
     authLoading,
     loading,
+    allTournamentEvents,
     event,
     matches,
     submissions,

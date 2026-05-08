@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useTournament } from './tournament/useTournament';
+import { getEventDate } from './tournament/utils';
 import { downloadDrawAsPng } from './tournament/bracketImage';
 import { BracketView } from './tournament/BracketView';
 import { BracketErrorBoundary } from './tournament/BracketErrorBoundary';
@@ -13,9 +15,13 @@ import { PlayerMovePanel } from './tournament/PlayerMovePanel';
 import { AddPlayerPanel } from './tournament/AddPlayerPanel';
 
 export const Tournament: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const eventId = searchParams.get('event') || undefined;
+
   const {
     authLoading, loading,
     event, matches, submissions,
+    allTournamentEvents,
     isCreator, started, userParticipant,
     currentDraw, currentMatches, displayMatches, visibleDraws,
     myActiveMatch, hasSubmittedScore, opponent,
@@ -28,7 +34,16 @@ export const Tournament: React.FC = () => {
     handleSetPreviewDrawSize, handleMovePlayer, handleAddPlayer,
     handleGenerateAll, handleCreatorUpdateDraw, handleResetDraw,
     handleResolveDispute, handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
-  } = useTournament();
+  } = useTournament(eventId);
+
+  useEffect(() => {
+    if (!event) return;
+    if (!searchParams.get('event')) {
+      setSearchParams({ event: event.id }, { replace: true });
+    }
+  }, [event?.id]);
+
+  const handleEventChange = (id: string) => setSearchParams({ event: id });
 
   if (authLoading || loading) {
     return (
@@ -38,8 +53,36 @@ export const Tournament: React.FC = () => {
     );
   }
 
+  const now = Date.now();
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
+      {allTournamentEvents.length > 1 && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {allTournamentEvents.map((e) => {
+            const startMs = getEventDate(e)?.getTime();
+            const isActive = startMs != null && startMs <= now;
+            const isCurrent = e.id === event?.id;
+            return (
+              <button
+                key={e.id}
+                onClick={() => handleEventChange(e.id)}
+                className={`px-4 py-2 rounded-2xl text-sm font-semibold transition-all border ${
+                  isCurrent
+                    ? 'bg-clay text-white border-clay'
+                    : 'bg-tennis-surface/40 text-gray-400 border-white/10 hover:text-white hover:border-white/30'
+                }`}
+              >
+                {e.title}
+                <span className={`ml-2 text-xs font-bold uppercase tracking-wider ${isCurrent ? 'text-white/70' : 'text-gray-600'}`}>
+                  {isActive ? 'Active' : 'Upcoming'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <TournamentHeader
         title={event?.title || 'Tournament Draw'}
         isCreator={isCreator}

@@ -434,8 +434,15 @@ export const Events: React.FC = () => {
       const intendedGroup = skill >= 4 ? 'Masters' : 'Challengers';
       const altGroup = skill >= 4 ? 'Challengers' : 'Masters';
 
-      const merged = findSlot('Singles', joinForm.division, 'All');
-      if (merged) return { status: 'available', ...merged, skillOverride: skill };
+      const mergedDrawExists = tournamentMatches.some(
+        (m) => m.tournament_choice === 'Singles' && m.division === joinForm.division && m.skill_group === 'All'
+      );
+
+      if (mergedDrawExists) {
+        const slot = findSlot('Singles', joinForm.division, 'All');
+        if (slot) return { status: 'available', ...slot, skillOverride: skill };
+        return { status: 'full', skillOverride: skill };
+      }
 
       const intended = findSlot('Singles', joinForm.division, intendedGroup);
       if (intended) return { status: 'available', ...intended, skillOverride: skill };
@@ -448,6 +455,17 @@ export const Events: React.FC = () => {
 
     if (joinForm.tournamentChoice === 'Doubles') {
       const skill = Number(joinForm.combinedSkill || 0);
+
+      const consolidatedDrawExists = tournamentMatches.some(
+        (m) => m.tournament_choice === 'Doubles' && m.division === 'All'
+      );
+
+      if (consolidatedDrawExists) {
+        const slot = findSlot('Doubles', 'All', 'All');
+        if (slot) return { status: 'available', ...slot, skillOverride: skill };
+        return { status: 'full', skillOverride: skill };
+      }
+
       const slot = findSlot('Doubles', joinForm.division, 'All');
       if (slot) return { status: 'available', ...slot, skillOverride: skill };
       return { status: 'full', skillOverride: skill };
@@ -594,7 +612,10 @@ export const Events: React.FC = () => {
     }
 
     if (slotStatus?.status === 'full') {
-      setJoinError('No available slots. Please join the next tournament.');
+      const label = joinForm.tournamentChoice === 'Doubles'
+        ? 'Doubles'
+        : `${joinForm.division} Singles`;
+      setJoinError(`The ${label} draw is full. Please join the next event.`);
       return;
     }
     if (slotStatus?.status === 'fallback' && !slotFallbackConfirmed) {
@@ -1065,7 +1086,9 @@ export const Events: React.FC = () => {
                           {slotStatus?.status === 'full' && (
                             <div className="flex items-start gap-3 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400">
                               <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
-                              <p className="text-sm">No available slots. Please join the next tournament.</p>
+                              <p className="text-sm">
+                                {joinForm.tournamentChoice === 'Doubles' ? 'Doubles' : `${joinForm.division} Singles`} draw is full. Please join the next event.
+                              </p>
                             </div>
                           )}
                         </>
