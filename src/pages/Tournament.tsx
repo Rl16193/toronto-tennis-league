@@ -123,11 +123,14 @@ export const Tournament: React.FC = () => {
             {(currentDraw.tournamentChoice === 'Singles' ? [8, 16, 32] : [8, 16]).map((size) => (
               <button
                 key={size}
+                disabled={currentMatches.length > 0}
                 onClick={() => handleSetPreviewDrawSize(currentDraw.label, size)}
                 className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
                   currentDrawSize === size
                     ? 'bg-clay text-white'
-                    : 'bg-tennis-surface/60 text-gray-300 hover:text-white'
+                    : currentMatches.length > 0
+                      ? 'bg-tennis-surface/30 text-gray-600 cursor-not-allowed'
+                      : 'bg-tennis-surface/60 text-gray-300 hover:text-white'
                 }`}
               >
                 R{size}
@@ -136,7 +139,7 @@ export const Tournament: React.FC = () => {
           </div>
           {currentMatches.length > 0 && (
             <p className="text-xs text-amber-400/80 mt-2">
-              Matches already created. Reset the draw first to change the draw size.
+              Matches already created — reset this draw first to change the size.
             </p>
           )}
         </div>
