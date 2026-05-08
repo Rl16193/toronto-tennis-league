@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   addDoc, collection, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
@@ -66,6 +66,8 @@ export const useTournament = (eventIdOverride?: string) => {
   const [skillOverrides, setSkillOverrides] = useState<Record<string, SkillGroup>>({});
   const [allUsers, setAllUsers] = useState<Record<string, UserData>>({});
 
+  const activeEventIdRef = useRef<string | undefined>(undefined);
+
   const isCreator = !!user && !!event?.creator_id && event.creator_id === user.uid;
   const started = isTournamentStarted(event);
 
@@ -118,7 +120,9 @@ export const useTournament = (eventIdOverride?: string) => {
     const target = eventIdOverride
       ? (allTournamentEvents.find((e) => e.id === eventIdOverride) ?? allTournamentEvents[0])
       : allTournamentEvents[0];
-    setEvent(target ?? null);
+    if (!target || target.id === activeEventIdRef.current) return;
+    activeEventIdRef.current = target.id;
+    setEvent(target);
     setParticipants([]);
     setMatches([]);
     setSubmissions([]);
