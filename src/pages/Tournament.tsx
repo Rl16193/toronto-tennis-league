@@ -76,7 +76,7 @@ export const Tournament: React.FC = () => {
         <div className="mb-6 rounded-2xl border border-orange-500/30 bg-orange-500 p-4 flex items-start gap-3 text-white">
           <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0" />
           <p className="text-sm font-semibold">
-            Draws have been finalized. Please contact your opponent to schedule your match. First round ends on May 16th, 2026. 
+            Draws have been finalized. Please contact your opponent to schedule your match. Kindly play your matches before the round deadline provided in the draw. Contact us if you are facing any difficulties.
           </p>
         </div>
       )}
