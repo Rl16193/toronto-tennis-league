@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, query, getDocs, addDoc, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, getDocs, addDoc, updateDoc, doc, where, onSnapshot } from 'firebase/firestore';
 import { getDownloadURL, ref } from 'firebase/storage';
 import { db, storage } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { TennisEvent } from '../types';
-import { parseDateValue } from './tournament/utils';
+import { TournamentMatch } from './tournament/types';
+import { PLAYER_LOADING, parseDateValue } from './tournament/utils';
 import { Button } from '../components/Button';
 import {
   Calendar,
@@ -259,6 +260,8 @@ export const Events: React.FC = () => {
   const [joinForm, setJoinForm] = useState<JoinFormState>(INITIAL_JOIN_FORM);
   const [joinError, setJoinError] = useState('');
   const [authPrompt, setAuthPrompt] = useState('');
+  const [tournamentMatches, setTournamentMatches] = useState<TournamentMatch[]>([]);
+  const [slotFallbackConfirmed, setSlotFallbackConfirmed] = useState(false);
   const loginRoute = '/login?returnTo=%2Fevents&intent=join-event';
   const signupRoute = '/signup?returnTo=%2Fevents&intent=join-event';
   const participantName = profile?.user.name?.trim() || user?.displayName || user?.email || '';
@@ -363,8 +366,17 @@ export const Events: React.FC = () => {
     if (!selectedEvent) {
       setJoinForm(INITIAL_JOIN_FORM);
       setJoinError('');
+      setTournamentMatches([]);
     }
   }, [selectedEvent]);
+
+  useEffect(() => {
+    if (!selectedEvent || !isTournamentEvent(selectedEvent)) { setTournamentMatches([]); return; }
+    getDocs(query(collection(db, 'tournament_matches'), where('event_id', '==', selectedEvent.id)))
+      .then((snap) => setTournamentMatches(snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentMatch))));
+  }, [selectedEvent?.id]);
+
+  useEffect(() => { setSlotFallbackConfirmed(false); }, [joinForm.division, joinForm.tournamentChoice]);
 
   const visibleEvents = useMemo(() => {
     return events.filter((event) => !isTopspinMeetupEvent(event));
@@ -395,6 +407,54 @@ export const Events: React.FC = () => {
   const hasJoinedAnyTournament = () => {
     return joinedRegistrations.some((entry) => entry.tournamentChoice === 'Singles' || entry.tournamentChoice === 'Doubles');
   };
+
+  type SlotResult = {
+    status: 'available' | 'fallback' | 'full';
+    match?: TournamentMatch;
+    slot?: 'player_1' | 'player_2';
+    skillOverride: number;
+    intendedGroup?: string;
+    actualGroup?: string;
+  };
+
+  const slotStatus = useMemo((): SlotResult | null => {
+    if (!selectedEvent || !isTournamentEvent(selectedEvent) || !joinForm.division || tournamentMatches.length === 0) return null;
+
+    const findSlot = (tc: string, div: string, group: string) => {
+      for (const m of tournamentMatches) {
+        if (m.tournament_choice !== tc || m.division !== div || m.skill_group !== group) continue;
+        if (m.player_1_name === PLAYER_LOADING) return { match: m, slot: 'player_1' as const };
+        if (m.player_2_name === PLAYER_LOADING) return { match: m, slot: 'player_2' as const };
+      }
+      return null;
+    };
+
+    if (joinForm.tournamentChoice === 'Singles') {
+      const skill = Number(profile?.stats.skill_level || 0);
+      const intendedGroup = skill >= 4 ? 'Masters' : 'Challengers';
+      const altGroup = skill >= 4 ? 'Challengers' : 'Masters';
+
+      const merged = findSlot('Singles', joinForm.division, 'All');
+      if (merged) return { status: 'available', ...merged, skillOverride: skill };
+
+      const intended = findSlot('Singles', joinForm.division, intendedGroup);
+      if (intended) return { status: 'available', ...intended, skillOverride: skill };
+
+      const alt = findSlot('Singles', joinForm.division, altGroup);
+      if (alt) return { status: 'fallback', ...alt, skillOverride: altGroup === 'Masters' ? 4 : 3, intendedGroup, actualGroup: altGroup };
+
+      return { status: 'full', skillOverride: skill };
+    }
+
+    if (joinForm.tournamentChoice === 'Doubles') {
+      const skill = Number(joinForm.combinedSkill || 0);
+      const slot = findSlot('Doubles', joinForm.division, 'All');
+      if (slot) return { status: 'available', ...slot, skillOverride: skill };
+      return { status: 'full', skillOverride: skill };
+    }
+
+    return null;
+  }, [selectedEvent, tournamentMatches, joinForm.division, joinForm.tournamentChoice, joinForm.combinedSkill, profile]);
 
   const registerForRegularEvent = async (event: DisplayEvent) => {
     if (isWeekendMatchdaysEvent(event) && !hasJoinedAnyTournament()) {
@@ -533,6 +593,15 @@ export const Events: React.FC = () => {
       }
     }
 
+    if (slotStatus?.status === 'full') {
+      setJoinError('No available slots. Please join the next tournament.');
+      return;
+    }
+    if (slotStatus?.status === 'fallback' && !slotFallbackConfirmed) {
+      setJoinError('Please confirm the draw assignment above.');
+      return;
+    }
+
     setJoining(true);
     setJoinError('');
 
@@ -555,12 +624,21 @@ export const Events: React.FC = () => {
         division: joinForm.division,
         doubles: joinForm.tournamentChoice === 'Doubles' ? joinForm.partnerName.trim() : '',
         partner_in_app: joinForm.tournamentChoice === 'Doubles' ? joinForm.partnerInApp : '',
-        skill: joinForm.tournamentChoice === 'Singles'
+        skill: slotStatus?.skillOverride ?? (joinForm.tournamentChoice === 'Singles'
           ? Number(profile?.stats.skill_level || 0)
-          : Number(joinForm.combinedSkill),
+          : Number(joinForm.combinedSkill)),
         dateselected,
         createdAt: new Date().toISOString(),
       });
+
+      if (slotStatus?.match && slotStatus.slot) {
+        await updateDoc(doc(db, 'tournament_matches', slotStatus.match.id), {
+          [`${slotStatus.slot}_name`]: participantName,
+          [`${slotStatus.slot}_user_id`]: user.uid,
+          [`${slotStatus.slot}_contact`]: user.email || '',
+        });
+      }
+
       setSelectedEvent(null);
     } catch (error) {
       console.error('Error joining event:', error);
@@ -963,6 +1041,33 @@ export const Events: React.FC = () => {
                               Your current skill level will be used for this registration: <span className="text-clay font-bold">{profile?.stats.skill_level ?? 'Not set'}</span>
                             </div>
                           )}
+
+                          {slotStatus?.status === 'fallback' && (
+                            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 space-y-3">
+                              <div className="flex items-start gap-3 text-amber-300">
+                                <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+                                <p className="text-sm">
+                                  <span className="font-bold">{slotStatus.intendedGroup} Draw is full.</span> Joining will add you to the {slotStatus.actualGroup} draw.
+                                </p>
+                              </div>
+                              <label className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={slotFallbackConfirmed}
+                                  onChange={(e) => setSlotFallbackConfirmed(e.target.checked)}
+                                  className="w-4 h-4 accent-clay"
+                                />
+                                <span className="text-sm text-amber-200">I understand and wish to continue</span>
+                              </label>
+                            </div>
+                          )}
+
+                          {slotStatus?.status === 'full' && (
+                            <div className="flex items-start gap-3 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400">
+                              <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+                              <p className="text-sm">No available slots. Please join the next tournament.</p>
+                            </div>
+                          )}
                         </>
 )}
 
@@ -1000,7 +1105,11 @@ export const Events: React.FC = () => {
                           Cancel
                         </Button>
                         {user ? (
-                          <Button onClick={handleSubmitJoin} isLoading={joining}>
+                          <Button
+                            onClick={handleSubmitJoin}
+                            isLoading={joining}
+                            disabled={slotStatus?.status === 'full' || (slotStatus?.status === 'fallback' && !slotFallbackConfirmed)}
+                          >
                             Join Event
                           </Button>
                         ) : (

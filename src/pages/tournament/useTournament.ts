@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  collection, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
+  addDoc, collection, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -9,7 +9,7 @@ import { DrawConfig, DrawTab, ScoreForm, ScoreSubmission, SkillGroup, Tournament
 import {
   BYE, PLAYER_LOADING,
   buildPlayerList, fallbackTemplate, filterParticipantsForDraw,
-  getDrawKey, getDrawSize, getEventDate, getWinnerPlaceholder,
+  formatPlayerName, getContactValue, getDrawKey, getDrawSize, getEventDate, getWinnerPlaceholder,
   isTournamentStarted, normalizeTemplateMatches, scoresMatch,
 } from './utils';
 
@@ -63,6 +63,7 @@ export const useTournament = () => {
   const [consolidateDoubles, setConsolidateDoubles] = useState(false);
   const [previewDrawSize, setPreviewDrawSize] = useState<Record<string, number>>({});
   const [skillOverrides, setSkillOverrides] = useState<Record<string, SkillGroup>>({});
+  const [allUsers, setAllUsers] = useState<Record<string, UserData>>({});
 
   const isCreator = !!user && !!event?.creator_id && event.creator_id === user.uid;
   const started = isTournamentStarted(event);
@@ -142,6 +143,16 @@ export const useTournament = () => {
       (snap) => setSubmissions(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ScoreSubmission))),
     );
   }, [event, user]);
+
+  // Lazy-load all registered users the first time the creator enters edit mode
+  useEffect(() => {
+    if (!editMode || !isCreator || Object.keys(allUsers).length > 0) return;
+    getDocs(collection(db, 'users')).then((snap) => {
+      const map: Record<string, UserData> = {};
+      snap.docs.forEach((d) => { map[d.id] = d.data() as UserData; });
+      setAllUsers(map);
+    });
+  }, [editMode, isCreator, allUsers]);
 
   // Fetch users + stats in one effect, parallel per participant
   useEffect(() => {
@@ -349,6 +360,17 @@ export const useTournament = () => {
     });
     return result.sort((a, b) => a.name.localeCompare(b.name));
   }, [activeTab, effectiveDraws, participants, effectiveStatsMap, userMap]);
+
+  const availableUsers = useMemo(() => {
+    const joinedIds = new Set(participants.map((p) => p.user_id));
+    return Object.entries(allUsers)
+      .filter(([id]) => !joinedIds.has(id))
+      .map(([id, data]) => ({ id, name: data.name, email: data.email }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [allUsers, participants]);
+
+  const addPlayerLocked = currentMatches.length > 0 &&
+    !currentMatches.some((m) => m.player_1_name === PLAYER_LOADING || m.player_2_name === PLAYER_LOADING);
 
   const skillMismatchedCount = useMemo(() => {
     if (!isCreator || matches.length === 0) return 0;
@@ -714,6 +736,51 @@ export const useTournament = () => {
     setScoreForm(null);
   };
 
+  const handleAddPlayer = async (userId: string, partnerName?: string, divisionOverride?: string) => {
+    if (!event || !isCreator || !currentDraw) return;
+    const userData = allUsers[userId];
+    if (!userData) return;
+
+    let skillLevel = statsMap[userId]?.skill_level ?? 0;
+    if (!statsMap[userId]) {
+      const statsSnap = await getDocs(query(collection(db, 'stats'), where('__name__', '==', userId)));
+      skillLevel = (statsSnap.docs[0]?.data() as UserStats | undefined)?.skill_level ?? 0;
+    }
+
+    const division = divisionOverride ?? (currentDraw.division !== 'All' ? currentDraw.division : "Men's");
+    const contact = getContactValue(userData);
+    const playerName = formatPlayerName(userData.name);
+
+    await addDoc(collection(db, 'event_participants'), {
+      user_id: userId,
+      user_name: userData.name,
+      event_id: event.id,
+      event_name: event.title,
+      tournament_choice: currentDraw.tournamentChoice,
+      division,
+      skill: skillLevel,
+      ...(partnerName ? { doubles: partnerName, partner_in_app: 'no' } : {}),
+      createdAt: new Date().toISOString(),
+    });
+
+    if (currentMatches.length > 0) {
+      const loadingMatch = currentMatches.find(
+        (m) => m.player_1_name === PLAYER_LOADING || m.player_2_name === PLAYER_LOADING,
+      );
+      if (loadingMatch) {
+        const slot = loadingMatch.player_1_name === PLAYER_LOADING ? 'player_1' : 'player_2';
+        const matchName = partnerName ? `${playerName} / ${formatPlayerName(partnerName)}` : playerName;
+        await updateDoc(doc(db, 'tournament_matches', loadingMatch.id), {
+          [`${slot}_name`]: matchName,
+          [`${slot}_user_id`]: userId,
+          [`${slot}_contact`]: contact,
+        });
+      }
+    }
+
+    setMessage({ type: 'success', text: `${userData.name} added to ${currentDraw.label}.` });
+  };
+
   const handleOpenScoreForm = () => {
     if (!myActiveMatch || !user) return;
     setScoreForm({
@@ -762,8 +829,11 @@ export const useTournament = () => {
     activeDoubles,
     setActiveDoubles,
     moveablePlayers,
+    availableUsers,
+    addPlayerLocked,
     handleSetPreviewDrawSize,
     handleMovePlayer,
+    handleAddPlayer,
     handleGenerateAll,
     handleCreatorUpdateDraw,
     handleResetDraw,
