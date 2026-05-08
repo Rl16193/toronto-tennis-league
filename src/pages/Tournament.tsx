@@ -10,6 +10,7 @@ import { DrawTabs } from './tournament/DrawTabs';
 import { ScoreModal } from './tournament/ScoreModal';
 import { FlaggedResults } from './tournament/FlaggedResults';
 import { PlayerMovePanel } from './tournament/PlayerMovePanel';
+import { AddPlayerPanel } from './tournament/AddPlayerPanel';
 
 export const Tournament: React.FC = () => {
   const {
@@ -23,7 +24,8 @@ export const Tournament: React.FC = () => {
     generating, updatingDraw, resettingDraw, editMode, setEditMode,
     mergeWomensSingles, setMergeWomensSingles, consolidateDoubles, setConsolidateDoubles,
     activeTab, setActiveTab, activeSkill, setActiveSkill, activeDoubles, setActiveDoubles,
-    moveablePlayers, handleSetPreviewDrawSize, handleMovePlayer,
+    moveablePlayers, availableUsers, addPlayerLocked,
+    handleSetPreviewDrawSize, handleMovePlayer, handleAddPlayer,
     handleGenerateAll, handleCreatorUpdateDraw, handleResetDraw,
     handleResolveDispute, handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
   } = useTournament();
@@ -44,7 +46,7 @@ export const Tournament: React.FC = () => {
         generating={generating}
         updatingDraw={updatingDraw}
         resettingDraw={resettingDraw}
-        canReset={!started && currentMatches.length > 0}
+        canReset={false}
         canFinalize={currentMatches.length === 0}
         editMode={editMode}
         started={started}
@@ -76,7 +78,7 @@ export const Tournament: React.FC = () => {
         <div className="mb-6 rounded-2xl border border-orange-500/30 bg-orange-500 p-4 flex items-start gap-3 text-white">
           <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0" />
           <p className="text-sm font-semibold">
-            Draws have been finalized. Please contact your opponent to schedule your match. First round ends on May 16th, 2026. 
+            Draws have been finalized. Please contact your opponent to schedule your match. Kindly play your matches before the round deadline provided in the draw. Contact us if you are facing any difficulties.
           </p>
         </div>
       )}
@@ -115,6 +117,15 @@ export const Tournament: React.FC = () => {
 
       {editMode && isCreator && (
         <PlayerMovePanel players={moveablePlayers} onMove={handleMovePlayer} />
+      )}
+
+      {editMode && isCreator && (
+        <AddPlayerPanel
+          availableUsers={availableUsers}
+          currentDraw={currentDraw}
+          addPlayerLocked={addPlayerLocked}
+          onAdd={handleAddPlayer}
+        />
       )}
 
       {editMode && currentDraw && (
