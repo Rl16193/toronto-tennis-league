@@ -24,7 +24,7 @@ export const Tournament: React.FC = () => {
     generating, updatingDraw, resettingDraw, editMode, setEditMode,
     mergeWomensSingles, setMergeWomensSingles, consolidateDoubles, setConsolidateDoubles,
     activeTab, setActiveTab, activeSkill, setActiveSkill, activeDoubles, setActiveDoubles,
-    moveablePlayers, availableUsers, addPlayerLocked,
+    moveablePlayers, availableUsers,
     handleSetPreviewDrawSize, handleMovePlayer, handleAddPlayer,
     handleGenerateAll, handleCreatorUpdateDraw, handleResetDraw,
     handleResolveDispute, handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
@@ -123,7 +123,6 @@ export const Tournament: React.FC = () => {
         <AddPlayerPanel
           availableUsers={availableUsers}
           currentDraw={currentDraw}
-          addPlayerLocked={addPlayerLocked}
           onAdd={handleAddPlayer}
         />
       )}

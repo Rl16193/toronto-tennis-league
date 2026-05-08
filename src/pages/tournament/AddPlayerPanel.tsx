@@ -8,14 +8,13 @@ type AvailableUser = { id: string; name: string; email: string };
 type Props = {
   availableUsers: AvailableUser[];
   currentDraw: DrawConfig | undefined;
-  addPlayerLocked: boolean;
   onAdd: (userId: string, partnerName?: string, divisionOverride?: string) => Promise<void>;
 };
 
 const DOUBLES_DIVISIONS = ["Men's", "Women's", 'Mixed Doubles'];
 
 export const AddPlayerPanel: React.FC<Props> = ({
-  availableUsers, currentDraw, addPlayerLocked, onAdd,
+  availableUsers, currentDraw, onAdd,
 }) => {
   const [selectedUserId, setSelectedUserId] = useState('');
   const [partnerName, setPartnerName] = useState('');
@@ -69,10 +68,7 @@ export const AddPlayerPanel: React.FC<Props> = ({
         <span className="text-sm font-bold text-gray-300 uppercase tracking-widest">Add Player</span>
       </div>
 
-      {addPlayerLocked ? (
-        <p className="text-sm text-amber-400">Draw is finalized and full — no open slots available.</p>
-      ) : (
-        <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-end gap-3">
           <div className="relative flex-1 min-w-[200px]" ref={dropdownRef}>
             <button
               type="button"
@@ -136,7 +132,6 @@ export const AddPlayerPanel: React.FC<Props> = ({
             Add
           </Button>
         </div>
-      )}
     </div>
   );
 };

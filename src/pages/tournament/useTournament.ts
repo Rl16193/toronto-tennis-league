@@ -9,7 +9,7 @@ import { DrawConfig, DrawTab, ScoreForm, ScoreSubmission, SkillGroup, Tournament
 import {
   BYE, PLAYER_LOADING,
   buildPlayerList, fallbackTemplate, filterParticipantsForDraw,
-  formatPlayerName, getContactValue, getDrawKey, getDrawSize, getEventDate, getWinnerPlaceholder,
+  getDrawKey, getDrawSize, getEventDate, getWinnerPlaceholder,
   isTournamentStarted, normalizeTemplateMatches, scoresMatch,
 } from './utils';
 
@@ -369,9 +369,6 @@ export const useTournament = () => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [allUsers, participants]);
 
-  const addPlayerLocked = currentMatches.length > 0 &&
-    !currentMatches.some((m) => m.player_1_name === PLAYER_LOADING || m.player_2_name === PLAYER_LOADING);
-
   const skillMismatchedCount = useMemo(() => {
     if (!isCreator || matches.length === 0) return 0;
     const allUids = new Set<string>();
@@ -442,10 +439,10 @@ export const useTournament = () => {
           position: index + 1,
           player_1_slot: tm.player_1,
           player_2_slot: tm.player_2,
-          player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? (started ? BYE : PLAYER_LOADING) : getWinnerPlaceholder(tm.player_1, templateMatches)),
+          player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_1, templateMatches)),
           player_1_user_id: p1?.user_id || '',
           player_1_contact: p1?.contact || '',
-          player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? (started ? BYE : PLAYER_LOADING) : getWinnerPlaceholder(tm.player_2, templateMatches)),
+          player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_2, templateMatches)),
           player_2_user_id: p2?.user_id || '',
           player_2_contact: p2?.contact || '',
           next_match_id: tm.next_match_id || '',
@@ -740,46 +737,29 @@ export const useTournament = () => {
     if (!event || !isCreator || !currentDraw) return;
     const userData = allUsers[userId];
     if (!userData) return;
-
-    let skillLevel = statsMap[userId]?.skill_level ?? 0;
-    if (!statsMap[userId]) {
-      const statsSnap = await getDocs(query(collection(db, 'stats'), where('__name__', '==', userId)));
-      skillLevel = (statsSnap.docs[0]?.data() as UserStats | undefined)?.skill_level ?? 0;
-    }
-
-    const division = divisionOverride ?? (currentDraw.division !== 'All' ? currentDraw.division : "Men's");
-    const contact = getContactValue(userData);
-    const playerName = formatPlayerName(userData.name);
-
-    await addDoc(collection(db, 'event_participants'), {
-      user_id: userId,
-      user_name: userData.name,
-      event_id: event.id,
-      event_name: event.title,
-      tournament_choice: currentDraw.tournamentChoice,
-      division,
-      skill: skillLevel,
-      ...(partnerName ? { doubles: partnerName, partner_in_app: 'no' } : {}),
-      createdAt: new Date().toISOString(),
-    });
-
-    if (currentMatches.length > 0) {
-      const loadingMatch = currentMatches.find(
-        (m) => m.player_1_name === PLAYER_LOADING || m.player_2_name === PLAYER_LOADING,
-      );
-      if (loadingMatch) {
-        const slot = loadingMatch.player_1_name === PLAYER_LOADING ? 'player_1' : 'player_2';
-        const matchName = partnerName ? `${playerName} / ${formatPlayerName(partnerName)}` : playerName;
-        await updateDoc(doc(db, 'tournament_matches', loadingMatch.id), {
-          [`${slot}_name`]: matchName,
-          [`${slot}_user_id`]: userId,
-          [`${slot}_contact`]: contact,
-        });
+    try {
+      let skillLevel = statsMap[userId]?.skill_level ?? 0;
+      if (!statsMap[userId]) {
+        const statsSnap = await getDocs(query(collection(db, 'stats'), where('__name__', '==', userId)));
+        skillLevel = (statsSnap.docs[0]?.data() as UserStats | undefined)?.skill_level ?? 0;
       }
+      const division = divisionOverride ?? (currentDraw.division !== 'All' ? currentDraw.division : "Men's");
+      await addDoc(collection(db, 'event_participants'), {
+        user_id: userId,
+        user_name: userData.name,
+        event_id: event.id,
+        event_name: event.title,
+        tournament_choice: currentDraw.tournamentChoice,
+        division,
+        skill: skillLevel,
+        ...(partnerName ? { doubles: partnerName, partner_in_app: 'no' } : {}),
+        createdAt: new Date().toISOString(),
+      });
+      setMessage({ type: 'success', text: `${userData.name} added. Use Move Players to assign their bracket.` });
+    } catch (err) {
+      console.error('Add player failed:', err);
+      setMessage({ type: 'error', text: 'Could not add player.' });
     }
-
-    setSkillOverrides((prev) => ({ ...prev, [userId]: currentDraw.skillGroup }));
-    setMessage({ type: 'success', text: `${userData.name} added to ${currentDraw.label}.` });
   };
 
   const handleOpenScoreForm = () => {
@@ -831,7 +811,6 @@ export const useTournament = () => {
     setActiveDoubles,
     moveablePlayers,
     availableUsers,
-    addPlayerLocked,
     handleSetPreviewDrawSize,
     handleMovePlayer,
     handleAddPlayer,
