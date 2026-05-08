@@ -45,6 +45,7 @@ export const Tournament: React.FC = () => {
         updatingDraw={updatingDraw}
         resettingDraw={resettingDraw}
         canReset={!started && currentMatches.length > 0}
+        canFinalize={currentMatches.length === 0}
         editMode={editMode}
         started={started}
         mergeWomensSingles={mergeWomensSingles}

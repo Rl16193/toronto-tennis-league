@@ -10,7 +10,7 @@ import {
   BYE, PLAYER_LOADING,
   buildPlayerList, fallbackTemplate, filterParticipantsForDraw,
   getDrawKey, getDrawSize, getEventDate, getWinnerPlaceholder,
-  isTournamentStarted, normalizeTemplateMatches, parseDateValue, scoresMatch,
+  isTournamentStarted, normalizeTemplateMatches, scoresMatch,
 } from './utils';
 
 export const VISIBLE_DRAWS: DrawConfig[] = [
@@ -66,9 +66,6 @@ export const useTournament = () => {
 
   const isCreator = !!user && !!event?.creator_id && event.creator_id === user.uid;
   const started = isTournamentStarted(event);
-
-  const joinLastDate = useMemo(() => (event?.join_last_date ? parseDateValue(event.join_last_date) : null), [event]);
-  const drawLocked = joinLastDate ? new Date() >= joinLastDate : false;
 
   const effectiveStatsMap = useMemo(() => {
     if (Object.keys(skillOverrides).length === 0) return statsMap;
@@ -520,25 +517,15 @@ export const useTournament = () => {
   };
 
   const handleGenerateAll = async () => {
-    if (!isCreator || !event) return;
+    if (!isCreator || !event || !currentDraw) return;
     setGenerating(true);
     setMessage(null);
     try {
-      for (const draw of effectiveDraws) {
-        // Preserve the saved drawsize for already-generated draws so subsequent
-        // finalize calls on other draws don't overwrite the size.
-        const existingMatches = matches.filter(
-          (m) => m.tournament_choice === draw.tournamentChoice &&
-            m.division === draw.division &&
-            m.skill_group === draw.skillGroup,
-        );
-        const lockedSize = existingMatches.length > 0 ? existingMatches[0].drawsize : undefined;
-        await generateDraw(draw, lockedSize);
-      }
+      await generateDraw(currentDraw);
       setEditMode(false);
-      setPreviewSlotOverrides({});
-      setPreviewDrawSize({});
-      setMessage({ type: 'success', text: 'Tournament draws generated.' });
+      setPreviewSlotOverrides((prev) => deleteKey(prev, currentDraw.label));
+      setPreviewDrawSize((prev) => deleteKey(prev, currentDraw.label));
+      setMessage({ type: 'success', text: `${currentDraw.label} finalized.` });
     } catch (err) {
       console.error('Draw generation failed:', err);
       setMessage({ type: 'error', text: 'Could not generate the draw. Check templates and permissions.' });
@@ -552,17 +539,6 @@ export const useTournament = () => {
     setUpdatingDraw(true);
     setMessage(null);
     try {
-      for (const draw of effectiveDraws) {
-        // After join cutoff, preserve existing drawsize so new joiners fill PLAYER_LOADING slots
-        const existingDrawMatches = matches.filter(
-          (m) => m.tournament_choice === draw.tournamentChoice &&
-            m.division === draw.division &&
-            m.skill_group === draw.skillGroup,
-        );
-        const lockedSize = drawLocked && existingDrawMatches.length > 0 ? existingDrawMatches[0].drawsize : undefined;
-        await generateDraw(draw, lockedSize);
-      }
-
       const byeMatches = matches.filter((m) => {
         if (m.status === 'complete') return false;
         return (m.player_1_name === BYE && !!m.player_2_user_id) ||
@@ -593,8 +569,7 @@ export const useTournament = () => {
         }
       }
 
-      setEditMode(false);
-      setMessage({ type: 'success', text: 'Draw updated: brackets re-evaluated and scores processed.' });
+      setMessage({ type: 'success', text: 'Draw updated: BYEs advanced and scores processed.' });
     } catch (err) {
       console.error('Draw update failed:', err);
       setMessage({ type: 'error', text: 'Could not update the draw.' });
@@ -605,20 +580,20 @@ export const useTournament = () => {
 
   const handleResetDraw = async () => {
     if (!isCreator || started || !currentDraw || currentMatches.length === 0) return;
-    if (!window.confirm(`Reset ${currentDraw.label}? This removes finalized matches and returns to the live preview.`)) return;
+    if (!window.confirm(`Reset and regenerate ${currentDraw.label}? This rebuilds the draw with current players and settings.`)) return;
     setResettingDraw(true);
     setMessage(null);
     try {
       const batch = writeBatch(db);
       currentMatches.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
       await batch.commit();
+      await generateDraw(currentDraw);
       setEditMode(false);
       setPreviewSlotOverrides((prev) => deleteKey(prev, currentDraw.label));
       setPreviewDrawSize((prev) => deleteKey(prev, currentDraw.label));
-      setSkillOverrides({});
       if (currentDraw.skillGroup === 'All' && currentDraw.tournamentChoice === 'Singles') setMergeWomensSingles(false);
       if (currentDraw.tournamentChoice === 'Doubles' && currentDraw.division === 'All') setConsolidateDoubles(false);
-      setMessage({ type: 'success', text: `${currentDraw.label} reset to live preview.` });
+      setMessage({ type: 'success', text: `${currentDraw.label} rebuilt with current settings.` });
     } catch (err) {
       console.error('Draw reset failed:', err);
       setMessage({ type: 'error', text: 'Could not reset the draw.' });
