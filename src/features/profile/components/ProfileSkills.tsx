@@ -1,14 +1,17 @@
 import React from 'react';
+import type { UserStats } from '../../../types';
 import { useAuth } from '../../../context/AuthContext';
 import { Button } from '../../../components/Button';
 import { Trophy, Edit2, Save, X } from 'lucide-react';
 import { SKILL_DESCRIPTIONS, SKILL_LEVELS } from '../../../utils/skillLevels';
 
+import type { ProfileEditData } from '../types';
+
 interface ProfileSkillsProps {
   isEditing: boolean;
   setIsEditing: (editing: boolean) => void;
-  editData: any;
-  setEditData: (data: any) => void;
+  editData: ProfileEditData;
+  setEditData: (data: ProfileEditData) => void;
   onSave: () => void;
   updateLoading: boolean;
 }
@@ -114,7 +117,7 @@ export const ProfileSkills: React.FC<ProfileSkillsProps> = ({
                       stats: {
                         ...editData.stats,
                         skill_level: editData.stats?.skill_level ?? profile.stats.skill_level,
-                        tournament_preference: type as any,
+                        tournament_preference: type as UserStats['tournament_preference'],
                       },
                     })}
                     className={`p-3 rounded-xl text-sm font-bold border transition-all ${

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, onSnapshot, documentId } from 'firebase/firestore';
-import { db, storage } from '../../../services/firebase';
+import { db, storage } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent, EventParticipant } from '../../../types';
 import { getDownloadURL, ref } from 'firebase/storage';

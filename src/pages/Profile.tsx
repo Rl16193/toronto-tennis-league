@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { auth } from '../services/firebase';
+import { auth } from '../lib/firebase';
 import { Button } from '../components/Button';
 import { LogOut, CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -29,6 +29,8 @@ export const Profile: React.FC = () => {
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [emailChangeData, setEmailChangeData] = useState({ newEmail: '', password: '' });
   const [emailVerificationPending, setEmailVerificationPending] = useState(false);
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
+  const [emailChangeLoading, setEmailChangeLoading] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -90,9 +92,9 @@ export const Profile: React.FC = () => {
       </AnimatePresence>
 
       {incompleteFields.length > 0 && (
-        <div className="mb-8 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300">
-          <p className="font-bold mb-1">Profile incomplete</p>
-          <p className="text-sm">
+        <div className="mb-8 px-1">
+          <p className="text-sm text-orange-500 font-bold mb-1">Profile incomplete</p>
+          <p className="text-sm text-orange-500">
             Please add details for: {incompleteFields.join(', ')}.
           </p>
         </div>
@@ -143,17 +145,25 @@ export const Profile: React.FC = () => {
             }}
             updateLoading={updateLoading}
             hasGoogleProvider={hasGoogleProvider}
-            onLinkGoogle={actions.linkGoogle}
-            linkingGoogle={false} // TODO: add loading state
+            onLinkGoogle={async () => {
+              setLinkingGoogle(true);
+              try { await actions.linkGoogle(); } finally { setLinkingGoogle(false); }
+            }}
+            linkingGoogle={linkingGoogle}
             showEmailForm={showEmailForm}
             setShowEmailForm={setShowEmailForm}
             emailChangeData={emailChangeData}
             setEmailChangeData={setEmailChangeData}
-            emailChangeLoading={false} // TODO: add loading state
+            emailChangeLoading={emailChangeLoading}
             emailVerificationPending={emailVerificationPending}
             onStartEmailChange={async () => {
-              const success = await actions.changeEmail(emailChangeData.newEmail, emailChangeData.password);
-              if (success) setEmailVerificationPending(true);
+              setEmailChangeLoading(true);
+              try {
+                const success = await actions.changeEmail(emailChangeData.newEmail, emailChangeData.password);
+                if (success) setEmailVerificationPending(true);
+              } finally {
+                setEmailChangeLoading(false);
+              }
             }}
             onRefreshEmailChange={actions.refreshEmailChange}
             onCancelEmailChange={() => {
@@ -170,11 +180,13 @@ export const Profile: React.FC = () => {
           />
 
           {(() => {
-            const parseMayKey = (val: any): string | null => {
+            const parseMayKey = (val: unknown): string | null => {
               if (typeof val === 'string') return val.startsWith('May') ? val : null;
+              if (typeof val !== 'object' || val === null) return null;
               let d: Date | null = null;
-              if (typeof (val as any)?.toDate === 'function') d = (val as any).toDate();
-              else if ((val as any)?.seconds) d = new Date((val as any).seconds * 1000);
+              const obj = val as Record<string, unknown>;
+              if (typeof obj['toDate'] === 'function') d = (obj['toDate'] as () => Date)();
+              else if (typeof obj['seconds'] === 'number') d = new Date(obj['seconds'] * 1000);
               if (!d) return null;
               return d.getFullYear() === 2026 && d.getMonth() === 4 ? `May ${d.getDate()}, 2026` : null;
             };
@@ -192,7 +204,8 @@ export const Profile: React.FC = () => {
 
             const savedDates = new Set<string>();
             joinedEvents.forEach((e) => {
-              ((e as any).dateselected || []).forEach((v: any) => {
+              const dateselected = (e as Record<string, unknown>)['dateselected'];
+              (Array.isArray(dateselected) ? dateselected : []).forEach((v: unknown) => {
                 const k = parseMayKey(v);
                 if (k) savedDates.add(k);
               });

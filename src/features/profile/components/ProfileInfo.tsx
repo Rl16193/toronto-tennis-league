@@ -3,21 +3,24 @@ import { useAuth } from '../../../context/AuthContext';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { User, Mail, Phone, Edit2, Save, X } from 'lucide-react';
+import type { ProfileEditData } from '../types';
+
+type EmailChangeData = { newEmail: string; password: string };
 
 interface ProfileInfoProps {
   isEditing: boolean;
   setIsEditing: (editing: boolean) => void;
-  editData: any;
-  setEditData: (data: any) => void;
+  editData: ProfileEditData;
+  setEditData: (data: ProfileEditData) => void;
   onSave: () => void;
   updateLoading: boolean;
-  hasGoogleProvider: boolean;
+  hasGoogleProvider: boolean | undefined;
   onLinkGoogle: () => void;
   linkingGoogle: boolean;
   showEmailForm: boolean;
   setShowEmailForm: (show: boolean) => void;
-  emailChangeData: any;
-  setEmailChangeData: (data: any) => void;
+  emailChangeData: EmailChangeData;
+  setEmailChangeData: (data: EmailChangeData) => void;
   emailChangeLoading: boolean;
   emailVerificationPending: boolean;
   onStartEmailChange: () => void;

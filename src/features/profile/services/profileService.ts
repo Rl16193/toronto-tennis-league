@@ -1,6 +1,6 @@
 import { doc, updateDoc, getDocs, query, where, collection, deleteDoc, writeBatch } from 'firebase/firestore';
-import { EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail, linkWithPopup } from 'firebase/auth';
-import { db, googleProvider } from '../../../services/firebase';
+import { EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail, linkWithPopup, type User } from 'firebase/auth';
+import { db, googleProvider } from '../../../lib/firebase';
 
 export const updateUserInfo = async (userId: string, name: string, phone: string) => {
   const normalizedPhone = phone.replace(/\D/g, '');
@@ -77,13 +77,13 @@ export const updateAvailability = async (userId: string, availabilityDay: string
   });
 };
 
-export const changeEmail = async (user: any, newEmail: string, password: string) => {
+export const changeEmail = async (user: User, newEmail: string, password: string) => {
   const credential = EmailAuthProvider.credential(user.email || '', password);
   await reauthenticateWithCredential(user, credential);
   await verifyBeforeUpdateEmail(user, newEmail.trim());
 };
 
-export const linkGoogleAccount = async (user: any) => {
+export const linkGoogleAccount = async (user: User) => {
   await linkWithPopup(user, googleProvider);
 };
 

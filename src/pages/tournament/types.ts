@@ -99,3 +99,14 @@ export type DrawConfig = {
   division: string;
   skillGroup: SkillGroup;
 };
+
+export type ReservesParticipant = {
+  id: string;
+  user_id: string;
+  user_name: string;
+  event_id: string;
+  division: string;
+  tournament_choice: 'Singles' | 'Doubles';
+  skill: number;
+  createdAt: string;
+};
