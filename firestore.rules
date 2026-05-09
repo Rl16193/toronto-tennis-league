@@ -112,6 +112,26 @@ service cloud.firestore {
     }
 
     // ===============================================================
+    // Reserves Participants
+    // ===============================================================
+    match /reserves_participants/{docId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.user_id == request.auth.uid &&
+        request.resource.data.event_id is string &&
+        request.resource.data.createdAt is string;
+
+      allow update: if isCreatorOfEvent(resource.data.event_id);
+
+      allow delete: if isAuthenticated() &&
+        (
+          resource.data.user_id == request.auth.uid ||
+          isCreatorOfEvent(resource.data.event_id)
+        );
+    }
+
+    // ===============================================================
     // Score Submissions
     // ===============================================================
     

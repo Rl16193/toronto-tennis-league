@@ -17,11 +17,13 @@ const FAVOURITE_PLAYERS = [
   "Novak Djokovic"
 ];
 
+import type { ProfileEditData } from '../types';
+
 interface ProfileAvailabilityProps {
   isEditing: boolean;
   setIsEditing: (editing: boolean) => void;
-  editData: any;
-  setEditData: (data: any) => void;
+  editData: ProfileEditData;
+  setEditData: (data: ProfileEditData) => void;
   onSave: () => void;
   updateLoading: boolean;
 }
