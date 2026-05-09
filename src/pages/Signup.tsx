@@ -30,7 +30,7 @@ const FAVOURITE_PLAYERS = [
 export const Signup: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, refreshProfile } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -273,6 +273,7 @@ export const Signup: React.FC = () => {
         console.error("Failed to create preferences document:", err);
         throw new Error("Failed to create user preferences. Please try again.");
       }
+      await refreshProfile(user);
       setShouldRedirectToProfile(true);
       setStatusMessage('Your account is ready. Taking you to your profile...');
       sessionStorage.setItem(`profile-bootstrap-pending:${user.uid}`, '1');
