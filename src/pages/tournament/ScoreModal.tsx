@@ -9,9 +9,10 @@ type Props = {
   onChange: (form: ScoreForm) => void;
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => Promise<void> | void;
+  isCreatorSubmit?: boolean;
 };
 
-export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClose, onSubmit }) => {
+export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClose, onSubmit, isCreatorSubmit }) => {
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,7 +43,9 @@ export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClos
 
         <div className="flex items-center gap-2 mb-5 px-3 py-2.5 text-sm text-orange-500">
           <AlertTriangle className="w-4 h-4 shrink-0" />
-          You can only submit the score once.
+          {isCreatorSubmit
+            ? 'Entering score as event organizer. This will be accepted immediately.'
+            : 'Scores to be submitted by winner only. You can only submit the score once.'}
         </div>
 
         <label className="block text-sm font-medium text-gray-300 mb-2">Winner</label>
@@ -60,7 +63,7 @@ export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClos
             <div key={index} className="grid grid-cols-[90px_1fr_1fr] gap-3 items-end">
               <p className="text-gray-300 font-bold pb-3">Set {index + 1}</p>
               <label className="text-sm text-gray-400">
-                My score
+                {isCreatorSubmit ? match.player_1_name : 'My score'}
                 <input
                   type="number" min="0" step="1" inputMode="numeric" value={set.mine}
                   onChange={(e) => {
@@ -72,7 +75,7 @@ export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClos
                 />
               </label>
               <label className="text-sm text-gray-400">
-                Opponent score
+                {isCreatorSubmit ? match.player_2_name : 'Opponent score'}
                 <input
                   type="number" min="0" step="1" inputMode="numeric" value={set.opponent}
                   onChange={(e) => {
@@ -88,7 +91,7 @@ export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClos
         </div>
 
         <Button type="submit" className="w-full mt-6" isLoading={submitting} disabled={submitting}>
-          Submit Score
+          {isCreatorSubmit ? 'Record Score' : 'Submit Score'}
         </Button>
       </form>
     </div>

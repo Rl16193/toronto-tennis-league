@@ -19,14 +19,14 @@ export const Tournament: React.FC = () => {
   const eventId = searchParams.get('event') || undefined;
 
   const {
-    authLoading, loading,
+    authLoading, loading, user,
     event, matches, submissions,
     allTournamentEvents,
     isCreator, started, userParticipant,
     currentDraw, currentMatches, displayMatches, visibleDraws,
     myActiveMatch, hasSubmittedScore, opponent,
     editPlayers, reservesPlayers, currentDrawSize, skillMismatchedCount,
-    message, scoreForm, setScoreForm,
+    message, scoreForm, scoreFormMatch, setScoreForm,
     generating, updatingDraw, resettingDraw, editMode, setEditMode,
     mergeWomensSingles, setMergeWomensSingles, consolidateDoubles, setConsolidateDoubles,
     activeTab, setActiveTab, activeSkill, setActiveSkill, activeDoubles, setActiveDoubles,
@@ -218,6 +218,9 @@ export const Tournament: React.FC = () => {
           editMode={editMode && !showReserves}
           editPlayers={editPlayers}
           onEditPlayer={handleEditPlayer}
+          submissions={submissions}
+          isCreator={isCreator}
+          onSubmitScore={handleOpenScoreForm}
         />
       </BracketErrorBoundary>
 
@@ -252,13 +255,14 @@ export const Tournament: React.FC = () => {
         />
       )}
 
-      {scoreForm && myActiveMatch && (
+      {scoreForm && scoreFormMatch && (
         <ScoreModal
-          match={myActiveMatch}
+          match={scoreFormMatch}
           scoreForm={scoreForm}
           onChange={setScoreForm}
           onClose={() => setScoreForm(null)}
           onSubmit={handleSubmitScore}
+          isCreatorSubmit={isCreator && scoreFormMatch.player_1_user_id !== user?.uid && scoreFormMatch.player_2_user_id !== user?.uid}
         />
       )}
     </div>

@@ -741,7 +741,8 @@ export const useTournament = (eventIdOverride?: string) => {
 
     const isPlayer1 = match.player_1_user_id === user.uid;
     const isPlayer2 = match.player_2_user_id === user.uid;
-    if (!isPlayer1 && !isPlayer2) return;
+    const isCreatorSubmit = isCreator && !isPlayer1 && !isPlayer2;
+    if (!isPlayer1 && !isPlayer2 && !isCreatorSubmit) return;
 
     const parsedSets = scoreForm.sets.map((s) => ({
       mine: Number(s.mine || 0),
@@ -752,8 +753,10 @@ export const useTournament = (eventIdOverride?: string) => {
       return;
     }
 
-    const p1Scores = parsedSets.map((s) => (isPlayer1 ? s.mine : s.opponent));
-    const p2Scores = parsedSets.map((s) => (isPlayer1 ? s.opponent : s.mine));
+    // Creator submits from player_1's perspective; player_2 submits from their own perspective
+    const viewAsPlayer1 = isPlayer1 || isCreatorSubmit;
+    const p1Scores = parsedSets.map((s) => (viewAsPlayer1 ? s.mine : s.opponent));
+    const p2Scores = parsedSets.map((s) => (viewAsPlayer1 ? s.opponent : s.mine));
     const pointsWon = parsedSets.reduce((t, s) => t + s.mine, 0);
     const opponentPoints = parsedSets.reduce((t, s) => t + s.opponent, 0);
 
@@ -775,6 +778,15 @@ export const useTournament = (eventIdOverride?: string) => {
       status: 'pending',
       created_at: new Date().toISOString(),
     };
+
+    // Creator override: auto-accept immediately, no need to wait for second submission
+    if (isCreatorSubmit) {
+      await setDoc(doc(db, 'score_submissions', submission.id), { ...submission, status: 'accepted' });
+      await updateMatchWithSubmission(match, { ...submission, status: 'accepted' });
+      setScoreForm(null);
+      setMessage({ type: 'success', text: 'Score recorded and draw updated.' });
+      return;
+    }
 
     const existingOther = submissions.find(
       (s) => s.match_doc_id === match.id && s.submitted_by !== user.uid,
@@ -830,11 +842,19 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  const handleOpenScoreForm = () => {
-    if (!myActiveMatch || !user) return;
+  const scoreFormMatch = useMemo(
+    () => (scoreForm ? (matches.find((m) => m.id === scoreForm.matchDocId) ?? null) : null),
+    [matches, scoreForm],
+  );
+
+  const handleOpenScoreForm = (matchOverride?: TournamentMatch) => {
+    const targetMatch = matchOverride ?? myActiveMatch;
+    if (!targetMatch || !user) return;
+    const isTargetPlayer =
+      targetMatch.player_1_user_id === user.uid || targetMatch.player_2_user_id === user.uid;
     setScoreForm({
-      matchDocId: myActiveMatch.id,
-      winnerUserId: user.uid,
+      matchDocId: targetMatch.id,
+      winnerUserId: isTargetPlayer ? user.uid : targetMatch.player_1_user_id,
       sets: [{ mine: '', opponent: '' }, { mine: '', opponent: '' }, { mine: '', opponent: '' }],
     });
   };
@@ -947,6 +967,7 @@ export const useTournament = (eventIdOverride?: string) => {
   return {
     authLoading,
     loading,
+    user,
     allTournamentEvents,
     event,
     matches,
@@ -967,6 +988,7 @@ export const useTournament = (eventIdOverride?: string) => {
     skillMismatchedCount,
     message,
     scoreForm,
+    scoreFormMatch,
     setScoreForm,
     generating,
     updatingDraw,
