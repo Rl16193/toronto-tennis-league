@@ -1,15 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  addDoc, collection, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
+  addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { EventParticipant, TennisEvent, UserData, UserStats } from '../../types';
-import { DrawConfig, DrawTab, ScoreForm, ScoreSubmission, SkillGroup, TournamentMatch, TournamentPlayer, TournamentTemplate } from './types';
+import { DrawConfig, DrawTab, ReservesParticipant, ScoreForm, ScoreSubmission, SkillGroup, TournamentMatch, TournamentPlayer, TournamentTemplate } from './types';
 import {
   BYE, PLAYER_LOADING,
   buildPlayerList, fallbackTemplate, filterParticipantsForDraw,
-  getDrawKey, getDrawSize, getEventDate, getWinnerPlaceholder,
+  getDrawKey, getDrawSize, getReservesDrawSize, getEventDate, getWinnerPlaceholder,
   isTournamentStarted, normalizeTemplateMatches, scoresMatch,
 } from './utils';
 
@@ -65,6 +65,9 @@ export const useTournament = (eventIdOverride?: string) => {
   const [previewDrawSize, setPreviewDrawSize] = useState<Record<string, number>>({});
   const [skillOverrides, setSkillOverrides] = useState<Record<string, SkillGroup>>({});
   const [allUsers, setAllUsers] = useState<Record<string, UserData>>({});
+  const [reservesParticipants, setReservesParticipants] = useState<ReservesParticipant[]>([]);
+  const [generatingReserves, setGeneratingReserves] = useState(false);
+  const [showReserves, setShowReserves] = useState(false);
 
   const activeEventIdRef = useRef<string | undefined>(undefined);
 
@@ -165,6 +168,14 @@ export const useTournament = (eventIdOverride?: string) => {
       (snap) => setSubmissions(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ScoreSubmission))),
     );
   }, [event, user]);
+
+  useEffect(() => {
+    if (!event) return;
+    return onSnapshot(
+      query(collection(db, 'reserves_participants'), where('event_id', '==', event.id)),
+      (snap) => setReservesParticipants(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ReservesParticipant))),
+    );
+  }, [event]);
 
   // Lazy-load all registered users the first time the creator enters edit mode
   useEffect(() => {
@@ -411,6 +422,41 @@ export const useTournament = (eventIdOverride?: string) => {
     });
     return count;
   }, [isCreator, matches, participants, statsMap]);
+
+  const reserveDrawLabels = useMemo(() => {
+    const labels = new Set<string>();
+    const reserveMatches = matches.filter((m) => m.bracket === 'reserves');
+    for (const m of reserveMatches) {
+      const draw = effectiveDraws.find(
+        (d) => d.tournamentChoice === m.tournament_choice && d.division === m.division && d.skillGroup === m.skill_group,
+      );
+      if (draw) labels.add(draw.label);
+    }
+    return labels;
+  }, [matches, effectiveDraws]);
+
+  const currentReservesMatches = useMemo(() => {
+    if (!currentDraw) return [];
+    return matches
+      .filter((m) =>
+        m.bracket === 'reserves' &&
+        m.tournament_choice === currentDraw.tournamentChoice &&
+        m.division === currentDraw.division,
+      )
+      .sort((a, b) => a.position - b.position);
+  }, [currentDraw, matches]);
+
+  const currentReservesParticipants = useMemo(() => {
+    if (!currentDraw) return [];
+    return reservesParticipants.filter(
+      (p) => p.tournament_choice === currentDraw.tournamentChoice && p.division === currentDraw.division,
+    );
+  }, [reservesParticipants, currentDraw]);
+
+  const userReservesParticipant = useMemo(() => {
+    if (!user || !currentDraw) return null;
+    return currentReservesParticipants.find((p) => p.user_id === user.uid) ?? null;
+  }, [currentReservesParticipants, user, currentDraw]);
 
   const opponentMatch = myActiveMatch || visibleUserMatch;
   const opponent = opponentMatch && user
@@ -793,6 +839,111 @@ export const useTournament = (eventIdOverride?: string) => {
     });
   };
 
+  const handleJoinReserves = async () => {
+    if (!event || !user || !profile || !currentDraw) return;
+    if (userParticipant || userReservesParticipant) return;
+    try {
+      await addDoc(collection(db, 'reserves_participants'), {
+        user_id: user.uid,
+        user_name: profile.user.name,
+        event_id: event.id,
+        division: currentDraw.division,
+        tournament_choice: currentDraw.tournamentChoice,
+        skill: profile.stats.skill_level,
+        createdAt: new Date().toISOString(),
+      });
+      setMessage({ type: 'success', text: 'You have joined the reserves draw.' });
+    } catch (err) {
+      console.error('Join reserves failed:', err);
+      setMessage({ type: 'error', text: 'Could not join reserves. Please try again.' });
+    }
+  };
+
+  const handleLeaveReserves = async () => {
+    if (!userReservesParticipant) return;
+    try {
+      await deleteDoc(doc(db, 'reserves_participants', userReservesParticipant.id));
+      setMessage({ type: 'success', text: 'You have left the reserves draw.' });
+    } catch (err) {
+      console.error('Leave reserves failed:', err);
+      setMessage({ type: 'error', text: 'Could not leave reserves. Please try again.' });
+    }
+  };
+
+  const handleGenerateReservesDraw = async () => {
+    if (!event || !isCreator || !currentDraw) return;
+    if (currentReservesParticipants.length < 2) {
+      setMessage({ type: 'error', text: 'Need at least 2 players to create a reserves draw.' });
+      return;
+    }
+    setGeneratingReserves(true);
+    setMessage(null);
+    try {
+      const players: TournamentPlayer[] = currentReservesParticipants.map((p) => ({
+        user_id: p.user_id,
+        name: p.user_name,
+        contact: userMap[p.user_id]?.email || '',
+        preferredContact: 'email',
+        participantId: p.id,
+      }));
+
+      const drawsize = getReservesDrawSize(players.length);
+      const template = templates.find((t) => Number(t.size || t.drawsize || t.draw_size) === drawsize);
+      const templateMatches = normalizeTemplateMatches(
+        template?.matches?.length ? template.matches : fallbackTemplate(drawsize),
+      );
+
+      const slotMap = new Map<number, TournamentPlayer>();
+      players.slice(0, drawsize).forEach((p, i) => slotMap.set(i + 1, p));
+
+      const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
+      const batch = writeBatch(db);
+
+      templateMatches.forEach((tm, index) => {
+        const p1 = typeof tm.player_1 === 'number' ? slotMap.get(tm.player_1) : null;
+        const p2 = typeof tm.player_2 === 'number' ? slotMap.get(tm.player_2) : null;
+        batch.set(
+          doc(db, 'tournament_matches', `${event.id}_reserves_${drawKey}_${tm.match_id}`),
+          {
+            event_id: event.id,
+            template_id: template?.id || `fallback_${drawsize}`,
+            tournament_choice: currentDraw.tournamentChoice,
+            division: currentDraw.division,
+            skill_group: currentDraw.skillGroup,
+            drawsize,
+            match_id: tm.match_id,
+            round: tm.round,
+            position: index + 1,
+            player_1_slot: tm.player_1,
+            player_2_slot: tm.player_2,
+            player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_1, templateMatches)),
+            player_1_user_id: p1?.user_id || '',
+            player_1_contact: p1?.contact || '',
+            player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_2, templateMatches)),
+            player_2_user_id: p2?.user_id || '',
+            player_2_contact: p2?.contact || '',
+            next_match_id: tm.next_match_id || '',
+            next_slot: tm.next_slot || '',
+            status: 'pending',
+            bracket: 'reserves',
+            started: false,
+            created_at: new Date().toISOString(),
+          },
+          { merge: true },
+        );
+      });
+
+      await batch.commit();
+      setShowReserves(true);
+      setMessage({ type: 'success', text: `Reserves draw created with ${Math.min(players.length, drawsize)} players.` });
+    } catch (err) {
+      console.error('Reserves draw generation failed:', err);
+      setMessage({ type: 'error', text: 'Could not create the reserves draw.' });
+    } finally {
+      setGeneratingReserves(false);
+    }
+  };
+
   return {
     authLoading,
     loading,
@@ -844,5 +995,16 @@ export const useTournament = (eventIdOverride?: string) => {
     handleEditPlayer,
     handleSubmitScore,
     handleOpenScoreForm,
+    reservesParticipants,
+    reserveDrawLabels,
+    currentReservesMatches,
+    currentReservesParticipants,
+    userReservesParticipant,
+    showReserves,
+    setShowReserves,
+    generatingReserves,
+    handleJoinReserves,
+    handleLeaveReserves,
+    handleGenerateReservesDraw,
   };
 };

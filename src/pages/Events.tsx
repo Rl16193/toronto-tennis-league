@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, query, getDocs, addDoc, updateDoc, doc, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, getDocs, addDoc, deleteDoc, updateDoc, doc, where, onSnapshot } from 'firebase/firestore';
 import { getDownloadURL, ref } from 'firebase/storage';
-import { db, storage } from '../services/firebase';
+import { db, storage } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { TennisEvent } from '../types';
-import { TournamentMatch } from './tournament/types';
+import { ReservesParticipant, TournamentMatch } from './tournament/types';
 import { PLAYER_LOADING, parseDateValue } from './tournament/utils';
 import { Button } from '../components/Button';
 import {
@@ -262,6 +262,9 @@ export const Events: React.FC = () => {
   const [authPrompt, setAuthPrompt] = useState('');
   const [tournamentMatches, setTournamentMatches] = useState<TournamentMatch[]>([]);
   const [slotFallbackConfirmed, setSlotFallbackConfirmed] = useState(false);
+  const [reservesParticipants, setReservesParticipants] = useState<ReservesParticipant[]>([]);
+  const [joiningReserves, setJoiningReserves] = useState(false);
+  const [reservesJoined, setReservesJoined] = useState(false);
   const loginRoute = '/login?returnTo=%2Fevents&intent=join-event';
   const signupRoute = '/signup?returnTo=%2Fevents&intent=join-event';
   const participantName = profile?.user.name?.trim() || user?.displayName || user?.email || '';
@@ -367,6 +370,8 @@ export const Events: React.FC = () => {
       setJoinForm(INITIAL_JOIN_FORM);
       setJoinError('');
       setTournamentMatches([]);
+      setReservesParticipants([]);
+      setReservesJoined(false);
     }
   }, [selectedEvent]);
 
@@ -376,11 +381,25 @@ export const Events: React.FC = () => {
       .then((snap) => setTournamentMatches(snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentMatch))));
   }, [selectedEvent?.id]);
 
+  useEffect(() => {
+    if (!selectedEvent || !isTournamentEvent(selectedEvent)) { setReservesParticipants([]); return; }
+    getDocs(query(collection(db, 'reserves_participants'), where('event_id', '==', selectedEvent.id)))
+      .then((snap) => setReservesParticipants(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ReservesParticipant))));
+  }, [selectedEvent?.id]);
+
   useEffect(() => { setSlotFallbackConfirmed(false); }, [joinForm.division, joinForm.tournamentChoice]);
 
   const visibleEvents = useMemo(() => {
     return events.filter((event) => !isTopspinMeetupEvent(event));
   }, [events]);
+
+  const tournamentEvents = useMemo(() => {
+    return visibleEvents.filter((event) => isSeasonOpener(event) || (isTournamentEvent(event) && !isWeekendMatchdaysEvent(event)));
+  }, [visibleEvents]);
+
+  const matchdayEvents = useMemo(() => {
+    return visibleEvents.filter((event) => isWeekendMatchdaysEvent(event));
+  }, [visibleEvents]);
 
   const featuredEvents = useMemo(() => {
     return visibleEvents.filter((event) => isSeasonOpener(event) || isWeekendMatchdaysEvent(event));
@@ -510,6 +529,56 @@ export const Events: React.FC = () => {
     return hasJoinedRegularEvent(event.id);
   };
 
+  const userReservesParticipant = reservesParticipants.find(
+    (p) => p.user_id === user?.uid && p.division === joinForm.division && p.tournament_choice === joinForm.tournamentChoice
+  );
+
+  const handleJoinReserves = async () => {
+    if (!selectedEvent || !user || !joinForm.division) return;
+    setJoiningReserves(true);
+    try {
+      const newDoc = await addDoc(collection(db, 'reserves_participants'), {
+        user_id: user.uid,
+        user_name: participantName,
+        event_id: selectedEvent.id,
+        division: joinForm.division,
+        tournament_choice: joinForm.tournamentChoice,
+        skill: Number(profile?.stats.skill_level || 0),
+        createdAt: new Date().toISOString(),
+      });
+      setReservesParticipants((prev) => [...prev, {
+        id: newDoc.id,
+        user_id: user.uid,
+        user_name: participantName,
+        event_id: selectedEvent.id,
+        division: joinForm.division,
+        tournament_choice: joinForm.tournamentChoice,
+        skill: Number(profile?.stats.skill_level || 0),
+        createdAt: new Date().toISOString(),
+      }]);
+      setReservesJoined(true);
+    } catch (error) {
+      console.error('Error joining reserves:', error);
+      setJoinError('Could not join reserves right now. Please try again.');
+    } finally {
+      setJoiningReserves(false);
+    }
+  };
+
+  const handleLeaveReserves = async () => {
+    if (!userReservesParticipant) return;
+    setJoiningReserves(true);
+    try {
+      await deleteDoc(doc(db, 'reserves_participants', userReservesParticipant.id));
+      setReservesParticipants((prev) => prev.filter((p) => p.id !== userReservesParticipant.id));
+    } catch (error) {
+      console.error('Error leaving reserves:', error);
+      setJoinError('Could not leave reserves right now. Please try again.');
+    } finally {
+      setJoiningReserves(false);
+    }
+  };
+
   const handleStartJoin = async (event: DisplayEvent) => {
     if (!user) {
       setAuthPrompt('Join the league to get updates and reserve your spot.');
@@ -611,11 +680,12 @@ export const Events: React.FC = () => {
       }
     }
 
-    if (slotStatus?.status === 'full') {
-      const label = joinForm.tournamentChoice === 'Doubles'
-        ? 'Doubles'
-        : `${joinForm.division} Singles`;
-      setJoinError(`The ${label} draw is full. Please join the next event.`);
+    if (slotStatus?.status === 'full' && isTournamentEvent(selectedEvent)) {
+      if (userReservesParticipant) {
+        setReservesJoined(true);
+        return;
+      }
+      await handleJoinReserves();
       return;
     }
     if (slotStatus?.status === 'fallback' && !slotFallbackConfirmed) {
@@ -673,8 +743,8 @@ export const Events: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
       <div className="space-y-6 mb-8">
         {authPrompt && (
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-amber-300 space-y-3">
-            <p>{authPrompt}</p>
+          <div className="px-1 py-2 space-y-3">
+            <p className="text-sm text-orange-500">{authPrompt}</p>
             {!user && (
               <div className="flex flex-col sm:flex-row gap-3">
                 <Link to={loginRoute} className="w-full sm:w-auto">
@@ -716,105 +786,153 @@ export const Events: React.FC = () => {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-96 bg-tennis-surface/30 rounded-[2.5rem] animate-pulse" />
+            <div key={i} className="h-64 bg-tennis-surface/30 rounded-[2.5rem] animate-pulse" />
           ))}
         </div>
-      ) : featuredEvents.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
-          {featuredEvents.map((event, i) => (
-            <motion.div
-              key={event.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.08 }}
-              className="group bg-tennis-surface/30 border border-white/5 rounded-[2.5rem] overflow-hidden hover:border-clay/30 transition-all duration-300 flex flex-col shadow-xl"
-            >
-            <div className="relative h-[460px] md:h-[540px] overflow-hidden rounded-t-3xl">
-                <img
-                  src={event.image}
-                  alt={event.title}
-                  className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
-                  referrerPolicy="no-referrer"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-tennis-dark via-tennis-surface to-clay/20 px-6 text-center text-white">
-                  <span className="text-lg font-bold">{event.title}</span>
-                </div>
-              )
-
-              <div className="absolute top-4 left-4 px-3 py-1 bg-tennis-dark/80 backdrop-blur-md rounded-lg text-xs font-bold text-clay uppercase tracking-wider">
-                {event.type}
-              </div>
-
-              {isFullyJoinedEvent(event) && (
-                <div className="absolute top-4 right-4 w-10 h-10 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
-                  <CheckCircle2 className="w-6 h-6 text-white" />
-                </div>
-              )}
-            </div>
-
-              <div className="p-5 flex-grow flex flex-col gap-4">
-                <div className="space-y-2">
-                  <h3 className="text-xl md:text-2xl font-bold text-white group-hover:text-clay transition-colors leading-tight">{event.title}</h3>
-                  {isSeasonOpener(event) && (
-                    <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">First Tournament of 2026</p>
-                  )}
-                  {isTournamentEvent(event) && formatTournamentRange(event) && (
-                    <p className="text-clay font-semibold">{formatTournamentRange(event)}</p>
-                  )}
-                  {getRecurringEventLabel(event) && (
-                    <p className="text-gray-400 text-sm font-medium">{getRecurringEventLabel(event)}</p>
-                  )}
-                  {isWeekendMatchdaysEvent(event) && (
-                    <p className="text-sm text-amber-200">Join Tournament to access weekend matchdays</p>
-                  )}
-                </div>
-
-                <div className="mt-auto pt-3 border-t border-white/5 space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <Button
-                      variant={isFullyJoinedEvent(event) ? 'secondary' : 'primary'}
-                      size="sm"
-                      onClick={() => handleStartJoin(event)}
-                      isLoading={joining && !selectedEvent}
-                      disabled={isFullyJoinedEvent(event)}
-                    >
-                      {isFullyJoinedEvent(event)
-                        ? 'Joined'
-                        : authLoading
-                          ? 'Loading...'
-                          : user
-                            ? 'Join Event'
-                            : 'Log In to Join'}
-                    </Button>
-                  </div>
-                  {canAddToCalendar(event) && (
-                    <div className="pt-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => handleAddToCalendar(event)}
-                      >
-                        Add to Google Calendar
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          ))}
+      ) : featuredEvents.length === 0 ? (
+        <div className="text-center py-24 space-y-5">
+          <h3 className="text-2xl font-bold text-white">Featured events are coming soon</h3>
+          <p className="text-gray-400">Season opener and weekend matchdays will appear here when they are live.</p>
         </div>
       ) : (
-        <div className="text-center py-24 space-y-5">
-          <div>
-            <h3 className="text-2xl font-bold text-white">Featured events are coming soon</h3>
-            <p className="text-gray-400">Season opener and weekend matchdays will appear here when they are live.</p>
-          </div>
+        <div className="space-y-8">
+          {tournamentEvents.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-white uppercase tracking-widest">Tournaments</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                {tournamentEvents.map((event, i) => (
+                  <motion.div
+                    key={event.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.08 }}
+                    className="group bg-tennis-surface/30 border border-white/5 rounded-[2.5rem] overflow-hidden hover:border-clay/30 transition-all duration-300 flex flex-col shadow-xl"
+                  >
+                    <div className="relative h-[200px] sm:h-[300px] md:h-[380px] overflow-hidden rounded-t-3xl">
+                      {event.image ? (
+                        <img
+                          src={event.image}
+                          alt={event.title}
+                          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                          referrerPolicy="no-referrer"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-tennis-dark via-tennis-surface to-clay/20 px-6 text-center text-white">
+                          <span className="text-lg font-bold">{event.title}</span>
+                        </div>
+                      )}
+                      <div className="absolute top-3 left-3 px-2.5 py-1 bg-tennis-dark/80 backdrop-blur-md rounded-lg text-xs font-bold text-clay uppercase tracking-wider">
+                        {event.type}
+                      </div>
+                      {isFullyJoinedEvent(event) && (
+                        <div className="absolute top-3 right-3 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
+                          <CheckCircle2 className="w-5 h-5 text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4 sm:p-5 flex-grow flex flex-col gap-3">
+                      <div className="space-y-1.5">
+                        <h3 className="text-lg sm:text-xl font-bold text-white group-hover:text-clay transition-colors leading-tight">{event.title}</h3>
+                        {isSeasonOpener(event) && (
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300">First Tournament of 2026</p>
+                        )}
+                        {isTournamentEvent(event) && formatTournamentRange(event) && (
+                          <p className="text-clay font-semibold text-sm">{formatTournamentRange(event)}</p>
+                        )}
+                        {getRecurringEventLabel(event) && (
+                          <p className="text-gray-400 text-sm font-medium">{getRecurringEventLabel(event)}</p>
+                        )}
+                      </div>
+                      <div className="mt-auto pt-3 border-t border-white/5 flex items-center gap-3">
+                        <Button
+                          variant={isFullyJoinedEvent(event) ? 'secondary' : 'primary'}
+                          size="sm"
+                          onClick={() => handleStartJoin(event)}
+                          isLoading={joining && !selectedEvent}
+                          disabled={isFullyJoinedEvent(event)}
+                        >
+                          {isFullyJoinedEvent(event) ? 'Joined' : authLoading ? 'Loading...' : user ? 'Join Event' : 'Log In to Join'}
+                        </Button>
+                        {canAddToCalendar(event) && (
+                          <Button type="button" variant="outline" size="sm" onClick={() => handleAddToCalendar(event)}>
+                            Add to Calendar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+          {matchdayEvents.length > 0 && (
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-white uppercase tracking-widest">Weekend Matchdays</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                {matchdayEvents.map((event, i) => (
+                  <motion.div
+                    key={event.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.08 }}
+                    className="group bg-tennis-surface/30 border border-white/5 rounded-[2.5rem] overflow-hidden hover:border-clay/30 transition-all duration-300 flex flex-col shadow-xl"
+                  >
+                    <div className="relative h-[180px] sm:h-[240px] md:h-[320px] overflow-hidden rounded-t-3xl">
+                      {event.image ? (
+                        <img
+                          src={event.image}
+                          alt={event.title}
+                          className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                          referrerPolicy="no-referrer"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-tennis-dark via-tennis-surface to-clay/20 px-6 text-center text-white">
+                          <span className="text-lg font-bold">{event.title}</span>
+                        </div>
+                      )}
+                      <div className="absolute top-3 left-3 px-2.5 py-1 bg-tennis-dark/80 backdrop-blur-md rounded-lg text-xs font-bold text-clay uppercase tracking-wider">
+                        {event.type}
+                      </div>
+                      {isFullyJoinedEvent(event) && (
+                        <div className="absolute top-3 right-3 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
+                          <CheckCircle2 className="w-5 h-5 text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4 sm:p-5 flex-grow flex flex-col gap-3">
+                      <div className="space-y-1.5">
+                        <h3 className="text-lg sm:text-xl font-bold text-white group-hover:text-clay transition-colors leading-tight">{event.title}</h3>
+                        <p className="text-sm text-orange-500">Join Tournament to access weekend matchdays</p>
+                        {getRecurringEventLabel(event) && (
+                          <p className="text-gray-400 text-sm font-medium">{getRecurringEventLabel(event)}</p>
+                        )}
+                      </div>
+                      <div className="mt-auto pt-3 border-t border-white/5 flex items-center gap-3">
+                        <Button
+                          variant={isFullyJoinedEvent(event) ? 'secondary' : 'primary'}
+                          size="sm"
+                          onClick={() => handleStartJoin(event)}
+                          isLoading={joining && !selectedEvent}
+                          disabled={isFullyJoinedEvent(event)}
+                        >
+                          {isFullyJoinedEvent(event) ? 'Joined' : authLoading ? 'Loading...' : user ? 'Join Event' : 'Log In to Join'}
+                        </Button>
+                        {canAddToCalendar(event) && (
+                          <Button type="button" variant="outline" size="sm" onClick={() => handleAddToCalendar(event)}>
+                            Add to Calendar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -931,16 +1049,16 @@ export const Events: React.FC = () => {
                   </div>
 
                   {joinError && (
-                    <div className="flex items-center space-x-3 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
-                      <AlertCircle className="w-5 h-5 shrink-0" />
+                    <div className="flex items-center gap-2 text-sm text-orange-500">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
                       <span>{joinError}</span>
                     </div>
                   )}
 
                   {!user && (
-                    <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
-                      Guest event join is not available with the current signup system. Join the league to get updates and register for events.
-                    </div>
+                    <p className="text-sm text-orange-500">
+                      Guest event join is not available. Join the league to get updates and register for events.
+                    </p>
                   )}
 
                   {isFullyJoinedEvent(selectedEvent) ? (
@@ -1064,10 +1182,10 @@ export const Events: React.FC = () => {
                           )}
 
                           {slotStatus?.status === 'fallback' && (
-                            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 space-y-3">
-                              <div className="flex items-start gap-3 text-amber-300">
-                                <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
-                                <p className="text-sm">
+                            <div className="space-y-3">
+                              <div className="flex items-start gap-2 text-sm text-orange-500">
+                                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                                <p>
                                   <span className="font-bold">{slotStatus.intendedGroup} Draw is full.</span> Joining will add you to the {slotStatus.actualGroup} draw.
                                 </p>
                               </div>
@@ -1078,17 +1196,15 @@ export const Events: React.FC = () => {
                                   onChange={(e) => setSlotFallbackConfirmed(e.target.checked)}
                                   className="w-4 h-4 accent-clay"
                                 />
-                                <span className="text-sm text-amber-200">I understand and wish to continue</span>
+                                <span className="text-sm text-gray-300">I understand and wish to continue</span>
                               </label>
                             </div>
                           )}
 
-                          {slotStatus?.status === 'full' && (
-                            <div className="flex items-start gap-3 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400">
-                              <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
-                              <p className="text-sm">
-                                {joinForm.tournamentChoice === 'Doubles' ? 'Doubles' : `${joinForm.division} Singles`} draw is full. Please join the next event.
-                              </p>
+                          {reservesJoined && (
+                            <div className="flex items-start gap-2 text-sm text-green-400">
+                              <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                              <p>You are on the reserves list for this draw. Stay tuned for updates.</p>
                             </div>
                           )}
                         </>
@@ -1130,8 +1246,8 @@ export const Events: React.FC = () => {
                         {user ? (
                           <Button
                             onClick={handleSubmitJoin}
-                            isLoading={joining}
-                            disabled={slotStatus?.status === 'full' || (slotStatus?.status === 'fallback' && !slotFallbackConfirmed)}
+                            isLoading={joining || joiningReserves}
+                            disabled={reservesJoined || (slotStatus?.status === 'fallback' && !slotFallbackConfirmed)}
                           >
                             Join Event
                           </Button>

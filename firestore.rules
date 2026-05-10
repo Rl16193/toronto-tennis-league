@@ -8,10 +8,11 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
+
     function isGlobalEventCreator() {
       return isAuthenticated() &&
         (
@@ -28,13 +29,11 @@ service cloud.firestore {
         );
     }
 
-
-
     // ===============================================================
     // Users Collection
     // ===============================================================
     match /users/{userId} {
-      allow read: if isAuthenticated(); // allow opponent viewing
+      allow read: if isAuthenticated();
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if false;
@@ -44,7 +43,7 @@ service cloud.firestore {
     // Stats Collection
     // ===============================================================
     match /stats/{userId} {
-      allow read: if isAuthenticated(); // allow opponent stats
+      allow read: if isAuthenticated();
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if false;
@@ -54,7 +53,7 @@ service cloud.firestore {
     // Preferences Collection
     // ===============================================================
     match /preferences/{userId} {
-      allow read: if isAuthenticated(); // allow opponent availability viewing
+      allow read: if isAuthenticated();
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if false;
@@ -65,7 +64,7 @@ service cloud.firestore {
     // ===============================================================
     match /events/{eventId} {
       allow read: if true;
-      allow write: if false; // admin/backend only
+      allow write: if false;
     }
 
     // ===============================================================
@@ -100,34 +99,51 @@ service cloud.firestore {
     // ===============================================================
     // Tournament Matches (draw + results)
     // ===============================================================
-
     match /tournament_matches/{matchId} {
-      allow read:  if isAuthenticated();
-
+      allow read: if isAuthenticated();
       allow create: if isCreatorOfEvent(request.resource.data.event_id);
+      allow update: if isCreatorOfEvent(resource.data.event_id);
+      allow delete: if isCreatorOfEvent(resource.data.event_id);
+    }
+
+    // ===============================================================
+    // Reserves Participants
+    // ===============================================================
+    match /reserves_participants/{docId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.user_id == request.auth.uid &&
+        request.resource.data.event_id is string &&
+        request.resource.data.createdAt is string;
 
       allow update: if isCreatorOfEvent(resource.data.event_id);
 
-      allow delete: if isCreatorOfEvent(resource.data.event_id);
+      allow delete: if isAuthenticated() &&
+        (
+          resource.data.user_id == request.auth.uid ||
+          isCreatorOfEvent(resource.data.event_id)
+        );
     }
 
     // ===============================================================
     // Score Submissions
     // ===============================================================
-    
     match /score_submissions/{submissionId} {
       allow read: if isAuthenticated();
 
-      allow create: if isAuth()
-        && request.auth.uid == request.resource.data.submitted_by
-        && (
-          request.auth.uid == get(/databases/$(database)/documents/tournament_matches/$(request.resource.data.match_doc_id)).data.player_1_user_id
-          || request.auth.uid == get(/databases/$(database)/documents/tournament_matches/$(request.resource.data.match_doc_id)).data.player_2_user_id
+      allow create: if isAuthenticated() &&
+        request.auth.uid == request.resource.data.submitted_by &&
+        (
+          request.auth.uid == get(/databases/$(database)/documents/tournament_matches/$(request.resource.data.match_doc_id)).data.player_1_user_id ||
+          request.auth.uid == get(/databases/$(database)/documents/tournament_matches/$(request.resource.data.match_doc_id)).data.player_2_user_id
         );
-      allow update: if isAuth() && (
-        request.auth.uid == resource.data.submitted_by
-        || request.auth.uid == eventCreatorId(resource.data.event_id)
-      );
+
+      allow update: if isAuthenticated() &&
+        (
+          request.auth.uid == resource.data.submitted_by ||
+          isCreatorOfEvent(resource.data.event_id)
+        );
     }
   }
 }

@@ -58,8 +58,17 @@ export const getDrawSize = (count: number, tournamentChoice: 'Singles' | 'Double
   return 32;
 };
 
+export const getReservesDrawSize = (count: number): number => {
+  if (count <= 2) return 2;
+  if (count <= 4) return 4;
+  if (count <= 8) return 8;
+  return 16;
+};
+
 export const fallbackTemplate = (drawsize: number): TemplateMatch[] => {
   const seedOrder: Record<number, Array<[number, number]>> = {
+    2: [[1, 2]],
+    4: [[1, 4], [3, 2]],
     8: [[1, 8], [4, 5], [3, 6], [2, 7]],
     16: [[1, 16], [8, 9], [4, 13], [5, 12], [3, 14], [6, 11], [7, 10], [2, 15]],
     32: Array.from({ length: 16 }, (_, i) => [i + 1, 32 - i] as [number, number]),
@@ -67,6 +76,8 @@ export const fallbackTemplate = (drawsize: number): TemplateMatch[] => {
 
   const firstRound = seedOrder[drawsize] || seedOrder[8];
   const rounds =
+    drawsize === 2 ? ['F'] :
+    drawsize === 4 ? ['SF', 'F'] :
     drawsize === 8 ? ['QF', 'SF', 'F'] :
     drawsize === 16 ? ['R16', 'QF', 'SF', 'F'] :
     ['R32', 'R16', 'QF', 'SF', 'F'];

@@ -2,18 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { Mail, Phone, Trophy, User } from 'lucide-react';
-import { db } from '../services/firebase';
+import { db } from '../lib/firebase';
 import { Button } from '../components/Button';
 import { UserData, UserPreferences, UserStats } from '../types';
 
-const parseMayKey = (val: any): string | null => {
+const parseMayKey = (val: unknown): string | null => {
   if (typeof val === 'string') return val.startsWith('May') ? val : null;
-
+  if (typeof val !== 'object' || val === null) return null;
   let d: Date | null = null;
-
-  if (typeof val?.toDate === 'function') d = val.toDate();
-  else if (val?.seconds) d = new Date(val.seconds * 1000);
-
+  const obj = val as Record<string, unknown>;
+  if (typeof obj['toDate'] === 'function') d = (obj['toDate'] as () => Date)();
+  else if (typeof obj['seconds'] === 'number') d = new Date(obj['seconds'] * 1000);
   if (!d) return null;
 
   return d.getFullYear() === 2026 && d.getMonth() === 4
@@ -65,7 +64,8 @@ export const PlayerProfile: React.FC = () => {
         const dates = new Set<string>();
 
         participantSnap.docs.forEach((d) => {
-          ((d.data() as any).dateselected || []).forEach((v: any) => {
+          const dateselected = (d.data() as Record<string, unknown>)['dateselected'];
+          (Array.isArray(dateselected) ? dateselected : []).forEach((v: unknown) => {
             const k = parseMayKey(v);
             if (k) dates.add(k);
           });
