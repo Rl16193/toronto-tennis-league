@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, query, getDocs, addDoc, deleteDoc, updateDoc, doc, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, getDocs, addDoc, updateDoc, doc, where, onSnapshot } from 'firebase/firestore';
 import { getDownloadURL, ref } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { TennisEvent } from '../types';
-import { ReservesParticipant, TournamentMatch } from './tournament/types';
+import { TournamentMatch } from './tournament/types';
 import { PLAYER_LOADING, parseDateValue } from './tournament/utils';
 import { Button } from '../components/Button';
 import {
@@ -262,9 +262,6 @@ export const Events: React.FC = () => {
   const [authPrompt, setAuthPrompt] = useState('');
   const [tournamentMatches, setTournamentMatches] = useState<TournamentMatch[]>([]);
   const [slotFallbackConfirmed, setSlotFallbackConfirmed] = useState(false);
-  const [reservesParticipants, setReservesParticipants] = useState<ReservesParticipant[]>([]);
-  const [joiningReserves, setJoiningReserves] = useState(false);
-  const [reservesJoined, setReservesJoined] = useState(false);
   const loginRoute = '/login?returnTo=%2Fevents&intent=join-event';
   const signupRoute = '/signup?returnTo=%2Fevents&intent=join-event';
   const participantName = profile?.user.name?.trim() || user?.displayName || user?.email || '';
@@ -370,8 +367,6 @@ export const Events: React.FC = () => {
       setJoinForm(INITIAL_JOIN_FORM);
       setJoinError('');
       setTournamentMatches([]);
-      setReservesParticipants([]);
-      setReservesJoined(false);
     }
   }, [selectedEvent]);
 
@@ -381,11 +376,6 @@ export const Events: React.FC = () => {
       .then((snap) => setTournamentMatches(snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentMatch))));
   }, [selectedEvent?.id]);
 
-  useEffect(() => {
-    if (!selectedEvent || !isTournamentEvent(selectedEvent)) { setReservesParticipants([]); return; }
-    getDocs(query(collection(db, 'reserves_participants'), where('event_id', '==', selectedEvent.id)))
-      .then((snap) => setReservesParticipants(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ReservesParticipant))));
-  }, [selectedEvent?.id]);
 
   useEffect(() => { setSlotFallbackConfirmed(false); }, [joinForm.division, joinForm.tournamentChoice]);
 
@@ -529,55 +519,6 @@ export const Events: React.FC = () => {
     return hasJoinedRegularEvent(event.id);
   };
 
-  const userReservesParticipant = reservesParticipants.find(
-    (p) => p.user_id === user?.uid && p.division === joinForm.division && p.tournament_choice === joinForm.tournamentChoice
-  );
-
-  const handleJoinReserves = async () => {
-    if (!selectedEvent || !user || !joinForm.division) return;
-    setJoiningReserves(true);
-    try {
-      const newDoc = await addDoc(collection(db, 'reserves_participants'), {
-        user_id: user.uid,
-        user_name: participantName,
-        event_id: selectedEvent.id,
-        division: joinForm.division,
-        tournament_choice: joinForm.tournamentChoice,
-        skill: Number(profile?.stats.skill_level || 0),
-        createdAt: new Date().toISOString(),
-      });
-      setReservesParticipants((prev) => [...prev, {
-        id: newDoc.id,
-        user_id: user.uid,
-        user_name: participantName,
-        event_id: selectedEvent.id,
-        division: joinForm.division,
-        tournament_choice: joinForm.tournamentChoice,
-        skill: Number(profile?.stats.skill_level || 0),
-        createdAt: new Date().toISOString(),
-      }]);
-      setReservesJoined(true);
-    } catch (error) {
-      console.error('Error joining reserves:', error);
-      setJoinError('Could not join reserves right now. Please try again.');
-    } finally {
-      setJoiningReserves(false);
-    }
-  };
-
-  const handleLeaveReserves = async () => {
-    if (!userReservesParticipant) return;
-    setJoiningReserves(true);
-    try {
-      await deleteDoc(doc(db, 'reserves_participants', userReservesParticipant.id));
-      setReservesParticipants((prev) => prev.filter((p) => p.id !== userReservesParticipant.id));
-    } catch (error) {
-      console.error('Error leaving reserves:', error);
-      setJoinError('Could not leave reserves right now. Please try again.');
-    } finally {
-      setJoiningReserves(false);
-    }
-  };
 
   const handleStartJoin = async (event: DisplayEvent) => {
     if (!user) {
@@ -681,11 +622,7 @@ export const Events: React.FC = () => {
     }
 
     if (slotStatus?.status === 'full' && isTournamentEvent(selectedEvent)) {
-      if (userReservesParticipant) {
-        setReservesJoined(true);
-        return;
-      }
-      await handleJoinReserves();
+      setJoinError('This draw is currently full. Contact the organizer to be added to the LL Draw.');
       return;
     }
     if (slotStatus?.status === 'fallback' && !slotFallbackConfirmed) {
@@ -1201,10 +1138,10 @@ export const Events: React.FC = () => {
                             </div>
                           )}
 
-                          {reservesJoined && (
+                          {false && (
                             <div className="flex items-start gap-2 text-sm text-green-400">
                               <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
-                              <p>You are on the reserves list for this draw. Stay tuned for updates.</p>
+                              <p>placeholder</p>
                             </div>
                           )}
                         </>
@@ -1246,8 +1183,8 @@ export const Events: React.FC = () => {
                         {user ? (
                           <Button
                             onClick={handleSubmitJoin}
-                            isLoading={joining || joiningReserves}
-                            disabled={reservesJoined || (slotStatus?.status === 'fallback' && !slotFallbackConfirmed)}
+                            isLoading={joining}
+                            disabled={slotStatus?.status === 'fallback' && !slotFallbackConfirmed}
                           >
                             Join Event
                           </Button>

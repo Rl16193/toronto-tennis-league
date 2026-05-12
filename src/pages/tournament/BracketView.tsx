@@ -126,7 +126,7 @@ export const BracketView: React.FC<Props> = ({
             {round.matches.map((match, matchIndex) => {
               const rowSpan = 2 ** (roundIndex + 1);
               const gridRowStart = matchIndex * 2 ** roundIndex * 2 + 2;
-              const isPreview = match.id.startsWith('preview_');
+              const isPreview = match.id.startsWith('preview_') || match.id.startsWith('ll_preview_');
               const isPreviewFirstRound = isPreview &&
                 typeof match.player_1_slot === 'number' &&
                 typeof match.player_2_slot === 'number';
