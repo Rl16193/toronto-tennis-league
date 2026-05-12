@@ -153,9 +153,10 @@ export const useTournament = (eventIdOverride?: string) => {
         const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentMatch));
         setMatches(loaded);
         // Auto-enable merge/consolidate toggles if that draw data already exists in Firestore
-        if (loaded.some((m) => m.tournament_choice === 'Singles' && m.division === "Women's" && m.skill_group === 'All'))
+        // Exclude reserves matches to avoid false positives
+        if (loaded.some((m) => m.tournament_choice === 'Singles' && m.division === "Women's" && m.skill_group === 'All' && m.bracket !== 'reserves'))
           setMergeWomensSingles(true);
-        if (loaded.some((m) => m.tournament_choice === 'Doubles' && m.division === 'All'))
+        if (loaded.some((m) => m.tournament_choice === 'Doubles' && m.division === 'All' && m.bracket !== 'reserves'))
           setConsolidateDoubles(true);
       },
     );
@@ -424,17 +425,21 @@ export const useTournament = (eventIdOverride?: string) => {
     return count;
   }, [isCreator, matches, participants, statsMap]);
 
+  // Which primary tabs have an LL Draw (reserves bracket), regardless of skill group
   const reserveDrawLabels = useMemo(() => {
-    const labels = new Set<string>();
-    const reserveMatches = matches.filter((m) => m.bracket === 'reserves');
-    for (const m of reserveMatches) {
-      const draw = effectiveDraws.find(
-        (d) => d.tournamentChoice === m.tournament_choice && d.division === m.division && d.skillGroup === m.skill_group,
-      );
-      if (draw) labels.add(draw.label);
+    const tabs = new Set<DrawTab>();
+    for (const m of matches) {
+      if (m.bracket !== 'reserves') continue;
+      if (m.tournament_choice === 'Doubles') {
+        tabs.add('doubles');
+      } else if (m.division === "Men's") {
+        tabs.add('mens');
+      } else if (m.division === "Women's") {
+        tabs.add('womens');
+      }
     }
-    return labels;
-  }, [matches, effectiveDraws]);
+    return tabs;
+  }, [matches]);
 
   const currentReservesMatches = useMemo(() => {
     if (!currentDraw) return [];
@@ -917,7 +922,8 @@ export const useTournament = (eventIdOverride?: string) => {
       const slotMap = new Map<number, TournamentPlayer>();
       players.slice(0, drawsize).forEach((p, i) => slotMap.set(i + 1, p));
 
-      const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
+      // LL Draw is per division only — skill group is ignored
+      const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, 'All');
       const batch = writeBatch(db);
 
       templateMatches.forEach((tm, index) => {
@@ -930,7 +936,7 @@ export const useTournament = (eventIdOverride?: string) => {
             template_id: template?.id || `fallback_${drawsize}`,
             tournament_choice: currentDraw.tournamentChoice,
             division: currentDraw.division,
-            skill_group: currentDraw.skillGroup,
+            skill_group: 'All',
             drawsize,
             match_id: tm.match_id,
             round: tm.round,
