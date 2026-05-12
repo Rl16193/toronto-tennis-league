@@ -37,7 +37,7 @@ export const Tournament: React.FC = () => {
     handleResolveDispute, handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
     currentReservesMatches, llDrawDisplayMatches, currentLLSize, allUsersAsTournamentPlayers,
     showReserves, setShowReserves, generatingReserves,
-    handleSetLLDrawSize, handleGenerateReservesDraw,
+    handleSetLLDrawSize, handleGenerateReservesDraw, handleResetLLDraw,
   } = useTournament(eventId);
 
   useEffect(() => {
@@ -190,7 +190,12 @@ export const Tournament: React.FC = () => {
                 </Button>
               )}
               {!llIsPreview && (
-                <span className="text-xs text-gray-500">Draw finalized — use Edit Draw to modify players.</span>
+                <>
+                  <span className="text-xs text-gray-500">Draw finalized — use Edit Draw to modify players.</span>
+                  <Button variant="danger" onClick={handleResetLLDraw} className="ml-2">
+                    Reset LL Draw
+                  </Button>
+                </>
               )}
             </div>
           )}

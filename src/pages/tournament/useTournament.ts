@@ -914,6 +914,24 @@ export const useTournament = (eventIdOverride?: string) => {
     setLLDrawSizes((prev) => ({ ...prev, [llCurrentKey]: size }));
   };
 
+  const handleResetLLDraw = async () => {
+    if (!isCreator || !currentDraw || currentReservesMatches.length === 0) return;
+    if (!window.confirm('Reset the LL Draw? This will delete all LL Draw matches and return to preview mode.')) return;
+    try {
+      const batch = writeBatch(db);
+      currentReservesMatches.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
+      await batch.commit();
+      if (llCurrentKey) {
+        setLLDrawSizes((prev) => deleteKey(prev, llCurrentKey));
+        setLLDrawSlotOverrides((prev) => deleteKey(prev, llCurrentKey));
+      }
+      setMessage({ type: 'success', text: 'LL Draw reset.' });
+    } catch (err) {
+      console.error('LL Draw reset failed:', err);
+      setMessage({ type: 'error', text: 'Could not reset the LL Draw.' });
+    }
+  };
+
   const handleGenerateReservesDraw = async () => {
     if (!event || !isCreator || !currentDraw || !llCurrentKey) return;
     setGeneratingReserves(true);
@@ -1038,5 +1056,6 @@ export const useTournament = (eventIdOverride?: string) => {
     generatingReserves,
     handleSetLLDrawSize,
     handleGenerateReservesDraw,
+    handleResetLLDraw,
   };
 };
