@@ -7,7 +7,6 @@ type Props = {
   activeDoubles: string;
   currentDraw: DrawConfig | undefined;
   visibleDraws: DrawConfig[];
-  reserveDrawLabels: Set<DrawTab>;
   showReserves: boolean;
   onTabChange: (tab: DrawTab) => void;
   onSkillChange: (skill: SkillGroup) => void;
@@ -22,7 +21,7 @@ const subBtnClass = (active: boolean) =>
 
 export const DrawTabs: React.FC<Props> = ({
   activeTab, activeSkill, activeDoubles, currentDraw, visibleDraws,
-  reserveDrawLabels, showReserves,
+  showReserves,
   onTabChange, onSkillChange, onDoublesChange, onReservesChange,
 }) => {
   const availablePrimaryTabs = (['mens', 'womens', 'doubles'] as DrawTab[]).filter(
@@ -38,9 +37,6 @@ export const DrawTabs: React.FC<Props> = ({
   const availableDoublesDivisions = ["Men's", "Women's", 'Mixed Doubles'].filter(
     (div) => visibleDraws.some((d) => d.tab === 'doubles' && d.division === div),
   );
-
-  // Whether the active tab has an LL Draw
-  const tabHasLL = reserveDrawLabels.has(activeTab);
 
   return (
     <>
@@ -64,10 +60,8 @@ export const DrawTabs: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Sub-tab row */}
+      {/* Sub-tab row — always includes LL Draw */}
       {activeTab !== 'doubles' ? (
-        // Singles: Challengers | Masters | LL Draw
-        // — or for merged draw: Main Draw | LL Draw
         <div className="flex flex-wrap gap-2 mb-6">
           {availableSkills.length > 0 ? (
             availableSkills.map((skill) => (
@@ -80,7 +74,7 @@ export const DrawTabs: React.FC<Props> = ({
               </button>
             ))
           ) : (
-            // Merged single draw — show "Main Draw" toggle
+            // Merged single draw
             <button
               onClick={() => onReservesChange(false)}
               className={subBtnClass(!showReserves)}
@@ -88,18 +82,14 @@ export const DrawTabs: React.FC<Props> = ({
               Main Draw
             </button>
           )}
-
-          {tabHasLL && (
-            <button
-              onClick={() => onReservesChange(true)}
-              className={subBtnClass(showReserves)}
-            >
-              LL Draw
-            </button>
-          )}
+          <button
+            onClick={() => onReservesChange(true)}
+            className={subBtnClass(showReserves)}
+          >
+            LL Draw
+          </button>
         </div>
       ) : (
-        // Doubles: division buttons | LL Draw
         <div className="flex flex-wrap gap-2 mb-6">
           {availableDoublesDivisions.length > 0 ? (
             availableDoublesDivisions.map((division) => {
@@ -115,7 +105,7 @@ export const DrawTabs: React.FC<Props> = ({
               );
             })
           ) : (
-            // Consolidated doubles — show "Main Draw" toggle
+            // Consolidated doubles
             <button
               onClick={() => onReservesChange(false)}
               className={subBtnClass(!showReserves)}
@@ -123,15 +113,12 @@ export const DrawTabs: React.FC<Props> = ({
               Main Draw
             </button>
           )}
-
-          {tabHasLL && (
-            <button
-              onClick={() => onReservesChange(true)}
-              className={subBtnClass(showReserves)}
-            >
-              LL Draw
-            </button>
-          )}
+          <button
+            onClick={() => onReservesChange(true)}
+            className={subBtnClass(showReserves)}
+          >
+            LL Draw
+          </button>
         </div>
       )}
     </>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Pencil, RefreshCw, ShieldCheck, Users, X } from 'lucide-react';
+import { Download, Pencil, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import { Button } from '../../components/Button';
 
 type Props = {
@@ -8,15 +8,12 @@ type Props = {
   generating: boolean;
   updatingDraw: boolean;
   resettingDraw: boolean;
-  generatingReserves: boolean;
   canReset: boolean;
   canFinalize: boolean;
   editMode: boolean;
   started: boolean;
   mergeWomensSingles: boolean;
   consolidateDoubles: boolean;
-  reservesParticipantCount: number;
-  reservesDrawExists: boolean;
   onDownload: () => void;
   onGenerateAll: () => void;
   onUpdateDraw: () => void;
@@ -24,15 +21,13 @@ type Props = {
   onToggleEdit: () => void;
   onToggleMergeWomens: () => void;
   onToggleConsolidateDoubles: () => void;
-  onGenerateReservesDraw: () => void;
 };
 
 export const TournamentHeader: React.FC<Props> = ({
-  title, isCreator, generating, updatingDraw, resettingDraw, generatingReserves,
+  title, isCreator, generating, updatingDraw, resettingDraw,
   canReset, canFinalize, editMode, started, mergeWomensSingles, consolidateDoubles,
-  reservesParticipantCount, reservesDrawExists,
   onDownload, onGenerateAll, onUpdateDraw, onResetDraw, onToggleEdit,
-  onToggleMergeWomens, onToggleConsolidateDoubles, onGenerateReservesDraw,
+  onToggleMergeWomens, onToggleConsolidateDoubles,
 }) => (
   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-8">
     <div>
@@ -68,18 +63,6 @@ export const TournamentHeader: React.FC<Props> = ({
             <ShieldCheck className="w-4 h-4 mr-2" />
             Finalize Draw
           </Button>
-          {!reservesDrawExists && (
-            <Button
-              variant="outline"
-              onClick={onGenerateReservesDraw}
-              isLoading={generatingReserves}
-              disabled={reservesParticipantCount < 2}
-              title={reservesParticipantCount < 2 ? 'Need at least 2 reserves players' : undefined}
-            >
-              <Users className="w-4 h-4 mr-2" />
-              Create Reserves Draw {reservesParticipantCount > 0 ? `(${reservesParticipantCount})` : ''}
-            </Button>
-          )}
           <Button variant="outline" onClick={onUpdateDraw} isLoading={updatingDraw}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Update Draw
