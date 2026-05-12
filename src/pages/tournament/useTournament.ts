@@ -263,7 +263,8 @@ export const useTournament = (eventIdOverride?: string) => {
       .filter((m) =>
         m.tournament_choice === currentDraw.tournamentChoice &&
         m.division === currentDraw.division &&
-        m.skill_group === currentDraw.skillGroup,
+        m.skill_group === currentDraw.skillGroup &&
+        m.bracket !== 'reserves',
       )
       .sort((a, b) => a.position - b.position);
   }, [currentDraw, matches]);
@@ -936,10 +937,10 @@ export const useTournament = (eventIdOverride?: string) => {
             position: index + 1,
             player_1_slot: tm.player_1,
             player_2_slot: tm.player_2,
-            player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_1, templateMatches)),
+            player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? BYE : getWinnerPlaceholder(tm.player_1, templateMatches)),
             player_1_user_id: p1?.user_id || '',
             player_1_contact: p1?.contact || '',
-            player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_2, templateMatches)),
+            player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? BYE : getWinnerPlaceholder(tm.player_2, templateMatches)),
             player_2_user_id: p2?.user_id || '',
             player_2_contact: p2?.contact || '',
             next_match_id: tm.next_match_id || '',

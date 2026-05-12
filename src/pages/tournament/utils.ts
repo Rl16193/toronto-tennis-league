@@ -59,7 +59,6 @@ export const getDrawSize = (count: number, tournamentChoice: 'Singles' | 'Double
 };
 
 export const getReservesDrawSize = (count: number): number => {
-  if (count <= 2) return 2;
   if (count <= 4) return 4;
   if (count <= 8) return 8;
   return 16;

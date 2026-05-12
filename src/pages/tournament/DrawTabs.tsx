@@ -81,7 +81,7 @@ export const DrawTabs: React.FC<Props> = ({
                         isReserveActive ? 'bg-white text-tennis-dark' : 'bg-white/10 text-gray-300 hover:text-white'
                       }`}
                     >
-                      {skill} Reserve
+                      {skill} LL Draw
                     </button>
                   )}
                 </React.Fragment>
@@ -114,7 +114,7 @@ export const DrawTabs: React.FC<Props> = ({
                         isReserveActive ? 'bg-white text-tennis-dark' : 'bg-white/10 text-gray-300 hover:text-white'
                       }`}
                     >
-                      {shortLabel} Reserve
+                      {shortLabel} LL Draw
                     </button>
                   )}
                 </React.Fragment>
