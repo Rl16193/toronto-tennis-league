@@ -14,6 +14,7 @@ import { FlaggedResults } from './tournament/FlaggedResults';
 import { PlayerMovePanel } from './tournament/PlayerMovePanel';
 import { AddPlayerPanel } from './tournament/AddPlayerPanel';
 import { AlertMessage } from '../components/AlertMessage';
+import { Button } from '../components/Button';
 
 export const Tournament: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,6 +36,9 @@ export const Tournament: React.FC = () => {
     handleSetPreviewDrawSize, handleMovePlayer, handleAddPlayer,
     handleGenerateAll, handleCreatorUpdateDraw, handleResetDraw,
     handleResolveDispute, handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
+    currentReservesMatches, llDrawDisplayMatches, currentLLSize, allUsersAsTournamentPlayers,
+    showReserves, setShowReserves, generatingReserves,
+    handleSetLLDrawSize, handleGenerateReservesDraw, handleResetLLDraw,
   } = useTournament(eventId);
 
   useEffect(() => {
@@ -97,7 +101,7 @@ export const Tournament: React.FC = () => {
         started={started}
         mergeWomensSingles={mergeWomensSingles}
         consolidateDoubles={consolidateDoubles}
-        onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw')}
+        onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'))}
         onGenerateAll={handleGenerateAll}
         onUpdateDraw={handleCreatorUpdateDraw}
         onResetDraw={handleResetDraw}
@@ -113,20 +117,20 @@ export const Tournament: React.FC = () => {
       )}
 
       {userParticipant && matches.length > 0 && (
-        <div className="mb-6 rounded-2xl border border-orange-500/30 bg-orange-500 p-4 flex items-start gap-3 text-white">
-          <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0" />
-          <p className="text-sm font-semibold">
+        <div className="mb-6 flex items-start gap-2 text-sm text-orange-500">
+          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+          <p className="font-semibold">
             Draws have been finalized. Please contact your opponent to schedule your match. Kindly play your matches before the round deadline provided in the draw. Contact us if you are facing any difficulties.
           </p>
         </div>
       )}
 
       {isCreator && skillMismatchedCount > 0 && (
-        <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 flex items-start gap-3 text-amber-300">
-          <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+        <div className="mb-6 flex items-start gap-2 text-sm text-orange-500">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
           <div>
             <p className="font-semibold">Bracket mismatch detected</p>
-            <p className="text-sm mt-1">
+            <p className="mt-1">
               {skillMismatchedCount} player{skillMismatchedCount > 1 ? 's have' : ' has'} updated their skill level since the draw was finalized and may be in the wrong bracket. Click <strong>Update Draw</strong> to move them to the correct bracket.
             </p>
           </div>
@@ -148,14 +152,69 @@ export const Tournament: React.FC = () => {
         activeDoubles={activeDoubles}
         currentDraw={currentDraw}
         visibleDraws={visibleDraws}
+        showReserves={showReserves}
         onTabChange={setActiveTab}
         onSkillChange={setActiveSkill}
         onDoublesChange={setActiveDoubles}
+        onReservesChange={setShowReserves}
       />
 
-      {editMode && isCreator && (
-        <PlayerMovePanel players={moveablePlayers} onMove={handleMovePlayer} />
-      )}
+      {/* LL Draw view */}
+      {showReserves ? (
+        <>
+          {isCreator && (
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">LL Draw Size</span>
+              {[4, 8, 16].map((size) => (
+                <button
+                  key={size}
+                  disabled={!llIsPreview}
+                  onClick={() => handleSetLLDrawSize(size)}
+                  className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
+                    currentLLSize === size
+                      ? 'bg-clay text-white'
+                      : !llIsPreview
+                        ? 'bg-tennis-surface/30 text-gray-600 cursor-not-allowed'
+                        : 'bg-tennis-surface/60 text-gray-300 hover:text-white'
+                  }`}
+                >
+                  R{size}
+                </button>
+              ))}
+              {llIsPreview && (
+                <Button onClick={handleGenerateReservesDraw} isLoading={generatingReserves} className="ml-2">
+                  Finalize LL Draw
+                </Button>
+              )}
+              {!llIsPreview && (
+                <>
+                  <span className="text-xs text-gray-500">Draw finalized — use Edit Draw to modify players.</span>
+                  <Button variant="danger" onClick={handleResetLLDraw} className="ml-2">
+                    Reset LL Draw
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+
+          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(llDrawDisplayMatches, 'LL Draw')}>
+            <BracketView
+              matches={llDrawDisplayMatches}
+              drawTitle="LL Draw"
+              editMode={editMode}
+              editPlayers={editMode ? allUsersAsTournamentPlayers : []}
+              onEditPlayer={handleEditPlayer}
+              submissions={submissions}
+              isCreator={isCreator}
+              onSubmitScore={handleOpenScoreForm}
+            />
+          </BracketErrorBoundary>
+        </>
+      ) : (
+        <>
+          {editMode && isCreator && (
+            <PlayerMovePanel players={moveablePlayers} onMove={handleMovePlayer} />
+          )}
 
           {editMode && isCreator && (
             <AddPlayerPanel
@@ -194,15 +253,18 @@ export const Tournament: React.FC = () => {
             </div>
           )}
 
-      <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw')}>
-        <BracketView
-          matches={displayMatches}
-          drawTitle={currentDraw?.label || 'Draw'}
-          editMode={editMode}
-          editPlayers={editPlayers}
-          onEditPlayer={handleEditPlayer}
-        />
-      </BracketErrorBoundary>
+          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw')}>
+            <BracketView
+              matches={displayMatches}
+              drawTitle={currentDraw?.label || 'Draw'}
+              editMode={editMode}
+              editPlayers={editPlayers}
+              onEditPlayer={handleEditPlayer}
+              submissions={submissions}
+              isCreator={isCreator}
+              onSubmitScore={handleOpenScoreForm}
+            />
+          </BracketErrorBoundary>
 
           {reservesPlayers.length > 0 && (
             <div className="mt-8">

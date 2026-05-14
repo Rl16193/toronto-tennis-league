@@ -1,5 +1,5 @@
 import { fetchSignInMethodsForEmail } from 'firebase/auth';
-import { auth } from '../../services/firebase';
+import { auth } from '../../lib/firebase';
 import { emailExistsInProfiles } from '../../services/accountService';
 
 export const signupEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

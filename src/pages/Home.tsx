@@ -10,22 +10,26 @@ import { useAuth } from '../context/AuthContext';
 export const Home: React.FC = () => {
   const { user } = useAuth();
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [logoUrl, setLogoUrl] = useState<string>('');
   const galleryPreview = useMemo(() => galleryImages.slice(0, 4), [galleryImages]);
 
   useEffect(() => {
-    const loadGalleryImages = async () => {
+    const loadAssets = async () => {
       try {
-        const galleryRef = ref(storage, 'Gallery');
-        const result = await listAll(galleryRef);
-        const urls = await Promise.all(result.items.map((item) => getDownloadURL(item)));
+        const [logo, galleryResult] = await Promise.all([
+          getDownloadURL(ref(storage, 'LandingPage/Logo RS.png')),
+          listAll(ref(storage, 'Gallery')),
+        ]);
+        setLogoUrl(logo);
+        const urls = await Promise.all(galleryResult.items.map((item) => getDownloadURL(item)));
         setGalleryImages(urls);
       } catch (error) {
-        console.error('Error loading gallery images:', error);
+        console.error('Error loading assets:', error);
         setGalleryImages([]);
       }
     };
 
-    loadGalleryImages();
+    loadAssets();
   }, []);
 
   return (
@@ -43,12 +47,13 @@ export const Home: React.FC = () => {
             transition={{ duration: 0.8, ease: "easeOut" }}
             className="flex flex-col items-center"
           >
-            <img
-              src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FLogo%20RS.png?alt=media&token=73ec69ac-c796-489f-9df1-228b152e1edf"
-              alt="Racquets & Strings"
-              className="mx-auto w-64 sm:w-80 md:w-96 lg:w-[800px] mb-6"
-              referrerPolicy="no-referrer"
-            />
+            {logoUrl && (
+              <img
+                src={logoUrl}
+                alt="Racquets & Strings"
+                className="mx-auto w-64 sm:w-80 md:w-96 lg:w-[800px] mb-6"
+              />
+            )}
             <p className="text-base md:text-lg text-gray-400 leading-relaxed max-w-xl mx-auto text-center mb-6">
               Join a community of Tennis Enthusiasts in Toronto.
             </p>

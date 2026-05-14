@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { getAdditionalUserInfo, signInWithEmailAndPassword, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
-import { auth, googleProvider, setAuthPersistence } from '../lib/firebase';
+import { getDownloadURL, ref } from 'firebase/storage';
+import { auth, googleProvider, setAuthPersistence, storage } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { ensureUserProfileDocuments } from '../lib/profileBootstrap';
 import { Button } from '../components/Button';
@@ -24,14 +25,21 @@ export const Login: React.FC = () => {
   const [resetSent, setResetSent] = useState(false);
   const [stayLoggedIn, setStayLoggedIn] = useState(false);
   const [emailSuggestion, setEmailSuggestion] = useState<any>(null);
+  const [logoUrl, setLogoUrl] = useState<string>('');
   const returnTo = searchParams.get('returnTo') || '/profile';
   const intent = searchParams.get('intent') || '';
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!authLoading && user) {
       navigate(returnTo);
     }
   }, [authLoading, navigate, returnTo, user]);
+
+  useEffect(() => {
+    getDownloadURL(ref(storage, 'LandingPage/Logo RS.png'))
+      .then(setLogoUrl)
+      .catch(() => {});
+  }, []);
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newEmail = e.target.value;
@@ -137,12 +145,13 @@ export const Login: React.FC = () => {
         className="w-full max-w-md bg-tennis-surface/40 backdrop-blur-xl border border-white/5 p-10 rounded-[3rem] shadow-2xl"
       >
         <div className="text-center space-y-4 mb-10">
-          <img
-            src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FLogo%20RS.png?alt=media&token=73ec69ac-c796-489f-9df1-228b152e1edf"
-            alt="Racquets&Strings"
-            className="mx-auto h-48 w-full max-w-md object-contain"
-            referrerPolicy="no-referrer"
-          />
+          {logoUrl && (
+            <img
+              src={logoUrl}
+              alt="Racquets & Strings"
+              className="mx-auto h-48 w-full max-w-md object-contain"
+            />
+          )}
           {intent === 'join-event' && (
             <p className="text-sm text-gray-400">
               Sign in to join an event. New here? Use sign up to create your league profile first.

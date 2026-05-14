@@ -1,6 +1,6 @@
 import { addDoc, collection, getDocs } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { db, storage } from '../../../services/firebase';
+import { db, storage } from '../../../lib/firebase';
 import { TennisEvent } from '../../../types';
 import { sortEventsByStartDate } from '../../../utils/eventDates';
 
