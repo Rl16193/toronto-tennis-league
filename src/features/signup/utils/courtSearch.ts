@@ -68,5 +68,5 @@ export const getCourtSuggestions = (courtOptions: string[], selectedCourts: stri
       };
       return score(aLower) - score(bLower) || a.localeCompare(b);
     })
-    .slice(0, courtQuery ? 8 : 6);
+    .filter(() => courtQuery.length > 0);
 };
