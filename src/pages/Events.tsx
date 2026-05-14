@@ -640,9 +640,9 @@ export const Events: React.FC = () => {
             <div key={i} className="h-96 bg-tennis-surface/30 rounded-[2.5rem] animate-pulse" />
           ))}
         </div>
-      ) : featuredEvents.length > 0 ? (
+      ) : visibleEvents.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
-          {featuredEvents.map((event, i) => (
+          {visibleEvents.map((event, i) => (
             <motion.div
               key={event.id}
               initial={{ opacity: 0, y: 20 }}
@@ -716,8 +716,8 @@ export const Events: React.FC = () => {
       ) : (
         <div className="text-center py-24 space-y-5">
           <div>
-            <h3 className="text-2xl font-bold text-white">Featured events are coming soon</h3>
-            <p className="text-gray-400">Season opener will appear here when it is live.</p>
+            <h3 className="text-2xl font-bold text-white">No events yet</h3>
+            <p className="text-gray-400">Events will appear here when they are live.</p>
           </div>
         </div>
       )}

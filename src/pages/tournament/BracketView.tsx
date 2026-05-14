@@ -154,10 +154,9 @@ export const BracketView: React.FC<Props> = ({
                   ? 'bg-green-400'
                   : 'bg-orange-400';
 
-              // Creator submit button
+              // Creator submit button (also shown for complete matches so creator can overwrite)
               const showCreatorSubmit =
-                isCreator && !!onSubmitScore && hasRealPlayers &&
-                match.status !== 'complete' && !editMode;
+                isCreator && !!onSubmitScore && hasRealPlayers && !editMode;
 
               return (
                 <div
@@ -224,7 +223,7 @@ export const BracketView: React.FC<Props> = ({
                         onClick={() => onSubmitScore(match)}
                         className="w-full border-t border-gray-100 px-2 py-1 text-[10px] text-gray-400 hover:text-clay transition-colors text-center leading-tight"
                       >
-                        Enter score
+                        {match.status === 'complete' ? 'Edit score' : 'Enter score'}
                       </button>
                     )}
                   </div>

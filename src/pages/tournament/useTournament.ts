@@ -336,7 +336,22 @@ export const useTournament = (eventIdOverride?: string) => {
     [myActiveMatch, submissions, user],
   );
 
-  const editPlayers = editMode ? currentDrawAllPlayers : [];
+  // For the edit dropdown, include ALL participants for this division/choice regardless of skill group
+  // so that players moved between skill brackets remain accessible.
+  const editPlayers = useMemo(() => {
+    if (!editMode || !currentDraw) return [];
+    const divisionParticipants = participants.filter((p) => {
+      if (p.tournament_choice !== currentDraw.tournamentChoice) return false;
+      if (currentDraw.division !== 'All' && p.division !== currentDraw.division) return false;
+      return true;
+    });
+    return buildPlayerList(
+      divisionParticipants,
+      { ...currentDraw, skillGroup: 'All' },
+      effectiveStatsMap,
+      userMap,
+    );
+  }, [editMode, currentDraw, participants, effectiveStatsMap, userMap]);
 
   const currentDrawSize = displayMatches[0]?.drawsize ?? 16;
 
@@ -463,17 +478,26 @@ export const useTournament = (eventIdOverride?: string) => {
     });
   }, [currentReservesMatches, currentDraw, currentLLSize, currentLLSlotOverrides, llCurrentKey, templates, event?.id]);
 
+  // LL Draw dropdown: use event participants (not all registered users)
   const allUsersAsTournamentPlayers = useMemo(
-    () => Object.entries(allUsers)
-      .map(([id, data]) => ({
-        user_id: id,
-        name: data.name || data.email || id,
-        contact: data.email || '',
-        preferredContact: 'email' as const,
-        participantId: id,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name)),
-    [allUsers],
+    () => {
+      const seen = new Set<string>();
+      return participants
+        .filter((p) => {
+          if (seen.has(p.user_id)) return false;
+          seen.add(p.user_id);
+          return true;
+        })
+        .map((p) => ({
+          user_id: p.user_id,
+          name: p.user_name || allUsers[p.user_id]?.name || p.user_id,
+          contact: allUsers[p.user_id]?.email || '',
+          preferredContact: 'email' as const,
+          participantId: p.id,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    },
+    [participants, allUsers],
   );
 
   const opponentMatch = myActiveMatch || visibleUserMatch;
@@ -770,7 +794,8 @@ export const useTournament = (eventIdOverride?: string) => {
 
     const isPlayer1 = match.player_1_user_id === user.uid;
     const isPlayer2 = match.player_2_user_id === user.uid;
-    const isCreatorSubmit = isCreator && !isPlayer1 && !isPlayer2;
+    // Creator override: always applied when overwriting a complete match, or when creator is not a player
+    const isCreatorSubmit = isCreator && (match.status === 'complete' || (!isPlayer1 && !isPlayer2));
     if (!isPlayer1 && !isPlayer2 && !isCreatorSubmit) return;
 
     const parsedSets = scoreForm.sets.map((s) => ({
