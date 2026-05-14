@@ -44,13 +44,13 @@ export const Home: React.FC = () => {
             className="flex flex-col items-center"
           >
             <img
-              src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FLogo(2).png?alt=media&token=845e0265-3b63-4a5b-871b-a9d23fafb8b6"
+              src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FLogo%20RS.png?alt=media&token=73ec69ac-c796-489f-9df1-228b152e1edf"
               alt="Racquets & Strings"
-              className="mx-auto w-64 sm:w-80 md:w-96 lg:w-[520px] object-contain opacity-85 mix-blend-lighten mb-6"
+              className="mx-auto w-64 sm:w-80 md:w-96 lg:w-[800px] mb-6"
               referrerPolicy="no-referrer"
             />
             <p className="text-base md:text-lg text-gray-400 leading-relaxed max-w-xl mx-auto text-center mb-6">
-              Join a thriving community of Tennis Enthusiasts in Toronto.
+              Join a community of Tennis Enthusiasts in Toronto.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">

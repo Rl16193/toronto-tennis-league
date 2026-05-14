@@ -142,7 +142,7 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
                     <label className="block text-sm font-medium text-gray-400">Email Address</label>
                     <div className="flex items-center space-x-3 p-3 bg-white/5 border border-white/5 rounded-2xl text-gray-500">
                       <Mail className="w-4 h-4" />
-                      <span>{profile.user.email}</span>
+                      <span className="min-w-0 break-all">{profile.user.email}</span>
                     </div>
                     {!showEmailForm ? (
                       <Button variant="clay" size="sm" className="w-full mt-2" onClick={() => setShowEmailForm(true)}>
@@ -187,7 +187,7 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
                   </div>
                   <div className="space-y-1">
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Email</p>
-                    <p className="text-xl font-bold text-clay">{profile.user.email}</p>
+                    <p className="text-xl font-bold text-clay break-all">{profile.user.email}</p>
                   </div>
                   {!hasGoogleProvider ? (
                     <div className="rounded-3xl border border-white/5 bg-white/5 p-4 text-sm text-gray-300">
@@ -203,11 +203,7 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
                         Connect Google
                       </Button>
                     </div>
-                  ) : (
-                    <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">
-                      <p className="font-bold">Google is connected to your account.</p>
-                    </div>
-                  )}
+                  ) : null}
                   <div className="space-y-1">
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Phone</p>
                     <p className="text-xl font-bold text-clay">{profile.user.phone}</p>

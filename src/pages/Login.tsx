@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { getAdditionalUserInfo, fetchSignInMethodsForEmail, signInWithEmailAndPassword, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
+import { getAdditionalUserInfo, signInWithEmailAndPassword, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
 import { auth, googleProvider, setAuthPersistence } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { ensureUserProfileDocuments } from '../lib/profileBootstrap';
@@ -9,6 +9,8 @@ import { Input } from '../components/Input';
 import { Mail, Lock, Chrome, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import mailcheck from 'mailcheck';
+import { emailExistsInProfiles } from '../services/accountService';
+import { emailRegex, getAuthErrorMessage, getGoogleSignInErrorMessage } from '../features/auth/authMessages';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -31,8 +33,6 @@ export const Login: React.FC = () => {
     }
   }, [authLoading, navigate, returnTo, user]);
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newEmail = e.target.value;
     setEmail(newEmail);
@@ -44,66 +44,31 @@ export const Login: React.FC = () => {
     });
   };
 
-  const getAuthErrorMessage = (error: any, context: 'login' | 'reset' | 'google' = 'login') => {
-    const code = (error?.code || error?.message || '').toString().toLowerCase();
-    if (context === 'login') {
-      if (code.includes('wrong-password') || code.includes('user-not-found') || code.includes('invalid-email')) {
-        return 'Invalid credentials';
-      }
-      if (code.includes('too-many-requests')) {
-        return 'Too many login attempts. Please try again later.';
-      }
-      if (code.includes('user-disabled')) {
-        return 'This account has been disabled. Please contact support.';
-      }
-      return 'Invalid credentials';
-    }
-
-    if (context === 'reset') {
-      if (code.includes('invalid-email')) {
-        return 'Please enter a valid email address.';
-      }
-      if (code.includes('user-not-found')) {
-        return 'No account found with that email.';
-      }
-      return 'Unable to send reset email. Please try again.';
-    }
-
-    return 'Unable to sign in. Please try again.';
-  };
-
-  const getGoogleSignInErrorMessage = async (error: any) => {
-    const code = (error?.code || error?.message || '').toString().toLowerCase();
-    if (code.includes('popup-closed-by-user')) {
-      return 'Google sign-in was cancelled.';
-    }
-    if (code.includes('account-exists-with-different-credential')) {
-      const emailFromError = error?.customData?.email || email;
-      if (emailFromError && emailRegex.test(emailFromError)) {
-        try {
-          const methods = await fetchSignInMethodsForEmail(auth, emailFromError);
-          if (methods.includes('password')) {
-            return 'An account already exists for this email. Sign in with your password, then connect Google from your profile.';
-          }
-          if (methods.includes('google.com')) {
-            return 'This Google account is already linked. Please sign in with Google.';
-          }
-        } catch (fetchError) {
-          console.error('Error checking sign-in methods:', fetchError);
-        }
-      }
-      return 'An account already exists with this email. Please use the same sign-in provider.';
-    }
-    return getAuthErrorMessage(error, 'google');
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+      setError('Email not in use. Sign up or login with a different email.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password should be atleast 6 charecters');
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
+      const emailExists = await emailExistsInProfiles(trimmedEmail);
+      if (!emailExists) {
+        setError('Email not in use. Sign up or login with a different email.');
+        return;
+      }
+
       await setAuthPersistence(stayLoggedIn);
-      await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, trimmedEmail, password);
     } catch (err: any) {
       setError(getAuthErrorMessage(err, 'login'));
     } finally {
@@ -125,7 +90,7 @@ export const Login: React.FC = () => {
         navigate(`/signup?returnTo=${encodeURIComponent(returnTo)}&intent=${encodeURIComponent(intent || 'join-league')}`);
       }
     } catch (err: any) {
-      setError(await getGoogleSignInErrorMessage(err));
+      setError(await getGoogleSignInErrorMessage(err, email));
     } finally {
       setLoading(false);
     }
@@ -133,18 +98,25 @@ export const Login: React.FC = () => {
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
       setError('Please enter your email address.');
       return;
     }
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(trimmedEmail)) {
       setError('Please enter a valid email address.');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      await sendPasswordResetEmail(auth, email);
+      const emailExists = await emailExistsInProfiles(trimmedEmail);
+      if (!emailExists) {
+        setError('Email not found. Please re-enter.');
+        return;
+      }
+
+      await sendPasswordResetEmail(auth, trimmedEmail);
       setResetSent(true);
     } catch (err: any) {
       setError(getAuthErrorMessage(err, 'reset'));
@@ -166,9 +138,9 @@ export const Login: React.FC = () => {
       >
         <div className="text-center space-y-4 mb-10">
           <img
-            src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FLogo(2).png?alt=media&token=845e0265-3b63-4a5b-871b-a9d23fafb8b6"
+            src="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FLogo%20RS.png?alt=media&token=73ec69ac-c796-489f-9df1-228b152e1edf"
             alt="Racquets&Strings"
-            className="mx-auto h-48 w-full max-w-md object-contain opacity-80 mix-blend-lighten"
+            className="mx-auto h-48 w-full max-w-md object-contain"
             referrerPolicy="no-referrer"
           />
           {intent === 'join-event' && (
@@ -195,7 +167,7 @@ export const Login: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <h3 className="text-xl font-bold text-white">Email Sent!</h3>
-                <p className="text-gray-400">Check your inbox for instructions to reset your password.</p>
+                <p className="text-gray-400">Check your inbox/ spam folder for instructions to reset your password.</p>
               </div>
               <Button variant="outline" className="w-full" onClick={() => {
                 setResetSent(false);
@@ -207,7 +179,7 @@ export const Login: React.FC = () => {
           ) : (
             <form onSubmit={showForgot ? handleResetPassword : handleLogin} className="space-y-6">
               {error && (
-                <div className="flex items-center space-x-3 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
+                <div className="flex items-center space-x-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">
                   <AlertCircle className="w-5 h-5 shrink-0" />
                   <span>{error}</span>
                 </div>

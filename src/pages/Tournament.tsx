@@ -13,6 +13,7 @@ import { ScoreModal } from './tournament/ScoreModal';
 import { FlaggedResults } from './tournament/FlaggedResults';
 import { PlayerMovePanel } from './tournament/PlayerMovePanel';
 import { AddPlayerPanel } from './tournament/AddPlayerPanel';
+import { AlertMessage } from '../components/AlertMessage';
 
 export const Tournament: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -34,9 +35,6 @@ export const Tournament: React.FC = () => {
     handleSetPreviewDrawSize, handleMovePlayer, handleAddPlayer,
     handleGenerateAll, handleCreatorUpdateDraw, handleResetDraw,
     handleResolveDispute, handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
-    currentReservesMatches, currentReservesParticipants,
-    reserveDrawLabels, showReserves, setShowReserves, generatingReserves,
-    handleGenerateReservesDraw,
   } = useTournament(eventId);
 
   useEffect(() => {
@@ -92,15 +90,12 @@ export const Tournament: React.FC = () => {
         generating={generating}
         updatingDraw={updatingDraw}
         resettingDraw={resettingDraw}
-        generatingReserves={generatingReserves}
         canReset={false}
         canFinalize={currentMatches.length === 0}
         editMode={editMode}
         started={started}
         mergeWomensSingles={mergeWomensSingles}
         consolidateDoubles={consolidateDoubles}
-        reservesParticipantCount={currentReservesParticipants.length}
-        reservesDrawExists={currentReservesMatches.length > 0}
         onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw')}
         onGenerateAll={handleGenerateAll}
         onUpdateDraw={handleCreatorUpdateDraw}
@@ -108,33 +103,29 @@ export const Tournament: React.FC = () => {
         onToggleEdit={() => setEditMode((v) => !v)}
         onToggleMergeWomens={() => setMergeWomensSingles((v) => !v)}
         onToggleConsolidateDoubles={() => setConsolidateDoubles((v) => !v)}
-        onGenerateReservesDraw={handleGenerateReservesDraw}
       />
 
       {message && (
-        <div className={`mb-6 flex items-start gap-2 text-sm ${message.type === 'success' ? 'text-green-400' : 'text-orange-500'}`}>
-          {message.type === 'success'
-            ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
-            : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />}
-          <p className="font-semibold">{message.text}</p>
-        </div>
+        <AlertMessage tone={message.type} className="mb-6">
+          <p>{message.text}</p>
+        </AlertMessage>
       )}
 
       {userParticipant && matches.length > 0 && (
-        <div className="mb-6 flex items-start gap-2 text-sm text-orange-500">
-          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
-          <p className="font-semibold">
+        <div className="mb-6 rounded-2xl border border-orange-500/30 bg-orange-500 p-4 flex items-start gap-3 text-white">
+          <CheckCircle2 className="w-5 h-5 mt-0.5 shrink-0" />
+          <p className="text-sm font-semibold">
             Draws have been finalized. Please contact your opponent to schedule your match. Kindly play your matches before the round deadline provided in the draw. Contact us if you are facing any difficulties.
           </p>
         </div>
       )}
 
       {isCreator && skillMismatchedCount > 0 && (
-        <div className="mb-6 flex items-start gap-2 text-sm text-orange-500">
-          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+        <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 flex items-start gap-3 text-amber-300">
+          <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
           <div>
             <p className="font-semibold">Bracket mismatch detected</p>
-            <p className="mt-1">
+            <p className="text-sm mt-1">
               {skillMismatchedCount} player{skillMismatchedCount > 1 ? 's have' : ' has'} updated their skill level since the draw was finalized and may be in the wrong bracket. Click <strong>Update Draw</strong> to move them to the correct bracket.
             </p>
           </div>
@@ -156,19 +147,10 @@ export const Tournament: React.FC = () => {
         activeDoubles={activeDoubles}
         currentDraw={currentDraw}
         visibleDraws={visibleDraws}
-        reserveDrawLabels={reserveDrawLabels}
-        showReserves={showReserves}
         onTabChange={setActiveTab}
         onSkillChange={setActiveSkill}
         onDoublesChange={setActiveDoubles}
-        onReservesChange={setShowReserves}
       />
-
-      {isCreator && currentReservesParticipants.length > 0 && currentReservesMatches.length === 0 && (
-        <p className="text-sm text-gray-400 mb-4">
-          {currentReservesParticipants.length} player{currentReservesParticipants.length > 1 ? 's' : ''} waiting for reserves draw
-        </p>
-      )}
 
       {editMode && isCreator && (
         <PlayerMovePanel players={moveablePlayers} onMove={handleMovePlayer} />
@@ -211,11 +193,11 @@ export const Tournament: React.FC = () => {
         </div>
       )}
 
-      <BracketErrorBoundary onDownload={() => downloadDrawAsPng(showReserves ? currentReservesMatches : displayMatches, showReserves ? 'Reserves Draw' : (currentDraw?.label || 'Draw'))}>
+      <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw')}>
         <BracketView
-          matches={showReserves ? currentReservesMatches : displayMatches}
-          drawTitle={showReserves ? 'Reserves Draw' : (currentDraw?.label || 'Draw')}
-          editMode={editMode && !showReserves}
+          matches={displayMatches}
+          drawTitle={currentDraw?.label || 'Draw'}
+          editMode={editMode}
           editPlayers={editPlayers}
           onEditPlayer={handleEditPlayer}
         />

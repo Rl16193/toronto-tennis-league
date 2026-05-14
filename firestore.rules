@@ -64,7 +64,8 @@ service cloud.firestore {
     // ===============================================================
     match /events/{eventId} {
       allow read: if true;
-      allow write: if false;
+      allow create, update: if isGlobalEventCreator();
+      allow delete: if false;
     }
 
     // ===============================================================
