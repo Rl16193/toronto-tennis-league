@@ -111,10 +111,6 @@ export const Signup: React.FC = () => {
     
     if (formData.phone.replace(/\D/g, '').length !== 10) newErrors.phone = 'Phone must be exactly 10 digits';
 
-    if (!newErrors.email && await emailExistsForSignup(trimmedEmail)) {
-      newErrors.email = 'Email already exists. Please login instead.';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -173,21 +169,8 @@ export const Signup: React.FC = () => {
     });
   };
 
-  const handleEmailBlur = async () => {
-    const trimmedEmail = formData.email.trim();
-    if (!signupEmailRegex.test(trimmedEmail)) return;
-
-    setCheckingEmail(true);
-    try {
-      if (await emailExistsForSignup(trimmedEmail)) {
-        setErrors((current) => ({
-          ...current,
-          email: 'Email already exists. Please login instead.',
-        }));
-      }
-    } finally {
-      setCheckingEmail(false);
-    }
+  const handleEmailBlur = () => {
+    // Email-in-use check happens at account creation — Firebase Auth handles duplicates
   };
 
   const addCustomCourt = () => {
@@ -370,7 +353,7 @@ export const Signup: React.FC = () => {
           exit={{ opacity: 0, x: -20 }}
           className="bg-tennis-surface/40 backdrop-blur-xl border border-white/5 p-8 md:p-12 rounded-[3rem] shadow-2xl"
         >
-          {error && (
+          {error && step !== 3 && (
             <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center space-x-3">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <span>{error}</span>
@@ -793,7 +776,13 @@ export const Signup: React.FC = () => {
           )}
 
           {/* Navigation Buttons */}
-          <div className="flex justify-between items-center mt-12 pt-8 border-t border-white/5">
+          {error && step === 3 && (
+            <div className="mt-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center space-x-3">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+          <div className="flex justify-between items-center mt-4 pt-8 border-t border-white/5">
             {step > 1 ? (
               <Button variant="ghost" onClick={handleBack} disabled={loading}>
                 <ChevronLeft className="mr-2 w-5 h-5" />
@@ -804,7 +793,7 @@ export const Signup: React.FC = () => {
             )}
             
             {step < 3 ? (
-              <Button onClick={handleNext} className="group" isLoading={checkingEmail} disabled={!!errors.email}>
+              <Button onClick={handleNext} className="group" isLoading={checkingEmail}>
                 Continue
                 <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>

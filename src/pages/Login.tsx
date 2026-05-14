@@ -10,7 +10,6 @@ import { Input } from '../components/Input';
 import { Mail, Lock, Chrome, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import mailcheck from 'mailcheck';
-import { emailExistsInProfiles } from '../services/accountService';
 import { emailRegex, getAuthErrorMessage, getGoogleSignInErrorMessage } from '../features/auth/authMessages';
 
 export const Login: React.FC = () => {
@@ -118,12 +117,6 @@ export const Login: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const emailExists = await emailExistsInProfiles(trimmedEmail);
-      if (!emailExists) {
-        setError('Email not found. Please re-enter.');
-        return;
-      }
-
       await sendPasswordResetEmail(auth, trimmedEmail);
       setResetSent(true);
     } catch (err: any) {
@@ -175,8 +168,8 @@ export const Login: React.FC = () => {
                 <CheckCircle2 className="w-10 h-10 text-green-500" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-xl font-bold text-white">Email Sent!</h3>
-                <p className="text-gray-400">Check your inbox/ spam folder for instructions to reset your password.</p>
+                <h3 className="text-xl font-bold text-white">Reset Link Sent</h3>
+                <p className="text-gray-400">If that email is in our system, you will receive a reset link. Check your spam folder too.</p>
               </div>
               <Button variant="outline" className="w-full" onClick={() => {
                 setResetSent(false);
