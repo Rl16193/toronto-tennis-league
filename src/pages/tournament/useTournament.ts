@@ -1,15 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  addDoc, collection, deleteDoc, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
+  addDoc, collection, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { EventParticipant, TennisEvent, UserData, UserStats } from '../../types';
-import { DrawConfig, DrawTab, ReservesParticipant, ScoreForm, ScoreSubmission, SkillGroup, TournamentMatch, TournamentPlayer, TournamentTemplate } from './types';
+import { DrawConfig, DrawTab, ScoreForm, ScoreSubmission, SkillGroup, TournamentMatch, TournamentPlayer, TournamentTemplate } from './types';
 import {
   BYE, PLAYER_LOADING,
   buildPlayerList, fallbackTemplate, filterParticipantsForDraw,
-  getDrawKey, getDrawSize, getReservesDrawSize, getEventDate, getWinnerPlaceholder,
+  getDrawKey, getDrawSize, getEventDate, getWinnerPlaceholder,
   isTournamentStarted, normalizeTemplateMatches, scoresMatch,
 } from './utils';
 import { CONSOLIDATED_DOUBLES_DRAW, VISIBLE_DRAWS, WOMENS_MERGED_DRAW } from './drawConfigs';
@@ -44,9 +44,11 @@ export const useTournament = (eventIdOverride?: string) => {
   const [previewDrawSize, setPreviewDrawSize] = useState<Record<string, number>>({});
   const [skillOverrides, setSkillOverrides] = useState<Record<string, SkillGroup>>({});
   const [allUsers, setAllUsers] = useState<Record<string, UserData>>({});
-  const [reservesParticipants, setReservesParticipants] = useState<ReservesParticipant[]>([]);
   const [generatingReserves, setGeneratingReserves] = useState(false);
   const [showReserves, setShowReserves] = useState(false);
+  // LL Draw state — keyed by draw key so each division has independent size/slots
+  const [llDrawSizes, setLLDrawSizes] = useState<Record<string, number>>({});
+  const [llDrawSlotOverrides, setLLDrawSlotOverrides] = useState<Record<string, Record<number, TournamentPlayer | null>>>({});
 
   const activeEventIdRef = useRef<string | undefined>(undefined);
 
@@ -112,6 +114,8 @@ export const useTournament = (eventIdOverride?: string) => {
     setSkillOverrides({});
     setPreviewSlotOverrides({});
     setPreviewDrawSize({});
+    setLLDrawSizes({});
+    setLLDrawSlotOverrides({});
     setMergeWomensSingles(false);
     setConsolidateDoubles(false);
   }, [eventIdOverride, allTournamentEvents]);
@@ -132,9 +136,10 @@ export const useTournament = (eventIdOverride?: string) => {
         const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentMatch));
         setMatches(loaded);
         // Auto-enable merge/consolidate toggles if that draw data already exists in Firestore
-        if (loaded.some((m) => m.tournament_choice === 'Singles' && m.division === "Women's" && m.skill_group === 'All'))
+        // Exclude reserves matches to avoid false positives
+        if (loaded.some((m) => m.tournament_choice === 'Singles' && m.division === "Women's" && m.skill_group === 'All' && m.bracket !== 'reserves'))
           setMergeWomensSingles(true);
-        if (loaded.some((m) => m.tournament_choice === 'Doubles' && m.division === 'All'))
+        if (loaded.some((m) => m.tournament_choice === 'Doubles' && m.division === 'All' && m.bracket !== 'reserves'))
           setConsolidateDoubles(true);
       },
     );
@@ -148,13 +153,6 @@ export const useTournament = (eventIdOverride?: string) => {
     );
   }, [event, user]);
 
-  useEffect(() => {
-    if (!event) return;
-    return onSnapshot(
-      query(collection(db, 'reserves_participants'), where('event_id', '==', event.id)),
-      (snap) => setReservesParticipants(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ReservesParticipant))),
-    );
-  }, [event]);
 
   // Lazy-load all registered users the first time the creator enters edit mode
   useEffect(() => {
@@ -242,7 +240,8 @@ export const useTournament = (eventIdOverride?: string) => {
       .filter((m) =>
         m.tournament_choice === currentDraw.tournamentChoice &&
         m.division === currentDraw.division &&
-        m.skill_group === currentDraw.skillGroup,
+        m.skill_group === currentDraw.skillGroup &&
+        m.bracket !== 'reserves',
       )
       .sort((a, b) => a.position - b.position);
   }, [currentDraw, matches]);
@@ -402,18 +401,6 @@ export const useTournament = (eventIdOverride?: string) => {
     return count;
   }, [isCreator, matches, participants, statsMap]);
 
-  const reserveDrawLabels = useMemo(() => {
-    const labels = new Set<string>();
-    const reserveMatches = matches.filter((m) => m.bracket === 'reserves');
-    for (const m of reserveMatches) {
-      const draw = effectiveDraws.find(
-        (d) => d.tournamentChoice === m.tournament_choice && d.division === m.division && d.skillGroup === m.skill_group,
-      );
-      if (draw) labels.add(draw.label);
-    }
-    return labels;
-  }, [matches, effectiveDraws]);
-
   const currentReservesMatches = useMemo(() => {
     if (!currentDraw) return [];
     return matches
@@ -425,17 +412,69 @@ export const useTournament = (eventIdOverride?: string) => {
       .sort((a, b) => a.position - b.position);
   }, [currentDraw, matches]);
 
-  const currentReservesParticipants = useMemo(() => {
-    if (!currentDraw) return [];
-    return reservesParticipants.filter(
-      (p) => p.tournament_choice === currentDraw.tournamentChoice && p.division === currentDraw.division,
-    );
-  }, [reservesParticipants, currentDraw]);
+  // LL Draw per-division key and current preview state
+  const llCurrentKey = currentDraw
+    ? getDrawKey(currentDraw.tournamentChoice, currentDraw.division, 'All')
+    : '';
+  const currentLLSize = llCurrentKey ? (llDrawSizes[llCurrentKey] ?? 4) : 4;
+  const currentLLSlotOverrides = llCurrentKey ? (llDrawSlotOverrides[llCurrentKey] ?? {}) : {};
 
-  const userReservesParticipant = useMemo(() => {
-    if (!user || !currentDraw) return null;
-    return currentReservesParticipants.find((p) => p.user_id === user.uid) ?? null;
-  }, [currentReservesParticipants, user, currentDraw]);
+  // LL Draw preview — always shown when no finalized LL matches exist
+  const llDrawDisplayMatches = useMemo(() => {
+    if (currentReservesMatches.length > 0) return currentReservesMatches;
+    if (!currentDraw) return [];
+    const drawsize = currentLLSize;
+    const template = templates.find((t) => Number(t.size || t.drawsize || t.draw_size) === drawsize);
+    const templateMatches = normalizeTemplateMatches(
+      template?.matches?.length ? template.matches : fallbackTemplate(drawsize),
+    );
+    const slotMap = new Map<number, TournamentPlayer>();
+    Object.entries(currentLLSlotOverrides).forEach(([slotStr, player]) => {
+      if (player !== null) slotMap.set(Number(slotStr), player);
+    });
+    return templateMatches.map<TournamentMatch>((tm, index) => {
+      const p1 = typeof tm.player_1 === 'number' ? (slotMap.get(tm.player_1) ?? null) : null;
+      const p2 = typeof tm.player_2 === 'number' ? (slotMap.get(tm.player_2) ?? null) : null;
+      return {
+        id: `ll_preview_${llCurrentKey}_${tm.match_id}`,
+        event_id: event?.id || 'preview',
+        template_id: template?.id || `fallback_${drawsize}`,
+        tournament_choice: currentDraw.tournamentChoice,
+        division: currentDraw.division,
+        skill_group: 'All',
+        drawsize,
+        match_id: tm.match_id,
+        round: tm.round,
+        position: index + 1,
+        player_1_slot: tm.player_1,
+        player_2_slot: tm.player_2,
+        player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_1, templateMatches)),
+        player_1_user_id: p1?.user_id || '',
+        player_1_contact: p1?.contact || '',
+        player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_2, templateMatches)),
+        player_2_user_id: p2?.user_id || '',
+        player_2_contact: p2?.contact || '',
+        next_match_id: tm.next_match_id || '',
+        next_slot: tm.next_slot,
+        status: 'pending',
+        bracket: 'reserves',
+        started: false,
+      };
+    });
+  }, [currentReservesMatches, currentDraw, currentLLSize, currentLLSlotOverrides, llCurrentKey, templates, event?.id]);
+
+  const allUsersAsTournamentPlayers = useMemo(
+    () => Object.entries(allUsers)
+      .map(([id, data]) => ({
+        user_id: id,
+        name: data.name || data.email || id,
+        contact: data.email || '',
+        preferredContact: 'email' as const,
+        participantId: id,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [allUsers],
+  );
 
   const opponentMatch = myActiveMatch || visibleUserMatch;
   const opponent = opponentMatch && user
@@ -688,6 +727,17 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   const handleEditPlayer = async (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => {
+    if (matchId.startsWith('ll_preview_')) {
+      const match = llDrawDisplayMatches.find((m) => m.id === matchId);
+      if (!match || !llCurrentKey) return;
+      const slotNum = slot === 'player_1' ? match.player_1_slot : match.player_2_slot;
+      if (typeof slotNum !== 'number') return;
+      setLLDrawSlotOverrides((prev) => ({
+        ...prev,
+        [llCurrentKey]: { ...(prev[llCurrentKey] ?? {}), [slotNum]: player },
+      }));
+      return;
+    }
     if (matchId.startsWith('preview_')) {
       const match = displayMatches.find((m) => m.id === matchId);
       if (!match || !currentDraw) return;
@@ -720,7 +770,8 @@ export const useTournament = (eventIdOverride?: string) => {
 
     const isPlayer1 = match.player_1_user_id === user.uid;
     const isPlayer2 = match.player_2_user_id === user.uid;
-    if (!isPlayer1 && !isPlayer2) return;
+    const isCreatorSubmit = isCreator && !isPlayer1 && !isPlayer2;
+    if (!isPlayer1 && !isPlayer2 && !isCreatorSubmit) return;
 
     const parsedSets = scoreForm.sets.map((s) => ({
       mine: Number(s.mine || 0),
@@ -731,8 +782,10 @@ export const useTournament = (eventIdOverride?: string) => {
       return;
     }
 
-    const p1Scores = parsedSets.map((s) => (isPlayer1 ? s.mine : s.opponent));
-    const p2Scores = parsedSets.map((s) => (isPlayer1 ? s.opponent : s.mine));
+    // Creator submits from player_1's perspective; player_2 submits from their own perspective
+    const viewAsPlayer1 = isPlayer1 || isCreatorSubmit;
+    const p1Scores = parsedSets.map((s) => (viewAsPlayer1 ? s.mine : s.opponent));
+    const p2Scores = parsedSets.map((s) => (viewAsPlayer1 ? s.opponent : s.mine));
     const pointsWon = parsedSets.reduce((t, s) => t + s.mine, 0);
     const opponentPoints = parsedSets.reduce((t, s) => t + s.opponent, 0);
 
@@ -754,6 +807,15 @@ export const useTournament = (eventIdOverride?: string) => {
       status: 'pending',
       created_at: new Date().toISOString(),
     };
+
+    // Creator override: auto-accept immediately, no need to wait for second submission
+    if (isCreatorSubmit) {
+      await setDoc(doc(db, 'score_submissions', submission.id), { ...submission, status: 'accepted' });
+      await updateMatchWithSubmission(match, { ...submission, status: 'accepted' });
+      setScoreForm(null);
+      setMessage({ type: 'success', text: 'Score recorded and draw updated.' });
+      return;
+    }
 
     const existingOther = submissions.find(
       (s) => s.match_doc_id === match.id && s.submitted_by !== user.uid,
@@ -809,78 +871,65 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  const handleOpenScoreForm = () => {
-    if (!myActiveMatch || !user) return;
+  const scoreFormMatch = useMemo(
+    () => (scoreForm ? (matches.find((m) => m.id === scoreForm.matchDocId) ?? null) : null),
+    [matches, scoreForm],
+  );
+
+  const handleOpenScoreForm = (matchOverride?: TournamentMatch) => {
+    const targetMatch = matchOverride ?? myActiveMatch;
+    if (!targetMatch || !user) return;
+    const isTargetPlayer =
+      targetMatch.player_1_user_id === user.uid || targetMatch.player_2_user_id === user.uid;
     setScoreForm({
-      matchDocId: myActiveMatch.id,
-      winnerUserId: user.uid,
+      matchDocId: targetMatch.id,
+      winnerUserId: isTargetPlayer ? user.uid : targetMatch.player_1_user_id,
       sets: [{ mine: '', opponent: '' }, { mine: '', opponent: '' }, { mine: '', opponent: '' }],
     });
   };
 
-  const handleJoinReserves = async () => {
-    if (!event || !user || !profile || !currentDraw) return;
-    if (userParticipant || userReservesParticipant) return;
-    try {
-      await addDoc(collection(db, 'reserves_participants'), {
-        user_id: user.uid,
-        user_name: profile.user.name,
-        event_id: event.id,
-        division: currentDraw.division,
-        tournament_choice: currentDraw.tournamentChoice,
-        skill: profile.stats.skill_level,
-        createdAt: new Date().toISOString(),
-      });
-      setMessage({ type: 'success', text: 'You have joined the reserves draw.' });
-    } catch (err) {
-      console.error('Join reserves failed:', err);
-      setMessage({ type: 'error', text: 'Could not join reserves. Please try again.' });
-    }
+  const handleSetLLDrawSize = (size: number) => {
+    if (!llCurrentKey) return;
+    setLLDrawSizes((prev) => ({ ...prev, [llCurrentKey]: size }));
   };
 
-  const handleLeaveReserves = async () => {
-    if (!userReservesParticipant) return;
+  const handleResetLLDraw = async () => {
+    if (!isCreator || !currentDraw || currentReservesMatches.length === 0) return;
+    if (!window.confirm('Reset the LL Draw? This will delete all LL Draw matches and return to preview mode.')) return;
     try {
-      await deleteDoc(doc(db, 'reserves_participants', userReservesParticipant.id));
-      setMessage({ type: 'success', text: 'You have left the reserves draw.' });
+      const batch = writeBatch(db);
+      currentReservesMatches.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
+      await batch.commit();
+      if (llCurrentKey) {
+        setLLDrawSizes((prev) => deleteKey(prev, llCurrentKey));
+        setLLDrawSlotOverrides((prev) => deleteKey(prev, llCurrentKey));
+      }
+      setMessage({ type: 'success', text: 'LL Draw reset.' });
     } catch (err) {
-      console.error('Leave reserves failed:', err);
-      setMessage({ type: 'error', text: 'Could not leave reserves. Please try again.' });
+      console.error('LL Draw reset failed:', err);
+      setMessage({ type: 'error', text: 'Could not reset the LL Draw.' });
     }
   };
 
   const handleGenerateReservesDraw = async () => {
-    if (!event || !isCreator || !currentDraw) return;
-    if (currentReservesParticipants.length < 2) {
-      setMessage({ type: 'error', text: 'Need at least 2 players to create a reserves draw.' });
-      return;
-    }
+    if (!event || !isCreator || !currentDraw || !llCurrentKey) return;
     setGeneratingReserves(true);
     setMessage(null);
     try {
-      const players: TournamentPlayer[] = currentReservesParticipants.map((p) => ({
-        user_id: p.user_id,
-        name: p.user_name,
-        contact: userMap[p.user_id]?.email || '',
-        preferredContact: 'email',
-        participantId: p.id,
-      }));
-
-      const drawsize = getReservesDrawSize(players.length);
+      const drawsize = currentLLSize;
       const template = templates.find((t) => Number(t.size || t.drawsize || t.draw_size) === drawsize);
       const templateMatches = normalizeTemplateMatches(
         template?.matches?.length ? template.matches : fallbackTemplate(drawsize),
       );
-
       const slotMap = new Map<number, TournamentPlayer>();
-      players.slice(0, drawsize).forEach((p, i) => slotMap.set(i + 1, p));
-
-      const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
+      Object.entries(currentLLSlotOverrides).forEach(([slotStr, player]) => {
+        if (player !== null) slotMap.set(Number(slotStr), player);
+      });
+      const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, 'All');
       const batch = writeBatch(db);
-
       templateMatches.forEach((tm, index) => {
-        const p1 = typeof tm.player_1 === 'number' ? slotMap.get(tm.player_1) : null;
-        const p2 = typeof tm.player_2 === 'number' ? slotMap.get(tm.player_2) : null;
+        const p1 = typeof tm.player_1 === 'number' ? (slotMap.get(tm.player_1) ?? null) : null;
+        const p2 = typeof tm.player_2 === 'number' ? (slotMap.get(tm.player_2) ?? null) : null;
         batch.set(
           doc(db, 'tournament_matches', `${event.id}_reserves_${drawKey}_${tm.match_id}`),
           {
@@ -888,7 +937,7 @@ export const useTournament = (eventIdOverride?: string) => {
             template_id: template?.id || `fallback_${drawsize}`,
             tournament_choice: currentDraw.tournamentChoice,
             division: currentDraw.division,
-            skill_group: currentDraw.skillGroup,
+            skill_group: 'All',
             drawsize,
             match_id: tm.match_id,
             round: tm.round,
@@ -911,13 +960,13 @@ export const useTournament = (eventIdOverride?: string) => {
           { merge: true },
         );
       });
-
       await batch.commit();
+      setLLDrawSlotOverrides((prev) => deleteKey(prev, llCurrentKey));
       setShowReserves(true);
-      setMessage({ type: 'success', text: `Reserves draw created with ${Math.min(players.length, drawsize)} players.` });
+      setMessage({ type: 'success', text: 'LL Draw finalized.' });
     } catch (err) {
-      console.error('Reserves draw generation failed:', err);
-      setMessage({ type: 'error', text: 'Could not create the reserves draw.' });
+      console.error('LL Draw generation failed:', err);
+      setMessage({ type: 'error', text: 'Could not finalize the LL Draw.' });
     } finally {
       setGeneratingReserves(false);
     }
@@ -926,6 +975,7 @@ export const useTournament = (eventIdOverride?: string) => {
   return {
     authLoading,
     loading,
+    user,
     allTournamentEvents,
     event,
     matches,
@@ -946,6 +996,7 @@ export const useTournament = (eventIdOverride?: string) => {
     skillMismatchedCount,
     message,
     scoreForm,
+    scoreFormMatch,
     setScoreForm,
     generating,
     updatingDraw,
@@ -974,16 +1025,16 @@ export const useTournament = (eventIdOverride?: string) => {
     handleEditPlayer,
     handleSubmitScore,
     handleOpenScoreForm,
-    reservesParticipants,
-    reserveDrawLabels,
     currentReservesMatches,
-    currentReservesParticipants,
-    userReservesParticipant,
+    llDrawDisplayMatches,
+    llCurrentKey,
+    currentLLSize,
+    allUsersAsTournamentPlayers,
     showReserves,
     setShowReserves,
     generatingReserves,
-    handleJoinReserves,
-    handleLeaveReserves,
+    handleSetLLDrawSize,
     handleGenerateReservesDraw,
+    handleResetLLDraw,
   };
 };

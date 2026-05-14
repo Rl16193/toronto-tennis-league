@@ -20,14 +20,14 @@ export const Tournament: React.FC = () => {
   const eventId = searchParams.get('event') || undefined;
 
   const {
-    authLoading, loading,
+    authLoading, loading, user,
     event, matches, submissions,
     allTournamentEvents,
     isCreator, started, userParticipant,
     currentDraw, currentMatches, displayMatches, visibleDraws,
     myActiveMatch, hasSubmittedScore, opponent,
     editPlayers, reservesPlayers, currentDrawSize, skillMismatchedCount,
-    message, scoreForm, setScoreForm,
+    message, scoreForm, scoreFormMatch, setScoreForm,
     generating, updatingDraw, resettingDraw, editMode, setEditMode,
     mergeWomensSingles, setMergeWomensSingles, consolidateDoubles, setConsolidateDoubles,
     activeTab, setActiveTab, activeSkill, setActiveSkill, activeDoubles, setActiveDoubles,
@@ -55,6 +55,7 @@ export const Tournament: React.FC = () => {
   }
 
   const now = Date.now();
+  const llIsPreview = currentReservesMatches.length === 0;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
@@ -132,7 +133,7 @@ export const Tournament: React.FC = () => {
         </div>
       )}
 
-      {opponent && (
+      {opponent && !showReserves && (
         <OpponentCard
           opponent={opponent}
           myActiveMatch={myActiveMatch}
@@ -156,42 +157,42 @@ export const Tournament: React.FC = () => {
         <PlayerMovePanel players={moveablePlayers} onMove={handleMovePlayer} />
       )}
 
-      {editMode && isCreator && (
-        <AddPlayerPanel
-          availableUsers={availableUsers}
-          currentDraw={currentDraw}
-          onAdd={handleAddPlayer}
-        />
-      )}
-
-      {editMode && currentDraw && (
-        <div className="mb-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Draw Size</span>
-            {(currentDraw.tournamentChoice === 'Singles' ? [8, 16, 32] : [8, 16]).map((size) => (
-              <button
-                key={size}
-                disabled={currentMatches.length > 0}
-                onClick={() => handleSetPreviewDrawSize(currentDraw.label, size)}
-                className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
-                  currentDrawSize === size
-                    ? 'bg-clay text-white'
-                    : currentMatches.length > 0
-                      ? 'bg-tennis-surface/30 text-gray-600 cursor-not-allowed'
-                      : 'bg-tennis-surface/60 text-gray-300 hover:text-white'
-                }`}
-              >
-                R{size}
-              </button>
-            ))}
-          </div>
-          {currentMatches.length > 0 && (
-            <p className="text-xs text-amber-400/80 mt-2">
-              Matches already created — reset this draw first to change the size.
-            </p>
+          {editMode && isCreator && (
+            <AddPlayerPanel
+              availableUsers={availableUsers}
+              currentDraw={currentDraw}
+              onAdd={handleAddPlayer}
+            />
           )}
-        </div>
-      )}
+
+          {editMode && currentDraw && (
+            <div className="mb-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Draw Size</span>
+                {(currentDraw.tournamentChoice === 'Singles' ? [8, 16, 32] : [8, 16]).map((size) => (
+                  <button
+                    key={size}
+                    disabled={currentMatches.length > 0}
+                    onClick={() => handleSetPreviewDrawSize(currentDraw.label, size)}
+                    className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
+                      currentDrawSize === size
+                        ? 'bg-clay text-white'
+                        : currentMatches.length > 0
+                          ? 'bg-tennis-surface/30 text-gray-600 cursor-not-allowed'
+                          : 'bg-tennis-surface/60 text-gray-300 hover:text-white'
+                    }`}
+                  >
+                    R{size}
+                  </button>
+                ))}
+              </div>
+              {currentMatches.length > 0 && (
+                <p className="text-xs text-amber-400/80 mt-2">
+                  Matches already created — reset this draw first to change the size.
+                </p>
+              )}
+            </div>
+          )}
 
       <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw')}>
         <BracketView
@@ -203,27 +204,29 @@ export const Tournament: React.FC = () => {
         />
       </BracketErrorBoundary>
 
-      {reservesPlayers.length > 0 && (
-        <div className="mt-8">
-          <h3 className="text-xl font-bold text-white mb-4">
-            Reserves <span className="text-gray-400 text-base font-normal">({reservesPlayers.length})</span>
-          </h3>
-          <div className="bg-tennis-surface/30 border border-white/5 rounded-2xl p-6">
-            <ol className="space-y-2">
-              {reservesPlayers.map((player, i) => (
-                <li key={player.user_id} className="flex items-center gap-3 text-gray-300">
-                  <span className="text-gray-500 text-sm w-6 text-right shrink-0">{i + 1}.</span>
-                  <span className="font-semibold">{player.name}</span>
-                </li>
-              ))}
-            </ol>
-            {editMode && (
-              <p className="text-xs text-gray-500 mt-4 border-t border-white/5 pt-4">
-                Use the slot dropdowns in the draw above to assign reserves players.
-              </p>
-            )}
-          </div>
-        </div>
+          {reservesPlayers.length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-xl font-bold text-white mb-4">
+                Reserves <span className="text-gray-400 text-base font-normal">({reservesPlayers.length})</span>
+              </h3>
+              <div className="bg-tennis-surface/30 border border-white/5 rounded-2xl p-6">
+                <ol className="space-y-2">
+                  {reservesPlayers.map((player, i) => (
+                    <li key={player.user_id} className="flex items-center gap-3 text-gray-300">
+                      <span className="text-gray-500 text-sm w-6 text-right shrink-0">{i + 1}.</span>
+                      <span className="font-semibold">{player.name}</span>
+                    </li>
+                  ))}
+                </ol>
+                {editMode && (
+                  <p className="text-xs text-gray-500 mt-4 border-t border-white/5 pt-4">
+                    Use the slot dropdowns in the draw above to assign reserves players.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {isCreator && (
@@ -234,13 +237,14 @@ export const Tournament: React.FC = () => {
         />
       )}
 
-      {scoreForm && myActiveMatch && (
+      {scoreForm && scoreFormMatch && (
         <ScoreModal
-          match={myActiveMatch}
+          match={scoreFormMatch}
           scoreForm={scoreForm}
           onChange={setScoreForm}
           onClose={() => setScoreForm(null)}
           onSubmit={handleSubmitScore}
+          isCreatorSubmit={isCreator && scoreFormMatch.player_1_user_id !== user?.uid && scoreFormMatch.player_2_user_id !== user?.uid}
         />
       )}
     </div>
