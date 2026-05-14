@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, query, getDocs, addDoc, updateDoc, doc, where, onSnapshot } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { TennisEvent } from '../types';
 import { TournamentMatch } from './tournament/types';
