@@ -16,11 +16,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { UserData, UserStats, UserPreferences } from '../types';
 import mailcheck from 'mailcheck';
-
-const PRELOADED_COURTS = [
-  "Sorauren Park", "High Park", "Riverdale", "Trinity Bellwoods", 
-  "Ramsden Park", "Stanley Park", "Moss Park", "Dovercourt"
-];
+import { defaultCourtOptions, extractDropdownCourts, getCourtSuggestions, mergeCourtOptions } from '../features/signup/utils/courtSearch';
+import { emailExistsForSignup, getSignupErrorMessage, signupEmailRegex } from '../features/signup/signupValidation';
 
 const FAVOURITE_PLAYERS = [
   "Jannik Sinner", "Carlos Alcaraz", "Rafael Nadal", 
@@ -39,6 +36,8 @@ export const Signup: React.FC = () => {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [shouldRedirectToProfile, setShouldRedirectToProfile] = useState(false);
   const [emailSuggestion, setEmailSuggestion] = useState<any>(null);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  const [courtOptions, setCourtOptions] = useState<string[]>(defaultCourtOptions);
   const returnTo = searchParams.get('returnTo') || '/profile';
   const intent = searchParams.get('intent') || '';
 
@@ -79,11 +78,31 @@ export const Signup: React.FC = () => {
   });
 }, [step]);
 
-  const validateStep1 = () => {
+  useEffect(() => {
+    let isMounted = true;
+
+    fetch('/Tennis Courts Facilities - 4326.csv')
+      .then((response) => response.ok ? response.text() : '')
+      .then((csvText) => {
+        if (!isMounted || !csvText) return;
+        setCourtOptions(mergeCourtOptions(extractDropdownCourts(csvText)));
+      })
+      .catch((error) => {
+        console.error('Unable to load tennis court list:', error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const validateStep1 = async () => {
     const newErrors: Record<string, string> = {};
+    const trimmedEmail = formData.email.trim();
+
     if (formData.name.length < 3 || formData.name.length > 80) newErrors.name = 'Name must be 3-80 characters';
     if (/\d/.test(formData.name)) newErrors.name = 'Name cannot contain numbers';
-    if (!emailRegex.test(formData.email)) newErrors.email = 'Please enter a valid email address';
+    if (!signupEmailRegex.test(trimmedEmail)) newErrors.email = 'Please enter a valid email address';
     if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters';
     
     // Sequential check
@@ -91,7 +110,11 @@ export const Signup: React.FC = () => {
     if (sequential.includes(formData.password.toLowerCase())) newErrors.password = 'Password cannot be sequential';
     
     if (formData.phone.replace(/\D/g, '').length !== 10) newErrors.phone = 'Phone must be exactly 10 digits';
-    
+
+    if (!newErrors.email && await emailExistsForSignup(trimmedEmail)) {
+      newErrors.email = 'Email already exists. Please login instead.';
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -100,9 +123,16 @@ export const Signup: React.FC = () => {
     return true; // Mostly selection based
   };
 
-  const handleNext = () => {
-    if (step === 1 && validateStep1()) {
-      setStep(2);
+  const handleNext = async () => {
+    if (step === 1) {
+      setCheckingEmail(true);
+      try {
+        if (await validateStep1()) {
+          setStep(2);
+        }
+      } finally {
+        setCheckingEmail(false);
+      }
     } else if (step === 2 && validateStep2()) {
       setStep(3);
     }
@@ -127,12 +157,14 @@ export const Signup: React.FC = () => {
     return `(${numbers.slice(0, 3)})-${numbers.slice(3, 6)}-${numbers.slice(6, 10)}`;
   };
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const nameOnlyRegex = /^[A-Za-z ]+$/;
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newEmail = e.target.value;
     setFormData({ ...formData, email: newEmail });
+    if (errors.email) {
+      setErrors({ ...errors, email: '' });
+    }
     setEmailSuggestion(null);
     mailcheck.run({
       email: newEmail,
@@ -141,16 +173,26 @@ export const Signup: React.FC = () => {
     });
   };
 
+  const handleEmailBlur = async () => {
+    const trimmedEmail = formData.email.trim();
+    if (!signupEmailRegex.test(trimmedEmail)) return;
+
+    setCheckingEmail(true);
+    try {
+      if (await emailExistsForSignup(trimmedEmail)) {
+        setErrors((current) => ({
+          ...current,
+          email: 'Email already exists. Please login instead.',
+        }));
+      }
+    } finally {
+      setCheckingEmail(false);
+    }
+  };
+
   const addCustomCourt = () => {
     const court = formData.customCourtEntry.trim();
     if (!court) return;
-    if (!nameOnlyRegex.test(court)) {
-      setErrors({
-        ...errors,
-        customCourtEntry: 'Preferred court names can only contain letters and spaces.',
-      });
-      return;
-    }
     setFormData({
       ...formData,
       preferredCourts: formData.preferredCourts.includes(court)
@@ -179,26 +221,6 @@ export const Signup: React.FC = () => {
       customPlayerEntry: '',
     });
     setErrors({ ...errors, customPlayerEntry: '' });
-  };
-
-  const getSignupErrorMessage = (error: any) => {
-    const code = (error?.code || error?.message || '').toString().toLowerCase();
-    if (code.includes('account-exists-with-different-credential')) {
-      return 'An account already exists with this email. Please sign in with Google or use the same provider.';
-    }
-    if (code.includes('email-already-in-use')) {
-      return 'That email is already registered.';
-    }
-    if (code.includes('invalid-email')) {
-      return 'Please enter a valid email address.';
-    }
-    if (code.includes('weak-password')) {
-      return 'Password is too weak. Please use at least 6 characters.';
-    }
-    if (code.includes('network-request-failed')) {
-      return 'Network error. Please try again.';
-    }
-    return 'Signup failed. Please try again.';
   };
 
   const handleSignup = async () => {
@@ -289,6 +311,19 @@ export const Signup: React.FC = () => {
   const skillMismatch = (formData.tournamentType === 'Beginners' && formData.skillLevel > 2.5) ||
                         (formData.tournamentType === 'Challengers' && (formData.skillLevel < 3 || formData.skillLevel > 3.5)) ||
                         (formData.tournamentType === 'Masters' && formData.skillLevel < 4);
+
+  const courtSuggestions = getCourtSuggestions(courtOptions, formData.preferredCourts, formData.customCourtEntry);
+
+  const selectCourt = (court: string) => {
+    setFormData({
+      ...formData,
+      preferredCourts: formData.preferredCourts.includes(court)
+        ? formData.preferredCourts
+        : [...formData.preferredCourts, court],
+      customCourtEntry: '',
+    });
+    setErrors({ ...errors, customCourtEntry: '' });
+  };
 
   return (
     <div className="min-h-screen py-20 px-4 relative overflow-hidden">
@@ -385,6 +420,7 @@ export const Signup: React.FC = () => {
                     placeholder="roger@goat.com" 
                     value={formData.email}
                     onChange={handleEmailChange}
+                    onBlur={handleEmailBlur}
                     error={errors.email}
                     required
                   />
@@ -487,7 +523,7 @@ export const Signup: React.FC = () => {
                 <div className="space-y-4">
                   <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider">Preferred Courts</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {[...new Set([...PRELOADED_COURTS, ...formData.preferredCourts])].map(court => (
+                    {[...new Set([...formData.preferredCourts, ...defaultCourtOptions])].map(court => (
                       <button
                         key={court}
                         onClick={() => {
@@ -502,9 +538,9 @@ export const Signup: React.FC = () => {
                       </button>
                     ))}
                   </div>
-                  <div className="flex gap-3">
+                  <div className="relative space-y-3">
                     <Input 
-                      placeholder="Add your own court..." 
+                      placeholder="Search parks, public courts, or clubs..." 
                       value={formData.customCourtEntry}
                       error={errors.customCourtEntry}
                       onChange={(e) => {
@@ -520,8 +556,22 @@ export const Signup: React.FC = () => {
                         }
                       }}
                     />
+                    {courtSuggestions.length > 0 && (
+                      <div className="max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-tennis-dark/95 p-2 shadow-2xl">
+                        {courtSuggestions.map((court) => (
+                          <button
+                            key={court}
+                            type="button"
+                            onClick={() => selectCourt(court)}
+                            className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-gray-200 transition-colors hover:bg-clay/20 hover:text-white"
+                          >
+                            {court}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <Button type="button" variant="secondary" size="sm" onClick={addCustomCourt} disabled={!formData.customCourtEntry.trim()}>
-                      Add
+                      Add typed court
                     </Button>
                   </div>
                 </div>
@@ -754,7 +804,7 @@ export const Signup: React.FC = () => {
             )}
             
             {step < 3 ? (
-              <Button onClick={handleNext} className="group">
+              <Button onClick={handleNext} className="group" isLoading={checkingEmail} disabled={!!errors.email}>
                 Continue
                 <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>

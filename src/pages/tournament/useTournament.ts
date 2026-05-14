@@ -12,29 +12,8 @@ import {
   getDrawKey, getDrawSize, getEventDate, getWinnerPlaceholder,
   isTournamentStarted, normalizeTemplateMatches, scoresMatch,
 } from './utils';
-
-export const VISIBLE_DRAWS: DrawConfig[] = [
-  { tab: 'mens', label: "Men's Challengers", tournamentChoice: 'Singles', division: "Men's", skillGroup: 'Challengers' },
-  { tab: 'mens', label: "Men's Masters", tournamentChoice: 'Singles', division: "Men's", skillGroup: 'Masters' },
-  { tab: 'womens', label: "Women's Challengers", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'Challengers' },
-  { tab: 'womens', label: "Women's Masters", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'Masters' },
-  { tab: 'doubles', label: "Men's Doubles", tournamentChoice: 'Doubles', division: "Men's", skillGroup: 'All' },
-  { tab: 'doubles', label: "Women's Doubles", tournamentChoice: 'Doubles', division: "Women's", skillGroup: 'All' },
-  { tab: 'doubles', label: 'Mixed Doubles', tournamentChoice: 'Doubles', division: 'Mixed Doubles', skillGroup: 'All' },
-];
-
-const WOMENS_MERGED_DRAW: DrawConfig = {
-  tab: 'womens', label: "Women's Masters", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'All',
-};
-const CONSOLIDATED_DOUBLES_DRAW: DrawConfig = {
-  tab: 'doubles', label: 'Doubles', tournamentChoice: 'Doubles', division: 'All', skillGroup: 'All',
-};
-
-const deleteKey = <T extends Record<string, unknown>>(obj: T, key: string): T => {
-  const next = { ...obj };
-  delete next[key];
-  return next;
-};
+import { CONSOLIDATED_DOUBLES_DRAW, VISIBLE_DRAWS, WOMENS_MERGED_DRAW } from './drawConfigs';
+import { deleteKey } from './objectUtils';
 
 export const useTournament = (eventIdOverride?: string) => {
   const { user, profile, loading: authLoading } = useAuth();

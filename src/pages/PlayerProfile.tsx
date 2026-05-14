@@ -199,7 +199,7 @@ export const PlayerProfile: React.FC = () => {
                           {item.label}
                         </p>
 
-                        <p className="text-white font-semibold break-words mt-1">
+                        <p className="text-white font-semibold break-all mt-1">
                           {item.value}
                         </p>
                       </div>
