@@ -1,13 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { Calendar, Edit2, Save, X } from 'lucide-react';
-
-const PRELOADED_COURTS = [
-  "Sorauren Park", "High Park", "Riverdale", "Trinity Bellwoods", 
-  "Ramsden Park", "Stanley Park", "Moss Park", "Dovercourt"
-];
+import { defaultCourtOptions, extractDropdownCourts, getCourtSuggestions, mergeCourtOptions } from '../../signup/utils/courtSearch';
 
 const FAVOURITE_PLAYERS = [
   "Jannik Sinner",
@@ -37,6 +33,47 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
   updateLoading,
 }) => {
   const { profile } = useAuth();
+  const [courtOptions, setCourtOptions] = useState<string[]>(defaultCourtOptions);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch('/Tennis Courts Facilities - 4326.csv')
+      .then((r) => r.ok ? r.text() : '')
+      .then((csv) => { if (isMounted && csv) setCourtOptions(mergeCourtOptions(extractDropdownCourts(csv))); })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
+
+  const selectedCourts = editData.preferences?.preferred_courts || [];
+  const courtSuggestions = getCourtSuggestions(courtOptions, selectedCourts, editData.customCourtInput || '');
+
+  const addCourt = (court: string) => {
+    if (!court.trim() || selectedCourts.includes(court.trim())) return;
+    setEditData({
+      ...editData,
+      preferences: {
+        ...editData.preferences,
+        availability_day: editData.preferences?.availability_day || profile!.preferences.availability_day,
+        availability_time: editData.preferences?.availability_time || profile!.preferences.availability_time,
+        preferred_courts: [...selectedCourts, court.trim()],
+        favourite_players: editData.preferences?.favourite_players || profile!.preferences.favourite_players,
+      },
+      customCourtInput: '',
+    });
+  };
+
+  const removeCourt = (court: string) => {
+    setEditData({
+      ...editData,
+      preferences: {
+        ...editData.preferences,
+        availability_day: editData.preferences?.availability_day || profile!.preferences.availability_day,
+        availability_time: editData.preferences?.availability_time || profile!.preferences.availability_time,
+        preferred_courts: selectedCourts.filter((c) => c !== court),
+        favourite_players: editData.preferences?.favourite_players || profile!.preferences.favourite_players,
+      },
+    });
+  };
 
   if (!profile) return null;
 
@@ -141,59 +178,51 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
             </div>
             <div className="space-y-3">
               <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest">Courts</label>
-              <div className="flex flex-wrap gap-2">
-                {PRELOADED_COURTS.map(court => (
-                  <button
-                    key={court}
-                    onClick={() => {
-                      const current = editData.preferences?.preferred_courts || [];
-                      setEditData({
-                        ...editData,
-                        preferences: {
-                          ...editData.preferences,
-                          availability_day: editData.preferences?.availability_day || profile.preferences.availability_day,
-                          availability_time: editData.preferences?.availability_time || profile.preferences.availability_time,
-                          preferred_courts: current.includes(court) ? current.filter(c => c !== court) : [...current, court],
-                          favourite_players: editData.preferences?.favourite_players || profile.preferences.favourite_players,
-                        },
-                      });
-                    }}
-                    className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${
-                      (editData.preferences?.preferred_courts || []).includes(court) ? 'bg-clay/20 border-clay text-clay' : 'bg-white/5 border-white/5 text-gray-500'
-                    }`}
-                  >
-                    {court}
-                  </button>
-                ))}
-              </div>
-              <div className="flex gap-2 items-start">
-                <div className="flex-1">
-                  <Input
-                    placeholder="Add your own court..."
-                    value={editData.customCourtInput || ''}
-                    onChange={(e) => setEditData({ ...editData, customCourtInput: e.target.value })}
-                  />
+
+              {/* Selected courts as dismissible chips */}
+              {selectedCourts.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedCourts.map((court) => (
+                    <button
+                      key={court}
+                      type="button"
+                      onClick={() => removeCourt(court)}
+                      className="px-3 py-1 rounded-xl text-xs font-bold bg-clay text-white flex items-center gap-1.5 shadow-lg shadow-clay/20"
+                    >
+                      {court} <span className="opacity-70">✕</span>
+                    </button>
+                  ))}
                 </div>
+              )}
+
+              {/* Search input + suggestions */}
+              <div className="relative space-y-2">
+                <Input
+                  placeholder="Search courts by name..."
+                  value={editData.customCourtInput || ''}
+                  onChange={(e) => setEditData({ ...editData, customCourtInput: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCourt(editData.customCourtInput || ''); } }}
+                />
+                {courtSuggestions.length > 0 && (
+                  <div className="max-h-48 overflow-y-auto rounded-2xl border border-white/10 bg-tennis-dark/95 p-2 shadow-2xl">
+                    {courtSuggestions.map((court) => (
+                      <button
+                        key={court}
+                        type="button"
+                        onClick={() => addCourt(court)}
+                        className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-gray-200 transition-colors hover:bg-clay/20 hover:text-white"
+                      >
+                        {court}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <Button
                   size="sm"
                   type="button"
-                  onClick={() => {
-                    const value = (editData.customCourtInput || '').trim();
-                    if (!value) return;
-                    const current = editData.preferences?.preferred_courts || [];
-                    if (current.includes(value)) return;
-                    setEditData({
-                      ...editData,
-                      preferences: {
-                        ...editData.preferences,
-                        availability_day: editData.preferences?.availability_day || profile.preferences.availability_day,
-                        availability_time: editData.preferences?.availability_time || profile.preferences.availability_time,
-                        preferred_courts: [...current, value],
-                        favourite_players: editData.preferences?.favourite_players || profile.preferences.favourite_players,
-                      },
-                      customCourtInput: '',
-                    });
-                  }}
+                  variant="clay"
+                  onClick={() => addCourt(editData.customCourtInput || '')}
+                  disabled={!(editData.customCourtInput || '').trim()}
                 >
                   Add
                 </Button>
