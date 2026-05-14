@@ -505,38 +505,35 @@ export const Signup: React.FC = () => {
                 {/* Court Selection */}
                 <div className="space-y-4">
                   <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider">Preferred Courts</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[...new Set([...formData.preferredCourts, ...defaultCourtOptions])].map(court => (
-                      <button
-                        key={court}
-                        onClick={() => {
-                          const current = formData.preferredCourts;
-                          setFormData({...formData, preferredCourts: current.includes(court) ? current.filter(c => c !== court) : [...current, court]});
-                        }}
-                        className={`text-left px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                          formData.preferredCourts.includes(court) ? 'bg-clay text-white shadow-lg shadow-clay/20' : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/5'
-                        }`}
-                      >
-                        {court}
-                      </button>
-                    ))}
-                  </div>
+
+                  {/* Selected courts chips */}
+                  {formData.preferredCourts.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {formData.preferredCourts.map((court) => (
+                        <button
+                          key={court}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, preferredCourts: formData.preferredCourts.filter((c) => c !== court) })}
+                          className="px-3 py-1 rounded-xl text-xs font-bold bg-clay text-white flex items-center gap-1.5 shadow-lg shadow-clay/20"
+                        >
+                          {court} <span className="opacity-70">✕</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Search + add */}
                   <div className="relative space-y-3">
-                    <Input 
-                      placeholder="Search parks, public courts, or clubs..." 
+                    <Input
+                      placeholder="Search courts by name..."
                       value={formData.customCourtEntry}
                       error={errors.customCourtEntry}
                       onChange={(e) => {
-                        setFormData({...formData, customCourtEntry: e.target.value});
-                        if (errors.customCourtEntry) {
-                          setErrors({ ...errors, customCourtEntry: '' });
-                        }
+                        setFormData({ ...formData, customCourtEntry: e.target.value });
+                        if (errors.customCourtEntry) setErrors({ ...errors, customCourtEntry: '' });
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addCustomCourt();
-                        }
+                        if (e.key === 'Enter') { e.preventDefault(); addCustomCourt(); }
                       }}
                     />
                     {courtSuggestions.length > 0 && (
@@ -553,8 +550,8 @@ export const Signup: React.FC = () => {
                         ))}
                       </div>
                     )}
-                    <Button type="button" variant="secondary" size="sm" onClick={addCustomCourt} disabled={!formData.customCourtEntry.trim()}>
-                      Add typed court
+                    <Button type="button" variant="clay" size="sm" onClick={addCustomCourt} disabled={!formData.customCourtEntry.trim()}>
+                      Add
                     </Button>
                   </div>
                 </div>
