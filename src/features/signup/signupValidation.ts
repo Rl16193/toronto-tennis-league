@@ -8,13 +8,18 @@ export const emailExistsForSignup = async (emailToCheck: string) => {
   const normalizedEmail = emailToCheck.trim();
   if (!normalizedEmail || !signupEmailRegex.test(normalizedEmail)) return false;
 
-  if (await emailExistsInProfiles(normalizedEmail)) return true;
+  try {
+    if (await emailExistsInProfiles(normalizedEmail)) return true;
+  } catch {
+    // Firestore query fails for unauthenticated users — fail open, let Firebase
+    // Auth catch duplicates at account creation
+    return false;
+  }
 
   try {
     const methods = await fetchSignInMethodsForEmail(auth, normalizedEmail);
     return methods.length > 0;
-  } catch (error) {
-    console.error('Error checking signup email:', error);
+  } catch {
     return false;
   }
 };

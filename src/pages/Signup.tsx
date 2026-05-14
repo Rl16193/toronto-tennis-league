@@ -111,10 +111,6 @@ export const Signup: React.FC = () => {
     
     if (formData.phone.replace(/\D/g, '').length !== 10) newErrors.phone = 'Phone must be exactly 10 digits';
 
-    if (!newErrors.email && await emailExistsForSignup(trimmedEmail)) {
-      newErrors.email = 'Email already exists. Please login instead.';
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -173,21 +169,8 @@ export const Signup: React.FC = () => {
     });
   };
 
-  const handleEmailBlur = async () => {
-    const trimmedEmail = formData.email.trim();
-    if (!signupEmailRegex.test(trimmedEmail)) return;
-
-    setCheckingEmail(true);
-    try {
-      if (await emailExistsForSignup(trimmedEmail)) {
-        setErrors((current) => ({
-          ...current,
-          email: 'Email already exists. Please login instead.',
-        }));
-      }
-    } finally {
-      setCheckingEmail(false);
-    }
+  const handleEmailBlur = () => {
+    // Email-in-use check happens at account creation — Firebase Auth handles duplicates
   };
 
   const addCustomCourt = () => {
@@ -370,7 +353,7 @@ export const Signup: React.FC = () => {
           exit={{ opacity: 0, x: -20 }}
           className="bg-tennis-surface/40 backdrop-blur-xl border border-white/5 p-8 md:p-12 rounded-[3rem] shadow-2xl"
         >
-          {error && (
+          {error && step !== 3 && (
             <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center space-x-3">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <span>{error}</span>
@@ -522,38 +505,35 @@ export const Signup: React.FC = () => {
                 {/* Court Selection */}
                 <div className="space-y-4">
                   <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider">Preferred Courts</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[...new Set([...formData.preferredCourts, ...defaultCourtOptions])].map(court => (
-                      <button
-                        key={court}
-                        onClick={() => {
-                          const current = formData.preferredCourts;
-                          setFormData({...formData, preferredCourts: current.includes(court) ? current.filter(c => c !== court) : [...current, court]});
-                        }}
-                        className={`text-left px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                          formData.preferredCourts.includes(court) ? 'bg-clay text-white shadow-lg shadow-clay/20' : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/5'
-                        }`}
-                      >
-                        {court}
-                      </button>
-                    ))}
-                  </div>
+
+                  {/* Selected courts chips */}
+                  {formData.preferredCourts.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {formData.preferredCourts.map((court) => (
+                        <button
+                          key={court}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, preferredCourts: formData.preferredCourts.filter((c) => c !== court) })}
+                          className="px-3 py-1 rounded-xl text-xs font-bold bg-clay text-white flex items-center gap-1.5 shadow-lg shadow-clay/20"
+                        >
+                          {court} <span className="opacity-70">✕</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Search + add */}
                   <div className="relative space-y-3">
-                    <Input 
-                      placeholder="Search parks, public courts, or clubs..." 
+                    <Input
+                      placeholder="Search courts by name..."
                       value={formData.customCourtEntry}
                       error={errors.customCourtEntry}
                       onChange={(e) => {
-                        setFormData({...formData, customCourtEntry: e.target.value});
-                        if (errors.customCourtEntry) {
-                          setErrors({ ...errors, customCourtEntry: '' });
-                        }
+                        setFormData({ ...formData, customCourtEntry: e.target.value });
+                        if (errors.customCourtEntry) setErrors({ ...errors, customCourtEntry: '' });
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addCustomCourt();
-                        }
+                        if (e.key === 'Enter') { e.preventDefault(); addCustomCourt(); }
                       }}
                     />
                     {courtSuggestions.length > 0 && (
@@ -570,8 +550,8 @@ export const Signup: React.FC = () => {
                         ))}
                       </div>
                     )}
-                    <Button type="button" variant="secondary" size="sm" onClick={addCustomCourt} disabled={!formData.customCourtEntry.trim()}>
-                      Add typed court
+                    <Button type="button" variant="clay" size="sm" onClick={addCustomCourt} disabled={!formData.customCourtEntry.trim()}>
+                      Add
                     </Button>
                   </div>
                 </div>
@@ -793,7 +773,13 @@ export const Signup: React.FC = () => {
           )}
 
           {/* Navigation Buttons */}
-          <div className="flex justify-between items-center mt-12 pt-8 border-t border-white/5">
+          {error && step === 3 && (
+            <div className="mt-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center space-x-3">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+          <div className="flex justify-between items-center mt-4 pt-8 border-t border-white/5">
             {step > 1 ? (
               <Button variant="ghost" onClick={handleBack} disabled={loading}>
                 <ChevronLeft className="mr-2 w-5 h-5" />
@@ -804,7 +790,7 @@ export const Signup: React.FC = () => {
             )}
             
             {step < 3 ? (
-              <Button onClick={handleNext} className="group" isLoading={checkingEmail} disabled={!!errors.email}>
+              <Button onClick={handleNext} className="group" isLoading={checkingEmail}>
                 Continue
                 <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
