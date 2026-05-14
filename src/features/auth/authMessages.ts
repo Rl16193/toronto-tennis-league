@@ -6,27 +6,19 @@ export const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const getAuthErrorMessage = (error: any, context: 'login' | 'reset' | 'google' = 'login') => {
   const code = (error?.code || error?.message || '').toString().toLowerCase();
   if (context === 'login') {
-    if (code.includes('wrong-password') || code.includes('invalid-credential') || code.includes('invalid-password')) {
-      return 'Password incorrect. Use forgot password to reset.';
-    }
-    if (code.includes('user-not-found') || code.includes('invalid-email')) {
-      return 'Email not in use. Sign up or login with a different email.';
-    }
     if (code.includes('too-many-requests')) {
-      return 'Too many login attempts. Please try again later.';
+      return 'Too many login attempts. Please wait a moment and try again.';
     }
     if (code.includes('user-disabled')) {
       return 'This account has been disabled. Please contact support.';
     }
-    return 'Unable to sign in. Please try again.';
+    // Firebase no longer distinguishes wrong email from wrong password — show one message
+    return 'Invalid credentials. Please check your email and password.';
   }
 
   if (context === 'reset') {
     if (code.includes('invalid-email')) {
       return 'Please enter a valid email address.';
-    }
-    if (code.includes('user-not-found')) {
-      return 'No account found with that email.';
     }
     return 'Unable to send reset email. Please try again.';
   }

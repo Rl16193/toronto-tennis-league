@@ -40,8 +40,8 @@ export const DrawTabs: React.FC<Props> = ({
 
   return (
     <>
-      {/* Primary tab row: Men's / Women's / Doubles */}
-      {availablePrimaryTabs.length > 1 && (
+      {/* Primary tab row: Men's / Women's / Doubles — always shown */}
+      {availablePrimaryTabs.length > 0 && (
         <div className="flex flex-wrap gap-3 mb-5">
           {availablePrimaryTabs.map((tab) => {
             const label = tab === 'mens' ? "Men's" : tab === 'womens' ? "Women's" : 'Doubles';

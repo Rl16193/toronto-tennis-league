@@ -11,7 +11,6 @@ import { OpponentCard } from './tournament/OpponentCard';
 import { DrawTabs } from './tournament/DrawTabs';
 import { ScoreModal } from './tournament/ScoreModal';
 import { FlaggedResults } from './tournament/FlaggedResults';
-import { PlayerMovePanel } from './tournament/PlayerMovePanel';
 import { AddPlayerPanel } from './tournament/AddPlayerPanel';
 import { AlertMessage } from '../components/AlertMessage';
 import { Button } from '../components/Button';
@@ -29,12 +28,14 @@ export const Tournament: React.FC = () => {
     myActiveMatch, hasSubmittedScore, opponent,
     editPlayers, reservesPlayers, currentDrawSize, skillMismatchedCount,
     message, scoreForm, scoreFormMatch, setScoreForm,
-    generating, updatingDraw, resettingDraw, editMode, setEditMode,
-    mergeWomensSingles, setMergeWomensSingles, consolidateDoubles, setConsolidateDoubles,
+    generating, resettingDraw, editMode, setEditMode,
+    mergeMensSingles, setMergeMensSingles,
+    mergeWomensSingles, setMergeWomensSingles,
+    consolidateDoubles, setConsolidateDoubles,
     activeTab, setActiveTab, activeSkill, setActiveSkill, activeDoubles, setActiveDoubles,
-    moveablePlayers, availableUsers,
-    handleSetPreviewDrawSize, handleMovePlayer, handleAddPlayer,
-    handleGenerateAll, handleCreatorUpdateDraw, handleResetDraw,
+    availableUsers,
+    handleSetPreviewDrawSize, handleAddPlayer,
+    handleGenerateAll, handleResetDraw,
     handleResolveDispute, handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
     currentReservesMatches, llDrawDisplayMatches, currentLLSize, allUsersAsTournamentPlayers,
     showReserves, setShowReserves, generatingReserves,
@@ -63,6 +64,7 @@ export const Tournament: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
+      {/* Event selector — always shown when multiple events exist */}
       {allTournamentEvents.length > 1 && (
         <div className="mb-6 flex flex-wrap gap-2">
           {allTournamentEvents.map((e) => {
@@ -90,22 +92,21 @@ export const Tournament: React.FC = () => {
       )}
 
       <TournamentHeader
-        title={event?.title || 'Tournament Draw'}
         isCreator={isCreator}
         generating={generating}
-        updatingDraw={updatingDraw}
         resettingDraw={resettingDraw}
         canReset={false}
         canFinalize={currentMatches.length === 0}
         editMode={editMode}
         started={started}
+        mergeMensSingles={mergeMensSingles}
         mergeWomensSingles={mergeWomensSingles}
         consolidateDoubles={consolidateDoubles}
         onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'))}
         onGenerateAll={handleGenerateAll}
-        onUpdateDraw={handleCreatorUpdateDraw}
         onResetDraw={handleResetDraw}
         onToggleEdit={() => setEditMode((v) => !v)}
+        onToggleMergeMens={() => setMergeMensSingles((v) => !v)}
         onToggleMergeWomens={() => setMergeWomensSingles((v) => !v)}
         onToggleConsolidateDoubles={() => setConsolidateDoubles((v) => !v)}
       />
@@ -131,7 +132,7 @@ export const Tournament: React.FC = () => {
           <div>
             <p className="font-semibold">Bracket mismatch detected</p>
             <p className="mt-1">
-              {skillMismatchedCount} player{skillMismatchedCount > 1 ? 's have' : ' has'} updated their skill level since the draw was finalized and may be in the wrong bracket. Click <strong>Update Draw</strong> to move them to the correct bracket.
+              {skillMismatchedCount} player{skillMismatchedCount > 1 ? 's have' : ' has'} updated their skill level since the draw was finalized and may be in the wrong bracket. Use Edit Draw to correct their bracket placement.
             </p>
           </div>
         </div>
@@ -142,6 +143,7 @@ export const Tournament: React.FC = () => {
           opponent={opponent}
           myActiveMatch={myActiveMatch}
           hasSubmittedScore={hasSubmittedScore}
+          eventId={event?.id}
           onSubmitScore={handleOpenScoreForm}
         />
       )}
@@ -212,10 +214,6 @@ export const Tournament: React.FC = () => {
         </>
       ) : (
         <>
-          {editMode && isCreator && (
-            <PlayerMovePanel players={moveablePlayers} onMove={handleMovePlayer} />
-          )}
-
           {editMode && isCreator && (
             <AddPlayerPanel
               availableUsers={availableUsers}

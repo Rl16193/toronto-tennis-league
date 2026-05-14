@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { Mail, Phone, Trophy, User } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { Button } from '../components/Button';
-import { UserData, UserPreferences, UserStats } from '../types';
+import { TennisEvent, UserData, UserPreferences, UserStats } from '../types';
 
 const parseMayKey = (val: unknown): string | null => {
   if (typeof val === 'string') return val.startsWith('May') ? val : null;
@@ -29,11 +29,14 @@ const Chip: React.FC<{ label: string }> = ({ label }) => (
 export const PlayerProfile: React.FC = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const eventId = searchParams.get('event') || null;
 
   const [player, setPlayer] = useState<UserData | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [markedDates, setMarkedDates] = useState<Set<string>>(new Set());
+  const [organizer, setOrganizer] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -60,6 +63,18 @@ export const PlayerProfile: React.FC = () => {
         setPreferences(
           prefsDoc.exists() ? (prefsDoc.data() as UserPreferences) : null
         );
+
+        // Load organizer from the event's creator_id
+        if (eventId) {
+          const eventDoc = await getDoc(doc(db, 'events', eventId));
+          if (eventDoc.exists()) {
+            const eventData = eventDoc.data() as TennisEvent;
+            if (eventData.creator_id) {
+              const creatorDoc = await getDoc(doc(db, 'users', eventData.creator_id));
+              if (creatorDoc.exists()) setOrganizer(creatorDoc.data() as UserData);
+            }
+          }
+        }
 
         const dates = new Set<string>();
 
@@ -248,6 +263,26 @@ export const PlayerProfile: React.FC = () => {
 
         </div>
       </div>
+
+      {organizer && (
+        <div className="rounded-[2rem] bg-tennis-surface/40 border border-white/10 p-6 md:p-8 mt-6">
+          <h2 className="text-base font-black text-white mb-3">Contact organizer if you require any assistance</h2>
+          <div className="flex flex-wrap gap-6">
+            {organizer.email && (
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-clay shrink-0" />
+                <span className="text-gray-300 font-semibold">{organizer.email}</span>
+              </div>
+            )}
+            {organizer.phone && (
+              <div className="flex items-center gap-2">
+                <Phone className="w-4 h-4 text-clay shrink-0" />
+                <span className="text-gray-300 font-semibold">{organizer.phone}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {hasAvailability && (
         <div className="rounded-[2rem] bg-tennis-surface/40 border border-white/10 p-6 md:p-8 mt-6">

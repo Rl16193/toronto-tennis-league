@@ -10,22 +10,23 @@ type Props = {
   opponent: Opponent;
   myActiveMatch: TournamentMatch | null;
   hasSubmittedScore: boolean;
+  eventId?: string;
   onSubmitScore: () => void;
 };
 
-export const OpponentCard: React.FC<Props> = ({ opponent, myActiveMatch, hasSubmittedScore, onSubmitScore }) => (
+export const OpponentCard: React.FC<Props> = ({ opponent, myActiveMatch, hasSubmittedScore, eventId, onSubmitScore }) => (
   <section className="mb-8 rounded-[2rem] bg-tennis-surface/40 border border-white/10 p-5 md:p-6">
     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
       <div>
         <h2 className="text-2xl font-black text-white">Your opponent is {opponent.name}</h2>
         <p className="text-gray-400 mt-2">
-          Contact opponent to schedule match outside of weekend matchdays:{' '}
-          <span className="text-clay font-semibold">{opponent.contact || 'Preferred contact not available'}</span>
+          Contact your opponent to schedule your matches:{' '}
+          <span className="text-clay font-semibold">{opponent.contact || 'Contact not available'}</span>
         </p>
       </div>
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         {opponent.userId && (
-          <Link to={`/players/${opponent.userId}`}>
+          <Link to={`/players/${opponent.userId}${eventId ? `?event=${eventId}` : ''}`}>
             <Button variant="ghost">
               <ExternalLink className="w-4 h-4 mr-2" />
               Profile
@@ -44,9 +45,7 @@ export const OpponentCard: React.FC<Props> = ({ opponent, myActiveMatch, hasSubm
               Submit Score
             </Button>
           )
-        ) : (
-          <p className="text-sm text-gray-400 max-w-xs">Submit Score here after you play your match.</p>
-        )}
+        ) : null}
       </div>
     </div>
   </section>

@@ -10,6 +10,14 @@ export const VISIBLE_DRAWS: DrawConfig[] = [
   { tab: 'doubles', label: 'Mixed Doubles', tournamentChoice: 'Doubles', division: 'Mixed Doubles', skillGroup: 'All' },
 ];
 
+export const MENS_MERGED_DRAW: DrawConfig = {
+  tab: 'mens',
+  label: "Men's Masters",
+  tournamentChoice: 'Singles',
+  division: "Men's",
+  skillGroup: 'All',
+};
+
 export const WOMENS_MERGED_DRAW: DrawConfig = {
   tab: 'womens',
   label: "Women's Masters",

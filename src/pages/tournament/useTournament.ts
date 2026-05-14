@@ -12,7 +12,7 @@ import {
   getDrawKey, getDrawSize, getEventDate, getWinnerPlaceholder,
   isTournamentStarted, normalizeTemplateMatches, scoresMatch,
 } from './utils';
-import { CONSOLIDATED_DOUBLES_DRAW, VISIBLE_DRAWS, WOMENS_MERGED_DRAW } from './drawConfigs';
+import { CONSOLIDATED_DOUBLES_DRAW, MENS_MERGED_DRAW, VISIBLE_DRAWS, WOMENS_MERGED_DRAW } from './drawConfigs';
 import { deleteKey } from './objectUtils';
 
 export const useTournament = (eventIdOverride?: string) => {
@@ -39,6 +39,7 @@ export const useTournament = (eventIdOverride?: string) => {
   const [resettingDraw, setResettingDraw] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [previewSlotOverrides, setPreviewSlotOverrides] = useState<Record<string, Record<number, TournamentPlayer | null>>>({});
+  const [mergeMensSingles, setMergeMensSingles] = useState(false);
   const [mergeWomensSingles, setMergeWomensSingles] = useState(false);
   const [consolidateDoubles, setConsolidateDoubles] = useState(false);
   const [previewDrawSize, setPreviewDrawSize] = useState<Record<string, number>>({});
@@ -66,15 +67,17 @@ export const useTournament = (eventIdOverride?: string) => {
 
   const effectiveDraws = useMemo<DrawConfig[]>(() => {
     let draws = VISIBLE_DRAWS.filter((d) => {
+      if (mergeMensSingles && d.tab === 'mens' && d.tournamentChoice === 'Singles') return false;
       if (mergeWomensSingles && d.tab === 'womens' && d.tournamentChoice === 'Singles') return false;
       if (consolidateDoubles && d.tab === 'doubles') return false;
       return true;
     });
+    if (mergeMensSingles) draws = [...draws, MENS_MERGED_DRAW];
     if (mergeWomensSingles) draws = [...draws, WOMENS_MERGED_DRAW];
     if (consolidateDoubles) draws = [...draws, CONSOLIDATED_DOUBLES_DRAW];
     const tabOrder = { mens: 0, womens: 1, doubles: 2 };
     return draws.sort((a, b) => tabOrder[a.tab] - tabOrder[b.tab]);
-  }, [mergeWomensSingles, consolidateDoubles]);
+  }, [mergeMensSingles, mergeWomensSingles, consolidateDoubles]);
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -116,6 +119,7 @@ export const useTournament = (eventIdOverride?: string) => {
     setPreviewDrawSize({});
     setLLDrawSizes({});
     setLLDrawSlotOverrides({});
+    setMergeMensSingles(false);
     setMergeWomensSingles(false);
     setConsolidateDoubles(false);
   }, [eventIdOverride, allTournamentEvents]);
@@ -137,6 +141,8 @@ export const useTournament = (eventIdOverride?: string) => {
         setMatches(loaded);
         // Auto-enable merge/consolidate toggles if that draw data already exists in Firestore
         // Exclude reserves matches to avoid false positives
+        if (loaded.some((m) => m.tournament_choice === 'Singles' && m.division === "Men's" && m.skill_group === 'All' && m.bracket !== 'reserves'))
+          setMergeMensSingles(true);
         if (loaded.some((m) => m.tournament_choice === 'Singles' && m.division === "Women's" && m.skill_group === 'All' && m.bracket !== 'reserves'))
           setMergeWomensSingles(true);
         if (loaded.some((m) => m.tournament_choice === 'Doubles' && m.division === 'All' && m.bracket !== 'reserves'))
@@ -728,7 +734,8 @@ export const useTournament = (eventIdOverride?: string) => {
       setEditMode(false);
       setPreviewSlotOverrides((prev) => deleteKey(prev, currentDraw.label));
       setPreviewDrawSize((prev) => deleteKey(prev, currentDraw.label));
-      if (currentDraw.skillGroup === 'All' && currentDraw.tournamentChoice === 'Singles') setMergeWomensSingles(false);
+      if (currentDraw.skillGroup === 'All' && currentDraw.tournamentChoice === 'Singles' && currentDraw.division === "Men's") setMergeMensSingles(false);
+      if (currentDraw.skillGroup === 'All' && currentDraw.tournamentChoice === 'Singles' && currentDraw.division === "Women's") setMergeWomensSingles(false);
       if (currentDraw.tournamentChoice === 'Doubles' && currentDraw.division === 'All') setConsolidateDoubles(false);
       setMessage({ type: 'success', text: `${currentDraw.label} rebuilt with current settings.` });
     } catch (err) {
@@ -1028,6 +1035,8 @@ export const useTournament = (eventIdOverride?: string) => {
     resettingDraw,
     editMode,
     setEditMode,
+    mergeMensSingles,
+    setMergeMensSingles,
     mergeWomensSingles,
     setMergeWomensSingles,
     consolidateDoubles,

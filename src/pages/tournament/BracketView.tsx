@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ScoreSubmission, TournamentMatch, TournamentPlayer } from './types';
-import { BYE, formatPlayerName } from './utils';
+import { BYE, PLAYER_LOADING, formatPlayerName } from './utils';
 import { getRoundLabels } from './bracketImage';
 
 const getRoundTone = (round: string) => {
@@ -145,6 +145,13 @@ export const BracketView: React.FC<Props> = ({
                 !isPreview && !hasBye &&
                 !!match.player_1_user_id && !!match.player_2_user_id;
 
+              // For the creator, also allow submitting when a slot is PLAYER_LOADING (winner pending)
+              const hasPlayableSlots =
+                !isPreview && !hasBye && (
+                  (!!match.player_1_user_id || match.player_1_name === PLAYER_LOADING) &&
+                  (!!match.player_2_user_id || match.player_2_name === PLAYER_LOADING)
+                );
+
               // Status dot
               const showDot = !isPreview && hasRealPlayers;
               const dotClass =
@@ -156,7 +163,7 @@ export const BracketView: React.FC<Props> = ({
 
               // Creator submit button (also shown for complete matches so creator can overwrite)
               const showCreatorSubmit =
-                isCreator && !!onSubmitScore && hasRealPlayers && !editMode;
+                isCreator && !!onSubmitScore && hasPlayableSlots && !editMode;
 
               return (
                 <div
