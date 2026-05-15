@@ -14,6 +14,29 @@ export const Home: React.FC = () => {
   const galleryPreview = useMemo(() => galleryImages.slice(0, 4), [galleryImages]);
 
   useEffect(() => {
+    document.title = 'Racquets & Strings';
+
+    // JSON-LD Organization schema for Google
+    const schema = document.createElement('script');
+    schema.id = 'org-schema';
+    schema.type = 'application/ld+json';
+    schema.text = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'SportsOrganization',
+      name: 'Racquets & Strings',
+      url: 'https://racquetsandstrings.ca',
+      sport: 'Tennis',
+      description: "Toronto's Tennis Community — join events, play competitive matches, track results and connect with other players.",
+      areaServed: 'Toronto, Canada',
+    });
+    const existing = document.getElementById('org-schema');
+    if (existing) existing.replaceWith(schema);
+    else document.head.appendChild(schema);
+
+    return () => { document.getElementById('org-schema')?.remove(); };
+  }, []);
+
+  useEffect(() => {
     const loadAssets = async () => {
       try {
         const [logo, galleryResult] = await Promise.all([

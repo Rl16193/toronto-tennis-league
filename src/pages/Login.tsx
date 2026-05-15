@@ -28,6 +28,8 @@ export const Login: React.FC = () => {
   const returnTo = searchParams.get('returnTo') || '/profile';
   const intent = searchParams.get('intent') || '';
 
+  useEffect(() => { document.title = 'Sign In — Racquets & Strings'; }, []);
+
   useEffect(() => {
     if (!authLoading && user) {
       navigate(returnTo);

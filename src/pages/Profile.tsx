@@ -32,6 +32,8 @@ export const Profile: React.FC = () => {
   const [linkingGoogle, setLinkingGoogle] = useState(false);
   const [emailChangeLoading, setEmailChangeLoading] = useState(false);
 
+  useEffect(() => { document.title = 'My Profile — Racquets & Strings'; }, []);
+
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/login');

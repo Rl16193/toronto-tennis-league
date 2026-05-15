@@ -164,6 +164,8 @@ export const Events: React.FC = () => {
   const participantName = profile?.user.name?.trim() || user?.displayName || user?.email || '';
   const isEventCreator = !!profile?.preferences.event_creator;
 
+  useEffect(() => { document.title = 'Events — Racquets & Strings'; }, []);
+
   useEffect(() => {
     const loadEvents = async () => {
       try {

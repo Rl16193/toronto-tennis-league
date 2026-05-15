@@ -65,6 +65,8 @@ export const Signup: React.FC = () => {
   // Validation
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  useEffect(() => { document.title = 'Sign Up — Racquets & Strings'; }, []);
+
   useEffect(() => {
     if (!authLoading && user && shouldRedirectToProfile) {
       navigate(returnTo);

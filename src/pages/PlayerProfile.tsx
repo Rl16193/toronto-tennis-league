@@ -39,6 +39,8 @@ export const PlayerProfile: React.FC = () => {
   const [organizer, setOrganizer] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  useEffect(() => { document.title = 'Player Profile — Racquets & Strings'; }, []);
+
   useEffect(() => {
     const loadPlayer = async () => {
       if (!userId) return;
@@ -58,7 +60,11 @@ export const PlayerProfile: React.FC = () => {
           ),
         ]);
 
-        setPlayer(userDoc.exists() ? (userDoc.data() as UserData) : null);
+        const playerData = userDoc.exists() ? (userDoc.data() as UserData) : null;
+        setPlayer(playerData);
+        if (playerData?.name) {
+          document.title = `${playerData.name} — Racquets & Strings`;
+        }
         setStats(statsDoc.exists() ? (statsDoc.data() as UserStats) : null);
         setPreferences(
           prefsDoc.exists() ? (prefsDoc.data() as UserPreferences) : null

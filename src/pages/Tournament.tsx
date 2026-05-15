@@ -49,6 +49,12 @@ export const Tournament: React.FC = () => {
     }
   }, [event?.id]);
 
+  useEffect(() => {
+    document.title = event?.title
+      ? `${event.title} — Racquets & Strings`
+      : 'Tournament — Racquets & Strings';
+  }, [event?.title]);
+
   const handleEventChange = (id: string) => setSearchParams({ event: id });
 
   if (authLoading || loading) {
