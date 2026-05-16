@@ -165,8 +165,8 @@ export const Login: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <h3 className="text-xl font-bold text-white">Reset Link Sent</h3>
-                <p className="text-gray-400">If that email has a password account with us, you will receive a reset link shortly. Check your spam folder too.</p>
-                <p className="text-gray-500 text-sm">If you signed up using Google, no password exists — use the Google button on the login screen instead.</p>
+                <p className="text-gray-400">If the email is linked with an account, you will receive a reset link.</p>
+                <p className="text-gray-500 text-sm">Check your spam folder too.</p>
               </div>
               <Button variant="outline" className="w-full" onClick={() => {
                 setResetSent(false);
@@ -181,12 +181,6 @@ export const Login: React.FC = () => {
                 <div className="flex items-center space-x-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-sm">
                   <AlertCircle className="w-5 h-5 shrink-0" />
                   <span>{error}</span>
-                </div>
-              )}
-
-              {showForgot && (
-                <div className="text-sm text-gray-400 -mb-2">
-                  Enter your email and we'll send a reset link. If you signed up with Google, use the Google button instead — there's no password to reset.
                 </div>
               )}
 
