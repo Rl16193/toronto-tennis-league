@@ -121,7 +121,8 @@ export const Signup: React.FC = () => {
       newErrors.confirmPassword = 'Passwords do not match';
     }
 
-    if (formData.phone.replace(/\D/g, '').length !== 10) newErrors.phone = 'Phone must be exactly 10 digits';
+    const rawPhone = formData.phone.replace(/\D/g, '');
+    if (rawPhone.length > 0 && rawPhone.length !== 10) newErrors.phone = 'Phone number must be exactly 10 digits';
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -469,7 +470,6 @@ export const Signup: React.FC = () => {
                     value={formData.phone}
                     onChange={(e) => setFormData({...formData, phone: formatPhone(e.target.value)})}
                     error={errors.phone}
-                    required
                   />
 
                   {/* Row 3: Confirm Password | Preferred Contact */}

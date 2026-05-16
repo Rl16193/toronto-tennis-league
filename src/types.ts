@@ -60,6 +60,7 @@ export interface TennisEvent {
   about?: string;
   description?: string;
   organizer?: string;
+  round_deadlines?: Record<string, string>; // round → 'YYYY-MM-DD'
 }
 
 export interface EventParticipant {

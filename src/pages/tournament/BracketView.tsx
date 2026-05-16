@@ -8,12 +8,10 @@ const getRoundTone = (round: string) => {
   return 'bg-sky-50 border-sky-200';
 };
 
-const ROUND_DEADLINES: Record<string, string> = {
-  R32: 'Avail. till Sat May 16',
-  R16: 'Avail. till Sat May 16',
-  QF: 'Avail. till Sat May 23',
-  SF: 'Avail. till Sun May 30',
-  F: 'Avail. till Sun May 30',
+const formatDeadline = (iso: string): string => {
+  const [, m, d] = iso.split('-').map(Number);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[m - 1]} ${d}`;
 };
 
 const BracketPlayer: React.FC<{ name: string; winner: boolean }> = ({ name, winner }) => (
@@ -69,11 +67,14 @@ type Props = {
   submissions?: ScoreSubmission[];
   isCreator?: boolean;
   onSubmitScore?: (match: TournamentMatch) => void;
+  roundDeadlines?: Record<string, string>; // round → 'YYYY-MM-DD'
+  onUpdateDeadline?: (round: string, date: string) => void;
 };
 
 export const BracketView: React.FC<Props> = ({
   matches, drawTitle, editMode, editPlayers = [], onEditPlayer,
   submissions = [], isCreator, onSubmitScore,
+  roundDeadlines = {}, onUpdateDeadline,
 }) => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
@@ -119,9 +120,19 @@ export const BracketView: React.FC<Props> = ({
               <p className="text-center text-xs uppercase tracking-widest text-gray-600 font-black">
                 {round.round}
               </p>
-              {ROUND_DEADLINES[round.round] && (
-                <p className="text-center text-[10px] text-gray-400 mt-0.5">{ROUND_DEADLINES[round.round]}</p>
-              )}
+              {onUpdateDeadline ? (
+                <input
+                  type="date"
+                  value={roundDeadlines[round.round] ?? ''}
+                  onChange={(e) => onUpdateDeadline(round.round, e.target.value)}
+                  className="mt-0.5 w-full text-center text-[10px] text-gray-500 bg-transparent border-none outline-none cursor-pointer hover:text-gray-700 focus:text-gray-800"
+                  title={`Set deadline for ${round.round}`}
+                />
+              ) : roundDeadlines[round.round] ? (
+                <p className="text-center text-[10px] text-gray-400 mt-0.5">
+                  Till {formatDeadline(roundDeadlines[round.round])}
+                </p>
+              ) : null}
             </div>
             {round.matches.map((match, matchIndex) => {
               const rowSpan = 2 ** (roundIndex + 1);

@@ -34,7 +34,7 @@ export const Tournament: React.FC = () => {
     consolidateDoubles, setConsolidateDoubles,
     activeTab, setActiveTab, activeSkill, setActiveSkill, activeDoubles, setActiveDoubles,
     availableUsers,
-    handleSetPreviewDrawSize, handleAddPlayer,
+    handleUpdateRoundDeadline, handleSetPreviewDrawSize, handleAddPlayer,
     handleGenerateAll, handleResetDraw,
     handleResolveDispute, handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
     currentReservesMatches, llDrawDisplayMatches, currentLLSize, allUsersAsTournamentPlayers,
@@ -215,6 +215,8 @@ export const Tournament: React.FC = () => {
               submissions={submissions}
               isCreator={isCreator}
               onSubmitScore={handleOpenScoreForm}
+              roundDeadlines={event?.round_deadlines}
+              onUpdateDeadline={isCreator ? handleUpdateRoundDeadline : undefined}
             />
           </BracketErrorBoundary>
         </>
@@ -267,6 +269,8 @@ export const Tournament: React.FC = () => {
               submissions={submissions}
               isCreator={isCreator}
               onSubmitScore={handleOpenScoreForm}
+              roundDeadlines={event?.round_deadlines}
+              onUpdateDeadline={isCreator ? handleUpdateRoundDeadline : undefined}
             />
           </BracketErrorBoundary>
 

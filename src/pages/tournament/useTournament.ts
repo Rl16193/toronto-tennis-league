@@ -647,6 +647,22 @@ export const useTournament = (eventIdOverride?: string) => {
 
   // ── Action handlers ───────────────────────────────────────────────────────
 
+  const handleUpdateRoundDeadline = async (round: string, date: string) => {
+    if (!isCreator || !event) return;
+    const updated: TennisEvent = {
+      ...event,
+      round_deadlines: { ...(event.round_deadlines ?? {}), [round]: date },
+    };
+    // Optimistic local update
+    setEvent(updated);
+    setAllTournamentEvents((prev) => prev.map((e) => (e.id === event.id ? updated : e)));
+    try {
+      await updateDoc(doc(db, 'events', event.id), { [`round_deadlines.${round}`]: date });
+    } catch (err) {
+      console.error('Failed to save round deadline:', err);
+    }
+  };
+
   const handleSetPreviewDrawSize = (drawLabel: string, size: number) => {
     setPreviewDrawSize((prev) => ({ ...prev, [drawLabel]: size }));
   };
@@ -1049,6 +1065,7 @@ export const useTournament = (eventIdOverride?: string) => {
     setActiveDoubles,
     moveablePlayers,
     availableUsers,
+    handleUpdateRoundDeadline,
     handleSetPreviewDrawSize,
     handleMovePlayer,
     handleAddPlayer,
