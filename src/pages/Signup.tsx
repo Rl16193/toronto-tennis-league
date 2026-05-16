@@ -8,10 +8,11 @@ import { useAuth } from '../context/AuthContext';
 import { SKILL_DESCRIPTIONS, SKILL_LEVELS, TOURNAMENT_OPTIONS } from '../lib/skillLevels';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { 
-  User, Mail, Lock, Phone, Trophy, MapPin, 
-  CheckCircle2, ChevronRight, ChevronLeft, 
-  Camera, AlertCircle, Info, Star, Calendar, Clock
+import {
+  User, Mail, Lock, Phone, Trophy, MapPin,
+  CheckCircle2, ChevronRight, ChevronLeft,
+  Camera, AlertCircle, Info, Star, Calendar, Clock,
+  Eye, EyeOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserData, UserStats, UserPreferences } from '../types';
@@ -38,6 +39,8 @@ export const Signup: React.FC = () => {
   const [emailSuggestion, setEmailSuggestion] = useState<any>(null);
   const [checkingEmail, setCheckingEmail] = useState(false);
   const [courtOptions, setCourtOptions] = useState<string[]>(defaultCourtOptions);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const returnTo = searchParams.get('returnTo') || '/profile';
   const intent = searchParams.get('intent') || '';
 
@@ -46,6 +49,7 @@ export const Signup: React.FC = () => {
     name: '',
     email: '',
     password: '',
+    confirmPassword: '',
     phone: '',
     contactMode: 'email' as 'email' | 'phone',
     skillLevel: 2,
@@ -105,12 +109,18 @@ export const Signup: React.FC = () => {
     if (formData.name.length < 3 || formData.name.length > 80) newErrors.name = 'Name must be 3-80 characters';
     if (/\d/.test(formData.name)) newErrors.name = 'Name cannot contain numbers';
     if (!signupEmailRegex.test(trimmedEmail)) newErrors.email = 'Please enter a valid email address';
-    if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters';
-    
-    // Sequential check
-    const sequential = "1234567890abcdefghijklmnopqrstuvwxyz";
-    if (sequential.includes(formData.password.toLowerCase())) newErrors.password = 'Password cannot be sequential';
-    
+    const sequential = '1234567890abcdefghijklmnopqrstuvwxyz';
+    if (
+      formData.password.length < 6 ||
+      formData.password.length > 80 ||
+      sequential.includes(formData.password.toLowerCase())
+    ) {
+      newErrors.password = 'Password should be between 6-80 characters and non-sequential.';
+    }
+    if (formData.confirmPassword !== formData.password) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+
     if (formData.phone.replace(/\D/g, '').length !== 10) newErrors.phone = 'Phone must be exactly 10 digits';
 
     setErrors(newErrors);
@@ -391,54 +401,111 @@ export const Signup: React.FC = () => {
                 </div>
 
                 <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Input 
-                    label="Full Name" 
-                    placeholder="Roger Federer" 
+                  {/* Row 1: Name | Email */}
+                  <Input
+                    label="Full Name"
+                    placeholder="Roger Federer"
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
                     error={errors.name}
                     required
                   />
-                  <Input 
-                    label="Email Address" 
-                    type="email" 
-                    placeholder="roger@goat.com" 
-                    value={formData.email}
-                    onChange={handleEmailChange}
-                    onBlur={handleEmailBlur}
-                    error={errors.email}
-                    required
-                  />
-                  {emailSuggestion && (
-                    <div className="text-sm text-blue-400 mt-1">
-                      Did you mean <button 
-                        className="underline hover:text-blue-300" 
-                        onClick={() => {
-                          setFormData({ ...formData, email: emailSuggestion.full });
-                          setEmailSuggestion(null);
-                        }}
+                  <div>
+                    <Input
+                      label="Email Address"
+                      type="email"
+                      placeholder="roger@goat.com"
+                      value={formData.email}
+                      onChange={handleEmailChange}
+                      onBlur={handleEmailBlur}
+                      error={errors.email}
+                      required
+                    />
+                    {emailSuggestion && (
+                      <div className="text-sm text-blue-400 mt-1">
+                        Did you mean <button
+                          className="underline hover:text-blue-300"
+                          onClick={() => {
+                            setFormData({ ...formData, email: emailSuggestion.full });
+                            setEmailSuggestion(null);
+                          }}
+                        >
+                          {emailSuggestion.full}
+                        </button>?
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Row 2: Password | Phone */}
+                  <div className="w-full space-y-1.5">
+                    <label className="block text-sm font-medium text-gray-300">
+                      Password <span className="text-red-400">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        value={formData.password}
+                        onChange={(e) => setFormData({...formData, password: e.target.value})}
+                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-12 text-white placeholder-gray-500 transition-all duration-200 focus:ring-2 outline-none ${errors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-white/10 focus:border-clay focus:ring-clay/20'}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                        tabIndex={-1}
                       >
-                        {emailSuggestion.full}
-                      </button>?
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
                     </div>
-                  )}
-                  <Input 
-                    label="Password" 
-                    type="password" 
-                    placeholder="••••••••" 
-                    value={formData.password}
-                    onChange={(e) => setFormData({...formData, password: e.target.value})}
-                    error={errors.password}
-                    required
-                  />
-                  <Input 
-                    label="Phone Number" 
-                    placeholder="(416)-555-0123" 
+                    {errors.password && (
+                      <p className="text-xs text-red-500 mt-1 ml-1">{errors.password}</p>
+                    )}
+                  </div>
+
+                  <Input
+                    label="Phone Number"
+                    placeholder="(416)-555-0123"
                     value={formData.phone}
                     onChange={(e) => setFormData({...formData, phone: formatPhone(e.target.value)})}
                     error={errors.phone}
                     required
                   />
+
+                  {/* Row 3: Confirm Password | Preferred Contact */}
+                  <div className="w-full space-y-1.5">
+                    <label className="block text-sm font-medium text-gray-300">
+                      Re-enter Password <span className="text-red-400">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="••••••••"
+                        value={formData.confirmPassword}
+                        onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-12 text-white placeholder-gray-500 transition-all duration-200 focus:ring-2 outline-none ${
+                          (errors.confirmPassword || (formData.confirmPassword && formData.confirmPassword !== formData.password))
+                            ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                            : 'border-white/10 focus:border-clay focus:ring-clay/20'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                        tabIndex={-1}
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    {formData.confirmPassword && formData.confirmPassword !== formData.password && (
+                      <p className="text-xs text-red-500 mt-1 ml-1">Passwords do not match</p>
+                    )}
+                    {errors.confirmPassword && !formData.confirmPassword && (
+                      <p className="text-xs text-red-500 mt-1 ml-1">{errors.confirmPassword}</p>
+                    )}
+                  </div>
+
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-gray-300">Preferred Contact Mode</label>
                     <div className="flex space-x-4">
@@ -446,11 +513,11 @@ export const Signup: React.FC = () => {
                         <label key={mode} className={`flex-1 flex items-center justify-center p-3 rounded-2xl border cursor-pointer transition-all ${
                           formData.contactMode === mode ? 'bg-clay/10 border-clay text-clay' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
                         }`}>
-                          <input 
-                            type="radio" 
-                            className="hidden" 
-                            name="contactMode" 
-                            value={mode} 
+                          <input
+                            type="radio"
+                            className="hidden"
+                            name="contactMode"
+                            value={mode}
                             checked={formData.contactMode === mode}
                             onChange={() => setFormData({...formData, contactMode: mode as any})}
                           />
