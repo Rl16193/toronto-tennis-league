@@ -410,7 +410,7 @@ export const Signup: React.FC = () => {
                     <Input
                       label="Email Address"
                       type="email"
-                      placeholder="roger@goat.com"
+                      placeholder="roger@hotmail.com"
                       value={formData.email}
                       onChange={handleEmailChange}
                       onBlur={handleEmailBlur}
