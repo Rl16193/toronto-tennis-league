@@ -42,6 +42,13 @@ export const Login: React.FC = () => {
       .catch(() => {});
   }, []);
 
+  // Auto-dismiss error banner after 30 seconds
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(''), 30_000);
+    return () => clearTimeout(t);
+  }, [error]);
+
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newEmail = e.target.value;
     setEmail(newEmail);

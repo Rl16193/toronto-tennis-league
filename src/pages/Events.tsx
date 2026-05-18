@@ -166,6 +166,19 @@ export const Events: React.FC = () => {
 
   useEffect(() => { document.title = 'Events — Racquets & Strings'; }, []);
 
+  // Auto-dismiss banners after 30 seconds
+  useEffect(() => {
+    if (!eventFormMessage) return;
+    const t = setTimeout(() => setEventFormMessage(null), 30_000);
+    return () => clearTimeout(t);
+  }, [eventFormMessage]);
+
+  useEffect(() => {
+    if (!joinError) return;
+    const t = setTimeout(() => setJoinError(''), 30_000);
+    return () => clearTimeout(t);
+  }, [joinError]);
+
   useEffect(() => {
     const loadEvents = async () => {
       try {
@@ -866,7 +879,7 @@ export const Events: React.FC = () => {
                             </div>
                           )}
                           <div className="space-y-2">
-                            <label className="block text-sm font-medium text-gray-300">Format</label>
+                            <label className="block text-sm font-medium text-gray-300">Format <span className="text-orange-500">*</span></label>
                             <div className="flex gap-3">
                               {(['Singles', 'Doubles'] as const).map((choice) => (
                                 <button
@@ -896,7 +909,7 @@ export const Events: React.FC = () => {
                           </div>
 
                           <div className="space-y-2">
-                            <label className="block text-sm font-medium text-gray-300">Select Division</label>
+                            <label className="block text-sm font-medium text-gray-300">Select Division <span className="text-orange-500">*</span></label>
                             <div className="flex flex-wrap gap-3">
                               {(["Men's", "Women's", 'Mixed Doubles'] as const).map((division) => {
                                 const isLocked =
@@ -929,7 +942,7 @@ export const Events: React.FC = () => {
                           {joinForm.tournamentChoice === 'Doubles' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div className="space-y-2 md:col-span-2">
-                                <label className="block text-sm font-medium text-gray-300">Partner Name</label>
+                                <label className="block text-sm font-medium text-gray-300">Partner Name <span className="text-orange-500">*</span></label>
                                 <input
                                   value={joinForm.partnerName}
                                   onChange={(e) => setJoinForm({ ...joinForm, partnerName: e.target.value })}
@@ -938,7 +951,7 @@ export const Events: React.FC = () => {
                                 />
                               </div>
                               <div className="space-y-2">
-                                <label className="block text-sm font-medium text-gray-300">Is your partner in the app?</label>
+                                <label className="block text-sm font-medium text-gray-300">Is your partner in the app? <span className="text-orange-500">*</span></label>
                                 <select
                                   value={joinForm.partnerInApp}
                                   onChange={(e) => setJoinForm({ ...joinForm, partnerInApp: e.target.value as 'yes' | 'no' | '' })}
@@ -950,7 +963,7 @@ export const Events: React.FC = () => {
                                 </select>
                               </div>
                               <div className="space-y-2">
-                                <label className="block text-sm font-medium text-gray-300">Combined Skill Level (Average)</label>
+                                <label className="block text-sm font-medium text-gray-300">Combined Skill Level (Average) <span className="text-orange-500">*</span></label>
                                 <input
                                   type="number"
                                   min="1"

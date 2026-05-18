@@ -33,17 +33,15 @@ export const TournamentHeader: React.FC<Props> = ({
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap mb-8">
       {/* Download — always visible */}
-      <div className="flex flex-col gap-1">
-        <Button variant="outline" onClick={onDownload}>
-          <Download className="w-4 h-4 mr-2" />
-          Download Draw
-        </Button>
-        {!isCreator && (
-          <p className="text-xs text-gray-500 max-w-[220px] leading-snug">
-            Draw updates after scores are submitted to the organizer in person, WhatsApp or Instagram.
-          </p>
-        )}
-      </div>
+      <Button variant="outline" onClick={onDownload}>
+        <Download className="w-4 h-4 mr-2" />
+        Download Draw
+      </Button>
+      {!isCreator && (
+        <span className="text-xs text-orange-500 font-medium">
+          Draw updates after scores are submitted to the organizer in person, WhatsApp or Instagram.
+        </span>
+      )}
 
       {isCreator && (
         <>

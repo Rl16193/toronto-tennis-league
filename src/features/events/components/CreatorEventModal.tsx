@@ -52,7 +52,7 @@ export const CreatorEventModal: React.FC<Props> = ({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">Title</span>
+          <span className="block text-sm font-medium text-gray-300">Title <span className="text-orange-500">*</span></span>
           <input
             value={eventForm.title}
             onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
@@ -62,7 +62,7 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">Type</span>
+          <span className="block text-sm font-medium text-gray-300">Type <span className="text-orange-500">*</span></span>
           <select
             value={eventForm.type}
             onChange={(e) => setEventForm({ ...eventForm, type: e.target.value })}
@@ -85,7 +85,7 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">Organizer</span>
+          <span className="block text-sm font-medium text-gray-300">Organizer <span className="text-orange-500">*</span></span>
           <input
             value={eventForm.organizer}
             onChange={(e) => setEventForm({ ...eventForm, organizer: e.target.value })}
@@ -95,7 +95,7 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">Start Date</span>
+          <span className="block text-sm font-medium text-gray-300">Start Date <span className="text-orange-500">*</span></span>
           <input
             type="date"
             value={eventForm.startDate}
@@ -105,7 +105,7 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">End Date</span>
+          <span className="block text-sm font-medium text-gray-300">End Date <span className="text-orange-500">*</span></span>
           <input
             type="date"
             value={eventForm.endDate}
@@ -164,7 +164,7 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2 md:col-span-2">
-          <span className="block text-sm font-medium text-gray-300">About</span>
+          <span className="block text-sm font-medium text-gray-300">About <span className="text-orange-500">*</span></span>
           <textarea
             value={eventForm.about}
             onChange={(e) => setEventForm({ ...eventForm, about: e.target.value })}

@@ -162,11 +162,6 @@ export const Tournament: React.FC = () => {
                 {state}
               </span>
             </div>
-            {userParticipant && hasGeneratedMatches && (
-              <p className="text-sm text-orange-500 font-semibold max-w-2xl">
-                Draws have been finalized. Please contact your opponent to schedule your match. Kindly play your matches before the round deadline provided in the draw. Contact us if you are facing any difficulties.
-              </p>
-            )}
           </div>
         );
       })()}
