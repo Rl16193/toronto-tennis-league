@@ -49,7 +49,7 @@ export const Tournament: React.FC = () => {
     allTournamentEvents,
     isCreator, started, userParticipant,
     currentDraw, currentMatches, displayMatches, visibleDraws,
-    myActiveMatch, hasSubmittedScore, opponent,
+    opponent,
     editPlayers, reservesPlayers, currentDrawSize, skillMismatchedCount,
     message, scoreForm, scoreFormMatch, setScoreForm,
     generating, resettingDraw, editMode, setEditMode,
@@ -181,10 +181,7 @@ export const Tournament: React.FC = () => {
       {opponent && !showReserves && (
         <OpponentCard
           opponent={opponent}
-          myActiveMatch={myActiveMatch}
-          hasSubmittedScore={hasSubmittedScore}
           eventId={event?.id}
-          onSubmitScore={handleOpenScoreForm}
         />
       )}
 
@@ -348,7 +345,7 @@ export const Tournament: React.FC = () => {
           onChange={setScoreForm}
           onClose={() => setScoreForm(null)}
           onSubmit={handleSubmitScore}
-          isCreatorSubmit={isCreator && scoreFormMatch.player_1_user_id !== user?.uid && scoreFormMatch.player_2_user_id !== user?.uid}
+          isCreatorSubmit={true}
         />
       )}
     </div>
