@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { ScoreForm, TournamentMatch } from './types';
@@ -35,7 +35,7 @@ export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClos
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-0 top-0 text-gray-400 hover:text-white font-semibold text-sm"
+            className="absolute right-0 top-0 text-white hover:text-white font-semibold text-sm"
           >
             Close
           </button>
@@ -48,7 +48,7 @@ export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClos
             : 'Scores to be submitted by winner only. You can only submit the score once.'}
         </div>
 
-        <label className="block text-sm font-medium text-gray-300 mb-2">Winner</label>
+        <label className="block text-sm font-medium text-white mb-2">Winner</label>
         <select
           value={scoreForm.winnerUserId}
           onChange={(e) => onChange({ ...scoreForm, winnerUserId: e.target.value })}
@@ -61,8 +61,8 @@ export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClos
         <div className="space-y-4">
           {scoreForm.sets.map((set, index) => (
             <div key={index} className="grid grid-cols-[90px_1fr_1fr] gap-3 items-end">
-              <p className="text-gray-300 font-bold pb-3">Set {index + 1}</p>
-              <label className="text-sm text-gray-400">
+              <p className="text-white font-bold pb-3">Set {index + 1}</p>
+              <label className="text-sm text-white">
                 {isCreatorSubmit ? match.player_1_name : 'My score'}
                 <input
                   type="number" min="0" step="1" inputMode="numeric" value={set.mine}
@@ -74,7 +74,7 @@ export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClos
                   className="mt-1 w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
                 />
               </label>
-              <label className="text-sm text-gray-400">
+              <label className="text-sm text-white">
                 {isCreatorSubmit ? match.player_2_name : 'Opponent score'}
                 <input
                   type="number" min="0" step="1" inputMode="numeric" value={set.opponent}

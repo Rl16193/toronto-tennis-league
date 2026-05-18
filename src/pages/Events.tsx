@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, query, getDocs, addDoc, updateDoc, doc, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -701,7 +701,7 @@ export const Events: React.FC = () => {
                     <p className="text-clay font-semibold">{formatTournamentRange(event)}</p>
                   )}
                   {getRecurringEventLabel(event) && (
-                    <p className="text-gray-400 text-sm font-medium">{getRecurringEventLabel(event)}</p>
+                    <p className="text-white text-sm font-medium">{getRecurringEventLabel(event)}</p>
                   )}
                 </div>
 
@@ -732,7 +732,7 @@ export const Events: React.FC = () => {
         <div className="text-center py-24 space-y-5">
           <div>
             <h3 className="text-2xl font-bold text-white">No events yet</h3>
-            <p className="text-gray-400">Events will appear here when they are live.</p>
+            <p className="text-white">Events will appear here when they are live.</p>
           </div>
         </div>
       )}
@@ -799,7 +799,7 @@ export const Events: React.FC = () => {
                   {isSeasonOpener(selectedEvent) && (
                     <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">First Tournament of 2026</p>
                   )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-white">
                     <div className="flex items-center">
                       <Calendar className="w-5 h-5 mr-2 text-clay" />
                       <span className="font-medium">
@@ -834,7 +834,7 @@ export const Events: React.FC = () => {
 
                 <div className="space-y-4">
                   <h4 className="text-white font-bold uppercase tracking-widest text-xs">About the Event</h4>
-                  <p className="text-gray-400 leading-relaxed">
+                  <p className="text-white leading-relaxed">
                     {selectedEvent.about || selectedEvent.description || 'Join us for a Toronto Tennis League event and connect with the community.'}
                   </p>
                 </div>
@@ -843,7 +843,7 @@ export const Events: React.FC = () => {
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
                       <h4 className="text-white font-bold">Join Event</h4>
-                      <p className="text-gray-400 text-sm">
+                      <p className="text-white text-sm">
                         {isTournamentEvent(selectedEvent)
                           ? 'Choose singles or doubles before we register you.'
                           : 'Reserve your spot for this event.'}
@@ -879,7 +879,7 @@ export const Events: React.FC = () => {
                             </div>
                           )}
                           <div className="space-y-2">
-                            <label className="block text-sm font-medium text-gray-300">Format <span className="text-orange-500">*</span></label>
+                            <label className="block text-sm font-medium text-white">Format <span className="text-orange-500">*</span></label>
                             <div className="flex gap-3">
                               {(['Singles', 'Doubles'] as const).map((choice) => (
                                 <button
@@ -898,7 +898,7 @@ export const Events: React.FC = () => {
                                   className={`px-4 py-3 rounded-2xl border font-semibold transition-all ${
                                     joinForm.tournamentChoice === choice
                                       ? 'bg-clay/10 border-clay text-clay'
-                                      : 'bg-tennis-surface/50 border-white/10 text-gray-400'
+                                      : 'bg-tennis-surface/50 border-white/10 text-white'
                                   } ${hasJoinedTournamentChoice(selectedEvent.id, choice) ? 'opacity-50 cursor-not-allowed' : ''}`}
                                   disabled={hasJoinedTournamentChoice(selectedEvent.id, choice)}
                                 >
@@ -909,7 +909,7 @@ export const Events: React.FC = () => {
                           </div>
 
                           <div className="space-y-2">
-                            <label className="block text-sm font-medium text-gray-300">Select Division <span className="text-orange-500">*</span></label>
+                            <label className="block text-sm font-medium text-white">Select Division <span className="text-orange-500">*</span></label>
                             <div className="flex flex-wrap gap-3">
                               {(["Men's", "Women's", 'Mixed Doubles'] as const).map((division) => {
                                 const isLocked =
@@ -928,8 +928,8 @@ export const Events: React.FC = () => {
                                       joinForm.division === division
                                         ? 'bg-clay/10 border-clay text-clay'
                                         : isLocked
-                                          ? 'bg-tennis-dark/70 border-white/5 text-gray-600 cursor-not-allowed opacity-70'
-                                          : 'bg-tennis-surface/50 border-white/10 text-gray-400'
+                                          ? 'bg-tennis-dark/70 border-white/5 text-white cursor-not-allowed opacity-70'
+                                          : 'bg-tennis-surface/50 border-white/10 text-white'
                                     }`}
                                   >
                                     {division}
@@ -942,7 +942,7 @@ export const Events: React.FC = () => {
                           {joinForm.tournamentChoice === 'Doubles' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div className="space-y-2 md:col-span-2">
-                                <label className="block text-sm font-medium text-gray-300">Partner Name <span className="text-orange-500">*</span></label>
+                                <label className="block text-sm font-medium text-white">Partner Name <span className="text-orange-500">*</span></label>
                                 <input
                                   value={joinForm.partnerName}
                                   onChange={(e) => setJoinForm({ ...joinForm, partnerName: e.target.value })}
@@ -951,7 +951,7 @@ export const Events: React.FC = () => {
                                 />
                               </div>
                               <div className="space-y-2">
-                                <label className="block text-sm font-medium text-gray-300">Is your partner in the app? <span className="text-orange-500">*</span></label>
+                                <label className="block text-sm font-medium text-white">Is your partner in the app? <span className="text-orange-500">*</span></label>
                                 <select
                                   value={joinForm.partnerInApp}
                                   onChange={(e) => setJoinForm({ ...joinForm, partnerInApp: e.target.value as 'yes' | 'no' | '' })}
@@ -963,7 +963,7 @@ export const Events: React.FC = () => {
                                 </select>
                               </div>
                               <div className="space-y-2">
-                                <label className="block text-sm font-medium text-gray-300">Combined Skill Level (Average) <span className="text-orange-500">*</span></label>
+                                <label className="block text-sm font-medium text-white">Combined Skill Level (Average) <span className="text-orange-500">*</span></label>
                                 <input
                                   type="number"
                                   min="1"
@@ -979,7 +979,7 @@ export const Events: React.FC = () => {
                           )}
 
                           {joinForm.tournamentChoice === 'Singles' && (
-                            <div className="rounded-2xl border border-clay/20 bg-clay/5 p-4 text-sm text-gray-300">
+                            <div className="rounded-2xl border border-clay/20 bg-clay/5 p-4 text-sm text-white">
                               Your current skill level will be used for this registration: <span className="text-clay font-bold">{profile?.stats.skill_level ?? 'Not set'}</span>
                             </div>
                           )}

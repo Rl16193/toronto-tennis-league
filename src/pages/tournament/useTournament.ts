@@ -728,25 +728,24 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   const handleResetDraw = async () => {
-    if (!isCreator || started || !currentDraw || currentMatches.length === 0) return;
-    if (!window.confirm(`Reset and regenerate ${currentDraw.label}? This rebuilds the draw with current players and settings.`)) return;
+    if (!isCreator || !currentDraw || currentMatches.length === 0) return;
+    if (!window.confirm(`Cancel all matches for ${currentDraw.label}? This will clear the draw and return to preview mode.`)) return;
     setResettingDraw(true);
     setMessage(null);
     try {
       const batch = writeBatch(db);
       currentMatches.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
       await batch.commit();
-      await generateDraw(currentDraw);
       setEditMode(false);
       setPreviewSlotOverrides((prev) => deleteKey(prev, currentDraw.label));
       setPreviewDrawSize((prev) => deleteKey(prev, currentDraw.label));
       if (currentDraw.skillGroup === 'All' && currentDraw.tournamentChoice === 'Singles' && currentDraw.division === "Men's") setMergeMensSingles(false);
       if (currentDraw.skillGroup === 'All' && currentDraw.tournamentChoice === 'Singles' && currentDraw.division === "Women's") setMergeWomensSingles(false);
       if (currentDraw.tournamentChoice === 'Doubles' && currentDraw.division === 'All') setConsolidateDoubles(false);
-      setMessage({ type: 'success', text: `${currentDraw.label} rebuilt with current settings.` });
+      setMessage({ type: 'success', text: `${currentDraw.label} cancelled. Draw returned to preview mode.` });
     } catch (err) {
       console.error('Draw reset failed:', err);
-      setMessage({ type: 'error', text: 'Could not reset the draw.' });
+      setMessage({ type: 'error', text: 'Could not cancel the draw.' });
     } finally {
       setResettingDraw(false);
     }

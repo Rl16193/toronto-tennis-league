@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { DrawConfig, DrawTab, SkillGroup } from './types';
 
 type Props = {
@@ -16,7 +16,7 @@ type Props = {
 
 const subBtnClass = (active: boolean) =>
   `px-4 py-2 rounded-xl text-sm font-bold transition-colors ${
-    active ? 'bg-white text-tennis-dark' : 'bg-white/10 text-gray-300 hover:text-white'
+    active ? 'bg-white text-tennis-dark' : 'bg-white/10 text-white hover:text-white'
   }`;
 
 export const DrawTabs: React.FC<Props> = ({
@@ -50,7 +50,7 @@ export const DrawTabs: React.FC<Props> = ({
                 key={tab}
                 onClick={() => { onTabChange(tab); onReservesChange(false); }}
                 className={`px-5 py-2.5 rounded-2xl font-bold transition-colors ${
-                  activeTab === tab ? 'bg-clay text-white' : 'bg-tennis-surface/60 text-gray-300 hover:text-white'
+                  activeTab === tab ? 'bg-clay text-white' : 'bg-tennis-surface/60 text-white hover:text-white'
                 }`}
               >
                 {label}

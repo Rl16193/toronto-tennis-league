@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
@@ -121,7 +121,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
         {isEditing ? (
           <div className="space-y-6">
             <div className="space-y-3">
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest">Days</label>
+              <label className="block text-xs font-bold text-white uppercase tracking-widest">Days</label>
               <div className="flex flex-wrap gap-2">
                 {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map(day => (
                   <button
@@ -140,7 +140,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
                       });
                     }}
                     className={`w-10 h-10 flex items-center justify-center rounded-lg text-[10px] font-black border transition-all ${
-                      (editData.preferences?.availability_day || []).includes(day) ? 'bg-clay border-clay text-white' : 'bg-white/5 border-white/5 text-gray-400'
+                      (editData.preferences?.availability_day || []).includes(day) ? 'bg-clay border-clay text-white' : 'bg-white/5 border-white/5 text-white'
                     }`}
                   >
                     {day}
@@ -149,7 +149,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
               </div>
             </div>
             <div className="space-y-3">
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest">Time</label>
+              <label className="block text-xs font-bold text-white uppercase tracking-widest">Time</label>
               <div className="flex gap-2">
                 {['AM', 'PM'].map(time => (
                   <button
@@ -168,7 +168,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
                       });
                     }}
                     className={`flex-1 p-3 rounded-xl text-xs font-black border transition-all ${
-                      (editData.preferences?.availability_time || []).includes(time) ? 'bg-clay border-clay text-white' : 'bg-white/5 border-white/5 text-gray-400'
+                      (editData.preferences?.availability_time || []).includes(time) ? 'bg-clay border-clay text-white' : 'bg-white/5 border-white/5 text-white'
                     }`}
                   >
                     {time}
@@ -177,7 +177,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
               </div>
             </div>
             <div className="space-y-3">
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest">Courts</label>
+              <label className="block text-xs font-bold text-white uppercase tracking-widest">Courts</label>
 
               {/* Selected courts as dismissible chips */}
               {selectedCourts.length > 0 && (
@@ -210,7 +210,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
                         key={court}
                         type="button"
                         onClick={() => addCourt(court)}
-                        className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-gray-200 transition-colors hover:bg-clay/20 hover:text-white"
+                        className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-clay/20 hover:text-white"
                       >
                         {court}
                       </button>
@@ -229,7 +229,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
               </div>
             </div>
             <div className="space-y-3">
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest">Favourite Players</label>
+              <label className="block text-xs font-bold text-white uppercase tracking-widest">Favourite Players</label>
               <div className="flex flex-wrap gap-2">
                 {FAVOURITE_PLAYERS.map(player => (
                   <button
@@ -248,7 +248,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
                       });
                     }}
                     className={`px-3 py-1 rounded-lg text-[10px] font-bold border transition-all ${
-                      (editData.preferences?.favourite_players || []).includes(player) ? 'bg-clay/20 border-clay text-clay' : 'bg-white/5 border-white/5 text-gray-500'
+                      (editData.preferences?.favourite_players || []).includes(player) ? 'bg-clay/20 border-clay text-clay' : 'bg-white/5 border-white/5 text-white'
                     }`}
                   >
                     {player}
@@ -292,7 +292,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
         ) : (
           <div className="space-y-6">
             <div className="space-y-2">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Selected Days</p>
+              <p className="text-xs font-bold text-white uppercase tracking-widest">Selected Days</p>
               <div className="flex flex-wrap gap-2">
                 {profile.preferences.availability_day.map(day => (
                   <span key={day} className="px-3 py-1 bg-clay/10 border border-clay/20 rounded-lg text-xs font-bold text-clay">{day}</span>
@@ -300,7 +300,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
               </div>
             </div>
             <div className="space-y-2">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Time</p>
+              <p className="text-xs font-bold text-white uppercase tracking-widest">Time</p>
               <div className="flex flex-wrap gap-2">
                 {profile.preferences.availability_time.map(time => (
                   <span key={time} className="px-3 py-1 bg-clay/10 border border-clay/20 rounded-lg text-xs font-bold text-clay">{time}</span>
@@ -308,7 +308,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
               </div>
             </div>
             <div className="space-y-2">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Courts</p>
+              <p className="text-xs font-bold text-white uppercase tracking-widest">Courts</p>
               <div className="flex flex-wrap gap-2">
                 {profile.preferences.preferred_courts.map(court => (
                   <span key={court} className="px-3 py-1 bg-clay/10 border border-clay/20 rounded-lg text-xs font-bold text-clay">{court}</span>
@@ -316,7 +316,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
               </div>
             </div>
             <div className="space-y-2">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Favourite Players</p>
+              <p className="text-xs font-bold text-white uppercase tracking-widest">Favourite Players</p>
               <div className="flex flex-wrap gap-2">
                 {profile.preferences.favourite_players.map(player => (
                   <span key={player} className="px-3 py-1 bg-clay/10 border border-clay/20 rounded-lg text-xs font-bold text-clay">{player}</span>

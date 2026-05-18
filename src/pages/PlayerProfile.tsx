@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { Mail, Phone, Trophy, User } from 'lucide-react';
@@ -116,7 +116,7 @@ export const PlayerProfile: React.FC = () => {
           Player Not Found
         </h1>
 
-        <p className="text-gray-400 mb-6">
+        <p className="text-white mb-6">
           This player profile is not available.
         </p>
 
@@ -176,7 +176,7 @@ export const PlayerProfile: React.FC = () => {
             </h1>
 
             {stats && (
-              <p className="text-gray-400 mt-2">
+              <p className="text-white mt-2">
                 NTRP {stats.skill_level} · {stats.tournament_preference}
               </p>
             )}
@@ -196,7 +196,7 @@ export const PlayerProfile: React.FC = () => {
           {/* Contact Information */}
           <div className="rounded-2xl bg-tennis-dark/40 border border-white/10 p-5">
 
-            <p className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-4">
+            <p className="text-xs uppercase tracking-widest text-white font-bold mb-4">
               Contact Information
             </p>
 
@@ -216,7 +216,7 @@ export const PlayerProfile: React.FC = () => {
                       </div>
 
                       <div className="min-w-0">
-                        <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">
+                        <p className="text-[10px] uppercase tracking-widest text-white font-bold">
                           {item.label}
                         </p>
 
@@ -240,7 +240,7 @@ export const PlayerProfile: React.FC = () => {
           <div className="rounded-2xl bg-tennis-dark/40 border border-white/10 p-5">
             <Phone className="w-5 h-5 text-clay mb-3" />
 
-            <p className="text-xs uppercase tracking-widest text-gray-500 font-bold">
+            <p className="text-xs uppercase tracking-widest text-white font-bold">
               Contact Mode
             </p>
 
@@ -253,7 +253,7 @@ export const PlayerProfile: React.FC = () => {
           <div className="rounded-2xl bg-tennis-dark/40 border border-white/10 p-5">
             <Trophy className="w-5 h-5 text-clay mb-3" />
 
-            <p className="text-xs uppercase tracking-widest text-gray-500 font-bold">
+            <p className="text-xs uppercase tracking-widest text-white font-bold">
               Record
             </p>
 
@@ -277,13 +277,13 @@ export const PlayerProfile: React.FC = () => {
             {organizer.email && (
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-clay shrink-0" />
-                <span className="text-gray-300 font-semibold">{organizer.email}</span>
+                <span className="text-white font-semibold">{organizer.email}</span>
               </div>
             )}
             {organizer.phone && (
               <div className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-clay shrink-0" />
-                <span className="text-gray-300 font-semibold">{organizer.phone}</span>
+                <span className="text-white font-semibold">{organizer.phone}</span>
               </div>
             )}
           </div>
@@ -300,7 +300,7 @@ export const PlayerProfile: React.FC = () => {
           {(preferences?.availability_day?.length ?? 0) > 0 && (
             <div className="mb-4">
 
-              <p className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">
+              <p className="text-xs uppercase tracking-widest text-white font-bold mb-2">
                 Preferred Days
               </p>
 
@@ -316,7 +316,7 @@ export const PlayerProfile: React.FC = () => {
           {(preferences?.availability_time?.length ?? 0) > 0 && (
             <div className="mb-5">
 
-              <p className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-2">
+              <p className="text-xs uppercase tracking-widest text-white font-bold mb-2">
                 Preferred Times
               </p>
 
@@ -331,7 +331,7 @@ export const PlayerProfile: React.FC = () => {
 
           {markedDates.size > 0 && (
             <>
-              <p className="text-xs uppercase tracking-widest text-gray-500 font-bold mb-3">
+              <p className="text-xs uppercase tracking-widest text-white font-bold mb-3">
                 Player Availability (May 2026)
               </p>
 
@@ -340,7 +340,7 @@ export const PlayerProfile: React.FC = () => {
                 {['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((d) => (
                   <div
                     key={d}
-                    className="text-gray-500 text-xs font-medium text-center py-1"
+                    className="text-white text-xs font-medium text-center py-1"
                   >
                     {d}
                   </div>
@@ -355,7 +355,7 @@ export const PlayerProfile: React.FC = () => {
                       className={`p-2 text-xs rounded-lg text-center ${
                         selected
                           ? 'bg-orange-500 text-white font-bold'
-                          : 'text-gray-600 bg-gray-800/30'
+                          : 'text-white bg-gray-800/30'
                       }`}
                     >
                       {day}

@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
 import { Button } from '../../components/Button';
@@ -15,7 +15,7 @@ export const OpponentCard: React.FC<Props> = ({ opponent, eventId }) => (
     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
       <div>
         <h2 className="text-2xl font-black text-white">Your opponent is {opponent.name}</h2>
-        <p className="text-gray-400 mt-2">
+        <p className="text-white mt-2">
           Contact your opponent to schedule your matches:{' '}
           <span className="text-clay font-semibold">{opponent.contact || 'Contact not available'}</span>
         </p>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchSignInMethodsForEmail, getAdditionalUserInfo, signInWithEmailAndPassword, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
 import { getDownloadURL, ref } from 'firebase/storage';
@@ -149,12 +149,12 @@ export const Login: React.FC = () => {
             />
           )}
           {intent === 'join-event' && (
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-white">
               Sign in to join an event. New here? Use sign up to create your league profile first.
             </p>
           )}
           {intent === 'join-league' && (
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-white">
               Sign in to continue, or create a league profile to get updates and event access.
             </p>
           )}
@@ -172,8 +172,8 @@ export const Login: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <h3 className="text-xl font-bold text-white">Reset Link Sent</h3>
-                <p className="text-gray-400">If the email is linked with an account, you will receive a reset link.</p>
-                <p className="text-gray-500 text-sm">Check your spam folder too.</p>
+                <p className="text-white">If the email is linked with an account, you will receive a reset link.</p>
+                <p className="text-white text-sm">Check your spam folder too.</p>
               </div>
               <Button variant="outline" className="w-full" onClick={() => {
                 setResetSent(false);
@@ -227,7 +227,7 @@ export const Login: React.FC = () => {
 
               {!showForgot && (
                 <div className="flex items-center justify-between gap-4">
-                  <label className="flex items-center gap-3 text-sm text-gray-300">
+                  <label className="flex items-center gap-3 text-sm text-white">
                     <input
                       type="checkbox"
                       checked={stayLoggedIn}
@@ -258,7 +258,7 @@ export const Login: React.FC = () => {
                       <div className="w-full border-t border-white/5"></div>
                     </div>
                     <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-tennis-dark px-4 text-gray-500 font-bold tracking-widest">Or continue with</span>
+                      <span className="bg-tennis-dark px-4 text-white font-bold tracking-widest">Or continue with</span>
                     </div>
                   </div>
 
@@ -275,7 +275,7 @@ export const Login: React.FC = () => {
               )}
 
               <div className="text-center pt-6">
-                <p className="text-gray-400 text-sm">
+                <p className="text-white text-sm">
                   {showForgot ? (
                     <button
                       type="button"

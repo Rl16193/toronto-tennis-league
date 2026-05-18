@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
@@ -339,7 +339,7 @@ export const Signup: React.FC = () => {
         {/* Progress Bar */}
         <div className="mb-12">
           {intent === 'join-event' && (
-            <div className="mb-6 rounded-2xl border border-clay/20 bg-clay/10 px-5 py-4 text-sm text-gray-200">
+            <div className="mb-6 rounded-2xl border border-clay/20 bg-clay/10 px-5 py-4 text-sm text-white">
               Create your league profile to join events and receive updates.
             </div>
           )}
@@ -347,11 +347,11 @@ export const Signup: React.FC = () => {
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex flex-col items-center space-y-2">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg transition-all duration-300 ${
-                  step >= i ? 'clay-gradient text-white shadow-lg shadow-clay/20' : 'bg-tennis-surface/50 text-gray-500 border border-white/5'
+                  step >= i ? 'clay-gradient text-white shadow-lg shadow-clay/20' : 'bg-tennis-surface/50 text-white border border-white/5'
                 }`}>
                   {step > i ? <CheckCircle2 className="w-6 h-6" /> : i}
                 </div>
-                <span className={`text-xs font-bold uppercase tracking-widest ${step >= i ? 'text-clay' : 'text-gray-500'}`}>
+                <span className={`text-xs font-bold uppercase tracking-widest ${step >= i ? 'text-clay' : 'text-white'}`}>
                   {i === 1 ? 'Personal' : i === 2 ? 'Skills' : 'Review'}
                 </span>
               </div>
@@ -398,7 +398,7 @@ export const Signup: React.FC = () => {
                       {avatarPreview ? (
                         <img src={avatarPreview} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                       ) : (
-                        <User className="w-12 h-12 text-gray-600" />
+                        <User className="w-12 h-12 text-white" />
                       )}
                     </div>
                     <label className="absolute -bottom-2 -right-2 w-10 h-10 clay-gradient rounded-xl flex items-center justify-center cursor-pointer shadow-lg hover:scale-110 transition-transform">
@@ -406,7 +406,7 @@ export const Signup: React.FC = () => {
                       <input type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} />
                     </label>
                   </div>
-                  <p className="text-xs text-gray-500 font-medium">Profile Image (Optional)</p>
+                  <p className="text-xs text-white font-medium">Profile Image (Optional)</p>
                 </div>
 
                 <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -448,7 +448,7 @@ export const Signup: React.FC = () => {
                   {/* Row 2: Password | Confirm Password — always side-by-side */}
                   <div className="col-span-1 md:col-span-2 grid grid-cols-2 gap-4">
                     <div className="w-full space-y-1.5">
-                      <label className="block text-sm font-medium text-gray-300">
+                      <label className="block text-sm font-medium text-white">
                         Password <span className="text-orange-500">*</span>
                       </label>
                       <div className="relative">
@@ -462,7 +462,7 @@ export const Signup: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setShowPassword((v) => !v)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-white hover:text-white transition-colors"
                           tabIndex={-1}
                         >
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -474,7 +474,7 @@ export const Signup: React.FC = () => {
                     </div>
 
                     <div className="w-full space-y-1.5">
-                      <label className="block text-sm font-medium text-gray-300">
+                      <label className="block text-sm font-medium text-white">
                         Re-enter Password <span className="text-orange-500">*</span>
                       </label>
                       <div className="relative">
@@ -492,7 +492,7 @@ export const Signup: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setShowConfirmPassword((v) => !v)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-white hover:text-white transition-colors"
                           tabIndex={-1}
                         >
                           {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -517,11 +517,11 @@ export const Signup: React.FC = () => {
                   />
 
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-300">Preferred Contact Mode</label>
+                    <label className="block text-sm font-medium text-white">Preferred Contact Mode</label>
                     <div className="flex space-x-4">
                       {['email', 'phone'].map((mode) => (
                         <label key={mode} className={`flex-1 flex items-center justify-center p-3 rounded-2xl border cursor-pointer transition-all ${
-                          formData.contactMode === mode ? 'bg-clay/10 border-clay text-clay' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
+                          formData.contactMode === mode ? 'bg-clay/10 border-clay text-clay' : 'bg-white/5 border-white/5 text-white hover:bg-white/10'
                         }`}>
                           <input
                             type="radio"
@@ -567,7 +567,7 @@ export const Signup: React.FC = () => {
                     {SKILL_LEVELS.map((level) => (
                       <div key={level} className="flex flex-col items-center gap-2">
                         <span className={`w-2.5 h-2.5 rounded-full ${formData.skillLevel === level ? 'bg-clay' : 'bg-white/20'}`} />
-                        <span className={`text-[10px] font-black tracking-widest ${formData.skillLevel === level ? 'text-clay' : 'text-gray-500'}`}>
+                        <span className={`text-[10px] font-black tracking-widest ${formData.skillLevel === level ? 'text-clay' : 'text-white'}`}>
                           {level.toFixed(1)}
                         </span>
                       </div>
@@ -583,7 +583,7 @@ export const Signup: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                 {/* Court Selection — full width since Tournament Type removed */}
                 <div className="space-y-4 md:col-span-2">
-                  <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider">Preferred Courts</label>
+                  <label className="block text-sm font-bold text-white uppercase tracking-wider">Preferred Courts</label>
 
                   {/* Selected courts chips */}
                   {formData.preferredCourts.length > 0 && (
@@ -622,7 +622,7 @@ export const Signup: React.FC = () => {
                             key={court}
                             type="button"
                             onClick={() => selectCourt(court)}
-                            className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-gray-200 transition-colors hover:bg-clay/20 hover:text-white"
+                            className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-clay/20 hover:text-white"
                           >
                             {court}
                           </button>
@@ -638,7 +638,7 @@ export const Signup: React.FC = () => {
               </div>
 
               <div className="space-y-4">
-                <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center">
+                <label className="block text-sm font-bold text-white uppercase tracking-wider flex items-center">
                   <Star className="w-4 h-4 mr-2 text-clay" />
                   Favourite Players
                 </label>
@@ -658,7 +658,7 @@ export const Signup: React.FC = () => {
                       className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                         formData.favouritePlayers.includes(player)
                           ? 'bg-clay text-white shadow-lg shadow-clay/20'
-                          : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/5'
+                          : 'bg-white/5 text-white hover:bg-white/10 border border-white/5'
                       }`}
                     >
                       {player}
@@ -692,7 +692,7 @@ export const Signup: React.FC = () => {
               {/* Availability */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10 pt-6 border-t border-white/5">
                 <div className="space-y-4">
-                  <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center">
+                  <label className="block text-sm font-bold text-white uppercase tracking-wider flex items-center">
                     <Calendar className="w-4 h-4 mr-2 text-clay" />
                     Availability Day
                   </label>
@@ -708,7 +708,7 @@ export const Signup: React.FC = () => {
                           });
                         }}
                         className={`w-12 h-12 flex items-center justify-center rounded-xl text-xs font-black transition-all ${
-                          formData.availabilityDay.includes(day) ? 'bg-clay text-white shadow-lg shadow-clay/20' : 'bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10'
+                          formData.availabilityDay.includes(day) ? 'bg-clay text-white shadow-lg shadow-clay/20' : 'bg-white/5 text-white border border-white/5 hover:bg-white/10'
                         }`}
                       >
                         {day}
@@ -717,7 +717,7 @@ export const Signup: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-4">
-                  <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider flex items-center">
+                  <label className="block text-sm font-bold text-white uppercase tracking-wider flex items-center">
                     <Clock className="w-4 h-4 mr-2 text-clay" />
                     Availability Time
                   </label>
@@ -733,7 +733,7 @@ export const Signup: React.FC = () => {
                           });
                         }}
                         className={`w-16 h-12 flex items-center justify-center rounded-xl text-xs font-black transition-all ${
-                          formData.availabilityTime.includes(time) ? 'bg-clay text-white shadow-lg shadow-clay/20' : 'bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10'
+                          formData.availabilityTime.includes(time) ? 'bg-clay text-white shadow-lg shadow-clay/20' : 'bg-white/5 text-white border border-white/5 hover:bg-white/10'
                         }`}
                       >
                         {time}
@@ -754,15 +754,15 @@ export const Signup: React.FC = () => {
                     <h4 className="text-clay font-bold text-xs uppercase tracking-widest mb-4">Personal Info</h4>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-gray-500 text-sm">Name</span>
+                        <span className="text-white text-sm">Name</span>
                         <span className="text-white font-medium">{formData.name}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500 text-sm">Email</span>
+                        <span className="text-white text-sm">Email</span>
                         <span className="text-white font-medium">{formData.email}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-500 text-sm">Phone</span>
+                        <span className="text-white text-sm">Phone</span>
                         <span className="text-white font-medium">{formData.phone}</span>
                       </div>
                     </div>
@@ -772,7 +772,7 @@ export const Signup: React.FC = () => {
                     <h4 className="text-clay font-bold text-xs uppercase tracking-widest mb-4">Skill & Tournament</h4>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-gray-500 text-sm">Skill Level</span>
+                        <span className="text-white text-sm">Skill Level</span>
                         <span className="text-white font-medium">{formData.skillLevel}</span>
                       </div>
                     </div>
@@ -784,11 +784,11 @@ export const Signup: React.FC = () => {
                     <h4 className="text-clay font-bold text-xs uppercase tracking-widest mb-4">Preferences</h4>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-gray-500 text-sm">Availability</span>
+                        <span className="text-white text-sm">Availability</span>
                         <span className="text-white font-medium">{formData.availabilityDay.join(', ') || 'None'}</span>
                       </div>
                       <div className="space-y-1">
-                        <span className="text-gray-500 text-sm">Courts</span>
+                        <span className="text-white text-sm">Courts</span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {formData.preferredCourts.map(c => (
                             <span key={c} className="px-2 py-1 bg-clay/10 text-clay text-[10px] font-bold rounded-md">{c}</span>
@@ -796,7 +796,7 @@ export const Signup: React.FC = () => {
                         </div>
                       </div>
                       <div className="space-y-1">
-                        <span className="text-gray-500 text-sm">Favourite Players</span>
+                        <span className="text-white text-sm">Favourite Players</span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {formData.favouritePlayers.map(player => (
                             <span key={player} className="px-2 py-1 bg-clay/10 text-clay text-[10px] font-bold rounded-md">{player}</span>
@@ -814,7 +814,7 @@ export const Signup: React.FC = () => {
                       checked={formData.agreeToRules}
                       onChange={(e) => setFormData({...formData, agreeToRules: e.target.checked})}
                     />
-                    <label htmlFor="agree" className="text-sm text-gray-300 font-medium cursor-pointer">
+                    <label htmlFor="agree" className="text-sm text-white font-medium cursor-pointer">
                       I agree to the league rules and code of conduct
                     </label>
                   </div>

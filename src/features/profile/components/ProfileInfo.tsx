@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
@@ -58,6 +58,11 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
   };
 
   if (!profile) return null;
+
+  const phoneDigits = (editData.user?.phone ?? '').replace(/\D/g, '');
+  const phoneError = phoneDigits.length > 0 && phoneDigits.length !== 10
+    ? 'Please enter a valid 10-digit phone number'
+    : undefined;
 
   return (
     <div className="lg:col-span-2">
@@ -126,9 +131,10 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
                       },
                     })}
                   />
-                  <Input 
-                    label="Phone Number" 
-                    value={editData.user?.phone ?? profile.user.phone} 
+                  <Input
+                    label="Phone Number"
+                    value={editData.user?.phone ?? profile.user.phone}
+                    error={phoneError}
                     onChange={(e) => setEditData({
                       ...editData,
                       user: {
@@ -139,8 +145,8 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
                     })}
                   />
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-400">Email Address</label>
-                    <div className="flex items-center space-x-3 p-3 bg-white/5 border border-white/5 rounded-2xl text-gray-500">
+                    <label className="block text-sm font-medium text-white">Email Address</label>
+                    <div className="flex items-center space-x-3 p-3 bg-white/5 border border-white/5 rounded-2xl text-white">
                       <Mail className="w-4 h-4" />
                       <span className="min-w-0 break-all">{profile.user.email}</span>
                     </div>
@@ -182,17 +188,17 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
               ) : (
                 <>
                   <div className="space-y-1">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Name</p>
+                    <p className="text-xs font-bold text-white uppercase tracking-widest">Name</p>
                     <p className="text-xl font-bold text-clay">{profile.user.name}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Email</p>
+                    <p className="text-xs font-bold text-white uppercase tracking-widest">Email</p>
                     <p className="text-xl font-bold text-clay break-all">{profile.user.email}</p>
                   </div>
                   {!hasGoogleProvider ? (
-                    <div className="rounded-3xl border border-white/5 bg-white/5 p-4 text-sm text-gray-300">
-                      <p className="font-bold text-gray-100">Want Google sign-in later?</p>
-                      <p className="mt-1 text-gray-400">Link your Google account now so you can use it for future sign-ins.</p>
+                    <div className="rounded-3xl border border-white/5 bg-white/5 p-4 text-sm text-white">
+                      <p className="font-bold text-white">Want Google sign-in later?</p>
+                      <p className="mt-1 text-white">Link your Google account now so you can use it for future sign-ins.</p>
                       <Button
                         variant="clay"
                         size="sm"
@@ -205,7 +211,7 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
                     </div>
                   ) : null}
                   <div className="space-y-1">
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Phone</p>
+                    <p className="text-xs font-bold text-white uppercase tracking-widest">Phone</p>
                     <p className="text-xl font-bold text-clay">{profile.user.phone}</p>
                   </div>
                 </>

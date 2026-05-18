@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Link } from 'react-router-dom';
 import { Instagram, Mail, MapPin } from 'lucide-react';
 
@@ -16,11 +16,11 @@ export const Footer: React.FC = () => {
               <span className="text-clay"> &</span>
               <span className="text-white"> STRINGS</span>
             </Link>
-            <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
+            <p className="text-white text-sm leading-relaxed max-w-xs">
               Racquets & Strings is a community-driven, non-profit platform designed to help players connect and participate in matches, meetups, and tournaments.
             </p>
             <div className="flex items-center space-x-4">
-              <a href="https://www.instagram.com/tbtc.to/" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-gray-400 hover:bg-clay hover:text-white transition-all">
+              <a href="https://www.instagram.com/tbtc.to/" target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-white hover:bg-clay hover:text-white transition-all">
                 <Instagram className="w-5 h-5" />
               </a>
             </div>
@@ -30,9 +30,9 @@ export const Footer: React.FC = () => {
           <div className="space-y-6">
             <h4 className="text-white font-bold uppercase tracking-wider text-xs">Quick Links</h4>
             <ul className="space-y-4">
-              <li><Link to="/events" className="text-gray-400 hover:text-clay text-sm transition-colors">Events</Link></li>
-              <li><Link to="/profile" className="text-gray-400 hover:text-clay text-sm transition-colors">My Profile</Link></li>
-              <li><Link to="/rules" className="text-gray-400 hover:text-clay text-sm transition-colors">League Rules</Link></li>
+              <li><Link to="/events" className="text-white hover:text-clay text-sm transition-colors">Events</Link></li>
+              <li><Link to="/profile" className="text-white hover:text-clay text-sm transition-colors">My Profile</Link></li>
+              <li><Link to="/rules" className="text-white hover:text-clay text-sm transition-colors">League Rules</Link></li>
             </ul>
           </div>
 
@@ -40,9 +40,9 @@ export const Footer: React.FC = () => {
           <div className="space-y-6">
             <h4 className="text-white font-bold uppercase tracking-wider text-xs">Legal</h4>
             <ul className="space-y-4">
-              <li><Link to="/terms" className="text-gray-400 hover:text-clay text-sm transition-colors">Terms of Service</Link></li>
-              <li><Link to="/privacy" className="text-gray-400 hover:text-clay text-sm transition-colors">Privacy Policy</Link></li>
-              <li><Link to="/contact" className="text-gray-400 hover:text-clay text-sm transition-colors">Contact Us</Link></li>
+              <li><Link to="/terms" className="text-white hover:text-clay text-sm transition-colors">Terms of Service</Link></li>
+              <li><Link to="/privacy" className="text-white hover:text-clay text-sm transition-colors">Privacy Policy</Link></li>
+              <li><Link to="/contact" className="text-white hover:text-clay text-sm transition-colors">Contact Us</Link></li>
             </ul>
           </div>
 
@@ -50,11 +50,11 @@ export const Footer: React.FC = () => {
           <div className="space-y-6">
             <h4 className="text-white font-bold uppercase tracking-wider text-xs">Contact Us</h4>
             <ul className="space-y-4">
-              <li className="flex items-start space-x-3 text-gray-400 text-sm">
+              <li className="flex items-start space-x-3 text-white text-sm">
                 <Mail className="w-5 h-5 text-clay shrink-0" />
                 <span>tenniscommunity.tbtc@gmail.com</span>
               </li>
-              <li className="flex items-start space-x-3 text-gray-400 text-sm">
+              <li className="flex items-start space-x-3 text-white text-sm">
                 <MapPin className="w-5 h-5 text-clay shrink-0" />
                 <span>Toronto, ON, Canada</span>
               </li>
@@ -63,11 +63,11 @@ export const Footer: React.FC = () => {
         </div>
 
         <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-          <p className="text-gray-500 text-xs">
+          <p className="text-white text-xs">
             © {currentYear} Racquets & Strings. All rights reserved.
           </p>
           <div className="flex items-center space-x-6">
-            <span className="text-gray-500 text-xs flex items-center">
+            <span className="text-white text-xs flex items-center">
               Made with <span className="text-clay mx-1">❤</span> in Toronto
             </span>
           </div>

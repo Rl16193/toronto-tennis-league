@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { ChevronDown, Download, Pencil, Play, X, XCircle } from 'lucide-react';
 import { Button } from '../../components/Button';
 
@@ -70,7 +70,7 @@ export const TournamentHeader: React.FC<Props> = ({
                       className={`w-full flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
                         active
                           ? 'bg-clay/20 text-clay'
-                          : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                          : 'text-white hover:bg-white/5 hover:text-white'
                       }`}
                     >
                       {label}
