@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { Button } from '../../../components/Button';
 import { Trophy, Edit2, Save, X } from 'lucide-react';
@@ -36,10 +36,10 @@ export const ProfileSkills: React.FC<ProfileSkillsProps> = ({
     <div className={`rounded-[2.5rem] border transition-all duration-500 ${
       isEditing ? 'bg-gray-800/50 border-white/10' : 'bg-tennis-surface/30 border-white/5 shadow-xl'
     }`}>
-      <div className="p-8">
-        <div className="flex justify-between items-start mb-8">
-          <h2 className="text-2xl font-bold text-white flex items-center">
-            <Trophy className="w-6 h-6 mr-3 text-clay" />
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold text-white flex items-center">
+            <Trophy className="w-5 h-5 mr-2 text-clay" />
             Skills
           </h2>
           {!isEditing ? (
@@ -71,7 +71,7 @@ export const ProfileSkills: React.FC<ProfileSkillsProps> = ({
         {isEditing ? (
           <div className="space-y-6">
             <div className="space-y-4">
-              <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider">
+              <label className="block text-sm font-bold text-white uppercase tracking-wider">
                 NTRP Level: {editData.stats?.skill_level ?? profile.stats.skill_level}
               </label>
               <input 
@@ -94,24 +94,21 @@ export const ProfileSkills: React.FC<ProfileSkillsProps> = ({
                 {SKILL_LEVELS.map((level) => (
                   <span
                     key={level}
-                    className={`text-[10px] font-black tracking-widest ${(editData.stats?.skill_level ?? profile.stats.skill_level) === level ? 'text-clay' : 'text-gray-500'}`}
+                    className={`text-[10px] font-black tracking-widest ${(editData.stats?.skill_level ?? profile.stats.skill_level) === level ? 'text-clay' : 'text-white'}`}
                   >
                     {level.toFixed(1)}
                   </span>
                 ))}
               </div>
-              <p className="text-sm text-gray-400 italic">
+              <p className="text-sm text-white italic">
                 "{SKILL_DESCRIPTIONS[(editData.stats?.skill_level ?? profile.stats.skill_level) as number]}"
               </p>
             </div>
           </div>
         ) : (
-          <div className="space-y-6">
-            <div className="p-6 rounded-3xl bg-clay/10 border border-clay/20">
-              <p className="text-clay font-black text-3xl mb-1">NTRP {profile.stats.skill_level}</p>
-              <p className="text-gray-400 text-sm italic">"{SKILL_DESCRIPTIONS[profile.stats.skill_level]}"</p>
-            </div>
-          </div>
+          <p className="text-white font-semibold">
+            NTRP Skill — <span className="text-clay font-black">{profile.stats.skill_level}</span>
+          </p>
         )}
       </div>
     </div>

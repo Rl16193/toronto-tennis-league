@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -21,7 +21,7 @@ export const Input: React.FC<InputProps> = ({
   return (
     <div className="w-full space-y-1.5">
       {label && (
-        <label className="block text-sm font-medium text-gray-300">
+        <label className="block text-sm font-medium text-white">
           {label}
           {required && <span className="text-orange-500 ml-0.5">*</span>}
         </label>

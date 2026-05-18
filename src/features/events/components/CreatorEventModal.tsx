@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Upload } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { ModalShell } from '../../../components/ModalShell';
@@ -52,7 +52,7 @@ export const CreatorEventModal: React.FC<Props> = ({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">Title <span className="text-orange-500">*</span></span>
+          <span className="block text-sm font-medium text-white">Title <span className="text-orange-500">*</span></span>
           <input
             value={eventForm.title}
             onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
@@ -62,7 +62,7 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">Type <span className="text-orange-500">*</span></span>
+          <span className="block text-sm font-medium text-white">Type <span className="text-orange-500">*</span></span>
           <select
             value={eventForm.type}
             onChange={(e) => setEventForm({ ...eventForm, type: e.target.value })}
@@ -75,7 +75,7 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">Location</span>
+          <span className="block text-sm font-medium text-white">Location</span>
           <input
             value={eventForm.location}
             onChange={(e) => setEventForm({ ...eventForm, location: e.target.value })}
@@ -85,7 +85,7 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">Organizer <span className="text-orange-500">*</span></span>
+          <span className="block text-sm font-medium text-white">Organizer <span className="text-orange-500">*</span></span>
           <input
             value={eventForm.organizer}
             onChange={(e) => setEventForm({ ...eventForm, organizer: e.target.value })}
@@ -95,7 +95,7 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">Start Date <span className="text-orange-500">*</span></span>
+          <span className="block text-sm font-medium text-white">Start Date <span className="text-orange-500">*</span></span>
           <input
             type="date"
             value={eventForm.startDate}
@@ -105,7 +105,7 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">End Date <span className="text-orange-500">*</span></span>
+          <span className="block text-sm font-medium text-white">End Date <span className="text-orange-500">*</span></span>
           <input
             type="date"
             value={eventForm.endDate}
@@ -115,7 +115,7 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">Join Last Date</span>
+          <span className="block text-sm font-medium text-white">Join Last Date</span>
           <input
             type="date"
             value={eventForm.joinLastDate}
@@ -125,7 +125,7 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">Time</span>
+          <span className="block text-sm font-medium text-white">Time</span>
           <input
             value={eventForm.time}
             onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
@@ -135,7 +135,7 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">Skill Level</span>
+          <span className="block text-sm font-medium text-white">Skill Level</span>
           <select
             value={eventForm.skillLevel}
             onChange={(e) => setEventForm({ ...eventForm, skillLevel: e.target.value })}
@@ -148,8 +148,8 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-gray-300">Image</span>
-          <div className="rounded-2xl border border-dashed border-white/20 bg-tennis-dark/60 px-4 py-3 text-gray-300">
+          <span className="block text-sm font-medium text-white">Image</span>
+          <div className="rounded-2xl border border-dashed border-white/20 bg-tennis-dark/60 px-4 py-3 text-white">
             <div className="flex items-center gap-3">
               <Upload className="w-5 h-5 text-clay" />
               <span className="text-sm font-semibold truncate">{eventImageFile?.name || 'Upload event image'}</span>
@@ -158,13 +158,13 @@ export const CreatorEventModal: React.FC<Props> = ({
               type="file"
               accept="image/jpeg,image/png,image/jpg,image/webp,image/gif,image/heic,image/heif"
               onChange={onImageChange}
-              className="mt-3 block w-full text-sm text-gray-400 file:mr-4 file:rounded-xl file:border-0 file:bg-clay file:px-4 file:py-2 file:font-semibold file:text-white"
+              className="mt-3 block w-full text-sm text-white file:mr-4 file:rounded-xl file:border-0 file:bg-clay file:px-4 file:py-2 file:font-semibold file:text-white"
             />
           </div>
         </label>
 
         <label className="space-y-2 md:col-span-2">
-          <span className="block text-sm font-medium text-gray-300">About <span className="text-orange-500">*</span></span>
+          <span className="block text-sm font-medium text-white">About <span className="text-orange-500">*</span></span>
           <textarea
             value={eventForm.about}
             onChange={(e) => setEventForm({ ...eventForm, about: e.target.value })}

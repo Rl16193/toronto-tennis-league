@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy, Users, MapPin, Star } from 'lucide-react';
 import { getDownloadURL, listAll, ref } from 'firebase/storage';
@@ -77,7 +77,7 @@ export const Home: React.FC = () => {
                 className="mx-auto w-64 sm:w-80 md:w-96 lg:w-[800px] mb-6"
               />
             )}
-            <p className="text-base md:text-lg text-gray-400 leading-relaxed max-w-xl mx-auto text-center mb-6">
+            <p className="text-base md:text-lg text-white leading-relaxed max-w-xl mx-auto text-center mb-6">
               Join a community of Tennis Enthusiasts in Toronto.
             </p>
 
@@ -111,7 +111,7 @@ export const Home: React.FC = () => {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center space-y-2 mb-6">
           <h2 className="text-2xl md:text-3xl font-display font-bold text-white">Test Your Racquet Skills</h2>
-          <p className="text-gray-400 max-w-2xl mx-auto text-sm md:text-base">
+          <p className="text-white max-w-2xl mx-auto text-sm md:text-base">
             Join the league to get event updates and access to your player profile.
           </p>
         </div>
@@ -146,7 +146,7 @@ export const Home: React.FC = () => {
                 <feature.icon className="w-8 h-8 text-white" />
               </div>
               <h3 className="text-xl md:text-2xl font-bold text-white mb-3">{feature.title}</h3>
-              <p className="text-gray-400 leading-relaxed">{feature.desc}</p>
+              <p className="text-white leading-relaxed">{feature.desc}</p>
             </motion.div>
           ))}
         </div>
@@ -156,7 +156,7 @@ export const Home: React.FC = () => {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center space-y-3 mb-8">
           <h2 className="text-3xl md:text-4xl font-display font-bold text-white">2025</h2>
-          <p className="text-gray-400 max-w-2xl mx-auto text-base md:text-lg">
+          <p className="text-white max-w-2xl mx-auto text-base md:text-lg">
             Our past events.
           </p>
         </div>
@@ -185,7 +185,7 @@ export const Home: React.FC = () => {
             </motion.div>
           ))}
           {galleryImages.length === 0 && (
-            <div className="col-span-2 md:col-span-4 rounded-[2rem] border border-dashed border-white/10 p-10 text-center text-gray-400">
+            <div className="col-span-2 md:col-span-4 rounded-[2rem] border border-dashed border-white/10 p-10 text-center text-white">
               Loading...
             </div>
           )}

@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Check, Flag } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { ScoreSubmission, TournamentMatch } from './types';
@@ -20,7 +20,7 @@ const SetScores: React.FC<{ submission: ScoreSubmission; match: TournamentMatch 
   const p2First = match.player_2_name.split(' ')[0];
 
   return (
-    <div className="text-sm text-gray-300 space-y-1">
+    <div className="text-sm text-white space-y-1">
       {sets.map(([p1, p2], i) => (
         <p key={i}>
           Set {i + 1}:{' '}
@@ -61,9 +61,9 @@ export const FlaggedResults: React.FC<Props> = ({ submissions, matches, onResolv
               <p className="text-white font-bold text-lg mb-0.5">
                 {match.player_1_name} vs {match.player_2_name}
               </p>
-              <p className="text-sm text-gray-400 mb-4">{match.round} · Match {match.match_id}</p>
+              <p className="text-sm text-white mb-4">{match.round} · Match {match.match_id}</p>
 
-              <p className="text-sm text-gray-400 mb-3">
+              <p className="text-sm text-white mb-3">
                 Both players submitted different results. Pick the correct one:
               </p>
 
@@ -74,7 +74,7 @@ export const FlaggedResults: React.FC<Props> = ({ submissions, matches, onResolv
                     className="rounded-xl bg-tennis-surface/60 border border-white/10 p-4 flex flex-col gap-3"
                   >
                     <div>
-                      <p className="text-xs text-gray-400 mb-1">Submitted by {s.submitted_by_name}</p>
+                      <p className="text-xs text-white mb-1">Submitted by {s.submitted_by_name}</p>
                       <p className="text-white font-bold">Winner: {s.claimed_winner_name}</p>
                     </div>
 

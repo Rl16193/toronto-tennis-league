@@ -320,17 +320,6 @@ export const useTournament = (eventIdOverride?: string) => {
     });
   }, [currentDraw, currentDrawAllPlayers, currentMatches, event?.id, previewDrawSize, previewSlotOverrides, started, templates]);
 
-  const myActiveMatch = useMemo(
-    () => user
-      ? matches.find((m) =>
-          m.status !== 'complete' &&
-          [m.player_1_user_id, m.player_2_user_id].includes(user.uid) &&
-          m.player_1_name !== BYE && m.player_2_name !== BYE &&
-          m.player_1_name !== PLAYER_LOADING && m.player_2_name !== PLAYER_LOADING,
-        ) ?? null
-      : null,
-    [matches, user],
-  );
 
   const visibleUserMatch = useMemo(
     () => user
@@ -342,12 +331,6 @@ export const useTournament = (eventIdOverride?: string) => {
     [displayMatches, user],
   );
 
-  const hasSubmittedScore = useMemo(
-    () => !!myActiveMatch && submissions.some(
-      (s) => s.match_doc_id === myActiveMatch.id && s.submitted_by === user?.uid,
-    ),
-    [myActiveMatch, submissions, user],
-  );
 
   // For the edit dropdown, include ALL participants for this division/choice regardless of skill group
   // so that players moved between skill brackets remain accessible.
@@ -513,7 +496,7 @@ export const useTournament = (eventIdOverride?: string) => {
     [participants, allUsers],
   );
 
-  const opponentMatch = myActiveMatch || visibleUserMatch;
+  const opponentMatch = visibleUserMatch;
   const opponent = opponentMatch && user
     ? opponentMatch.player_1_user_id === user.uid
       ? { name: opponentMatch.player_2_name, userId: opponentMatch.player_2_user_id, contact: opponentMatch.player_2_contact }
@@ -745,25 +728,24 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   const handleResetDraw = async () => {
-    if (!isCreator || started || !currentDraw || currentMatches.length === 0) return;
-    if (!window.confirm(`Reset and regenerate ${currentDraw.label}? This rebuilds the draw with current players and settings.`)) return;
+    if (!isCreator || !currentDraw || currentMatches.length === 0) return;
+    if (!window.confirm(`Cancel all matches for ${currentDraw.label}? This will clear the draw and return to preview mode.`)) return;
     setResettingDraw(true);
     setMessage(null);
     try {
       const batch = writeBatch(db);
       currentMatches.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
       await batch.commit();
-      await generateDraw(currentDraw);
       setEditMode(false);
       setPreviewSlotOverrides((prev) => deleteKey(prev, currentDraw.label));
       setPreviewDrawSize((prev) => deleteKey(prev, currentDraw.label));
       if (currentDraw.skillGroup === 'All' && currentDraw.tournamentChoice === 'Singles' && currentDraw.division === "Men's") setMergeMensSingles(false);
       if (currentDraw.skillGroup === 'All' && currentDraw.tournamentChoice === 'Singles' && currentDraw.division === "Women's") setMergeWomensSingles(false);
       if (currentDraw.tournamentChoice === 'Doubles' && currentDraw.division === 'All') setConsolidateDoubles(false);
-      setMessage({ type: 'success', text: `${currentDraw.label} rebuilt with current settings.` });
+      setMessage({ type: 'success', text: `${currentDraw.label} cancelled. Draw returned to preview mode.` });
     } catch (err) {
       console.error('Draw reset failed:', err);
-      setMessage({ type: 'error', text: 'Could not reset the draw.' });
+      setMessage({ type: 'error', text: 'Could not cancel the draw.' });
     } finally {
       setResettingDraw(false);
     }
@@ -815,18 +797,13 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
+  // Only the creator can submit scores — no player-side submission.
   const handleSubmitScore = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!scoreForm || !user || !profile) return;
+    if (!scoreForm || !user || !profile || !isCreator) return;
 
     const match = matches.find((m) => m.id === scoreForm.matchDocId);
     if (!match) return;
-
-    const isPlayer1 = match.player_1_user_id === user.uid;
-    const isPlayer2 = match.player_2_user_id === user.uid;
-    // Creator override: always applied when overwriting a complete match, or when creator is not a player
-    const isCreatorSubmit = isCreator && (match.status === 'complete' || (!isPlayer1 && !isPlayer2));
-    if (!isPlayer1 && !isPlayer2 && !isCreatorSubmit) return;
 
     const parsedSets = scoreForm.sets.map((s) => ({
       mine: Number(s.mine || 0),
@@ -837,10 +814,9 @@ export const useTournament = (eventIdOverride?: string) => {
       return;
     }
 
-    // Creator submits from player_1's perspective; player_2 submits from their own perspective
-    const viewAsPlayer1 = isPlayer1 || isCreatorSubmit;
-    const p1Scores = parsedSets.map((s) => (viewAsPlayer1 ? s.mine : s.opponent));
-    const p2Scores = parsedSets.map((s) => (viewAsPlayer1 ? s.opponent : s.mine));
+    // Creator always submits from player_1's perspective
+    const p1Scores = parsedSets.map((s) => s.mine);
+    const p2Scores = parsedSets.map((s) => s.opponent);
     const pointsWon = parsedSets.reduce((t, s) => t + s.mine, 0);
     const opponentPoints = parsedSets.reduce((t, s) => t + s.opponent, 0);
 
@@ -859,42 +835,19 @@ export const useTournament = (eventIdOverride?: string) => {
       points_won_by_submitter: pointsWon,
       opponent_points_won: opponentPoints,
       total_points_played: pointsWon + opponentPoints,
-      status: 'pending',
+      status: 'accepted',
       created_at: new Date().toISOString(),
     };
 
-    // Creator override: auto-accept immediately, no need to wait for second submission
-    if (isCreatorSubmit) {
-      await setDoc(doc(db, 'score_submissions', submission.id), { ...submission, status: 'accepted' });
-      await updateMatchWithSubmission(match, { ...submission, status: 'accepted' });
+    try {
+      await setDoc(doc(db, 'score_submissions', submission.id), submission);
+      await updateMatchWithSubmission(match, submission);
       setScoreForm(null);
       setMessage({ type: 'success', text: 'Score recorded and draw updated.' });
-      return;
+    } catch (err) {
+      console.error('Score submission failed:', err);
+      setMessage({ type: 'error', text: 'Could not record score. Please try again.' });
     }
-
-    const existingOther = submissions.find(
-      (s) => s.match_doc_id === match.id && s.submitted_by !== user.uid,
-    );
-
-    await setDoc(doc(db, 'score_submissions', submission.id), submission);
-
-    if (existingOther) {
-      if (scoresMatch(submission, existingOther)) {
-        await updateMatchWithSubmission(match, submission);
-        setMessage({ type: 'success', text: 'Scores matched. The draw has been updated.' });
-      } else {
-        await Promise.all([
-          updateDoc(doc(db, 'score_submissions', submission.id), { status: 'flagged' }),
-          updateDoc(doc(db, 'score_submissions', existingOther.id), { status: 'flagged' }),
-          updateDoc(doc(db, 'tournament_matches', match.id), { status: 'flagged' }),
-        ]);
-        setMessage({ type: 'success', text: 'Score submitted.' });
-      }
-    } else {
-      setMessage({ type: 'success', text: 'Score submitted. Waiting for your opponent to confirm.' });
-    }
-
-    setScoreForm(null);
   };
 
   const handleAddPlayer = async (userId: string, partnerName?: string, divisionOverride?: string) => {
@@ -931,14 +884,11 @@ export const useTournament = (eventIdOverride?: string) => {
     [matches, scoreForm],
   );
 
-  const handleOpenScoreForm = (matchOverride?: TournamentMatch) => {
-    const targetMatch = matchOverride ?? myActiveMatch;
-    if (!targetMatch || !user) return;
-    const isTargetPlayer =
-      targetMatch.player_1_user_id === user.uid || targetMatch.player_2_user_id === user.uid;
+  const handleOpenScoreForm = (match: TournamentMatch) => {
+    if (!match || !user) return;
     setScoreForm({
-      matchDocId: targetMatch.id,
-      winnerUserId: isTargetPlayer ? user.uid : targetMatch.player_1_user_id,
+      matchDocId: match.id,
+      winnerUserId: match.player_1_user_id,
       sets: [{ mine: '', opponent: '' }, { mine: '', opponent: '' }, { mine: '', opponent: '' }],
     });
   };
@@ -1042,8 +992,6 @@ export const useTournament = (eventIdOverride?: string) => {
     currentMatches,
     displayMatches,
     visibleDraws,
-    myActiveMatch,
-    hasSubmittedScore,
     opponent,
     editPlayers,
     reservesPlayers,

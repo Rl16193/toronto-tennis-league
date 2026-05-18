@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+﻿import React, { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useTournament } from './tournament/useTournament';
@@ -49,7 +49,7 @@ export const Tournament: React.FC = () => {
     allTournamentEvents,
     isCreator, started, userParticipant,
     currentDraw, currentMatches, displayMatches, visibleDraws,
-    myActiveMatch, hasSubmittedScore, opponent,
+    opponent,
     editPlayers, reservesPlayers, currentDrawSize, skillMismatchedCount,
     message, scoreForm, scoreFormMatch, setScoreForm,
     generating, resettingDraw, editMode, setEditMode,
@@ -108,11 +108,11 @@ export const Tournament: React.FC = () => {
                 className={`px-4 py-2 rounded-2xl text-sm font-semibold transition-all border ${
                   isCurrent
                     ? 'bg-clay text-white border-clay'
-                    : 'bg-tennis-surface/40 text-gray-400 border-white/10 hover:text-white hover:border-white/30'
+                    : 'bg-tennis-surface/40 text-white border-white/10 hover:text-white hover:border-white/30'
                 }`}
               >
                 {e.title}
-                <span className={`ml-2 text-xs font-bold uppercase tracking-wider ${isCurrent ? 'text-white/70' : 'text-gray-600'}`}>
+                <span className={`ml-2 text-xs font-bold uppercase tracking-wider ${isCurrent ? 'text-white/70' : 'text-white'}`}>
                   {isActive ? 'Active' : 'Upcoming'}
                 </span>
               </button>
@@ -154,7 +154,7 @@ export const Tournament: React.FC = () => {
             <div className="inline-flex items-center gap-2">
               <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest border ${
                 state === 'Live Preview'
-                  ? 'bg-white/5 border-white/10 text-gray-400'
+                  ? 'bg-white/5 border-white/10 text-white'
                   : state === 'Tournament Complete'
                   ? 'bg-green-500/15 border-green-500/30 text-green-400'
                   : 'bg-clay/15 border-clay/30 text-clay'
@@ -181,10 +181,7 @@ export const Tournament: React.FC = () => {
       {opponent && !showReserves && (
         <OpponentCard
           opponent={opponent}
-          myActiveMatch={myActiveMatch}
-          hasSubmittedScore={hasSubmittedScore}
           eventId={event?.id}
-          onSubmitScore={handleOpenScoreForm}
         />
       )}
 
@@ -206,7 +203,7 @@ export const Tournament: React.FC = () => {
         <>
           {isCreator && (
             <div className="mb-4 flex flex-wrap items-center gap-3">
-              <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">LL Draw Size</span>
+              <span className="text-sm font-bold text-white uppercase tracking-widest">LL Draw Size</span>
               {[4, 8, 16].map((size) => (
                 <button
                   key={size}
@@ -216,8 +213,8 @@ export const Tournament: React.FC = () => {
                     currentLLSize === size
                       ? 'bg-clay text-white'
                       : !llIsPreview
-                        ? 'bg-tennis-surface/30 text-gray-600 cursor-not-allowed'
-                        : 'bg-tennis-surface/60 text-gray-300 hover:text-white'
+                        ? 'bg-tennis-surface/30 text-white cursor-not-allowed'
+                        : 'bg-tennis-surface/60 text-white hover:text-white'
                   }`}
                 >
                   R{size}
@@ -230,7 +227,7 @@ export const Tournament: React.FC = () => {
               )}
               {!llIsPreview && (
                 <>
-                  <span className="text-xs text-gray-500">Draw finalized — use Edit Draw to modify players.</span>
+                  <span className="text-xs text-white">Draw finalized — use Edit Draw to modify players.</span>
                   <Button variant="danger" onClick={handleResetLLDraw} className="ml-2">
                     Reset LL Draw
                   </Button>
@@ -267,7 +264,7 @@ export const Tournament: React.FC = () => {
           {editMode && currentDraw && (
             <div className="mb-4">
               <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Draw Size</span>
+                <span className="text-sm font-bold text-white uppercase tracking-widest">Draw Size</span>
                 {(currentDraw.tournamentChoice === 'Singles' ? [8, 16, 32] : [8, 16]).map((size) => (
                   <button
                     key={size}
@@ -277,8 +274,8 @@ export const Tournament: React.FC = () => {
                       currentDrawSize === size
                         ? 'bg-clay text-white'
                         : currentMatches.length > 0
-                          ? 'bg-tennis-surface/30 text-gray-600 cursor-not-allowed'
-                          : 'bg-tennis-surface/60 text-gray-300 hover:text-white'
+                          ? 'bg-tennis-surface/30 text-white cursor-not-allowed'
+                          : 'bg-tennis-surface/60 text-white hover:text-white'
                     }`}
                   >
                     R{size}
@@ -311,19 +308,19 @@ export const Tournament: React.FC = () => {
           {reservesPlayers.length > 0 && (
             <div className="mt-8">
               <h3 className="text-xl font-bold text-white mb-4">
-                Reserves <span className="text-gray-400 text-base font-normal">({reservesPlayers.length})</span>
+                Reserves <span className="text-white text-base font-normal">({reservesPlayers.length})</span>
               </h3>
               <div className="bg-tennis-surface/30 border border-white/5 rounded-2xl p-6">
                 <ol className="space-y-2">
                   {reservesPlayers.map((player, i) => (
-                    <li key={player.user_id} className="flex items-center gap-3 text-gray-300">
-                      <span className="text-gray-500 text-sm w-6 text-right shrink-0">{i + 1}.</span>
+                    <li key={player.user_id} className="flex items-center gap-3 text-white">
+                      <span className="text-white text-sm w-6 text-right shrink-0">{i + 1}.</span>
                       <span className="font-semibold">{player.name}</span>
                     </li>
                   ))}
                 </ol>
                 {editMode && (
-                  <p className="text-xs text-gray-500 mt-4 border-t border-white/5 pt-4">
+                  <p className="text-xs text-white mt-4 border-t border-white/5 pt-4">
                     Use the slot dropdowns in the draw above to assign reserves players.
                   </p>
                 )}
@@ -348,7 +345,7 @@ export const Tournament: React.FC = () => {
           onChange={setScoreForm}
           onClose={() => setScoreForm(null)}
           onSubmit={handleSubmitScore}
-          isCreatorSubmit={isCreator && scoreFormMatch.player_1_user_id !== user?.uid && scoreFormMatch.player_2_user_id !== user?.uid}
+          isCreatorSubmit={true}
         />
       )}
     </div>

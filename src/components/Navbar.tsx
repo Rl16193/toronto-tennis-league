@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { LogOut, Calendar, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -67,7 +67,7 @@ export const Navbar: React.FC = () => {
                 key={link.path}
                 to={link.path}
                 className={`text-sm font-medium transition-colors hover:text-clay ${
-                  location.pathname === link.path ? 'text-clay' : 'text-gray-300'
+                  location.pathname === link.path ? 'text-clay' : 'text-white'
                 }`}
               >
                 {link.name}
@@ -79,7 +79,7 @@ export const Navbar: React.FC = () => {
           <div className="hidden md:flex items-center gap-4 shrink-0">
             {user ? (
               <>
-                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-gray-400 hover:text-white">
+                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-white hover:text-white">
                   <LogOut className="w-4 h-4 mr-2" />
                   Logout
                 </Button>
@@ -115,7 +115,7 @@ export const Navbar: React.FC = () => {
                     key={link.path}
                     to={link.path}
                     className={`p-2 rounded-xl transition-colors ${
-                      'text-gray-400 hover:text-white hover:bg-white/5'
+                      'text-white hover:text-white hover:bg-white/5'
                     }`}
                     aria-label={link.name}
                   >
@@ -124,7 +124,7 @@ export const Navbar: React.FC = () => {
                 ))}
                 <button
                   onClick={handleLogout}
-                  className="p-2 rounded-xl text-gray-500 hover:text-red-400 hover:bg-red-500/5 transition-colors"
+                  className="p-2 rounded-xl text-white hover:text-red-400 hover:bg-red-500/5 transition-colors"
                   aria-label="Logout"
                 >
                   <LogOut className="w-5 h-5" />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
@@ -66,7 +66,7 @@ export const Profile: React.FC = () => {
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-clay border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-white font-semibold">Preparing your profile...</p>
-          <p className="text-gray-400 text-sm mt-2">This can take a moment right after sign-in.</p>
+          <p className="text-white text-sm mt-2">This can take a moment right after sign-in.</p>
         </div>
       </div>
     );
@@ -127,6 +127,7 @@ export const Profile: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] gap-6 lg:gap-8">
+        {/* Left column: Contact Card, Skills, Availability */}
         <div className="space-y-6">
           <ProfileInfo
             isEditing={isEditingInfo}
@@ -168,6 +169,47 @@ export const Profile: React.FC = () => {
               setEmailChangeData({ newEmail: '', password: '' });
             }}
           />
+
+          <ProfileSkills
+            isEditing={isEditingSkills}
+            setIsEditing={setIsEditingSkills}
+            editData={editData}
+            setEditData={setEditData}
+            onSave={async () => {
+              const saved = await actions.updateSkills(
+                editData.stats?.skill_level || profile.stats.skill_level,
+                profile.stats.tournament_preference
+              );
+              if (saved) {
+                setIsEditingSkills(false);
+              }
+            }}
+            updateLoading={updateLoading}
+          />
+
+          <ProfileAvailability
+            isEditing={isEditingAvailability}
+            setIsEditing={setIsEditingAvailability}
+            editData={editData}
+            setEditData={setEditData}
+            onSave={async () => {
+              const saved = await actions.updateAvailability(
+                editData.preferences?.availability_day || profile.preferences.availability_day,
+                editData.preferences?.availability_time || profile.preferences.availability_time,
+                editData.preferences?.preferred_courts || profile.preferences.preferred_courts,
+                editData.preferences?.favourite_players || profile.preferences.favourite_players
+              );
+              if (saved) {
+                setIsEditingAvailability(false);
+              }
+            }}
+            updateLoading={updateLoading}
+          />
+        </div>
+
+        {/* Right column: Match Stats, Events, Calendar */}
+        <div className="space-y-6">
+          <ProfileStats />
 
           <ProfileEvents
             joinedEvents={joinedEvents}
@@ -240,11 +282,11 @@ export const Profile: React.FC = () => {
             return (
               <div className="bg-tennis-surface/30 border border-white/5 rounded-[2.5rem] shadow-xl p-8">
                 <h2 className="text-2xl font-bold text-white mb-1">Events Calendar</h2>
-                <p className="text-gray-400 text-sm mb-1">Mark availability during the tournament</p>
-                <p className="text-gray-500 text-xs mb-4">May 9 – May 31, 2026</p>
+                <p className="text-white/60 text-sm mb-1">Mark availability during the tournament</p>
+                <p className="text-white/40 text-xs mb-4">May 9 – May 31, 2026</p>
                 <div className="grid grid-cols-7 gap-2">
                   {['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((d) => (
-                    <div key={d} className="text-gray-500 text-xs font-medium text-center py-1">{d}</div>
+                    <div key={d} className="text-white/40 text-xs font-medium text-center py-1">{d}</div>
                   ))}
                   {calendarDays.map((day) => {
                     const selected = isDateSelected(day);
@@ -261,10 +303,10 @@ export const Profile: React.FC = () => {
                             : deflt
                               ? 'border border-orange-500/60 text-orange-300 font-semibold hover:bg-orange-500/20 cursor-pointer'
                               : past
-                                ? 'text-gray-600 bg-gray-800/30 cursor-not-allowed'
+                                ? 'text-white/20 bg-gray-800/30 cursor-not-allowed'
                                 : participantId
-                                  ? 'text-gray-300 bg-gray-800/30 hover:bg-white/10 cursor-pointer'
-                                  : 'text-gray-600 bg-gray-800/30'
+                                  ? 'text-white bg-gray-800/30 hover:bg-white/10 cursor-pointer'
+                                  : 'text-white/20 bg-gray-800/30'
                         }`}
                       >
                         {day}
@@ -274,52 +316,12 @@ export const Profile: React.FC = () => {
                 </div>
                 {savedDates.size > 0 && (
                   <div className="mt-4 pt-4 border-t border-white/5">
-                    <p className="text-gray-500 text-xs">Selected: {[...savedDates].sort().join(', ')}</p>
+                    <p className="text-white/40 text-xs">Selected: {[...savedDates].sort().join(', ')}</p>
                   </div>
                 )}
               </div>
             );
           })()}
-        </div>
-
-        <div className="space-y-6">
-          <ProfileSkills
-            isEditing={isEditingSkills}
-            setIsEditing={setIsEditingSkills}
-            editData={editData}
-            setEditData={setEditData}
-            onSave={async () => {
-              const saved = await actions.updateSkills(
-                editData.stats?.skill_level || profile.stats.skill_level,
-                profile.stats.tournament_preference
-              );
-              if (saved) {
-                setIsEditingSkills(false);
-              }
-            }}
-            updateLoading={updateLoading}
-          />
-
-          <ProfileStats />
-
-          <ProfileAvailability
-            isEditing={isEditingAvailability}
-            setIsEditing={setIsEditingAvailability}
-            editData={editData}
-            setEditData={setEditData}
-            onSave={async () => {
-              const saved = await actions.updateAvailability(
-                editData.preferences?.availability_day || profile.preferences.availability_day,
-                editData.preferences?.availability_time || profile.preferences.availability_time,
-                editData.preferences?.preferred_courts || profile.preferences.preferred_courts,
-                editData.preferences?.favourite_players || profile.preferences.favourite_players
-              );
-              if (saved) {
-                setIsEditingAvailability(false);
-              }
-            }}
-            updateLoading={updateLoading}
-          />
         </div>
       </div>
     </div>

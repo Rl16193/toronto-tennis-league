@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+﻿import React, { useMemo } from 'react';
 import { ScoreSubmission, TournamentMatch, TournamentPlayer } from './types';
 import { BYE, PLAYER_LOADING, formatPlayerName } from './utils';
 import { getRoundLabels } from './bracketImage';
@@ -117,7 +117,7 @@ export const BracketView: React.FC<Props> = ({
             style={{ gridTemplateRows: `auto repeat(${drawSize}, minmax(24px, 1fr))`, rowGap: '0.35rem' }}
           >
             <div className="sticky top-0 z-10 bg-inherit pb-2">
-              <p className="text-center text-xs uppercase tracking-widest text-gray-600 font-black">
+              <p className="text-center text-xs uppercase tracking-widest text-white font-black">
                 {round.round}
               </p>
               {onUpdateDeadline ? (
@@ -125,11 +125,11 @@ export const BracketView: React.FC<Props> = ({
                   type="date"
                   value={roundDeadlines[round.round] ?? ''}
                   onChange={(e) => onUpdateDeadline(round.round, e.target.value)}
-                  className="mt-0.5 w-full text-center text-[10px] text-gray-500 bg-transparent border-none outline-none cursor-pointer hover:text-gray-700 focus:text-gray-800"
+                  className="mt-0.5 w-full text-center text-[10px] text-white bg-transparent border-none outline-none cursor-pointer hover:text-white focus:text-white"
                   title={`Set deadline for ${round.round}`}
                 />
               ) : roundDeadlines[round.round] ? (
-                <p className="text-center text-[10px] text-gray-400 mt-0.5">
+                <p className="text-center text-[10px] text-white mt-0.5">
                   Till {formatDeadline(roundDeadlines[round.round])}
                 </p>
               ) : null}
@@ -222,7 +222,7 @@ export const BracketView: React.FC<Props> = ({
 
                     {/* Score display */}
                     {scoreText && (
-                      <div className="border-t border-gray-200 px-2 py-0.5 text-[10px] text-gray-500 font-mono tracking-wide">
+                      <div className="border-t border-gray-200 px-2 py-0.5 text-[10px] text-white font-mono tracking-wide">
                         {scoreText}
                       </div>
                     )}
@@ -239,7 +239,7 @@ export const BracketView: React.FC<Props> = ({
                       <button
                         type="button"
                         onClick={() => onSubmitScore(match)}
-                        className="w-full border-t border-gray-100 px-2 py-1 text-[10px] text-gray-400 hover:text-clay transition-colors text-center leading-tight"
+                        className="w-full border-t border-gray-100 px-2 py-1 text-[10px] text-white hover:text-clay transition-colors text-center leading-tight"
                       >
                         {match.status === 'complete' ? 'Edit score' : 'Enter score'}
                       </button>

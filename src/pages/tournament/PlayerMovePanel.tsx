@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { SkillGroup, TournamentPlayer } from './types';
 
@@ -33,12 +33,12 @@ export const PlayerMovePanel: React.FC<Props> = ({ players, onMove }) => {
 
   return (
     <div className="mb-6">
-      <p className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">Move Players</p>
+      <p className="text-sm font-bold text-white uppercase tracking-widest mb-2">Move Players</p>
 
       <div className="relative inline-block">
         <button
           onClick={() => setOpen((v) => !v)}
-          className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-tennis-surface/60 text-gray-300 hover:text-white border border-white/10 text-sm font-medium min-w-52"
+          className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-tennis-surface/60 text-white hover:text-white border border-white/10 text-sm font-medium min-w-52"
         >
           <span>
             {selected.size === 0
@@ -68,7 +68,7 @@ export const PlayerMovePanel: React.FC<Props> = ({ players, onMove }) => {
                         </svg>
                       )}
                     </span>
-                    <span className="text-sm text-gray-200 truncate">{player.name}</span>
+                    <span className="text-sm text-white truncate">{player.name}</span>
                   </span>
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${
                     player.currentGroup === 'Masters'
@@ -88,9 +88,9 @@ export const PlayerMovePanel: React.FC<Props> = ({ players, onMove }) => {
         <>
           <div className="mt-3 flex flex-wrap gap-2">
             {selectedPlayers.map((p) => (
-              <span key={p.user_id} className="flex items-center gap-1.5 px-3 py-1 bg-white/10 rounded-full text-sm text-gray-200">
+              <span key={p.user_id} className="flex items-center gap-1.5 px-3 py-1 bg-white/10 rounded-full text-sm text-white">
                 {p.name}
-                <button onClick={() => toggle(p.user_id)} className="text-gray-400 hover:text-white leading-none">×</button>
+                <button onClick={() => toggle(p.user_id)} className="text-white hover:text-white leading-none">×</button>
               </span>
             ))}
           </div>

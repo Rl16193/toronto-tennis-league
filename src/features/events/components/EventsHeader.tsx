@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '../../../components/Button';
 
@@ -12,7 +12,7 @@ export const EventsHeader: React.FC<Props> = ({ isEventCreator, onAddEvent }) =>
     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
       <div className="space-y-2">
         <h1 className="text-3xl md:text-4xl font-display font-black text-white">Events</h1>
-        <p className="text-gray-300 text-base md:text-lg max-w-xl">Explore Toronto events and join the right draw for your level.</p>
+        <p className="text-white text-base md:text-lg max-w-xl">Explore Toronto events and join the right draw for your level.</p>
       </div>
       {isEventCreator && (
         <Button onClick={onAddEvent}>
