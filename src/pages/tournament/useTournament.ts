@@ -33,6 +33,13 @@ export const useTournament = (eventIdOverride?: string) => {
   const [scoreForm, setScoreForm] = useState<ScoreForm | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Auto-dismiss message banner after 30 seconds
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(null), 30_000);
+    return () => clearTimeout(t);
+  }, [message]);
+
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [updatingDraw, setUpdatingDraw] = useState(false);

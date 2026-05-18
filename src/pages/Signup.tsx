@@ -70,6 +70,19 @@ export const Signup: React.FC = () => {
 
   useEffect(() => { document.title = 'Sign Up — Racquets & Strings'; }, []);
 
+  // Auto-dismiss banners after 30 seconds
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(''), 30_000);
+    return () => clearTimeout(t);
+  }, [error]);
+
+  useEffect(() => {
+    if (!statusMessage) return;
+    const t = setTimeout(() => setStatusMessage(''), 30_000);
+    return () => clearTimeout(t);
+  }, [statusMessage]);
+
   useEffect(() => {
     if (!authLoading && user && shouldRedirectToProfile) {
       navigate(returnTo);
@@ -436,7 +449,7 @@ export const Signup: React.FC = () => {
                   <div className="col-span-1 md:col-span-2 grid grid-cols-2 gap-4">
                     <div className="w-full space-y-1.5">
                       <label className="block text-sm font-medium text-gray-300">
-                        Password <span className="text-red-400">*</span>
+                        Password <span className="text-orange-500">*</span>
                       </label>
                       <div className="relative">
                         <input
@@ -462,7 +475,7 @@ export const Signup: React.FC = () => {
 
                     <div className="w-full space-y-1.5">
                       <label className="block text-sm font-medium text-gray-300">
-                        Re-enter Password <span className="text-red-400">*</span>
+                        Re-enter Password <span className="text-orange-500">*</span>
                       </label>
                       <div className="relative">
                         <input
