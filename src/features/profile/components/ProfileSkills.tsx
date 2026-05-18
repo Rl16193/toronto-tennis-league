@@ -1,5 +1,4 @@
 import React from 'react';
-import type { UserStats } from '../../../types';
 import { useAuth } from '../../../context/AuthContext';
 import { Button } from '../../../components/Button';
 import { Trophy, Edit2, Save, X } from 'lucide-react';
@@ -50,7 +49,6 @@ export const ProfileSkills: React.FC<ProfileSkillsProps> = ({
                 stats: {
                   ...editData.stats,
                   skill_level: profile.stats.skill_level,
-                  tournament_preference: profile.stats.tournament_preference,
                 },
               });
               setIsEditing(true);
@@ -106,41 +104,12 @@ export const ProfileSkills: React.FC<ProfileSkillsProps> = ({
                 "{SKILL_DESCRIPTIONS[(editData.stats?.skill_level ?? profile.stats.skill_level) as number]}"
               </p>
             </div>
-            <div className="space-y-4">
-              <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider">Tournament Choice</label>
-              <div className="grid grid-cols-1 gap-2">
-                {['Beginners', 'Challengers', 'Masters'].map(type => (
-                  <button
-                    key={type}
-                    onClick={() => setEditData({
-                      ...editData,
-                      stats: {
-                        ...editData.stats,
-                        skill_level: editData.stats?.skill_level ?? profile.stats.skill_level,
-                        tournament_preference: type as UserStats['tournament_preference'],
-                      },
-                    })}
-                    className={`p-3 rounded-xl text-sm font-bold border transition-all ${
-                      (editData.stats?.tournament_preference ?? profile.stats.tournament_preference) === type
-                        ? 'bg-clay/10 border-clay text-clay'
-                        : 'bg-white/5 border-white/5 text-gray-400'
-                    }`}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
         ) : (
           <div className="space-y-6">
             <div className="p-6 rounded-3xl bg-clay/10 border border-clay/20">
               <p className="text-clay font-black text-3xl mb-1">NTRP {profile.stats.skill_level}</p>
               <p className="text-gray-400 text-sm italic">"{SKILL_DESCRIPTIONS[profile.stats.skill_level]}"</p>
-            </div>
-            <div className="p-6 rounded-3xl bg-white/5 border border-white/5">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Tournament Choice</p>
-              <p className="text-xl font-bold text-clay">{profile.stats.tournament_preference}</p>
             </div>
           </div>
         )}

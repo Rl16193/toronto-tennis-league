@@ -68,7 +68,7 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
           <div className="flex justify-between items-start mb-8">
             <h2 className="text-2xl font-bold text-white flex items-center">
               <User className="w-6 h-6 mr-3 text-clay" />
-              Info
+              Contact Card
             </h2>
             {!isEditing ? (
               <Button variant="ghost" size="sm" onClick={() => {

@@ -1,21 +1,19 @@
 import React, { useState } from 'react';
-import { ChevronDown, Download, Pencil, ShieldCheck, X } from 'lucide-react';
+import { ChevronDown, Download, Pencil, Play, X, XCircle } from 'lucide-react';
 import { Button } from '../../components/Button';
 
 type Props = {
   isCreator: boolean;
-  generating: boolean;
-  resettingDraw: boolean;
-  canReset: boolean;
-  canFinalize: boolean;
+  hasMatches: boolean;
+  isProcessing: boolean;
   editMode: boolean;
   started: boolean;
   mergeMensSingles: boolean;
   mergeWomensSingles: boolean;
   consolidateDoubles: boolean;
   onDownload: () => void;
-  onGenerateAll: () => void;
-  onResetDraw: () => void;
+  onGenerateMatches: () => void;
+  onCancelMatches: () => void;
   onToggleEdit: () => void;
   onToggleMergeMens: () => void;
   onToggleMergeWomens: () => void;
@@ -23,10 +21,9 @@ type Props = {
 };
 
 export const TournamentHeader: React.FC<Props> = ({
-  isCreator, generating, resettingDraw,
-  canReset, canFinalize, editMode, started,
+  isCreator, hasMatches, isProcessing, editMode, started,
   mergeMensSingles, mergeWomensSingles, consolidateDoubles,
-  onDownload, onGenerateAll, onResetDraw, onToggleEdit,
+  onDownload, onGenerateMatches, onCancelMatches, onToggleEdit,
   onToggleMergeMens, onToggleMergeWomens, onToggleConsolidateDoubles,
 }) => {
   const [mergeOpen, setMergeOpen] = useState(false);
@@ -87,10 +84,17 @@ export const TournamentHeader: React.FC<Props> = ({
             </div>
           )}
 
-          <Button onClick={onGenerateAll} isLoading={generating} disabled={!canFinalize}>
-            <ShieldCheck className="w-4 h-4 mr-2" />
-            Finalize Draw
-          </Button>
+          {hasMatches ? (
+            <Button variant="danger" onClick={onCancelMatches} isLoading={isProcessing}>
+              <XCircle className="w-4 h-4 mr-2" />
+              Cancel Matches
+            </Button>
+          ) : (
+            <Button onClick={onGenerateMatches} isLoading={isProcessing}>
+              <Play className="w-4 h-4 mr-2" />
+              Generate Matches
+            </Button>
+          )}
 
           <Button variant={editMode ? 'danger' : 'outline'} onClick={onToggleEdit}>
             {editMode ? (
@@ -98,10 +102,6 @@ export const TournamentHeader: React.FC<Props> = ({
             ) : (
               <><Pencil className="w-4 h-4 mr-2" />Edit Draw</>
             )}
-          </Button>
-
-          <Button variant="danger" onClick={onResetDraw} isLoading={resettingDraw} disabled={!canReset}>
-            Reset Draw
           </Button>
         </>
       )}

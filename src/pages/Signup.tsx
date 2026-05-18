@@ -5,7 +5,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db, setAuthPersistence, storage } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
-import { SKILL_DESCRIPTIONS, SKILL_LEVELS, TOURNAMENT_OPTIONS } from '../lib/skillLevels';
+import { SKILL_DESCRIPTIONS, SKILL_LEVELS } from '../lib/skillLevels';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import {
@@ -55,7 +55,6 @@ export const Signup: React.FC = () => {
     skillLevel: 2,
     preferredCourts: [] as string[],
     customCourtEntry: '',
-    tournamentType: 'Challengers' as 'Beginners' | 'Challengers' | 'Masters',
     favouritePlayers: [] as string[],
     customPlayerEntry: '',
     availabilityDay: [] as string[],
@@ -251,7 +250,7 @@ export const Signup: React.FC = () => {
         user_id: user.uid,
         name: formData.name,
         skill_level: formData.skillLevel,
-        tournament_preference: formData.tournamentType,
+        tournament_preference: 'Challengers',
         matches_played: 0,
         matches_won: 0,
         points_won_percentage: 0,
@@ -303,10 +302,6 @@ export const Signup: React.FC = () => {
       setLoading(false);
     }
   };
-
-  const skillMismatch = (formData.tournamentType === 'Beginners' && formData.skillLevel > 2.5) ||
-                        (formData.tournamentType === 'Challengers' && (formData.skillLevel < 3 || formData.skillLevel > 3.5)) ||
-                        (formData.tournamentType === 'Masters' && formData.skillLevel < 4);
 
   const courtSuggestions = getCourtSuggestions(courtOptions, formData.preferredCourts, formData.customCourtEntry);
 
@@ -437,33 +432,69 @@ export const Signup: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Row 2: Password | Phone */}
-                  <div className="w-full space-y-1.5">
-                    <label className="block text-sm font-medium text-gray-300">
-                      Password <span className="text-red-400">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
-                        value={formData.password}
-                        onChange={(e) => setFormData({...formData, password: e.target.value})}
-                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-12 text-white placeholder-gray-500 transition-all duration-200 focus:ring-2 outline-none ${errors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-white/10 focus:border-clay focus:ring-clay/20'}`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                        tabIndex={-1}
-                      >
-                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
+                  {/* Row 2: Password | Confirm Password — always side-by-side */}
+                  <div className="col-span-1 md:col-span-2 grid grid-cols-2 gap-4">
+                    <div className="w-full space-y-1.5">
+                      <label className="block text-sm font-medium text-gray-300">
+                        Password <span className="text-red-400">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          value={formData.password}
+                          onChange={(e) => setFormData({...formData, password: e.target.value})}
+                          className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-10 text-white placeholder-gray-500 transition-all duration-200 focus:ring-2 outline-none ${errors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-white/10 focus:border-clay focus:ring-clay/20'}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((v) => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                          tabIndex={-1}
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      {errors.password && (
+                        <p className="text-xs text-red-500 mt-1 ml-1">{errors.password}</p>
+                      )}
                     </div>
-                    {errors.password && (
-                      <p className="text-xs text-red-500 mt-1 ml-1">{errors.password}</p>
-                    )}
+
+                    <div className="w-full space-y-1.5">
+                      <label className="block text-sm font-medium text-gray-300">
+                        Re-enter Password <span className="text-red-400">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          value={formData.confirmPassword}
+                          onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
+                          className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-10 text-white placeholder-gray-500 transition-all duration-200 focus:ring-2 outline-none ${
+                            (errors.confirmPassword || (formData.confirmPassword && formData.confirmPassword !== formData.password))
+                              ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+                              : 'border-white/10 focus:border-clay focus:ring-clay/20'
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword((v) => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                          tabIndex={-1}
+                        >
+                          {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      {formData.confirmPassword && formData.confirmPassword !== formData.password && (
+                        <p className="text-xs text-red-500 mt-1 ml-1">Passwords do not match</p>
+                      )}
+                      {errors.confirmPassword && !formData.confirmPassword && (
+                        <p className="text-xs text-red-500 mt-1 ml-1">{errors.confirmPassword}</p>
+                      )}
+                    </div>
                   </div>
 
+                  {/* Row 3: Phone | Preferred Contact */}
                   <Input
                     label="Phone Number"
                     placeholder="(416)-555-0123"
@@ -471,40 +502,6 @@ export const Signup: React.FC = () => {
                     onChange={(e) => setFormData({...formData, phone: formatPhone(e.target.value)})}
                     error={errors.phone}
                   />
-
-                  {/* Row 3: Confirm Password | Preferred Contact */}
-                  <div className="w-full space-y-1.5">
-                    <label className="block text-sm font-medium text-gray-300">
-                      Re-enter Password <span className="text-red-400">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        placeholder="••••••••"
-                        value={formData.confirmPassword}
-                        onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})}
-                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-12 text-white placeholder-gray-500 transition-all duration-200 focus:ring-2 outline-none ${
-                          (errors.confirmPassword || (formData.confirmPassword && formData.confirmPassword !== formData.password))
-                            ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
-                            : 'border-white/10 focus:border-clay focus:ring-clay/20'
-                        }`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                        tabIndex={-1}
-                      >
-                        {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
-                    </div>
-                    {formData.confirmPassword && formData.confirmPassword !== formData.password && (
-                      <p className="text-xs text-red-500 mt-1 ml-1">Passwords do not match</p>
-                    )}
-                    {errors.confirmPassword && !formData.confirmPassword && (
-                      <p className="text-xs text-red-500 mt-1 ml-1">{errors.confirmPassword}</p>
-                    )}
-                  </div>
 
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-gray-300">Preferred Contact Mode</label>
@@ -571,8 +568,8 @@ export const Signup: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                {/* Court Selection */}
-                <div className="space-y-4">
+                {/* Court Selection — full width since Tournament Type removed */}
+                <div className="space-y-4 md:col-span-2">
                   <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider">Preferred Courts</label>
 
                   {/* Selected courts chips */}
@@ -625,30 +622,6 @@ export const Signup: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Tournament Type */}
-                <div className="space-y-4">
-                  <label className="block text-sm font-bold text-gray-300 uppercase tracking-wider">Tournament Type</label>
-                  <div className="space-y-3">
-                    {TOURNAMENT_OPTIONS.map((type) => (
-                      <button
-                        key={type.name}
-                        onClick={() => setFormData({...formData, tournamentType: type.name as any})}
-                        className={`w-full flex justify-between items-center p-4 rounded-2xl border transition-all ${
-                          formData.tournamentType === type.name ? 'bg-clay/10 border-clay text-clay' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
-                        }`}
-                      >
-                        <span className="font-bold">{type.name}</span>
-                        <span className="text-xs opacity-60">NTRP {type.range}</span>
-                      </button>
-                    ))}
-                  </div>
-                  {skillMismatch && (
-                    <div className="flex items-center space-x-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>Selected tournament does not match your skill level</span>
-                    </div>
-                  )}
-                </div>
               </div>
 
               <div className="space-y-4">
@@ -788,10 +761,6 @@ export const Signup: React.FC = () => {
                       <div className="flex justify-between">
                         <span className="text-gray-500 text-sm">Skill Level</span>
                         <span className="text-white font-medium">{formData.skillLevel}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500 text-sm">Tournament</span>
-                        <span className="text-white font-medium">{formData.tournamentType}</span>
                       </div>
                     </div>
                   </div>

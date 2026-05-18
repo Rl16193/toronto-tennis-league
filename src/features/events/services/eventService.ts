@@ -24,13 +24,13 @@ export type EventFormState = {
 export const INITIAL_EVENT_FORM: EventFormState = {
   title: '',
   type: 'Tournament',
-  location: '',
+  location: 'Anywhere',
   organizer: '',
   about: '',
   startDate: '',
   endDate: '',
   joinLastDate: '',
-  time: '',
+  time: 'Anytime',
   skillLevel: 'All',
 };
 

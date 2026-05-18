@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, User, Calendar, Trophy } from 'lucide-react';
+import { LogOut, Calendar, Trophy } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -9,7 +9,6 @@ import { Button } from './Button';
 const ALL_NAV_LINKS = [
   { name: 'Events', path: '/events', icon: Calendar },
   { name: 'Draw', path: '/tournament', icon: Trophy },
-  { name: 'Profile', path: '/profile', icon: User },
 ] as const;
 
 export const Navbar: React.FC = () => {

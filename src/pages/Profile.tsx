@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { auth } from '../lib/firebase';
 import { Button } from '../components/Button';
-import { LogOut, CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useProfileData } from '../features/profile/hooks/useProfileData';
 import { useProfileActions } from '../features/profile/hooks/useProfileActions';
@@ -44,7 +43,6 @@ export const Profile: React.FC = () => {
 
   const incompleteFields = profile ? [
     !profile.user.name.trim() ? 'name' : null,
-    !profile.user.phone.trim() ? 'phone number' : null,
     profile.preferences.availability_day.length === 0 ? 'availability day' : null,
     profile.preferences.availability_time.length === 0 ? 'availability time' : null,
     profile.preferences.preferred_courts.length === 0 ? 'preferred courts' : null,
@@ -103,12 +101,8 @@ export const Profile: React.FC = () => {
       )}
 
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="mb-8">
         <h1 className="text-3xl md:text-4xl font-display font-black text-white tracking-tight">My Profile</h1>
-        <Button variant="danger" size="sm" onClick={() => auth.signOut()}>
-          <LogOut className="w-4 h-4 mr-2" />
-          Logout
-        </Button>
       </div>
 
       {joinedEvents.length === 0 && (
@@ -297,7 +291,7 @@ export const Profile: React.FC = () => {
             onSave={async () => {
               const saved = await actions.updateSkills(
                 editData.stats?.skill_level || profile.stats.skill_level,
-                editData.stats?.tournament_preference || profile.stats.tournament_preference
+                profile.stats.tournament_preference
               );
               if (saved) {
                 setIsEditingSkills(false);

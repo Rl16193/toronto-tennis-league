@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useTournament } from './tournament/useTournament';
 import { getEventDate } from './tournament/utils';
-import { downloadDrawAsPng } from './tournament/bracketImage';
+import { downloadDrawAsPng, getRoundLabels } from './tournament/bracketImage';
+import { TournamentMatch } from './tournament/types';
 import { BracketView } from './tournament/BracketView';
 import { BracketErrorBoundary } from './tournament/BracketErrorBoundary';
 import { TournamentHeader } from './tournament/TournamentHeader';
@@ -14,6 +15,29 @@ import { FlaggedResults } from './tournament/FlaggedResults';
 import { AddPlayerPanel } from './tournament/AddPlayerPanel';
 import { AlertMessage } from '../components/AlertMessage';
 import { Button } from '../components/Button';
+
+const getDrawState = (matches: TournamentMatch[]): string => {
+  const real = matches.filter((m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_'));
+  if (real.length === 0) return 'Live Preview';
+
+  const drawSize = real[0]?.drawsize || 8;
+  const roundLabels = getRoundLabels(drawSize);
+
+  // Check tournament complete: final match has a winner
+  const finals = real.filter((m) => m.round === 'F');
+  if (finals.length > 0 && finals.every((m) => m.winner_user_id)) return 'Tournament Complete';
+
+  // Walk rounds from last to first — find most advanced with activity
+  for (let i = roundLabels.length - 1; i >= 0; i--) {
+    const round = roundLabels[i];
+    const roundMatches = real.filter((m) => m.round === round);
+    if (roundMatches.length === 0 || roundMatches.every((m) => !m.winner_user_id)) continue;
+    const allComplete = roundMatches.every((m) => !!m.winner_user_id);
+    return allComplete ? `${round} Complete` : `${round} Started`;
+  }
+
+  return 'Matches Generated';
+};
 
 export const Tournament: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -99,18 +123,16 @@ export const Tournament: React.FC = () => {
 
       <TournamentHeader
         isCreator={isCreator}
-        generating={generating}
-        resettingDraw={resettingDraw}
-        canReset={false}
-        canFinalize={currentMatches.length === 0}
+        hasMatches={currentMatches.length > 0}
+        isProcessing={generating || resettingDraw}
         editMode={editMode}
         started={started}
         mergeMensSingles={mergeMensSingles}
         mergeWomensSingles={mergeWomensSingles}
         consolidateDoubles={consolidateDoubles}
         onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'))}
-        onGenerateAll={handleGenerateAll}
-        onResetDraw={handleResetDraw}
+        onGenerateMatches={handleGenerateAll}
+        onCancelMatches={handleResetDraw}
         onToggleEdit={() => setEditMode((v) => !v)}
         onToggleMergeMens={() => setMergeMensSingles((v) => !v)}
         onToggleMergeWomens={() => setMergeWomensSingles((v) => !v)}
@@ -123,14 +145,31 @@ export const Tournament: React.FC = () => {
         </AlertMessage>
       )}
 
-      {userParticipant && matches.length > 0 && (
-        <div className="mb-6 flex items-start gap-2 text-sm text-orange-500">
-          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
-          <p className="font-semibold">
-            Draws have been finalized. Please contact your opponent to schedule your match. Kindly play your matches before the round deadline provided in the draw. Contact us if you are facing any difficulties.
-          </p>
-        </div>
-      )}
+      {/* Draw state badge */}
+      {(() => {
+        const state = getDrawState(currentMatches);
+        const hasGeneratedMatches = currentMatches.length > 0;
+        return (
+          <div className="mb-6 flex flex-col gap-2">
+            <div className="inline-flex items-center gap-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest border ${
+                state === 'Live Preview'
+                  ? 'bg-white/5 border-white/10 text-gray-400'
+                  : state === 'Tournament Complete'
+                  ? 'bg-green-500/15 border-green-500/30 text-green-400'
+                  : 'bg-clay/15 border-clay/30 text-clay'
+              }`}>
+                {state}
+              </span>
+            </div>
+            {userParticipant && hasGeneratedMatches && (
+              <p className="text-sm text-orange-500 font-semibold max-w-2xl">
+                Draws have been finalized. Please contact your opponent to schedule your match. Kindly play your matches before the round deadline provided in the draw. Contact us if you are facing any difficulties.
+              </p>
+            )}
+          </div>
+        );
+      })()}
 
       {isCreator && skillMismatchedCount > 0 && (
         <div className="mb-6 flex items-start gap-2 text-sm text-orange-500">
