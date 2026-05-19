@@ -2,7 +2,7 @@
 import { useAuth } from '../../../context/AuthContext';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
-import { User, Mail, Phone, Edit2, Save, X } from 'lucide-react';
+import { User, Mail, Edit2, Save, X } from 'lucide-react';
 import type { ProfileEditData } from '../types';
 
 type EmailChangeData = { newEmail: string; password: string };

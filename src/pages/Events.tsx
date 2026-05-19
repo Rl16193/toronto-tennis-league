@@ -479,12 +479,12 @@ export const Events: React.FC = () => {
         setJoinError('Please enter your partner name for doubles.');
         return;
       }
-      if (!joinForm.partnerInApp) {
-        setJoinError('Please tell us whether your partner is already in the app.');
+      if (joinForm.partnerName.trim().length < 3 || joinForm.partnerName.length > 80) {
+        setJoinError('Partner name must be 3–80 characters.');
         return;
       }
-      if (!joinForm.combinedSkill || Number.isNaN(Number(joinForm.combinedSkill))) {
-        setJoinError('Please enter the combined average skill level for doubles.');
+      if (/\d/.test(joinForm.partnerName)) {
+        setJoinError('Partner name cannot contain numbers.');
         return;
       }
     }
@@ -522,10 +522,10 @@ export const Events: React.FC = () => {
         tournament_choice: joinForm.tournamentChoice,
         division: joinForm.division,
         doubles: joinForm.tournamentChoice === 'Doubles' ? joinForm.partnerName.trim() : '',
-        partner_in_app: joinForm.tournamentChoice === 'Doubles' ? joinForm.partnerInApp : '',
+        partner_in_app: joinForm.tournamentChoice === 'Doubles' ? (joinForm.partnerInApp || 'no') : '',
         skill: slotStatus?.skillOverride ?? (joinForm.tournamentChoice === 'Singles'
           ? Number(profile?.stats.skill_level || 0)
-          : Number(joinForm.combinedSkill)),
+          : Number(joinForm.combinedSkill || 3)),
         dateselected,
         createdAt: new Date().toISOString(),
       });

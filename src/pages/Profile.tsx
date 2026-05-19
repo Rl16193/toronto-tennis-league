@@ -214,7 +214,7 @@ export const Profile: React.FC = () => {
           <ProfileEvents
             joinedEvents={joinedEvents}
             loading={eventsLoading}
-            onRemoveEvent={(event) => actions.removeEvent(event.participantId)}
+            onRemoveEvent={(event) => actions.removeEvent(event.participantId, event.id)}
           />
 
           {(() => {

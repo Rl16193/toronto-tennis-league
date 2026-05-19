@@ -110,6 +110,16 @@ export const Navbar: React.FC = () => {
           <div className="md:hidden flex items-center gap-1 shrink-0">
             {user ? (
               <>
+                <Link to="/profile" className="mr-1">
+                  <div className="w-8 h-8 rounded-full border-2 border-clay p-0.5 overflow-hidden hover:scale-105 transition-transform">
+                    <img
+                      src={profile?.user.avatar || `https://ui-avatars.com/api/?name=${profile?.user.name || user.email}&background=C25E44&color=fff`}
+                      alt="Profile"
+                      className="w-full h-full rounded-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                </Link>
                 {mobileNavLinks.map((link) => (
                   <Link
                     key={link.path}

@@ -1,31 +1,19 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, onSnapshot, documentId } from 'firebase/firestore';
-import { db, storage } from '../../../lib/firebase';
+import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent, EventParticipant } from '../../../types';
-import { getDownloadURL, ref } from 'firebase/storage';
-
-type JoinedEventCard = TennisEvent & { participantId: string };
+import { resolveStorageUrl } from '../../events/services/eventService';
+import { JoinedEventCard } from '../types';
 
 const FIRESTORE_IN_QUERY_LIMIT = 10;
 
 const chunkValues = <T,>(values: T[], chunkSize: number) => {
   const chunks: T[][] = [];
-
   for (let index = 0; index < values.length; index += chunkSize) {
     chunks.push(values.slice(index, index + chunkSize));
   }
-
   return chunks;
-};
-
-const resolveStorageUrl = async (imagePath: string) => {
-  if (!imagePath) return '';
-  if (imagePath.startsWith('gs://')) {
-    return getDownloadURL(ref(storage, imagePath));
-  }
-
-  return imagePath;
 };
 
 export const useProfileData = () => {

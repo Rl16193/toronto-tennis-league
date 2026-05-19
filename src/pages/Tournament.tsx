@@ -1,6 +1,6 @@
 ﻿import React, { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertCircle, CheckCircle2 } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useTournament } from './tournament/useTournament';
 import { getEventDate } from './tournament/utils';
 import { downloadDrawAsPng, getRoundLabels } from './tournament/bracketImage';
@@ -49,7 +49,7 @@ export const Tournament: React.FC = () => {
     allTournamentEvents,
     isCreator, started, userParticipant,
     currentDraw, currentMatches, displayMatches, visibleDraws,
-    opponent,
+    opponents,
     editPlayers, reservesPlayers, currentDrawSize, skillMismatchedCount,
     message, scoreForm, scoreFormMatch, setScoreForm,
     generating, resettingDraw, editMode, setEditMode,
@@ -178,12 +178,13 @@ export const Tournament: React.FC = () => {
         </div>
       )}
 
-      {opponent && !showReserves && (
+      {opponents.map((opponent, i) => (
         <OpponentCard
+          key={opponent.userId || i}
           opponent={opponent}
           eventId={event?.id}
         />
-      )}
+      ))}
 
       <DrawTabs
         activeTab={activeTab}
