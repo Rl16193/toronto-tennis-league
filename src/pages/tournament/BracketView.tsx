@@ -61,18 +61,19 @@ const formatSetScores = (sub: ScoreSubmission): string => {
 type Props = {
   matches: TournamentMatch[];
   drawTitle: string;
+  drawState?: string;
   editMode?: boolean;
   editPlayers?: TournamentPlayer[];
   onEditPlayer?: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
   submissions?: ScoreSubmission[];
   isCreator?: boolean;
   onSubmitScore?: (match: TournamentMatch) => void;
-  roundDeadlines?: Record<string, string>; // round → 'YYYY-MM-DD'
+  roundDeadlines?: Record<string, string>;
   onUpdateDeadline?: (round: string, date: string) => void;
 };
 
 export const BracketView: React.FC<Props> = ({
-  matches, drawTitle, editMode, editPlayers = [], onEditPlayer,
+  matches, drawTitle, drawState, editMode, editPlayers = [], onEditPlayer,
   submissions = [], isCreator, onSubmitScore,
   roundDeadlines = {}, onUpdateDeadline,
 }) => {
@@ -101,6 +102,9 @@ export const BracketView: React.FC<Props> = ({
   return (
     <section className="overflow-x-auto rounded-[2rem] bg-violet-100 text-black border border-white/10 p-4 md:p-6">
       <h2 className="text-center text-2xl md:text-3xl font-black mb-1">{drawTitle}</h2>
+      {drawState && (
+        <p className="text-center text-xs font-bold uppercase tracking-widest text-gray-500 mb-1">{drawState}</p>
+      )}
       {editMode && (
         <p className="text-center text-xs text-amber-700 font-semibold mb-4">
           Edit mode — use dropdowns to reassign players
@@ -222,7 +226,7 @@ export const BracketView: React.FC<Props> = ({
 
                     {/* Score display */}
                     {scoreText && (
-                      <div className="border-t border-gray-200 px-2 py-0.5 text-[10px] text-white font-mono tracking-wide">
+                      <div className="border-t border-gray-200 px-2 py-0.5 text-[10px] text-black font-mono tracking-wide">
                         {scoreText}
                       </div>
                     )}
@@ -239,7 +243,7 @@ export const BracketView: React.FC<Props> = ({
                       <button
                         type="button"
                         onClick={() => onSubmitScore(match)}
-                        className="w-full border-t border-gray-100 px-2 py-1 text-[10px] text-white hover:text-clay transition-colors text-center leading-tight"
+                        className="w-full border-t border-gray-100 px-2 py-1 text-[10px] text-black hover:text-clay transition-colors text-center leading-tight"
                       >
                         {match.status === 'complete' ? 'Edit score' : 'Enter score'}
                       </button>

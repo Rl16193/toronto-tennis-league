@@ -1,9 +1,6 @@
-﻿import React, { useState } from 'react';
+﻿import React from 'react';
 import { motion } from 'motion/react';
 import { Shield, FileText, Gavel, CheckCircle2, Mail, MessageSquare } from 'lucide-react';
-import { Button } from '../components/Button';
-import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
 
 const PageWrapper: React.FC<{ title: string; icon: any; children: React.ReactNode }> = ({ title, icon: Icon, children }) => (
   <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-32">
@@ -210,86 +207,32 @@ export const Privacy: React.FC = () => (
   </PageWrapper>
 );
 
-export const Contact: React.FC = () => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  const [message, setMessage] = useState('');
-  const [subjectValue, setSubjectValue] = useState('Meetups');
-
-  const subject = encodeURIComponent(`Racquets & Strings - ${subjectValue}`);
-  const body = encodeURIComponent(
-    `Hi Racquets & Strings,\n\nSubject: ${subjectValue}\n\nMessage:\n${message}\n`
-  );
-
-  const handleSendMessage = () => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-    // The mailto link will be handled by the anchor
-  };
-
-  return (
-    <PageWrapper title="Contact Us" icon={Mail}>
-      <div className="space-y-10">
-        <section className="space-y-4">
-          <h2 className="text-3xl font-bold text-white flex items-center">
-            <MessageSquare className="w-6 h-6 mr-3 text-clay" />
-            Event Requests and Feedback
-          </h2>
-          <p className="text-white leading-relaxed text-lg">
-            Want to create an event? Contact us to learn more. Tell us about the type of event you want to organize, whether it is a meetup or tournament, or send us general feedback.
-          </p>
-        </section>
-
-        <section className="grid grid-cols-1 gap-6">
-          <div className="rounded-[2rem] border border-white/5 bg-white/5 p-6">
-            <p className="text-xs font-bold uppercase tracking-widest text-white mb-2">Email</p>
-            <a href="mailto:tenniscommunity.tbtc@gmail.com" className="text-clay text-lg font-bold hover:underline">
-              tenniscommunity.tbtc@gmail.com
-            </a>
-          </div>
-        </section>
-
-        <section className="rounded-[2rem] border border-clay/20 bg-clay/5 p-6 space-y-4">
-          <p className="text-white font-semibold">
-            Tell us about the type of event you want to organize: meetups, tournaments, or provide general feedback.
-          </p>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-white mb-2">Subject</label>
-              <select
-                value={subjectValue}
-                onChange={(e) => setSubjectValue(e.target.value)}
-                className="w-full rounded-2xl bg-tennis-surface/50 border border-white/10 px-4 py-3 text-white focus:border-clay outline-none"
-              >
-                <option value="Meetups">Meetups</option>
-                <option value="Tournaments">Tournaments</option>
-                <option value="General Feedback">General Feedback</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-white mb-2">Message</label>
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                rows={6}
-                className="w-full rounded-2xl bg-tennis-surface/50 border border-white/10 px-4 py-3 text-white placeholder-gray-500 focus:border-clay outline-none resize-none"
-                placeholder="Share the kind of event you want to organize, preferred timing, location ideas, or any general feedback."
-              />
-            </div>
-          </div>
-          <a
-            href={user ? `mailto:tenniscommunity.tbtc@gmail.com?subject=${subject}&body=${body}` : undefined}
-            onClick={!user ? handleSendMessage : undefined}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center rounded-2xl bg-clay hover:bg-clay-dark text-white shadow-lg shadow-clay/20 px-6 py-2.5 font-semibold transition-all duration-200"
-          >
-            Send Message
+export const Contact: React.FC = () => (
+  <PageWrapper title="Contact Us" icon={Mail}>
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <h2 className="text-2xl font-bold text-white flex items-center">
+          <MessageSquare className="w-5 h-5 mr-3 text-clay" />
+          Get in Touch
+        </h2>
+        <p className="text-white/70 leading-relaxed">
+          Want to create an event or provide feedback? Reach out via email or Instagram.
+        </p>
+      </section>
+      <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="rounded-[2rem] border border-white/5 bg-white/5 p-6">
+          <p className="text-xs font-bold uppercase tracking-widest text-white/50 mb-2">Email</p>
+          <a href="mailto:tenniscommunity.tbtc@gmail.com" className="text-clay font-bold hover:underline break-all">
+            tenniscommunity.tbtc@gmail.com
           </a>
-        </section>
-      </div>
-    </PageWrapper>
-  );
-};
+        </div>
+        <div className="rounded-[2rem] border border-white/5 bg-white/5 p-6">
+          <p className="text-xs font-bold uppercase tracking-widest text-white/50 mb-2">Instagram</p>
+          <a href="https://www.instagram.com/racquetsnstrings.to/" target="_blank" rel="noopener noreferrer" className="text-clay font-bold hover:underline">
+            @racquetsnstrings.to
+          </a>
+        </div>
+      </section>
+    </div>
+  </PageWrapper>
+);

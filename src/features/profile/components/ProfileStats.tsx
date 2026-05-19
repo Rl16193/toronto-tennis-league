@@ -15,10 +15,6 @@ export const ProfileStats: React.FC = () => {
       </h2>
       <div className="space-y-2">
         <div className="flex justify-between items-center py-2 border-b border-white/5">
-          <span className="text-white font-medium">NTRP Skill</span>
-          <span className="text-xl font-black text-clay">{profile.stats.skill_level}</span>
-        </div>
-        <div className="flex justify-between items-center py-2 border-b border-white/5">
           <span className="text-white font-medium">Matches Played</span>
           <span className="text-xl font-black text-white">{profile.stats.matches_played}</span>
         </div>
