@@ -25,7 +25,6 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
   const [selectedEvent, setSelectedEvent] = useState<DisplayEvent | null>(null);
   const [joinForm, setJoinForm] = useState<JoinFormState>(INITIAL_JOIN_FORM);
   const [joinError, setJoinError] = useState('');
-  const [authPrompt, setAuthPrompt] = useState('');
   const [joining, setJoining] = useState(false);
   const [tournamentMatches, setTournamentMatches] = useState<TournamentMatch[]>([]);
   const [slotFallbackConfirmed, setSlotFallbackConfirmed] = useState(false);
@@ -97,15 +96,7 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
   }, [selectedEvent, tournamentMatches, joinForm.division, joinForm.tournamentChoice, joinForm.combinedSkill, profile]);
 
   const handleStartJoin = (event: DisplayEvent) => {
-    if (!user) {
-      setAuthPrompt('Join the league to get updates and reserve your spot.');
-      window.setTimeout(() => navigate(LOGIN_ROUTE), 1200);
-      return;
-    }
-    if (!isTournamentEvent(event) && hasJoinedRegularEvent(event.id)) {
-      setAuthPrompt('You are already registered for this event.');
-      return;
-    }
+    if (!user) { navigate(LOGIN_ROUTE); return; }
     setSelectedEvent(event);
     setJoinError('');
   };
@@ -184,7 +175,7 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
   return {
     selectedEvent, setSelectedEvent,
     joinForm, setJoinForm,
-    joinError, authPrompt, setAuthPrompt,
+    joinError,
     joining, slotStatus,
     slotFallbackConfirmed, setSlotFallbackConfirmed,
     handleStartJoin, handleSubmitJoin,

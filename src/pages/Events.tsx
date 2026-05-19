@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
 import { Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -7,7 +7,7 @@ import { Button } from '../components/Button';
 import { ACCEPTED_EVENT_IMAGE_TYPES, createEvent, EventFormState, INITIAL_EVENT_FORM, uploadEventImage, validateEventForm } from '../features/events/services/eventService';
 import { sortEventsByStartDate } from '../utils/eventDates';
 import { useEvents } from '../features/events/hooks/useEvents';
-import { useJoin, LOGIN_ROUTE, SIGNUP_ROUTE } from '../features/events/hooks/useJoin';
+import { useJoin } from '../features/events/hooks/useJoin';
 import { EventCard } from '../features/events/components/EventCard';
 import { JoinModal } from '../features/events/components/JoinModal';
 import { CreatorEventModal } from '../features/events/components/CreatorEventModal';
@@ -18,7 +18,7 @@ export const Events: React.FC = () => {
   const isEventCreator = !!profile?.preferences.event_creator;
 
   const { events, setEvents, loading, visibleEvents, getJoinedChoices, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament, isFullyJoinedEvent } = useEvents();
-  const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, authPrompt, setAuthPrompt, joining, slotStatus, slotFallbackConfirmed, setSlotFallbackConfirmed, handleStartJoin, handleSubmitJoin } = useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament });
+  const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, slotStatus, slotFallbackConfirmed, setSlotFallbackConfirmed, handleStartJoin, handleSubmitJoin } = useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament });
 
   const [showEventForm, setShowEventForm] = useState(false);
   const [eventForm, setEventForm] = useState<EventFormState>(INITIAL_EVENT_FORM);
@@ -75,18 +75,6 @@ export const Events: React.FC = () => {
           <Button onClick={() => { setEventFormMessage(null); setEventForm((f) => ({ ...f, organizer: f.organizer || profile?.user.name || '' })); setShowEventForm(true); }}>
             <Plus className="w-4 h-4 mr-2" />Add an Event
           </Button>
-        </div>
-      )}
-
-      {authPrompt && (
-        <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-amber-300 space-y-3">
-          <p>{authPrompt}</p>
-          {!user && (
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Link to={LOGIN_ROUTE} className="w-full sm:w-auto"><Button size="sm" className="w-full sm:w-auto">Log In</Button></Link>
-              <Link to={SIGNUP_ROUTE} className="w-full sm:w-auto"><Button variant="outline" size="sm" className="w-full sm:w-auto">Join the League</Button></Link>
-            </div>
-          )}
         </div>
       )}
 
