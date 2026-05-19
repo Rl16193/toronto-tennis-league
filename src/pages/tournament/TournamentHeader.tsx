@@ -30,37 +30,40 @@ export const TournamentHeader: React.FC<Props> = ({
 
   const anyMergeActive = mergeMensSingles || mergeWomensSingles || consolidateDoubles;
 
+  const mergeMenuItems = [
+    { label: "Men's Singles", active: mergeMensSingles, onToggle: onToggleMergeMens },
+    { label: "Women's Singles", active: mergeWomensSingles, onToggle: onToggleMergeWomens },
+    { label: 'Doubles', active: consolidateDoubles, onToggle: onToggleConsolidateDoubles },
+  ];
+
+  const mergeMenu = mergeOpen && (
+    <div className="absolute left-0 top-full mt-2 z-20 min-w-[200px] rounded-2xl border border-white/10 bg-tennis-dark shadow-2xl p-2 space-y-1">
+      {mergeMenuItems.map(({ label, active, onToggle }) => (
+        <button
+          key={label}
+          type="button"
+          onClick={() => { onToggle(); setMergeOpen(false); }}
+          className={`w-full flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
+            active ? 'bg-clay/20 text-clay' : 'text-white hover:bg-white/5 hover:text-white'
+          }`}
+        >
+          {label}
+          {active && <span className="text-xs font-bold text-clay">Unmerge</span>}
+        </button>
+      ))}
+    </div>
+  );
+
   const mergeDropdown = !started && (
-    <div className="relative flex-1">
+    <div className="relative">
       <Button
         variant={anyMergeActive ? 'clay' : 'outline'}
-        className="w-full"
         onClick={() => setMergeOpen((v) => !v)}
       >
         Merge Draws
         <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${mergeOpen ? 'rotate-180' : ''}`} />
       </Button>
-      {mergeOpen && (
-        <div className="absolute left-0 top-full mt-2 z-20 min-w-[200px] rounded-2xl border border-white/10 bg-tennis-dark shadow-2xl p-2 space-y-1">
-          {[
-            { label: "Men's Singles", active: mergeMensSingles, onToggle: onToggleMergeMens },
-            { label: "Women's Singles", active: mergeWomensSingles, onToggle: onToggleMergeWomens },
-            { label: 'Doubles', active: consolidateDoubles, onToggle: onToggleConsolidateDoubles },
-          ].map(({ label, active, onToggle }) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => { onToggle(); setMergeOpen(false); }}
-              className={`w-full flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
-                active ? 'bg-clay/20 text-clay' : 'text-white hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              {label}
-              {active && <span className="text-xs font-bold text-clay">Unmerge</span>}
-            </button>
-          ))}
-        </div>
-      )}
+      {mergeMenu}
     </div>
   );
 
@@ -133,27 +136,7 @@ export const TournamentHeader: React.FC<Props> = ({
                   Merge Draws
                   <ChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${mergeOpen ? 'rotate-180' : ''}`} />
                 </Button>
-                {mergeOpen && (
-                  <div className="absolute left-0 top-full mt-2 z-20 min-w-[200px] rounded-2xl border border-white/10 bg-tennis-dark shadow-2xl p-2 space-y-1">
-                    {[
-                      { label: "Men's Singles", active: mergeMensSingles, onToggle: onToggleMergeMens },
-                      { label: "Women's Singles", active: mergeWomensSingles, onToggle: onToggleMergeWomens },
-                      { label: 'Doubles', active: consolidateDoubles, onToggle: onToggleConsolidateDoubles },
-                    ].map(({ label, active, onToggle }) => (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => { onToggle(); setMergeOpen(false); }}
-                        className={`w-full flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
-                          active ? 'bg-clay/20 text-clay' : 'text-white hover:bg-white/5 hover:text-white'
-                        }`}
-                      >
-                        {label}
-                        {active && <span className="text-xs font-bold text-clay">Unmerge</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {mergeMenu}
               </div>
             ) : <div />}
           </div>
