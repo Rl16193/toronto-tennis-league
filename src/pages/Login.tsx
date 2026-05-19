@@ -145,7 +145,7 @@ export const Login: React.FC = () => {
             <img
               src={logoUrl}
               alt="Racquets & Strings"
-              className="mx-auto h-28 w-full max-w-xs object-contain"
+              className="mx-auto h-28 w-auto object-contain"
             />
           )}
           {intent === 'join-event' && (

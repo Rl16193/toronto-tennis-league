@@ -62,13 +62,6 @@ export const Footer: React.FC = () => {
             </ul>
           </div>
         </div>
-
-        <div className="pt-6 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-2">
-          <p className="text-white/40 text-xs">© {currentYear} Racquets & Strings. All rights reserved.</p>
-          <span className="text-white/40 text-xs flex items-center">
-            Made with <span className="text-clay mx-1">❤</span> in Toronto
-          </span>
-        </div>
       </div>
     </footer>
   );
