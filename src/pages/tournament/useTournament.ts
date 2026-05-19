@@ -321,15 +321,14 @@ export const useTournament = (eventIdOverride?: string) => {
   }, [currentDraw, currentDrawAllPlayers, currentMatches, event?.id, previewDrawSize, previewSlotOverrides, started, templates]);
 
 
-  const visibleUserMatches = useMemo(
+  const visibleUserMatch = useMemo(
     () => user
-      ? matches.filter((m) =>
+      ? displayMatches.find((m) =>
           [m.player_1_user_id, m.player_2_user_id].includes(user.uid) &&
-          m.player_1_name !== BYE && m.player_2_name !== BYE &&
-          !m.winner_user_id,
-        )
-      : [],
-    [matches, user],
+          m.player_1_name !== BYE && m.player_2_name !== BYE,
+        ) ?? null
+      : null,
+    [displayMatches, user],
   );
 
 
@@ -497,16 +496,11 @@ export const useTournament = (eventIdOverride?: string) => {
     [participants, allUsers],
   );
 
-  const opponents = useMemo(
-    () => user
-      ? visibleUserMatches.map((m) =>
-          m.player_1_user_id === user.uid
-            ? { name: m.player_2_name, userId: m.player_2_user_id, contact: m.player_2_contact }
-            : { name: m.player_1_name, userId: m.player_1_user_id, contact: m.player_1_contact },
-        )
-      : [],
-    [visibleUserMatches, user],
-  );
+  const opponent = visibleUserMatch && user
+    ? visibleUserMatch.player_1_user_id === user.uid
+      ? { name: visibleUserMatch.player_2_name, userId: visibleUserMatch.player_2_user_id, contact: visibleUserMatch.player_2_contact }
+      : { name: visibleUserMatch.player_1_name, userId: visibleUserMatch.player_1_user_id, contact: visibleUserMatch.player_1_contact }
+    : null;
 
   // ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -997,7 +991,7 @@ export const useTournament = (eventIdOverride?: string) => {
     currentMatches,
     displayMatches,
     visibleDraws,
-    opponents,
+    opponent,
     editPlayers,
     reservesPlayers,
     currentDrawSize,

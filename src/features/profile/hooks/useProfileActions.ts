@@ -142,6 +142,8 @@ export const useProfileActions = () => {
         const updates: Promise<void>[] = [];
         matchesSnap.docs.forEach((matchDoc) => {
           const data = matchDoc.data();
+          const hasScores = data.set_1_player_1 != null || data.set_1_player_2 != null;
+          if (hasScores) return;
           if (data.player_1_user_id === user.uid) {
             updates.push(updateDoc(doc(db, 'tournament_matches', matchDoc.id), {
               player_1_name: 'Player Loading', player_1_user_id: '', player_1_contact: '',

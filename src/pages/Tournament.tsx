@@ -49,7 +49,7 @@ export const Tournament: React.FC = () => {
     allTournamentEvents,
     isCreator, started, userParticipant,
     currentDraw, currentMatches, displayMatches, visibleDraws,
-    opponents,
+    opponent,
     editPlayers, reservesPlayers, currentDrawSize, skillMismatchedCount,
     message, scoreForm, scoreFormMatch, setScoreForm,
     generating, resettingDraw, editMode, setEditMode,
@@ -178,13 +178,12 @@ export const Tournament: React.FC = () => {
         </div>
       )}
 
-      {opponents.map((opponent, i) => (
+      {opponent && (
         <OpponentCard
-          key={opponent.userId || i}
           opponent={opponent}
           eventId={event?.id}
         />
-      ))}
+      )}
 
       <DrawTabs
         activeTab={activeTab}
