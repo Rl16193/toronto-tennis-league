@@ -37,18 +37,18 @@ export const TournamentHeader: React.FC<Props> = ({
   ];
 
   const mergeMenu = mergeOpen && (
-    <div className="absolute left-0 top-full mt-2 z-20 min-w-[200px] rounded-2xl border border-white/10 bg-tennis-dark shadow-2xl p-2 space-y-1">
+    <div className="absolute left-0 top-full mt-2 z-50 min-w-[200px] rounded-2xl border border-white/10 bg-tennis-dark shadow-2xl p-2 space-y-1">
       {mergeMenuItems.map(({ label, active, onToggle }) => (
         <button
           key={label}
           type="button"
           onClick={() => { onToggle(); setMergeOpen(false); }}
-          className={`w-full flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
+          className={`w-full flex items-center justify-between gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
             active ? 'bg-clay/20 text-clay' : 'text-white hover:bg-white/5 hover:text-white'
           }`}
         >
-          {label}
-          {active && <span className="text-xs font-bold text-clay">Unmerge</span>}
+          <span>{label}</span>
+          {active && <span className="text-xs font-bold text-clay shrink-0">Unmerge</span>}
         </button>
       ))}
     </div>
