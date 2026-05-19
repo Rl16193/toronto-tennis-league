@@ -5,7 +5,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db, setAuthPersistence, storage } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
-import { SKILL_DESCRIPTIONS, SKILL_LEVELS } from '../lib/skillLevels';
+import { SKILL_DESCRIPTIONS, SKILL_LEVELS } from '../utils/skillLevels';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import {
@@ -118,13 +118,14 @@ export const Signup: React.FC = () => {
     const newErrors: Record<string, string> = {};
     const trimmedEmail = formData.email.trim();
 
-    if (formData.name.length < 3 || formData.name.length > 80) newErrors.name = 'Name must be 3-80 characters';
+    if (formData.name.trim().length < 3 || formData.name.length > 80) newErrors.name = 'Name must be 3-80 characters';
     if (/\d/.test(formData.name)) newErrors.name = 'Name cannot contain numbers';
     if (!signupEmailRegex.test(trimmedEmail)) newErrors.email = 'Please enter a valid email address';
     const sequential = '1234567890abcdefghijklmnopqrstuvwxyz';
     if (
       formData.password.length < 6 ||
       formData.password.length > 80 ||
+      formData.password.trim().length < 3 ||
       sequential.includes(formData.password.toLowerCase())
     ) {
       newErrors.password = 'Password should be between 6-80 characters and non-sequential.';

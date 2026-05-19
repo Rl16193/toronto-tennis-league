@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { reload } from 'firebase/auth';
+import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { updateUserInfo, updateSkills, updateAvailability, changeEmail, linkGoogleAccount, removeEventParticipant, updateEventParticipantDates } from '../services/profileService';
 
@@ -15,6 +17,14 @@ export const useProfileActions = () => {
 
   const handleUpdateInfo = async (name: string, phone: string) => {
     if (!user) return false;
+    if (name.trim().length < 3 || name.length > 80) {
+      showMessage('Name must be 3–80 characters.', 'error');
+      return false;
+    }
+    if (/\d/.test(name)) {
+      showMessage('Name cannot contain numbers.', 'error');
+      return false;
+    }
     setUpdateLoading(true);
     try {
       await updateUserInfo(user.uid, name, phone);
@@ -122,9 +132,29 @@ export const useProfileActions = () => {
     }
   };
 
-  const handleRemoveEvent = async (participantId: string) => {
+  const handleRemoveEvent = async (participantId: string, eventId: string) => {
     try {
       await removeEventParticipant(participantId);
+      if (user && eventId) {
+        const matchesSnap = await getDocs(
+          query(collection(db, 'tournament_matches'), where('event_id', '==', eventId))
+        );
+        const updates: Promise<void>[] = [];
+        matchesSnap.docs.forEach((matchDoc) => {
+          const data = matchDoc.data();
+          if (data.player_1_user_id === user.uid) {
+            updates.push(updateDoc(doc(db, 'tournament_matches', matchDoc.id), {
+              player_1_name: 'Player Loading', player_1_user_id: '', player_1_contact: '',
+            }));
+          }
+          if (data.player_2_user_id === user.uid) {
+            updates.push(updateDoc(doc(db, 'tournament_matches', matchDoc.id), {
+              player_2_name: 'Player Loading', player_2_user_id: '', player_2_contact: '',
+            }));
+          }
+        });
+        await Promise.all(updates);
+      }
       showMessage('You have been removed from the event.', 'success');
     } catch (error) {
       console.error("Error removing event:", error);
@@ -152,7 +182,7 @@ export const useProfileActions = () => {
       changeEmail: handleChangeEmail,
       refreshEmailChange: handleRefreshEmailChange,
       linkGoogle: handleLinkGoogle,
-      removeEvent: handleRemoveEvent,
+      removeEvent: (participantId: string, eventId: string) => handleRemoveEvent(participantId, eventId),
       updateEventDates: handleUpdateEventDates,
     },
   };
