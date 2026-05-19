@@ -100,11 +100,13 @@ export const BracketView: React.FC<Props> = ({
   );
 
   return (
-    <section className="relative overflow-x-auto rounded-[2rem] bg-violet-100 text-black border border-white/10 p-4 md:p-6">
-      {drawState && (
-        <span className="absolute top-3 left-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">{drawState}</span>
-      )}
-      <h2 className="text-center text-2xl md:text-3xl font-black mb-1">{drawTitle}</h2>
+    <section className="overflow-x-auto rounded-[2rem] bg-violet-100 text-black border border-white/10 p-4 md:p-6">
+      <div className="relative flex items-center justify-center mb-1">
+        {drawState && (
+          <span className="absolute left-0 text-[11px] font-black uppercase tracking-widest text-orange-500">{drawState}</span>
+        )}
+        <h2 className="text-2xl md:text-3xl font-black">{drawTitle}</h2>
+      </div>
       {editMode && (
         <p className="text-center text-xs text-amber-700 font-semibold mb-4">
           Edit mode — use dropdowns to reassign players
