@@ -123,9 +123,39 @@ export const TournamentHeader: React.FC<Props> = ({
             <Button variant={editMode ? 'danger' : 'outline'} onClick={onToggleEdit} className="w-full text-xs px-2">
               {editMode ? <><X className="w-3.5 h-3.5 mr-1 shrink-0" />Done</> : <><Pencil className="w-3.5 h-3.5 mr-1 shrink-0" />Edit</>}
             </Button>
-            <div className="relative">
-              {!started && mergeDropdown}
-            </div>
+            {!started ? (
+              <div className="relative w-full">
+                <Button
+                  variant={anyMergeActive ? 'clay' : 'outline'}
+                  className="w-full text-xs px-2"
+                  onClick={() => setMergeOpen((v) => !v)}
+                >
+                  Merge Draws
+                  <ChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${mergeOpen ? 'rotate-180' : ''}`} />
+                </Button>
+                {mergeOpen && (
+                  <div className="absolute left-0 top-full mt-2 z-20 min-w-[200px] rounded-2xl border border-white/10 bg-tennis-dark shadow-2xl p-2 space-y-1">
+                    {[
+                      { label: "Men's Singles", active: mergeMensSingles, onToggle: onToggleMergeMens },
+                      { label: "Women's Singles", active: mergeWomensSingles, onToggle: onToggleMergeWomens },
+                      { label: 'Doubles', active: consolidateDoubles, onToggle: onToggleConsolidateDoubles },
+                    ].map(({ label, active, onToggle }) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => { onToggle(); setMergeOpen(false); }}
+                        className={`w-full flex items-center justify-between rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
+                          active ? 'bg-clay/20 text-clay' : 'text-white hover:bg-white/5 hover:text-white'
+                        }`}
+                      >
+                        {label}
+                        {active && <span className="text-xs font-bold text-clay">Unmerge</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : <div />}
           </div>
         )}
       </div>

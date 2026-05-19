@@ -77,10 +77,10 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?:
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <rect width="100%" height="100%" fill="#ede9fe" />
   <text x="${width / 2}" y="26" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="22" font-weight="900" fill="#111827">${escapeSvg(drawTitle)}</text>
-  ${drawState ? `<text x="16" y="16" text-anchor="start" dominant-baseline="hanging" font-family="Montserrat,Arial,sans-serif" font-size="11" font-weight="700" fill="#6b7280" letter-spacing="2">${escapeSvg(drawState.toUpperCase())}</text>` : ''}
+  ${drawState ? `<text x="40" y="26" text-anchor="start" font-family="Montserrat,Arial,sans-serif" font-size="11" font-weight="900" fill="#ff6b35" letter-spacing="2">${escapeSvg(drawState.toUpperCase())}</text>` : ''}
   <g font-family="Montserrat,Arial,sans-serif">${cells}</g>
-  <text x="${width / 2}" y="${height - 24}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="14" font-weight="900" fill="#111827">Racquets &amp; Strings</text>
-  <text x="${width / 2}" y="${height - 8}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="11" font-weight="600" fill="#374151">toronto-tennis-league.web.app</text>
+  <text x="${width / 2}" y="${height - 24}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="14" font-weight="900" fill="#111827">Season Opener 2026</text>
+  <text x="${width / 2}" y="${height - 8}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="11" font-weight="600" fill="#374151">Presented by Racquets &amp; Strings</text>
 </svg>`;
 };
 
