@@ -35,11 +35,16 @@ export const formatDateLabel = (value?: FirestoreDateLike) => {
   });
 };
 
-export const sortEventsByStartDate = <T extends TennisEvent>(events: T[]) =>
-  [...events].sort((a, b) => {
+export const sortEventsByStartDate = <T extends TennisEvent>(events: T[]) => {
+  const now = Date.now();
+  return [...events].sort((a, b) => {
     const aTime = parseValidDate(getEventStartDate(a))?.getTime() ?? Number.MAX_SAFE_INTEGER;
     const bTime = parseValidDate(getEventStartDate(b))?.getTime() ?? Number.MAX_SAFE_INTEGER;
     const safeATime = Number.isNaN(aTime) ? Number.MAX_SAFE_INTEGER : aTime;
     const safeBTime = Number.isNaN(bTime) ? Number.MAX_SAFE_INTEGER : bTime;
+    const aStarted = safeATime < now;
+    const bStarted = safeBTime < now;
+    if (aStarted !== bStarted) return aStarted ? 1 : -1;
     return safeATime - safeBTime;
   });
+};

@@ -23,7 +23,7 @@ const ROUND_DEADLINES: Record<string, string> = {
   F: 'Avail. till Sun May 30',
 };
 
-const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string): string => {
+const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?: string): string => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
   const rowHeight = 46;
@@ -77,18 +77,19 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string): string => 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <rect width="100%" height="100%" fill="#ede9fe" />
   <text x="${width / 2}" y="26" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="22" font-weight="900" fill="#111827">${escapeSvg(drawTitle)}</text>
+  ${drawState ? `<text x="16" y="16" text-anchor="start" dominant-baseline="hanging" font-family="Montserrat,Arial,sans-serif" font-size="11" font-weight="700" fill="#6b7280" letter-spacing="2">${escapeSvg(drawState.toUpperCase())}</text>` : ''}
   <g font-family="Montserrat,Arial,sans-serif">${cells}</g>
-  <text x="${width / 2}" y="${height - 24}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="14" font-weight="900" fill="#111827">Season Opener 2026</text>
-  <text x="${width / 2}" y="${height - 8}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="11" font-weight="600" fill="#374151">Presented by Racquets &amp; Strings</text>
+  <text x="${width / 2}" y="${height - 24}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="14" font-weight="900" fill="#111827">Racquets &amp; Strings</text>
+  <text x="${width / 2}" y="${height - 8}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="11" font-weight="600" fill="#374151">toronto-tennis-league.web.app</text>
 </svg>`;
 };
 
-export const downloadDrawAsPng = (matches: TournamentMatch[], drawTitle: string): void => {
+export const downloadDrawAsPng = (matches: TournamentMatch[], drawTitle: string, drawState?: string): void => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
   const width = Math.max(900, roundLabels.length * 190 + 80);
   const height = Math.max(580, 105 + drawSize * 46 + 70);
-  const svg = buildDrawSvg(matches, drawTitle);
+  const svg = buildDrawSvg(matches, drawTitle, drawState);
   const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const svgUrl = URL.createObjectURL(svgBlob);
   const svgImg = new Image(width, height);

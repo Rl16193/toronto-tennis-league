@@ -15,6 +15,14 @@ import { AddPlayerPanel } from './tournament/AddPlayerPanel';
 import { AlertMessage } from '../components/AlertMessage';
 import { Button } from '../components/Button';
 
+const abbreviateEventTitle = (title: string): string => {
+  return title
+    .replace(/Season Opener\s*/i, 'SO')
+    .replace(/Racquets\s*&\s*Strings\s*Slam\s*/i, 'RS Slam ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 const getDrawState = (matches: TournamentMatch[]): string => {
   const real = matches.filter((m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_'));
   if (real.length === 0) return 'Live Preview';
@@ -90,6 +98,7 @@ export const Tournament: React.FC = () => {
 
   const now = Date.now();
   const llIsPreview = currentReservesMatches.length === 0;
+  const drawState = getDrawState(currentMatches);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
@@ -110,7 +119,7 @@ export const Tournament: React.FC = () => {
                     : 'bg-tennis-surface/40 text-white border-white/10 hover:text-white hover:border-white/30'
                 }`}
               >
-                {e.title}
+                {abbreviateEventTitle(e.title)}
                 <span className={`ml-2 text-xs font-bold uppercase tracking-wider ${isCurrent ? 'text-white/70' : 'text-white'}`}>
                   {isActive ? 'Active' : 'Upcoming'}
                 </span>
@@ -129,7 +138,7 @@ export const Tournament: React.FC = () => {
         mergeMensSingles={mergeMensSingles}
         mergeWomensSingles={mergeWomensSingles}
         consolidateDoubles={consolidateDoubles}
-        onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'))}
+        onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'), drawState)}
         onGenerateMatches={handleGenerateAll}
         onCancelMatches={handleResetDraw}
         onToggleEdit={() => setEditMode((v) => !v)}
@@ -143,27 +152,6 @@ export const Tournament: React.FC = () => {
           <p>{message.text}</p>
         </AlertMessage>
       )}
-
-      {/* Draw state badge */}
-      {(() => {
-        const state = getDrawState(currentMatches);
-        const hasGeneratedMatches = currentMatches.length > 0;
-        return (
-          <div className="mb-6 flex flex-col gap-2">
-            <div className="inline-flex items-center gap-2">
-              <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest border ${
-                state === 'Live Preview'
-                  ? 'bg-white/5 border-white/10 text-white'
-                  : state === 'Tournament Complete'
-                  ? 'bg-green-500/15 border-green-500/30 text-green-400'
-                  : 'bg-clay/15 border-clay/30 text-clay'
-              }`}>
-                {state}
-              </span>
-            </div>
-          </div>
-        );
-      })()}
 
       {isCreator && skillMismatchedCount > 0 && (
         <div className="mb-6 flex items-start gap-2 text-sm text-orange-500">
@@ -235,10 +223,11 @@ export const Tournament: React.FC = () => {
             </div>
           )}
 
-          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(llDrawDisplayMatches, 'LL Draw')}>
+          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(llDrawDisplayMatches, 'LL Draw', drawState)}>
             <BracketView
               matches={llDrawDisplayMatches}
               drawTitle="LL Draw"
+              drawState={drawState}
               editMode={editMode}
               editPlayers={editMode ? allUsersAsTournamentPlayers : []}
               onEditPlayer={handleEditPlayer}
@@ -289,10 +278,11 @@ export const Tournament: React.FC = () => {
             </div>
           )}
 
-          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw')}>
+          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState)}>
             <BracketView
               matches={displayMatches}
               drawTitle={currentDraw?.label || 'Draw'}
+              drawState={drawState}
               editMode={editMode}
               editPlayers={editPlayers}
               onEditPlayer={handleEditPlayer}

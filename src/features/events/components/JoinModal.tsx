@@ -1,12 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Calendar, MapPin, Users, Clock3, Repeat, X, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Calendar, Users, X, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { DisplayEvent } from '../services/eventService';
-import { isTournamentEvent, isSeasonOpener, isRecurringWeekly } from '../../../utils/eventTypes';
+import { isTournamentEvent } from '../../../utils/eventTypes';
 import { formatDateLabel, getEventStartDate, getEventEndDate } from '../../../utils/eventDates';
-import { formatEventSchedule } from '../utils/eventFormatters';
 import type { JoinFormState, SlotResult } from '../types';
 import { LOGIN_ROUTE, SIGNUP_ROUTE } from '../hooks/useJoin';
 
@@ -34,7 +33,6 @@ export const JoinModal: React.FC<Props> = ({
   user, skillLevel, getJoinedChoices, hasJoinedTournamentChoice,
   isFullyJoined, onClose, onSubmit,
 }) => {
-  const schedule = formatEventSchedule(event);
   const startLabel = formatDateLabel(getEventStartDate(event));
   const endDate = getEventEndDate(event);
   const dateRange = endDate && endDate !== getEventStartDate(event) ? `${startLabel} to ${formatDateLabel(endDate)}` : startLabel;
@@ -67,32 +65,16 @@ export const JoinModal: React.FC<Props> = ({
           <div className="absolute inset-0 bg-gradient-to-t from-tennis-surface via-transparent to-transparent" />
         </div>
 
-        <div className="p-5 sm:p-8 md:p-10 space-y-6 sm:space-y-8">
-          <div className="space-y-4">
-            <span className="inline-block px-3 py-1 bg-clay/10 border border-clay/20 rounded-lg text-xs font-bold text-clay uppercase tracking-widest">
-              {event.type}
-            </span>
-            <h2 className="text-3xl sm:text-4xl font-display font-black text-white">{event.title}</h2>
-            {isSeasonOpener(event) && (
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">First Tournament of 2026</p>
-            )}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-white text-sm">
-              <div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-clay shrink-0" /><span>{dateRange}</span></div>
-              <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-clay shrink-0" /><span>{event.location}</span></div>
-              <div className="flex items-center gap-2"><Users className="w-4 h-4 text-clay shrink-0" /><span>Skill: {event.skill_level || event.type}</span></div>
-              {schedule && <div className="flex items-center gap-2"><Clock3 className="w-4 h-4 text-clay shrink-0" /><span>{schedule}</span></div>}
-              {isRecurringWeekly(event) && <div className="flex items-center gap-2"><Repeat className="w-4 h-4 text-clay shrink-0" /><span>Recurring weekly</span></div>}
+        <div className="p-5 sm:p-8 space-y-6">
+          <div className="space-y-1">
+            <h2 className="text-2xl sm:text-3xl font-display font-black text-white">{event.title}</h2>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/70">
+              <div className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-clay shrink-0" /><span>{dateRange}</span></div>
+              {event.skill_level && <div className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-clay shrink-0" /><span>Skill: {event.skill_level}</span></div>}
             </div>
           </div>
 
-          <div className="space-y-2">
-            <h4 className="text-white font-bold uppercase tracking-widest text-xs">About</h4>
-            <p className="text-white/70 leading-relaxed text-sm">
-              {event.about || event.description || 'Join us for a Toronto Tennis League event.'}
-            </p>
-          </div>
-
-          <div className="rounded-[2rem] border border-white/5 bg-white/5 p-5 sm:p-6 space-y-5">
+          <div className="space-y-5">
             <div>
               <h4 className="text-white font-bold">Join Event</h4>
               <p className="text-white/60 text-sm mt-1">
@@ -226,3 +208,4 @@ export const JoinModal: React.FC<Props> = ({
     </div>
   );
 };
+
