@@ -17,7 +17,7 @@ export const Footer: React.FC = () => {
               <span className="text-white"> STRINGS</span>
             </Link>
             <p className="text-white/60 text-sm leading-relaxed">
-              A community-driven, non-profit platform helping Toronto players connect and participate in matches, meetups, and tournaments.
+              A community-driven platform to help players connect, join meetups and tournaments. A new approach to finding your hitting partner and spending more time on the court. Join for free!
             </p>
           </div>
 
