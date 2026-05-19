@@ -1,4 +1,4 @@
-import { TournamentMatch } from './types';
+import { ScoreSubmission, TournamentMatch } from './types';
 import { formatPlayerName } from './utils';
 
 export const getRoundLabels = (drawSize: number): string[] => {
@@ -23,12 +23,29 @@ const ROUND_DEADLINES: Record<string, string> = {
   F: 'Avail. till Sun May 30',
 };
 
-const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?: string): string => {
+const formatSvgScore = (sub: ScoreSubmission): string => {
+  const pairs: [number, number][] = [
+    [sub.set_1_player_1, sub.set_1_player_2],
+    [sub.set_2_player_1, sub.set_2_player_2],
+    [sub.set_3_player_1, sub.set_3_player_2],
+  ];
+  return pairs
+    .filter(([p1, p2]) => p1 > 0 || p2 > 0)
+    .map(([p1, p2]) => `${p1}-${p2}`)
+    .join('  ');
+};
+
+const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, submissions: ScoreSubmission[] = []): string => {
+  const subsMap = new Map<string, ScoreSubmission>();
+  for (const s of [...submissions].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+    if (!subsMap.has(s.match_doc_id)) subsMap.set(s.match_doc_id, s);
+  }
+
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
   const rowHeight = 46;
-  const colStart = 44;   // top of colored columns
-  const topOffset = 105; // where match cards begin (leaves room for labels inside column header)
+  const colStart = 44;
+  const topOffset = 105;
   const footerHeight = 50;
   const width = Math.max(900, roundLabels.length * 190 + 80);
   const height = Math.max(580, topOffset + drawSize * rowHeight + footerHeight + 20);
@@ -62,11 +79,19 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?:
       const connector = ri < rounds.length - 1
         ? `<line x1="${connX - 16}" y1="${y + 36}" x2="${connX}" y2="${y + 36}" stroke="#4b5563" stroke-width="1.5" />`
         : '';
+
+      const sub = subsMap.get(match.id);
+      const scoreText = sub ? formatSvgScore(sub) : '';
+      const p1Y = y + (scoreText ? 20 : 27);
+      const divY = y + (scoreText ? 28 : 36);
+      const p2Y = y + (scoreText ? 48 : 61);
+
       return `<g>
         <rect x="${x}" y="${y}" width="${colWidth - 58}" height="72" rx="4" fill="#ffffff" stroke="#9ca3af" />
-        <text x="${x + 10}" y="${y + 27}" font-size="13" font-weight="700" fill="${match.winner_user_id === match.player_1_user_id ? '#ff6b35' : '#111827'}">${escapeSvg(p1)}</text>
-        <line x1="${x}" y1="${y + 36}" x2="${x + colWidth - 58}" y2="${y + 36}" stroke="#d1d5db" />
-        <text x="${x + 10}" y="${y + 61}" font-size="13" font-weight="700" fill="${match.winner_user_id === match.player_2_user_id ? '#ff6b35' : '#111827'}">${escapeSvg(p2)}</text>
+        <text x="${x + 10}" y="${p1Y}" font-size="13" font-weight="700" fill="${match.winner_user_id === match.player_1_user_id ? '#ff6b35' : '#111827'}">${escapeSvg(p1)}</text>
+        <line x1="${x}" y1="${divY}" x2="${x + colWidth - 58}" y2="${divY}" stroke="#d1d5db" />
+        <text x="${x + 10}" y="${p2Y}" font-size="13" font-weight="700" fill="${match.winner_user_id === match.player_2_user_id ? '#ff6b35' : '#111827'}">${escapeSvg(p2)}</text>
+        ${scoreText ? `<line x1="${x}" y1="${y + 56}" x2="${x + colWidth - 58}" y2="${y + 56}" stroke="#e5e7eb" /><text x="${x + 10}" y="${y + 67}" font-size="10" fill="#374151" font-family="monospace">${escapeSvg(scoreText)}</text>` : ''}
         ${connector}
       </g>`;
     }).join('');
@@ -74,22 +99,24 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?:
     return `${col}${label}${items}`;
   }).join('');
 
+  const footerLabel = escapeSvg(eventTitle || drawTitle);
+
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <rect width="100%" height="100%" fill="#ede9fe" />
   <text x="${width / 2}" y="26" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="22" font-weight="900" fill="#111827">${escapeSvg(drawTitle)}</text>
   ${drawState ? `<text x="40" y="26" text-anchor="start" font-family="Montserrat,Arial,sans-serif" font-size="11" font-weight="900" fill="#ff6b35" letter-spacing="2">${escapeSvg(drawState.toUpperCase())}</text>` : ''}
   <g font-family="Montserrat,Arial,sans-serif">${cells}</g>
-  <text x="${width / 2}" y="${height - 24}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="14" font-weight="900" fill="#111827">Season Opener 2026</text>
+  <text x="${width / 2}" y="${height - 24}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="14" font-weight="900" fill="#111827">${footerLabel}</text>
   <text x="${width / 2}" y="${height - 8}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="11" font-weight="600" fill="#374151">Presented by Racquets &amp; Strings</text>
 </svg>`;
 };
 
-export const downloadDrawAsPng = (matches: TournamentMatch[], drawTitle: string, drawState?: string): void => {
+export const downloadDrawAsPng = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, submissions: ScoreSubmission[] = []): void => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
   const width = Math.max(900, roundLabels.length * 190 + 80);
   const height = Math.max(580, 105 + drawSize * 46 + 70);
-  const svg = buildDrawSvg(matches, drawTitle, drawState);
+  const svg = buildDrawSvg(matches, drawTitle, drawState, eventTitle, submissions);
   const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const svgUrl = URL.createObjectURL(svgBlob);
   const svgImg = new Image(width, height);

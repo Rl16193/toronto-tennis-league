@@ -101,9 +101,6 @@ export const BracketView: React.FC<Props> = ({
 
   return (
     <section className="overflow-x-auto rounded-[2rem] bg-violet-100 text-black border border-white/10 p-4 md:p-6">
-      {drawState && (
-        <p className="text-[11px] font-black uppercase tracking-widest text-orange-500 mb-2">{drawState}</p>
-      )}
       {editMode && (
         <p className="text-center text-xs text-amber-700 font-semibold mb-4">
           Edit mode — use dropdowns to reassign players
@@ -120,6 +117,9 @@ export const BracketView: React.FC<Props> = ({
             style={{ gridTemplateRows: `auto repeat(${drawSize}, minmax(24px, 1fr))`, rowGap: '0.35rem' }}
           >
             <div className="sticky top-0 z-10 bg-inherit pb-2">
+              {roundIndex === 0 && drawState && (
+                <p className="text-center text-[10px] font-black uppercase tracking-widest text-orange-500 mb-1">{drawState}</p>
+              )}
               <p className="text-center text-xs uppercase tracking-widest text-black font-black">
                 {round.round}
               </p>
