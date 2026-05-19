@@ -117,7 +117,7 @@ export const BracketView: React.FC<Props> = ({
             style={{ gridTemplateRows: `auto repeat(${drawSize}, minmax(24px, 1fr))`, rowGap: '0.35rem' }}
           >
             <div className="sticky top-0 z-10 bg-inherit pb-2">
-              <p className="text-center text-xs uppercase tracking-widest text-white font-black">
+              <p className="text-center text-xs uppercase tracking-widest text-black font-black">
                 {round.round}
               </p>
               {onUpdateDeadline ? (
@@ -125,11 +125,11 @@ export const BracketView: React.FC<Props> = ({
                   type="date"
                   value={roundDeadlines[round.round] ?? ''}
                   onChange={(e) => onUpdateDeadline(round.round, e.target.value)}
-                  className="mt-0.5 w-full text-center text-[10px] text-white bg-transparent border-none outline-none cursor-pointer hover:text-white focus:text-white"
+                  className="mt-0.5 w-full text-center text-[10px] text-black bg-transparent border-none outline-none cursor-pointer hover:text-black focus:text-black"
                   title={`Set deadline for ${round.round}`}
                 />
               ) : roundDeadlines[round.round] ? (
-                <p className="text-center text-[10px] text-white mt-0.5">
+                <p className="text-center text-[10px] text-black mt-0.5">
                   Till {formatDeadline(roundDeadlines[round.round])}
                 </p>
               ) : null}
