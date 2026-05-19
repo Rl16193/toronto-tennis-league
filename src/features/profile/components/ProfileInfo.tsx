@@ -3,6 +3,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { User, Mail, Edit2, Save, X } from 'lucide-react';
+import { SKILL_LEVELS, SKILL_DESCRIPTIONS } from '../../../utils/skillLevels';
 import type { ProfileEditData } from '../types';
 
 type EmailChangeData = { newEmail: string; password: string };
@@ -14,6 +15,7 @@ interface ProfileInfoProps {
   setEditData: (data: ProfileEditData) => void;
   onSave: () => void;
   updateLoading: boolean;
+  message?: { text: string; type: 'success' | 'error' } | null;
   hasGoogleProvider: boolean | undefined;
   onLinkGoogle: () => void;
   linkingGoogle: boolean;
@@ -35,6 +37,7 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
   setEditData,
   onSave,
   updateLoading,
+  message,
   hasGoogleProvider,
   onLinkGoogle,
   linkingGoogle,
@@ -79,11 +82,8 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
               <Button variant="ghost" size="sm" onClick={() => {
                 setEditData({
                   ...editData,
-                  user: {
-                    ...editData.user,
-                    name: profile.user.name,
-                    phone: profile.user.phone,
-                  },
+                  user: { ...editData.user, name: profile.user.name, phone: profile.user.phone },
+                  stats: { ...editData.stats, skill_level: profile.stats.skill_level },
                 });
                 setIsEditing(true);
               }}>
@@ -144,6 +144,37 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
                       },
                     })}
                   />
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="block text-sm font-bold text-white uppercase tracking-wider">
+                      NTRP Level: {editData.stats?.skill_level ?? profile.stats.skill_level}
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max={SKILL_LEVELS.length - 1}
+                      step="1"
+                      value={Math.max(0, SKILL_LEVELS.indexOf((editData.stats?.skill_level ?? profile.stats.skill_level) as typeof SKILL_LEVELS[number]))}
+                      onChange={(e) => setEditData({
+                        ...editData,
+                        stats: {
+                          ...editData.stats,
+                          skill_level: SKILL_LEVELS[Number(e.target.value)],
+                        },
+                      })}
+                      className="w-full h-2 bg-tennis-dark rounded-full appearance-none cursor-pointer accent-clay"
+                    />
+                    <div className="flex items-start justify-between gap-2 text-center">
+                      {SKILL_LEVELS.map((level) => (
+                        <span key={level} className={`text-[10px] font-black tracking-widest ${(editData.stats?.skill_level ?? profile.stats.skill_level) === level ? 'text-clay' : 'text-white'}`}>
+                          {level.toFixed(1)}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-sm text-white italic">
+                      "{SKILL_DESCRIPTIONS[(editData.stats?.skill_level ?? profile.stats.skill_level) as number]}"
+                    </p>
+                  </div>
+
                   <div className="space-y-2">
                     <label className="block text-sm font-medium text-white">Email Address</label>
                     <div className="flex items-center space-x-3 p-3 bg-white/5 border border-white/5 rounded-2xl text-white">
@@ -186,14 +217,24 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
                   </div>
                 </>
               ) : (
-                <>
-                  <div className="space-y-1">
-                    <p className="text-xs font-bold text-white uppercase tracking-widest">Name</p>
-                    <p className="text-xl font-bold text-clay">{profile.user.name}</p>
+                <div className="space-y-6 w-full">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-white uppercase tracking-widest">Name</p>
+                      <p className="text-xl font-bold text-clay">{profile.user.name}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-white uppercase tracking-widest">Email</p>
+                      <p className="text-xl font-bold text-clay break-all">{profile.user.email}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-white uppercase tracking-widest">Phone</p>
+                      <p className="text-xl font-bold text-clay">{profile.user.phone}</p>
+                    </div>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-bold text-white uppercase tracking-widest">Email</p>
-                    <p className="text-xl font-bold text-clay break-all">{profile.user.email}</p>
+                    <p className="text-xs font-bold text-white uppercase tracking-widest">NTRP Skill</p>
+                    <p className="text-xl font-bold text-clay">{profile.stats.skill_level}</p>
                   </div>
                   {!hasGoogleProvider ? (
                     <div className="rounded-3xl border border-white/5 bg-white/5 p-4 text-sm text-white">
@@ -210,25 +251,28 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
                       </Button>
                     </div>
                   ) : null}
-                  <div className="space-y-1">
-                    <p className="text-xs font-bold text-white uppercase tracking-widest">Phone</p>
-                    <p className="text-xl font-bold text-clay">{profile.user.phone}</p>
-                  </div>
-                </>
+                </div>
               )}
             </div>
           </div>
 
           {isEditing && (
-            <div className="mt-8 flex flex-col-reverse gap-3 border-t border-white/10 pt-6 sm:flex-row sm:justify-end">
-              <Button variant="ghost" onClick={() => setIsEditing(false)}>
-                <X className="w-4 h-4 mr-2" />
-                Cancel
-              </Button>
-              <Button onClick={onSave} isLoading={updateLoading}>
-                <Save className="w-4 h-4 mr-2" />
-                Save
-              </Button>
+            <div className="mt-8 border-t border-white/10 pt-6 space-y-3">
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button variant="ghost" onClick={() => setIsEditing(false)}>
+                  <X className="w-4 h-4 mr-2" />
+                  Cancel
+                </Button>
+                <Button onClick={onSave} isLoading={updateLoading}>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save
+                </Button>
+              </div>
+              {message && (
+                <p className={`text-sm font-semibold text-right ${message.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                  {message.text}
+                </p>
+              )}
             </div>
           )}
         </div>

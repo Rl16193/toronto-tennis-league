@@ -10,6 +10,7 @@ import { Button } from '../components/Button';
 import {
   Calendar,
   MapPin,
+  Plus,
   Users,
   X,
   CheckCircle2,
@@ -604,6 +605,22 @@ export const Events: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
+      {isEventCreator && (
+        <div className="mb-6 flex justify-end">
+          <Button onClick={() => {
+            setEventFormMessage(null);
+            setEventForm((current) => ({
+              ...current,
+              organizer: current.organizer || profile?.user.name || '',
+            }));
+            setShowEventForm(true);
+          }}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add an Event
+          </Button>
+        </div>
+      )}
+
       <div className="space-y-6 mb-8">
         {authPrompt && (
           <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-amber-300 space-y-3">
@@ -635,17 +652,7 @@ export const Events: React.FC = () => {
           </div>
         )}
 
-        <EventsHeader
-          isEventCreator={isEventCreator}
-          onAddEvent={() => {
-            setEventFormMessage(null);
-            setEventForm((current) => ({
-              ...current,
-              organizer: current.organizer || profile?.user.name || '',
-            }));
-            setShowEventForm(true);
-          }}
-        />
+        <EventsHeader />
 
       </div>
 

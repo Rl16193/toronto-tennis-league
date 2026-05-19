@@ -115,7 +115,7 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-white">Join Last Date</span>
+          <span className="block text-sm font-medium text-white">Join Last Date <span className="text-white/50 font-normal">(Optional)</span></span>
           <input
             type="date"
             value={eventForm.joinLastDate}

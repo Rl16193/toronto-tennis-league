@@ -79,8 +79,7 @@ export const validateEventForm = (eventForm: EventFormState) => {
   if (!eventForm.startDate) return 'Please choose a start date.';
   if (!eventForm.endDate) return 'Please choose an end date.';
   if (eventForm.endDate < eventForm.startDate) return 'End date must be on or after the start date.';
-  if (!eventForm.joinLastDate) return 'Please choose the last date to join.';
-  if (eventForm.joinLastDate > eventForm.endDate) return 'Join last date must be on or before the end date.';
+  if (eventForm.joinLastDate && eventForm.joinLastDate > eventForm.endDate) return 'Join last date must be on or before the end date.';
   if (!eventForm.time.trim()) return 'Please enter the event time.';
   return '';
 };

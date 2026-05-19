@@ -1,13 +1,11 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { CheckCircle2 } from 'lucide-react';
 import { useProfileData } from '../features/profile/hooks/useProfileData';
 import { useProfileActions } from '../features/profile/hooks/useProfileActions';
 import { ProfileInfo } from '../features/profile/components/ProfileInfo';
-import { ProfileSkills } from '../features/profile/components/ProfileSkills';
 import { ProfileStats } from '../features/profile/components/ProfileStats';
 import { ProfileAvailability } from '../features/profile/components/ProfileAvailability';
 import { ProfileEvents } from '../features/profile/components/ProfileEvents';
@@ -19,9 +17,7 @@ export const Profile: React.FC = () => {
   const { joinedEvents, loading: eventsLoading } = useProfileData();
   const { updateLoading, message, actions } = useProfileActions();
 
-  // Edit States
   const [isEditingInfo, setIsEditingInfo] = useState(false);
-  const [isEditingSkills, setIsEditingSkills] = useState(false);
   const [isEditingAvailability, setIsEditingAvailability] = useState(false);
 
   const [editData, setEditData] = useState<ProfileEditData>({});
@@ -34,12 +30,10 @@ export const Profile: React.FC = () => {
   useEffect(() => { document.title = 'My Profile — Racquets & Strings'; }, []);
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      navigate('/login');
-    }
+    if (!authLoading && !user) navigate('/login');
   }, [user, authLoading, navigate]);
 
-  const hasGoogleProvider = user?.providerData?.some((provider) => provider.providerId === 'google.com');
+  const hasGoogleProvider = user?.providerData?.some((p) => p.providerId === 'google.com');
 
   const incompleteFields = profile ? [
     !profile.user.name.trim() ? 'name' : null,
@@ -74,33 +68,13 @@ export const Profile: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-8">
-      {/* Toast Message */}
-      <AnimatePresence>
-        {message.text && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className={`fixed top-24 right-8 z-50 p-4 rounded-2xl shadow-2xl flex items-center space-x-3 border ${
-              message.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-500' : 'bg-red-500/10 border-red-500/20 text-red-500'
-            }`}
-          >
-            {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-            <span className="font-bold text-sm">{message.text}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {incompleteFields.length > 0 && (
         <div className="mb-8 px-1">
           <p className="text-sm text-orange-500 font-bold mb-1">Profile incomplete</p>
-          <p className="text-sm text-orange-500">
-            Please add details for: {incompleteFields.join(', ')}.
-          </p>
+          <p className="text-sm text-orange-500">Please add details for: {incompleteFields.join(', ')}.</p>
         </div>
       )}
 
-      {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl md:text-4xl font-display font-black text-white tracking-tight">My Profile</h1>
       </div>
@@ -108,9 +82,7 @@ export const Profile: React.FC = () => {
       {joinedEvents.length === 0 && (
         <div className="mb-8 p-6 rounded-2xl bg-clay/10 border border-clay/20 text-center">
           <p className="text-white font-semibold mb-4">Ready to play? Join some events to get started!</p>
-          <Button onClick={() => navigate('/events')}>
-            Register for Events Here
-          </Button>
+          <Button onClick={() => navigate('/events')}>Register for Events Here</Button>
         </div>
       )}
 
@@ -120,94 +92,76 @@ export const Profile: React.FC = () => {
             <CheckCircle2 className="w-5 h-5 text-green-400 shrink-0" />
             <p className="text-green-300 font-semibold">You're all set for the tournament!</p>
           </div>
-          <Button onClick={() => navigate('/tournament')} size="sm">
-            Check Draw for Updates
-          </Button>
+          <Button onClick={() => navigate('/tournament')} size="sm">Check Draw for Updates</Button>
         </div>
       )}
 
+      {/* Contact Card — full width */}
+      <div className="mb-6">
+        <ProfileInfo
+          isEditing={isEditingInfo}
+          setIsEditing={setIsEditingInfo}
+          editData={editData}
+          setEditData={setEditData}
+          message={message}
+          onSave={async () => {
+            const [savedInfo, savedSkills] = await Promise.all([
+              actions.updateInfo(editData.user?.name || profile.user.name, editData.user?.phone || profile.user.phone),
+              actions.updateSkills(editData.stats?.skill_level || profile.stats.skill_level, profile.stats.tournament_preference),
+            ]);
+            if (savedInfo && savedSkills) setIsEditingInfo(false);
+          }}
+          updateLoading={updateLoading}
+          hasGoogleProvider={hasGoogleProvider}
+          onLinkGoogle={async () => {
+            setLinkingGoogle(true);
+            try { await actions.linkGoogle(); } finally { setLinkingGoogle(false); }
+          }}
+          linkingGoogle={linkingGoogle}
+          showEmailForm={showEmailForm}
+          setShowEmailForm={setShowEmailForm}
+          emailChangeData={emailChangeData}
+          setEmailChangeData={setEmailChangeData}
+          emailChangeLoading={emailChangeLoading}
+          emailVerificationPending={emailVerificationPending}
+          onStartEmailChange={async () => {
+            setEmailChangeLoading(true);
+            try {
+              const success = await actions.changeEmail(emailChangeData.newEmail, emailChangeData.password);
+              if (success) setEmailVerificationPending(true);
+            } finally {
+              setEmailChangeLoading(false);
+            }
+          }}
+          onRefreshEmailChange={actions.refreshEmailChange}
+          onCancelEmailChange={() => {
+            setShowEmailForm(false);
+            setEmailVerificationPending(false);
+            setEmailChangeData({ newEmail: '', password: '' });
+          }}
+        />
+      </div>
+
+      {/* Two-column grid: Availability | Stats + Events + Calendar */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] gap-6 lg:gap-8">
-        {/* Left column: Contact Card, Skills, Availability */}
-        <div className="space-y-6">
-          <ProfileInfo
-            isEditing={isEditingInfo}
-            setIsEditing={setIsEditingInfo}
-            editData={editData}
-            setEditData={setEditData}
-            onSave={async () => {
-              const saved = await actions.updateInfo(editData.user?.name || profile.user.name, editData.user?.phone || profile.user.phone);
-              if (saved) {
-                setIsEditingInfo(false);
-              }
-            }}
-            updateLoading={updateLoading}
-            hasGoogleProvider={hasGoogleProvider}
-            onLinkGoogle={async () => {
-              setLinkingGoogle(true);
-              try { await actions.linkGoogle(); } finally { setLinkingGoogle(false); }
-            }}
-            linkingGoogle={linkingGoogle}
-            showEmailForm={showEmailForm}
-            setShowEmailForm={setShowEmailForm}
-            emailChangeData={emailChangeData}
-            setEmailChangeData={setEmailChangeData}
-            emailChangeLoading={emailChangeLoading}
-            emailVerificationPending={emailVerificationPending}
-            onStartEmailChange={async () => {
-              setEmailChangeLoading(true);
-              try {
-                const success = await actions.changeEmail(emailChangeData.newEmail, emailChangeData.password);
-                if (success) setEmailVerificationPending(true);
-              } finally {
-                setEmailChangeLoading(false);
-              }
-            }}
-            onRefreshEmailChange={actions.refreshEmailChange}
-            onCancelEmailChange={() => {
-              setShowEmailForm(false);
-              setEmailVerificationPending(false);
-              setEmailChangeData({ newEmail: '', password: '' });
-            }}
-          />
+        <ProfileAvailability
+          isEditing={isEditingAvailability}
+          setIsEditing={setIsEditingAvailability}
+          editData={editData}
+          setEditData={setEditData}
+          message={message}
+          onSave={async () => {
+            const saved = await actions.updateAvailability(
+              editData.preferences?.availability_day || profile.preferences.availability_day,
+              editData.preferences?.availability_time || profile.preferences.availability_time,
+              editData.preferences?.preferred_courts || profile.preferences.preferred_courts,
+              editData.preferences?.favourite_players || profile.preferences.favourite_players
+            );
+            if (saved) setIsEditingAvailability(false);
+          }}
+          updateLoading={updateLoading}
+        />
 
-          <ProfileSkills
-            isEditing={isEditingSkills}
-            setIsEditing={setIsEditingSkills}
-            editData={editData}
-            setEditData={setEditData}
-            onSave={async () => {
-              const saved = await actions.updateSkills(
-                editData.stats?.skill_level || profile.stats.skill_level,
-                profile.stats.tournament_preference
-              );
-              if (saved) {
-                setIsEditingSkills(false);
-              }
-            }}
-            updateLoading={updateLoading}
-          />
-
-          <ProfileAvailability
-            isEditing={isEditingAvailability}
-            setIsEditing={setIsEditingAvailability}
-            editData={editData}
-            setEditData={setEditData}
-            onSave={async () => {
-              const saved = await actions.updateAvailability(
-                editData.preferences?.availability_day || profile.preferences.availability_day,
-                editData.preferences?.availability_time || profile.preferences.availability_time,
-                editData.preferences?.preferred_courts || profile.preferences.preferred_courts,
-                editData.preferences?.favourite_players || profile.preferences.favourite_players
-              );
-              if (saved) {
-                setIsEditingAvailability(false);
-              }
-            }}
-            updateLoading={updateLoading}
-          />
-        </div>
-
-        {/* Right column: Match Stats, Events, Calendar */}
         <div className="space-y-6">
           <ProfileStats />
 
@@ -249,16 +203,10 @@ export const Profile: React.FC = () => {
               });
             });
 
-            const tournamentStartKey = tournamentEvent?.start_date
-              ? parseMayKey(tournamentEvent.start_date)
-              : null;
-
+            const tournamentStartKey = tournamentEvent?.start_date ? parseMayKey(tournamentEvent.start_date) : null;
             const isDateSelected = (day: number) => savedDates.has(`May ${day}, 2026`);
             const isDefaultDate = (day: number) =>
-              !!tournamentStartKey &&
-              tournamentStartKey === `May ${day}, 2026` &&
-              !savedDates.has(tournamentStartKey);
-
+              !!tournamentStartKey && tournamentStartKey === `May ${day}, 2026` && !savedDates.has(tournamentStartKey);
             const isPast = (day: number) => {
               const now = new Date();
               return new Date(2026, 4, day) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -268,11 +216,7 @@ export const Profile: React.FC = () => {
               if (!participantId || isPast(day)) return;
               const dateKey = `May ${day}, 2026`;
               const current = new Set(savedDates);
-              if (current.has(dateKey)) {
-                current.delete(dateKey);
-              } else {
-                current.add(dateKey);
-              }
+              if (current.has(dateKey)) current.delete(dateKey); else current.add(dateKey);
               await actions.updateEventDates(participantId, [...current]);
             };
 
@@ -298,15 +242,11 @@ export const Profile: React.FC = () => {
                         disabled={past || !participantId}
                         onClick={() => handleToggleDate(day)}
                         className={`p-2 text-xs rounded-lg transition-colors ${
-                          selected
-                            ? 'bg-orange-500 text-white font-bold'
-                            : deflt
-                              ? 'border border-orange-500/60 text-orange-300 font-semibold hover:bg-orange-500/20 cursor-pointer'
-                              : past
-                                ? 'text-white/20 bg-gray-800/30 cursor-not-allowed'
-                                : participantId
-                                  ? 'text-white bg-gray-800/30 hover:bg-white/10 cursor-pointer'
-                                  : 'text-white/20 bg-gray-800/30'
+                          selected ? 'bg-orange-500 text-white font-bold'
+                            : deflt ? 'border border-orange-500/60 text-orange-300 font-semibold hover:bg-orange-500/20 cursor-pointer'
+                            : past ? 'text-white/20 bg-gray-800/30 cursor-not-allowed'
+                            : participantId ? 'text-white bg-gray-800/30 hover:bg-white/10 cursor-pointer'
+                            : 'text-white/20 bg-gray-800/30'
                         }`}
                       >
                         {day}

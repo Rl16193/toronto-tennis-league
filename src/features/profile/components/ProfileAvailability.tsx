@@ -22,6 +22,7 @@ interface ProfileAvailabilityProps {
   setEditData: (data: ProfileEditData) => void;
   onSave: () => void;
   updateLoading: boolean;
+  message?: { text: string; type: 'success' | 'error' } | null;
 }
 
 export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
@@ -31,6 +32,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
   setEditData,
   onSave,
   updateLoading,
+  message,
 }) => {
   const { profile } = useAuth();
   const [courtOptions, setCourtOptions] = useState<string[]>(defaultCourtOptions);
@@ -89,7 +91,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
           </h2>
           {!isEditing ? (
             <Button variant="ghost" size="sm" onClick={() => {
-              setEditData({ 
+              setEditData({
                 ...editData,
                 preferences: {
                   ...editData.preferences,
@@ -107,13 +109,20 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
               Edit
             </Button>
           ) : (
-            <div className="flex space-x-2">
-              <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
-                <X className="w-4 h-4" />
-              </Button>
-              <Button size="sm" onClick={onSave} isLoading={updateLoading}>
-                <Save className="w-4 h-4" />
-              </Button>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex space-x-2">
+                <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+                  <X className="w-4 h-4" />
+                </Button>
+                <Button size="sm" onClick={onSave} isLoading={updateLoading}>
+                  <Save className="w-4 h-4" />
+                </Button>
+              </div>
+              {message && (
+                <p className={`text-xs font-semibold ${message.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                  {message.text}
+                </p>
+              )}
             </div>
           )}
         </div>
