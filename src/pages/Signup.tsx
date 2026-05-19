@@ -141,10 +141,6 @@ export const Signup: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const validateStep2 = () => {
-    return true; // Mostly selection based
-  };
-
   const handleNext = async () => {
     if (step === 1) {
       setCheckingEmail(true);
@@ -155,7 +151,7 @@ export const Signup: React.FC = () => {
       } finally {
         setCheckingEmail(false);
       }
-    } else if (step === 2 && validateStep2()) {
+    } else if (step === 2) {
       setStep(3);
     }
   };
@@ -193,10 +189,6 @@ export const Signup: React.FC = () => {
       suggested: (suggestion) => setEmailSuggestion(suggestion),
       empty: () => setEmailSuggestion(null)
     });
-  };
-
-  const handleEmailBlur = () => {
-    // Email-in-use check happens at account creation — Firebase Auth handles duplicates
   };
 
   const addCustomCourt = () => {
@@ -427,7 +419,6 @@ export const Signup: React.FC = () => {
                       placeholder="roger@goat.com"
                       value={formData.email}
                       onChange={handleEmailChange}
-                      onBlur={handleEmailBlur}
                       error={errors.email}
                       required
                     />

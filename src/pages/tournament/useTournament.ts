@@ -42,7 +42,6 @@ export const useTournament = (eventIdOverride?: string) => {
 
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [updatingDraw, setUpdatingDraw] = useState(false);
   const [resettingDraw, setResettingDraw] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [previewSlotOverrides, setPreviewSlotOverrides] = useState<Record<string, Record<number, TournamentPlayer | null>>>({});
@@ -359,30 +358,6 @@ export const useTournament = (eventIdOverride?: string) => {
     return currentDrawAllPlayers.filter((p) => !placedIds.has(p.user_id));
   }, [currentDrawAllPlayers, currentMatches, displayMatches]);
 
-  // All singles players for the active tab with their current bracket — used by the move panel.
-  // Only populated when two skill-group draws exist (i.e. not merged).
-  const moveablePlayers = useMemo(() => {
-    if (activeTab === 'doubles') return [];
-    const tabDraws = effectiveDraws.filter((d) => d.tab === activeTab);
-    if (tabDraws.length < 2) return [];
-    const seenIds = new Set<string>();
-    const result: Array<TournamentPlayer & { currentGroup: SkillGroup }> = [];
-    tabDraws.forEach((draw) => {
-      buildPlayerList(
-        filterParticipantsForDraw(participants, draw, effectiveStatsMap),
-        draw,
-        effectiveStatsMap,
-        userMap,
-      ).forEach((p) => {
-        if (seenIds.has(p.user_id)) return;
-        seenIds.add(p.user_id);
-        const effectiveSkill = effectiveStatsMap[p.user_id]?.skill_level ?? 0;
-        result.push({ ...p, currentGroup: effectiveSkill >= 4 ? 'Masters' : 'Challengers' });
-      });
-    });
-    return result.sort((a, b) => a.name.localeCompare(b.name));
-  }, [activeTab, effectiveDraws, participants, effectiveStatsMap, userMap]);
-
   const availableUsers = useMemo(() => {
     const joinedIds = new Set(participants.map((p) => p.user_id));
     return Object.entries(allUsers)
@@ -576,61 +551,22 @@ export const useTournament = (eventIdOverride?: string) => {
     });
 
     if (match.next_match_id && match.next_slot) {
-      const nextMatch = matches.find(
-        (m) => m.event_id === match.event_id &&
-          m.tournament_choice === match.tournament_choice &&
-          m.division === match.division &&
-          m.skill_group === match.skill_group &&
-          m.match_id === match.next_match_id,
-      );
-      if (nextMatch) {
-        batch.update(doc(db, 'tournament_matches', nextMatch.id), {
-          [`${match.next_slot}_name`]: submission.claimed_winner_name,
-          [`${match.next_slot}_user_id`]: submission.claimed_winner_user_id,
-          [`${match.next_slot}_contact`]:
-            submission.claimed_winner_user_id === match.player_1_user_id
-              ? match.player_1_contact
-              : match.player_2_contact,
-        });
-      }
+      const drawKey = getDrawKey(match.tournament_choice, match.division, match.skill_group as SkillGroup);
+      const nextMatchDocId = `${match.event_id}_${drawKey}_${match.next_match_id}`;
+      batch.update(doc(db, 'tournament_matches', nextMatchDocId), {
+        [`${match.next_slot}_name`]: submission.claimed_winner_name,
+        [`${match.next_slot}_user_id`]: submission.claimed_winner_user_id,
+        [`${match.next_slot}_contact`]:
+          submission.claimed_winner_user_id === match.player_1_user_id
+            ? match.player_1_contact
+            : match.player_2_contact,
+      });
     }
 
     submissions
       .filter((s) => s.match_doc_id === match.id)
       .forEach((s) => batch.update(doc(db, 'score_submissions', s.id), { status: 'accepted' }));
 
-    await batch.commit();
-  };
-
-  const advancePlayerByBye = async (match: TournamentMatch) => {
-    const byeIsPlayer1 = match.player_1_name === BYE;
-    const winnerName = byeIsPlayer1 ? match.player_2_name : match.player_1_name;
-    const winnerUserId = byeIsPlayer1 ? match.player_2_user_id : match.player_1_user_id;
-    const winnerContact = byeIsPlayer1 ? match.player_2_contact : match.player_1_contact;
-
-    const batch = writeBatch(db);
-    batch.update(doc(db, 'tournament_matches', match.id), {
-      winner_name: winnerName,
-      winner_user_id: winnerUserId,
-      status: 'complete',
-      completed_at: new Date().toISOString(),
-    });
-    if (match.next_match_id && match.next_slot) {
-      const nextMatch = matches.find(
-        (m) => m.event_id === match.event_id &&
-          m.tournament_choice === match.tournament_choice &&
-          m.division === match.division &&
-          m.skill_group === match.skill_group &&
-          m.match_id === match.next_match_id,
-      );
-      if (nextMatch) {
-        batch.update(doc(db, 'tournament_matches', nextMatch.id), {
-          [`${match.next_slot}_name`]: winnerName,
-          [`${match.next_slot}_user_id`]: winnerUserId,
-          [`${match.next_slot}_contact`]: winnerContact,
-        });
-      }
-    }
     await batch.commit();
   };
 
@@ -656,14 +592,6 @@ export const useTournament = (eventIdOverride?: string) => {
     setPreviewDrawSize((prev) => ({ ...prev, [drawLabel]: size }));
   };
 
-  const handleMovePlayer = (userIds: string[], target: SkillGroup) => {
-    setSkillOverrides((prev) => {
-      const next = { ...prev };
-      userIds.forEach((id) => { next[id] = target; });
-      return next;
-    });
-  };
-
   const handleGenerateAll = async () => {
     if (!isCreator || !event || !currentDraw) return;
     setGenerating(true);
@@ -679,50 +607,6 @@ export const useTournament = (eventIdOverride?: string) => {
       setMessage({ type: 'error', text: 'Could not generate the draw. Check templates and permissions.' });
     } finally {
       setGenerating(false);
-    }
-  };
-
-  const handleCreatorUpdateDraw = async () => {
-    if (!isCreator || !event) return;
-    setUpdatingDraw(true);
-    setMessage(null);
-    try {
-      const byeMatches = matches.filter((m) => {
-        if (m.status === 'complete') return false;
-        return (m.player_1_name === BYE && !!m.player_2_user_id) ||
-          (m.player_2_name === BYE && !!m.player_1_user_id);
-      });
-      await Promise.all(byeMatches.map(advancePlayerByBye));
-
-      const pendingByMatch = new Map<string, ScoreSubmission[]>();
-      submissions
-        .filter((s) => s.status === 'pending')
-        .forEach((s) => pendingByMatch.set(s.match_doc_id, [...(pendingByMatch.get(s.match_doc_id) || []), s]));
-
-      for (const [matchDocId, pending] of pendingByMatch) {
-        const match = matches.find((m) => m.id === matchDocId);
-        if (!match || match.status === 'complete') continue;
-        if (pending.length === 1) {
-          await updateMatchWithSubmission(match, pending[0]);
-        } else if (pending.length >= 2) {
-          if (scoresMatch(pending[0], pending[1])) {
-            await updateMatchWithSubmission(match, pending[0]);
-          } else {
-            await Promise.all([
-              updateDoc(doc(db, 'score_submissions', pending[0].id), { status: 'flagged' }),
-              updateDoc(doc(db, 'score_submissions', pending[1].id), { status: 'flagged' }),
-              updateDoc(doc(db, 'tournament_matches', match.id), { status: 'flagged' }),
-            ]);
-          }
-        }
-      }
-
-      setMessage({ type: 'success', text: 'Draw updated: BYEs advanced and scores processed.' });
-    } catch (err) {
-      console.error('Draw update failed:', err);
-      setMessage({ type: 'error', text: 'Could not update the draw.' });
-    } finally {
-      setUpdatingDraw(false);
     }
   };
 
@@ -747,17 +631,6 @@ export const useTournament = (eventIdOverride?: string) => {
       setMessage({ type: 'error', text: 'Could not cancel the draw.' });
     } finally {
       setResettingDraw(false);
-    }
-  };
-
-  const handleResolveDispute = async (match: TournamentMatch, chosen: ScoreSubmission) => {
-    setMessage(null);
-    try {
-      await updateMatchWithSubmission(match, chosen);
-      setMessage({ type: 'success', text: 'Dispute resolved. Draw updated.' });
-    } catch (err) {
-      console.error('Resolve dispute failed:', err);
-      setMessage({ type: 'error', text: 'Could not resolve the dispute.' });
     }
   };
 
@@ -1001,7 +874,6 @@ export const useTournament = (eventIdOverride?: string) => {
     scoreFormMatch,
     setScoreForm,
     generating,
-    updatingDraw,
     resettingDraw,
     editMode,
     setEditMode,
@@ -1017,22 +889,17 @@ export const useTournament = (eventIdOverride?: string) => {
     setActiveSkill,
     activeDoubles,
     setActiveDoubles,
-    moveablePlayers,
     availableUsers,
     handleUpdateRoundDeadline,
     handleSetPreviewDrawSize,
-    handleMovePlayer,
     handleAddPlayer,
     handleGenerateAll,
-    handleCreatorUpdateDraw,
     handleResetDraw,
-    handleResolveDispute,
     handleEditPlayer,
     handleSubmitScore,
     handleOpenScoreForm,
     currentReservesMatches,
     llDrawDisplayMatches,
-    llCurrentKey,
     currentLLSize,
     allUsersAsTournamentPlayers,
     showReserves,

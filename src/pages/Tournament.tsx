@@ -11,7 +11,6 @@ import { TournamentHeader } from './tournament/TournamentHeader';
 import { OpponentCard } from './tournament/OpponentCard';
 import { DrawTabs } from './tournament/DrawTabs';
 import { ScoreModal } from './tournament/ScoreModal';
-import { FlaggedResults } from './tournament/FlaggedResults';
 import { AddPlayerPanel } from './tournament/AddPlayerPanel';
 import { AlertMessage } from '../components/AlertMessage';
 import { Button } from '../components/Button';
@@ -60,7 +59,7 @@ export const Tournament: React.FC = () => {
     availableUsers,
     handleUpdateRoundDeadline, handleSetPreviewDrawSize, handleAddPlayer,
     handleGenerateAll, handleResetDraw,
-    handleResolveDispute, handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
+    handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
     currentReservesMatches, llDrawDisplayMatches, currentLLSize, allUsersAsTournamentPlayers,
     showReserves, setShowReserves, generatingReserves,
     handleSetLLDrawSize, handleGenerateReservesDraw, handleResetLLDraw,
@@ -328,14 +327,6 @@ export const Tournament: React.FC = () => {
             </div>
           )}
         </>
-      )}
-
-      {isCreator && (
-        <FlaggedResults
-          submissions={submissions}
-          matches={matches}
-          onResolve={handleResolveDispute}
-        />
       )}
 
       {scoreForm && scoreFormMatch && (
