@@ -11,6 +11,8 @@ import {
   Calendar,
   MapPin,
   Plus,
+  Star,
+  User,
   Users,
   X,
   CheckCircle2,
@@ -40,7 +42,6 @@ import {
   isTournamentEvent,
   isWeekendMatchdaysEvent,
 } from '../utils/eventTypes';
-import { EventsHeader } from '../features/events/components/EventsHeader';
 import { CreatorEventModal } from '../features/events/components/CreatorEventModal';
 
 type JoinFormState = {
@@ -621,126 +622,120 @@ export const Events: React.FC = () => {
         </div>
       )}
 
-      <div className="space-y-6 mb-8">
-        {authPrompt && (
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-amber-300 space-y-3">
-            <p>{authPrompt}</p>
-            {!user && (
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Link to={loginRoute} className="w-full sm:w-auto">
-                  <Button size="sm" className="w-full sm:w-auto">
-                    Log In
-                  </Button>
-                </Link>
-                <Link to={signupRoute} className="w-full sm:w-auto">
-                  <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                    Join the League
-                  </Button>
-                </Link>
-              </div>
-            )}
-          </div>
-        )}
+      {authPrompt && (
+        <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-amber-300 space-y-3">
+          <p>{authPrompt}</p>
+          {!user && (
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Link to={loginRoute} className="w-full sm:w-auto">
+                <Button size="sm" className="w-full sm:w-auto">Log In</Button>
+              </Link>
+              <Link to={signupRoute} className="w-full sm:w-auto">
+                <Button variant="outline" size="sm" className="w-full sm:w-auto">Join the League</Button>
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
 
-        {eventFormMessage && !showEventForm && (
-          <div className={`rounded-2xl border px-5 py-4 ${
-            eventFormMessage.type === 'success'
-              ? 'border-green-500/20 bg-green-500/10 text-green-300'
-              : 'border-red-500/20 bg-red-500/10 text-red-300'
-          }`}>
-            {eventFormMessage.text}
-          </div>
-        )}
-
-        <EventsHeader />
-
-      </div>
+      {eventFormMessage && !showEventForm && (
+        <div className={`mb-6 rounded-2xl border px-5 py-4 ${
+          eventFormMessage.type === 'success'
+            ? 'border-green-500/20 bg-green-500/10 text-green-300'
+            : 'border-red-500/20 bg-red-500/10 text-red-300'
+        }`}>
+          {eventFormMessage.text}
+        </div>
+      )}
 
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-96 bg-tennis-surface/30 rounded-[2.5rem] animate-pulse" />
+            <div key={i} className="h-48 bg-tennis-surface/30 rounded-2xl animate-pulse" />
           ))}
         </div>
       ) : visibleEvents.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {visibleEvents.map((event, i) => (
             <motion.div
               key={event.id}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.08 }}
-              className="group bg-tennis-surface/30 border border-white/5 rounded-[2.5rem] overflow-hidden hover:border-clay/30 transition-all duration-300 flex flex-col shadow-xl"
+              transition={{ delay: i * 0.05 }}
+              className="bg-tennis-surface/30 border border-white/5 rounded-2xl p-5 flex flex-col gap-3 hover:border-clay/30 transition-colors"
             >
-              <div className="relative h-[460px] md:h-[540px] overflow-hidden rounded-t-3xl">
-              {event.image ? (
-                <img
-                  src={event.image}
-                  alt={event.title}
-                  className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500"
-                  referrerPolicy="no-referrer"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-tennis-dark via-tennis-surface to-clay/20 px-6 text-center text-white">
-                  <span className="text-lg font-bold">{event.title}</span>
-                </div>
-              )}
-
-              <div className="absolute top-4 left-4 px-3 py-1 bg-tennis-dark/80 backdrop-blur-md rounded-lg text-xs font-bold text-clay uppercase tracking-wider">
-                {event.type}
+              <div className="flex items-start justify-between gap-2">
+                <span className="px-2.5 py-0.5 bg-clay/10 border border-clay/20 rounded-lg text-[10px] font-bold text-clay uppercase tracking-widest">
+                  {event.type}
+                </span>
+                {isFullyJoinedEvent(event) && <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />}
               </div>
 
-              {isFullyJoinedEvent(event) && (
-                <div className="absolute top-4 right-4 w-10 h-10 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
-                  <CheckCircle2 className="w-6 h-6 text-white" />
-                </div>
+              <div>
+                <h3 className="text-base font-bold text-white leading-snug">{event.title}</h3>
+                {isSeasonOpener(event) && (
+                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-300 mt-1">First Tournament of 2026</p>
+                )}
+              </div>
+
+              {(event.about || event.description) && (
+                <p className="text-xs text-white/50 line-clamp-2 leading-relaxed">
+                  {event.about || event.description}
+                </p>
               )}
-            </div>
 
-              <div className="p-5 flex-grow flex flex-col gap-4">
-                <div className="space-y-2">
-                  <h3 className="text-xl md:text-2xl font-bold text-white group-hover:text-clay transition-colors leading-tight">{event.title}</h3>
-                  {isSeasonOpener(event) && (
-                    <p className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">First Tournament of 2026</p>
-                  )}
-                  {isTournamentEvent(event) && formatTournamentRange(event) && (
-                    <p className="text-clay font-semibold">{formatTournamentRange(event)}</p>
-                  )}
-                  {getRecurringEventLabel(event) && (
-                    <p className="text-white text-sm font-medium">{getRecurringEventLabel(event)}</p>
-                  )}
-                </div>
-
-                <div className="mt-auto pt-3 border-t border-white/5 space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <Button
-                      variant={isFullyJoinedEvent(event) ? 'secondary' : 'primary'}
-                      size="sm"
-                      onClick={() => handleStartJoin(event)}
-                      isLoading={joining && !selectedEvent}
-                      disabled={isFullyJoinedEvent(event)}
-                    >
-                      {isFullyJoinedEvent(event)
-                        ? 'Joined'
-                        : authLoading
-                          ? 'Loading...'
-                          : user
-                            ? 'Join Event'
-                            : 'Log In to Join'}
-                    </Button>
+              <div className="space-y-1.5 text-xs text-white/70">
+                {(isTournamentEvent(event) ? formatTournamentRange(event) : formatEventSchedule(event)) && (
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-3.5 h-3.5 text-clay shrink-0" />
+                    <span>{isTournamentEvent(event) ? formatTournamentRange(event) : formatEventSchedule(event)}</span>
                   </div>
-                </div>
+                )}
+                {event.location && (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-clay shrink-0" />
+                    <span className="truncate">{event.location}</span>
+                  </div>
+                )}
+                {event.organizer && (
+                  <div className="flex items-center gap-2">
+                    <User className="w-3.5 h-3.5 text-clay shrink-0" />
+                    <span className="truncate">{event.organizer}</span>
+                  </div>
+                )}
+                {event.skill_level && (
+                  <div className="flex items-center gap-2">
+                    <Star className="w-3.5 h-3.5 text-clay shrink-0" />
+                    <span>Skill: {event.skill_level}</span>
+                  </div>
+                )}
+                {event.time && event.time !== 'Anytime' && (
+                  <div className="flex items-center gap-2">
+                    <Clock3 className="w-3.5 h-3.5 text-clay shrink-0" />
+                    <span>{event.time}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-3 mt-auto border-t border-white/5">
+                <Button
+                  variant={isFullyJoinedEvent(event) ? 'secondary' : 'primary'}
+                  size="sm"
+                  onClick={() => handleStartJoin(event)}
+                  isLoading={joining && !selectedEvent}
+                  disabled={isFullyJoinedEvent(event)}
+                  className="w-full"
+                >
+                  {isFullyJoinedEvent(event) ? 'Joined' : authLoading ? 'Loading...' : user ? 'Join Event' : 'Log In to Join'}
+                </Button>
               </div>
             </motion.div>
           ))}
         </div>
       ) : (
-        <div className="text-center py-24 space-y-5">
-          <div>
-            <h3 className="text-2xl font-bold text-white">No events yet</h3>
-            <p className="text-white">Events will appear here when they are live.</p>
-          </div>
+        <div className="text-center py-16">
+          <h3 className="text-xl font-bold text-white">No events yet</h3>
+          <p className="text-white/60 mt-1">Events will appear here when they are live.</p>
         </div>
       )}
 
@@ -781,7 +776,7 @@ export const Events: React.FC = () => {
                 <X className="w-6 h-6" />
               </button>
 
-              <div className="h-64 relative">
+              <div className="h-48 sm:h-64 relative">
                 {selectedEvent.image ? (
                   <img
                     src={selectedEvent.image}
@@ -797,7 +792,7 @@ export const Events: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-tennis-surface via-transparent to-transparent" />
               </div>
 
-              <div className="p-10 space-y-8">
+              <div className="p-5 sm:p-8 md:p-10 space-y-6 sm:space-y-8">
                 <div className="space-y-4">
                   <div className="inline-block px-3 py-1 bg-clay/10 border border-clay/20 rounded-lg text-xs font-bold text-clay uppercase tracking-widest">
                     {selectedEvent.type}
@@ -902,7 +897,7 @@ export const Events: React.FC = () => {
                                     partnerInApp: choice === 'Singles' ? '' : joinForm.partnerInApp,
                                     combinedSkill: choice === 'Singles' ? '' : joinForm.combinedSkill,
                                   })}
-                                  className={`px-4 py-3 rounded-2xl border font-semibold transition-all ${
+                                  className={`px-3 py-2 sm:px-4 sm:py-3 rounded-2xl border font-semibold text-sm transition-all ${
                                     joinForm.tournamentChoice === choice
                                       ? 'bg-clay/10 border-clay text-clay'
                                       : 'bg-tennis-surface/50 border-white/10 text-white'
@@ -931,7 +926,7 @@ export const Events: React.FC = () => {
                                       setJoinForm({ ...joinForm, division });
                                     }}
                                     disabled={isLocked}
-                                    className={`px-4 py-3 rounded-2xl border font-semibold transition-all ${
+                                    className={`px-3 py-2 sm:px-4 sm:py-3 rounded-2xl border font-semibold text-sm transition-all ${
                                       joinForm.division === division
                                         ? 'bg-clay/10 border-clay text-clay'
                                         : isLocked
