@@ -323,7 +323,7 @@ export const Signup: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen py-20 px-4 relative overflow-hidden">
+    <div className="min-h-screen py-8 px-4 relative overflow-hidden">
       {/* Background Glows */}
       <div className="absolute top-0 right-0 w-96 h-96 bg-clay/5 blur-[120px] -z-10 rounded-full" />
       <div className="absolute bottom-0 left-0 w-96 h-96 bg-tennis-surface/20 blur-[100px] -z-10 rounded-full" />
@@ -365,7 +365,7 @@ export const Signup: React.FC = () => {
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
-          className="bg-tennis-surface/40 backdrop-blur-xl border border-white/5 p-8 md:p-12 rounded-[3rem] shadow-2xl"
+          className="p-6 md:p-10"
         >
           {error && step !== 3 && (
             <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center space-x-3">
