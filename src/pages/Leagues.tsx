@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 
@@ -38,7 +38,7 @@ export const Leagues: React.FC = () => {
   const [rows, setRows] = useState<LeagueRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeDiv, setActiveDiv] = useState<DivTab>('mens');
-  const [activeTournamentUids, setActiveTournamentUids] = useState<Set<string>>(new Set());
+  const [stillActiveUids, setStillActiveUids] = useState<Set<string>>(new Set());
   const [hasActiveTournament, setHasActiveTournament] = useState(false);
 
   useEffect(() => { document.title = 'Leagues — Racquets & Strings'; }, []);
@@ -47,22 +47,23 @@ export const Leagues: React.FC = () => {
     if (!authLoading && !user) navigate('/login?returnTo=%2Fleagues');
   }, [authLoading, user, navigate]);
 
+  // Load standings — only players with at least one confirmed match score
   useEffect(() => {
     if (!user) return;
     getDocs(collection(db, 'stats')).then((snap) => {
       const data: LeagueRow[] = [];
       snap.forEach((d) => {
         const s = d.data();
-        if (typeof s.leaguePoints26 !== 'number') return;
+        if (!s.matchesPlayed || s.matchesPlayed === 0) return;
         data.push({
           user_id: d.id,
           name: s.name || '',
           skill_level: s.skill_level ?? 0,
           tournamentsPlayed: s.tournamentsPlayed ?? 0,
-          matchesPlayed: s.matchesPlayed ?? 0,
+          matchesPlayed: s.matchesPlayed,
           wins: s.wins ?? 0,
           loses: s.loses ?? 0,
-          leaguePoints26: s.leaguePoints26,
+          leaguePoints26: s.leaguePoints26 ?? 0,
           league: s.league || '',
         });
       });
@@ -71,6 +72,7 @@ export const Leagues: React.FC = () => {
     });
   }, [user]);
 
+  // Detect active tournaments and find players still in (not yet eliminated)
   useEffect(() => {
     if (!user) return;
     const fetchActive = async () => {
@@ -86,12 +88,25 @@ export const Leagues: React.FC = () => {
           return startMs <= now;
         })
         .map((d) => d.id);
+
       if (activeIds.length === 0) return;
       setHasActiveTournament(true);
-      const participantsSnap = await getDocs(
-        query(collection(db, 'event_participants'), where('event_id', 'in', activeIds.slice(0, 30))),
-      );
-      setActiveTournamentUids(new Set(participantsSnap.docs.map((d) => d.data().user_id)));
+
+      const ids = activeIds.slice(0, 30);
+      const [participantsSnap, matchesSnap] = await Promise.all([
+        getDocs(query(collection(db, 'event_participants'), where('event_id', 'in', ids))),
+        getDocs(query(collection(db, 'tournament_matches'), where('event_id', 'in', ids), where('status', '==', 'complete'))),
+      ]);
+
+      const allParticipantUids = new Set(participantsSnap.docs.map((d) => d.data().user_id));
+      const eliminatedUids = new Set<string>();
+      matchesSnap.docs.forEach((d) => {
+        const m = d.data();
+        const loserUid = m.winner_user_id === m.player_1_user_id ? m.player_2_user_id : m.player_1_user_id;
+        if (loserUid) eliminatedUids.add(loserUid);
+      });
+
+      setStillActiveUids(new Set([...allParticipantUids].filter((uid) => !eliminatedUids.has(uid))));
     };
     fetchActive();
   }, [user]);
@@ -145,7 +160,7 @@ export const Leagues: React.FC = () => {
       ) : filtered.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-xl font-bold text-white">No standings yet</p>
-          <p className="text-white/60 mt-1 text-sm">Standings will appear once league data is synced.</p>
+          <p className="text-white/60 mt-1 text-sm">Standings will appear once matches are played.</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl bg-tennis-surface/30 border border-white/5">
@@ -168,17 +183,10 @@ export const Leagues: React.FC = () => {
                   className={`border-b border-white/5 transition-colors hover:bg-white/[0.04] ${i % 2 !== 0 ? 'bg-white/[0.02]' : ''}`}
                 >
                   <td className="px-4 py-3 text-white/40 font-mono text-xs">{i + 1}</td>
-                  <td className="px-4 py-3">
-                    <Link
-                      to={`/players/${row.user_id}`}
-                      className="font-semibold text-white hover:text-clay transition-colors"
-                    >
-                      {row.name}
-                    </Link>
-                  </td>
+                  <td className="px-4 py-3 font-semibold text-white">{row.name}</td>
                   <td className="px-4 py-3 text-center text-white/80">{row.skill_level}</td>
                   <td className="px-4 py-3 text-center text-white/80">
-                    {row.tournamentsPlayed}{activeTournamentUids.has(row.user_id) ? <span className="text-clay font-black">*</span> : null}
+                    {row.tournamentsPlayed}{stillActiveUids.has(row.user_id) ? <span className="text-clay font-black">*</span> : null}
                   </td>
                   <td className="px-4 py-3 text-center font-bold text-clay">{row.matchesPlayed}</td>
                   <td className="px-4 py-3 text-center text-white/80">{row.wins}</td>

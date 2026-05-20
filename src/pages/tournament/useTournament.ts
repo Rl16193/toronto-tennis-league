@@ -525,12 +525,14 @@ export const useTournament = (eventIdOverride?: string) => {
     const ROUND_LOSER_PTS: Record<string, number> = { R32: 1, R16: 2, QF: 3, SF: 5, F: 10 };
     const loserPts = ROUND_LOSER_PTS[match.round] ?? 1;
     const isFinal = match.round === 'F';
+    const matchLeague = match.tournament_choice === 'Doubles' ? 'Doubles' : match.division;
     const winnerUid = submission.claimed_winner_user_id;
     const loserUid = winnerUid === match.player_1_user_id ? match.player_2_user_id : match.player_1_user_id;
     if (winnerUid) {
       batch.set(doc(db, 'stats', winnerUid), {
         matchesPlayed: increment(1),
         wins: increment(1),
+        league: matchLeague,
         ...(isFinal ? { leaguePoints26: increment(20) } : {}),
       }, { merge: true });
     }
@@ -539,6 +541,7 @@ export const useTournament = (eventIdOverride?: string) => {
         matchesPlayed: increment(1),
         loses: increment(1),
         leaguePoints26: increment(loserPts),
+        league: matchLeague,
       }, { merge: true });
     }
 
