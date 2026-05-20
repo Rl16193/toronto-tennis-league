@@ -1,4 +1,6 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
+import { ExternalLink } from 'lucide-react';
 
 type Opponent = { name: string; userId: string; contact: string };
 
@@ -15,6 +17,12 @@ export const OpponentCard: React.FC<Props> = ({ opponent }) => (
         Contact your opponent to schedule your matches:{' '}
         <span className="text-clay font-semibold">{opponent.contact || 'Contact not available'}</span>
       </p>
+      <Link
+        to={`/players/${opponent.userId}`}
+        className="inline-flex items-center gap-1.5 mt-3 text-sm text-clay font-semibold hover:underline"
+      >
+        View Profile <ExternalLink size={14} />
+      </Link>
     </div>
   </section>
 );
