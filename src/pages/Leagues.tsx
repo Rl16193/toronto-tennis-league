@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { Link, useNavigate } from 'react-router-dom';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -38,6 +38,8 @@ export const Leagues: React.FC = () => {
   const [rows, setRows] = useState<LeagueRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeDiv, setActiveDiv] = useState<DivTab>('mens');
+  const [activeTournamentUids, setActiveTournamentUids] = useState<Set<string>>(new Set());
+  const [hasActiveTournament, setHasActiveTournament] = useState(false);
 
   useEffect(() => { document.title = 'Leagues — Racquets & Strings'; }, []);
 
@@ -67,6 +69,31 @@ export const Leagues: React.FC = () => {
       setRows(data);
       setLoading(false);
     });
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchActive = async () => {
+      const eventsSnap = await getDocs(collection(db, 'events'));
+      const now = Date.now();
+      const activeIds = eventsSnap.docs
+        .filter((d) => {
+          const e = d.data();
+          if (!e.type?.toLowerCase().includes('tournament')) return false;
+          const start = e.startDate || e.start_date || e.date;
+          if (!start) return false;
+          const startMs = typeof start === 'object' && start.toDate ? start.toDate().getTime() : new Date(start).getTime();
+          return startMs <= now;
+        })
+        .map((d) => d.id);
+      if (activeIds.length === 0) return;
+      setHasActiveTournament(true);
+      const participantsSnap = await getDocs(
+        query(collection(db, 'event_participants'), where('event_id', 'in', activeIds.slice(0, 30))),
+      );
+      setActiveTournamentUids(new Set(participantsSnap.docs.map((d) => d.data().user_id)));
+    };
+    fetchActive();
   }, [user]);
 
   const filtered = rows
@@ -150,7 +177,9 @@ export const Leagues: React.FC = () => {
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-center text-white/80">{row.skill_level}</td>
-                  <td className="px-4 py-3 text-center text-white/80">{row.tournamentsPlayed}</td>
+                  <td className="px-4 py-3 text-center text-white/80">
+                    {row.tournamentsPlayed}{activeTournamentUids.has(row.user_id) ? <span className="text-clay font-black">*</span> : null}
+                  </td>
                   <td className="px-4 py-3 text-center font-bold text-clay">{row.matchesPlayed}</td>
                   <td className="px-4 py-3 text-center text-white/80">{row.wins}</td>
                   <td className="px-4 py-3 text-center font-black text-clay text-base">{row.leaguePoints26}</td>
@@ -159,6 +188,12 @@ export const Leagues: React.FC = () => {
             </tbody>
           </table>
         </div>
+      )}
+
+      {hasActiveTournament && (
+        <p className="mt-3 text-xs text-white/40">
+          <span className="text-clay font-black">*</span> — Ongoing Tournament
+        </p>
       )}
     </div>
   );
