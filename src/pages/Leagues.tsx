@@ -24,6 +24,9 @@ const DIV_TABS: { id: DivTab; label: string }[] = [
   { id: 'doubles', label: 'Doubles' },
 ];
 
+const toTitleCase = (s: string) =>
+  s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+
 const inDivision = (league: string, tab: DivTab): boolean => {
   const l = (league || '').toLowerCase();
   if (tab === 'mens') return (l.includes('men') || l.includes('male')) && !l.includes('women') && !l.includes('female');
@@ -198,7 +201,7 @@ export const Leagues: React.FC = () => {
                   >
                     <td className="px-4 py-3 text-white/40 font-mono text-xs">{i + 1}</td>
                     <td className="px-4 py-3 font-semibold text-white">
-                      {row.name}{isCurrentUser ? <span className="ml-1 text-clay text-xs">(you)</span> : null}
+                      {toTitleCase(row.name)}{isCurrentUser ? <span className="ml-1 text-clay text-xs">(you)</span> : null}
                     </td>
                     <td className="px-4 py-3 text-center text-white/80">{row.skill_level}</td>
                     <td className="px-4 py-3 text-center text-white/80">
@@ -222,7 +225,7 @@ export const Leagues: React.FC = () => {
                   <tr className="bg-clay/10">
                     <td className="px-4 py-3 text-white/40 font-mono text-xs">{userRank + 1}</td>
                     <td className="px-4 py-3 font-semibold text-white">
-                      {userRow.name}<span className="ml-1 text-clay text-xs">(you)</span>
+                      {toTitleCase(userRow.name)}<span className="ml-1 text-clay text-xs">(you)</span>
                     </td>
                     <td className="px-4 py-3 text-center text-white/80">{userRow.skill_level}</td>
                     <td className="px-4 py-3 text-center text-white/80">
