@@ -32,6 +32,8 @@ const inDivision = (league: string, tab: DivTab): boolean => {
   return false;
 };
 
+const TOP_N = 15;
+
 export const Leagues: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -47,23 +49,22 @@ export const Leagues: React.FC = () => {
     if (!authLoading && !user) navigate('/login?returnTo=%2Fleagues');
   }, [authLoading, user, navigate]);
 
-  // Load standings — only players with at least one confirmed match score
   useEffect(() => {
     if (!user) return;
     getDocs(collection(db, 'stats')).then((snap) => {
       const data: LeagueRow[] = [];
       snap.forEach((d) => {
         const s = d.data();
-        if (!s.matchesPlayed || s.matchesPlayed === 0) return;
+        if (!s.leaguePoints26 || s.leaguePoints26 <= 0) return;
         data.push({
           user_id: d.id,
           name: s.name || '',
           skill_level: s.skill_level ?? 0,
           tournamentsPlayed: s.tournamentsPlayed ?? 0,
-          matchesPlayed: s.matchesPlayed,
+          matchesPlayed: s.matchesPlayed ?? 0,
           wins: s.wins ?? 0,
           loses: s.loses ?? 0,
-          leaguePoints26: s.leaguePoints26 ?? 0,
+          leaguePoints26: s.leaguePoints26,
           league: s.league || '',
         });
       });
@@ -111,9 +112,18 @@ export const Leagues: React.FC = () => {
     fetchActive();
   }, [user]);
 
-  const filtered = rows
+  const sorted = rows
     .filter((r) => inDivision(r.league, activeDiv))
     .sort((a, b) => b.leaguePoints26 - a.leaguePoints26);
+
+  const top15 = sorted.slice(0, TOP_N);
+  const userRank = user ? sorted.findIndex((r) => r.user_id === user.uid) : -1;
+  const userRow = userRank >= TOP_N ? sorted[userRank] : null;
+
+  const displayTournaments = (row: LeagueRow) => {
+    const base = row.tournamentsPlayed;
+    return stillActiveUids.has(row.user_id) ? Math.max(base + 1, 1) : base;
+  };
 
   if (authLoading) {
     return (
@@ -157,7 +167,7 @@ export const Leagues: React.FC = () => {
             <div key={i} className="h-12 bg-tennis-surface/30 rounded-xl animate-pulse" />
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : top15.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-xl font-bold text-white">No standings yet</p>
           <p className="text-white/60 mt-1 text-sm">Standings will appear once matches are played.</p>
@@ -170,29 +180,60 @@ export const Leagues: React.FC = () => {
                 <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-white/50 w-10">#</th>
                 <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-white/50">Name</th>
                 <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-white/50">Skill</th>
-                <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-white/50">Events</th>
+                <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-white/50">Tournaments</th>
                 <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-clay">Matches</th>
                 <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-white/50">Wins</th>
                 <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-clay">Points</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row, i) => (
-                <tr
-                  key={row.user_id}
-                  className={`border-b border-white/5 transition-colors hover:bg-white/[0.04] ${i % 2 !== 0 ? 'bg-white/[0.02]' : ''}`}
-                >
-                  <td className="px-4 py-3 text-white/40 font-mono text-xs">{i + 1}</td>
-                  <td className="px-4 py-3 font-semibold text-white">{row.name}</td>
-                  <td className="px-4 py-3 text-center text-white/80">{row.skill_level}</td>
-                  <td className="px-4 py-3 text-center text-white/80">
-                    {row.tournamentsPlayed}{stillActiveUids.has(row.user_id) ? <span className="text-clay font-black">*</span> : null}
-                  </td>
-                  <td className="px-4 py-3 text-center font-bold text-clay">{row.matchesPlayed}</td>
-                  <td className="px-4 py-3 text-center text-white/80">{row.wins}</td>
-                  <td className="px-4 py-3 text-center font-black text-clay text-base">{row.leaguePoints26}</td>
-                </tr>
-              ))}
+              {top15.map((row, i) => {
+                const isCurrentUser = user?.uid === row.user_id;
+                return (
+                  <tr
+                    key={row.user_id}
+                    className={`border-b border-white/5 transition-colors hover:bg-white/[0.04] ${
+                      isCurrentUser ? 'bg-clay/10' : i % 2 !== 0 ? 'bg-white/[0.02]' : ''
+                    }`}
+                  >
+                    <td className="px-4 py-3 text-white/40 font-mono text-xs">{i + 1}</td>
+                    <td className="px-4 py-3 font-semibold text-white">
+                      {row.name}{isCurrentUser ? <span className="ml-1 text-clay text-xs">(you)</span> : null}
+                    </td>
+                    <td className="px-4 py-3 text-center text-white/80">{row.skill_level}</td>
+                    <td className="px-4 py-3 text-center text-white/80">
+                      {displayTournaments(row)}{stillActiveUids.has(row.user_id) ? <span className="text-clay font-black">*</span> : null}
+                    </td>
+                    <td className="px-4 py-3 text-center font-bold text-clay">{row.matchesPlayed}</td>
+                    <td className="px-4 py-3 text-center text-white/80">{row.wins}</td>
+                    <td className="px-4 py-3 text-center font-black text-clay text-base">{row.leaguePoints26}</td>
+                  </tr>
+                );
+              })}
+
+              {/* Current user below top 15 */}
+              {userRow && (
+                <>
+                  <tr>
+                    <td colSpan={7} className="px-4 py-2">
+                      <div className="border-t border-dashed border-white/20" />
+                    </td>
+                  </tr>
+                  <tr className="bg-clay/10">
+                    <td className="px-4 py-3 text-white/40 font-mono text-xs">{userRank + 1}</td>
+                    <td className="px-4 py-3 font-semibold text-white">
+                      {userRow.name}<span className="ml-1 text-clay text-xs">(you)</span>
+                    </td>
+                    <td className="px-4 py-3 text-center text-white/80">{userRow.skill_level}</td>
+                    <td className="px-4 py-3 text-center text-white/80">
+                      {displayTournaments(userRow)}{stillActiveUids.has(userRow.user_id) ? <span className="text-clay font-black">*</span> : null}
+                    </td>
+                    <td className="px-4 py-3 text-center font-bold text-clay">{userRow.matchesPlayed}</td>
+                    <td className="px-4 py-3 text-center text-white/80">{userRow.wins}</td>
+                    <td className="px-4 py-3 text-center font-black text-clay text-base">{userRow.leaguePoints26}</td>
+                  </tr>
+                </>
+              )}
             </tbody>
           </table>
         </div>
@@ -200,7 +241,7 @@ export const Leagues: React.FC = () => {
 
       {hasActiveTournament && (
         <p className="mt-3 text-xs text-white/40">
-          <span className="text-clay font-black">*</span> — Ongoing Tournament
+          <span className="text-clay font-black">*</span> — points to be updated after event ends
         </p>
       )}
     </div>
