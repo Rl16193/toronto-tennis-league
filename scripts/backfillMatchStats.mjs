@@ -59,10 +59,10 @@ console.log(`\nFound ${snap.size} completed matches.\n`);
 
 // ── Aggregate per user ────────────────────────────────────────────────────────
 
-const userStats = new Map(); // uid → { matchesPlayed, wins, loses, leaguePoints26, league }
+const userStats = new Map(); // uid → { matchesPlayed, wins, loses, leaguePoints26, league, eventIds }
 
 const ensure = (uid) => {
-  if (!userStats.has(uid)) userStats.set(uid, { matchesPlayed: 0, wins: 0, loses: 0, leaguePoints26: 0, league: '' });
+  if (!userStats.has(uid)) userStats.set(uid, { matchesPlayed: 0, wins: 0, loses: 0, leaguePoints26: 0, league: '', eventIds: new Set() });
   return userStats.get(uid);
 };
 
@@ -81,6 +81,7 @@ for (const doc of snap.docs) {
     s.matchesPlayed += 1;
     s.wins += 1;
     s.league = matchLeague;
+    if (m.event_id) s.eventIds.add(m.event_id);
     if (isFinal) s.leaguePoints26 += winnerPts;
   }
   if (loserUid) {
@@ -89,6 +90,7 @@ for (const doc of snap.docs) {
     s.loses += 1;
     s.leaguePoints26 += loserPts;
     s.league = matchLeague;
+    if (m.event_id) s.eventIds.add(m.event_id);
   }
 }
 
@@ -127,10 +129,11 @@ for (let i = 0; i < uids.length; i += chunkSize) {
   docs.forEach((d, idx) => {
     const data = d.exists ? d.data() : {};
     baselines.set(chunk[idx], {
-      matchesPlayed: data.matchesPlayed_xlsx ?? 0,
-      wins:          data.wins_xlsx          ?? 0,
-      loses:         data.loses_xlsx         ?? 0,
-      leaguePoints26: data.leaguePoints26_xlsx ?? 0,
+      matchesPlayed:    data.matchesPlayed_xlsx    ?? 0,
+      wins:             data.wins_xlsx             ?? 0,
+      loses:            data.loses_xlsx            ?? 0,
+      leaguePoints26:   data.leaguePoints26_xlsx   ?? 0,
+      tournamentsPlayed: data.tournamentsPlayed_xlsx ?? 0,
     });
   });
 }
@@ -139,20 +142,22 @@ let written = 0;
 const batch = db.batch();
 
 for (const [uid, s] of userStats.entries()) {
-  const base = baselines.get(uid) || { matchesPlayed: 0, wins: 0, loses: 0, leaguePoints26: 0 };
+  const base = baselines.get(uid) || { matchesPlayed: 0, wins: 0, loses: 0, leaguePoints26: 0, tournamentsPlayed: 0 };
   const ref = db.collection('stats').doc(uid);
-  const finalMatchesPlayed  = base.matchesPlayed  + s.matchesPlayed;
-  const finalWins           = base.wins           + s.wins;
-  const finalLoses          = base.loses          + s.loses;
-  const finalPoints         = base.leaguePoints26 + s.leaguePoints26;
+  const finalMatchesPlayed   = base.matchesPlayed    + s.matchesPlayed;
+  const finalWins            = base.wins             + s.wins;
+  const finalLoses           = base.loses            + s.loses;
+  const finalPoints          = base.leaguePoints26   + s.leaguePoints26;
+  const finalTournaments     = base.tournamentsPlayed + s.eventIds.size;
   batch.set(ref, {
-    matchesPlayed:  finalMatchesPlayed,
-    wins:           finalWins,
-    loses:          finalLoses,
-    leaguePoints26: finalPoints,
-    league:         s.league,
+    matchesPlayed:     finalMatchesPlayed,
+    wins:              finalWins,
+    loses:             finalLoses,
+    leaguePoints26:    finalPoints,
+    tournamentsPlayed: finalTournaments,
+    league:            s.league,
   }, { merge: true });
-  console.log(`  ${uid} → ${finalMatchesPlayed} matches, ${finalWins}W/${finalLoses}L, ${finalPoints}pts (xlsx base: ${base.leaguePoints26} + tm: ${s.leaguePoints26})`);
+  console.log(`  ${uid} → ${finalMatchesPlayed} matches, ${finalWins}W/${finalLoses}L, ${finalPoints}pts, ${finalTournaments} events (xlsx base: ${base.leaguePoints26} + tm: ${s.leaguePoints26})`);
   written++;
 }
 

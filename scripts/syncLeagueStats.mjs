@@ -99,17 +99,18 @@ for (const row of rows) {
   const ref = db.collection('stats').doc(uid);
   const existing = await ref.get();
 
-  const xlsxMatchesPlayed = Number(row.matchesPlayed ?? 0);
-  const xlsxWins         = Number(row.wins ?? 0);
-  const xlsxLoses        = Number(row.loses ?? 0);
-  const xlsxPoints       = Number(row.leaguePoints26 ?? row.leaguepoints26 ?? 0);
+  const xlsxMatchesPlayed    = Number(row.matchesPlayed ?? 0);
+  const xlsxWins             = Number(row.wins ?? 0);
+  const xlsxLoses            = Number(row.loses ?? 0);
+  const xlsxPoints           = Number(row.leaguePoints26 ?? row.leaguepoints26 ?? 0);
+  const xlsxTournaments      = Number(row.tournamentsPlayed ?? 0);
 
   const update = {
     user_id: uid,
     name: String(row.name ?? ''),
     league: String(row.League ?? ''),
-    tournamentsPlayed: Number(row.tournamentsPlayed ?? 0),
     // Display fields (XLSX baseline — backfill adds tournament totals on top)
+    tournamentsPlayed: xlsxTournaments,
     matchesPlayed: xlsxMatchesPlayed,
     wins: xlsxWins,
     loses: xlsxLoses,
@@ -118,6 +119,7 @@ for (const row of rows) {
     pointsWonPct: Number(row.pointsWonPct ?? 0),
     leaguePoints26: xlsxPoints,
     // Stored baselines so backfill can recompute idempotently
+    tournamentsPlayed_xlsx: xlsxTournaments,
     matchesPlayed_xlsx: xlsxMatchesPlayed,
     wins_xlsx: xlsxWins,
     loses_xlsx: xlsxLoses,
