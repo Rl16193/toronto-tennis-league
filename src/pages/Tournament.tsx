@@ -227,7 +227,6 @@ export const Tournament: React.FC = () => {
             <BracketView
               matches={llDrawDisplayMatches}
               drawTitle="LL Draw"
-              drawState={drawState}
               editMode={editMode}
               editPlayers={editMode ? allUsersAsTournamentPlayers : []}
               onEditPlayer={handleEditPlayer}
@@ -282,7 +281,6 @@ export const Tournament: React.FC = () => {
             <BracketView
               matches={displayMatches}
               drawTitle={currentDraw?.label || 'Draw'}
-              drawState={drawState}
               editMode={editMode}
               editPlayers={editPlayers}
               onEditPlayer={handleEditPlayer}

@@ -196,7 +196,7 @@ export const Profile: React.FC = () => {
 
             const savedDates = new Set<string>();
             joinedEvents.forEach((e) => {
-              const dateselected = (e as Record<string, unknown>)['dateselected'];
+              const dateselected = (e as unknown as Record<string, unknown>)['dateselected'];
               (Array.isArray(dateselected) ? dateselected : []).forEach((v: unknown) => {
                 const k = parseMayKey(v);
                 if (k) savedDates.add(k);

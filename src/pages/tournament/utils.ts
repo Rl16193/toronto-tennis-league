@@ -250,6 +250,52 @@ export const mapParticipantsToPlayers = (participants: EventParticipant[], userM
     };
   });
 
+export const deleteKey = <T extends Record<string, unknown>>(obj: T, key: string): T => {
+  const next = { ...obj };
+  delete next[key];
+  return next;
+};
+
+export const buildMatchFields = (
+  tm: TemplateMatch,
+  index: number,
+  slotMap: Map<number, TournamentPlayer>,
+  cfg: {
+    eventId: string;
+    templateId: string;
+    tournamentChoice: 'Singles' | 'Doubles';
+    division: string;
+    skillGroup: SkillGroup;
+    drawsize: number;
+    allMatches: TemplateMatch[];
+  },
+) => {
+  const p1 = typeof tm.player_1 === 'number' ? (slotMap.get(tm.player_1) ?? null) : null;
+  const p2 = typeof tm.player_2 === 'number' ? (slotMap.get(tm.player_2) ?? null) : null;
+  return {
+    event_id: cfg.eventId,
+    template_id: cfg.templateId,
+    tournament_choice: cfg.tournamentChoice,
+    division: cfg.division,
+    skill_group: cfg.skillGroup,
+    drawsize: cfg.drawsize,
+    match_id: tm.match_id,
+    round: tm.round,
+    position: index + 1,
+    player_1_slot: tm.player_1,
+    player_2_slot: tm.player_2,
+    player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_1, cfg.allMatches)),
+    player_1_user_id: p1?.user_id || '',
+    player_1_contact: p1?.contact || '',
+    player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_2, cfg.allMatches)),
+    player_2_user_id: p2?.user_id || '',
+    player_2_contact: p2?.contact || '',
+    next_match_id: tm.next_match_id || '',
+    next_slot: tm.next_slot,
+    status: 'pending' as const,
+  };
+};
+
 // Returns the full sorted player list for a draw (no size limit — callers slice as needed).
 export const buildPlayerList = (
   drawParticipants: EventParticipant[],

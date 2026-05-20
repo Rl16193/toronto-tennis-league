@@ -8,6 +8,20 @@ const getRoundTone = (round: string) => {
   return 'bg-sky-50 border-sky-200';
 };
 
+const getRoundState = (roundMatches: TournamentMatch[]): 'preview' | 'started' | 'finished' => {
+  const real = roundMatches.filter(
+    (m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_'),
+  );
+  if (real.length === 0) return 'preview';
+  // round is "started" once at least one match has both slots filled with real players
+  const anyReady = real.some(
+    (m) => m.player_1_name !== PLAYER_LOADING && m.player_2_name !== PLAYER_LOADING,
+  );
+  if (!anyReady) return 'preview';
+  if (real.every((m) => !!m.winner_user_id)) return 'finished';
+  return 'started';
+};
+
 const formatDeadline = (iso: string): string => {
   const [, m, d] = iso.split('-').map(Number);
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -61,7 +75,6 @@ const formatSetScores = (sub: ScoreSubmission): string => {
 type Props = {
   matches: TournamentMatch[];
   drawTitle: string;
-  drawState?: string;
   editMode?: boolean;
   editPlayers?: TournamentPlayer[];
   onEditPlayer?: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
@@ -73,7 +86,7 @@ type Props = {
 };
 
 export const BracketView: React.FC<Props> = ({
-  matches, drawTitle, drawState, editMode, editPlayers = [], onEditPlayer,
+  matches, drawTitle, editMode, editPlayers = [], onEditPlayer,
   submissions = [], isCreator, onSubmitScore,
   roundDeadlines = {}, onUpdateDeadline,
 }) => {
@@ -117,12 +130,14 @@ export const BracketView: React.FC<Props> = ({
             style={{ gridTemplateRows: `auto repeat(${drawSize}, minmax(24px, 1fr))`, rowGap: '0.35rem' }}
           >
             <div className="sticky top-0 z-10 bg-inherit pb-2">
-              {roundIndex === 0 && drawState && (
-                <p className="text-center text-[10px] font-black uppercase tracking-widest text-orange-500 mb-1">{drawState}</p>
-              )}
-              <p className="text-center text-xs uppercase tracking-widest text-black font-black">
-                {round.round}
-              </p>
+              {(() => {
+                const rs = getRoundState(round.matches);
+                return (
+                  <p className={`text-center text-xs uppercase tracking-widest font-black ${rs === 'finished' ? 'text-orange-500' : 'text-black'}`}>
+                    {round.round} — {rs === 'preview' ? 'Live Preview' : rs === 'started' ? 'Started' : 'Finished'}
+                  </p>
+                );
+              })()}
               {onUpdateDeadline ? (
                 <input
                   type="date"

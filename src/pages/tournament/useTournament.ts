@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  addDoc, collection, doc, getDocs, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
+  addDoc, collection, doc, getDocs, increment, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -8,12 +8,11 @@ import { EventParticipant, TennisEvent, UserData, UserStats } from '../../types'
 import { DrawConfig, DrawTab, ScoreForm, ScoreSubmission, SkillGroup, TournamentMatch, TournamentPlayer, TournamentTemplate } from './types';
 import {
   BYE, PLAYER_LOADING,
-  buildPlayerList, fallbackTemplate, filterParticipantsForDraw,
-  getDrawKey, getDrawSize, getEventDate, getWinnerPlaceholder,
+  buildMatchFields, buildPlayerList, deleteKey, fallbackTemplate, filterParticipantsForDraw,
+  getDrawKey, getDrawSize, getEventDate,
   isTournamentStarted, normalizeTemplateMatches, scoresMatch,
 } from './utils';
 import { CONSOLIDATED_DOUBLES_DRAW, MENS_MERGED_DRAW, VISIBLE_DRAWS, WOMENS_MERGED_DRAW } from './drawConfigs';
-import { deleteKey } from './objectUtils';
 
 export const useTournament = (eventIdOverride?: string) => {
   const { user, profile, loading: authLoading } = useAuth();
@@ -288,35 +287,21 @@ export const useTournament = (eventIdOverride?: string) => {
       else slotMap.set(slotNum, player);
     });
 
-    return templateMatches.map<TournamentMatch>((tm, index) => {
-      const p1 = typeof tm.player_1 === 'number' ? slotMap.get(tm.player_1) : null;
-      const p2 = typeof tm.player_2 === 'number' ? slotMap.get(tm.player_2) : null;
-      return {
-        id: `preview_${currentDraw.label}_${tm.match_id}`,
-        event_id: event?.id || 'preview',
-        template_id: template?.id || `fallback_${drawsize}`,
-        tournament_choice: currentDraw.tournamentChoice,
-        division: currentDraw.division,
-        skill_group: currentDraw.skillGroup,
-        drawsize,
-        match_id: tm.match_id,
-        round: tm.round,
-        position: index + 1,
-        player_1_slot: tm.player_1,
-        player_2_slot: tm.player_2,
-        player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_1, templateMatches)),
-        player_1_user_id: p1?.user_id || '',
-        player_1_contact: p1?.contact || '',
-        player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_2, templateMatches)),
-        player_2_user_id: p2?.user_id || '',
-        player_2_contact: p2?.contact || '',
-        next_match_id: tm.next_match_id || '',
-        next_slot: tm.next_slot,
-        status: 'pending',
-        bracket: null,
-        started,
-      };
-    });
+    const cfg = {
+      eventId: event?.id || 'preview',
+      templateId: template?.id || `fallback_${drawsize}`,
+      tournamentChoice: currentDraw.tournamentChoice,
+      division: currentDraw.division,
+      skillGroup: currentDraw.skillGroup,
+      drawsize,
+      allMatches: templateMatches,
+    };
+    return templateMatches.map<TournamentMatch>((tm, index) => ({
+      id: `preview_${currentDraw.label}_${tm.match_id}`,
+      bracket: null,
+      started,
+      ...buildMatchFields(tm, index, slotMap, cfg),
+    }));
   }, [currentDraw, currentDrawAllPlayers, currentMatches, event?.id, previewDrawSize, previewSlotOverrides, started, templates]);
 
 
@@ -418,35 +403,21 @@ export const useTournament = (eventIdOverride?: string) => {
     Object.entries(currentLLSlotOverrides).forEach(([slotStr, player]) => {
       if (player !== null) slotMap.set(Number(slotStr), player);
     });
-    return templateMatches.map<TournamentMatch>((tm, index) => {
-      const p1 = typeof tm.player_1 === 'number' ? (slotMap.get(tm.player_1) ?? null) : null;
-      const p2 = typeof tm.player_2 === 'number' ? (slotMap.get(tm.player_2) ?? null) : null;
-      return {
-        id: `ll_preview_${llCurrentKey}_${tm.match_id}`,
-        event_id: event?.id || 'preview',
-        template_id: template?.id || `fallback_${drawsize}`,
-        tournament_choice: currentDraw.tournamentChoice,
-        division: currentDraw.division,
-        skill_group: 'All',
-        drawsize,
-        match_id: tm.match_id,
-        round: tm.round,
-        position: index + 1,
-        player_1_slot: tm.player_1,
-        player_2_slot: tm.player_2,
-        player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_1, templateMatches)),
-        player_1_user_id: p1?.user_id || '',
-        player_1_contact: p1?.contact || '',
-        player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_2, templateMatches)),
-        player_2_user_id: p2?.user_id || '',
-        player_2_contact: p2?.contact || '',
-        next_match_id: tm.next_match_id || '',
-        next_slot: tm.next_slot,
-        status: 'pending',
-        bracket: 'reserves',
-        started: false,
-      };
-    });
+    const cfg = {
+      eventId: event?.id || 'preview',
+      templateId: template?.id || `fallback_${drawsize}`,
+      tournamentChoice: currentDraw.tournamentChoice,
+      division: currentDraw.division,
+      skillGroup: 'All' as const,
+      drawsize,
+      allMatches: templateMatches,
+    };
+    return templateMatches.map<TournamentMatch>((tm, index) => ({
+      id: `ll_preview_${llCurrentKey}_${tm.match_id}`,
+      bracket: 'reserves',
+      started: false,
+      ...buildMatchFields(tm, index, slotMap, cfg),
+    }));
   }, [currentReservesMatches, currentDraw, currentLLSize, currentLLSlotOverrides, llCurrentKey, templates, event?.id]);
 
   // LL Draw dropdown: use event participants (not all registered users)
@@ -502,36 +473,19 @@ export const useTournament = (eventIdOverride?: string) => {
 
     const batch = writeBatch(db);
     const drawKey = getDrawKey(draw.tournamentChoice, draw.division, draw.skillGroup);
+    const cfg = {
+      eventId: event.id,
+      templateId: template?.id || `fallback_${drawsize}`,
+      tournamentChoice: draw.tournamentChoice,
+      division: draw.division,
+      skillGroup: draw.skillGroup,
+      drawsize,
+      allMatches: templateMatches,
+    };
     templateMatches.forEach((tm, index) => {
-      const p1 = typeof tm.player_1 === 'number' ? slotMap.get(tm.player_1) : null;
-      const p2 = typeof tm.player_2 === 'number' ? slotMap.get(tm.player_2) : null;
       batch.set(
         doc(db, 'tournament_matches', `${event.id}_${drawKey}_${tm.match_id}`),
-        {
-          event_id: event.id,
-          template_id: template?.id || `fallback_${drawsize}`,
-          tournament_choice: draw.tournamentChoice,
-          division: draw.division,
-          skill_group: draw.skillGroup,
-          drawsize,
-          match_id: tm.match_id,
-          round: tm.round,
-          position: index + 1,
-          player_1_slot: tm.player_1,
-          player_2_slot: tm.player_2,
-          player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_1, templateMatches)),
-          player_1_user_id: p1?.user_id || '',
-          player_1_contact: p1?.contact || '',
-          player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_2, templateMatches)),
-          player_2_user_id: p2?.user_id || '',
-          player_2_contact: p2?.contact || '',
-          next_match_id: tm.next_match_id || '',
-          next_slot: tm.next_slot || '',
-          status: 'pending',
-          bracket: null,
-          started,
-          created_at: new Date().toISOString(),
-        },
+        { ...buildMatchFields(tm, index, slotMap, cfg), bracket: null, started, created_at: new Date().toISOString() },
         { merge: true },
       );
     });
@@ -566,6 +520,16 @@ export const useTournament = (eventIdOverride?: string) => {
     submissions
       .filter((s) => s.match_doc_id === match.id)
       .forEach((s) => batch.update(doc(db, 'score_submissions', s.id), { status: 'accepted' }));
+
+    // Update player stats
+    const winnerUid = submission.claimed_winner_user_id;
+    const loserUid = winnerUid === match.player_1_user_id ? match.player_2_user_id : match.player_1_user_id;
+    if (winnerUid) {
+      batch.set(doc(db, 'stats', winnerUid), { matchesPlayed: increment(1), wins: increment(1) }, { merge: true });
+    }
+    if (loserUid) {
+      batch.set(doc(db, 'stats', loserUid), { matchesPlayed: increment(1), loses: increment(1) }, { merge: true });
+    }
 
     await batch.commit();
   };
@@ -804,36 +768,19 @@ export const useTournament = (eventIdOverride?: string) => {
       });
       const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, 'All');
       const batch = writeBatch(db);
+      const cfg = {
+        eventId: event.id,
+        templateId: template?.id || `fallback_${drawsize}`,
+        tournamentChoice: currentDraw.tournamentChoice,
+        division: currentDraw.division,
+        skillGroup: 'All' as const,
+        drawsize,
+        allMatches: templateMatches,
+      };
       templateMatches.forEach((tm, index) => {
-        const p1 = typeof tm.player_1 === 'number' ? (slotMap.get(tm.player_1) ?? null) : null;
-        const p2 = typeof tm.player_2 === 'number' ? (slotMap.get(tm.player_2) ?? null) : null;
         batch.set(
           doc(db, 'tournament_matches', `${event.id}_reserves_${drawKey}_${tm.match_id}`),
-          {
-            event_id: event.id,
-            template_id: template?.id || `fallback_${drawsize}`,
-            tournament_choice: currentDraw.tournamentChoice,
-            division: currentDraw.division,
-            skill_group: 'All',
-            drawsize,
-            match_id: tm.match_id,
-            round: tm.round,
-            position: index + 1,
-            player_1_slot: tm.player_1,
-            player_2_slot: tm.player_2,
-            player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_1, templateMatches)),
-            player_1_user_id: p1?.user_id || '',
-            player_1_contact: p1?.contact || '',
-            player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_2, templateMatches)),
-            player_2_user_id: p2?.user_id || '',
-            player_2_contact: p2?.contact || '',
-            next_match_id: tm.next_match_id || '',
-            next_slot: tm.next_slot || '',
-            status: 'pending',
-            bracket: 'reserves',
-            started: false,
-            created_at: new Date().toISOString(),
-          },
+          { ...buildMatchFields(tm, index, slotMap, cfg), bracket: 'reserves', started: false, created_at: new Date().toISOString() },
           { merge: true },
         );
       });
