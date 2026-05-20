@@ -8,11 +8,16 @@ const getRoundTone = (round: string) => {
   return 'bg-sky-50 border-sky-200';
 };
 
-const getRoundState = (roundMatches: TournamentMatch[]): 'preview' | 'started' | 'finished' => {
+const isPlaceholder = (name?: string) =>
+  (name || '').toLowerCase().startsWith('winner of ');
+
+const getRoundState = (roundMatches: TournamentMatch[]): 'preview' | 'loading' | 'started' | 'finished' => {
   const real = roundMatches.filter(
     (m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_'),
   );
   if (real.length === 0) return 'preview';
+  // Any slot still waiting on a previous-round winner → Loading
+  if (real.some((m) => isPlaceholder(m.player_1_name) || isPlaceholder(m.player_2_name))) return 'loading';
   // round is "started" once at least one match has both slots filled with real players
   const anyReady = real.some(
     (m) => m.player_1_name !== PLAYER_LOADING && m.player_2_name !== PLAYER_LOADING,
@@ -133,8 +138,8 @@ export const BracketView: React.FC<Props> = ({
               {(() => {
                 const rs = getRoundState(round.matches);
                 return (
-                  <p className={`text-center text-xs uppercase tracking-widest font-black ${rs === 'finished' ? 'text-orange-500' : 'text-black'}`}>
-                    {round.round} — {rs === 'preview' ? 'Live Preview' : rs === 'started' ? 'Started' : 'Finished'}
+                  <p className={`text-center text-xs uppercase tracking-widest font-black ${rs === 'finished' ? 'text-orange-500' : rs === 'loading' ? 'text-gray-400' : 'text-black'}`}>
+                    {round.round} — {rs === 'preview' ? 'Live Preview' : rs === 'loading' ? 'Loading' : rs === 'started' ? 'Started' : 'Finished'}
                   </p>
                 );
               })()}

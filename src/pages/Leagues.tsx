@@ -182,11 +182,11 @@ export const Leagues: React.FC = () => {
               <tr className="border-b border-white/10">
                 <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-white/50 w-10">#</th>
                 <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-white/50">Name</th>
-                <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-white/50">Skill</th>
                 <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-white/50">Tournaments</th>
                 <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-clay">Matches</th>
                 <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-white/50">Wins</th>
                 <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-clay">Points</th>
+                <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-white/50">Skill</th>
               </tr>
             </thead>
             <tbody>
@@ -203,13 +203,13 @@ export const Leagues: React.FC = () => {
                     <td className="px-4 py-3 font-semibold text-white">
                       {toTitleCase(row.name)}{isCurrentUser ? <span className="ml-1 text-clay text-xs">(you)</span> : null}
                     </td>
-                    <td className="px-4 py-3 text-center text-white/80">{row.skill_level}</td>
                     <td className="px-4 py-3 text-center text-white/80">
                       {displayTournaments(row)}{stillActiveUids.has(row.user_id) ? <span className="text-clay font-black">*</span> : null}
                     </td>
                     <td className="px-4 py-3 text-center font-bold text-clay">{row.matchesPlayed}</td>
                     <td className="px-4 py-3 text-center text-white/80">{row.wins}</td>
                     <td className="px-4 py-3 text-center font-black text-clay text-base">{row.leaguePoints26}</td>
+                    <td className="px-4 py-3 text-center text-white/80">{row.skill_level}</td>
                   </tr>
                 );
               })}
@@ -227,13 +227,13 @@ export const Leagues: React.FC = () => {
                     <td className="px-4 py-3 font-semibold text-white">
                       {toTitleCase(userRow.name)}<span className="ml-1 text-clay text-xs">(you)</span>
                     </td>
-                    <td className="px-4 py-3 text-center text-white/80">{userRow.skill_level}</td>
                     <td className="px-4 py-3 text-center text-white/80">
                       {displayTournaments(userRow)}{stillActiveUids.has(userRow.user_id) ? <span className="text-clay font-black">*</span> : null}
                     </td>
                     <td className="px-4 py-3 text-center font-bold text-clay">{userRow.matchesPlayed}</td>
                     <td className="px-4 py-3 text-center text-white/80">{userRow.wins}</td>
                     <td className="px-4 py-3 text-center font-black text-clay text-base">{userRow.leaguePoints26}</td>
+                    <td className="px-4 py-3 text-center text-white/80">{userRow.skill_level}</td>
                   </tr>
                 </>
               )}
@@ -244,7 +244,7 @@ export const Leagues: React.FC = () => {
 
       {hasActiveTournament && (
         <p className="mt-3 text-xs text-white/40">
-          <span className="text-clay font-black">*</span> — points to be updated after event ends
+          <span className="text-clay font-black">*</span> points to be updated after event ends
         </p>
       )}
     </div>
