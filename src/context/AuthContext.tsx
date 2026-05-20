@@ -11,7 +11,7 @@ interface AuthContextType {
   loading: boolean;
   isAuthReady: boolean;
   profileError: string | null;
-  refreshProfile: () => Promise<void>;
+  refreshProfile: (user?: User | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({

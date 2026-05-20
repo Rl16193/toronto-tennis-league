@@ -10,6 +10,7 @@ import { Profile } from './pages/Profile';
 import { Tournament } from './pages/Tournament';
 import { PlayerProfile } from './pages/PlayerProfile';
 import { Rules, Terms, Privacy, Contact } from './pages/StaticPages';
+import { Leagues } from './pages/Leagues';
 
 const ScrollToTop: React.FC = () => {
   const location = useLocation();
@@ -61,6 +62,7 @@ export default function App() {
             <Route path="/signup" element={<Signup />} />
             <Route path="/events" element={<Events />} />
             <Route path="/tournament" element={<PrivateRoute><Tournament /></PrivateRoute>} />
+            <Route path="/leagues" element={<PrivateRoute><Leagues /></PrivateRoute>} />
             <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
             <Route path="/players/:userId" element={<PrivateRoute><PlayerProfile /></PrivateRoute>} />
             <Route path="/rules" element={<Rules />} />
