@@ -258,7 +258,7 @@ export const PlayerProfile: React.FC = () => {
             </p>
 
             {stats ? (() => {
-              const s = stats as typeof stats & { matchesPlayed?: number; wins?: number; loses?: number; leaguePoints26?: number };
+              const s = stats as typeof stats & { matchesPlayed?: number; wins?: number; loses?: number; leaguePoints26?: number; pointsWonPct?: number };
               return (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                   <div>
@@ -274,8 +274,8 @@ export const PlayerProfile: React.FC = () => {
                     <p className="text-white font-black text-lg">{s.loses ?? 0}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest text-white/50">Points</p>
-                    <p className="text-clay font-black text-lg">{s.leaguePoints26 ?? 0}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-white/50">% Pts Won</p>
+                    <p className="text-clay font-black text-lg">{s.pointsWonPct != null ? `${s.pointsWonPct}%` : '—'}</p>
                   </div>
                 </div>
               );
