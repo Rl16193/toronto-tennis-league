@@ -249,22 +249,39 @@ export const PlayerProfile: React.FC = () => {
             </p>
           </div>
 
-          {/* Record */}
+          {/* Match Stats */}
           <div className="rounded-2xl bg-tennis-dark/40 border border-white/10 p-5">
             <Trophy className="w-5 h-5 text-clay mb-3" />
 
-            <p className="text-xs uppercase tracking-widest text-white font-bold">
-              Record
+            <p className="text-xs uppercase tracking-widest text-white font-bold mb-3">
+              Match Stats
             </p>
 
-            <p className="text-white font-semibold mt-1">
-              {stats
-                ? `${stats.matches_won}-${Math.max(
-                    0,
-                    stats.matches_played - stats.matches_won
-                  )}`
-                : 'Not available'}
-            </p>
+            {stats ? (() => {
+              const s = stats as typeof stats & { matchesPlayed?: number; wins?: number; loses?: number; leaguePoints26?: number };
+              return (
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-white/50">Played</p>
+                    <p className="text-white font-black text-lg">{s.matchesPlayed ?? 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-white/50">Wins</p>
+                    <p className="text-white font-black text-lg">{s.wins ?? 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-white/50">Losses</p>
+                    <p className="text-white font-black text-lg">{s.loses ?? 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-white/50">Points</p>
+                    <p className="text-clay font-black text-lg">{s.leaguePoints26 ?? 0}</p>
+                  </div>
+                </div>
+              );
+            })() : (
+              <p className="text-white/60 text-sm">No stats available</p>
+            )}
           </div>
 
         </div>
