@@ -44,8 +44,8 @@ service cloud.firestore {
     // ===============================================================
     match /stats/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
+      allow create: if isOwner(userId) || isGlobalEventCreator();
+      allow update: if isOwner(userId) || isGlobalEventCreator();
       allow delete: if false;
     }
 

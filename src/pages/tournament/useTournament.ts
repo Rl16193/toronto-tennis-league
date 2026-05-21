@@ -305,15 +305,23 @@ export const useTournament = (eventIdOverride?: string) => {
   }, [currentDraw, currentDrawAllPlayers, currentMatches, event?.id, previewDrawSize, previewSlotOverrides, started, templates]);
 
 
-  const visibleUserMatch = useMemo(
-    () => user
-      ? displayMatches.find((m) =>
-          [m.player_1_user_id, m.player_2_user_id].includes(user.uid) &&
-          m.player_1_name !== BYE && m.player_2_name !== BYE,
-        ) ?? null
-      : null,
-    [displayMatches, user],
-  );
+  const visibleUserMatch = useMemo(() => {
+    if (!user) return null;
+    const pool = showReserves
+      ? matches.filter(
+          (m) =>
+            m.bracket === 'reserves' &&
+            m.status !== 'complete' &&
+            m.player_1_name !== BYE &&
+            m.player_2_name !== BYE,
+        )
+      : displayMatches.filter(
+          (m) => m.player_1_name !== BYE && m.player_2_name !== BYE,
+        );
+    return pool.find((m) =>
+      [m.player_1_user_id, m.player_2_user_id].includes(user.uid),
+    ) ?? null;
+  }, [displayMatches, matches, showReserves, user]);
 
 
   // For the edit dropdown, include ALL participants for this division/choice regardless of skill group
@@ -539,7 +547,7 @@ export const useTournament = (eventIdOverride?: string) => {
           matchesPlayed: increment(1),
           wins: increment(1),
           league: matchLeague,
-          ...(isFinal ? { leaguePoints26: increment(winnerPts) } : {}),
+          ...(isFinal ? { leaguePoints26: increment(winnerPts), tournamentsPlayed: increment(1) } : {}),
         }, { merge: true });
       }
       if (loserUid) {
@@ -547,6 +555,7 @@ export const useTournament = (eventIdOverride?: string) => {
           matchesPlayed: increment(1),
           loses: increment(1),
           leaguePoints26: increment(loserPts),
+          tournamentsPlayed: increment(1),
           league: matchLeague,
         }, { merge: true });
       }
