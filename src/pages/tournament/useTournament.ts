@@ -451,9 +451,18 @@ export const useTournament = (eventIdOverride?: string) => {
   );
 
   const opponent = visibleUserMatch && user
-    ? visibleUserMatch.player_1_user_id === user.uid
-      ? { name: visibleUserMatch.player_2_name, userId: visibleUserMatch.player_2_user_id, contact: visibleUserMatch.player_2_contact }
-      : { name: visibleUserMatch.player_1_name, userId: visibleUserMatch.player_1_user_id, contact: visibleUserMatch.player_1_contact }
+    ? (() => {
+        const isP1 = visibleUserMatch.player_1_user_id === user.uid;
+        const opponentUid = isP1 ? visibleUserMatch.player_2_user_id : visibleUserMatch.player_1_user_id;
+        const opponentUser = allUsers[opponentUid];
+        return {
+          name: isP1 ? visibleUserMatch.player_2_name : visibleUserMatch.player_1_name,
+          userId: opponentUid,
+          contact: isP1 ? visibleUserMatch.player_2_contact : visibleUserMatch.player_1_contact,
+          email: opponentUser?.email ?? '',
+          phone: opponentUser?.phone ?? '',
+        };
+      })()
     : null;
 
   // ── Internal helpers ──────────────────────────────────────────────────────

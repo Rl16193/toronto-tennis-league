@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink } from 'lucide-react';
 
-type Opponent = { name: string; userId: string; contact: string };
+type Opponent = { name: string; userId: string; contact: string; email: string; phone: string };
 
 type Props = {
   opponent: Opponent;
@@ -14,10 +14,12 @@ export const OpponentCard: React.FC<Props> = ({ opponent }) => (
     <div className="flex items-start justify-between gap-4">
       <div>
         <h2 className="text-2xl font-black text-white">Your opponent is {opponent.name}</h2>
-        <p className="text-white mt-2">
-          Contact your opponent to schedule your matches:{' '}
-          <span className="text-clay font-semibold">{opponent.contact || 'Contact not available'}</span>
-        </p>
+        <p className="text-white mt-2">Contact your opponent to schedule your matches:</p>
+        <div className="mt-1 flex flex-col gap-0.5">
+          {opponent.email && <span className="text-clay font-semibold">{opponent.email}</span>}
+          {opponent.phone && <span className="text-clay font-semibold">{opponent.phone}</span>}
+          {!opponent.email && !opponent.phone && <span className="text-clay font-semibold">Contact not available</span>}
+        </div>
       </div>
       <Link
         to={`/players/${opponent.userId}`}

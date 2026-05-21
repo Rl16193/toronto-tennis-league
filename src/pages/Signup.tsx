@@ -257,9 +257,12 @@ export const Signup: React.FC = () => {
         name: formData.name,
         skill_level: formData.skillLevel,
         tournament_preference: 'Challengers',
-        matches_played: 0,
-        matches_won: 0,
-        points_won_percentage: 0,
+        matchesPlayed: 0,
+        wins: 0,
+        loses: 0,
+        pointswon: 0,
+        totalPointsPlayed: 0,
+        pointsWonPct: 0,
       };
 
       // Create preferences collection document

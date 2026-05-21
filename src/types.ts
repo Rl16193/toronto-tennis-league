@@ -14,9 +14,15 @@ export interface UserStats {
   name: string;
   skill_level: number;
   tournament_preference: 'Beginners' | 'Challengers' | 'Masters';
-  matches_played: number;
-  matches_won: number;
-  points_won_percentage: number;
+  matchesPlayed: number;
+  wins: number;
+  loses: number;
+  leaguePoints26: number;
+  tournamentsPlayed: number;
+  league: string;
+  pointswon: number;
+  totalPointsPlayed: number;
+  pointsWonPct: number;
 }
 
 // Collection: preferences

@@ -16,15 +16,15 @@ export const ProfileStats: React.FC = () => {
       <div className="space-y-2">
         <div className="flex justify-between items-center py-2 border-b border-white/5">
           <span className="text-white font-medium">Matches Played</span>
-          <span className="text-xl font-black text-white">{profile.stats.matches_played}</span>
+          <span className="text-xl font-black text-white">{profile.stats.matchesPlayed}</span>
         </div>
         <div className="flex justify-between items-center py-2 border-b border-white/5">
           <span className="text-white font-medium">Matches Won</span>
-          <span className="text-xl font-black text-green-500">{profile.stats.matches_won}</span>
+          <span className="text-xl font-black text-green-500">{profile.stats.wins}</span>
         </div>
         <div className="flex justify-between items-center py-2">
           <span className="text-clay font-bold">Points Won %</span>
-          <span className="text-xl font-black text-clay">{profile.stats.points_won_percentage}%</span>
+          <span className="text-xl font-black text-clay">{profile.stats.pointsWonPct}%</span>
         </div>
       </div>
     </div>
