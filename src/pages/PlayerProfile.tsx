@@ -258,7 +258,10 @@ export const PlayerProfile: React.FC = () => {
             </p>
 
             {stats ? (() => {
-              const s = stats as typeof stats & { matchesPlayed?: number; wins?: number; loses?: number; leaguePoints26?: number; pointsWonPct?: number };
+              const s = stats as typeof stats & { matchesPlayed?: number; wins?: number; loses?: number; pointswon?: number; totalPointsPlayed?: number; pointsWonPct?: number };
+              const pctDisplay = (s.totalPointsPlayed ?? 0) > 0
+                ? `${Math.round((s.pointswon! / s.totalPointsPlayed!) * 100)}%`
+                : s.pointsWonPct != null ? `${s.pointsWonPct}%` : '—';
               return (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                   <div>
@@ -275,7 +278,7 @@ export const PlayerProfile: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-[10px] uppercase tracking-widest text-white/50">% Pts Won</p>
-                    <p className="text-clay font-black text-lg">{s.pointsWonPct != null ? `${s.pointsWonPct}%` : '—'}</p>
+                    <p className="text-clay font-black text-lg">{pctDisplay}</p>
                   </div>
                 </div>
               );

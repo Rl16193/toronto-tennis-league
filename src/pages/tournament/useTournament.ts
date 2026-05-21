@@ -542,22 +542,75 @@ export const useTournament = (eventIdOverride?: string) => {
       const matchLeague = match.tournament_choice === 'Doubles' ? 'Doubles' : match.division;
       const winnerUid = submission.claimed_winner_user_id;
       const loserUid = winnerUid === match.player_1_user_id ? match.player_2_user_id : match.player_1_user_id;
-      if (winnerUid) {
-        batch.set(doc(db, 'stats', winnerUid), {
-          matchesPlayed: increment(1),
-          wins: increment(1),
-          league: matchLeague,
-          ...(isFinal ? { leaguePoints26: increment(winnerPts), tournamentsPlayed: increment(1) } : {}),
-        }, { merge: true });
-      }
-      if (loserUid) {
-        batch.set(doc(db, 'stats', loserUid), {
-          matchesPlayed: increment(1),
-          loses: increment(1),
-          leaguePoints26: increment(loserPts),
-          tournamentsPlayed: increment(1),
-          league: matchLeague,
-        }, { merge: true });
+
+      // Games won per player (set scores are absolute: player_1/2 = match positions)
+      const newP1G = (submission.set_1_player_1 ?? 0) + (submission.set_2_player_1 ?? 0) + (submission.set_3_player_1 ?? 0);
+      const newP2G = (submission.set_1_player_2 ?? 0) + (submission.set_2_player_2 ?? 0) + (submission.set_3_player_2 ?? 0);
+      const newTotal = newP1G + newP2G;
+      const winnerIsP1 = winnerUid === match.player_1_user_id;
+
+      if (match.status !== 'complete') {
+        // First confirmation — apply all increments
+        if (winnerUid) {
+          batch.set(doc(db, 'stats', winnerUid), {
+            matchesPlayed: increment(1),
+            wins: increment(1),
+            league: matchLeague,
+            pointswon: increment(winnerIsP1 ? newP1G : newP2G),
+            totalPointsPlayed: increment(newTotal),
+            ...(isFinal ? { leaguePoints26: increment(winnerPts), tournamentsPlayed: increment(1) } : {}),
+          }, { merge: true });
+        }
+        if (loserUid) {
+          batch.set(doc(db, 'stats', loserUid), {
+            matchesPlayed: increment(1),
+            loses: increment(1),
+            leaguePoints26: increment(loserPts),
+            tournamentsPlayed: increment(1),
+            league: matchLeague,
+            pointswon: increment(winnerIsP1 ? newP2G : newP1G),
+            totalPointsPlayed: increment(newTotal),
+          }, { merge: true });
+        }
+      } else {
+        // Re-entry (edit score) — compute per-player delta (new − old) and apply
+        const oldWinnerUid = match.winner_user_id ?? '';
+        const oldP1G = (match.set_1_player_1 ?? 0) + (match.set_2_player_1 ?? 0) + (match.set_3_player_1 ?? 0);
+        const oldP2G = (match.set_1_player_2 ?? 0) + (match.set_2_player_2 ?? 0) + (match.set_3_player_2 ?? 0);
+        const oldTotal = oldP1G + oldP2G;
+
+        const applyPlayerDelta = (uid: string, isP1: boolean) => {
+          if (!uid) return;
+          const wasWinner = oldWinnerUid === uid;
+          const isWinner = winnerUid === uid;
+          const oldGames = isP1 ? oldP1G : oldP2G;
+          const newGames = isP1 ? newP1G : newP2G;
+
+          const delta: Record<string, unknown> = {};
+          if (isWinner !== wasWinner) {
+            delta.wins = increment(isWinner ? 1 : -1);
+            delta.loses = increment(isWinner ? -1 : 1);
+          }
+          const oldPts = wasWinner ? (isFinal ? winnerPts : 0) : loserPts;
+          const newPts = isWinner ? (isFinal ? winnerPts : 0) : loserPts;
+          if (newPts !== oldPts) delta.leaguePoints26 = increment(newPts - oldPts);
+
+          // tournamentsPlayed credit: losers always get +1; final winner also gets +1
+          const oldTC = (!wasWinner ? 1 : 0) + (wasWinner && isFinal ? 1 : 0);
+          const newTC = (!isWinner ? 1 : 0) + (isWinner && isFinal ? 1 : 0);
+          if (newTC !== oldTC) delta.tournamentsPlayed = increment(newTC - oldTC);
+
+          if (newGames !== oldGames) delta.pointswon = increment(newGames - oldGames);
+          if (newTotal !== oldTotal) delta.totalPointsPlayed = increment(newTotal - oldTotal);
+
+          if (Object.keys(delta).length > 0) {
+            delta.league = matchLeague;
+            batch.set(doc(db, 'stats', uid), delta, { merge: true });
+          }
+        };
+
+        applyPlayerDelta(match.player_1_user_id, true);
+        applyPlayerDelta(match.player_2_user_id, false);
       }
     }
 
