@@ -54,17 +54,6 @@ export const JoinModal: React.FC<Props> = ({
           <X className="w-6 h-6" />
         </button>
 
-        <div className="h-48 sm:h-64 relative">
-          {event.image ? (
-            <img src={event.image} alt={event.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-tennis-dark via-tennis-surface to-clay/20 px-8 text-center">
-              <span className="text-2xl font-bold text-white">{event.title}</span>
-            </div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-tennis-surface via-transparent to-transparent" />
-        </div>
-
         <div className="p-5 sm:p-8 space-y-6">
           <div className="space-y-1">
             <h2 className="text-2xl sm:text-3xl font-display font-black text-white">{event.title}</h2>
