@@ -16,8 +16,20 @@ interface Props {
   onJoin: (event: DisplayEvent) => void;
 }
 
+const isJoinClosed = (event: DisplayEvent): boolean => {
+  if (!event.join_last_date) return false;
+  const raw = event.join_last_date;
+  let d: Date;
+  if (typeof raw === 'string') d = new Date(raw);
+  else if (typeof raw.toDate === 'function') d = raw.toDate!();
+  else if (typeof raw.seconds === 'number') d = new Date(raw.seconds * 1000);
+  else return false;
+  return new Date() > d;
+};
+
 export const EventCard: React.FC<Props> = ({ event, index, isJoined, joining, authLoading, isLoggedIn, onJoin }) => {
   const dateLabel = isTournamentEvent(event) ? formatTournamentRange(event) : formatEventSchedule(event);
+  const joinClosed = isJoinClosed(event);
 
   return (
     <motion.div
@@ -83,10 +95,10 @@ export const EventCard: React.FC<Props> = ({ event, index, isJoined, joining, au
           size="sm"
           onClick={() => onJoin(event)}
           isLoading={joining && !isJoined}
-          disabled={isJoined}
+          disabled={isJoined || joinClosed}
           className="w-full"
         >
-          {isJoined ? 'Joined' : authLoading ? 'Loading...' : isLoggedIn ? 'Join Event' : 'Log In to Join'}
+          {isJoined ? 'Joined' : joinClosed ? 'Registration Closed' : authLoading ? 'Loading...' : isLoggedIn ? 'Join Event' : 'Log In to Join'}
         </Button>
       </div>
     </motion.div>

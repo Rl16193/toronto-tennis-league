@@ -1,6 +1,6 @@
-﻿import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Calendar, Trophy, Medal } from 'lucide-react';
+import { LogOut, Calendar, Trophy, Medal, User, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -17,12 +17,24 @@ export const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    if (menuOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
 
   const handleLogout = async () => {
     try {
@@ -36,11 +48,6 @@ export const Navbar: React.FC = () => {
   // Desktop: all main links for logged-in, nothing for logged-out (they use auth buttons)
   const desktopNavLinks = user ? ALL_NAV_LINKS : [];
 
-  // Mobile: only the pages the user is NOT currently on
-  const mobileNavLinks = user
-    ? ALL_NAV_LINKS.filter((link) => link.path !== location.pathname)
-    : [];
-
   return (
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
@@ -50,7 +57,7 @@ export const Navbar: React.FC = () => {
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between relative">
 
           {/* Logo */}
           <Link to={user ? '/profile' : '/'} className="flex items-center shrink-0">
@@ -108,19 +115,9 @@ export const Navbar: React.FC = () => {
           </div>
 
           {/* Mobile Nav */}
-          <div className="md:hidden flex items-center gap-1 shrink-0">
+          <div className="md:hidden flex items-center gap-2 shrink-0" ref={menuRef}>
             {user ? (
               <>
-                {mobileNavLinks.map((link) => (
-                  <Link
-                    key={link.path}
-                    to={link.path}
-                    className="p-2 rounded-xl text-white hover:text-white hover:bg-white/5 transition-colors"
-                    aria-label={link.name}
-                  >
-                    <link.icon className="w-5 h-5" />
-                  </Link>
-                ))}
                 <button
                   onClick={handleLogout}
                   className="p-2 rounded-xl text-white hover:text-red-400 hover:bg-red-500/5 transition-colors"
@@ -128,7 +125,7 @@ export const Navbar: React.FC = () => {
                 >
                   <LogOut className="w-5 h-5" />
                 </button>
-                <Link to="/profile" className="ml-1">
+                <Link to="/profile">
                   <div className="w-8 h-8 rounded-full border-2 border-clay p-0.5 overflow-hidden hover:scale-105 transition-transform">
                     <img
                       src={profile?.user.avatar || `https://ui-avatars.com/api/?name=${profile?.user.name || user.email}&background=C25E44&color=fff`}
@@ -138,6 +135,35 @@ export const Navbar: React.FC = () => {
                     />
                   </div>
                 </Link>
+                <button
+                  onClick={() => setMenuOpen((o) => !o)}
+                  className="p-2 rounded-xl text-white hover:bg-white/5 transition-colors"
+                  aria-label="Menu"
+                >
+                  {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                </button>
+
+                {menuOpen && (
+                  <div className="absolute top-full right-4 mt-2 w-48 rounded-2xl bg-tennis-dark border border-white/10 shadow-xl overflow-hidden z-50">
+                    {ALL_NAV_LINKS.map((link) => (
+                      <Link
+                        key={link.path}
+                        to={link.path}
+                        className={`flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors hover:bg-white/5 ${location.pathname === link.path ? 'text-clay' : 'text-white'}`}
+                      >
+                        <link.icon className="w-4 h-4 shrink-0" />
+                        {link.name}
+                      </Link>
+                    ))}
+                    <Link
+                      to="/profile"
+                      className={`flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors hover:bg-white/5 border-t border-white/5 ${location.pathname === '/profile' ? 'text-clay' : 'text-white'}`}
+                    >
+                      <User className="w-4 h-4 shrink-0" />
+                      Profile
+                    </Link>
+                  </div>
+                )}
               </>
             ) : (
               <>
