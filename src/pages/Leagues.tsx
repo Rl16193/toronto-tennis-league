@@ -46,8 +46,6 @@ export const Leagues: React.FC = () => {
   const [stillActiveUids, setStillActiveUids] = useState<Set<string>>(new Set());
   const [hasActiveTournament, setHasActiveTournament] = useState(false);
 
-  useEffect(() => { document.title = 'Leagues — Racquets & Strings'; }, []);
-
   useEffect(() => {
     if (!authLoading && !user) navigate('/login?returnTo=%2Fleagues');
   }, [authLoading, user, navigate]);

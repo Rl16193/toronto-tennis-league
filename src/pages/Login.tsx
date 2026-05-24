@@ -25,7 +25,7 @@ export const Login: React.FC = () => {
   const [stayLoggedIn, setStayLoggedIn] = useState(false);
   const [emailSuggestion, setEmailSuggestion] = useState<any>(null);
   const [logoUrl, setLogoUrl] = useState<string>('');
-  const returnTo = searchParams.get('returnTo') || '/profile';
+  const returnTo = searchParams.get('returnTo') || '/events';
   const intent = searchParams.get('intent') || '';
 
   useEffect(() => { document.title = 'Sign In — Racquets & Strings'; }, []);
