@@ -72,10 +72,6 @@ export const Profile: React.FC = () => {
         </div>
       )}
 
-      <div className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-display font-black text-white tracking-tight">My Profile</h1>
-      </div>
-
       {/* Contact Card — full width */}
       <div className="mb-6">
         <ProfileInfo
