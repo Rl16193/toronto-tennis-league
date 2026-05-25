@@ -4,7 +4,7 @@ import { AnimatePresence } from 'motion/react';
 import { Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
-import { ACCEPTED_EVENT_IMAGE_TYPES, createEvent, EventFormState, INITIAL_EVENT_FORM, uploadEventImage, validateEventForm } from '../features/events/services/eventService';
+import { createEvent, EventFormState, INITIAL_EVENT_FORM, validateEventForm } from '../features/events/services/eventService';
 import { sortEventsByStartDate } from '../utils/eventDates';
 import { useEvents } from '../features/events/hooks/useEvents';
 import { useJoin } from '../features/events/hooks/useJoin';
@@ -22,7 +22,6 @@ export const Events: React.FC = () => {
 
   const [showEventForm, setShowEventForm] = useState(false);
   const [eventForm, setEventForm] = useState<EventFormState>(INITIAL_EVENT_FORM);
-  const [eventImageFile, setEventImageFile] = useState<File | null>(null);
   const [eventFormMessage, setEventFormMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [creatingEvent, setCreatingEvent] = useState(false);
 
@@ -34,18 +33,6 @@ export const Events: React.FC = () => {
     return () => clearTimeout(t);
   }, [eventFormMessage]);
 
-  const handleEventImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    if (!file) { setEventImageFile(null); return; }
-    if (!ACCEPTED_EVENT_IMAGE_TYPES.includes(file.type)) {
-      setEventFormMessage({ type: 'error', text: 'Please upload a JPEG, PNG, JPG, WEBP, GIF, HEIC, or HEIF image.' });
-      e.target.value = '';
-      return;
-    }
-    setEventFormMessage(null);
-    setEventImageFile(file);
-  };
-
   const handleCreateEvent = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!user || !isEventCreator) { setEventFormMessage({ type: 'error', text: 'Only event creators can add events.' }); return; }
@@ -54,11 +41,9 @@ export const Events: React.FC = () => {
     setCreatingEvent(true);
     setEventFormMessage(null);
     try {
-      const imageUrl = await uploadEventImage(user.uid, eventForm.title, eventImageFile);
-      const created = await createEvent(user.uid, eventForm, imageUrl);
+      const created = await createEvent(user.uid, eventForm, '');
       setEvents((prev) => [...prev, created]);
       setEventForm(INITIAL_EVENT_FORM);
-      setEventImageFile(null);
       setEventFormMessage({ type: 'success', text: 'Event added successfully.' });
       setShowEventForm(false);
     } catch {
@@ -115,11 +100,9 @@ export const Events: React.FC = () => {
           <CreatorEventModal
             eventForm={eventForm}
             setEventForm={setEventForm}
-            eventImageFile={eventImageFile}
             eventFormMessage={eventFormMessage}
             creatingEvent={creatingEvent}
             organizerPlaceholder={profile?.user.name || 'Organizer name'}
-            onImageChange={handleEventImageChange}
             onSubmit={handleCreateEvent}
             onClose={() => setShowEventForm(false)}
           />

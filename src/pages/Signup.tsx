@@ -41,7 +41,7 @@ export const Signup: React.FC = () => {
   const [courtOptions, setCourtOptions] = useState<string[]>(defaultCourtOptions);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const returnTo = searchParams.get('returnTo') || '/profile';
+  const returnTo = searchParams.get('returnTo') || '/events';
   const intent = searchParams.get('intent') || '';
 
   // Form State

@@ -1,5 +1,4 @@
 ﻿import React from 'react';
-import { Upload } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { ModalShell } from '../../../components/ModalShell';
 import {
@@ -13,11 +12,9 @@ type FormMessage = { type: 'success' | 'error'; text: string } | null;
 type Props = {
   eventForm: EventFormState;
   setEventForm: (eventForm: EventFormState) => void;
-  eventImageFile: File | null;
   eventFormMessage: FormMessage;
   creatingEvent: boolean;
   organizerPlaceholder: string;
-  onImageChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
 };
@@ -25,11 +22,9 @@ type Props = {
 export const CreatorEventModal: React.FC<Props> = ({
   eventForm,
   setEventForm,
-  eventImageFile,
   eventFormMessage,
   creatingEvent,
   organizerPlaceholder,
-  onImageChange,
   onSubmit,
   onClose,
 }) => (
@@ -145,22 +140,6 @@ export const CreatorEventModal: React.FC<Props> = ({
               <option key={skill} value={skill}>{skill}</option>
             ))}
           </select>
-        </label>
-
-        <label className="space-y-2">
-          <span className="block text-sm font-medium text-white">Image</span>
-          <div className="rounded-2xl border border-dashed border-white/20 bg-tennis-dark/60 px-4 py-3 text-white">
-            <div className="flex items-center gap-3">
-              <Upload className="w-5 h-5 text-clay" />
-              <span className="text-sm font-semibold truncate">{eventImageFile?.name || 'Upload event image'}</span>
-            </div>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/jpg,image/webp,image/gif,image/heic,image/heif"
-              onChange={onImageChange}
-              className="mt-3 block w-full text-sm text-white file:mr-4 file:rounded-xl file:border-0 file:bg-clay file:px-4 file:py-2 file:font-semibold file:text-white"
-            />
-          </div>
         </label>
 
         <label className="space-y-2 md:col-span-2">

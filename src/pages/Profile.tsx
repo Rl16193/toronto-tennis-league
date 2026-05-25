@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
-import { CheckCircle2 } from 'lucide-react';
 import { useProfileData } from '../features/profile/hooks/useProfileData';
 import { useProfileActions } from '../features/profile/hooks/useProfileActions';
 import { ProfileInfo } from '../features/profile/components/ProfileInfo';
@@ -26,8 +25,6 @@ export const Profile: React.FC = () => {
   const [emailVerificationPending, setEmailVerificationPending] = useState(false);
   const [linkingGoogle, setLinkingGoogle] = useState(false);
   const [emailChangeLoading, setEmailChangeLoading] = useState(false);
-
-  useEffect(() => { document.title = 'My Profile — Racquets & Strings'; }, []);
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/login');
@@ -72,27 +69,6 @@ export const Profile: React.FC = () => {
         <div className="mb-8 px-1">
           <p className="text-sm text-orange-500 font-bold mb-1">Profile incomplete</p>
           <p className="text-sm text-orange-500">Please add details for: {incompleteFields.join(', ')}.</p>
-        </div>
-      )}
-
-      <div className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-display font-black text-white tracking-tight">My Profile</h1>
-      </div>
-
-      {joinedEvents.length === 0 && (
-        <div className="mb-8 p-6 rounded-2xl bg-clay/10 border border-clay/20 text-center">
-          <p className="text-white font-semibold mb-4">Ready to play? Join some events to get started!</p>
-          <Button onClick={() => navigate('/events')}>Register for Events Here</Button>
-        </div>
-      )}
-
-      {incompleteFields.length === 0 && joinedEvents.length > 0 && (
-        <div className="mb-8 p-5 rounded-2xl bg-green-500/10 border border-green-500/20 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <CheckCircle2 className="w-5 h-5 text-green-400 shrink-0" />
-            <p className="text-green-300 font-semibold">You're all set for the tournament!</p>
-          </div>
-          <Button onClick={() => navigate('/tournament')} size="sm">Check Draw for Updates</Button>
         </div>
       )}
 
