@@ -124,6 +124,8 @@ for (const row of rows) {
     wins_xlsx: xlsxWins,
     loses_xlsx: xlsxLoses,
     leaguePoints26_xlsx: xlsxPoints,
+    pointswon_xlsx: Number(row.pointswon ?? 0),
+    totalPointsPlayed_xlsx: Number(row.totalPointsPlayed ?? 0),
   };
 
   if (!existing.exists) {

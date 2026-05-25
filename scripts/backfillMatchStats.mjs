@@ -57,12 +57,24 @@ const snap = await db.collection('tournament_matches')
 
 console.log(`\nFound ${snap.size} completed matches.\n`);
 
+// Game tallies from accepted score submissions (keyed by match_doc_id)
+const subsSnap = await db.collection('score_submissions').where('status', '==', 'accepted').get();
+const subsByMatch = new Map();
+subsSnap.docs.forEach(d => {
+  const sub = d.data();
+  if (!subsByMatch.has(sub.match_doc_id)) subsByMatch.set(sub.match_doc_id, sub);
+});
+console.log(`Found ${subsByMatch.size} accepted score submissions.\n`);
+
 // ── Aggregate per user ────────────────────────────────────────────────────────
 
-const userStats = new Map(); // uid → { matchesPlayed, wins, loses, leaguePoints26, league, eventIds }
+// uid → { matchesPlayed, wins, loses, leaguePoints26, league, eliminatedEventIds }
+// eliminatedEventIds: events where this player was knocked out (loser or F winner).
+// Winners still in progress are NOT counted — Leagues.tsx adds +1 for active players.
+const userStats = new Map();
 
 const ensure = (uid) => {
-  if (!userStats.has(uid)) userStats.set(uid, { matchesPlayed: 0, wins: 0, loses: 0, leaguePoints26: 0, league: '', eventIds: new Set() });
+  if (!userStats.has(uid)) userStats.set(uid, { matchesPlayed: 0, wins: 0, loses: 0, leaguePoints26: 0, league: '', eliminatedEventIds: new Set(), pointswon: 0, totalPointsPlayed: 0 });
   return userStats.get(uid);
 };
 
@@ -76,12 +88,22 @@ for (const doc of snap.docs) {
   const winnerPts = isLL ? WINNER_PTS_LL : WINNER_PTS;
   const matchLeague = m.tournament_choice === 'Doubles' ? 'Doubles' : (m.division || '');
 
+  // Game tallies from score submission
+  const sub = subsByMatch.get(doc.id);
+  const p1G = sub ? (sub.set_1_player_1??0)+(sub.set_2_player_1??0)+(sub.set_3_player_1??0) : 0;
+  const p2G = sub ? (sub.set_1_player_2??0)+(sub.set_2_player_2??0)+(sub.set_3_player_2??0) : 0;
+  const totalG = p1G + p2G;
+  const winnerIsP1 = winnerUid === m.player_1_user_id;
+
   if (winnerUid) {
     const s = ensure(winnerUid);
     s.matchesPlayed += 1;
     s.wins += 1;
     s.league = matchLeague;
-    if (m.event_id) s.eventIds.add(m.event_id);
+    s.pointswon += winnerIsP1 ? p1G : p2G;
+    s.totalPointsPlayed += totalG;
+    // Tournament winner (F) is done — count the event for them too
+    if (isFinal && m.event_id) s.eliminatedEventIds.add(m.event_id);
     if (isFinal) s.leaguePoints26 += winnerPts;
   }
   if (loserUid) {
@@ -90,7 +112,10 @@ for (const doc of snap.docs) {
     s.loses += 1;
     s.leaguePoints26 += loserPts;
     s.league = matchLeague;
-    if (m.event_id) s.eventIds.add(m.event_id);
+    s.pointswon += winnerIsP1 ? p2G : p1G;
+    s.totalPointsPlayed += totalG;
+    // Loser is eliminated — count this event for them
+    if (m.event_id) s.eliminatedEventIds.add(m.event_id);
   }
 }
 
@@ -112,12 +137,12 @@ if (!shouldWrite) {
   process.exit(0);
 }
 
-// ── Write to Firestore (idempotent SET — safe to re-run) ─────────────────────
+// ── Write to Firestore ────────────────────────────────────────────────────────
 //
 // Strategy: read each player's _xlsx baseline fields (set by syncLeagueStats).
 // Final value = xlsx_baseline + tournament_match_total.
-// Running this script N times always produces the same result.
-// Always run syncLeagueStats --write BEFORE this script.
+// _xlsx fields are deleted after write — they are baked into the regular fields.
+// To re-run: first run syncLeagueStats --write to restore _xlsx baselines, then this script.
 
 // Read XLSX baselines for all affected players
 const uids = [...userStats.keys()];
@@ -134,6 +159,8 @@ for (let i = 0; i < uids.length; i += chunkSize) {
       loses:            data.loses_xlsx            ?? 0,
       leaguePoints26:   data.leaguePoints26_xlsx   ?? 0,
       tournamentsPlayed: data.tournamentsPlayed_xlsx ?? 0,
+      pointswon:        data.pointswon_xlsx        ?? 0,
+      totalPointsPlayed: data.totalPointsPlayed_xlsx ?? 0,
     });
   });
 }
@@ -148,7 +175,10 @@ for (const [uid, s] of userStats.entries()) {
   const finalWins            = base.wins             + s.wins;
   const finalLoses           = base.loses            + s.loses;
   const finalPoints          = base.leaguePoints26   + s.leaguePoints26;
-  const finalTournaments     = base.tournamentsPlayed + s.eventIds.size;
+  const finalTournaments     = base.tournamentsPlayed + s.eliminatedEventIds.size;
+  const finalPointswon      = base.pointswon + s.pointswon;
+  const finalTotalGames     = base.totalPointsPlayed + s.totalPointsPlayed;
+  const finalPointsWonPct   = finalTotalGames > 0 ? Math.round(finalPointswon / finalTotalGames * 100) : 0;
   batch.set(ref, {
     matchesPlayed:     finalMatchesPlayed,
     wins:              finalWins,
@@ -156,8 +186,23 @@ for (const [uid, s] of userStats.entries()) {
     leaguePoints26:    finalPoints,
     tournamentsPlayed: finalTournaments,
     league:            s.league,
+    pointswon:         finalPointswon,
+    totalPointsPlayed: finalTotalGames,
+    pointsWonPct:      finalPointsWonPct,
+    // Delete stale _xlsx baseline fields (xlsx data is now baked into the regular fields above)
+    matchesPlayed_xlsx:     FieldValue.delete(),
+    wins_xlsx:              FieldValue.delete(),
+    loses_xlsx:             FieldValue.delete(),
+    leaguePoints26_xlsx:    FieldValue.delete(),
+    tournamentsPlayed_xlsx: FieldValue.delete(),
+    pointswon_xlsx:         FieldValue.delete(),
+    totalPointsPlayed_xlsx: FieldValue.delete(),
+    // Delete snake_case duplicates written by old signup flow
+    matches_played:         FieldValue.delete(),
+    matches_won:            FieldValue.delete(),
+    points_won_percentage:  FieldValue.delete(),
   }, { merge: true });
-  console.log(`  ${uid} → ${finalMatchesPlayed} matches, ${finalWins}W/${finalLoses}L, ${finalPoints}pts, ${finalTournaments} events (xlsx base: ${base.leaguePoints26} + tm: ${s.leaguePoints26})`);
+  console.log(`  ${uid} → ${finalMatchesPlayed}MP ${finalWins}W/${finalLoses}L ${finalPoints}pts | ${finalPointswon}/${finalTotalGames} games (${finalPointsWonPct}%) [xlsx:${base.pointswon}/${base.totalPointsPlayed} + tm:${s.pointswon}/${s.totalPointsPlayed}]`);
   written++;
 }
 
