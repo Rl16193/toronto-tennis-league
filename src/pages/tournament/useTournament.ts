@@ -454,7 +454,7 @@ export const useTournament = (eventIdOverride?: string) => {
     ? (() => {
         const isP1 = visibleUserMatch.player_1_user_id === user.uid;
         const opponentUid = isP1 ? visibleUserMatch.player_2_user_id : visibleUserMatch.player_1_user_id;
-        const opponentUser = allUsers[opponentUid];
+        const opponentUser = userMap[opponentUid] ?? allUsers[opponentUid];
         return {
           name: isP1 ? visibleUserMatch.player_2_name : visibleUserMatch.player_1_name,
           userId: opponentUid,
