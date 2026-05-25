@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { ChevronDown } from 'lucide-react';
-import { AlertCircle } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { useTournament } from './tournament/useTournament';
 import { getEventDate } from './tournament/utils';
@@ -189,18 +188,6 @@ export const Tournament: React.FC = () => {
         <AlertMessage tone={message.type} className="mb-6">
           <p>{message.text}</p>
         </AlertMessage>
-      )}
-
-      {isCreator && skillMismatchedCount > 0 && (
-        <div className="mb-6 flex items-start gap-2 text-sm text-orange-500">
-          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-          <div>
-            <p className="font-semibold">Bracket mismatch detected</p>
-            <p className="mt-1">
-              {skillMismatchedCount} player{skillMismatchedCount > 1 ? 's have' : ' has'} updated their skill level since the draw was finalized.
-            </p>
-          </div>
-        </div>
       )}
 
       {opponent && <OpponentCard opponent={opponent} eventId={event?.id} />}

@@ -69,10 +69,12 @@ export const Events: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
-      <div className="mb-6 flex items-center justify-between">
-        <Link to="/tournament?tab=past" className="text-sm text-white/50 hover:text-clay transition-colors">
-          Check past events →
-        </Link>
+      <div className="mb-6 flex items-center justify-end gap-3">
+        {!isEventCreator && (
+          <Link to="/tournament?tab=past">
+            <Button variant="outline" size="sm">Check Past Events</Button>
+          </Link>
+        )}
         {isEventCreator && (
           <Button onClick={() => { setEventFormMessage(null); setEventForm((f) => ({ ...f, organizer: f.organizer || profile?.user.name || '' })); setShowEventForm(true); }}>
             <Plus className="w-4 h-4 mr-2" />Add an Event

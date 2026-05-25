@@ -139,14 +139,14 @@ export const Home: React.FC = () => {
           ].map((feature, i) => (
             <motion.div
               key={i}
-              whileHover={{ y: -10 }}
-              className="p-6 md:p-8 rounded-[2rem] bg-tennis-surface/30 border border-white/5 hover:border-clay/30 transition-all duration-300 group"
+              whileHover={{ y: -6 }}
+              className="p-4 md:p-6 rounded-2xl bg-tennis-surface/30 border border-white/5 hover:border-clay/30 transition-all duration-300 group"
             >
-              <div className={`w-14 h-14 ${feature.color} rounded-2xl flex items-center justify-center mb-6 shadow-xl group-hover:scale-110 transition-transform`}>
-                <feature.icon className="w-8 h-8 text-white" />
+              <div className={`w-10 h-10 md:w-12 md:h-12 ${feature.color} rounded-xl flex items-center justify-center mb-3 md:mb-4 shadow-lg group-hover:scale-110 transition-transform`}>
+                <feature.icon className="w-5 h-5 md:w-6 md:h-6 text-white" />
               </div>
-              <h3 className="text-xl md:text-2xl font-bold text-white mb-3">{feature.title}</h3>
-              <p className="text-white leading-relaxed">{feature.desc}</p>
+              <h3 className="text-base md:text-lg font-bold text-white mb-1.5">{feature.title}</h3>
+              <p className="text-white/80 text-sm leading-relaxed">{feature.desc}</p>
             </motion.div>
           ))}
         </div>

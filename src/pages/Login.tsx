@@ -130,7 +130,7 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-8 relative overflow-hidden">
+    <div className="min-h-[60vh] flex items-center justify-center px-4 py-4 relative overflow-hidden">
       {/* Background Glows */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-clay/10 blur-[100px] -z-10 rounded-full" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-tennis-surface/20 blur-[100px] -z-10 rounded-full" />
@@ -138,14 +138,14 @@ export const Login: React.FC = () => {
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md p-6 sm:p-10"
+        className="w-full max-w-md p-4 sm:p-8"
       >
-        <div className="text-center space-y-3 mb-6">
+        <div className="text-center space-y-2 mb-4">
           {logoUrl && (
             <img
               src={logoUrl}
               alt="Racquets & Strings"
-              className="mx-auto h-28 w-auto object-contain"
+              className="mx-auto h-20 w-auto object-contain"
             />
           )}
           {intent === 'join-event' && (
