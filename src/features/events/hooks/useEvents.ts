@@ -45,10 +45,39 @@ export function useEvents() {
     });
   }, [user]);
 
-  const visibleEvents = useMemo(
-    () => events.filter((e) => !isTopspinMeetupEvent(e) && !isWeekendMatchdaysEvent(e)),
-    [events]
-  );
+  const visibleEvents = useMemo(() => {
+    const now = Date.now();
+    return events.filter((e) => {
+      if (isTopspinMeetupEvent(e) || isWeekendMatchdaysEvent(e)) return false;
+      // Hide if end date has passed
+      const rawEnd = (e as unknown as Record<string, unknown>).endDate ?? (e as unknown as Record<string, unknown>).end_date;
+      if (rawEnd) {
+        let endMs: number | null = null;
+        if (typeof rawEnd === 'string') endMs = new Date(rawEnd).getTime();
+        else if (typeof rawEnd === 'object' && rawEnd !== null) {
+          const obj = rawEnd as Record<string, unknown>;
+          if (typeof obj['toDate'] === 'function') endMs = (obj['toDate'] as () => Date)().getTime();
+          else if (typeof obj['seconds'] === 'number') endMs = (obj['seconds'] as number) * 1000;
+        }
+        if (endMs !== null && endMs < now) return false;
+      }
+      // Hide non-tournament events whose start date has passed
+      if (!isTournamentEvent(e)) {
+        const rawStart = (e as unknown as Record<string, unknown>).startDate ?? (e as unknown as Record<string, unknown>).start_date ?? (e as unknown as Record<string, unknown>).date;
+        if (rawStart) {
+          let startMs: number | null = null;
+          if (typeof rawStart === 'string') startMs = new Date(rawStart).getTime();
+          else if (typeof rawStart === 'object' && rawStart !== null) {
+            const obj = rawStart as Record<string, unknown>;
+            if (typeof obj['toDate'] === 'function') startMs = (obj['toDate'] as () => Date)().getTime();
+            else if (typeof obj['seconds'] === 'number') startMs = (obj['seconds'] as number) * 1000;
+          }
+          if (startMs !== null && startMs < now) return false;
+        }
+      }
+      return true;
+    });
+  }, [events]);
 
   const getJoinedChoices = (eventId: string) =>
     new Set(joinedRegistrations.filter((r) => r.eventId === eventId && r.tournamentChoice).map((r) => r.tournamentChoice));

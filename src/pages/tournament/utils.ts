@@ -291,7 +291,7 @@ export const buildMatchFields = (
     player_2_user_id: p2?.user_id || '',
     player_2_contact: p2?.contact || '',
     next_match_id: tm.next_match_id || '',
-    next_slot: tm.next_slot,
+    next_slot: (tm.next_slot ?? '') as 'player_1' | 'player_2' | '',
     status: 'pending' as const,
   };
 };

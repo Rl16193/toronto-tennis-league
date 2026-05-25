@@ -454,7 +454,7 @@ export const useTournament = (eventIdOverride?: string) => {
     ? (() => {
         const isP1 = visibleUserMatch.player_1_user_id === user.uid;
         const opponentUid = isP1 ? visibleUserMatch.player_2_user_id : visibleUserMatch.player_1_user_id;
-        const opponentUser = allUsers[opponentUid];
+        const opponentUser = userMap[opponentUid] ?? allUsers[opponentUid];
         return {
           name: isP1 ? visibleUserMatch.player_2_name : visibleUserMatch.player_1_name,
           userId: opponentUid,
@@ -668,6 +668,18 @@ export const useTournament = (eventIdOverride?: string) => {
 
   const handleResetDraw = async () => {
     if (!isCreator || !currentDraw || currentMatches.length === 0) return;
+
+    const completedSnap = await getDocs(
+      query(collection(db, 'tournament_matches'),
+        where('event_id', '==', event!.id),
+        where('status', '==', 'complete'),
+      )
+    );
+    if (!completedSnap.empty) {
+      setMessage({ type: 'error', text: 'Cannot cancel — a match has already been played in this draw.' });
+      return;
+    }
+
     if (!window.confirm(`Cancel all matches for ${currentDraw.label}? This will clear the draw and return to preview mode.`)) return;
     setResettingDraw(true);
     setMessage(null);

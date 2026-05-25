@@ -78,7 +78,7 @@ export const Home: React.FC = () => {
               />
             )}
             <p className="text-base md:text-lg text-white leading-relaxed max-w-xl mx-auto text-center mb-6">
-              Join a community of Tennis Enthusiasts in Toronto.
+              Create your profile, join our events and track your progress. Let's play tennis!
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
@@ -110,17 +110,17 @@ export const Home: React.FC = () => {
       {/* Features Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center space-y-2 mb-6">
-          <h2 className="text-2xl md:text-3xl font-display font-bold text-white">Test Your Racquet Skills</h2>
+          <h2 className="text-2xl md:text-3xl font-display font-bold text-white">Test Your Serve</h2>
           <p className="text-white max-w-2xl mx-auto text-sm md:text-base">
-            Join the league to get event updates and access to your player profile.
+            Compete in our seasonal leagues and play someone new every week!
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {[
             {
-              title: 'Events',
-              desc: '4 last year. More to come!',
+              title: 'Matches',
+              desc: 'Faciliated 80+ matches already. Across 4 tournaments.',
               icon: Trophy,
               color: 'bg-clay'
             },
@@ -132,21 +132,21 @@ export const Home: React.FC = () => {
             },
             {
               title: 'Flexible',
-              desc: 'Play your matches at times that work for you.',
+              desc: 'Play your matches at times and courts that work for you.',
               icon: MapPin,
               color: 'bg-clay-dark'
             },
           ].map((feature, i) => (
             <motion.div
               key={i}
-              whileHover={{ y: -10 }}
-              className="p-6 md:p-8 rounded-[2rem] bg-tennis-surface/30 border border-white/5 hover:border-clay/30 transition-all duration-300 group"
+              whileHover={{ y: -6 }}
+              className="p-4 md:p-6 rounded-2xl bg-tennis-surface/30 border border-white/5 hover:border-clay/30 transition-all duration-300 group"
             >
-              <div className={`w-14 h-14 ${feature.color} rounded-2xl flex items-center justify-center mb-6 shadow-xl group-hover:scale-110 transition-transform`}>
-                <feature.icon className="w-8 h-8 text-white" />
+              <div className={`w-10 h-10 md:w-12 md:h-12 ${feature.color} rounded-xl flex items-center justify-center mb-3 md:mb-4 shadow-lg group-hover:scale-110 transition-transform`}>
+                <feature.icon className="w-5 h-5 md:w-6 md:h-6 text-white" />
               </div>
-              <h3 className="text-xl md:text-2xl font-bold text-white mb-3">{feature.title}</h3>
-              <p className="text-white leading-relaxed">{feature.desc}</p>
+              <h3 className="text-base md:text-lg font-bold text-white mb-1.5">{feature.title}</h3>
+              <p className="text-white/80 text-sm leading-relaxed">{feature.desc}</p>
             </motion.div>
           ))}
         </div>

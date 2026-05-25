@@ -41,6 +41,8 @@ export const Leagues: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [rows, setRows] = useState<LeagueRow[]>([]);
+
+  useEffect(() => { document.title = 'Leagues — Racquets & Strings'; }, []);
   const [loading, setLoading] = useState(true);
   const [activeDiv, setActiveDiv] = useState<DivTab>('mens');
   const [stillActiveUids, setStillActiveUids] = useState<Set<string>>(new Set());
@@ -121,11 +123,6 @@ export const Leagues: React.FC = () => {
   const userRank = user ? sorted.findIndex((r) => r.user_id === user.uid) : -1;
   const userRow = userRank >= TOP_N ? sorted[userRank] : null;
 
-  const displayTournaments = (row: LeagueRow) => {
-    const base = row.tournamentsPlayed;
-    return stillActiveUids.has(row.user_id) ? Math.max(base + 1, 1) : base;
-  };
-
   if (authLoading) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center">
@@ -173,21 +170,21 @@ export const Leagues: React.FC = () => {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl bg-tennis-surface/30 border border-white/5">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs sm:text-sm">
             <thead>
               <tr className="border-b border-white/10">
-                <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-white/50 w-10">#</th>
-                <th className="px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-white/50">Name</th>
-                <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-white/50">Tournaments</th>
-                <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-clay">Matches</th>
-                <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-white/50">Wins</th>
-                <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-clay">Points</th>
-                <th className="px-4 py-3 text-center text-xs font-black uppercase tracking-widest text-white/50">Skill</th>
+                <th className="px-2 sm:px-3 py-2.5 text-left text-[10px] font-black uppercase tracking-widest text-white/50 w-7">#</th>
+                <th className="px-2 sm:px-3 py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-white/50 w-10">Skill</th>
+                <th className="px-2 sm:px-3 py-2.5 text-left text-[10px] font-black uppercase tracking-widest text-white/50">Name</th>
+                <th className="px-2 sm:px-3 py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-clay">Matches</th>
+                <th className="px-2 sm:px-3 py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-white/50">Wins</th>
+                <th className="px-2 sm:px-3 py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-clay">Pts</th>
               </tr>
             </thead>
             <tbody>
               {top15.map((row, i) => {
                 const isCurrentUser = user?.uid === row.user_id;
+                const activeMarker = stillActiveUids.has(row.user_id);
                 return (
                   <tr
                     key={row.user_id}
@@ -195,41 +192,38 @@ export const Leagues: React.FC = () => {
                       isCurrentUser ? 'bg-clay/10' : i % 2 !== 0 ? 'bg-white/[0.02]' : ''
                     }`}
                   >
-                    <td className="px-4 py-3 text-white/40 font-mono text-xs">{i + 1}</td>
-                    <td className="px-4 py-3 font-semibold text-white">
-                      {toTitleCase(row.name)}{isCurrentUser ? <span className="ml-1 text-clay text-xs">(you)</span> : null}
+                    <td className="px-2 sm:px-3 py-2 text-white/40 font-mono text-[10px]">{i + 1}</td>
+                    <td className="px-2 sm:px-3 py-2 text-center text-white/70 text-[11px]">{row.skill_level}</td>
+                    <td className="px-2 sm:px-3 py-2 font-semibold text-white text-xs sm:text-sm">
+                      {toTitleCase(row.name)}{isCurrentUser ? <span className="ml-1 text-clay text-[10px]">(you)</span> : null}
                     </td>
-                    <td className="px-4 py-3 text-center text-white/80">
-                      {displayTournaments(row)}{stillActiveUids.has(row.user_id) ? <span className="text-clay font-black">*</span> : null}
+                    <td className="px-2 sm:px-3 py-2 text-center font-bold text-clay">
+                      {row.matchesPlayed}{activeMarker ? <span className="text-clay font-black">*</span> : null}
                     </td>
-                    <td className="px-4 py-3 text-center font-bold text-clay">{row.matchesPlayed}</td>
-                    <td className="px-4 py-3 text-center text-white/80">{row.wins}</td>
-                    <td className="px-4 py-3 text-center font-black text-clay text-base">{row.leaguePoints26}</td>
-                    <td className="px-4 py-3 text-center text-white/80">{row.skill_level}</td>
+                    <td className="px-2 sm:px-3 py-2 text-center text-white/80">{row.wins}</td>
+                    <td className="px-2 sm:px-3 py-2 text-center font-black text-clay text-sm sm:text-base">{row.leaguePoints26}</td>
                   </tr>
                 );
               })}
 
-              {/* Current user below top 15 */}
               {userRow && (
                 <>
                   <tr>
-                    <td colSpan={7} className="px-4 py-2">
+                    <td colSpan={6} className="px-3 py-1.5">
                       <div className="border-t border-dashed border-white/20" />
                     </td>
                   </tr>
                   <tr className="bg-clay/10">
-                    <td className="px-4 py-3 text-white/40 font-mono text-xs">{userRank + 1}</td>
-                    <td className="px-4 py-3 font-semibold text-white">
-                      {toTitleCase(userRow.name)}<span className="ml-1 text-clay text-xs">(you)</span>
+                    <td className="px-2 sm:px-3 py-2 text-white/40 font-mono text-[10px]">{userRank + 1}</td>
+                    <td className="px-2 sm:px-3 py-2 text-center text-white/70 text-[11px]">{userRow.skill_level}</td>
+                    <td className="px-2 sm:px-3 py-2 font-semibold text-white text-xs sm:text-sm">
+                      {toTitleCase(userRow.name)}<span className="ml-1 text-clay text-[10px]">(you)</span>
                     </td>
-                    <td className="px-4 py-3 text-center text-white/80">
-                      {displayTournaments(userRow)}{stillActiveUids.has(userRow.user_id) ? <span className="text-clay font-black">*</span> : null}
+                    <td className="px-2 sm:px-3 py-2 text-center font-bold text-clay">
+                      {userRow.matchesPlayed}{stillActiveUids.has(userRow.user_id) ? <span className="text-clay font-black">*</span> : null}
                     </td>
-                    <td className="px-4 py-3 text-center font-bold text-clay">{userRow.matchesPlayed}</td>
-                    <td className="px-4 py-3 text-center text-white/80">{userRow.wins}</td>
-                    <td className="px-4 py-3 text-center font-black text-clay text-base">{userRow.leaguePoints26}</td>
-                    <td className="px-4 py-3 text-center text-white/80">{userRow.skill_level}</td>
+                    <td className="px-2 sm:px-3 py-2 text-center text-white/80">{userRow.wins}</td>
+                    <td className="px-2 sm:px-3 py-2 text-center font-black text-clay text-sm sm:text-base">{userRow.leaguePoints26}</td>
                   </tr>
                 </>
               )}

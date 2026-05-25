@@ -1,6 +1,8 @@
-﻿import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertCircle } from 'lucide-react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { ChevronDown } from 'lucide-react';
+import { db } from '../lib/firebase';
 import { useTournament } from './tournament/useTournament';
 import { getEventDate } from './tournament/utils';
 import { downloadDrawAsPng, getRoundLabels } from './tournament/bracketImage';
@@ -14,27 +16,18 @@ import { ScoreModal } from './tournament/ScoreModal';
 import { AddPlayerPanel } from './tournament/AddPlayerPanel';
 import { AlertMessage } from '../components/AlertMessage';
 import { Button } from '../components/Button';
+import { TennisEvent } from '../types';
 
-const abbreviateEventTitle = (title: string): string => {
-  return title
-    .replace(/Season Opener\s*/i, 'SO')
-    .replace(/Racquets\s*&\s*Strings\s*Slam\s*/i, 'RS Slam ')
-    .replace(/\s+/g, ' ')
-    .trim();
-};
+type PageTab = 'past' | 'active' | 'upcoming';
+type EventStatus = 'active' | 'past';
 
 const getDrawState = (matches: TournamentMatch[]): string => {
   const real = matches.filter((m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_'));
   if (real.length === 0) return 'Live Preview';
-
   const drawSize = real[0]?.drawsize || 8;
   const roundLabels = getRoundLabels(drawSize);
-
-  // Check tournament complete: final match has a winner
   const finals = real.filter((m) => m.round === 'F');
   if (finals.length > 0 && finals.every((m) => m.winner_user_id)) return 'Tournament Complete';
-
-  // Walk rounds from last to first — find most advanced with activity
   for (let i = roundLabels.length - 1; i >= 0; i--) {
     const round = roundLabels[i];
     const roundMatches = real.filter((m) => m.round === round);
@@ -42,13 +35,42 @@ const getDrawState = (matches: TournamentMatch[]): string => {
     const allComplete = roundMatches.every((m) => !!m.winner_user_id);
     return allComplete ? `${round} Complete` : `${round} Started`;
   }
-
   return 'Matches Generated';
+};
+
+const formatEventRange = (e: TennisEvent): string => {
+  const start = getEventDate(e);
+  const rawEnd = (e as unknown as Record<string, unknown>).endDate || (e as unknown as Record<string, unknown>).end_date;
+  let end: Date | null = null;
+  if (rawEnd) {
+    if (typeof rawEnd === 'string') end = new Date(rawEnd);
+    else if (typeof rawEnd === 'object' && rawEnd !== null) {
+      const obj = rawEnd as Record<string, unknown>;
+      if (typeof obj['toDate'] === 'function') end = (obj['toDate'] as () => Date)();
+      else if (typeof obj['seconds'] === 'number') end = new Date((obj['seconds'] as number) * 1000);
+    }
+  }
+  if (!start) return '';
+  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+  const s = start.toLocaleDateString('en-CA', opts);
+  if (!end) return s;
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  const endStr = sameMonth
+    ? end.toLocaleDateString('en-CA', { day: 'numeric' })
+    : end.toLocaleDateString('en-CA', opts);
+  return `${s}–${endStr}, ${start.getFullYear()}`;
 };
 
 export const Tournament: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const tabParam = searchParams.get('tab') as PageTab | null;
+  const [pageTab, setPageTab] = useState<PageTab>(tabParam || 'active');
   const eventId = searchParams.get('event') || undefined;
+
+  const [eventStatuses, setEventStatuses] = useState<Record<string, EventStatus>>({});
+  const [statusLoading, setStatusLoading] = useState(true);
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
   const {
     authLoading, loading, user,
@@ -73,22 +95,71 @@ export const Tournament: React.FC = () => {
     handleSetLLDrawSize, handleGenerateReservesDraw, handleResetLLDraw,
   } = useTournament(eventId);
 
+  useEffect(() => { document.title = 'Matches — Racquets & Strings'; }, []);
+
+  // Sync tab param into state
   useEffect(() => {
-    if (!event) return;
-    if (!searchParams.get('event')) {
-      setSearchParams({ event: event.id }, { replace: true });
+    if (tabParam && tabParam !== pageTab) setPageTab(tabParam);
+  }, [tabParam]);
+
+  // Auto-set event from first active event if none selected
+  useEffect(() => {
+    if (!event && allTournamentEvents.length > 0 && !loading) {
+      const first = allTournamentEvents[0];
+      setSearchParams((p) => { const n = new URLSearchParams(p); n.set('event', first.id); return n; }, { replace: true });
     }
-  }, [event?.id]);
+  }, [event?.id, allTournamentEvents.length, loading]);
 
+  // Fetch match statuses for all events (one batch query)
   useEffect(() => {
-    document.title = event?.title
-      ? `${event.title} — Racquets & Strings`
-      : 'Tournament — Racquets & Strings';
-  }, [event?.title]);
+    if (allTournamentEvents.length === 0) return;
+    const ids = allTournamentEvents.map((e) => e.id).slice(0, 30);
+    setStatusLoading(true);
+    getDocs(query(collection(db, 'tournament_matches'), where('event_id', 'in', ids)))
+      .then((snap) => {
+        const statuses: Record<string, EventStatus> = {};
+        snap.docs.forEach((d) => {
+          const m = d.data();
+          const eid = m.event_id as string;
+          if (!statuses[eid]) statuses[eid] = 'active';
+          if (m.round === 'F' && m.status === 'complete' && m.winner_user_id) statuses[eid] = 'past';
+        });
+        setEventStatuses(statuses);
+      })
+      .finally(() => setStatusLoading(false));
+  }, [allTournamentEvents.length]);
 
-  const handleEventChange = (id: string) => setSearchParams({ event: id });
+  // Auto-expand: when tab or events change, expand user's event or first in tab
+  useEffect(() => {
+    if (statusLoading || allTournamentEvents.length === 0) return;
+    const tabEvents = allTournamentEvents.filter((e) => {
+      if (pageTab === 'past') return eventStatuses[e.id] === 'past';
+      if (pageTab === 'active') return eventStatuses[e.id] === 'active';
+      return !eventStatuses[e.id];
+    });
+    if (tabEvents.length === 0) return;
+    // Prefer event the user participated in; otherwise first
+    const preferred = userParticipant ? tabEvents.find((e) => e.id === event?.id) : null;
+    const toExpand = preferred ?? tabEvents[0];
+    setExpandedEventId(toExpand.id);
+    setSearchParams((p) => { const n = new URLSearchParams(p); n.set('event', toExpand.id); return n; }, { replace: true });
+  }, [pageTab, statusLoading, allTournamentEvents.length]);
 
-  if (authLoading || loading) {
+  const handleAccordionToggle = (eid: string) => {
+    if (expandedEventId === eid) {
+      setExpandedEventId(null);
+    } else {
+      setExpandedEventId(eid);
+      setSearchParams((p) => { const n = new URLSearchParams(p); n.set('event', eid); return n; });
+    }
+  };
+
+  const handleTabChange = (tab: PageTab) => {
+    setPageTab(tab);
+    setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', tab); return n; });
+  };
+
+  if (authLoading || (loading && allTournamentEvents.length === 0)) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center">
         <div className="w-14 h-14 border-4 border-clay border-t-transparent rounded-full animate-spin" />
@@ -96,81 +167,30 @@ export const Tournament: React.FC = () => {
     );
   }
 
-  const now = Date.now();
   const llIsPreview = currentReservesMatches.length === 0;
   const drawState = getDrawState(currentMatches);
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
-      {/* Event selector — always shown when multiple events exist */}
-      {allTournamentEvents.length > 1 && (
-        <div className="mb-6 flex flex-wrap gap-2">
-          {allTournamentEvents.map((e) => {
-            const startMs = getEventDate(e)?.getTime();
-            const isActive = startMs != null && startMs <= now;
-            const isCurrent = e.id === event?.id;
-            return (
-              <button
-                key={e.id}
-                onClick={() => handleEventChange(e.id)}
-                className={`px-4 py-2 rounded-2xl text-sm font-semibold transition-all border ${
-                  isCurrent
-                    ? 'bg-clay text-white border-clay'
-                    : 'bg-tennis-surface/40 text-white border-white/10 hover:text-white hover:border-white/30'
-                }`}
-              >
-                {abbreviateEventTitle(e.title)}
-                <span className={`ml-2 text-xs font-bold uppercase tracking-wider ${isCurrent ? 'text-white/70' : 'text-white'}`}>
-                  {isActive ? 'Active' : 'Upcoming'}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+  const pastEvents = allTournamentEvents.filter((e) => eventStatuses[e.id] === 'past');
+  const activeEvents = allTournamentEvents.filter((e) => eventStatuses[e.id] === 'active');
+  const upcomingEvents = allTournamentEvents.filter((e) => !eventStatuses[e.id]);
 
-      <TournamentHeader
-        isCreator={isCreator}
-        hasMatches={currentMatches.length > 0}
-        isProcessing={generating || resettingDraw}
-        editMode={editMode}
-        started={started}
-        mergeMensSingles={mergeMensSingles}
-        mergeWomensSingles={mergeWomensSingles}
-        consolidateDoubles={consolidateDoubles}
-        onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'), drawState, event?.title, submissions)}
-        onGenerateMatches={handleGenerateAll}
-        onCancelMatches={handleResetDraw}
-        onToggleEdit={() => setEditMode((v) => !v)}
-        onToggleMergeMens={() => setMergeMensSingles((v) => !v)}
-        onToggleMergeWomens={() => setMergeWomensSingles((v) => !v)}
-        onToggleConsolidateDoubles={() => setConsolidateDoubles((v) => !v)}
-      />
+  const tabEvents = pageTab === 'past' ? pastEvents : pageTab === 'active' ? activeEvents : upcomingEvents;
 
+  const PAGE_TABS: { id: PageTab; label: string }[] = [
+    { id: 'upcoming', label: 'Upcoming' },
+    { id: 'active', label: 'Active' },
+    { id: 'past', label: 'Past' },
+  ];
+
+  const DrawContent = () => (
+    <>
       {message && (
         <AlertMessage tone={message.type} className="mb-6">
           <p>{message.text}</p>
         </AlertMessage>
       )}
 
-      {isCreator && skillMismatchedCount > 0 && (
-        <div className="mb-6 flex items-start gap-2 text-sm text-orange-500">
-          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-          <div>
-            <p className="font-semibold">Bracket mismatch detected</p>
-            <p className="mt-1">
-              {skillMismatchedCount} player{skillMismatchedCount > 1 ? 's have' : ' has'} updated their skill level since the draw was finalized and may be in the wrong bracket. Use Edit Draw to correct their bracket placement.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {opponent && (
-        <OpponentCard
-          opponent={opponent}
-          eventId={event?.id}
-        />
-      )}
+      {opponent && <OpponentCard opponent={opponent} eventId={event?.id} />}
 
       <DrawTabs
         activeTab={activeTab}
@@ -197,11 +217,7 @@ export const Tournament: React.FC = () => {
                   disabled={!llIsPreview}
                   onClick={() => handleSetLLDrawSize(size)}
                   className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
-                    currentLLSize === size
-                      ? 'bg-clay text-white'
-                      : !llIsPreview
-                        ? 'bg-tennis-surface/30 text-white cursor-not-allowed'
-                        : 'bg-tennis-surface/60 text-white hover:text-white'
+                    currentLLSize === size ? 'bg-clay text-white' : !llIsPreview ? 'bg-tennis-surface/30 text-white cursor-not-allowed' : 'bg-tennis-surface/60 text-white hover:text-white'
                   }`}
                 >
                   R{size}
@@ -215,14 +231,11 @@ export const Tournament: React.FC = () => {
               {!llIsPreview && (
                 <>
                   <span className="text-xs text-white">Draw finalized — use Edit Draw to modify players.</span>
-                  <Button variant="danger" onClick={handleResetLLDraw} className="ml-2">
-                    Reset LL Draw
-                  </Button>
+                  <Button variant="danger" onClick={handleResetLLDraw} className="ml-2">Reset LL Draw</Button>
                 </>
               )}
             </div>
           )}
-
           <BracketErrorBoundary onDownload={() => downloadDrawAsPng(llDrawDisplayMatches, 'LL Draw', drawState, event?.title, submissions)}>
             <BracketView
               matches={llDrawDisplayMatches}
@@ -241,13 +254,8 @@ export const Tournament: React.FC = () => {
       ) : (
         <>
           {editMode && isCreator && (
-            <AddPlayerPanel
-              availableUsers={availableUsers}
-              currentDraw={currentDraw}
-              onAdd={handleAddPlayer}
-            />
+            <AddPlayerPanel availableUsers={availableUsers} currentDraw={currentDraw} onAdd={handleAddPlayer} />
           )}
-
           {editMode && currentDraw && (
             <div className="mb-4">
               <div className="flex flex-wrap items-center gap-3">
@@ -258,11 +266,7 @@ export const Tournament: React.FC = () => {
                     disabled={currentMatches.length > 0}
                     onClick={() => handleSetPreviewDrawSize(currentDraw.label, size)}
                     className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
-                      currentDrawSize === size
-                        ? 'bg-clay text-white'
-                        : currentMatches.length > 0
-                          ? 'bg-tennis-surface/30 text-white cursor-not-allowed'
-                          : 'bg-tennis-surface/60 text-white hover:text-white'
+                      currentDrawSize === size ? 'bg-clay text-white' : currentMatches.length > 0 ? 'bg-tennis-surface/30 text-white cursor-not-allowed' : 'bg-tennis-surface/60 text-white hover:text-white'
                     }`}
                   >
                     R{size}
@@ -270,13 +274,10 @@ export const Tournament: React.FC = () => {
                 ))}
               </div>
               {currentMatches.length > 0 && (
-                <p className="text-xs text-amber-400/80 mt-2">
-                  Matches already created — reset this draw first to change the size.
-                </p>
+                <p className="text-xs text-amber-400/80 mt-2">Matches already created — reset this draw first to change the size.</p>
               )}
             </div>
           )}
-
           <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, submissions)}>
             <BracketView
               matches={displayMatches}
@@ -291,7 +292,6 @@ export const Tournament: React.FC = () => {
               onUpdateDeadline={isCreator ? handleUpdateRoundDeadline : undefined}
             />
           </BracketErrorBoundary>
-
           {reservesPlayers.length > 0 && (
             <div className="mt-8">
               <h3 className="text-xl font-bold text-white mb-4">
@@ -306,16 +306,32 @@ export const Tournament: React.FC = () => {
                     </li>
                   ))}
                 </ol>
-                {editMode && (
-                  <p className="text-xs text-white mt-4 border-t border-white/5 pt-4">
-                    Use the slot dropdowns in the draw above to assign reserves players.
-                  </p>
-                )}
               </div>
             </div>
           )}
         </>
       )}
+
+      {/* Buttons at bottom */}
+      <div className="mt-8 pt-6 border-t border-white/5">
+        <TournamentHeader
+          isCreator={isCreator}
+          hasMatches={currentMatches.length > 0}
+          isProcessing={generating || resettingDraw}
+          editMode={editMode}
+          started={started}
+          mergeMensSingles={mergeMensSingles}
+          mergeWomensSingles={mergeWomensSingles}
+          consolidateDoubles={consolidateDoubles}
+          onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'), drawState, event?.title, submissions)}
+          onGenerateMatches={handleGenerateAll}
+          onCancelMatches={handleResetDraw}
+          onToggleEdit={() => setEditMode((v) => !v)}
+          onToggleMergeMens={() => setMergeMensSingles((v) => !v)}
+          onToggleMergeWomens={() => setMergeWomensSingles((v) => !v)}
+          onToggleConsolidateDoubles={() => setConsolidateDoubles((v) => !v)}
+        />
+      </div>
 
       {scoreForm && scoreFormMatch && (
         <ScoreModal
@@ -326,6 +342,76 @@ export const Tournament: React.FC = () => {
           onSubmit={handleSubmitScore}
           isCreatorSubmit={true}
         />
+      )}
+    </>
+  );
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
+      {/* Page tabs: Past / Active / Upcoming */}
+      <div className="flex gap-2 mb-6 flex-wrap">
+        {PAGE_TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => handleTabChange(t.id)}
+            className={`px-4 py-2 rounded-2xl text-sm font-semibold transition-all border ${
+              pageTab === t.id
+                ? 'bg-clay text-white border-clay'
+                : 'bg-tennis-surface/40 text-white border-white/10 hover:border-white/30'
+            }`}
+          >
+            {t.label}
+            {t.id === 'active' && activeEvents.length > 0 && (
+              <span className="ml-1.5 text-xs font-bold opacity-70">{activeEvents.length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {statusLoading && allTournamentEvents.length === 0 ? (
+        <div className="space-y-3">
+          {[1, 2].map((i) => <div key={i} className="h-14 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
+        </div>
+      ) : tabEvents.length === 0 ? (
+        <div className="text-center py-16">
+          <p className="text-white/50 text-sm">No {pageTab} tournaments.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {tabEvents.map((e) => {
+            const isOpen = expandedEventId === e.id;
+            const isLoaded = isOpen && event?.id === e.id;
+            const dateRange = formatEventRange(e);
+            return (
+              <div key={e.id} className="rounded-2xl border border-white/10 bg-tennis-surface/20 overflow-hidden">
+                {/* Accordion header */}
+                <button
+                  onClick={() => handleAccordionToggle(e.id)}
+                  className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/[0.03] transition-colors"
+                >
+                  <div>
+                    <span className="font-bold text-white">{e.title}</span>
+                    {dateRange && <span className="ml-3 text-xs text-white/50">{dateRange}</span>}
+                  </div>
+                  <ChevronDown className={`w-5 h-5 text-white/40 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Accordion body */}
+                {isOpen && (
+                  <div className="px-4 pb-6 pt-2 border-t border-white/5">
+                    {!isLoaded || loading ? (
+                      <div className="flex justify-center py-8">
+                        <div className="w-10 h-10 border-4 border-clay border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    ) : (
+                      <DrawContent />
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
