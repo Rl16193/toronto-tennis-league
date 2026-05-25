@@ -56,7 +56,7 @@ export type TournamentMatch = {
   set_3_player_1?: number;
   set_3_player_2?: number;
   next_match_id?: string;
-  next_slot?: 'player_1' | 'player_2';
+  next_slot?: 'player_1' | 'player_2' | '';
   status: MatchStatus;
   bracket?: string | null;
   started: boolean;

@@ -1,15 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
 import { Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
-import { createEvent, EventFormState, INITIAL_EVENT_FORM, validateEventForm } from '../features/events/services/eventService';
-import { sortEventsByStartDate } from '../utils/eventDates';
+import { createEvent, DisplayEvent, EventFormState, INITIAL_EVENT_FORM, validateEventForm } from '../features/events/services/eventService';
 import { useEvents } from '../features/events/hooks/useEvents';
 import { useJoin } from '../features/events/hooks/useJoin';
 import { EventCard } from '../features/events/components/EventCard';
-import { JoinModal } from '../features/events/components/JoinModal';
 import { CreatorEventModal } from '../features/events/components/CreatorEventModal';
 
 export const Events: React.FC = () => {
@@ -17,9 +15,10 @@ export const Events: React.FC = () => {
   const navigate = useNavigate();
   const isEventCreator = !!profile?.preferences.event_creator;
 
-  const { events, setEvents, loading, visibleEvents, getJoinedChoices, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament, isFullyJoinedEvent } = useEvents();
-  const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, slotStatus, slotFallbackConfirmed, setSlotFallbackConfirmed, handleStartJoin, handleSubmitJoin } = useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament });
+  const { events, setEvents, loading, visibleEvents, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament, isFullyJoinedEvent } = useEvents();
+  const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, slotStatus, slotFallbackConfirmed, setSlotFallbackConfirmed, handleSubmitJoin } = useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament });
 
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [showEventForm, setShowEventForm] = useState(false);
   const [eventForm, setEventForm] = useState<EventFormState>(INITIAL_EVENT_FORM);
   const [eventFormMessage, setEventFormMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -32,6 +31,21 @@ export const Events: React.FC = () => {
     const t = setTimeout(() => setEventFormMessage(null), 30_000);
     return () => clearTimeout(t);
   }, [eventFormMessage]);
+
+  // Collapse expansion when join completes (selectedEvent cleared by useJoin on success)
+  useEffect(() => {
+    if (!selectedEvent) setExpandedEventId(null);
+  }, [selectedEvent]);
+
+  const handleExpand = (event: DisplayEvent | null) => {
+    if (event) {
+      setExpandedEventId(event.id);
+      setSelectedEvent(event);
+    } else {
+      setExpandedEventId(null);
+      setSelectedEvent(null);
+    }
+  };
 
   const handleCreateEvent = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -55,13 +69,16 @@ export const Events: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
-      {isEventCreator && (
-        <div className="mb-6 flex justify-end">
+      <div className="mb-6 flex items-center justify-between">
+        <Link to="/tournament?tab=past" className="text-sm text-white/50 hover:text-clay transition-colors">
+          Check past events →
+        </Link>
+        {isEventCreator && (
           <Button onClick={() => { setEventFormMessage(null); setEventForm((f) => ({ ...f, organizer: f.organizer || profile?.user.name || '' })); setShowEventForm(true); }}>
             <Plus className="w-4 h-4 mr-2" />Add an Event
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       {eventFormMessage && !showEventForm && (
         <div className={`mb-6 rounded-2xl border px-5 py-4 text-sm ${eventFormMessage.type === 'success' ? 'border-green-500/20 bg-green-500/10 text-green-300' : 'border-red-500/20 bg-red-500/10 text-red-300'}`}>
@@ -84,7 +101,15 @@ export const Events: React.FC = () => {
               joining={joining}
               authLoading={authLoading}
               isLoggedIn={!!user}
-              onJoin={handleStartJoin}
+              isExpanded={expandedEventId === event.id}
+              onExpand={handleExpand}
+              joinForm={joinForm}
+              setJoinForm={setJoinForm}
+              joinError={expandedEventId === event.id ? joinError : ''}
+              slotStatus={expandedEventId === event.id ? slotStatus : null}
+              slotFallbackConfirmed={slotFallbackConfirmed}
+              setSlotFallbackConfirmed={setSlotFallbackConfirmed}
+              onSubmitJoin={handleSubmitJoin}
             />
           ))}
         </div>
@@ -105,26 +130,6 @@ export const Events: React.FC = () => {
             organizerPlaceholder={profile?.user.name || 'Organizer name'}
             onSubmit={handleCreateEvent}
             onClose={() => setShowEventForm(false)}
-          />
-        )}
-
-        {selectedEvent && (
-          <JoinModal
-            event={selectedEvent}
-            joinForm={joinForm}
-            setJoinForm={setJoinForm}
-            joinError={joinError}
-            joining={joining}
-            slotStatus={slotStatus}
-            slotFallbackConfirmed={slotFallbackConfirmed}
-            setSlotFallbackConfirmed={setSlotFallbackConfirmed}
-            user={user}
-            skillLevel={profile?.stats.skill_level}
-            getJoinedChoices={getJoinedChoices}
-            hasJoinedTournamentChoice={hasJoinedTournamentChoice}
-            isFullyJoined={isFullyJoinedEvent(selectedEvent)}
-            onClose={() => setSelectedEvent(null)}
-            onSubmit={handleSubmitJoin}
           />
         )}
       </AnimatePresence>

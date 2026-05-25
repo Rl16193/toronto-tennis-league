@@ -668,6 +668,18 @@ export const useTournament = (eventIdOverride?: string) => {
 
   const handleResetDraw = async () => {
     if (!isCreator || !currentDraw || currentMatches.length === 0) return;
+
+    const completedSnap = await getDocs(
+      query(collection(db, 'tournament_matches'),
+        where('event_id', '==', event!.id),
+        where('status', '==', 'complete'),
+      )
+    );
+    if (!completedSnap.empty) {
+      setMessage({ type: 'error', text: 'Cannot cancel — a match has already been played in this draw.' });
+      return;
+    }
+
     if (!window.confirm(`Cancel all matches for ${currentDraw.label}? This will clear the draw and return to preview mode.`)) return;
     setResettingDraw(true);
     setMessage(null);

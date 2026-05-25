@@ -8,7 +8,7 @@ import { Button } from './Button';
 
 const ALL_NAV_LINKS = [
   { name: 'Events', path: '/events', icon: Calendar },
-  { name: 'Draw', path: '/tournament', icon: Trophy },
+  { name: 'Matches', path: '/tournament', icon: Trophy },
   { name: 'Leagues', path: '/leagues', icon: Medal },
 ] as const;
 

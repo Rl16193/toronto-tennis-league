@@ -41,6 +41,8 @@ export const Leagues: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [rows, setRows] = useState<LeagueRow[]>([]);
+
+  useEffect(() => { document.title = 'Leagues — Racquets & Strings'; }, []);
   const [loading, setLoading] = useState(true);
   const [activeDiv, setActiveDiv] = useState<DivTab>('mens');
   const [stillActiveUids, setStillActiveUids] = useState<Set<string>>(new Set());
