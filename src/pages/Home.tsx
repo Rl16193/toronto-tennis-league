@@ -78,7 +78,7 @@ export const Home: React.FC = () => {
               />
             )}
             <p className="text-base md:text-lg text-white leading-relaxed max-w-xl mx-auto text-center mb-6">
-              Let's Play Tennis!!
+              Create your profile, join our events and track your progress. Let's play tennis!
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
@@ -112,7 +112,7 @@ export const Home: React.FC = () => {
         <div className="text-center space-y-2 mb-6">
           <h2 className="text-2xl md:text-3xl font-display font-bold text-white">Test Your Serve</h2>
           <p className="text-white max-w-2xl mx-auto text-sm md:text-base">
-            Create your profile, join our events and track your progress. Compete in our seasonal leagues and play someone new every week!
+            Compete in our seasonal leagues and play someone new every week!
           </p>
         </div>
 
