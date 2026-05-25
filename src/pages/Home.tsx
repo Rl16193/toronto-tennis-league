@@ -78,7 +78,7 @@ export const Home: React.FC = () => {
               />
             )}
             <p className="text-base md:text-lg text-white leading-relaxed max-w-xl mx-auto text-center mb-6">
-              Join a community of Tennis Enthusiasts in Toronto.
+              Let's Play Tennis!!
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
@@ -110,17 +110,17 @@ export const Home: React.FC = () => {
       {/* Features Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center space-y-2 mb-6">
-          <h2 className="text-2xl md:text-3xl font-display font-bold text-white">Test Your Racquet Skills</h2>
+          <h2 className="text-2xl md:text-3xl font-display font-bold text-white">Test Your Serve</h2>
           <p className="text-white max-w-2xl mx-auto text-sm md:text-base">
-            Join the league to get event updates and access to your player profile.
+            Create your profile, join our events and track your progress. Compete in our seasonal leagues and play someone new every week!
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {[
             {
-              title: 'Events',
-              desc: '4 last year. More to come!',
+              title: 'Matches',
+              desc: 'Faciliated 80+ matches already. Across 4 tournaments.',
               icon: Trophy,
               color: 'bg-clay'
             },
@@ -132,7 +132,7 @@ export const Home: React.FC = () => {
             },
             {
               title: 'Flexible',
-              desc: 'Play your matches at times that work for you.',
+              desc: 'Play your matches at times and courts that work for you.',
               icon: MapPin,
               color: 'bg-clay-dark'
             },
