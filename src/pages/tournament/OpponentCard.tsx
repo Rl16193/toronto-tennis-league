@@ -8,20 +8,19 @@ type Props = {
   eventId?: string;
 };
 
-export const OpponentCard: React.FC<Props> = ({ opponent }) => (
-  <section className="mb-8 rounded-[2rem] bg-tennis-surface/40 border border-white/10 p-5 md:p-6">
-    <h2 className="text-2xl font-black text-white mb-1">Your opponent is {opponent.name}</h2>
-    <p className="text-white/70 text-sm mb-2">Contact your opponent to schedule your matches:</p>
-    <div className="flex flex-col gap-0.5 mb-4">
-      {opponent.email && <span className="text-clay font-semibold">{opponent.email}</span>}
-      {opponent.phone && <span className="text-clay font-semibold">{opponent.phone}</span>}
-      {!opponent.email && !opponent.phone && <span className="text-clay font-semibold">Contact not available</span>}
+export const OpponentCard: React.FC<Props> = ({ opponent }) => {
+  const loaded = opponent.name !== 'Player Loading';
+  return (
+    <div className="mb-6 flex items-center gap-4 flex-wrap">
+      <span className="text-white font-semibold">Your opponent is {opponent.name}</span>
+      {loaded && (
+        <Link
+          to={`/players/${opponent.userId}`}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-clay text-white text-sm font-bold hover:bg-clay/80 transition-colors"
+        >
+          Go to Opponent's Profile
+        </Link>
+      )}
     </div>
-    <Link
-      to={`/players/${opponent.userId}`}
-      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-clay text-white text-sm font-bold hover:bg-clay/80 transition-colors"
-    >
-      Go to Opponent's Profile
-    </Link>
-  </section>
-);
+  );
+};
