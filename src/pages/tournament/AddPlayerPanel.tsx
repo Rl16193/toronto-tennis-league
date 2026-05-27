@@ -39,8 +39,8 @@ export const AddPlayerPanel: React.FC<Props> = ({
 
   const filtered = availableUsers.filter(
     (u) =>
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase()),
+      (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (u.email || '').toLowerCase().includes(search.toLowerCase()),
   );
   const selectedUser = availableUsers.find((u) => u.id === selectedUserId);
 
