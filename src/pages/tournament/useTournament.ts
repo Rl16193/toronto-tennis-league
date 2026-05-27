@@ -355,8 +355,8 @@ export const useTournament = (eventIdOverride?: string) => {
     const joinedIds = new Set(participants.map((p) => p.user_id));
     return Object.entries(allUsers)
       .filter(([id]) => !joinedIds.has(id))
-      .map(([id, data]) => ({ id, name: data.name, email: data.email }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .map(([id, data]) => ({ id, name: data.name || data.email || id, email: data.email || '' }))
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [allUsers, participants]);
 
   const skillMismatchedCount = useMemo(() => {
