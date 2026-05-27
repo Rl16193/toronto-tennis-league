@@ -95,15 +95,6 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
         </div>
 
         <div className="flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8">
-          <div className="w-28 h-28 md:w-36 md:h-36 rounded-[2rem] border-4 border-tennis-dark bg-tennis-surface overflow-hidden shadow-2xl shrink-0">
-            <img
-              src={profile.user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.user.name || 'U')}&background=FF6B35&color=fff`}
-              alt={profile.user.name}
-              className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-
           <div className="flex-1 w-full min-w-0">
             {isEditing ? (
               <ProfileContactEdit

@@ -165,15 +165,15 @@ export const useTournament = (eventIdOverride?: string) => {
   }, [event, user]);
 
 
-  // Lazy-load all registered users the first time the creator enters edit mode
+  // Reload all registered users every time the creator enters edit mode
   useEffect(() => {
-    if (!editMode || !isCreator || Object.keys(allUsers).length > 0) return;
+    if (!editMode || !isCreator) return;
     getDocs(collection(db, 'users')).then((snap) => {
       const map: Record<string, UserData> = {};
       snap.docs.forEach((d) => { map[d.id] = d.data() as UserData; });
       setAllUsers(map);
     });
-  }, [editMode, isCreator, allUsers]);
+  }, [editMode, isCreator]);
 
   // Fetch users + stats in one effect, parallel per participant
   useEffect(() => {
