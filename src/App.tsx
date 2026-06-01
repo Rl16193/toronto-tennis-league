@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { logEvent } from 'firebase/analytics';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { analyticsPromise } from './lib/firebase';
 import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
 import { Login } from './pages/Login';
@@ -21,6 +23,16 @@ const ScrollToTop: React.FC = () => {
 
     history.scrollRestoration = 'manual';
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+
+    analyticsPromise.then((analytics) => {
+      if (analytics) {
+        logEvent(analytics, 'page_view', {
+          page_path: location.pathname,
+          page_search: location.search,
+          page_location: window.location.href,
+        });
+      }
+    });
 
     return () => {
       history.scrollRestoration = previousScrollRestoration;

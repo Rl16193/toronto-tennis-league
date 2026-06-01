@@ -2,22 +2,50 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://racquetsandstrings.ca/</loc>
+    <lastmod>2026-05-31</lastmod>
     <priority>1.0</priority>
     <changefreq>weekly</changefreq>
   </url>
   <url>
     <loc>https://racquetsandstrings.ca/events</loc>
+    <lastmod>2026-05-31</lastmod>
     <priority>0.9</priority>
     <changefreq>daily</changefreq>
   </url>
   <url>
-    <loc>https://racquetsandstrings.ca/login</loc>
-    <priority>0.5</priority>
+    <loc>https://racquetsandstrings.ca/rules</loc>
+    <lastmod>2026-05-31</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://racquetsandstrings.ca/contact</loc>
+    <lastmod>2026-05-31</lastmod>
+    <priority>0.6</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
     <loc>https://racquetsandstrings.ca/signup</loc>
-    <priority>0.6</priority>
+    <lastmod>2026-05-31</lastmod>
+    <priority>0.5</priority>
     <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://racquetsandstrings.ca/login</loc>
+    <lastmod>2026-05-31</lastmod>
+    <priority>0.3</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://racquetsandstrings.ca/terms</loc>
+    <lastmod>2026-05-31</lastmod>
+    <priority>0.3</priority>
+    <changefreq>yearly</changefreq>
+  </url>
+  <url>
+    <loc>https://racquetsandstrings.ca/privacy</loc>
+    <lastmod>2026-05-31</lastmod>
+    <priority>0.3</priority>
+    <changefreq>yearly</changefreq>
   </url>
 </urlset>

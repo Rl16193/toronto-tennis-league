@@ -25,9 +25,26 @@ export const Home: React.FC = () => {
       '@type': 'SportsOrganization',
       name: 'Racquets & Strings',
       url: 'https://racquetsandstrings.ca',
+      logo: 'https://racquetsandstrings.ca/logo.png',
       sport: 'Tennis',
       description: "Toronto's Tennis Community — join events, play competitive matches, track results and connect with other players.",
-      areaServed: 'Toronto, Canada',
+      areaServed: {
+        '@type': 'City',
+        name: 'Toronto',
+        containedInPlace: { '@type': 'Country', name: 'Canada' },
+      },
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: 'Toronto',
+        addressRegion: 'ON',
+        addressCountry: 'CA',
+      },
+      contactPoint: {
+        '@type': 'ContactPoint',
+        email: 'tenniscommunity.tbtc@gmail.com',
+        contactType: 'customer support',
+      },
+      sameAs: ['https://www.instagram.com/racquetsnstrings.to/'],
     });
     const existing = document.getElementById('org-schema');
     if (existing) existing.replaceWith(schema);
@@ -40,7 +57,7 @@ export const Home: React.FC = () => {
     const loadAssets = async () => {
       try {
         const [logo, galleryResult] = await Promise.all([
-          getDownloadURL(ref(storage, 'LandingPage/Logo RS.png')),
+          getDownloadURL(ref(storage, 'LandingPage/Screenshot 2026-06-01 130844.png')),
           listAll(ref(storage, 'Gallery')),
         ]);
         setLogoUrl(logo);

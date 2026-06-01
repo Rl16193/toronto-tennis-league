@@ -62,6 +62,9 @@ export const Footer: React.FC = () => {
             </ul>
           </div>
         </div>
+        <div className="border-t border-white/5 pt-4 text-center text-xs text-white/40">
+          © {currentYear} Racquets &amp; Strings. All rights reserved.
+        </div>
       </div>
     </footer>
   );

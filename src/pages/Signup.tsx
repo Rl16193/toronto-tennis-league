@@ -337,9 +337,11 @@ export const Signup: React.FC = () => {
       <div className="max-w-4xl mx-auto">
         {/* Progress Bar */}
         <div className="mb-12">
-          {intent === 'join-event' && (
+          {(intent === 'join-event' || intent === 'join-league') && (
             <div className="mb-6 rounded-2xl border border-clay/20 bg-clay/10 px-5 py-4 text-sm text-white">
-              Create your league profile to join events and receive updates.
+              {intent === 'join-league'
+                ? 'Create your league profile to access events and get match updates.'
+                : 'Create your league profile to join events and receive updates.'}
             </div>
           )}
           <div className="flex justify-between items-center mb-4">

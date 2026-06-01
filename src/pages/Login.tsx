@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchSignInMethodsForEmail, getAdditionalUserInfo, signInWithEmailAndPassword, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
+import { fetchSignInMethodsForEmail, getAdditionalUserInfo, getRedirectResult, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, sendPasswordResetEmail } from 'firebase/auth';
 import { getDownloadURL, ref } from 'firebase/storage';
 import { auth, googleProvider, setAuthPersistence, storage } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -11,6 +11,8 @@ import { Mail, Lock, Chrome, ArrowRight, AlertCircle, CheckCircle2 } from 'lucid
 import { motion, AnimatePresence } from 'motion/react';
 import mailcheck from 'mailcheck';
 import { emailRegex, getAuthErrorMessage, getGoogleSignInErrorMessage } from '../features/auth/authMessages';
+
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -37,9 +39,33 @@ export const Login: React.FC = () => {
   }, [authLoading, navigate, returnTo, user]);
 
   useEffect(() => {
-    getDownloadURL(ref(storage, 'LandingPage/Logo RS.png'))
+    getDownloadURL(ref(storage, 'LandingPage/Screenshot 2026-06-01 130844.png'))
       .then(setLogoUrl)
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (!result) return;
+        setLoading(true);
+        try {
+          const isNewGoogleUser = getAdditionalUserInfo(result)?.isNewUser === true;
+          await ensureUserProfileDocuments(result.user);
+          sessionStorage.setItem(`profile-bootstrap-pending:${result.user.uid}`, '1');
+          sessionStorage.removeItem(`profile-bootstrap-retry:${result.user.uid}`);
+          if (isNewGoogleUser) {
+            navigate(`/signup?returnTo=${encodeURIComponent(returnTo)}&intent=${encodeURIComponent(intent || 'join-league')}`);
+          }
+        } catch (err: any) {
+          setError(await getGoogleSignInErrorMessage(err, ''));
+        } finally {
+          setLoading(false);
+        }
+      })
+      .catch(async (err: any) => {
+        setError(await getGoogleSignInErrorMessage(err, ''));
+      });
   }, []);
 
   // Auto-dismiss error banner after 30 seconds
@@ -91,13 +117,17 @@ export const Login: React.FC = () => {
     setError('');
     try {
       await setAuthPersistence(stayLoggedIn);
-      const result = await signInWithPopup(auth, googleProvider);
-      const isNewGoogleUser = getAdditionalUserInfo(result)?.isNewUser === true;
-      await ensureUserProfileDocuments(result.user);
-      sessionStorage.setItem(`profile-bootstrap-pending:${result.user.uid}`, '1');
-      sessionStorage.removeItem(`profile-bootstrap-retry:${result.user.uid}`);
-      if (isNewGoogleUser) {
-        navigate(`/signup?returnTo=${encodeURIComponent(returnTo)}&intent=${encodeURIComponent(intent || 'join-league')}`);
+      if (isIOS) {
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        const result = await signInWithPopup(auth, googleProvider);
+        const isNewGoogleUser = getAdditionalUserInfo(result)?.isNewUser === true;
+        await ensureUserProfileDocuments(result.user);
+        sessionStorage.setItem(`profile-bootstrap-pending:${result.user.uid}`, '1');
+        sessionStorage.removeItem(`profile-bootstrap-retry:${result.user.uid}`);
+        if (isNewGoogleUser) {
+          navigate(`/signup?returnTo=${encodeURIComponent(returnTo)}&intent=${encodeURIComponent(intent || 'join-league')}`);
+        }
       }
     } catch (err: any) {
       setError(await getGoogleSignInErrorMessage(err, email));
