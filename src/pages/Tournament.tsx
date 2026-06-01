@@ -182,7 +182,7 @@ export const Tournament: React.FC = () => {
     { id: 'past', label: 'Past' },
   ];
 
-  const DrawContent = () => (
+  const drawContent = (
     <>
       {message && (
         <AlertMessage tone={message.type} className="mb-6">
@@ -260,7 +260,7 @@ export const Tournament: React.FC = () => {
             <div className="mb-4">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-sm font-bold text-white uppercase tracking-widest">Draw Size</span>
-                {(currentDraw.tournamentChoice === 'Singles' ? [8, 16, 32] : [8, 16]).map((size) => (
+                {[8, 16, 32].map((size) => (
                   <button
                     key={size}
                     disabled={currentMatches.length > 0}
@@ -404,7 +404,7 @@ export const Tournament: React.FC = () => {
                         <div className="w-10 h-10 border-4 border-clay border-t-transparent rounded-full animate-spin" />
                       </div>
                     ) : (
-                      <DrawContent />
+                      drawContent
                     )}
                   </div>
                 )}

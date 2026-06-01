@@ -51,8 +51,7 @@ export const isTournamentStarted = (event: { startDate?: unknown; start_date?: u
 export const getDrawKey = (tournamentChoice: string, division: string, skillGroup: SkillGroup) =>
   `${tournamentChoice}_${division}_${skillGroup}`.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
 
-export const getDrawSize = (count: number, tournamentChoice: 'Singles' | 'Doubles') => {
-  if (tournamentChoice === 'Doubles') return 16;
+export const getDrawSize = (count: number, _tournamentChoice: 'Singles' | 'Doubles') => {
   if (count <= 8) return 8;
   if (count <= 16) return 16;
   return 32;
