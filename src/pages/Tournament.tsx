@@ -236,7 +236,7 @@ export const Tournament: React.FC = () => {
               )}
             </div>
           )}
-          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(llDrawDisplayMatches, 'LL Draw', drawState, event?.title, submissions)}>
+          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(llDrawDisplayMatches, 'LL Draw', drawState, event?.title, submissions, event?.round_deadlines ?? {})}>
             <BracketView
               matches={llDrawDisplayMatches}
               drawTitle="LL Draw"
@@ -278,7 +278,7 @@ export const Tournament: React.FC = () => {
               )}
             </div>
           )}
-          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, submissions)}>
+          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, submissions, event?.round_deadlines ?? {})}>
             <BracketView
               matches={displayMatches}
               drawTitle={currentDraw?.label || 'Draw'}
@@ -323,7 +323,7 @@ export const Tournament: React.FC = () => {
           mergeMensSingles={mergeMensSingles}
           mergeWomensSingles={mergeWomensSingles}
           consolidateDoubles={consolidateDoubles}
-          onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'), drawState, event?.title, submissions)}
+          onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'), drawState, event?.title, submissions, event?.round_deadlines ?? {})}
           onGenerateMatches={handleGenerateAll}
           onCancelMatches={handleResetDraw}
           onToggleEdit={() => setEditMode((v) => !v)}
