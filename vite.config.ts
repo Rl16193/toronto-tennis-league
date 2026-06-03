@@ -15,6 +15,27 @@ export default defineConfig(({mode}) => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          // Split rarely-changing vendor libraries into their own chunks so
+          // browsers can cache them across deploys (only app code re-downloads).
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return;
+            if (id.includes('/firebase/') || id.includes('/@firebase/')) return 'firebase-vendor';
+            if (id.includes('/motion/') || id.includes('/framer-motion/')) return 'motion-vendor';
+            if (
+              id.includes('/react-router') ||
+              id.includes('/react-dom/') ||
+              id.includes('/react/') ||
+              id.includes('/scheduler/')
+            ) {
+              return 'react-vendor';
+            }
+          },
+        },
+      },
+    },
     server: {
       host: true,
       allowedHosts: ["lvh.me"],

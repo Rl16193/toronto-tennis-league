@@ -37,7 +37,7 @@ export const TournamentHeader: React.FC<Props> = ({
   ];
 
   const mergeMenu = mergeOpen && (
-    <div className="absolute left-0 top-full mt-2 z-50 min-w-[200px] rounded-2xl border border-white/10 bg-tennis-dark shadow-2xl p-2 space-y-1">
+    <div className="absolute left-0 bottom-full mb-2 z-50 min-w-[200px] rounded-2xl border border-white/10 bg-tennis-dark shadow-2xl p-2 space-y-1">
       {mergeMenuItems.map(({ label, active, onToggle }) => (
         <button
           key={label}

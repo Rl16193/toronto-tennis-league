@@ -1,18 +1,30 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { logEvent } from 'firebase/analytics';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { analyticsPromise } from './lib/firebase';
 import { Layout } from './components/Layout';
-import { Home } from './pages/Home';
-import { Login } from './pages/Login';
-import { Signup } from './pages/Signup';
-import { Events } from './pages/Events';
-import { Profile } from './pages/Profile';
-import { Tournament } from './pages/Tournament';
-import { PlayerProfile } from './pages/PlayerProfile';
-import { Rules, Terms, Privacy, Contact } from './pages/StaticPages';
-import { Leagues } from './pages/Leagues';
+
+// Route-level code splitting: each page loads as its own chunk on demand,
+// so the initial bundle stays small (faster first paint, esp. in-app browsers).
+const Home = lazy(() => import('./pages/Home').then((m) => ({ default: m.Home })));
+const Login = lazy(() => import('./pages/Login').then((m) => ({ default: m.Login })));
+const Signup = lazy(() => import('./pages/Signup').then((m) => ({ default: m.Signup })));
+const Events = lazy(() => import('./pages/Events').then((m) => ({ default: m.Events })));
+const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })));
+const Tournament = lazy(() => import('./pages/Tournament').then((m) => ({ default: m.Tournament })));
+const PlayerProfile = lazy(() => import('./pages/PlayerProfile').then((m) => ({ default: m.PlayerProfile })));
+const Leagues = lazy(() => import('./pages/Leagues').then((m) => ({ default: m.Leagues })));
+const Rules = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Rules })));
+const Terms = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Terms })));
+const Privacy = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Privacy })));
+const Contact = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Contact })));
+
+const RouteFallback: React.FC = () => (
+  <div className="min-h-[60vh] flex items-center justify-center">
+    <div className="w-14 h-14 border-4 border-clay border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 const ScrollToTop: React.FC = () => {
   const location = useLocation();
@@ -68,21 +80,23 @@ export default function App() {
       <Router>
         <ScrollToTop />
         <Layout>
-          <Routes>
-            <Route path="/" element={<HomeRoute />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/events" element={<Events />} />
-            <Route path="/tournament" element={<PrivateRoute><Tournament /></PrivateRoute>} />
-            <Route path="/leagues" element={<PrivateRoute><Leagues /></PrivateRoute>} />
-            <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
-            <Route path="/players/:userId" element={<PrivateRoute><PlayerProfile /></PrivateRoute>} />
-            <Route path="/rules" element={<Rules />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/contact" element={<Contact />} />
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
+          <Suspense fallback={<RouteFallback />}>
+            <Routes>
+              <Route path="/" element={<HomeRoute />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/events" element={<Events />} />
+              <Route path="/tournament" element={<PrivateRoute><Tournament /></PrivateRoute>} />
+              <Route path="/leagues" element={<PrivateRoute><Leagues /></PrivateRoute>} />
+              <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+              <Route path="/players/:userId" element={<PrivateRoute><PlayerProfile /></PrivateRoute>} />
+              <Route path="/rules" element={<Rules />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+          </Suspense>
         </Layout>
       </Router>
     </AuthProvider>

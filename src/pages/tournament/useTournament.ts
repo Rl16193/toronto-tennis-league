@@ -513,6 +513,10 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   const updateMatchWithSubmission = async (match: TournamentMatch, submission: ScoreSubmission) => {
+    // ── Step 1: commit the match result + score_submissions update ────────────
+    // This is the only step that can surface "Could not record score." to the user.
+    // Stats and advancement are separate best-effort steps below so they can never
+    // roll back a successfully recorded result.
     const batch = writeBatch(db);
     batch.update(doc(db, 'tournament_matches', match.id), {
       winner_name: submission.claimed_winner_name,
@@ -523,14 +527,13 @@ export const useTournament = (eventIdOverride?: string) => {
       status: 'complete',
       completed_at: new Date().toISOString(),
     });
-
     submissions
       .filter((s) => s.match_doc_id === match.id)
       .forEach((s) => batch.update(doc(db, 'score_submissions', s.id), { status: 'accepted' }));
+    await batch.commit();
 
-    // Update player stats + league points
-    // LL Draw (reserves) earns halved points; main draw earns full points
-    {
+    // ── Step 2: update player stats (best-effort, separate from the result) ───
+    try {
       const isLL = match.bracket === 'reserves';
       const LOSER_PTS: Record<string, number> = isLL
         ? { R32: 0.5, R16: 1, QF: 1.5, SF: 2.5, F: 5 }
@@ -541,17 +544,16 @@ export const useTournament = (eventIdOverride?: string) => {
       const matchLeague = match.tournament_choice === 'Doubles' ? 'Doubles' : match.division;
       const winnerUid = submission.claimed_winner_user_id;
       const loserUid = winnerUid === match.player_1_user_id ? match.player_2_user_id : match.player_1_user_id;
-
-      // Games won per player (set scores are absolute: player_1/2 = match positions)
       const newP1G = (submission.set_1_player_1 ?? 0) + (submission.set_2_player_1 ?? 0) + (submission.set_3_player_1 ?? 0);
       const newP2G = (submission.set_1_player_2 ?? 0) + (submission.set_2_player_2 ?? 0) + (submission.set_3_player_2 ?? 0);
       const newTotal = newP1G + newP2G;
       const winnerIsP1 = winnerUid === match.player_1_user_id;
 
+      const statsBatch = writeBatch(db);
+
       if (match.status !== 'complete') {
-        // First confirmation — apply all increments
         if (winnerUid) {
-          batch.set(doc(db, 'stats', winnerUid), {
+          statsBatch.set(doc(db, 'stats', winnerUid), {
             matchesPlayed: increment(1),
             wins: increment(1),
             league: matchLeague,
@@ -561,7 +563,7 @@ export const useTournament = (eventIdOverride?: string) => {
           }, { merge: true });
         }
         if (loserUid) {
-          batch.set(doc(db, 'stats', loserUid), {
+          statsBatch.set(doc(db, 'stats', loserUid), {
             matchesPlayed: increment(1),
             loses: increment(1),
             leaguePoints26: increment(loserPts),
@@ -572,7 +574,6 @@ export const useTournament = (eventIdOverride?: string) => {
           }, { merge: true });
         }
       } else {
-        // Re-entry (edit score) — compute per-player delta (new − old) and apply
         const oldWinnerUid = match.winner_user_id ?? '';
         const oldP1G = (match.set_1_player_1 ?? 0) + (match.set_2_player_1 ?? 0) + (match.set_3_player_1 ?? 0);
         const oldP2G = (match.set_1_player_2 ?? 0) + (match.set_2_player_2 ?? 0) + (match.set_3_player_2 ?? 0);
@@ -584,7 +585,6 @@ export const useTournament = (eventIdOverride?: string) => {
           const isWinner = winnerUid === uid;
           const oldGames = isP1 ? oldP1G : oldP2G;
           const newGames = isP1 ? newP1G : newP2G;
-
           const delta: Record<string, unknown> = {};
           if (isWinner !== wasWinner) {
             delta.wins = increment(isWinner ? 1 : -1);
@@ -593,27 +593,23 @@ export const useTournament = (eventIdOverride?: string) => {
           const oldPts = wasWinner ? (isFinal ? winnerPts : 0) : loserPts;
           const newPts = isWinner ? (isFinal ? winnerPts : 0) : loserPts;
           if (newPts !== oldPts) delta.leaguePoints26 = increment(newPts - oldPts);
-
-          // tournamentsPlayed credit: losers always get +1; final winner also gets +1
           const oldTC = (!wasWinner ? 1 : 0) + (wasWinner && isFinal ? 1 : 0);
           const newTC = (!isWinner ? 1 : 0) + (isWinner && isFinal ? 1 : 0);
           if (newTC !== oldTC) delta.tournamentsPlayed = increment(newTC - oldTC);
-
           if (newGames !== oldGames) delta.pointswon = increment(newGames - oldGames);
           if (newTotal !== oldTotal) delta.totalPointsPlayed = increment(newTotal - oldTotal);
-
           if (Object.keys(delta).length > 0) {
             delta.league = matchLeague;
-            batch.set(doc(db, 'stats', uid), delta, { merge: true });
+            statsBatch.set(doc(db, 'stats', uid), delta, { merge: true });
           }
         };
-
         applyPlayerDelta(match.player_1_user_id, true);
         applyPlayerDelta(match.player_2_user_id, false);
       }
+      await statsBatch.commit();
+    } catch (err) {
+      console.error('Score recorded, but stats update failed:', err);
     }
-
-    await batch.commit();
 
     // Advance the winner into the next match as a best-effort follow-up, AFTER the
     // result is committed — so a missing/mismatched next-match document can never roll
@@ -754,6 +750,32 @@ export const useTournament = (eventIdOverride?: string) => {
       return;
     }
     try {
+      // Invariant: any player placed into a real (persisted) bracket slot MUST have a
+      // matching event_participants entry for this event. Otherwise they appear in the
+      // draw but are invisible to engagement reports — flagged as "inactive" or a Slam
+      // "no-show" despite clearly being in the tournament. Self-heal here so the entry
+      // always exists, regardless of how the player became selectable. No-op when the
+      // player is already a participant, so the normal Add Player → Move Players flow
+      // is unaffected.
+      if (player?.user_id && event && currentDraw &&
+          !participants.some((p) => p.user_id === player.user_id)) {
+        let skillLevel = statsMap[player.user_id]?.skill_level ?? 0;
+        if (!statsMap[player.user_id]) {
+          const statsSnap = await getDocs(query(collection(db, 'stats'), where('__name__', '==', player.user_id)));
+          skillLevel = (statsSnap.docs[0]?.data() as UserStats | undefined)?.skill_level ?? 0;
+        }
+        await addDoc(collection(db, 'event_participants'), {
+          user_id: player.user_id,
+          user_name: player.name,
+          event_id: event.id,
+          event_name: event.title,
+          tournament_choice: currentDraw.tournamentChoice,
+          division: currentDraw.division !== 'All' ? currentDraw.division : "Men's",
+          skill: skillLevel,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
       await updateDoc(doc(db, 'tournament_matches', matchId), {
         [`${slot}_name`]: player?.name || BYE,
         [`${slot}_user_id`]: player?.user_id || '',
