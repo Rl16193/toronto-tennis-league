@@ -618,34 +618,49 @@ export const useTournament = (eventIdOverride?: string) => {
     // which breaks for merged/regenerated draws whose next round lives under a
     // different key.
     if (match.next_match_id) {
+      // Normalize null/undefined bracket so legacy docs (missing the field) still match.
+      const normBracket = (b: unknown) => b ?? null;
       const sameDraw = (m: TournamentMatch) =>
-        m.bracket === match.bracket &&
+        normBracket(m.bracket) === normBracket(match.bracket) &&
         m.tournament_choice === match.tournament_choice &&
         m.division === match.division &&
         m.skill_group === match.skill_group;
-      const nextMatch = matches.find((m) => sameDraw(m) && m.match_id === match.next_match_id);
-      if (nextMatch) {
-        // Slot: stored next_slot, else inferred from sibling ordering (legacy docs).
-        let slot = match.next_slot as 'player_1' | 'player_2' | '' | undefined;
-        if (!slot) {
-          const siblings = matches
-            .filter((m) => sameDraw(m) && m.next_match_id === match.next_match_id)
-            .sort((a, b) => a.position - b.position);
-          const idx = siblings.findIndex((m) => m.id === match.id);
-          slot = idx <= 0 ? 'player_1' : 'player_2';
-        }
-        try {
-          await updateDoc(doc(db, 'tournament_matches', nextMatch.id), {
-            [`${slot}_name`]: submission.claimed_winner_name,
-            [`${slot}_user_id`]: submission.claimed_winner_user_id,
-            [`${slot}_contact`]:
-              submission.claimed_winner_user_id === match.player_1_user_id
-                ? match.player_1_contact
-                : match.player_2_contact,
-          });
-        } catch (err) {
-          console.error('Winner recorded, but advancing to the next match failed:', err);
-        }
+
+      // Find the next match by match_id in loaded state; fall back to reconstructed doc id.
+      const drawKey = getDrawKey(match.tournament_choice, match.division, match.skill_group as SkillGroup);
+      const isReservesMatch = normBracket(match.bracket) === 'reserves';
+      const prefix = isReservesMatch
+        ? `${match.event_id}_reserves_${drawKey}`
+        : `${match.event_id}_${drawKey}`;
+      const reconstructedId = `${prefix}_${match.next_match_id}`;
+
+      const nextMatch =
+        matches.find((m) => sameDraw(m) && m.match_id === match.next_match_id) ??
+        matches.find((m) => m.id === reconstructedId);
+
+      // Slot: stored next_slot, else inferred from sibling ordering (legacy docs).
+      let slot = match.next_slot as 'player_1' | 'player_2' | '' | undefined;
+      if (!slot) {
+        const siblings = matches
+          .filter((m) => sameDraw(m) && m.next_match_id === match.next_match_id)
+          .sort((a, b) => a.position - b.position);
+        const idx = siblings.findIndex((m) => m.id === match.id);
+        slot = idx <= 0 ? 'player_1' : 'player_2';
+      }
+
+      const targetDocId = nextMatch?.id ?? reconstructedId;
+      try {
+        await updateDoc(doc(db, 'tournament_matches', targetDocId), {
+          [`${slot}_name`]: submission.claimed_winner_name,
+          [`${slot}_user_id`]: submission.claimed_winner_user_id,
+          [`${slot}_contact`]:
+            submission.claimed_winner_user_id === match.player_1_user_id
+              ? match.player_1_contact
+              : match.player_2_contact,
+        });
+      } catch (err) {
+        console.error('Advancement failed:', err);
+        setMessage({ type: 'error', text: 'Score recorded. Could not advance winner to next round — use Edit Draw to place the player manually.' });
       }
     }
   };
