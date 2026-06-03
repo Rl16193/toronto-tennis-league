@@ -135,27 +135,34 @@ export const useProfileActions = () => {
   const handleRemoveEvent = async (participantId: string, eventId: string) => {
     try {
       await removeEventParticipant(participantId);
-      if (user && eventId) {
-        const matchesSnap = await getDocs(
-          query(collection(db, 'tournament_matches'), where('event_id', '==', eventId))
-        );
-        const updates: Promise<void>[] = [];
-        matchesSnap.docs.forEach((matchDoc) => {
-          const data = matchDoc.data();
-          const hasScores = data.set_1_player_1 != null || data.set_1_player_2 != null;
-          if (hasScores) return;
-          if (data.player_1_user_id === user.uid) {
-            updates.push(updateDoc(doc(db, 'tournament_matches', matchDoc.id), {
-              player_1_name: 'Player Loading', player_1_user_id: '', player_1_contact: '',
-            }));
-          }
-          if (data.player_2_user_id === user.uid) {
-            updates.push(updateDoc(doc(db, 'tournament_matches', matchDoc.id), {
-              player_2_name: 'Player Loading', player_2_user_id: '', player_2_contact: '',
-            }));
-          }
-        });
-        await Promise.all(updates);
+      // Best-effort: clearing match slots is organizer-only (Firestore rules). The
+      // participant doc is already removed above; if the player can't edit the
+      // bracket, the organizer reconciles the empty slot via the draw.
+      try {
+        if (user && eventId) {
+          const matchesSnap = await getDocs(
+            query(collection(db, 'tournament_matches'), where('event_id', '==', eventId))
+          );
+          const updates: Promise<void>[] = [];
+          matchesSnap.docs.forEach((matchDoc) => {
+            const data = matchDoc.data();
+            const hasScores = data.set_1_player_1 != null || data.set_1_player_2 != null;
+            if (hasScores) return;
+            if (data.player_1_user_id === user.uid) {
+              updates.push(updateDoc(doc(db, 'tournament_matches', matchDoc.id), {
+                player_1_name: 'Player Loading', player_1_user_id: '', player_1_contact: '',
+              }));
+            }
+            if (data.player_2_user_id === user.uid) {
+              updates.push(updateDoc(doc(db, 'tournament_matches', matchDoc.id), {
+                player_2_name: 'Player Loading', player_2_user_id: '', player_2_contact: '',
+              }));
+            }
+          });
+          await Promise.all(updates);
+        }
+      } catch {
+        /* player not permitted to edit the bracket; organizer will clear the slot */
       }
       showMessage('You have been removed from the event.', 'success');
     } catch (error) {
