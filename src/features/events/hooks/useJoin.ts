@@ -160,12 +160,19 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
         dateselected, createdAt: new Date().toISOString(),
       });
 
+      // Best-effort: seating a player into a match slot is organizer-only (Firestore
+      // rules). For regular players this is skipped silently and the organizer seats
+      // them via the draw — the registration above has already succeeded.
       if (slotStatus?.match && slotStatus.slot) {
-        await updateDoc(doc(db, 'tournament_matches', slotStatus.match.id), {
-          [`${slotStatus.slot}_name`]: participantName,
-          [`${slotStatus.slot}_user_id`]: user.uid,
-          [`${slotStatus.slot}_contact`]: user.email || '',
-        });
+        try {
+          await updateDoc(doc(db, 'tournament_matches', slotStatus.match.id), {
+            [`${slotStatus.slot}_name`]: participantName,
+            [`${slotStatus.slot}_user_id`]: user.uid,
+            [`${slotStatus.slot}_contact`]: user.email || '',
+          });
+        } catch {
+          /* player not permitted to seat themselves; organizer will place them */
+        }
       }
       setSelectedEvent(null);
     } catch { setJoinError('Could not join the event right now. Please try again.'); }

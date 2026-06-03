@@ -182,7 +182,7 @@ export const Tournament: React.FC = () => {
     { id: 'past', label: 'Past' },
   ];
 
-  const DrawContent = () => (
+  const drawContent = (
     <>
       {message && (
         <AlertMessage tone={message.type} className="mb-6">
@@ -236,7 +236,7 @@ export const Tournament: React.FC = () => {
               )}
             </div>
           )}
-          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(llDrawDisplayMatches, 'LL Draw', drawState, event?.title, submissions)}>
+          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(llDrawDisplayMatches, 'LL Draw', drawState, event?.title, submissions, event?.round_deadlines ?? {})}>
             <BracketView
               matches={llDrawDisplayMatches}
               drawTitle="LL Draw"
@@ -260,7 +260,7 @@ export const Tournament: React.FC = () => {
             <div className="mb-4">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-sm font-bold text-white uppercase tracking-widest">Draw Size</span>
-                {(currentDraw.tournamentChoice === 'Singles' ? [8, 16, 32] : [8, 16]).map((size) => (
+                {[8, 16, 32].map((size) => (
                   <button
                     key={size}
                     disabled={currentMatches.length > 0}
@@ -278,7 +278,7 @@ export const Tournament: React.FC = () => {
               )}
             </div>
           )}
-          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, submissions)}>
+          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, submissions, event?.round_deadlines ?? {})}>
             <BracketView
               matches={displayMatches}
               drawTitle={currentDraw?.label || 'Draw'}
@@ -323,7 +323,7 @@ export const Tournament: React.FC = () => {
           mergeMensSingles={mergeMensSingles}
           mergeWomensSingles={mergeWomensSingles}
           consolidateDoubles={consolidateDoubles}
-          onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'), drawState, event?.title, submissions)}
+          onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'), drawState, event?.title, submissions, event?.round_deadlines ?? {})}
           onGenerateMatches={handleGenerateAll}
           onCancelMatches={handleResetDraw}
           onToggleEdit={() => setEditMode((v) => !v)}
@@ -404,7 +404,7 @@ export const Tournament: React.FC = () => {
                         <div className="w-10 h-10 border-4 border-clay border-t-transparent rounded-full animate-spin" />
                       </div>
                     ) : (
-                      <DrawContent />
+                      drawContent
                     )}
                   </div>
                 )}

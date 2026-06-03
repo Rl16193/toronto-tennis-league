@@ -428,26 +428,29 @@ export const useTournament = (eventIdOverride?: string) => {
     }));
   }, [currentReservesMatches, currentDraw, currentLLSize, currentLLSlotOverrides, llCurrentKey, templates, event?.id]);
 
-  // LL Draw dropdown: use event participants (not all registered users)
+  // LL Draw dropdown: only participants of the CURRENT draw's division/choice who are
+  // NOT already placed in the main draw. Prevents main-draw players (e.g. semi-finalists)
+  // from being added to the reserves draw — applies uniformly to every draw.
   const allUsersAsTournamentPlayers = useMemo(
     () => {
-      const seen = new Set<string>();
-      return participants
-        .filter((p) => {
-          if (seen.has(p.user_id)) return false;
-          seen.add(p.user_id);
-          return true;
-        })
-        .map((p) => ({
-          user_id: p.user_id,
-          name: p.user_name || allUsers[p.user_id]?.name || p.user_id,
-          contact: allUsers[p.user_id]?.email || '',
-          preferredContact: 'email' as const,
-          participantId: p.id,
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name));
+      if (!currentDraw) return [];
+      const mainMatches = currentMatches.length > 0 ? currentMatches : displayMatches;
+      const placedIds = new Set(
+        mainMatches.flatMap((m) => [m.player_1_user_id, m.player_2_user_id]).filter(Boolean),
+      );
+      const divisionParticipants = participants.filter((p) => {
+        if (p.tournament_choice !== currentDraw.tournamentChoice) return false;
+        if (currentDraw.division !== 'All' && p.division !== currentDraw.division) return false;
+        return true;
+      });
+      return buildPlayerList(
+        divisionParticipants,
+        { ...currentDraw, skillGroup: 'All' },
+        effectiveStatsMap,
+        userMap,
+      ).filter((p) => !placedIds.has(p.user_id));
     },
-    [participants, allUsers],
+    [currentDraw, currentMatches, displayMatches, participants, effectiveStatsMap, userMap],
   );
 
   const opponent = visibleUserMatch && user
@@ -520,19 +523,6 @@ export const useTournament = (eventIdOverride?: string) => {
       status: 'complete',
       completed_at: new Date().toISOString(),
     });
-
-    if (match.next_match_id && match.next_slot) {
-      const drawKey = getDrawKey(match.tournament_choice, match.division, match.skill_group as SkillGroup);
-      const nextMatchDocId = `${match.event_id}_${drawKey}_${match.next_match_id}`;
-      batch.update(doc(db, 'tournament_matches', nextMatchDocId), {
-        [`${match.next_slot}_name`]: submission.claimed_winner_name,
-        [`${match.next_slot}_user_id`]: submission.claimed_winner_user_id,
-        [`${match.next_slot}_contact`]:
-          submission.claimed_winner_user_id === match.player_1_user_id
-            ? match.player_1_contact
-            : match.player_2_contact,
-      });
-    }
 
     submissions
       .filter((s) => s.match_doc_id === match.id)
@@ -624,6 +614,44 @@ export const useTournament = (eventIdOverride?: string) => {
     }
 
     await batch.commit();
+
+    // Advance the winner into the next match as a best-effort follow-up, AFTER the
+    // result is committed — so a missing/mismatched next-match document can never roll
+    // back the recorded winner, scores, or stats. Resolve the next match from loaded
+    // state (use its real doc id) rather than reconstructing the id from the draw key,
+    // which breaks for merged/regenerated draws whose next round lives under a
+    // different key.
+    if (match.next_match_id) {
+      const sameDraw = (m: TournamentMatch) =>
+        m.bracket === match.bracket &&
+        m.tournament_choice === match.tournament_choice &&
+        m.division === match.division &&
+        m.skill_group === match.skill_group;
+      const nextMatch = matches.find((m) => sameDraw(m) && m.match_id === match.next_match_id);
+      if (nextMatch) {
+        // Slot: stored next_slot, else inferred from sibling ordering (legacy docs).
+        let slot = match.next_slot as 'player_1' | 'player_2' | '' | undefined;
+        if (!slot) {
+          const siblings = matches
+            .filter((m) => sameDraw(m) && m.next_match_id === match.next_match_id)
+            .sort((a, b) => a.position - b.position);
+          const idx = siblings.findIndex((m) => m.id === match.id);
+          slot = idx <= 0 ? 'player_1' : 'player_2';
+        }
+        try {
+          await updateDoc(doc(db, 'tournament_matches', nextMatch.id), {
+            [`${slot}_name`]: submission.claimed_winner_name,
+            [`${slot}_user_id`]: submission.claimed_winner_user_id,
+            [`${slot}_contact`]:
+              submission.claimed_winner_user_id === match.player_1_user_id
+                ? match.player_1_contact
+                : match.player_2_contact,
+          });
+        } catch (err) {
+          console.error('Winner recorded, but advancing to the next match failed:', err);
+        }
+      }
+    }
   };
 
   // ── Action handlers ───────────────────────────────────────────────────────

@@ -15,12 +15,13 @@ const escapeSvg = (value: string) =>
 const truncate = (value: string, max = 20) =>
   value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
-const ROUND_DEADLINES: Record<string, string> = {
-  R32: 'Avail. till Sat May 16',
-  R16: 'Avail. till Sat May 16',
-  QF: 'Avail. till Sat May 23',
-  SF: 'Avail. till Sun May 30',
-  F: 'Avail. till Sun May 30',
+// Format a stored 'YYYY-MM-DD' round deadline like the on-screen bracket ("Till May 23").
+const formatDeadline = (iso?: string): string => {
+  if (!iso) return '';
+  const [, m, d] = iso.split('-').map(Number);
+  if (!m || !d) return '';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `Till ${months[m - 1]} ${d}`;
 };
 
 const formatSvgScore = (sub: ScoreSubmission): string => {
@@ -35,7 +36,7 @@ const formatSvgScore = (sub: ScoreSubmission): string => {
     .join('  ');
 };
 
-const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, submissions: ScoreSubmission[] = []): string => {
+const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, submissions: ScoreSubmission[] = [], roundDeadlines: Record<string, string> = {}): string => {
   const subsMap = new Map<string, ScoreSubmission>();
   for (const s of [...submissions].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
     if (!subsMap.has(s.match_doc_id)) subsMap.set(s.match_doc_id, s);
@@ -64,7 +65,7 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?:
 
     const col = `<rect x="${x - 12}" y="${colStart}" width="${colWidth - 24}" height="${colH}" rx="14" fill="${colColor}" stroke="#d1d5db" />`;
 
-    const deadline = ROUND_DEADLINES[round.round] || '';
+    const deadline = formatDeadline(roundDeadlines[round.round]);
     const label = `<text x="${colCenterX}" y="${colStart + 22}" text-anchor="middle" font-size="13" font-weight="800" fill="#111827">${round.round}</text>${
       deadline ? `<text x="${colCenterX}" y="${colStart + 36}" text-anchor="middle" font-size="9" fill="#111827">${deadline}</text>` : ''
     }`;
@@ -111,12 +112,12 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?:
 </svg>`;
 };
 
-export const downloadDrawAsPng = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, submissions: ScoreSubmission[] = []): void => {
+export const downloadDrawAsPng = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, submissions: ScoreSubmission[] = [], roundDeadlines: Record<string, string> = {}): void => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
   const width = Math.max(900, roundLabels.length * 190 + 80);
   const height = Math.max(580, 105 + drawSize * 46 + 70);
-  const svg = buildDrawSvg(matches, drawTitle, drawState, eventTitle, submissions);
+  const svg = buildDrawSvg(matches, drawTitle, drawState, eventTitle, submissions, roundDeadlines);
   const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const svgUrl = URL.createObjectURL(svgBlob);
   const svgImg = new Image(width, height);

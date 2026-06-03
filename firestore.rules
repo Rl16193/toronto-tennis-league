@@ -13,10 +13,14 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isSuperAdmin() {
+      return isAuthenticated() && request.auth.uid == "7PvfzNtDmsOq5GLMieId7QRT7wH3";
+    }
+
     function isGlobalEventCreator() {
       return isAuthenticated() &&
         (
-          request.auth.uid == "7PvfzNtDmsOq5GLMieId7QRT7wH3" ||
+          isSuperAdmin() ||
           get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.event_creator == true
         );
     }
@@ -44,8 +48,19 @@ service cloud.firestore {
     // ===============================================================
     match /stats/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId) || isGlobalEventCreator();
-      allow update: if isOwner(userId) || isGlobalEventCreator();
+      // Owners may self-create only an all-zero scoring baseline (signup / bootstrap).
+      allow create: if isGlobalEventCreator() ||
+        (isOwner(userId) &&
+          request.resource.data.leaguePoints26 == 0 &&
+          request.resource.data.wins == 0 &&
+          request.resource.data.loses == 0 &&
+          request.resource.data.matchesPlayed == 0 &&
+          request.resource.data.tournamentsPlayed == 0);
+      // Owners may only edit profile fields; scoring fields are organizer-only.
+      allow update: if isGlobalEventCreator() ||
+        (isOwner(userId) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['skill_level', 'tournament_preference', 'name', 'user_id']));
       allow delete: if false;
     }
 
@@ -54,8 +69,11 @@ service cloud.firestore {
     // ===============================================================
     match /preferences/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
+      // event_creator may never be self-granted — only the super admin sets it.
+      allow create: if isOwner(userId) && request.resource.data.event_creator == false;
+      allow update: if isSuperAdmin() ||
+        (isOwner(userId) &&
+          request.resource.data.event_creator == resource.data.event_creator);
       allow delete: if false;
     }
 
@@ -72,7 +90,7 @@ service cloud.firestore {
     // Event Participants
     // ===============================================================
     match /event_participants/{docId} {
-      allow read: if true;
+      allow read: if isAuthenticated();
 
       allow create: if isAuthenticated() &&
         (
