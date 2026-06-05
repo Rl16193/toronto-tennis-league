@@ -1,18 +1,16 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { fetchSignInMethodsForEmail, getAdditionalUserInfo, getRedirectResult, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, sendPasswordResetEmail } from 'firebase/auth';
+import { fetchSignInMethodsForEmail, signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { getDownloadURL, ref } from 'firebase/storage';
-import { auth, googleProvider, setAuthPersistence, storage } from '../lib/firebase';
+import { auth, setAuthPersistence, storage } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
-import { ensureUserProfileDocuments } from '../lib/profileBootstrap';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Mail, Lock, Chrome, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import mailcheck from 'mailcheck';
-import { emailRegex, getAuthErrorMessage, getGoogleSignInErrorMessage } from '../features/auth/authMessages';
-
-const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+import { emailRegex, getAuthErrorMessage } from '../features/auth/authMessages';
+import { useGoogleSignIn } from '../features/auth/useGoogleSignIn';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -44,29 +42,14 @@ export const Login: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (!result) return;
-        setLoading(true);
-        try {
-          const isNewGoogleUser = getAdditionalUserInfo(result)?.isNewUser === true;
-          await ensureUserProfileDocuments(result.user);
-          sessionStorage.setItem(`profile-bootstrap-pending:${result.user.uid}`, '1');
-          sessionStorage.removeItem(`profile-bootstrap-retry:${result.user.uid}`);
-          if (isNewGoogleUser) {
-            navigate(`/signup?returnTo=${encodeURIComponent(returnTo)}&intent=${encodeURIComponent(intent || 'join-league')}`);
-          }
-        } catch (err: any) {
-          setError(await getGoogleSignInErrorMessage(err, ''));
-        } finally {
-          setLoading(false);
-        }
-      })
-      .catch(async (err: any) => {
-        setError(await getGoogleSignInErrorMessage(err, ''));
-      });
-  }, []);
+  const { handleGoogleSignIn } = useGoogleSignIn({
+    stayLoggedIn,
+    returnTo,
+    intent,
+    navigate,
+    setError,
+    setLoading,
+  });
 
   // Auto-dismiss error banner after 30 seconds
   useEffect(() => {
@@ -112,29 +95,6 @@ export const Login: React.FC = () => {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      await setAuthPersistence(stayLoggedIn);
-      if (isIOS) {
-        await signInWithRedirect(auth, googleProvider);
-      } else {
-        const result = await signInWithPopup(auth, googleProvider);
-        const isNewGoogleUser = getAdditionalUserInfo(result)?.isNewUser === true;
-        await ensureUserProfileDocuments(result.user);
-        sessionStorage.setItem(`profile-bootstrap-pending:${result.user.uid}`, '1');
-        sessionStorage.removeItem(`profile-bootstrap-retry:${result.user.uid}`);
-        if (isNewGoogleUser) {
-          navigate(`/signup?returnTo=${encodeURIComponent(returnTo)}&intent=${encodeURIComponent(intent || 'join-league')}`);
-        }
-      }
-    } catch (err: any) {
-      setError(await getGoogleSignInErrorMessage(err, email));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -296,7 +256,7 @@ export const Login: React.FC = () => {
                     type="button"
                     variant="secondary"
                     className="w-full border border-white/5"
-                    onClick={handleGoogleLogin}
+                    onClick={handleGoogleSignIn}
                   >
                     <Chrome className="mr-2 w-5 h-5" />
                     Google Account

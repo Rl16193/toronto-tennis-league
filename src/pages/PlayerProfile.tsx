@@ -1,24 +1,10 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { Mail, Phone, Trophy, User } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { Button } from '../components/Button';
 import { TennisEvent, UserData, UserPreferences, UserStats } from '../types';
-
-const parseMayKey = (val: unknown): string | null => {
-  if (typeof val === 'string') return val.startsWith('May') ? val : null;
-  if (typeof val !== 'object' || val === null) return null;
-  let d: Date | null = null;
-  const obj = val as Record<string, unknown>;
-  if (typeof obj['toDate'] === 'function') d = (obj['toDate'] as () => Date)();
-  else if (typeof obj['seconds'] === 'number') d = new Date(obj['seconds'] * 1000);
-  if (!d) return null;
-
-  return d.getFullYear() === 2026 && d.getMonth() === 4
-    ? `May ${d.getDate()}, 2026`
-    : null;
-};
 
 const Chip: React.FC<{ label: string }> = ({ label }) => (
   <span className="px-3 py-1 rounded-full bg-clay/20 border border-clay/30 text-clay text-sm font-semibold">
@@ -35,7 +21,6 @@ export const PlayerProfile: React.FC = () => {
   const [player, setPlayer] = useState<UserData | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
-  const [markedDates, setMarkedDates] = useState<Set<string>>(new Set());
   const [organizer, setOrganizer] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -48,16 +33,10 @@ export const PlayerProfile: React.FC = () => {
       setLoading(true);
 
       try {
-        const [userDoc, statsDoc, prefsDoc, participantSnap] = await Promise.all([
+        const [userDoc, statsDoc, prefsDoc] = await Promise.all([
           getDoc(doc(db, 'users', userId)),
           getDoc(doc(db, 'stats', userId)),
           getDoc(doc(db, 'preferences', userId)),
-          getDocs(
-            query(
-              collection(db, 'event_participants'),
-              where('user_id', '==', userId)
-            )
-          ),
         ]);
 
         const playerData = userDoc.exists() ? (userDoc.data() as UserData) : null;
@@ -81,18 +60,6 @@ export const PlayerProfile: React.FC = () => {
             }
           }
         }
-
-        const dates = new Set<string>();
-
-        participantSnap.docs.forEach((d) => {
-          const dateselected = (d.data() as Record<string, unknown>)['dateselected'];
-          (Array.isArray(dateselected) ? dateselected : []).forEach((v: unknown) => {
-            const k = parseMayKey(v);
-            if (k) dates.add(k);
-          });
-        });
-
-        setMarkedDates(dates);
       } finally {
         setLoading(false);
       }
@@ -145,15 +112,8 @@ export const PlayerProfile: React.FC = () => {
   ].filter(Boolean);
 
   const hasAvailability =
-    markedDates.size > 0 ||
     (preferences?.availability_day?.length ?? 0) > 0 ||
     (preferences?.availability_time?.length ?? 0) > 0;
-
-  const calendarDays: number[] = [];
-
-  for (let day = 9; day <= 31; day++) {
-    calendarDays.push(day);
-  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -258,10 +218,10 @@ export const PlayerProfile: React.FC = () => {
             </p>
 
             {stats ? (() => {
-              const s = stats as typeof stats & { matchesPlayed?: number; wins?: number; loses?: number; pointswon?: number; totalPointsPlayed?: number; pointsWonPct?: number };
+              const s = stats as typeof stats & { matchesPlayed?: number; wins?: number; loses?: number; pointswon?: number; totalPointsPlayed?: number };
               const pctDisplay = (s.totalPointsPlayed ?? 0) > 0
                 ? `${Math.round((s.pointswon! / s.totalPointsPlayed!) * 100)}%`
-                : s.pointsWonPct != null ? `${s.pointsWonPct}%` : '—';
+                : '—';
               return (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                   <div>
@@ -347,44 +307,6 @@ export const PlayerProfile: React.FC = () => {
               </div>
 
             </div>
-          )}
-
-          {markedDates.size > 0 && (
-            <>
-              <p className="text-xs uppercase tracking-widest text-white font-bold mb-3">
-                Player Availability (May 2026)
-              </p>
-
-              <div className="grid grid-cols-7 gap-1.5">
-
-                {['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((d) => (
-                  <div
-                    key={d}
-                    className="text-white text-xs font-medium text-center py-1"
-                  >
-                    {d}
-                  </div>
-                ))}
-
-                {calendarDays.map((day) => {
-                  const selected = markedDates.has(`May ${day}, 2026`);
-
-                  return (
-                    <div
-                      key={day}
-                      className={`p-2 text-xs rounded-lg text-center ${
-                        selected
-                          ? 'bg-orange-500 text-white font-bold'
-                          : 'text-white bg-gray-800/30'
-                      }`}
-                    >
-                      {day}
-                    </div>
-                  );
-                })}
-
-              </div>
-            </>
           )}
 
         </div>

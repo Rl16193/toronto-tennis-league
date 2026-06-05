@@ -7,17 +7,33 @@ import { isTournamentEvent, isSeasonOpener } from '../../../utils/eventTypes';
 import { formatEventSchedule, formatTournamentRange } from '../utils/eventFormatters';
 import { JoinFormState, SlotResult } from '../types';
 
-const isJoinClosed = (event: DisplayEvent): boolean => {
+const getJoinLastDateMs = (event: DisplayEvent): number | null => {
   const raw = (event as unknown as Record<string, unknown>).join_last_date;
-  if (!raw) return false;
-  let ms: number | null = null;
-  if (typeof raw === 'string') ms = new Date(raw).getTime();
-  else if (typeof raw === 'object' && raw !== null) {
+  if (!raw) return null;
+  if (typeof raw === 'string') return new Date(raw).getTime();
+  if (typeof raw === 'object' && raw !== null) {
     const obj = raw as Record<string, unknown>;
-    if (typeof obj['toDate'] === 'function') ms = (obj['toDate'] as () => Date)().getTime();
-    else if (typeof obj['seconds'] === 'number') ms = (obj['seconds'] as number) * 1000;
+    if (typeof obj['toDate'] === 'function') return (obj['toDate'] as () => Date)().getTime();
+    if (typeof obj['seconds'] === 'number') return (obj['seconds'] as number) * 1000;
   }
-  return ms !== null && Date.now() > ms;
+  return null;
+};
+
+const LATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/** After join_last_date but within the 7-day late-registration window (tournament only). */
+const isLateRegistration = (event: DisplayEvent): boolean => {
+  const ms = getJoinLastDateMs(event);
+  if (ms === null) return false;
+  const now = Date.now();
+  return now > ms && now <= ms + LATE_WINDOW_MS;
+};
+
+/** Hard close: more than 7 days past join_last_date — no join of any kind. */
+const isJoinHardClosed = (event: DisplayEvent): boolean => {
+  const ms = getJoinLastDateMs(event);
+  if (ms === null) return false;
+  return Date.now() > ms + LATE_WINDOW_MS;
 };
 
 interface Props {
@@ -47,8 +63,11 @@ export const EventCard: React.FC<Props> = ({
   slotStatus, slotFallbackConfirmed, setSlotFallbackConfirmed, onSubmitJoin,
 }) => {
   const dateLabel = isTournamentEvent(event) ? formatTournamentRange(event) : formatEventSchedule(event);
-  const joinClosed = isJoinClosed(event);
   const isTournament = isTournamentEvent(event);
+  const isLate = isLateRegistration(event);
+  const isHardClosed = isJoinHardClosed(event);
+  // Non-tournament events have no draw slots — late registration doesn't apply.
+  const joinClosed = isHardClosed || (isLate && !isTournament);
   const divisions = joinForm.tournamentChoice === 'Doubles' ? DOUBLES_DIVISIONS : SINGLES_DIVISIONS;
 
   const handleJoinClick = () => {
@@ -67,7 +86,9 @@ export const EventCard: React.FC<Props> = ({
           ? 'Log In to Join'
           : isExpanded
             ? 'Cancel'
-            : 'Join Event';
+            : isLate
+              ? 'Late Registration'
+              : 'Join Event';
 
   return (
     <motion.div
@@ -220,6 +241,14 @@ export const EventCard: React.FC<Props> = ({
                     />
                   </div>
                 </>
+              )}
+
+              {/* Late registration notice */}
+              {isLate && (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300">
+                  <p className="font-semibold">Late registration — limited spots remaining.</p>
+                  <p className="mt-0.5 text-amber-300/70">You'll be placed directly into an open draw slot.</p>
+                </div>
               )}
 
               {/* Slot feedback */}

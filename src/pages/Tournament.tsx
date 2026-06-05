@@ -74,11 +74,11 @@ export const Tournament: React.FC = () => {
 
   const {
     authLoading, loading, user,
-    event, matches, submissions,
+    event, matches,
     allTournamentEvents,
     isCreator, started, userParticipant,
     currentDraw, currentMatches, displayMatches, visibleDraws,
-    opponent,
+    opponent, nextMatchOpponents,
     editPlayers, reservesPlayers, currentDrawSize, skillMismatchedCount,
     message, scoreForm, scoreFormMatch, setScoreForm,
     generating, resettingDraw, editMode, setEditMode,
@@ -190,7 +190,7 @@ export const Tournament: React.FC = () => {
         </AlertMessage>
       )}
 
-      {opponent && <OpponentCard opponent={opponent} eventId={event?.id} />}
+      {opponent && <OpponentCard opponent={opponent} nextMatchOpponents={nextMatchOpponents} />}
 
       <DrawTabs
         activeTab={activeTab}
@@ -236,14 +236,13 @@ export const Tournament: React.FC = () => {
               )}
             </div>
           )}
-          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(llDrawDisplayMatches, 'LL Draw', drawState, event?.title, submissions, event?.round_deadlines ?? {})}>
+          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(llDrawDisplayMatches, 'LL Draw', drawState, event?.title, event?.round_deadlines ?? {})}>
             <BracketView
               matches={llDrawDisplayMatches}
               drawTitle="LL Draw"
               editMode={editMode}
               editPlayers={editMode ? allUsersAsTournamentPlayers : []}
               onEditPlayer={handleEditPlayer}
-              submissions={submissions}
               isCreator={isCreator}
               onSubmitScore={handleOpenScoreForm}
               roundDeadlines={event?.round_deadlines}
@@ -278,14 +277,13 @@ export const Tournament: React.FC = () => {
               )}
             </div>
           )}
-          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, submissions, event?.round_deadlines ?? {})}>
+          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, event?.round_deadlines ?? {})}>
             <BracketView
               matches={displayMatches}
               drawTitle={currentDraw?.label || 'Draw'}
               editMode={editMode}
               editPlayers={editPlayers}
               onEditPlayer={handleEditPlayer}
-              submissions={submissions}
               isCreator={isCreator}
               onSubmitScore={handleOpenScoreForm}
               roundDeadlines={event?.round_deadlines}
@@ -323,7 +321,7 @@ export const Tournament: React.FC = () => {
           mergeMensSingles={mergeMensSingles}
           mergeWomensSingles={mergeWomensSingles}
           consolidateDoubles={consolidateDoubles}
-          onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'), drawState, event?.title, submissions, event?.round_deadlines ?? {})}
+          onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'), drawState, event?.title, event?.round_deadlines ?? {})}
           onGenerateMatches={handleGenerateAll}
           onCancelMatches={handleResetDraw}
           onToggleEdit={() => setEditMode((v) => !v)}

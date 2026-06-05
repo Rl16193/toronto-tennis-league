@@ -4,7 +4,7 @@ import { NavigateFunction } from 'react-router-dom';
 import { db } from '../../../lib/firebase';
 import { TennisEvent } from '../../../types';
 import { TournamentMatch } from '../../../pages/tournament/types';
-import { PLAYER_LOADING, parseDateValue } from '../../../pages/tournament/utils';
+import { BYE, PLAYER_LOADING, parseDateValue } from '../../../pages/tournament/utils';
 import { isTournamentEvent, isSeasonOpener, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
 import { DisplayEvent } from '../services/eventService';
 import { INITIAL_JOIN_FORM, JoinFormState, SlotResult } from '../types';
@@ -56,11 +56,13 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
   const slotStatus = useMemo((): SlotResult | null => {
     if (!selectedEvent || !isTournamentEvent(selectedEvent) || !joinForm.division || tournamentMatches.length === 0) return null;
 
+    const isOpenSlot = (name: string) => name === PLAYER_LOADING || name === BYE;
+
     const findSlot = (tc: string, div: string, group: string) => {
       for (const m of tournamentMatches) {
         if (m.tournament_choice !== tc || m.division !== div || m.skill_group !== group) continue;
-        if (m.player_1_name === PLAYER_LOADING) return { match: m, slot: 'player_1' as const };
-        if (m.player_2_name === PLAYER_LOADING) return { match: m, slot: 'player_2' as const };
+        if (isOpenSlot(m.player_1_name)) return { match: m, slot: 'player_1' as const };
+        if (isOpenSlot(m.player_2_name)) return { match: m, slot: 'player_2' as const };
       }
       return null;
     };
