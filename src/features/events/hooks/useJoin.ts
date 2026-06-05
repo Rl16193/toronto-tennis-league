@@ -58,9 +58,13 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
 
     const isOpenSlot = (name: string) => name === PLAYER_LOADING || name === BYE;
 
+    // Match a draw slot — `div` is what the user selected; also accept 'All' in Firestore
+    // (consolidated/merged draws store division as 'All' rather than the specific gender).
     const findSlot = (tc: string, div: string, group: string) => {
       for (const m of tournamentMatches) {
-        if (m.tournament_choice !== tc || m.division !== div || m.skill_group !== group) continue;
+        if (m.tournament_choice !== tc) continue;
+        if (m.division !== div && m.division !== 'All') continue;
+        if (m.skill_group !== group) continue;
         if (isOpenSlot(m.player_1_name)) return { match: m, slot: 'player_1' as const };
         if (isOpenSlot(m.player_2_name)) return { match: m, slot: 'player_2' as const };
       }
@@ -71,7 +75,12 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
       const skill = Number(profile?.stats.skill_level || 0);
       const intendedGroup = skill >= 4 ? 'Masters' : 'Challengers';
       const altGroup = skill >= 4 ? 'Challengers' : 'Masters';
-      const mergedDraw = tournamentMatches.some((m) => m.tournament_choice === 'Singles' && m.division === joinForm.division && m.skill_group === 'All');
+      // Merged draw: skill_group 'All', division matches selected or 'All'
+      const mergedDraw = tournamentMatches.some(
+        (m) => m.tournament_choice === 'Singles' &&
+          (m.division === joinForm.division || m.division === 'All') &&
+          m.skill_group === 'All',
+      );
       if (mergedDraw) {
         const slot = findSlot('Singles', joinForm.division, 'All');
         return slot ? { status: 'available', ...slot, skillOverride: skill } : { status: 'full', skillOverride: skill };
@@ -85,9 +94,11 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
 
     if (joinForm.tournamentChoice === 'Doubles') {
       const skill = Number(joinForm.combinedSkill || 0);
-      const consolidated = tournamentMatches.some((m) => m.tournament_choice === 'Doubles' && m.division === 'All');
+      const consolidated = tournamentMatches.some(
+        (m) => m.tournament_choice === 'Doubles' && (m.division === 'All' || m.division === joinForm.division),
+      );
       if (consolidated) {
-        const slot = findSlot('Doubles', 'All', 'All');
+        const slot = findSlot('Doubles', 'All', 'All') ?? findSlot('Doubles', joinForm.division, 'All');
         return slot ? { status: 'available', ...slot, skillOverride: skill } : { status: 'full', skillOverride: skill };
       }
       const slot = findSlot('Doubles', joinForm.division, 'All');
