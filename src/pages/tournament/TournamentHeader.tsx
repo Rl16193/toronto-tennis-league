@@ -1,6 +1,7 @@
 ﻿import React, { useState } from 'react';
-import { ChevronDown, Download, Pencil, Play, X, XCircle } from 'lucide-react';
+import { ChevronDown, Download, GitFork, Pencil, Play, RefreshCw, X, XCircle } from 'lucide-react';
 import { Button } from '../../components/Button';
+import { TournamentFormat } from './types';
 
 type Props = {
   isCreator: boolean;
@@ -11,6 +12,8 @@ type Props = {
   mergeMensSingles: boolean;
   mergeWomensSingles: boolean;
   consolidateDoubles: boolean;
+  currentDrawFormat: TournamentFormat;
+  drawFormat: TournamentFormat;
   onDownload: () => void;
   onGenerateMatches: () => void;
   onCancelMatches: () => void;
@@ -18,15 +21,20 @@ type Props = {
   onToggleMergeMens: () => void;
   onToggleMergeWomens: () => void;
   onToggleConsolidateDoubles: () => void;
+  onSetFormat: (f: TournamentFormat) => void;
+  onConvertToRR: () => void;
 };
 
 export const TournamentHeader: React.FC<Props> = ({
   isCreator, hasMatches, isProcessing, editMode, started,
   mergeMensSingles, mergeWomensSingles, consolidateDoubles,
+  currentDrawFormat, drawFormat,
   onDownload, onGenerateMatches, onCancelMatches, onToggleEdit,
   onToggleMergeMens, onToggleMergeWomens, onToggleConsolidateDoubles,
+  onSetFormat, onConvertToRR,
 }) => {
   const [mergeOpen, setMergeOpen] = useState(false);
+  const [formatOpen, setFormatOpen] = useState(false);
 
   const anyMergeActive = mergeMensSingles || mergeWomensSingles || consolidateDoubles;
 
@@ -54,7 +62,7 @@ export const TournamentHeader: React.FC<Props> = ({
     </div>
   );
 
-  const mergeDropdown = !started && (
+  const mergeDropdown = !started && currentDrawFormat === 'bracket' && (
     <div className="relative">
       <Button
         variant={anyMergeActive ? 'clay' : 'outline'}
@@ -65,6 +73,44 @@ export const TournamentHeader: React.FC<Props> = ({
       </Button>
       {mergeMenu}
     </div>
+  );
+
+  const effectiveFormat = currentDrawFormat !== 'bracket' ? currentDrawFormat : drawFormat;
+  const formatMenu = formatOpen && (
+    <div className="absolute left-0 top-full mt-2 z-50 min-w-[180px] rounded-2xl border border-white/10 bg-tennis-dark shadow-2xl p-2 space-y-1">
+      {(['bracket', 'rr'] as TournamentFormat[]).map((f) => (
+        <button
+          key={f}
+          type="button"
+          onClick={() => { onSetFormat(f); setFormatOpen(false); }}
+          className={`w-full flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
+            effectiveFormat === f ? 'bg-clay/20 text-clay' : 'text-white hover:bg-white/5'
+          }`}
+        >
+          {f === 'bracket' ? 'Bracket' : 'Round Robin'}
+        </button>
+      ))}
+    </div>
+  );
+
+  const formatDropdown = isCreator && !started && !hasMatches && (
+    <div className="relative">
+      <Button
+        variant={effectiveFormat === 'rr' ? 'clay' : 'outline'}
+        onClick={() => setFormatOpen((v) => !v)}
+      >
+        <GitFork className="w-4 h-4 mr-2" />
+        {effectiveFormat === 'rr' ? 'Round Robin' : 'Bracket'}
+        <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${formatOpen ? 'rotate-180' : ''}`} />
+      </Button>
+      {formatMenu}
+    </div>
+  );
+
+  const convertButton = isCreator && !started && hasMatches && currentDrawFormat === 'bracket' && (
+    <Button variant="outline" onClick={onConvertToRR}>
+      <RefreshCw className="w-4 h-4 mr-2" />Convert to RR
+    </Button>
   );
 
   return (
@@ -94,6 +140,8 @@ export const TournamentHeader: React.FC<Props> = ({
               {editMode ? <><X className="w-4 h-4 mr-2" />Done Editing</> : <><Pencil className="w-4 h-4 mr-2" />Edit Draw</>}
             </Button>
             {mergeDropdown}
+            {formatDropdown}
+            {convertButton}
           </>
         )}
       </div>
@@ -126,7 +174,7 @@ export const TournamentHeader: React.FC<Props> = ({
             <Button variant={editMode ? 'danger' : 'outline'} onClick={onToggleEdit} className="w-full text-xs px-2">
               {editMode ? <><X className="w-3.5 h-3.5 mr-1 shrink-0" />Done</> : <><Pencil className="w-3.5 h-3.5 mr-1 shrink-0" />Edit</>}
             </Button>
-            {!started ? (
+            {!started && currentDrawFormat === 'bracket' ? (
               <div className="relative w-full">
                 <Button
                   variant={anyMergeActive ? 'clay' : 'outline'}
@@ -139,6 +187,16 @@ export const TournamentHeader: React.FC<Props> = ({
                 {mergeMenu}
               </div>
             ) : <div />}
+            {formatDropdown && (
+              <div className="col-span-2">
+                {formatDropdown}
+              </div>
+            )}
+            {convertButton && (
+              <div className="col-span-2">
+                {convertButton}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -14,6 +14,8 @@ import { OpponentCard } from './tournament/OpponentCard';
 import { DrawTabs } from './tournament/DrawTabs';
 import { ScoreModal } from './tournament/ScoreModal';
 import { AddPlayerPanel } from './tournament/AddPlayerPanel';
+import { RoundRobinView } from './tournament/RoundRobinView';
+import { RRConfigModal } from './tournament/RRConfigModal';
 import { AlertMessage } from '../components/AlertMessage';
 import { Button } from '../components/Button';
 import { TennisEvent } from '../types';
@@ -24,6 +26,18 @@ type EventStatus = 'active' | 'past';
 const getDrawState = (matches: TournamentMatch[]): string => {
   const real = matches.filter((m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_'));
   if (real.length === 0) return 'Live Preview';
+  if (real.some((m) => m.format === 'rr')) {
+    const groupStage = real.filter((m) => m.round === 'RR');
+    const knockout = real.filter((m) => m.format === 'rr' && m.round !== 'RR');
+    if (knockout.length > 0) {
+      const finals = knockout.filter((m) => m.round === 'F');
+      if (finals.length > 0 && finals.every((m) => m.winner_user_id)) return 'Tournament Complete';
+      return knockout.some((m) => m.winner_user_id) ? 'Knockout Started' : 'Knockout Stage';
+    }
+    if (groupStage.every((m) => m.status === 'complete')) return 'Group Stage Complete';
+    if (groupStage.some((m) => m.status === 'complete')) return 'Group Stage Started';
+    return 'Group Stage';
+  }
   const drawSize = real[0]?.drawsize || 8;
   const roundLabels = getRoundLabels(drawSize);
   const finals = real.filter((m) => m.round === 'F');
@@ -79,7 +93,7 @@ export const Tournament: React.FC = () => {
     isCreator, started, userParticipant,
     currentDraw, currentMatches, displayMatches, visibleDraws,
     opponent,
-    editPlayers, reservesPlayers, currentDrawSize, skillMismatchedCount,
+    editPlayers, reservesPlayers, currentDrawAllPlayers, currentDrawSize, skillMismatchedCount,
     message, scoreForm, scoreFormMatch, setScoreForm,
     generating, resettingDraw, editMode, setEditMode,
     mergeMensSingles, setMergeMensSingles,
@@ -93,6 +107,10 @@ export const Tournament: React.FC = () => {
     currentReservesMatches, llDrawDisplayMatches, currentLLSize, allUsersAsTournamentPlayers,
     showReserves, setShowReserves, generatingReserves,
     handleSetLLDrawSize, handleGenerateReservesDraw, handleResetLLDraw,
+    currentDrawFormat, drawFormat, setDrawFormat,
+    showRRConfig, setShowRRConfig, isConversionMode, setIsConversionMode, generatingRR,
+    rrGroups, rrStandingsByGroup, rrGroupMatches, rrKnockoutMatches, rrKnockoutReady, rrConfig,
+    handleGenerateRR, handleResetRR, handleConvertToRR, handleGenerateRRKnockout,
   } = useTournament(eventId);
 
   useEffect(() => { document.title = 'Matches — Racquets & Strings'; }, []);
@@ -278,20 +296,41 @@ export const Tournament: React.FC = () => {
               )}
             </div>
           )}
-          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, submissions, event?.round_deadlines ?? {})}>
-            <BracketView
-              matches={displayMatches}
-              drawTitle={currentDraw?.label || 'Draw'}
+          {currentDrawFormat === 'rr' ? (
+            <RoundRobinView
+              groups={rrGroups}
+              standingsByGroup={rrStandingsByGroup}
+              groupMatches={rrGroupMatches}
+              knockoutMatches={rrKnockoutMatches}
+              advancementCount={rrConfig?.advancementCount ?? 1}
+              isCreator={isCreator}
               editMode={editMode}
               editPlayers={editPlayers}
               onEditPlayer={handleEditPlayer}
-              submissions={submissions}
-              isCreator={isCreator}
               onSubmitScore={handleOpenScoreForm}
+              submissions={submissions}
+              rrKnockoutReady={rrKnockoutReady}
+              generatingKnockout={generatingRR}
+              onGenerateKnockout={handleGenerateRRKnockout}
               roundDeadlines={event?.round_deadlines}
               onUpdateDeadline={isCreator ? handleUpdateRoundDeadline : undefined}
             />
-          </BracketErrorBoundary>
+          ) : (
+            <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, submissions, event?.round_deadlines ?? {})}>
+              <BracketView
+                matches={displayMatches}
+                drawTitle={currentDraw?.label || 'Draw'}
+                editMode={editMode}
+                editPlayers={editPlayers}
+                onEditPlayer={handleEditPlayer}
+                submissions={submissions}
+                isCreator={isCreator}
+                onSubmitScore={handleOpenScoreForm}
+                roundDeadlines={event?.round_deadlines}
+                onUpdateDeadline={isCreator ? handleUpdateRoundDeadline : undefined}
+              />
+            </BracketErrorBoundary>
+          )}
           {reservesPlayers.length > 0 && (
             <div className="mt-8">
               <h3 className="text-xl font-bold text-white mb-4">
@@ -317,19 +356,23 @@ export const Tournament: React.FC = () => {
         <TournamentHeader
           isCreator={isCreator}
           hasMatches={currentMatches.length > 0}
-          isProcessing={generating || resettingDraw}
+          isProcessing={generating || resettingDraw || generatingRR}
           editMode={editMode}
           started={started}
           mergeMensSingles={mergeMensSingles}
           mergeWomensSingles={mergeWomensSingles}
           consolidateDoubles={consolidateDoubles}
+          currentDrawFormat={currentDrawFormat}
+          drawFormat={drawFormat}
           onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'), drawState, event?.title, submissions, event?.round_deadlines ?? {})}
-          onGenerateMatches={handleGenerateAll}
-          onCancelMatches={handleResetDraw}
+          onGenerateMatches={currentDrawFormat === 'rr' || drawFormat === 'rr' ? () => setShowRRConfig(true) : handleGenerateAll}
+          onCancelMatches={currentDrawFormat === 'rr' ? handleResetRR : handleResetDraw}
           onToggleEdit={() => setEditMode((v) => !v)}
           onToggleMergeMens={() => setMergeMensSingles((v) => !v)}
           onToggleMergeWomens={() => setMergeWomensSingles((v) => !v)}
           onToggleConsolidateDoubles={() => setConsolidateDoubles((v) => !v)}
+          onSetFormat={setDrawFormat}
+          onConvertToRR={() => { setIsConversionMode(true); setShowRRConfig(true); }}
         />
       </div>
 
@@ -341,6 +384,16 @@ export const Tournament: React.FC = () => {
           onClose={() => setScoreForm(null)}
           onSubmit={handleSubmitScore}
           isCreatorSubmit={true}
+        />
+      )}
+
+      {showRRConfig && (
+        <RRConfigModal
+          playerCount={currentDrawAllPlayers.length}
+          isConversion={isConversionMode}
+          isLoading={generatingRR}
+          onConfirm={isConversionMode ? handleConvertToRR : handleGenerateRR}
+          onClose={() => { setShowRRConfig(false); setIsConversionMode(false); }}
         />
       )}
     </>

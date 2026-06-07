@@ -62,6 +62,11 @@ export type TournamentMatch = {
   started: boolean;
   created_at?: string;
   completed_at?: string;
+  format?: TournamentFormat;
+  rr_group?: number;
+  rr_round?: number;
+  rr_advancement_count?: number;
+  walkover?: boolean;
 };
 
 export type ScoreSubmission = {
@@ -90,6 +95,22 @@ export type ScoreForm = {
   matchDocId: string;
   winnerUserId: string;
   sets: Array<{ mine: string; opponent: string }>;
+};
+
+export type TournamentFormat = 'bracket' | 'rr';
+
+export type RRConfig = {
+  groupSize: 4 | 5;
+  advancementCount: 1 | 2;
+};
+
+export type RRStandingRow = {
+  name: string;
+  userId: string;
+  matchWins: number;
+  matchLosses: number;
+  points: number;
+  rank: number;
 };
 
 export type DrawConfig = {

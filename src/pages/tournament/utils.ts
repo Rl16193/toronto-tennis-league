@@ -4,6 +4,8 @@ import { DrawConfig, ScoreSubmission, SkillGroup, TemplateMatch, TournamentPlaye
 export const PLAYER_LOADING = 'Player Loading';
 export const BYE = 'BYE';
 
+export const isRRMatch = (m: { format?: string }) => m.format === 'rr';
+
 export const formatPlayerName = (value?: string) => {
   const trimmed = (value || '').trim();
   if (!trimmed) return '';

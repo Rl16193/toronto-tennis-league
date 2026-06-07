@@ -5,7 +5,11 @@ import {
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { EventParticipant, TennisEvent, UserData, UserStats } from '../../types';
-import { DrawConfig, DrawTab, ScoreForm, ScoreSubmission, SkillGroup, TournamentMatch, TournamentPlayer, TournamentTemplate } from './types';
+import { DrawConfig, DrawTab, RRConfig, RRStandingRow, ScoreForm, ScoreSubmission, SkillGroup, TournamentFormat, TournamentMatch, TournamentPlayer, TournamentTemplate } from './types';
+import {
+  buildRRGroupMatchFields, buildRRKnockoutDocs, computeGroupStandings,
+  deriveRRConfig, distributePlayersIntoGroups, generateGroupPairings, selectAdvancingPlayers,
+} from './rrGeneration';
 import {
   BYE, PLAYER_LOADING,
   buildMatchFields, buildPlayerList, deleteKey, fallbackTemplate, filterParticipantsForDraw,
@@ -55,6 +59,12 @@ export const useTournament = (eventIdOverride?: string) => {
   // LL Draw state — keyed by draw key so each division has independent size/slots
   const [llDrawSizes, setLLDrawSizes] = useState<Record<string, number>>({});
   const [llDrawSlotOverrides, setLLDrawSlotOverrides] = useState<Record<string, Record<number, TournamentPlayer | null>>>({});
+
+  // Round Robin state
+  const [drawFormat, setDrawFormat] = useState<TournamentFormat>('bracket');
+  const [showRRConfig, setShowRRConfig] = useState(false);
+  const [isConversionMode, setIsConversionMode] = useState(false);
+  const [generatingRR, setGeneratingRR] = useState(false);
 
   const activeEventIdRef = useRef<string | undefined>(undefined);
 
@@ -124,6 +134,9 @@ export const useTournament = (eventIdOverride?: string) => {
     setPreviewDrawSize({});
     setLLDrawSizes({});
     setLLDrawSlotOverrides({});
+    setDrawFormat('bracket');
+    setShowRRConfig(false);
+    setIsConversionMode(false);
     setMergeMensSingles(false);
     setMergeWomensSingles(false);
     setConsolidateDoubles(false);
@@ -152,6 +165,8 @@ export const useTournament = (eventIdOverride?: string) => {
           setMergeWomensSingles(true);
         if (loaded.some((m) => m.tournament_choice === 'Doubles' && m.division === 'All' && m.bracket !== 'reserves'))
           setConsolidateDoubles(true);
+        if (loaded.some((m) => m.format === 'rr' && m.bracket !== 'reserves'))
+          setDrawFormat('rr');
       },
     );
   }, [event]);
@@ -468,6 +483,59 @@ export const useTournament = (eventIdOverride?: string) => {
       })()
     : null;
 
+  // ── Round Robin derived data ──────────────────────────────────────────────
+
+  const currentDrawFormat = useMemo<TournamentFormat>(
+    () => (currentMatches.some((m) => m.format === 'rr') ? 'rr' : drawFormat),
+    [currentMatches, drawFormat],
+  );
+
+  const rrGroupMatches = useMemo(
+    () => currentMatches.filter((m) => m.format === 'rr' && m.round === 'RR'),
+    [currentMatches],
+  );
+
+  const rrKnockoutMatches = useMemo(
+    () => currentMatches.filter((m) => m.format === 'rr' && m.round !== 'RR'),
+    [currentMatches],
+  );
+
+  const rrGroups = useMemo<TournamentPlayer[][]>(() => {
+    if (rrGroupMatches.length === 0) return [];
+    const groupIndices = [...new Set(rrGroupMatches.map((m) => m.rr_group ?? 0))].sort((a, b) => a - b);
+    return groupIndices.map((gi) => {
+      const groupMs = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === gi);
+      const seen = new Set<string>();
+      const players: TournamentPlayer[] = [];
+      for (const m of groupMs) {
+        if (m.player_1_user_id && !seen.has(m.player_1_user_id)) {
+          seen.add(m.player_1_user_id);
+          players.push({ user_id: m.player_1_user_id, name: m.player_1_name, contact: m.player_1_contact, preferredContact: 'email', participantId: '' });
+        }
+        if (m.player_2_user_id && !seen.has(m.player_2_user_id)) {
+          seen.add(m.player_2_user_id);
+          players.push({ user_id: m.player_2_user_id, name: m.player_2_name, contact: m.player_2_contact, preferredContact: 'email', participantId: '' });
+        }
+      }
+      return players;
+    });
+  }, [rrGroupMatches]);
+
+  const rrStandingsByGroup = useMemo<RRStandingRow[][]>(
+    () => rrGroups.map((_, gi) => computeGroupStandings(rrGroupMatches.filter((m) => (m.rr_group ?? 0) === gi))),
+    [rrGroups, rrGroupMatches],
+  );
+
+  const rrConfig = useMemo(() => deriveRRConfig(currentMatches), [currentMatches]);
+
+  const rrKnockoutReady = useMemo(
+    () =>
+      rrGroupMatches.length > 0 &&
+      rrGroupMatches.every((m) => m.status === 'complete') &&
+      rrKnockoutMatches.length === 0,
+    [rrGroupMatches, rrKnockoutMatches],
+  );
+
   // ── Internal helpers ──────────────────────────────────────────────────────
 
   const generateDraw = async (draw: DrawConfig, lockedDrawsize?: number) => {
@@ -512,7 +580,7 @@ export const useTournament = (eventIdOverride?: string) => {
     await batch.commit();
   };
 
-  const updateMatchWithSubmission = async (match: TournamentMatch, submission: ScoreSubmission) => {
+  const updateMatchWithSubmission = async (match: TournamentMatch, submission: ScoreSubmission, isWalkover?: boolean) => {
     const batch = writeBatch(db);
     batch.update(doc(db, 'tournament_matches', match.id), {
       winner_name: submission.claimed_winner_name,
@@ -522,6 +590,7 @@ export const useTournament = (eventIdOverride?: string) => {
       set_3_player_1: submission.set_3_player_1, set_3_player_2: submission.set_3_player_2,
       status: 'complete',
       completed_at: new Date().toISOString(),
+      ...(isWalkover ? { walkover: true } : {}),
     });
 
     submissions
@@ -532,11 +601,12 @@ export const useTournament = (eventIdOverride?: string) => {
     // LL Draw (reserves) earns halved points; main draw earns full points
     {
       const isLL = match.bracket === 'reserves';
+      const isRRGroupStage = match.format === 'rr' && match.round === 'RR';
       const LOSER_PTS: Record<string, number> = isLL
         ? { R32: 0.5, R16: 1, QF: 1.5, SF: 2.5, F: 5 }
-        : { R32: 1, R16: 2, QF: 3, SF: 5, F: 10 };
+        : { R32: 1, R16: 2, QF: 3, RR: 1, SF: 5, F: 10 };
       const loserPts = LOSER_PTS[match.round] ?? (isLL ? 0.5 : 1);
-      const winnerPts = isLL ? 10 : 20;
+      const winnerPts = isLL ? 10 : isRRGroupStage ? (isWalkover ? 1 : 3) : 20;
       const isFinal = match.round === 'F';
       const matchLeague = match.tournament_choice === 'Doubles' ? 'Doubles' : match.division;
       const winnerUid = submission.claimed_winner_user_id;
@@ -807,9 +877,11 @@ export const useTournament = (eventIdOverride?: string) => {
       created_at: new Date().toISOString(),
     };
 
+    const isWalkover = parsedSets.every((s) => s.mine === 0 && s.opponent === 0);
+
     try {
       await setDoc(doc(db, 'score_submissions', submission.id), submission);
-      await updateMatchWithSubmission(match, submission);
+      await updateMatchWithSubmission(match, submission, isWalkover);
       setScoreForm(null);
       setMessage({ type: 'success', text: 'Score recorded and draw updated.' });
     } catch (err) {
@@ -928,6 +1000,122 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
+  // ── Round Robin action handlers ───────────────────────────────────────────
+
+  const handleGenerateRR = async (config: RRConfig) => {
+    if (!isCreator || !event || !currentDraw) return;
+    setGeneratingRR(true);
+    setMessage(null);
+    try {
+      const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
+      const groups = distributePlayersIntoGroups(currentDrawAllPlayers, config.groupSize);
+      const batch = writeBatch(db);
+      groups.forEach((groupPlayers, gi) => {
+        const pairings = generateGroupPairings(groupPlayers.length);
+        buildRRGroupMatchFields({
+          eventId: event.id, drawKey, draw: currentDraw,
+          groupIndex: gi, groupPlayers, pairings,
+          advancementCount: config.advancementCount, started,
+        }).forEach(({ docId, fields }) => {
+          batch.set(doc(db, 'tournament_matches', docId), fields);
+        });
+      });
+      await batch.commit();
+      setDrawFormat('rr');
+      setShowRRConfig(false);
+      setEditMode(false);
+      setMessage({ type: 'success', text: `Round Robin draw generated — ${groups.length} group${groups.length > 1 ? 's' : ''}.` });
+    } catch (err) {
+      console.error('RR generation failed:', err);
+      setMessage({ type: 'error', text: 'Could not generate the Round Robin draw.' });
+    } finally {
+      setGeneratingRR(false);
+    }
+  };
+
+  const handleResetRR = async () => {
+    if (!isCreator || !currentDraw || currentMatches.length === 0) return;
+    const hasComplete = currentMatches.some((m) => m.status === 'complete');
+    if (hasComplete) {
+      setMessage({ type: 'error', text: 'Cannot reset — a match has already been played.' });
+      return;
+    }
+    if (!window.confirm('Reset the Round Robin draw? This will clear all group and knockout matches.')) return;
+    setResettingDraw(true);
+    try {
+      const batch = writeBatch(db);
+      currentMatches.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
+      await batch.commit();
+      setDrawFormat('bracket');
+      setEditMode(false);
+      setMessage({ type: 'success', text: 'Round Robin draw reset.' });
+    } catch (err) {
+      console.error('RR reset failed:', err);
+      setMessage({ type: 'error', text: 'Could not reset the draw.' });
+    } finally {
+      setResettingDraw(false);
+    }
+  };
+
+  const handleConvertToRR = async (config: RRConfig) => {
+    if (!isCreator || !event || !currentDraw) return;
+    setGeneratingRR(true);
+    setMessage(null);
+    try {
+      const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
+      const batch = writeBatch(db);
+      // Delete existing bracket matches
+      currentMatches.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
+      // Delete orphaned score submissions
+      const matchIds = new Set(currentMatches.map((m) => m.id));
+      submissions.filter((s) => matchIds.has(s.match_doc_id)).forEach((s) => batch.delete(doc(db, 'score_submissions', s.id)));
+      await batch.commit();
+
+      // Generate RR matches in a new batch
+      const groups = distributePlayersIntoGroups(currentDrawAllPlayers, config.groupSize);
+      const batch2 = writeBatch(db);
+      groups.forEach((groupPlayers, gi) => {
+        const pairings = generateGroupPairings(groupPlayers.length);
+        buildRRGroupMatchFields({
+          eventId: event.id, drawKey, draw: currentDraw,
+          groupIndex: gi, groupPlayers, pairings,
+          advancementCount: config.advancementCount, started,
+        }).forEach(({ docId, fields }) => batch2.set(doc(db, 'tournament_matches', docId), fields));
+      });
+      await batch2.commit();
+      setDrawFormat('rr');
+      setShowRRConfig(false);
+      setIsConversionMode(false);
+      setEditMode(false);
+      setMessage({ type: 'success', text: `Converted to Round Robin — ${groups.length} group${groups.length > 1 ? 's' : ''}.` });
+    } catch (err) {
+      console.error('Conversion failed:', err);
+      setMessage({ type: 'error', text: 'Could not convert the draw.' });
+    } finally {
+      setGeneratingRR(false);
+    }
+  };
+
+  const handleGenerateRRKnockout = async () => {
+    if (!isCreator || !event || !currentDraw || !rrKnockoutReady) return;
+    setGeneratingRR(true);
+    setMessage(null);
+    try {
+      const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
+      const advancing = selectAdvancingPlayers(rrGroups, rrStandingsByGroup, rrConfig?.advancementCount ?? 1);
+      const docs = buildRRKnockoutDocs({ eventId: event.id, drawKey, draw: currentDraw, advancingPlayers: advancing, started });
+      const batch = writeBatch(db);
+      docs.forEach(({ docId, fields }) => batch.set(doc(db, 'tournament_matches', docId), fields));
+      await batch.commit();
+      setMessage({ type: 'success', text: 'Knockout stage generated.' });
+    } catch (err) {
+      console.error('RR knockout generation failed:', err);
+      setMessage({ type: 'error', text: 'Could not generate knockout stage.' });
+    } finally {
+      setGeneratingRR(false);
+    }
+  };
+
   return {
     authLoading,
     loading,
@@ -946,6 +1134,7 @@ export const useTournament = (eventIdOverride?: string) => {
     opponent,
     editPlayers,
     reservesPlayers,
+    currentDrawAllPlayers,
     currentDrawSize,
     skillMismatchedCount,
     message,
@@ -987,5 +1176,24 @@ export const useTournament = (eventIdOverride?: string) => {
     handleSetLLDrawSize,
     handleGenerateReservesDraw,
     handleResetLLDraw,
+    // Round Robin
+    currentDrawFormat,
+    drawFormat,
+    setDrawFormat,
+    showRRConfig,
+    setShowRRConfig,
+    isConversionMode,
+    setIsConversionMode,
+    generatingRR,
+    rrGroups,
+    rrStandingsByGroup,
+    rrGroupMatches,
+    rrKnockoutMatches,
+    rrKnockoutReady,
+    rrConfig,
+    handleGenerateRR,
+    handleResetRR,
+    handleConvertToRR,
+    handleGenerateRRKnockout,
   };
 };
