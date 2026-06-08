@@ -1,4 +1,3 @@
-import 'leaflet/dist/leaflet.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { divIcon } from 'leaflet';
@@ -18,6 +17,7 @@ type CsvCourt = {
   courtType: string;
   numCourts: number;
   lights: boolean;
+  clubInfo: string;
 };
 
 type CourtWithCount = CsvCourt & { count: number; hasPrograms: boolean };
@@ -35,6 +35,7 @@ type TennisProgram = {
   minAgeYr: number | null;
   maxAgeYr: number | null;
   status: string;
+  activityUrl: string;
   lat?: number;
   lng?: number;
 };
@@ -129,15 +130,6 @@ function parseDateStr(s: string): Date | null {
   return new Date(yr, m, day);
 }
 
-function getTimeCategory(timeRange: string): string {
-  const match = timeRange.match(/^(\d{1,2}):/);
-  if (!match) return '';
-  const hour = parseInt(match[1]);
-  if (hour < 12) return 'Morning';
-  if (hour < 17) return 'Afternoon';
-  return 'Evening';
-}
-
 function toYears(months: string | undefined): number | null {
   if (!months || months === 'None') return null;
   const m = parseInt(months);
@@ -169,6 +161,7 @@ function parseCourts(csvText: string): CsvCourt[] {
   const iName = idx('Name'), iDropdown = idx('Dropdown'), iType = idx('Type');
   const iLights = idx('Lights'), iCourts = idx('Courts');
   const iAddress = idx('LocationAddress'), iGeom = idx('geometry');
+  const iClubInfo = idx('ClubInfo');
 
   const courts: CsvCourt[] = [];
   for (const line of lines) {
@@ -188,6 +181,7 @@ function parseCourts(csvText: string): CsvCourt[] {
         courtType: cells[iType]?.trim() || '',
         numCourts: parseInt(cells[iCourts]) || 0,
         lights: cells[iLights]?.trim().toLowerCase() === 'yes',
+        clubInfo: iClubInfo >= 0 ? (cells[iClubInfo]?.trim() || '') : '',
       });
     } catch { /* skip malformed */ }
   }
@@ -210,6 +204,7 @@ function parsePrograms(
   const iStartMin = pIdx('Start Min'), iEndHr = pIdx('End Hour');
   const iEndMin = pIdx('End Min'), iMinAge = pIdx('Min Age');
   const iMaxAge = pIdx('Max Age'), iStatus = pIdx('Status / Information');
+  const iActivityUrl = pIdx('Activity URL');
 
   const programs: TennisProgram[] = [];
   const seen = new Set<string>();
@@ -252,6 +247,7 @@ function parsePrograms(
       timeRange, ageRange,
       minAgeYr, maxAgeYr,
       status: cells[iStatus]?.trim() || '',
+      activityUrl: iActivityUrl >= 0 ? (cells[iActivityUrl]?.trim() || '') : '',
       lat: cached?.lat,
       lng: cached?.lng,
     });
@@ -273,12 +269,12 @@ function deduplicateCourts(courts: CourtWithCount[]): CourtWithCount[] {
     const totalCount = group.reduce((s, c) => s + c.count, 0);
     const totalCourts = group.reduce((s, c) => s + c.numCourts, 0);
     const hasPrograms = group.some(c => c.hasPrograms);
+    const clubInfo = group.map(c => c.clubInfo).filter(Boolean).join('; ');
     const winner = group[0];
-    // Use winner's name if it has more players; otherwise combine names
     const dropdown = group[0].count > group[1].count
       ? group[0].dropdown
       : group.map(c => c.dropdown).join(' / ');
-    result.push({ ...winner, dropdown, count: totalCount, numCourts: totalCourts, hasPrograms });
+    result.push({ ...winner, dropdown, count: totalCount, numCourts: totalCourts, hasPrograms, clubInfo });
   }
   return result;
 }
@@ -318,20 +314,32 @@ function courtMarkerIcon(court: CourtWithCount) {
 
   let html: string;
   if (hasPlayers && court.hasPrograms) {
+    // Green + Yellow split: players AND programs
     html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
       <path d="M${r},0 A${r},${r} 0 0,0 ${r},${s} Z" fill="#15803d" opacity="0.95"/>
       <path d="M${r},0 A${r},${r} 0 0,1 ${r},${s} Z" fill="#eab308" opacity="0.95"/>
       <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>
     </svg>`;
   } else if (hasPlayers) {
+    // Green: players only
     html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
       <circle cx="${r}" cy="${r}" r="${r}" fill="#15803d" opacity="0.95"/>
       <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>
     </svg>`;
-  } else {
-    const color = court.hasPrograms ? '#eab308' : '#f97316';
+  } else if (court.hasPrograms) {
+    // Yellow: programs, no players
     html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${r}" cy="${r}" r="${r}" fill="${color}" opacity="0.82"/>
+      <circle cx="${r}" cy="${r}" r="${r}" fill="#eab308" opacity="0.82"/>
+    </svg>`;
+  } else if (court.clubInfo) {
+    // Blue: public hours available, no players or programs
+    html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${r}" cy="${r}" r="${r}" fill="#3b82f6" opacity="0.82"/>
+    </svg>`;
+  } else {
+    // Orange: nothing
+    html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${r}" cy="${r}" r="${r}" fill="#f97316" opacity="0.82"/>
     </svg>`;
   }
   return divIcon({ html, className: '', iconSize: [s, s], iconAnchor: [r, r], popupAnchor: [0, -(r + 4)] });
@@ -362,7 +370,7 @@ function ChipGroup({
 }) {
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      <span className="text-clay text-xs shrink-0">{label}:</span>
+      <span className="text-white text-xs shrink-0">{label}:</span>
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -370,7 +378,7 @@ function ChipGroup({
           className={`px-2 py-0.5 rounded-md text-xs transition-colors ${
             value === opt.value
               ? 'bg-clay text-white'
-              : 'bg-white/5 text-white/60 hover:bg-white/10'
+              : 'bg-white/10 text-white/60 hover:bg-white/20'
           }`}
         >
           {opt.label}
@@ -390,7 +398,7 @@ function DaysChips({
   const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      <span className="text-clay text-xs shrink-0">Days:</span>
+      <span className="text-white text-xs shrink-0">Days:</span>
       {DAYS.map((d) => (
         <button
           key={d}
@@ -400,7 +408,7 @@ function DaysChips({
             onChange(next);
           }}
           className={`px-2 py-0.5 rounded-md text-xs transition-colors ${
-            selected.has(d) ? 'bg-clay text-white' : 'bg-white/5 text-white/60 hover:bg-white/10'
+            selected.has(d) ? 'bg-clay text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'
           }`}
         >
           {d}
@@ -429,15 +437,13 @@ export const CourtMap: React.FC = () => {
   const [courtTypeFilter, setCourtTypeFilter] = useState('');
   const [courtLightsFilter, setCourtLightsFilter] = useState('');
 
-  // Programs filters
+  // Programs filters (Time and Program removed)
   const [progDaysFilter, setProgDaysFilter] = useState(new Set<string>());
-  const [progTimeFilter, setProgTimeFilter] = useState('');
   const [progAgeFilter, setProgAgeFilter] = useState('');
   const [progStatusFilter, setProgStatusFilter] = useState('');
 
   const [courtsShowMore, setCourtsShowMore] = useState(false);
   const [programsShowMore, setProgramsShowMore] = useState(false);
-  const [progNameFilter, setProgNameFilter] = useState('');
 
   const [suggestions, setSuggestions] = useState<{ label: string; lat: number; lng: number }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -449,21 +455,7 @@ export const CourtMap: React.FC = () => {
   // ── Deduplicate courts at the same location ────────────────────────────────
   const deduplicatedCourts = useMemo(() => deduplicateCourts(courts), [courts]);
 
-  // ── Unique program types for filter chips ─────────────────────────────────
-  const uniqueProgramTypes = useMemo(() => {
-    const types = new Set<string>();
-    for (const p of programs) {
-      const norm = p.title.replace(/^tennis[:\s]+/i, '').trim();
-      const main = norm.split(/\s*[-–]\s*/)[0].trim().toLowerCase();
-      if (main) types.add(main);
-    }
-    return [...types].sort().map((t) => ({
-      value: t,
-      label: t.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
-    }));
-  }, [programs]);
-
-  // ── Filtered + sorted courts for table ────────────────────────────────────
+  // ── Filtered + sorted courts ───────────────────────────────────────────────
   const displayedCourts = useMemo((): NearestCourt[] => {
     let list = deduplicatedCourts;
     if (courtTypeFilter === 'Public') list = list.filter((c) => c.courtType.toLowerCase() === 'public');
@@ -478,7 +470,7 @@ export const CourtMap: React.FC = () => {
       .sort((a, b) => a.distKm - b.distKm);
   }, [deduplicatedCourts, courtTypeFilter, courtLightsFilter, userCoords]);
 
-  // ── Filtered + sorted programs for table ──────────────────────────────────
+  // ── Filtered + sorted programs ─────────────────────────────────────────────
   const displayedPrograms = useMemo((): NearestProgram[] => {
     const today = new Date();
     let list = programs;
@@ -501,23 +493,12 @@ export const CourtMap: React.FC = () => {
       });
     }
 
-    if (progTimeFilter) {
-      list = list.filter((p) => getTimeCategory(p.timeRange) === progTimeFilter);
-    }
-
     if (progAgeFilter === 'under13') {
       list = list.filter((p) => (p.minAgeYr ?? 0) < 13);
     } else if (progAgeFilter === '13to18') {
       list = list.filter((p) => { const m = p.minAgeYr ?? 0; return m >= 13 && m <= 18; });
     } else if (progAgeFilter === '19plus') {
       list = list.filter((p) => (p.minAgeYr ?? 0) >= 19);
-    }
-
-    if (progNameFilter) {
-      list = list.filter((p) => {
-        const norm = p.title.replace(/^tennis[:\s]+/i, '').toLowerCase();
-        return norm.startsWith(progNameFilter) || norm.includes(progNameFilter);
-      });
     }
 
     const scored: NearestProgram[] = list.map((p) => ({
@@ -530,11 +511,11 @@ export const CourtMap: React.FC = () => {
     const withDist = scored.filter((p) => p.distKm !== null).sort((a, b) => a.distKm! - b.distKm!);
     const withoutDist = scored.filter((p) => p.distKm === null);
     return [...withDist, ...withoutDist];
-  }, [programs, progStatusFilter, progDaysFilter, progTimeFilter, progAgeFilter, userCoords]);
+  }, [programs, progStatusFilter, progDaysFilter, progAgeFilter, userCoords]);
 
   // ── Reset "show more" when filters change ─────────────────────────────────
   useEffect(() => { setCourtsShowMore(false); }, [courtTypeFilter, courtLightsFilter]);
-  useEffect(() => { setProgramsShowMore(false); }, [progDaysFilter, progTimeFilter, progAgeFilter, progStatusFilter, progNameFilter]);
+  useEffect(() => { setProgramsShowMore(false); }, [progDaysFilter, progAgeFilter, progStatusFilter]);
 
   // ── Load data on mount ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -620,7 +601,7 @@ export const CourtMap: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
-  // ── Geocode helper (reuse cached coords if address unchanged) ──────────────
+  // ── Geocode helper ─────────────────────────────────────────────────────────
   const lastGeocodedQuery = useRef('');
   const lastGeocodedCoords = useRef<{ lat: number; lng: number } | null>(null);
 
@@ -708,10 +689,8 @@ export const CourtMap: React.FC = () => {
     setCourtTypeFilter('');
     setCourtLightsFilter('');
     setProgDaysFilter(new Set());
-    setProgTimeFilter('');
     setProgAgeFilter('');
     setProgStatusFilter('');
-    setProgNameFilter('');
     setCourtsShowMore(false);
     setProgramsShowMore(false);
     setSuggestions([]);
@@ -728,13 +707,11 @@ export const CourtMap: React.FC = () => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
 
         {/* Header */}
-        <div className="mb-4">
-          <h1 className="text-3xl font-bold font-['Montserrat'] text-white mb-1">
-            Courts <span className="text-clay">Map</span>
+        <div className="mb-2">
+          <h1 className="text-3xl font-bold font-['Montserrat']">
+            <span className="text-white">Our </span>
+            <span className="text-clay">Courts</span>
           </h1>
-          <p className="text-white/60 text-sm">
-            {loading ? 'Loading courts…' : 'See where we play.'}
-          </p>
         </div>
 
         {/* Search bar */}
@@ -821,8 +798,57 @@ export const CourtMap: React.FC = () => {
 
         {searchError && <p className="text-red-400 text-sm mb-3">{searchError}</p>}
 
-        {/* Map — sticky so it never slides under the fixed navbar when scrolling */}
-        <div className="rounded-2xl overflow-hidden border border-white/10 shadow-xl sticky top-20 z-10" style={{ height: '55vh' }}>
+        {/* Filters — above map, white labels */}
+        {showCourtsTable && (
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
+            <ChipGroup
+              label="Type"
+              value={courtTypeFilter}
+              options={[
+                { value: 'Public', label: 'Public' },
+                { value: 'Club', label: 'Club' },
+              ]}
+              onChange={setCourtTypeFilter}
+            />
+            <ChipGroup
+              label="Lights"
+              value={courtLightsFilter}
+              options={[
+                { value: 'yes', label: 'Yes' },
+                { value: 'no', label: 'No' },
+              ]}
+              onChange={setCourtLightsFilter}
+            />
+          </div>
+        )}
+        {showProgramsTable && (
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
+            <ChipGroup
+              label="Status"
+              value={progStatusFilter}
+              options={[
+                { value: 'ongoing', label: 'Ongoing' },
+                { value: 'upcoming', label: 'Upcoming' },
+              ]}
+              onChange={setProgStatusFilter}
+            />
+            <DaysChips selected={progDaysFilter} onChange={setProgDaysFilter} />
+            <ChipGroup
+              label="Age"
+              value={progAgeFilter}
+              options={[
+                { value: '', label: 'All ages' },
+                { value: 'under13', label: 'Under 13' },
+                { value: '13to18', label: '13–18' },
+                { value: '19plus', label: '19+' },
+              ]}
+              onChange={setProgAgeFilter}
+            />
+          </div>
+        )}
+
+        {/* Map — normal flow, not sticky */}
+        <div className="rounded-2xl overflow-hidden border border-white/10 shadow-xl relative" style={{ height: '55vh' }}>
           {loading ? (
             <div className="w-full h-full flex items-center justify-center bg-white/5">
               <Loader2 className="w-8 h-8 text-clay animate-spin" />
@@ -843,27 +869,23 @@ export const CourtMap: React.FC = () => {
                   <Popup>
                     <div className="text-sm" style={{ minWidth: 180 }}>
                       <p className="font-semibold text-base mb-1">{court.dropdown}</p>
-                      {court.name !== court.dropdown && (
-                        <p className="text-gray-500 text-xs mb-1">{court.name}</p>
+                      {court.address && (
+                        <p className="text-gray-500 text-xs mb-1">{court.address}</p>
                       )}
-                      {court.count > 0 ? (
-                        <p className="text-green-700 font-medium mb-1">
-                          {court.count === 1 ? 'Serving 1 player.' : `Serving ${court.count} people.`}
+                      {court.count > 0 && (
+                        <p className="text-green-700 font-medium text-xs mb-1">
+                          {court.count} active player{court.count !== 1 ? 's' : ''}
                         </p>
-                      ) : null}
-                      {court.hasPrograms ? (
-                        <p className="text-yellow-600 font-medium mb-1">Tennis programs available here.</p>
-                      ) : null}
-                      {!court.count && !court.hasPrograms && (
-                        <p className="text-gray-400 mb-1">No active players registered here.</p>
                       )}
-                      <div className="text-gray-500 text-xs space-y-0.5 border-t pt-2 mt-1">
-                        {court.address && <p>{court.address}</p>}
-                        <p>
-                          {court.courtType} · {court.numCourts} court{court.numCourts !== 1 ? 's' : ''} ·{' '}
-                          {court.lights ? 'Lights ✓' : 'No lights'}
-                        </p>
-                      </div>
+                      {court.hasPrograms && (
+                        <p className="text-yellow-600 font-medium text-xs mb-1">Tennis programs available</p>
+                      )}
+                      {court.clubInfo && (
+                        <p className="text-blue-600 text-xs mb-1">{court.clubInfo}</p>
+                      )}
+                      <p className="text-gray-400 text-xs mt-1">
+                        {court.courtType}{court.courtType ? ' · ' : ''}{court.numCourts} court{court.numCourts !== 1 ? 's' : ''} · {court.lights ? 'Lights ✓' : 'No lights'}
+                      </p>
                     </div>
                   </Popup>
                 </Marker>
@@ -887,7 +909,11 @@ export const CourtMap: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-[#eab308] inline-block shrink-0" />
-            Available tennis programs
+            Tennis programs
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-[#3b82f6] inline-block shrink-0" />
+            Public hours available
           </div>
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-[#f97316] inline-block shrink-0" />
@@ -900,37 +926,13 @@ export const CourtMap: React.FC = () => {
           const top10 = displayedCourts.slice(0, 10);
           const visible = courtsShowMore ? top10 : top10.slice(0, 5);
           return (
-            <div className="mt-8">
-              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                <h2 className="text-white font-semibold text-lg">
-                  Tennis Courts{' '}
-                  <span className="text-white/40 font-normal text-sm">
-                    {displayedCourts.length} result{displayedCourts.length !== 1 ? 's' : ''}, showing top {Math.min(10, displayedCourts.length)}
-                  </span>
-                </h2>
-              </div>
-
-              {/* Courts filters — compact inline chips */}
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
-                <ChipGroup
-                  label="Type"
-                  value={courtTypeFilter}
-                  options={[
-                    { value: 'Public', label: 'Public' },
-                    { value: 'Club', label: 'Club' },
-                  ]}
-                  onChange={setCourtTypeFilter}
-                />
-                <ChipGroup
-                  label="Lights"
-                  value={courtLightsFilter}
-                  options={[
-                    { value: 'yes', label: 'Yes' },
-                    { value: 'no', label: 'No' },
-                  ]}
-                  onChange={setCourtLightsFilter}
-                />
-              </div>
+            <div className="mt-6">
+              <h2 className="text-white font-semibold text-lg mb-2">
+                Tennis Courts{' '}
+                <span className="text-white/40 font-normal text-sm">
+                  {displayedCourts.length} result{displayedCourts.length !== 1 ? 's' : ''}, showing top {Math.min(10, displayedCourts.length)}
+                </span>
+              </h2>
 
               {displayedCourts.length === 0 ? (
                 <p className="text-white/40 text-sm py-4 text-center">No courts match the current filters.</p>
@@ -941,10 +943,9 @@ export const CourtMap: React.FC = () => {
                       <thead className="bg-white/5 text-white/50 text-xs uppercase">
                         <tr>
                           <th className="px-4 py-3 text-left">Court</th>
-                          <th className="px-4 py-3 text-left">Type</th>
                           <th className="px-4 py-3 text-left"># Courts</th>
-                          <th className="px-4 py-3 text-left">Lights</th>
                           <th className="px-4 py-3 text-left">Players</th>
+                          <th className="px-4 py-3 text-left">Public Hours</th>
                           <th className="px-4 py-3 text-left">Address</th>
                           <th className="px-4 py-3 text-left">Distance</th>
                         </tr>
@@ -953,13 +954,14 @@ export const CourtMap: React.FC = () => {
                         {visible.map((c) => (
                           <tr key={`${c.dropdown}-${c.lat}`} className="hover:bg-white/[0.03] transition-colors">
                             <td className="px-4 py-3 font-medium">{c.dropdown}</td>
-                            <td className="px-4 py-3">{c.courtType || '—'}</td>
                             <td className="px-4 py-3">{c.numCourts || '—'}</td>
-                            <td className="px-4 py-3">{c.lights ? 'Yes' : 'No'}</td>
                             <td className="px-4 py-3">
                               {c.count > 0 ? (
                                 <span className="text-clay font-medium">{c.count}</span>
                               ) : '—'}
+                            </td>
+                            <td className="px-4 py-3 text-white/50 text-xs max-w-[200px]">
+                              {c.clubInfo || '—'}
                             </td>
                             <td className="px-4 py-3 text-white/50">{c.address || '—'}</td>
                             <td className="px-4 py-3 text-clay font-medium">
@@ -989,58 +991,13 @@ export const CourtMap: React.FC = () => {
           const top10 = displayedPrograms.slice(0, 10);
           const visible = programsShowMore ? top10 : top10.slice(0, 5);
           return (
-            <div className="mt-8">
-              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                <h2 className="text-white font-semibold text-lg">
-                  Tennis Programs{' '}
-                  <span className="text-white/40 font-normal text-sm">
-                    {displayedPrograms.length} result{displayedPrograms.length !== 1 ? 's' : ''}, showing top {Math.min(10, displayedPrograms.length)}
-                  </span>
-                </h2>
-              </div>
-
-              {/* Programs filters — compact inline chips */}
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
-                <ChipGroup
-                  label="Status"
-                  value={progStatusFilter}
-                  options={[
-                    { value: 'ongoing', label: 'Ongoing' },
-                    { value: 'upcoming', label: 'Upcoming' },
-                  ]}
-                  onChange={setProgStatusFilter}
-                />
-                <DaysChips selected={progDaysFilter} onChange={setProgDaysFilter} />
-                <ChipGroup
-                  label="Time"
-                  value={progTimeFilter}
-                  options={[
-                    { value: 'Morning', label: 'Morning' },
-                    { value: 'Afternoon', label: 'Afternoon' },
-                    { value: 'Evening', label: 'Evening' },
-                  ]}
-                  onChange={setProgTimeFilter}
-                />
-                <ChipGroup
-                  label="Age"
-                  value={progAgeFilter}
-                  options={[
-                    { value: '', label: 'All ages' },
-                    { value: 'under13', label: 'Under 13' },
-                    { value: '13to18', label: '13–18' },
-                    { value: '19plus', label: '19+' },
-                  ]}
-                  onChange={setProgAgeFilter}
-                />
-                {uniqueProgramTypes.length > 0 && (
-                  <ChipGroup
-                    label="Program"
-                    value={progNameFilter}
-                    options={uniqueProgramTypes}
-                    onChange={(v) => setProgNameFilter(v === progNameFilter ? '' : v)}
-                  />
-                )}
-              </div>
+            <div className="mt-6">
+              <h2 className="text-white font-semibold text-lg mb-2">
+                Tennis Programs{' '}
+                <span className="text-white/40 font-normal text-sm">
+                  {displayedPrograms.length} result{displayedPrograms.length !== 1 ? 's' : ''}, showing top {Math.min(10, displayedPrograms.length)}
+                </span>
+              </h2>
 
               {displayedPrograms.length === 0 ? (
                 <p className="text-white/40 text-sm py-4 text-center">No programs match the current filters.</p>
@@ -1054,8 +1011,8 @@ export const CourtMap: React.FC = () => {
                           <th className="px-4 py-3 text-left">Location</th>
                           <th className="px-4 py-3 text-left">Days</th>
                           <th className="px-4 py-3 text-left">Date Range</th>
-                          <th className="px-4 py-3 text-left">Time</th>
                           <th className="px-4 py-3 text-left">Ages</th>
+                          <th className="px-4 py-3 text-left">Activity</th>
                           <th className="px-4 py-3 text-left">Distance</th>
                         </tr>
                       </thead>
@@ -1066,8 +1023,19 @@ export const CourtMap: React.FC = () => {
                             <td className="px-4 py-3">{p.locationName}</td>
                             <td className="px-4 py-3">{p.days}</td>
                             <td className="px-4 py-3 text-white/50">{p.dateRange}</td>
-                            <td className="px-4 py-3">{p.timeRange}</td>
                             <td className="px-4 py-3">{p.ageRange}</td>
+                            <td className="px-4 py-3">
+                              {p.activityUrl ? (
+                                <a
+                                  href={p.activityUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-clay hover:underline text-xs whitespace-nowrap"
+                                >
+                                  View activity
+                                </a>
+                              ) : '—'}
+                            </td>
                             <td className="px-4 py-3 text-clay font-medium">
                               {p.distKm !== null ? formatDist(p.distKm) : '—'}
                             </td>
@@ -1096,7 +1064,7 @@ export const CourtMap: React.FC = () => {
         })()}
 
         {/* Bottom info */}
-        <div className="mt-12 pt-6 border-t border-white/10 space-y-2">
+        <div className="mt-12 pt-6 border-t border-white/10">
           <p className="text-xs text-white/40 leading-relaxed">
             Checkout City of Toronto led Tennis Programs{' '}
             <a
