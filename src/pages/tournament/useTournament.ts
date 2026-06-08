@@ -528,6 +528,12 @@ export const useTournament = (eventIdOverride?: string) => {
 
   const rrConfig = useMemo(() => deriveRRConfig(currentMatches), [currentMatches]);
 
+  // Players in the current user's RR group (null if not in RR or not a participant)
+  const userRRGroup = useMemo<TournamentPlayer[] | null>(() => {
+    if (!user || rrGroups.length === 0) return null;
+    return rrGroups.find((g) => g.some((p) => p.user_id === user.uid)) ?? null;
+  }, [user, rrGroups]);
+
   const rrKnockoutReady = useMemo(
     () =>
       rrGroupMatches.length > 0 &&
@@ -1212,6 +1218,7 @@ export const useTournament = (eventIdOverride?: string) => {
     setIsConversionMode,
     generatingRR,
     rrGroups,
+    userRRGroup,
     rrStandingsByGroup,
     rrGroupMatches,
     rrKnockoutMatches,

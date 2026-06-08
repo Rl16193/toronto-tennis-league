@@ -16,6 +16,7 @@ import { ScoreModal } from './tournament/ScoreModal';
 import { AddPlayerPanel } from './tournament/AddPlayerPanel';
 import { RoundRobinView } from './tournament/RoundRobinView';
 import { RRConfigModal } from './tournament/RRConfigModal';
+import { RROpponentPanel } from './tournament/RROpponentPanel';
 import { AlertMessage } from '../components/AlertMessage';
 import { Button } from '../components/Button';
 import { TennisEvent } from '../types';
@@ -110,7 +111,7 @@ export const Tournament: React.FC = () => {
     submissions,
     currentDrawFormat, drawFormat, setDrawFormat,
     showRRConfig, setShowRRConfig, isConversionMode, setIsConversionMode, generatingRR,
-    rrGroups, rrStandingsByGroup, rrGroupMatches, rrKnockoutMatches, rrKnockoutReady, rrConfig,
+    rrGroups, userRRGroup, rrStandingsByGroup, rrGroupMatches, rrKnockoutMatches, rrKnockoutReady, rrConfig,
     handleGenerateRR, handleResetRR, handleConvertToRR, handleGenerateRRKnockout,
   } = useTournament(eventId);
 
@@ -209,7 +210,15 @@ export const Tournament: React.FC = () => {
         </AlertMessage>
       )}
 
-      {opponent && <OpponentCard opponent={opponent} />}
+      {currentDrawFormat === 'rr' && userRRGroup && user ? (
+        <RROpponentPanel
+          group={userRRGroup}
+          userId={user.uid}
+          isDoubles={rrGroupMatches[0]?.tournament_choice === 'Doubles'}
+        />
+      ) : (
+        opponent && <OpponentCard opponent={opponent} />
+      )}
 
       <DrawTabs
         activeTab={activeTab}
