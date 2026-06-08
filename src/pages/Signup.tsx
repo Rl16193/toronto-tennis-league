@@ -253,7 +253,6 @@ export const Signup: React.FC = () => {
 
       // Create stats collection document
       const userStats: UserStats = {
-        user_id: user.uid,
         name: formData.name,
         skill_level: formData.skillLevel,
         tournament_preference: 'Challengers',
@@ -265,13 +264,10 @@ export const Signup: React.FC = () => {
         league: '',
         pointswon: 0,
         totalPointsPlayed: 0,
-        pointsWonPct: 0,
       };
 
       // Create preferences collection document
       const userPreferences: UserPreferences = {
-        user_id: user.uid,
-        name: formData.name,
         availability_day: formData.availabilityDay,
         availability_time: formData.availabilityTime,
         preferred_courts: formData.preferredCourts,

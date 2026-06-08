@@ -3,47 +3,33 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { UserData, UserPreferences, UserStats } from '../types';
 
-const createDefaultStats = (user: User): UserStats => {
-  const displayName = user.displayName?.trim() || '';
+const createDefaultStats = (user: User): UserStats => ({
+  name: user.displayName?.trim() || '',
+  skill_level: 2,
+  tournament_preference: 'Challengers',
+  matchesPlayed: 0,
+  wins: 0,
+  loses: 0,
+  leaguePoints26: 0,
+  tournamentsPlayed: 0,
+  league: '',
+  pointswon: 0,
+  totalPointsPlayed: 0,
+});
 
-  return {
-    user_id: user.uid,
-    name: displayName,
-    skill_level: 2,
-    tournament_preference: 'Challengers',
-    matchesPlayed: 0,
-    wins: 0,
-    loses: 0,
-    leaguePoints26: 0,
-    tournamentsPlayed: 0,
-    league: '',
-    pointswon: 0,
-    totalPointsPlayed: 0,
-    pointsWonPct: 0,
-  };
-};
-
-const createDefaultPreferences = (user: User): UserPreferences => {
-  const displayName = user.displayName?.trim() || '';
-
-  return {
-    user_id: user.uid,
-    name: displayName,
-    availability_day: [],
-    availability_time: [],
-    preferred_courts: [],
-    favourite_players: [],
-    scheduling_preference: 'I will schedule matches on my own',
-    event_creator: false,
-  };
-};
+const createDefaultPreferences = (): UserPreferences => ({
+  availability_day: [],
+  availability_time: [],
+  preferred_courts: [],
+  favourite_players: [],
+  scheduling_preference: 'I will schedule matches on my own',
+  event_creator: false,
+});
 
 export const ensureUserProfileDocuments = async (user: User) => {
   const userRef = doc(db, 'users', user.uid);
   const statsRef = doc(db, 'stats', user.uid);
   const preferencesRef = doc(db, 'preferences', user.uid);
-  const fallbackName = user.displayName?.trim() || '';
-
   const [userSnap, statsSnap, preferencesSnap] = await Promise.all([
     getDoc(userRef),
     getDoc(statsRef),
@@ -66,26 +52,10 @@ export const ensureUserProfileDocuments = async (user: User) => {
 
   if (!statsSnap.exists()) {
     writes.push(setDoc(statsRef, createDefaultStats(user)));
-  } else {
-    const statsData = statsSnap.data() as Partial<UserStats>;
-    if (!statsData.user_id || typeof statsData.name !== 'string') {
-      writes.push(setDoc(statsRef, {
-        user_id: user.uid,
-        name: statsData.name ?? fallbackName,
-      }, { merge: true }));
-    }
   }
 
   if (!preferencesSnap.exists()) {
-    writes.push(setDoc(preferencesRef, createDefaultPreferences(user)));
-  } else {
-    const preferencesData = preferencesSnap.data() as Partial<UserPreferences>;
-    if (!preferencesData.user_id || typeof preferencesData.name !== 'string') {
-      writes.push(setDoc(preferencesRef, {
-        user_id: user.uid,
-        name: preferencesData.name ?? fallbackName,
-      }, { merge: true }));
-    }
+    writes.push(setDoc(preferencesRef, createDefaultPreferences()));
   }
 
   await Promise.all(writes);

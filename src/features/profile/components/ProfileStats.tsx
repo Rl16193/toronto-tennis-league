@@ -24,7 +24,11 @@ export const ProfileStats: React.FC = () => {
         </div>
         <div className="flex justify-between items-center py-2">
           <span className="text-clay font-bold">Points Won %</span>
-          <span className="text-xl font-black text-clay">{profile.stats.pointsWonPct}%</span>
+          <span className="text-xl font-black text-clay">
+            {profile.stats.totalPointsPlayed > 0
+              ? `${Math.round((profile.stats.pointswon / profile.stats.totalPointsPlayed) * 100)}%`
+              : '—'}
+          </span>
         </div>
       </div>
     </div>

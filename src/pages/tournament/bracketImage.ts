@@ -1,4 +1,4 @@
-import { ScoreSubmission, TournamentMatch } from './types';
+import { TournamentMatch } from './types';
 import { formatPlayerName } from './utils';
 
 export const getRoundLabels = (drawSize: number): string[] => {
@@ -24,11 +24,11 @@ const formatDeadline = (iso?: string): string => {
   return `Till ${months[m - 1]} ${d}`;
 };
 
-const formatSvgScore = (sub: ScoreSubmission): string => {
+const formatSvgScore = (match: TournamentMatch): string => {
   const pairs: [number, number][] = [
-    [sub.set_1_player_1, sub.set_1_player_2],
-    [sub.set_2_player_1, sub.set_2_player_2],
-    [sub.set_3_player_1, sub.set_3_player_2],
+    [match.set_1_player_1 ?? 0, match.set_1_player_2 ?? 0],
+    [match.set_2_player_1 ?? 0, match.set_2_player_2 ?? 0],
+    [match.set_3_player_1 ?? 0, match.set_3_player_2 ?? 0],
   ];
   return pairs
     .filter(([p1, p2]) => p1 > 0 || p2 > 0)
@@ -36,12 +36,7 @@ const formatSvgScore = (sub: ScoreSubmission): string => {
     .join('  ');
 };
 
-const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, submissions: ScoreSubmission[] = [], roundDeadlines: Record<string, string> = {}): string => {
-  const subsMap = new Map<string, ScoreSubmission>();
-  for (const s of [...submissions].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
-    if (!subsMap.has(s.match_doc_id)) subsMap.set(s.match_doc_id, s);
-  }
-
+const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, roundDeadlines: Record<string, string> = {}): string => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
   const rowHeight = 46;
@@ -81,8 +76,7 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?:
         ? `<line x1="${connX - 16}" y1="${y + 36}" x2="${connX}" y2="${y + 36}" stroke="#4b5563" stroke-width="1.5" />`
         : '';
 
-      const sub = subsMap.get(match.id);
-      const scoreText = sub ? formatSvgScore(sub) : '';
+      const scoreText = match.status === 'complete' ? formatSvgScore(match) : '';
       const p1Y = y + (scoreText ? 20 : 27);
       const divY = y + (scoreText ? 28 : 36);
       const p2Y = y + (scoreText ? 48 : 61);
@@ -112,12 +106,12 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?:
 </svg>`;
 };
 
-export const downloadDrawAsPng = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, submissions: ScoreSubmission[] = [], roundDeadlines: Record<string, string> = {}): void => {
+export const downloadDrawAsPng = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, roundDeadlines: Record<string, string> = {}): void => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
   const width = Math.max(900, roundLabels.length * 190 + 80);
   const height = Math.max(580, 105 + drawSize * 46 + 70);
-  const svg = buildDrawSvg(matches, drawTitle, drawState, eventTitle, submissions, roundDeadlines);
+  const svg = buildDrawSvg(matches, drawTitle, drawState, eventTitle, roundDeadlines);
   const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const svgUrl = URL.createObjectURL(svgBlob);
   const svgImg = new Image(width, height);

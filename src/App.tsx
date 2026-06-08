@@ -15,6 +15,7 @@ const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.P
 const Tournament = lazy(() => import('./pages/Tournament').then((m) => ({ default: m.Tournament })));
 const PlayerProfile = lazy(() => import('./pages/PlayerProfile').then((m) => ({ default: m.PlayerProfile })));
 const Leagues = lazy(() => import('./pages/Leagues').then((m) => ({ default: m.Leagues })));
+const CourtMap = lazy(() => import('./pages/CourtMap').then((m) => ({ default: m.CourtMap })));
 const Rules = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Rules })));
 const Terms = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Terms })));
 const Privacy = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Privacy })));
@@ -90,6 +91,7 @@ export default function App() {
               <Route path="/leagues" element={<PrivateRoute><Leagues /></PrivateRoute>} />
               <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
               <Route path="/players/:userId" element={<PrivateRoute><PlayerProfile /></PrivateRoute>} />
+              <Route path="/courts" element={<CourtMap />} />
               <Route path="/rules" element={<Rules />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />

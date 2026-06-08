@@ -11,11 +11,8 @@ npm run lint         # TypeScript type-check only (no eslint)
 npm run hosting:deploy   # build + firebase deploy --only hosting
 npm run hosting:preview  # build + deploy to a preview channel
 
-# Stats scripts (Node, require serviceAccount.json in project root)
-node scripts/syncLeagueStats.mjs            # dry run
-node scripts/syncLeagueStats.mjs --write    # write XLSX baseline to Firestore
-node scripts/backfillMatchStats.mjs         # dry run
-node scripts/backfillMatchStats.mjs --write # bake baseline + tournament totals
+# Export Firestore collections to CSV (requires serviceAccount.json in project root)
+node scripts/export-firestore.js
 
 # Deploy Firestore rules (separate from hosting)
 firebase deploy --only firestore:rules
@@ -43,12 +40,10 @@ The core is `useTournament.ts` (~960 lines), a single hook consumed only by `Tou
 Draw document IDs follow the pattern: `{eventId}_{drawKey}_{matchId}` where `drawKey = getDrawKey(tournamentChoice, division, skillGroup)`. LL (reserves) docs prefix with `{eventId}_reserves_{drawKey}_`.
 
 ### Stats data flow (read before changing)
-Three sources write to `stats/{userId}`:
-1. **`syncLeagueStats.mjs`** — imports XLSX, writes display fields + `_xlsx` baseline suffixes
-2. **`backfillMatchStats.mjs`** — reads `_xlsx` baselines + completed `tournament_matches`, writes final combined values (run AFTER sync)
-3. **`useTournament.ts`** (`updateMatchWithSubmission`) — live increments on score confirmation
+One source writes to `stats/{userId}` at runtime:
+- **`useTournament.ts`** (`updateMatchWithSubmission`) — live increments on score confirmation
 
-All fields are camelCase (`matchesPlayed`, `leaguePoints26`, etc.). Snake_case and `_xlsx` fields are dead. Script run order matters: `syncLeagueStats --write` must run before `backfillMatchStats --write`.
+All fields are camelCase (`matchesPlayed`, `leaguePoints26`, etc.). Snake_case and `_xlsx` fields are dead.
 
 ### Firestore collections
 | Collection | Written by |

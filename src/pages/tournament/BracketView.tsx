@@ -1,5 +1,5 @@
 ﻿import React, { useMemo } from 'react';
-import { ScoreSubmission, TournamentMatch, TournamentPlayer } from './types';
+import { TournamentMatch, TournamentPlayer } from './types';
 import { BYE, PLAYER_LOADING, formatPlayerName } from './utils';
 import { getRoundLabels } from './bracketImage';
 
@@ -65,11 +65,11 @@ const PlayerSelect: React.FC<PlayerSelectProps> = ({ matchId, slot, currentUserI
   </div>
 );
 
-const formatSetScores = (sub: ScoreSubmission): string => {
+const formatSetScores = (match: TournamentMatch): string => {
   const pairs: [number, number][] = [
-    [sub.set_1_player_1, sub.set_1_player_2],
-    [sub.set_2_player_1, sub.set_2_player_2],
-    [sub.set_3_player_1, sub.set_3_player_2],
+    [match.set_1_player_1 ?? 0, match.set_1_player_2 ?? 0],
+    [match.set_2_player_1 ?? 0, match.set_2_player_2 ?? 0],
+    [match.set_3_player_1 ?? 0, match.set_3_player_2 ?? 0],
   ];
   return pairs
     .filter(([p1, p2]) => p1 > 0 || p2 > 0)
@@ -83,7 +83,6 @@ type Props = {
   editMode?: boolean;
   editPlayers?: TournamentPlayer[];
   onEditPlayer?: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
-  submissions?: ScoreSubmission[];
   isCreator?: boolean;
   onSubmitScore?: (match: TournamentMatch) => void;
   roundDeadlines?: Record<string, string>;
@@ -92,22 +91,11 @@ type Props = {
 
 export const BracketView: React.FC<Props> = ({
   matches, drawTitle, editMode, editPlayers = [], onEditPlayer,
-  submissions = [], isCreator, onSubmitScore,
+  isCreator, onSubmitScore,
   roundDeadlines = {}, onUpdateDeadline,
 }) => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
-
-  // Pre-index submissions by match_doc_id for O(1) lookup
-  const submissionsByMatch = useMemo(() => {
-    const map = new Map<string, ScoreSubmission[]>();
-    for (const s of submissions) {
-      const list = map.get(s.match_doc_id) ?? [];
-      list.push(s);
-      map.set(s.match_doc_id, list);
-    }
-    return map;
-  }, [submissions]);
 
   const rounds = useMemo(
     () => roundLabels.map((round) => ({
@@ -168,11 +156,7 @@ export const BracketView: React.FC<Props> = ({
                 (!isPreview || isPreviewFirstRound);
 
               // Score / status logic (only for real matches)
-              const matchSubs = isPreview ? [] : (submissionsByMatch.get(match.id) ?? []);
-              const firstSub = matchSubs.length > 0
-                ? [...matchSubs].sort((a, b) => a.created_at.localeCompare(b.created_at))[0]
-                : null;
-              const scoreText = firstSub ? formatSetScores(firstSub) : '';
+              const scoreText = !isPreview && match.status === 'complete' ? formatSetScores(match) : '';
 
               const hasBye = match.player_1_name === BYE || match.player_2_name === BYE;
               const hasRealPlayers =
@@ -191,7 +175,7 @@ export const BracketView: React.FC<Props> = ({
               const dotClass =
                 match.status === 'flagged' && isCreator
                   ? 'bg-red-500'
-                  : matchSubs.length > 0
+                  : match.status === 'complete'
                   ? 'bg-green-400'
                   : 'bg-orange-400';
 
@@ -213,8 +197,8 @@ export const BracketView: React.FC<Props> = ({
                         title={
                           match.status === 'flagged' && isCreator
                             ? 'Disputed'
-                            : matchSubs.length > 0
-                            ? 'Score submitted'
+                            : match.status === 'complete'
+                            ? 'Score recorded'
                             : 'Pending'
                         }
                       />

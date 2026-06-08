@@ -1,20 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  addDoc, collection, doc, getDocs, onSnapshot, query, updateDoc, where, writeBatch,
+  addDoc, collection, doc, getDocs, increment, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { EventParticipant, TennisEvent, UserData, UserStats } from '../../types';
-import { DrawConfig, DrawTab, ScoreForm, ScoreSubmission, SkillGroup, TournamentMatch, TournamentPlayer } from './types';
+import { DrawConfig, DrawTab, ScoreForm, ScoreSubmission, SkillGroup, TournamentMatch, TournamentPlayer, TournamentTemplate } from './types';
 import {
   BYE, PLAYER_LOADING,
   buildMatchFields, buildPlayerList, deleteKey, fallbackTemplate, filterParticipantsForDraw,
   getDrawKey, getDrawSize, getEventDate,
-  isTournamentStarted, normalizeTemplateMatches,
+  isTournamentStarted, normalizeTemplateMatches, scoresMatch,
 } from './utils';
 import { CONSOLIDATED_DOUBLES_DRAW, MENS_MERGED_DRAW, VISIBLE_DRAWS, WOMENS_MERGED_DRAW } from './drawConfigs';
-import { generateDraw as generateDrawFn, GenerateDrawParams } from './drawGeneration';
-import { updateMatchWithSubmission as updateMatchWithSubmissionFn } from './scoreSubmission';
 
 export const useTournament = (eventIdOverride?: string) => {
   const { user, profile, loading: authLoading } = useAuth();
@@ -23,6 +21,8 @@ export const useTournament = (eventIdOverride?: string) => {
   const [event, setEvent] = useState<TennisEvent | null>(null);
   const [participants, setParticipants] = useState<EventParticipant[]>([]);
   const [matches, setMatches] = useState<TournamentMatch[]>([]);
+  const [submissions, setSubmissions] = useState<ScoreSubmission[]>([]);
+  const [templates, setTemplates] = useState<TournamentTemplate[]>([]);
   const [userMap, setUserMap] = useState<Record<string, UserData>>({});
   const [statsMap, setStatsMap] = useState<Record<string, UserStats>>({});
 
@@ -90,12 +90,16 @@ export const useTournament = (eventIdOverride?: string) => {
     const load = async () => {
       setLoading(true);
       try {
-        const eventsSnap = await getDocs(collection(db, 'events'));
+        const [eventsSnap, templatesSnap] = await Promise.all([
+          getDocs(collection(db, 'events')),
+          getDocs(collection(db, 'tournament_template')),
+        ]);
         const tournamentEvents = eventsSnap.docs
           .map((d) => ({ id: d.id, ...d.data() } as TennisEvent))
           .filter((e) => e.type?.toLowerCase().includes('tournament'))
           .sort((a, b) => (getEventDate(b)?.getTime() || 0) - (getEventDate(a)?.getTime() || 0));
         setAllTournamentEvents(tournamentEvents);
+        setTemplates(templatesSnap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentTemplate)));
       } finally {
         setLoading(false);
       }
@@ -113,6 +117,7 @@ export const useTournament = (eventIdOverride?: string) => {
     setEvent(target);
     setParticipants([]);
     setMatches([]);
+    setSubmissions([]);
     setEditMode(false);
     setSkillOverrides({});
     setPreviewSlotOverrides({});
@@ -151,6 +156,13 @@ export const useTournament = (eventIdOverride?: string) => {
     );
   }, [event]);
 
+  useEffect(() => {
+    if (!event || !user) return;
+    return onSnapshot(
+      query(collection(db, 'score_submissions'), where('event_id', '==', event.id)),
+      (snap) => setSubmissions(snap.docs.map((d) => ({ id: d.id, ...d.data() } as ScoreSubmission))),
+    );
+  }, [event, user]);
 
 
   // Reload all registered users every time the creator enters edit mode
@@ -261,7 +273,10 @@ export const useTournament = (eventIdOverride?: string) => {
     if (currentMatches.length > 0) return currentMatches;
 
     const drawsize = previewDrawSize[currentDraw.label] ?? getDrawSize(currentDrawAllPlayers.length, currentDraw.tournamentChoice);
-    const templateMatches = normalizeTemplateMatches(fallbackTemplate(drawsize));
+    const template = templates.find((t) => Number(t.size || t.drawsize || t.draw_size) === drawsize);
+    const templateMatches = normalizeTemplateMatches(
+      template?.matches?.length ? template.matches : fallbackTemplate(drawsize),
+    );
     const slotMap = new Map<number, TournamentPlayer>();
     currentDrawAllPlayers.slice(0, drawsize).forEach((p, i) => slotMap.set(i + 1, p));
 
@@ -274,6 +289,7 @@ export const useTournament = (eventIdOverride?: string) => {
 
     const cfg = {
       eventId: event?.id || 'preview',
+      templateId: template?.id || `fallback_${drawsize}`,
       tournamentChoice: currentDraw.tournamentChoice,
       division: currentDraw.division,
       skillGroup: currentDraw.skillGroup,
@@ -286,7 +302,7 @@ export const useTournament = (eventIdOverride?: string) => {
       started,
       ...buildMatchFields(tm, index, slotMap, cfg),
     }));
-  }, [currentDraw, currentDrawAllPlayers, currentMatches, event?.id, previewDrawSize, previewSlotOverrides, started]);
+  }, [currentDraw, currentDrawAllPlayers, currentMatches, event?.id, previewDrawSize, previewSlotOverrides, started, templates]);
 
 
   const visibleUserMatch = useMemo(() => {
@@ -387,13 +403,17 @@ export const useTournament = (eventIdOverride?: string) => {
     if (currentReservesMatches.length > 0) return currentReservesMatches;
     if (!currentDraw) return [];
     const drawsize = currentLLSize;
-    const templateMatches = normalizeTemplateMatches(fallbackTemplate(drawsize));
+    const template = templates.find((t) => Number(t.size || t.drawsize || t.draw_size) === drawsize);
+    const templateMatches = normalizeTemplateMatches(
+      template?.matches?.length ? template.matches : fallbackTemplate(drawsize),
+    );
     const slotMap = new Map<number, TournamentPlayer>();
     Object.entries(currentLLSlotOverrides).forEach(([slotStr, player]) => {
       if (player !== null) slotMap.set(Number(slotStr), player);
     });
     const cfg = {
       eventId: event?.id || 'preview',
+      templateId: template?.id || `fallback_${drawsize}`,
       tournamentChoice: currentDraw.tournamentChoice,
       division: currentDraw.division,
       skillGroup: 'All' as const,
@@ -406,7 +426,7 @@ export const useTournament = (eventIdOverride?: string) => {
       started: false,
       ...buildMatchFields(tm, index, slotMap, cfg),
     }));
-  }, [currentReservesMatches, currentDraw, currentLLSize, currentLLSlotOverrides, llCurrentKey, event?.id]);
+  }, [currentReservesMatches, currentDraw, currentLLSize, currentLLSlotOverrides, llCurrentKey, templates, event?.id]);
 
   // LL Draw dropdown: only participants of the CURRENT draw's division/choice who are
   // NOT already placed in the main draw. Prevents main-draw players (e.g. semi-finalists)
@@ -438,78 +458,201 @@ export const useTournament = (eventIdOverride?: string) => {
         const isP1 = visibleUserMatch.player_1_user_id === user.uid;
         const opponentUid = isP1 ? visibleUserMatch.player_2_user_id : visibleUserMatch.player_1_user_id;
         const opponentUser = userMap[opponentUid] ?? allUsers[opponentUid];
-        const opponentStats = statsMap[opponentUid];
-        const fallbackContact = isP1 ? visibleUserMatch.player_2_contact : visibleUserMatch.player_1_contact;
         return {
           name: isP1 ? visibleUserMatch.player_2_name : visibleUserMatch.player_1_name,
           userId: opponentUid,
-          contact: fallbackContact,
+          contact: isP1 ? visibleUserMatch.player_2_contact : visibleUserMatch.player_1_contact,
           email: opponentUser?.email ?? '',
-          phone: opponentUser?.phone ?? fallbackContact ?? '',
-          round: visibleUserMatch.round,
-          skill: opponentStats?.skill_level ?? null,
-          wins: opponentStats?.wins ?? 0,
-          losses: opponentStats?.loses ?? 0,
+          phone: opponentUser?.phone ?? '',
         };
       })()
     : null;
 
-  // Potential next-round opponents: players in the sibling match (same next_match_id,
-  // different match), filtering out PLAYER_LOADING and BYE placeholders.
-  const nextMatchOpponents = useMemo(() => {
-    if (!visibleUserMatch?.next_match_id || !user) return [];
-
-    const normBracket = (b: unknown) => b ?? null;
-    const sameDraw = (m: TournamentMatch) =>
-      normBracket(m.bracket) === normBracket(visibleUserMatch.bracket) &&
-      m.tournament_choice === visibleUserMatch.tournament_choice &&
-      m.division === visibleUserMatch.division &&
-      m.skill_group === visibleUserMatch.skill_group;
-
-    const sibling = matches.find(
-      (m) => sameDraw(m) && m.next_match_id === visibleUserMatch.next_match_id && m.id !== visibleUserMatch.id,
-    );
-    if (!sibling) return [];
-
-    const nextRoundDoc = matches.find((m) => sameDraw(m) && m.match_id === visibleUserMatch.next_match_id);
-    const nextRound = nextRoundDoc?.round ?? '';
-
-    return (
-      [
-        { name: sibling.player_1_name, uid: sibling.player_1_user_id, contact: sibling.player_1_contact },
-        { name: sibling.player_2_name, uid: sibling.player_2_user_id, contact: sibling.player_2_contact },
-      ] as Array<{ name: string; uid: string; contact: string }>
-    )
-      .filter(({ name }) => !!name && name !== PLAYER_LOADING && name !== BYE)
-      .map(({ name, uid, contact }) => {
-        const userData = userMap[uid] ?? allUsers[uid];
-        const statsData = statsMap[uid];
-        return {
-          name,
-          userId: uid,
-          email: userData?.email ?? '',
-          phone: userData?.phone ?? contact ?? '',
-          round: nextRound,
-          skill: statsData?.skill_level ?? null,
-          wins: statsData?.wins ?? 0,
-          losses: statsData?.loses ?? 0,
-        };
-      });
-  }, [visibleUserMatch, matches, userMap, allUsers, statsMap, user]);
-
   // ── Internal helpers ──────────────────────────────────────────────────────
 
-  const generateDraw = (draw: DrawConfig, lockedDrawsize?: number) => {
-    if (!event) return Promise.resolve();
-    const params: GenerateDrawParams = {
-      event, participants, effectiveStatsMap, userMap,
-      previewDrawSize, previewSlotOverrides, started,
+  const generateDraw = async (draw: DrawConfig, lockedDrawsize?: number) => {
+    if (!event) return;
+    const drawParticipants = filterParticipantsForDraw(participants, draw, effectiveStatsMap);
+    const players = buildPlayerList(drawParticipants, draw, effectiveStatsMap, userMap);
+    const drawsize = lockedDrawsize ?? previewDrawSize[draw.label] ?? getDrawSize(players.length, draw.tournamentChoice);
+    const slicedPlayers = players.slice(0, drawsize);
+
+    const template = templates.find((t) => Number(t.size || t.drawsize || t.draw_size) === drawsize);
+    const templateMatches = normalizeTemplateMatches(
+      template?.matches?.length ? template.matches : fallbackTemplate(drawsize),
+    );
+    const slotMap = new Map<number, TournamentPlayer>();
+    slicedPlayers.forEach((p, i) => slotMap.set(i + 1, p));
+
+    const drawOverrides = previewSlotOverrides[draw.label] ?? {};
+    Object.entries(drawOverrides).forEach(([slotStr, player]) => {
+      const slotNum = Number(slotStr);
+      if (player === null) slotMap.delete(slotNum);
+      else slotMap.set(slotNum, player);
+    });
+
+    const batch = writeBatch(db);
+    const drawKey = getDrawKey(draw.tournamentChoice, draw.division, draw.skillGroup);
+    const cfg = {
+      eventId: event.id,
+      templateId: template?.id || `fallback_${drawsize}`,
+      tournamentChoice: draw.tournamentChoice,
+      division: draw.division,
+      skillGroup: draw.skillGroup,
+      drawsize,
+      allMatches: templateMatches,
     };
-    return generateDrawFn(draw, params, db, lockedDrawsize);
+    templateMatches.forEach((tm, index) => {
+      batch.set(
+        doc(db, 'tournament_matches', `${event.id}_${drawKey}_${tm.match_id}`),
+        { ...buildMatchFields(tm, index, slotMap, cfg), bracket: null, started, created_at: new Date().toISOString() },
+        { merge: true },
+      );
+    });
+    await batch.commit();
   };
 
-  const updateMatchWithSubmission = (match: TournamentMatch, submission: ScoreSubmission) =>
-    updateMatchWithSubmissionFn(match, submission, matches, db, setMessage);
+  const updateMatchWithSubmission = async (match: TournamentMatch, submission: ScoreSubmission) => {
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'tournament_matches', match.id), {
+      winner_name: submission.claimed_winner_name,
+      winner_user_id: submission.claimed_winner_user_id,
+      set_1_player_1: submission.set_1_player_1, set_1_player_2: submission.set_1_player_2,
+      set_2_player_1: submission.set_2_player_1, set_2_player_2: submission.set_2_player_2,
+      set_3_player_1: submission.set_3_player_1, set_3_player_2: submission.set_3_player_2,
+      status: 'complete',
+      completed_at: new Date().toISOString(),
+    });
+
+    submissions
+      .filter((s) => s.match_doc_id === match.id)
+      .forEach((s) => batch.update(doc(db, 'score_submissions', s.id), { status: 'accepted' }));
+
+    // Update player stats + league points
+    // LL Draw (reserves) earns halved points; main draw earns full points
+    {
+      const isLL = match.bracket === 'reserves';
+      const LOSER_PTS: Record<string, number> = isLL
+        ? { R32: 0.5, R16: 1, QF: 1.5, SF: 2.5, F: 5 }
+        : { R32: 1, R16: 2, QF: 3, SF: 5, F: 10 };
+      const loserPts = LOSER_PTS[match.round] ?? (isLL ? 0.5 : 1);
+      const winnerPts = isLL ? 10 : 20;
+      const isFinal = match.round === 'F';
+      const matchLeague = match.tournament_choice === 'Doubles' ? 'Doubles' : match.division;
+      const winnerUid = submission.claimed_winner_user_id;
+      const loserUid = winnerUid === match.player_1_user_id ? match.player_2_user_id : match.player_1_user_id;
+
+      // Games won per player (set scores are absolute: player_1/2 = match positions)
+      const newP1G = (submission.set_1_player_1 ?? 0) + (submission.set_2_player_1 ?? 0) + (submission.set_3_player_1 ?? 0);
+      const newP2G = (submission.set_1_player_2 ?? 0) + (submission.set_2_player_2 ?? 0) + (submission.set_3_player_2 ?? 0);
+      const newTotal = newP1G + newP2G;
+      const winnerIsP1 = winnerUid === match.player_1_user_id;
+
+      if (match.status !== 'complete') {
+        // First confirmation — apply all increments
+        if (winnerUid) {
+          batch.set(doc(db, 'stats', winnerUid), {
+            matchesPlayed: increment(1),
+            wins: increment(1),
+            league: matchLeague,
+            pointswon: increment(winnerIsP1 ? newP1G : newP2G),
+            totalPointsPlayed: increment(newTotal),
+            ...(isFinal ? { leaguePoints26: increment(winnerPts), tournamentsPlayed: increment(1) } : {}),
+          }, { merge: true });
+        }
+        if (loserUid) {
+          batch.set(doc(db, 'stats', loserUid), {
+            matchesPlayed: increment(1),
+            loses: increment(1),
+            leaguePoints26: increment(loserPts),
+            tournamentsPlayed: increment(1),
+            league: matchLeague,
+            pointswon: increment(winnerIsP1 ? newP2G : newP1G),
+            totalPointsPlayed: increment(newTotal),
+          }, { merge: true });
+        }
+      } else {
+        // Re-entry (edit score) — compute per-player delta (new − old) and apply
+        const oldWinnerUid = match.winner_user_id ?? '';
+        const oldP1G = (match.set_1_player_1 ?? 0) + (match.set_2_player_1 ?? 0) + (match.set_3_player_1 ?? 0);
+        const oldP2G = (match.set_1_player_2 ?? 0) + (match.set_2_player_2 ?? 0) + (match.set_3_player_2 ?? 0);
+        const oldTotal = oldP1G + oldP2G;
+
+        const applyPlayerDelta = (uid: string, isP1: boolean) => {
+          if (!uid) return;
+          const wasWinner = oldWinnerUid === uid;
+          const isWinner = winnerUid === uid;
+          const oldGames = isP1 ? oldP1G : oldP2G;
+          const newGames = isP1 ? newP1G : newP2G;
+
+          const delta: Record<string, unknown> = {};
+          if (isWinner !== wasWinner) {
+            delta.wins = increment(isWinner ? 1 : -1);
+            delta.loses = increment(isWinner ? -1 : 1);
+          }
+          const oldPts = wasWinner ? (isFinal ? winnerPts : 0) : loserPts;
+          const newPts = isWinner ? (isFinal ? winnerPts : 0) : loserPts;
+          if (newPts !== oldPts) delta.leaguePoints26 = increment(newPts - oldPts);
+
+          // tournamentsPlayed credit: losers always get +1; final winner also gets +1
+          const oldTC = (!wasWinner ? 1 : 0) + (wasWinner && isFinal ? 1 : 0);
+          const newTC = (!isWinner ? 1 : 0) + (isWinner && isFinal ? 1 : 0);
+          if (newTC !== oldTC) delta.tournamentsPlayed = increment(newTC - oldTC);
+
+          if (newGames !== oldGames) delta.pointswon = increment(newGames - oldGames);
+          if (newTotal !== oldTotal) delta.totalPointsPlayed = increment(newTotal - oldTotal);
+
+          if (Object.keys(delta).length > 0) {
+            delta.league = matchLeague;
+            batch.set(doc(db, 'stats', uid), delta, { merge: true });
+          }
+        };
+
+        applyPlayerDelta(match.player_1_user_id, true);
+        applyPlayerDelta(match.player_2_user_id, false);
+      }
+    }
+
+    await batch.commit();
+
+    // Advance the winner into the next match as a best-effort follow-up, AFTER the
+    // result is committed — so a missing/mismatched next-match document can never roll
+    // back the recorded winner, scores, or stats. Resolve the next match from loaded
+    // state (use its real doc id) rather than reconstructing the id from the draw key,
+    // which breaks for merged/regenerated draws whose next round lives under a
+    // different key.
+    if (match.next_match_id) {
+      const sameDraw = (m: TournamentMatch) =>
+        m.bracket === match.bracket &&
+        m.tournament_choice === match.tournament_choice &&
+        m.division === match.division &&
+        m.skill_group === match.skill_group;
+      const nextMatch = matches.find((m) => sameDraw(m) && m.match_id === match.next_match_id);
+      if (nextMatch) {
+        // Slot: stored next_slot, else inferred from sibling ordering (legacy docs).
+        let slot = match.next_slot as 'player_1' | 'player_2' | '' | undefined;
+        if (!slot) {
+          const siblings = matches
+            .filter((m) => sameDraw(m) && m.next_match_id === match.next_match_id)
+            .sort((a, b) => a.position - b.position);
+          const idx = siblings.findIndex((m) => m.id === match.id);
+          slot = idx <= 0 ? 'player_1' : 'player_2';
+        }
+        try {
+          await updateDoc(doc(db, 'tournament_matches', nextMatch.id), {
+            [`${slot}_name`]: submission.claimed_winner_name,
+            [`${slot}_user_id`]: submission.claimed_winner_user_id,
+            [`${slot}_contact`]:
+              submission.claimed_winner_user_id === match.player_1_user_id
+                ? match.player_1_contact
+                : match.player_2_contact,
+          });
+        } catch (err) {
+          console.error('Winner recorded, but advancing to the next match failed:', err);
+        }
+      }
+    }
+  };
 
   // ── Action handlers ───────────────────────────────────────────────────────
 
@@ -668,16 +811,30 @@ export const useTournament = (eventIdOverride?: string) => {
     // Creator always submits from player_1's perspective
     const p1Scores = parsedSets.map((s) => s.mine);
     const p2Scores = parsedSets.map((s) => s.opponent);
+    const pointsWon = parsedSets.reduce((t, s) => t + s.mine, 0);
+    const opponentPoints = parsedSets.reduce((t, s) => t + s.opponent, 0);
 
     const submission: ScoreSubmission = {
+      id: `${match.id}_${user.uid}`,
+      match_doc_id: match.id,
+      match_id: match.match_id,
+      event_id: match.event_id,
+      submitted_by: user.uid,
+      submitted_by_name: profile.user.name,
       claimed_winner_name: scoreForm.winnerUserId === match.player_1_user_id ? match.player_1_name : match.player_2_name,
       claimed_winner_user_id: scoreForm.winnerUserId,
       set_1_player_1: p1Scores[0], set_1_player_2: p2Scores[0],
       set_2_player_1: p1Scores[1], set_2_player_2: p2Scores[1],
       set_3_player_1: p1Scores[2], set_3_player_2: p2Scores[2],
+      points_won_by_submitter: pointsWon,
+      opponent_points_won: opponentPoints,
+      total_points_played: pointsWon + opponentPoints,
+      status: 'accepted',
+      created_at: new Date().toISOString(),
     };
 
     try {
+      await setDoc(doc(db, 'score_submissions', submission.id), submission);
       await updateMatchWithSubmission(match, submission);
       setScoreForm(null);
       setMessage({ type: 'success', text: 'Score recorded and draw updated.' });
@@ -759,7 +916,10 @@ export const useTournament = (eventIdOverride?: string) => {
     setMessage(null);
     try {
       const drawsize = currentLLSize;
-      const templateMatches = normalizeTemplateMatches(fallbackTemplate(drawsize));
+      const template = templates.find((t) => Number(t.size || t.drawsize || t.draw_size) === drawsize);
+      const templateMatches = normalizeTemplateMatches(
+        template?.matches?.length ? template.matches : fallbackTemplate(drawsize),
+      );
       const slotMap = new Map<number, TournamentPlayer>();
       Object.entries(currentLLSlotOverrides).forEach(([slotStr, player]) => {
         if (player !== null) slotMap.set(Number(slotStr), player);
@@ -768,6 +928,7 @@ export const useTournament = (eventIdOverride?: string) => {
       const batch = writeBatch(db);
       const cfg = {
         eventId: event.id,
+        templateId: template?.id || `fallback_${drawsize}`,
         tournamentChoice: currentDraw.tournamentChoice,
         division: currentDraw.division,
         skillGroup: 'All' as const,
@@ -800,6 +961,7 @@ export const useTournament = (eventIdOverride?: string) => {
     allTournamentEvents,
     event,
     matches,
+    submissions,
     isCreator,
     started,
     userParticipant,
@@ -808,7 +970,6 @@ export const useTournament = (eventIdOverride?: string) => {
     displayMatches,
     visibleDraws,
     opponent,
-    nextMatchOpponents,
     editPlayers,
     reservesPlayers,
     currentDrawSize,

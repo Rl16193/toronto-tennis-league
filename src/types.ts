@@ -10,7 +10,6 @@ export interface UserData {
 
 // Collection: stats
 export interface UserStats {
-  user_id: string;
   name: string;
   skill_level: number;
   tournament_preference: 'Beginners' | 'Challengers' | 'Masters';
@@ -22,13 +21,10 @@ export interface UserStats {
   league: string;
   pointswon: number;
   totalPointsPlayed: number;
-  pointsWonPct: number;
 }
 
 // Collection: preferences
 export interface UserPreferences {
-  user_id: string;
-  name: string;
   availability_day: string[];
   availability_time: string[];
   preferred_courts: string[];

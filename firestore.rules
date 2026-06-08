@@ -37,7 +37,7 @@ service cloud.firestore {
     // Users Collection
     // ===============================================================
     match /users/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
       allow delete: if false;
@@ -47,7 +47,7 @@ service cloud.firestore {
     // Stats Collection
     // ===============================================================
     match /stats/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       // Owners may self-create only an all-zero scoring baseline (signup / bootstrap).
       allow create: if isGlobalEventCreator() ||
         (isOwner(userId) &&
@@ -68,7 +68,7 @@ service cloud.firestore {
     // Preferences Collection
     // ===============================================================
     match /preferences/{userId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       // event_creator may never be self-granted — only the super admin sets it.
       allow create: if isOwner(userId) && request.resource.data.event_creator == false;
       allow update: if isSuperAdmin() ||
@@ -108,14 +108,6 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Tournament Templates (admin only write)
-    // ===============================================================
-    match /tournament_template/{templateId} {
-      allow read: if true;
-      allow write: if isGlobalEventCreator();
-    }
-
-    // ===============================================================
     // Tournament Matches (draw + results)
     // ===============================================================
     match /tournament_matches/{matchId} {
@@ -145,25 +137,5 @@ service cloud.firestore {
         );
     }
 
-    // ===============================================================
-    // Score Submissions
-    // ===============================================================
-    match /score_submissions/{submissionId} {
-      allow read: if isAuthenticated();
-
-      allow create: if isAuthenticated() &&
-        request.auth.uid == request.resource.data.submitted_by &&
-        (
-          request.auth.uid == get(/databases/$(database)/documents/tournament_matches/$(request.resource.data.match_doc_id)).data.player_1_user_id ||
-          request.auth.uid == get(/databases/$(database)/documents/tournament_matches/$(request.resource.data.match_doc_id)).data.player_2_user_id ||
-          isCreatorOfEvent(request.resource.data.event_id)
-        );
-
-      allow update: if isAuthenticated() &&
-        (
-          request.auth.uid == resource.data.submitted_by ||
-          isCreatorOfEvent(resource.data.event_id)
-        );
-    }
   }
 }

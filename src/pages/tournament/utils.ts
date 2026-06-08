@@ -1,5 +1,5 @@
 import { EventParticipant, UserData, UserStats } from '../../types';
-import { DrawConfig, ScoreSubmission, SkillGroup, TemplateMatch, TournamentPlayer } from './types';
+import { DrawConfig, SkillGroup, TemplateMatch, TournamentPlayer } from './types';
 
 export const PLAYER_LOADING = 'Player Loading';
 export const BYE = 'BYE';
@@ -138,17 +138,6 @@ export const getContactValue = (userData?: UserData | null) => {
   return userData.preferred_mode_of_contact === 'phone' ? userData.phone : userData.email;
 };
 
-export const scoresMatch = (a: ScoreSubmission, b: ScoreSubmission) =>
-  a.claimed_winner_user_id === b.claimed_winner_user_id &&
-  a.total_points_played === b.total_points_played &&
-  a.points_won_by_submitter === b.opponent_points_won &&
-  a.opponent_points_won === b.points_won_by_submitter &&
-  a.set_1_player_1 === b.set_1_player_1 &&
-  a.set_1_player_2 === b.set_1_player_2 &&
-  a.set_2_player_1 === b.set_2_player_1 &&
-  a.set_2_player_2 === b.set_2_player_2 &&
-  a.set_3_player_1 === b.set_3_player_1 &&
-  a.set_3_player_2 === b.set_3_player_2;
 
 // Normalise a name string for fuzzy partner matching (case, whitespace, punctuation)
 const normalizeForMatch = (name?: string) =>
@@ -261,7 +250,6 @@ export const buildMatchFields = (
   slotMap: Map<number, TournamentPlayer>,
   cfg: {
     eventId: string;
-    templateId: string;
     tournamentChoice: 'Singles' | 'Doubles';
     division: string;
     skillGroup: SkillGroup;
@@ -273,7 +261,6 @@ export const buildMatchFields = (
   const p2 = typeof tm.player_2 === 'number' ? (slotMap.get(tm.player_2) ?? null) : null;
   return {
     event_id: cfg.eventId,
-    template_id: cfg.templateId,
     tournament_choice: cfg.tournamentChoice,
     division: cfg.division,
     skill_group: cfg.skillGroup,

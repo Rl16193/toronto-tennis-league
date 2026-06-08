@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { ensureUserProfileDocuments } from '../lib/profileBootstrap';
 import { UserProfile, UserData, UserStats, UserPreferences } from '../types';
@@ -75,6 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           stats: statsDoc.data() as UserStats,
           preferences: preferencesDoc.data() as UserPreferences,
         });
+        updateDoc(doc(db, 'users', activeUser.uid), { lastActive: serverTimestamp() }).catch(() => {});
       }
     } catch (error) {
       console.error("Error fetching user profile:", error);

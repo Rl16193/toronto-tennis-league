@@ -6,7 +6,8 @@
       "Bash(git add *)",
       "Bash(node scripts/backfillMatchStats.mjs)",
       "Bash(node scripts/backfillMatchStats.mjs --write)",
-      "Bash(node scripts/syncLeagueStats.mjs --write)"
+      "Bash(node scripts/syncLeagueStats.mjs --write)",
+      "Bash(npm run *)"
     ]
   }
 }

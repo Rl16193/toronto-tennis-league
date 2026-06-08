@@ -1,16 +1,22 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Calendar, Trophy, Medal, User, Menu, X } from 'lucide-react';
+import { LogOut, Calendar, Trophy, Medal, User, Menu, X, MapPin } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 import { Button } from './Button';
 
-const ALL_NAV_LINKS = [
+const PUBLIC_NAV_LINKS = [
+  { name: 'Courts', path: '/courts', icon: MapPin },
+] as const;
+
+const PRIVATE_NAV_LINKS = [
   { name: 'Events', path: '/events', icon: Calendar },
   { name: 'Matches', path: '/tournament', icon: Trophy },
   { name: 'Leagues', path: '/leagues', icon: Medal },
 ] as const;
+
+const ALL_NAV_LINKS = [...PUBLIC_NAV_LINKS, ...PRIVATE_NAV_LINKS] as const;
 
 export const Navbar: React.FC = () => {
   const { user, profile } = useAuth();
@@ -45,8 +51,7 @@ export const Navbar: React.FC = () => {
     }
   };
 
-  // Desktop: all main links for logged-in, nothing for logged-out (they use auth buttons)
-  const desktopNavLinks = user ? ALL_NAV_LINKS : [];
+  const desktopNavLinks = user ? ALL_NAV_LINKS : PUBLIC_NAV_LINKS;
 
   return (
     <nav
@@ -167,6 +172,16 @@ export const Navbar: React.FC = () => {
               </>
             ) : (
               <>
+                {PUBLIC_NAV_LINKS.map((link) => (
+                  <Link
+                    key={link.path}
+                    to={link.path}
+                    className={`p-2 rounded-xl transition-colors hover:bg-white/5 ${location.pathname === link.path ? 'text-clay' : 'text-white'}`}
+                    aria-label={link.name}
+                  >
+                    <link.icon className="w-5 h-5" />
+                  </Link>
+                ))}
                 <Link to="/login">
                   <Button variant="ghost" size="sm" className="text-sm px-3">Login</Button>
                 </Link>
