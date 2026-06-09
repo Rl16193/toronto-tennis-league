@@ -305,7 +305,9 @@ async function geocodeLocationId(locationId: string, locationName: string): Prom
 // ─── Marker icon (SVG DivIcon) ────────────────────────────────────────────────
 
 function hasPublicHours(court: CourtWithCount): boolean {
-  return !!court.clubInfo && !court.clubInfo.toLowerCase().includes('private');
+  return court.courtType.toLowerCase() === 'club'
+    && !!court.clubInfo
+    && !court.clubInfo.toLowerCase().includes('private');
 }
 
 function courtMarkerIcon(court: CourtWithCount) {
