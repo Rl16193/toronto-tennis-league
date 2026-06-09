@@ -304,6 +304,10 @@ async function geocodeLocationId(locationId: string, locationName: string): Prom
 
 // ─── Marker icon (SVG DivIcon) ────────────────────────────────────────────────
 
+function hasPublicHours(court: CourtWithCount): boolean {
+  return !!court.clubInfo && !court.clubInfo.toLowerCase().includes('private');
+}
+
 function courtMarkerIcon(court: CourtWithCount) {
   const hasPlayers = court.count > 0;
   const bigCount = court.count >= 10;
@@ -320,7 +324,7 @@ function courtMarkerIcon(court: CourtWithCount) {
       <path d="M${r},0 A${r},${r} 0 0,1 ${r},${s} Z" fill="#eab308" opacity="0.95"/>
       <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>
     </svg>`;
-  } else if (hasPlayers && court.clubInfo) {
+  } else if (hasPlayers && hasPublicHours(court)) {
     // Green + Blue split: players AND public hours
     html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
       <path d="M${r},0 A${r},${r} 0 0,0 ${r},${s} Z" fill="#15803d" opacity="0.95"/>
@@ -338,8 +342,8 @@ function courtMarkerIcon(court: CourtWithCount) {
     html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
       <circle cx="${r}" cy="${r}" r="${r}" fill="#eab308" opacity="0.82"/>
     </svg>`;
-  } else if (court.courtType.toLowerCase() === 'club' && court.clubInfo && court.clubInfo.toLowerCase() !== 'private') {
-    // Blue: club with public hours available
+  } else if (hasPublicHours(court)) {
+    // Blue: public hours available (clubInfo non-empty and not "Private")
     html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
       <circle cx="${r}" cy="${r}" r="${r}" fill="#3b82f6" opacity="0.82"/>
     </svg>`;
