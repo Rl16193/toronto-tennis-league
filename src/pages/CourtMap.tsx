@@ -320,6 +320,13 @@ function courtMarkerIcon(court: CourtWithCount) {
       <path d="M${r},0 A${r},${r} 0 0,1 ${r},${s} Z" fill="#eab308" opacity="0.95"/>
       <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>
     </svg>`;
+  } else if (hasPlayers && court.clubInfo) {
+    // Green + Blue split: players AND public hours
+    html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
+      <path d="M${r},0 A${r},${r} 0 0,0 ${r},${s} Z" fill="#15803d" opacity="0.95"/>
+      <path d="M${r},0 A${r},${r} 0 0,1 ${r},${s} Z" fill="#3b82f6" opacity="0.95"/>
+      <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>
+    </svg>`;
   } else if (hasPlayers) {
     // Green: players only
     html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
@@ -331,8 +338,8 @@ function courtMarkerIcon(court: CourtWithCount) {
     html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
       <circle cx="${r}" cy="${r}" r="${r}" fill="#eab308" opacity="0.82"/>
     </svg>`;
-  } else if (court.clubInfo) {
-    // Blue: public hours available, no players or programs
+  } else if (court.courtType.toLowerCase() === 'club' && court.clubInfo && court.clubInfo.toLowerCase() !== 'private') {
+    // Blue: club with public hours available
     html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
       <circle cx="${r}" cy="${r}" r="${r}" fill="#3b82f6" opacity="0.82"/>
     </svg>`;
@@ -707,7 +714,7 @@ export const CourtMap: React.FC = () => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
 
         {/* Header */}
-        <div className="mb-2">
+        <div className="mb-1">
           <h1 className="text-3xl font-bold font-['Montserrat']">
             <span className="text-white">Our </span>
             <span className="text-clay">Courts</span>
@@ -715,7 +722,7 @@ export const CourtMap: React.FC = () => {
         </div>
 
         {/* Search bar */}
-        <form onSubmit={handleFindCourts} className="mb-3 flex flex-wrap gap-2">
+        <form onSubmit={handleFindCourts} className="mb-3 flex flex-wrap gap-2 relative z-[1001]">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 pointer-events-none z-10" />
             <input
@@ -798,54 +805,39 @@ export const CourtMap: React.FC = () => {
 
         {searchError && <p className="text-red-400 text-sm mb-3">{searchError}</p>}
 
-        {/* Filters — above map, white labels */}
-        {showCourtsTable && (
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
-            <ChipGroup
-              label="Type"
-              value={courtTypeFilter}
-              options={[
-                { value: 'Public', label: 'Public' },
-                { value: 'Club', label: 'Club' },
-              ]}
-              onChange={setCourtTypeFilter}
-            />
-            <ChipGroup
-              label="Lights"
-              value={courtLightsFilter}
-              options={[
-                { value: 'yes', label: 'Yes' },
-                { value: 'no', label: 'No' },
-              ]}
-              onChange={setCourtLightsFilter}
-            />
+        {/* Legend */}
+        <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-white">
+          <div className="flex items-center gap-2">
+            <svg width="14" height="14" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+              <path d="M7,0 A7,7 0 0,0 7,14 Z" fill="#15803d" opacity="0.9" />
+              <path d="M7,0 A7,7 0 0,1 7,14 Z" fill="#eab308" opacity="0.9" />
+            </svg>
+            Active players + programs
           </div>
-        )}
-        {showProgramsTable && (
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
-            <ChipGroup
-              label="Status"
-              value={progStatusFilter}
-              options={[
-                { value: 'ongoing', label: 'Ongoing' },
-                { value: 'upcoming', label: 'Upcoming' },
-              ]}
-              onChange={setProgStatusFilter}
-            />
-            <DaysChips selected={progDaysFilter} onChange={setProgDaysFilter} />
-            <ChipGroup
-              label="Age"
-              value={progAgeFilter}
-              options={[
-                { value: '', label: 'All ages' },
-                { value: 'under13', label: 'Under 13' },
-                { value: '13to18', label: '13–18' },
-                { value: '19plus', label: '19+' },
-              ]}
-              onChange={setProgAgeFilter}
-            />
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-[#15803d] inline-block shrink-0" />
+            Active players
           </div>
-        )}
+          <div className="flex items-center gap-2">
+            <svg width="12" height="12" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+              <path d="M6,0 A6,6 0 0,0 6,12 Z" fill="#15803d" opacity="0.95" />
+              <path d="M6,0 A6,6 0 0,1 6,12 Z" fill="#3b82f6" opacity="0.95" />
+            </svg>
+            Active players + public hours
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-[#eab308] inline-block shrink-0" />
+            Tennis programs
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-[#3b82f6] inline-block shrink-0" />
+            Public hours available
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-[#f97316] inline-block shrink-0" />
+            No registered players
+          </div>
+        </div>
 
         {/* Map — normal flow, not sticky */}
         <div className="rounded-2xl overflow-hidden border border-white/10 shadow-xl relative" style={{ height: '55vh' }}>
@@ -894,33 +886,6 @@ export const CourtMap: React.FC = () => {
           )}
         </div>
 
-        {/* Legend */}
-        <div className="mt-3 flex flex-wrap items-center gap-5 text-xs text-white/50">
-          <div className="flex items-center gap-2">
-            <svg width="14" height="14" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-              <path d="M7,0 A7,7 0 0,0 7,14 Z" fill="#15803d" opacity="0.9" />
-              <path d="M7,0 A7,7 0 0,1 7,14 Z" fill="#eab308" opacity="0.9" />
-            </svg>
-            Active players + programs
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-[#15803d] inline-block shrink-0" />
-            Active players
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-[#eab308] inline-block shrink-0" />
-            Tennis programs
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-[#3b82f6] inline-block shrink-0" />
-            Public hours available
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-[#f97316] inline-block shrink-0" />
-            No registered players
-          </div>
-        </div>
-
         {/* ── Courts table ─────────────────────────────────────────────────── */}
         {showCourtsTable && (() => {
           const top10 = displayedCourts.slice(0, 10);
@@ -933,12 +898,54 @@ export const CourtMap: React.FC = () => {
                   {displayedCourts.length} result{displayedCourts.length !== 1 ? 's' : ''}, showing top {Math.min(10, displayedCourts.length)}
                 </span>
               </h2>
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
+                <ChipGroup
+                  label="Type"
+                  value={courtTypeFilter}
+                  options={[
+                    { value: 'Public', label: 'Public' },
+                    { value: 'Club', label: 'Club' },
+                  ]}
+                  onChange={setCourtTypeFilter}
+                />
+                <ChipGroup
+                  label="Lights"
+                  value={courtLightsFilter}
+                  options={[
+                    { value: 'yes', label: 'Yes' },
+                    { value: 'no', label: 'No' },
+                  ]}
+                  onChange={setCourtLightsFilter}
+                />
+              </div>
 
               {displayedCourts.length === 0 ? (
                 <p className="text-white/40 text-sm py-4 text-center">No courts match the current filters.</p>
               ) : (
                 <>
-                  <div className="overflow-x-auto rounded-xl border border-white/10">
+                  {/* Mobile cards */}
+                  <div className="sm:hidden space-y-2">
+                    {visible.map((c) => (
+                      <div key={`${c.dropdown}-${c.lat}`} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold text-white text-sm leading-snug">{c.dropdown}</p>
+                          {userCoords && (
+                            <span className="text-clay font-medium text-sm shrink-0">{formatDist(c.distKm)}</span>
+                          )}
+                        </div>
+                        {c.address && <p className="text-white/50 text-xs">{c.address}</p>}
+                        <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-white/60">
+                          {c.numCourts > 0 && <span>{c.numCourts} court{c.numCourts !== 1 ? 's' : ''}</span>}
+                          {c.count > 0 && <span className="text-clay font-medium">{c.count} active player{c.count !== 1 ? 's' : ''}</span>}
+                          {c.lights && <span>Lights ✓</span>}
+                        </div>
+                        {c.clubInfo && <p className="text-white/40 text-xs">{c.clubInfo}</p>}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop table */}
+                  <div className="hidden sm:block overflow-x-auto rounded-xl border border-white/10">
                     <table className="w-full text-sm text-white/80">
                       <thead className="bg-white/5 text-white/50 text-xs uppercase">
                         <tr>
@@ -956,13 +963,9 @@ export const CourtMap: React.FC = () => {
                             <td className="px-4 py-3 font-medium">{c.dropdown}</td>
                             <td className="px-4 py-3">{c.numCourts || '—'}</td>
                             <td className="px-4 py-3">
-                              {c.count > 0 ? (
-                                <span className="text-clay font-medium">{c.count}</span>
-                              ) : '—'}
+                              {c.count > 0 ? <span className="text-clay font-medium">{c.count}</span> : '—'}
                             </td>
-                            <td className="px-4 py-3 text-white/50 text-xs max-w-[200px]">
-                              {c.clubInfo || '—'}
-                            </td>
+                            <td className="px-4 py-3 text-white/50 text-xs max-w-[200px]">{c.clubInfo || '—'}</td>
                             <td className="px-4 py-3 text-white/50">{c.address || '—'}</td>
                             <td className="px-4 py-3 text-clay font-medium">
                               {userCoords ? formatDist(c.distKm) : '—'}
@@ -972,6 +975,7 @@ export const CourtMap: React.FC = () => {
                       </tbody>
                     </table>
                   </div>
+
                   {!courtsShowMore && top10.length > 5 && (
                     <button
                       onClick={() => setCourtsShowMore(true)}
@@ -998,18 +1002,74 @@ export const CourtMap: React.FC = () => {
                   {displayedPrograms.length} result{displayedPrograms.length !== 1 ? 's' : ''}, showing top {Math.min(10, displayedPrograms.length)}
                 </span>
               </h2>
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
+                <ChipGroup
+                  label="Status"
+                  value={progStatusFilter}
+                  options={[
+                    { value: 'ongoing', label: 'Ongoing' },
+                    { value: 'upcoming', label: 'Upcoming' },
+                  ]}
+                  onChange={setProgStatusFilter}
+                />
+                <DaysChips selected={progDaysFilter} onChange={setProgDaysFilter} />
+                <ChipGroup
+                  label="Age"
+                  value={progAgeFilter}
+                  options={[
+                    { value: '', label: 'All ages' },
+                    { value: 'under13', label: 'Under 13' },
+                    { value: '13to18', label: '13–18' },
+                    { value: '19plus', label: '19+' },
+                  ]}
+                  onChange={setProgAgeFilter}
+                />
+              </div>
 
               {displayedPrograms.length === 0 ? (
                 <p className="text-white/40 text-sm py-4 text-center">No programs match the current filters.</p>
               ) : (
                 <>
-                  <div className="overflow-x-auto rounded-xl border border-white/10">
+                  {/* Mobile cards */}
+                  <div className="sm:hidden space-y-2">
+                    {visible.map((p) => (
+                      <div key={p.courseId} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold text-white text-sm leading-snug">{p.title}</p>
+                          {p.distKm !== null && (
+                            <span className="text-clay font-medium text-sm shrink-0">{formatDist(p.distKm)}</span>
+                          )}
+                        </div>
+                        <p className="text-white/60 text-xs">{p.locationName}</p>
+                        <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-white/50">
+                          {p.days && <span>{p.days}</span>}
+                          {p.timeRange && <span>{p.timeRange}</span>}
+                          {p.dateRange && <span>{p.dateRange}</span>}
+                          <span>{p.ageRange}</span>
+                        </div>
+                        {p.activityUrl && (
+                          <a
+                            href={p.activityUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block text-clay text-xs hover:underline"
+                          >
+                            View activity →
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop table */}
+                  <div className="hidden sm:block overflow-x-auto rounded-xl border border-white/10">
                     <table className="w-full text-sm text-white/80">
                       <thead className="bg-white/5 text-white/50 text-xs uppercase">
                         <tr>
                           <th className="px-4 py-3 text-left">Program</th>
                           <th className="px-4 py-3 text-left">Location</th>
                           <th className="px-4 py-3 text-left">Days</th>
+                          <th className="px-4 py-3 text-left">Time</th>
                           <th className="px-4 py-3 text-left">Date Range</th>
                           <th className="px-4 py-3 text-left">Ages</th>
                           <th className="px-4 py-3 text-left">Activity</th>
@@ -1022,6 +1082,7 @@ export const CourtMap: React.FC = () => {
                             <td className="px-4 py-3 font-medium">{p.title}</td>
                             <td className="px-4 py-3">{p.locationName}</td>
                             <td className="px-4 py-3">{p.days}</td>
+                            <td className="px-4 py-3 text-white/60">{p.timeRange}</td>
                             <td className="px-4 py-3 text-white/50">{p.dateRange}</td>
                             <td className="px-4 py-3">{p.ageRange}</td>
                             <td className="px-4 py-3">
@@ -1044,6 +1105,7 @@ export const CourtMap: React.FC = () => {
                       </tbody>
                     </table>
                   </div>
+
                   {!programsShowMore && top10.length > 5 && (
                     <button
                       onClick={() => setProgramsShowMore(true)}
@@ -1052,32 +1114,12 @@ export const CourtMap: React.FC = () => {
                       Load {top10.length - 5} more
                     </button>
                   )}
-                  {displayedPrograms.some((p) => p.distKm === null) && (
-                    <p className="text-white/30 text-xs mt-2">
-                      Distances marked — are being resolved in the background.
-                    </p>
-                  )}
                 </>
               )}
             </div>
           );
         })()}
 
-        {/* Bottom info */}
-        <div className="mt-12 pt-6 border-t border-white/10">
-          <p className="text-xs text-white/40 leading-relaxed">
-            Checkout City of Toronto led Tennis Programs{' '}
-            <a
-              href="https://anc.ca.apm.activecommunities.com/toronto/activity/search?onlineSiteId=0&activity_category_ids=91&viewMode=list"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-clay hover:underline"
-            >
-              here
-            </a>
-            . Contact the city for more information.
-          </p>
-        </div>
 
       </div>
     </div>
