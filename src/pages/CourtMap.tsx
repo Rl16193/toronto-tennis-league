@@ -255,29 +255,6 @@ function parsePrograms(
   return programs;
 }
 
-function deduplicateCourts(courts: CourtWithCount[]): CourtWithCount[] {
-  const groups = new Map<string, CourtWithCount[]>();
-  for (const court of courts) {
-    const key = `${court.lat.toFixed(4)},${court.lng.toFixed(4)}`;
-    const g = groups.get(key);
-    if (g) g.push(court); else groups.set(key, [court]);
-  }
-  const result: CourtWithCount[] = [];
-  for (const group of groups.values()) {
-    if (group.length === 1) { result.push(group[0]); continue; }
-    group.sort((a, b) => b.count - a.count);
-    const totalCount = group.reduce((s, c) => s + c.count, 0);
-    const totalCourts = group.reduce((s, c) => s + c.numCourts, 0);
-    const hasPrograms = group.some(c => c.hasPrograms);
-    const clubInfo = group.map(c => c.clubInfo).filter(Boolean).join('; ');
-    const winner = group[0];
-    const dropdown = group[0].count > group[1].count
-      ? group[0].dropdown
-      : group.map(c => c.dropdown).join(' / ');
-    result.push({ ...winner, dropdown, count: totalCount, numCourts: totalCourts, hasPrograms, clubInfo });
-  }
-  return result;
-}
 
 async function geocodeQuery(query: string): Promise<{ lat: number; lng: number } | null> {
   const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=ca`;
@@ -465,12 +442,9 @@ export const CourtMap: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const geocodingActiveRef = useRef(false);
 
-  // ── Deduplicate courts at the same location ────────────────────────────────
-  const deduplicatedCourts = useMemo(() => deduplicateCourts(courts), [courts]);
-
   // ── Filtered + sorted courts ───────────────────────────────────────────────
   const displayedCourts = useMemo((): NearestCourt[] => {
-    let list = deduplicatedCourts;
+    let list = courts;
     if (courtTypeFilter === 'Public') list = list.filter((c) => c.courtType.toLowerCase() === 'public');
     if (courtTypeFilter === 'Club') list = list.filter((c) => c.courtType.toLowerCase() === 'club');
     if (courtLightsFilter === 'yes') list = list.filter((c) => c.lights);
@@ -481,7 +455,7 @@ export const CourtMap: React.FC = () => {
         distKm: userCoords ? haversineKm(userCoords.lat, userCoords.lng, c.lat, c.lng) : 0,
       }))
       .sort((a, b) => a.distKm - b.distKm);
-  }, [deduplicatedCourts, courtTypeFilter, courtLightsFilter, userCoords]);
+  }, [courts, courtTypeFilter, courtLightsFilter, userCoords]);
 
   // ── Filtered + sorted programs ─────────────────────────────────────────────
   const displayedPrograms = useMemo((): NearestProgram[] => {
@@ -640,7 +614,7 @@ export const CourtMap: React.FC = () => {
       setUserCoords(coords);
       setShowCourtsTable(true);
       setShowProgramsTable(false);
-      const nearest5 = deduplicatedCourts
+      const nearest5 = courts
         .map((c) => ({ lat: c.lat, lng: c.lng, dist: haversineKm(coords.lat, coords.lng, c.lat, c.lng) }))
         .sort((a, b) => a.dist - b.dist)
         .slice(0, 5);
@@ -846,7 +820,7 @@ export const CourtMap: React.FC = () => {
         </div>
 
         {/* Map — normal flow, not sticky */}
-        <div className="rounded-2xl overflow-hidden border border-white/10 shadow-xl relative" style={{ height: '55vh' }}>
+        <div className="rounded-2xl overflow-hidden border border-white/10 shadow-xl relative [isolation:isolate]" style={{ height: '55vh' }}>
           {loading ? (
             <div className="w-full h-full flex items-center justify-center bg-white/5">
               <Loader2 className="w-8 h-8 text-clay animate-spin" />
@@ -858,7 +832,7 @@ export const CourtMap: React.FC = () => {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               />
               {fitBounds.length > 0 && <FitBounds bounds={fitBounds} />}
-              {deduplicatedCourts.map((court, i) => (
+              {courts.map((court, i) => (
                 <Marker
                   key={i}
                   position={[court.lat, court.lng]}
