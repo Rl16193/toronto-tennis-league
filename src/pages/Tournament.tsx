@@ -93,7 +93,7 @@ export const Tournament: React.FC = () => {
     allTournamentEvents,
     isCreator, started, userParticipant,
     currentDraw, currentMatches, displayMatches, visibleDraws,
-    opponent,
+    opponent, nextMatchOpponents,
     editPlayers, reservesPlayers, currentDrawAllPlayers, currentDrawSize, skillMismatchedCount,
     message, scoreForm, scoreFormMatch, setScoreForm,
     generating, resettingDraw, editMode, setEditMode,
@@ -109,10 +109,10 @@ export const Tournament: React.FC = () => {
     showReserves, setShowReserves, generatingReserves,
     handleSetLLDrawSize, handleGenerateReservesDraw, handleResetLLDraw,
     submissions,
-    currentDrawFormat, drawFormat, setDrawFormat,
-    showRRConfig, setShowRRConfig, isConversionMode, setIsConversionMode, generatingRR,
-    rrGroups, userRRGroup, rrStandingsByGroup, rrGroupMatches, rrKnockoutMatches, rrKnockoutReady, rrConfig,
-    handleGenerateRR, handleResetRR, handleConvertToRR, handleGenerateRRKnockout,
+    currentDrawFormat, drawFormat,
+    showRRConfig, setShowRRConfig, generatingRR,
+    rrGroups, previewRRGroups, userRRGroup, rrStandingsByGroup, rrGroupMatches, rrKnockoutMatches, rrKnockoutReady, rrConfig,
+    handleGenerateRR, handleResetRR, handleGenerateRRKnockout,
   } = useTournament(eventId);
 
   useEffect(() => { document.title = 'Matches — Racquets & Strings'; }, []);
@@ -217,7 +217,7 @@ export const Tournament: React.FC = () => {
           isDoubles={rrGroupMatches[0]?.tournament_choice === 'Doubles'}
         />
       ) : (
-        opponent && <OpponentCard opponent={opponent} />
+        opponent && <OpponentCard opponent={opponent} nextMatchOpponents={nextMatchOpponents} />
       )}
 
       <DrawTabs
@@ -307,8 +307,8 @@ export const Tournament: React.FC = () => {
           )}
           {currentDrawFormat === 'rr' ? (
             <RoundRobinView
-              groups={rrGroups}
-              standingsByGroup={rrStandingsByGroup}
+              groups={rrGroups.length > 0 ? rrGroups : previewRRGroups}
+              standingsByGroup={rrGroups.length > 0 ? rrStandingsByGroup : previewRRGroups.map(() => [])}
               groupMatches={rrGroupMatches}
               knockoutMatches={rrKnockoutMatches}
               advancementCount={rrConfig?.advancementCount ?? 1}
@@ -366,21 +366,18 @@ export const Tournament: React.FC = () => {
           hasMatches={currentMatches.length > 0}
           isProcessing={generating || resettingDraw || generatingRR}
           editMode={editMode}
-          started={started}
+          started={currentMatches.some((m) => m.status === 'complete')}
           mergeMensSingles={mergeMensSingles}
           mergeWomensSingles={mergeWomensSingles}
           consolidateDoubles={consolidateDoubles}
           currentDrawFormat={currentDrawFormat}
-          drawFormat={drawFormat}
           onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'), drawState, event?.title, event?.round_deadlines ?? {})}
-          onGenerateMatches={currentDrawFormat === 'rr' || drawFormat === 'rr' ? () => setShowRRConfig(true) : handleGenerateAll}
+          onGenerateMatches={drawFormat === 'rr' ? () => setShowRRConfig(true) : handleGenerateAll}
           onCancelMatches={currentDrawFormat === 'rr' ? handleResetRR : handleResetDraw}
           onToggleEdit={() => setEditMode((v) => !v)}
           onToggleMergeMens={() => setMergeMensSingles((v) => !v)}
           onToggleMergeWomens={() => setMergeWomensSingles((v) => !v)}
           onToggleConsolidateDoubles={() => setConsolidateDoubles((v) => !v)}
-          onSetFormat={setDrawFormat}
-          onConvertToRR={() => { setIsConversionMode(true); setShowRRConfig(true); }}
         />
       </div>
 
@@ -398,10 +395,9 @@ export const Tournament: React.FC = () => {
       {showRRConfig && (
         <RRConfigModal
           playerCount={currentDrawAllPlayers.length}
-          isConversion={isConversionMode}
           isLoading={generatingRR}
-          onConfirm={isConversionMode ? handleConvertToRR : handleGenerateRR}
-          onClose={() => { setShowRRConfig(false); setIsConversionMode(false); }}
+          onConfirm={handleGenerateRR}
+          onClose={() => setShowRRConfig(false)}
         />
       )}
     </>

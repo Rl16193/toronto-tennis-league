@@ -43,27 +43,36 @@ type PlayerSelectProps = {
   matchId: string;
   slot: 'player_1' | 'player_2';
   currentUserId: string;
+  currentName: string;
   players: TournamentPlayer[];
   onSelect: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
 };
 
-const PlayerSelect: React.FC<PlayerSelectProps> = ({ matchId, slot, currentUserId, players, onSelect }) => (
-  <div className="h-8 border-b border-gray-300 flex items-center px-1 bg-yellow-50">
-    <select
-      value={currentUserId || ''}
-      onChange={(e) => {
-        const p = e.target.value ? players.find((p) => p.user_id === e.target.value) ?? null : null;
-        onSelect(matchId, slot, p);
-      }}
-      className="w-full text-xs bg-transparent border-none outline-none cursor-pointer"
-    >
-      <option value="">{BYE}</option>
-      {players.map((p) => (
-        <option key={p.user_id} value={p.user_id}>{p.name}</option>
-      ))}
-    </select>
-  </div>
-);
+const PlayerSelect: React.FC<PlayerSelectProps> = ({ matchId, slot, currentUserId, currentName, players, onSelect }) => {
+  const selectValue = currentName === PLAYER_LOADING ? PLAYER_LOADING : (currentUserId || '');
+  return (
+    <div className="h-8 border-b border-gray-300 flex items-center px-1 bg-yellow-50">
+      <select
+        value={selectValue}
+        onChange={(e) => {
+          if (e.target.value === PLAYER_LOADING) {
+            onSelect(matchId, slot, { user_id: '', name: PLAYER_LOADING, contact: '', preferredContact: 'email', participantId: '' });
+          } else {
+            const p = e.target.value ? players.find((p) => p.user_id === e.target.value) ?? null : null;
+            onSelect(matchId, slot, p);
+          }
+        }}
+        className="w-full text-xs bg-transparent border-none outline-none cursor-pointer"
+      >
+        <option value="">{BYE}</option>
+        <option value={PLAYER_LOADING}>{PLAYER_LOADING}</option>
+        {players.map((p) => (
+          <option key={p.user_id} value={p.user_id}>{p.name}</option>
+        ))}
+      </select>
+    </div>
+  );
+};
 
 const formatSetScores = (match: TournamentMatch): string => {
   const pairs: [number, number][] = [
@@ -209,6 +218,7 @@ export const BracketView: React.FC<Props> = ({
                         matchId={match.id}
                         slot="player_1"
                         currentUserId={match.player_1_user_id}
+                        currentName={match.player_1_name}
                         players={editPlayers}
                         onSelect={onEditPlayer!}
                       />
@@ -220,6 +230,7 @@ export const BracketView: React.FC<Props> = ({
                         matchId={match.id}
                         slot="player_2"
                         currentUserId={match.player_2_user_id}
+                        currentName={match.player_2_name}
                         players={editPlayers}
                         onSelect={onEditPlayer!}
                       />

@@ -19,6 +19,8 @@ export type EventFormState = {
   joinLastDate: string;
   time: string;
   skillLevel: string;
+  tournamentFormat: 'knockout' | 'rr';
+  tournamentChoice: 'Singles' | 'Doubles';
 };
 
 export const INITIAL_EVENT_FORM: EventFormState = {
@@ -32,6 +34,8 @@ export const INITIAL_EVENT_FORM: EventFormState = {
   joinLastDate: '',
   time: 'Anytime',
   skillLevel: 'All',
+  tournamentFormat: 'knockout',
+  tournamentChoice: 'Singles',
 };
 
 export const EVENT_SKILL_OPTIONS = ['All', '2.5+', '3.0+', '3.5+', '4.0+', '4.5+', '5.0+'];
@@ -112,6 +116,10 @@ export const createEvent = async (userId: string, eventForm: EventFormState, ima
     skill_level: eventForm.skillLevel,
     creator_id: userId,
     created_at: new Date().toISOString(),
+    ...(eventForm.type.trim() === 'Tournament' && {
+      tournament_format: eventForm.tournamentFormat,
+      tournament_choice: eventForm.tournamentChoice,
+    }),
   };
 
   const created = await addDoc(collection(db, 'events'), newEvent);

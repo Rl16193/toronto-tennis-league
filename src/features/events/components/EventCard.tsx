@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Calendar, MapPin, User, Star, Clock3, CheckCircle2, X } from 'lucide-react';
 import { Button } from '../../../components/Button';
@@ -68,7 +68,18 @@ export const EventCard: React.FC<Props> = ({
   const isHardClosed = isJoinHardClosed(event);
   // Non-tournament events have no draw slots — late registration doesn't apply.
   const joinClosed = isHardClosed || (isLate && !isTournament);
-  const divisions = joinForm.tournamentChoice === 'Doubles' ? DOUBLES_DIVISIONS : SINGLES_DIVISIONS;
+
+  const fixedChoice = event.tournament_choice; // set on new events; undefined on old events
+  const displayChoice = fixedChoice ?? joinForm.tournamentChoice;
+  const divisions = displayChoice === 'Doubles' ? DOUBLES_DIVISIONS : SINGLES_DIVISIONS;
+
+  useEffect(() => {
+    if (!isExpanded || !fixedChoice) return;
+    if (joinForm.tournamentChoice !== fixedChoice) {
+      setJoinForm({ ...joinForm, tournamentChoice: fixedChoice, division: '' });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExpanded]);
 
   const handleJoinClick = () => {
     if (!isLoggedIn) return;
@@ -156,26 +167,28 @@ export const EventCard: React.FC<Props> = ({
         <div className="pt-3 border-t border-white/10 space-y-4">
           {isTournament ? (
             <>
-              {/* Format toggle */}
-              <div>
-                <p className="text-xs font-bold text-white/50 uppercase tracking-widest mb-2">Format</p>
-                <div className="flex gap-2">
-                  {(['Singles', 'Doubles'] as const).map((choice) => (
-                    <button
-                      key={choice}
-                      type="button"
-                      onClick={() => setJoinForm({ ...joinForm, tournamentChoice: choice, division: '' })}
-                      className={`flex-1 py-2 rounded-xl text-sm font-bold border transition-colors ${
-                        joinForm.tournamentChoice === choice
-                          ? 'bg-clay text-white border-clay'
-                          : 'bg-white/5 text-white/70 border-white/10 hover:border-white/30'
-                      }`}
-                    >
-                      {choice}
-                    </button>
-                  ))}
+              {/* Format toggle — only for old events without a locked tournament_choice */}
+              {!fixedChoice && (
+                <div>
+                  <p className="text-xs font-bold text-white/50 uppercase tracking-widest mb-2">Format</p>
+                  <div className="flex gap-2">
+                    {(['Singles', 'Doubles'] as const).map((choice) => (
+                      <button
+                        key={choice}
+                        type="button"
+                        onClick={() => setJoinForm({ ...joinForm, tournamentChoice: choice, division: '' })}
+                        className={`flex-1 py-2 rounded-xl text-sm font-bold border transition-colors ${
+                          joinForm.tournamentChoice === choice
+                            ? 'bg-clay text-white border-clay'
+                            : 'bg-white/5 text-white/70 border-white/10 hover:border-white/30'
+                        }`}
+                      >
+                        {choice}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Division */}
               <div>
@@ -199,7 +212,7 @@ export const EventCard: React.FC<Props> = ({
               </div>
 
               {/* Doubles-only fields */}
-              {joinForm.tournamentChoice === 'Doubles' && (
+              {displayChoice === 'Doubles' && (
                 <>
                   <div>
                     <p className="text-xs font-bold text-white/50 uppercase tracking-widest mb-2">Partner Name</p>

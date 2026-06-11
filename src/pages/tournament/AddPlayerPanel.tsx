@@ -2,6 +2,9 @@
 import { UserPlus } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { DrawConfig } from './types';
+import { PLAYER_LOADING } from './utils';
+
+export const PLAYER_LOADING_SENTINEL = '__player_loading__';
 
 type AvailableUser = { id: string; name: string; email: string };
 
@@ -42,6 +45,7 @@ export const AddPlayerPanel: React.FC<Props> = ({
       (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
       (u.email || '').toLowerCase().includes(search.toLowerCase()),
   );
+  const isPlayerLoading = selectedUserId === PLAYER_LOADING_SENTINEL;
   const selectedUser = availableUsers.find((u) => u.id === selectedUserId);
 
   const handleAdd = async () => {
@@ -75,7 +79,7 @@ export const AddPlayerPanel: React.FC<Props> = ({
               onClick={() => setOpen((v) => !v)}
               className="w-full text-left px-3 py-2 rounded-xl bg-tennis-surface/60 border border-white/10 text-sm text-white hover:border-clay/50 transition-colors"
             >
-              {selectedUser ? selectedUser.name : <span className="text-white">Select player…</span>}
+              {isPlayerLoading ? <span className="text-white/60 italic">{PLAYER_LOADING}</span> : selectedUser ? selectedUser.name : <span className="text-white">Select player…</span>}
             </button>
             {open && (
               <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-xl overflow-hidden">
@@ -89,6 +93,12 @@ export const AddPlayerPanel: React.FC<Props> = ({
                   />
                 </div>
                 <ul className="max-h-52 overflow-y-auto">
+                  <li
+                    onClick={() => { setSelectedUserId(PLAYER_LOADING_SENTINEL); setOpen(false); setSearch(''); }}
+                    className="px-3 py-2 text-sm text-white/60 italic hover:bg-clay/20 cursor-pointer border-b border-white/10"
+                  >
+                    {PLAYER_LOADING}
+                  </li>
                   {filtered.length === 0 ? (
                     <li className="px-3 py-2 text-sm text-white">No users found</li>
                   ) : (

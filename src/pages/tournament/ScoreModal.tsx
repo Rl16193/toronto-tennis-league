@@ -60,32 +60,38 @@ export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClos
 
         <div className="space-y-4">
           {scoreForm.sets.map((set, index) => (
-            <div key={index} className="grid grid-cols-[90px_1fr_1fr] gap-3 items-end">
-              <p className="text-white font-bold pb-3">Set {index + 1}</p>
-              <label className="text-sm text-white">
-                {isCreatorSubmit ? match.player_1_name : 'My score'}
-                <input
-                  type="number" min="0" step="1" inputMode="numeric" value={set.mine}
-                  onChange={(e) => {
-                    const sets = [...scoreForm.sets];
-                    sets[index] = { ...set, mine: e.target.value };
-                    onChange({ ...scoreForm, sets });
-                  }}
-                  className="mt-1 w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
-                />
-              </label>
-              <label className="text-sm text-white">
-                {isCreatorSubmit ? match.player_2_name : 'Opponent score'}
-                <input
-                  type="number" min="0" step="1" inputMode="numeric" value={set.opponent}
-                  onChange={(e) => {
-                    const sets = [...scoreForm.sets];
-                    sets[index] = { ...set, opponent: e.target.value };
-                    onChange({ ...scoreForm, sets });
-                  }}
-                  className="mt-1 w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
-                />
-              </label>
+            <div key={index}>
+              <p className="text-white font-bold mb-2">Set {index + 1}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="text-sm text-white">
+                  <span className="block truncate mb-1">
+                    {isCreatorSubmit ? match.player_1_name : 'My score'}
+                  </span>
+                  <input
+                    type="number" min="0" step="1" inputMode="numeric" value={set.mine}
+                    onChange={(e) => {
+                      const sets = [...scoreForm.sets];
+                      sets[index] = { ...set, mine: e.target.value };
+                      onChange({ ...scoreForm, sets });
+                    }}
+                    className="w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
+                  />
+                </label>
+                <label className="text-sm text-white">
+                  <span className="block truncate mb-1">
+                    {isCreatorSubmit ? match.player_2_name : 'Opponent score'}
+                  </span>
+                  <input
+                    type="number" min="0" step="1" inputMode="numeric" value={set.opponent}
+                    onChange={(e) => {
+                      const sets = [...scoreForm.sets];
+                      sets[index] = { ...set, opponent: e.target.value };
+                      onChange({ ...scoreForm, sets });
+                    }}
+                    className="w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
+                  />
+                </label>
+              </div>
             </div>
           ))}
         </div>

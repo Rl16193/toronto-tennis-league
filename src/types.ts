@@ -63,6 +63,8 @@ export interface TennisEvent {
   description?: string;
   organizer?: string;
   round_deadlines?: Record<string, string>; // round → 'YYYY-MM-DD'
+  tournament_format?: 'knockout' | 'rr';
+  tournament_choice?: 'Singles' | 'Doubles';
 }
 
 export interface EventParticipant {

@@ -31,7 +31,6 @@ export const CreatorEventModal: React.FC<Props> = ({
   <ModalShell maxWidthClassName="max-w-4xl" onClose={onClose}>
     <form onSubmit={onSubmit} className="p-6 md:p-8">
       <div className="mb-6 pr-12">
-        <p className="text-xs uppercase tracking-widest text-clay font-black mb-2">Creator</p>
         <h2 className="text-3xl font-display font-black text-white">Add an Event</h2>
       </div>
 
@@ -141,6 +140,50 @@ export const CreatorEventModal: React.FC<Props> = ({
             ))}
           </select>
         </label>
+
+        {eventForm.type === 'Tournament' && (
+          <div className="space-y-2">
+            <span className="block text-sm font-medium text-white">Format</span>
+            <div className="flex gap-2">
+              {(['knockout', 'rr'] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setEventForm({ ...eventForm, tournamentFormat: f })}
+                  className={`flex-1 py-3 rounded-2xl text-sm font-semibold border transition-colors ${
+                    eventForm.tournamentFormat === f
+                      ? 'bg-clay text-white border-clay'
+                      : 'bg-tennis-dark/70 text-white/60 border-white/10 hover:border-white/30'
+                  }`}
+                >
+                  {f === 'knockout' ? 'Knockout' : 'Round Robin'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {eventForm.type === 'Tournament' && (
+          <div className="space-y-2">
+            <span className="block text-sm font-medium text-white">Participant Type</span>
+            <div className="flex gap-2">
+              {(['Singles', 'Doubles'] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setEventForm({ ...eventForm, tournamentChoice: c })}
+                  className={`flex-1 py-3 rounded-2xl text-sm font-semibold border transition-colors ${
+                    eventForm.tournamentChoice === c
+                      ? 'bg-clay text-white border-clay'
+                      : 'bg-tennis-dark/70 text-white/60 border-white/10 hover:border-white/30'
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <label className="space-y-2 md:col-span-2">
           <span className="block text-sm font-medium text-white">About <span className="text-orange-500">*</span></span>
