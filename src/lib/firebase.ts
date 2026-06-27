@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAnalytics, isSupported } from 'firebase/analytics';
+import { initializeAnalytics, isSupported } from 'firebase/analytics';
 import {
   browserLocalPersistence,
   browserSessionPersistence,
@@ -33,5 +33,11 @@ export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
 
 export const analyticsPromise = isSupported().then((supported) =>
-  supported ? getAnalytics(app) : null
+  supported
+    ? initializeAnalytics(app, {
+        // Manual page_view is fired per-route in App.tsx — disable gtag's
+        // automatic page_view so first load isn't double-counted.
+        config: { send_page_view: false, ...(import.meta.env.DEV ? { debug_mode: true } : {}) },
+      })
+    : null
 );

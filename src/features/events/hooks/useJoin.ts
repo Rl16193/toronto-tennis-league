@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, getDocs, query, updateDoc, doc, where } from 'firebase/firestore';
 import { NavigateFunction } from 'react-router-dom';
-import { db } from '../../../lib/firebase';
+import { db, analyticsPromise } from '../../../lib/firebase';
+import { logEvent } from 'firebase/analytics';
 import { TennisEvent } from '../../../types';
 import { TournamentMatch } from '../../../pages/tournament/types';
 import { BYE, PLAYER_LOADING, parseDateValue } from '../../../pages/tournament/utils';
@@ -55,6 +56,11 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
 
   const slotStatus = useMemo((): SlotResult | null => {
     if (!selectedEvent || !isTournamentEvent(selectedEvent) || !joinForm.division || tournamentMatches.length === 0) return null;
+
+    // RR draws fill every slot with a real player at generation, so there are no open
+    // slots to "find" — placement happens by (re)grouping the participant list, not by
+    // seating into empty slots. Never gate RR registration on slot availability.
+    if (selectedEvent.tournament_format === 'rr' || tournamentMatches.some((m) => m.format === 'rr')) return null;
 
     const isOpenSlot = (name: string) => name === PLAYER_LOADING || name === BYE;
 
@@ -134,6 +140,14 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
           skill: Number(profile?.stats.skill_level || 0), dateselected: [],
           createdAt: new Date().toISOString(),
         });
+        analyticsPromise.then((analytics) => {
+          if (!analytics) return;
+          logEvent(analytics, 'join_event', {
+            event_id:   selectedEvent.id,
+            event_name: selectedEvent.title,
+            event_type: selectedEvent.type,
+          });
+        });
         setSelectedEvent(null);
       } catch { setJoinError('Could not join the event right now. Please try again.'); }
       finally { setJoining(false); }
@@ -171,6 +185,14 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
         partner_in_app: joinForm.tournamentChoice === 'Doubles' ? (joinForm.partnerInApp || 'no') : '',
         skill: slotStatus?.skillOverride ?? (joinForm.tournamentChoice === 'Singles' ? Number(profile?.stats.skill_level || 0) : Number(joinForm.combinedSkill || 3)),
         dateselected, createdAt: new Date().toISOString(),
+      });
+      analyticsPromise.then((analytics) => {
+        if (!analytics) return;
+        logEvent(analytics, 'join_event', {
+          event_id:   selectedEvent.id,
+          event_name: selectedEvent.title,
+          event_type: selectedEvent.type,
+        });
       });
 
       // Best-effort: seating a player into a match slot is organizer-only (Firestore

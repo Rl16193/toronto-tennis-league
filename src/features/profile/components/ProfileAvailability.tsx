@@ -4,6 +4,7 @@ import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { Calendar, Edit2, Save, X } from 'lucide-react';
 import { defaultCourtOptions, extractDropdownCourts, getCourtSuggestions, mergeCourtOptions } from '../../signup/utils/courtSearch';
+import { ZONE_NAMES } from '../../../utils/zones';
 
 const FAVOURITE_PLAYERS = [
   "Jannik Sinner",
@@ -187,6 +188,7 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
             </div>
             <div className="space-y-3">
               <label className="block text-xs font-bold text-white uppercase tracking-widest">Courts</label>
+              <p className="text-xs text-white/50">Tip: select <span className="text-clay font-semibold">Stanley Park South - Toronto</span> for the downtown area.</p>
 
               {/* Selected courts as dismissible chips */}
               {selectedCourts.length > 0 && (
@@ -236,6 +238,29 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
                   Add
                 </Button>
               </div>
+            </div>
+            <div className="space-y-3">
+              <label className="block text-xs font-bold text-white uppercase tracking-widest">Zone</label>
+              <select
+                value={editData.preferences?.preferred_zone ?? profile.preferences.preferred_zone ?? ''}
+                onChange={(e) => setEditData({
+                  ...editData,
+                  preferences: {
+                    ...editData.preferences,
+                    availability_day: editData.preferences?.availability_day || profile.preferences.availability_day,
+                    availability_time: editData.preferences?.availability_time || profile.preferences.availability_time,
+                    preferred_courts: editData.preferences?.preferred_courts || profile.preferences.preferred_courts,
+                    favourite_players: editData.preferences?.favourite_players || profile.preferences.favourite_players,
+                    preferred_zone: e.target.value,
+                  },
+                })}
+                className="w-full rounded-xl bg-tennis-dark/50 border border-white/10 text-white text-sm px-3 py-2 focus:outline-none focus:border-clay/60"
+              >
+                <option value="">Not set</option>
+                {ZONE_NAMES.map((z) => (
+                  <option key={z} value={z}>{z}</option>
+                ))}
+              </select>
             </div>
             <div className="space-y-3">
               <label className="block text-xs font-bold text-white uppercase tracking-widest">Favourite Players</label>
@@ -324,6 +349,14 @@ export const ProfileAvailability: React.FC<ProfileAvailabilityProps> = ({
                 ))}
               </div>
             </div>
+            {(profile.preferences.preferred_zone ?? '') && (
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-white uppercase tracking-widest">Zone</p>
+                <span className="px-3 py-1 bg-clay/10 border border-clay/20 rounded-lg text-xs font-bold text-clay">
+                  {profile.preferences.preferred_zone}
+                </span>
+              </div>
+            )}
             <div className="space-y-2">
               <p className="text-xs font-bold text-white uppercase tracking-widest">Favourite Players</p>
               <div className="flex flex-wrap gap-2">

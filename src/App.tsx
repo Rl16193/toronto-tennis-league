@@ -8,7 +8,6 @@ import { Layout } from './components/Layout';
 // Route-level code splitting: each page loads as its own chunk on demand,
 // so the initial bundle stays small (faster first paint, esp. in-app browsers).
 const Home = lazy(() => import('./pages/Home').then((m) => ({ default: m.Home })));
-const Login = lazy(() => import('./pages/Login').then((m) => ({ default: m.Login })));
 const Signup = lazy(() => import('./pages/Signup').then((m) => ({ default: m.Signup })));
 const Events = lazy(() => import('./pages/Events').then((m) => ({ default: m.Events })));
 const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })));
@@ -84,7 +83,7 @@ export default function App() {
           <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/" element={<HomeRoute />} />
-              <Route path="/login" element={<Login />} />
+              <Route path="/login" element={<Signup />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/events" element={<Events />} />
               <Route path="/tournament" element={<PrivateRoute><Tournament /></PrivateRoute>} />

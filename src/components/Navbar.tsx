@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Calendar, Trophy, Medal, User, Menu, X, MapPin } from 'lucide-react';
+import { LogOut, Calendar, Trophy, Medal, User, Menu, X, MapPin, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -52,6 +52,7 @@ export const Navbar: React.FC = () => {
   };
 
   const desktopNavLinks = user ? ALL_NAV_LINKS : PUBLIC_NAV_LINKS;
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
 
   return (
     <nav
@@ -64,14 +65,25 @@ export const Navbar: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between relative">
 
-          {/* Logo */}
-          <Link to={user ? '/profile' : '/'} className="flex items-center shrink-0">
-            <span className="text-lg md:text-xl font-bold font-['Montserrat'] tracking-tight">
-              <span className="text-white">RACQUETS</span>
-              <span className="text-clay"> &</span>
-              <span className="text-white"> STRINGS</span>
-            </span>
-          </Link>
+          {/* Logo — back arrow on the auth page */}
+          {isAuthPage ? (
+            <Link
+              to="/"
+              className="flex items-center gap-2 shrink-0 text-white hover:text-clay transition-colors"
+              aria-label="Back to home"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span className="text-sm font-semibold">Back</span>
+            </Link>
+          ) : (
+            <Link to={user ? '/profile' : '/'} className="flex items-center shrink-0">
+              <span className="text-lg md:text-xl font-bold font-['Montserrat'] tracking-tight">
+                <span className="text-white">RACQUETS</span>
+                <span className="text-clay"> &</span>
+                <span className="text-white"> STRINGS</span>
+              </span>
+            </Link>
+          )}
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-8">
@@ -108,14 +120,9 @@ export const Navbar: React.FC = () => {
                 </Link>
               </>
             ) : (
-              <>
-                <Link to="/login">
-                  <Button variant="ghost" size="sm">Login</Button>
-                </Link>
-                <Link to="/signup">
-                  <Button size="sm">Sign Up</Button>
-                </Link>
-              </>
+              <Link to="/login">
+                <Button size="sm">Join or Log In</Button>
+              </Link>
             )}
           </div>
 
@@ -183,10 +190,7 @@ export const Navbar: React.FC = () => {
                   </Link>
                 ))}
                 <Link to="/login">
-                  <Button variant="ghost" size="sm" className="text-sm px-3">Login</Button>
-                </Link>
-                <Link to="/signup">
-                  <Button size="sm" className="text-sm px-3">Sign Up</Button>
+                  <Button size="sm" className="text-sm px-3">Join or Log In</Button>
                 </Link>
               </>
             )}

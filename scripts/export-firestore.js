@@ -22,7 +22,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PROJECT_ID = 'toronto-tennis-league';
-const COLLECTIONS = ['users', 'stats', 'preferences', 'event_participants', 'events', 'tournament_matches', 'tournament_template', 'score_submissions'];
+const COLLECTIONS = ['users', 'stats', 'preferences', 'event_participants', 'events', 'tournament_matches'];
 const OUTPUT_DIR = path.join(__dirname, 'exports_fresh');
 
 // ── Parse --key argument ──────────────────────────────────────────────────────

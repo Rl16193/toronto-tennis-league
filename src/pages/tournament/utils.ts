@@ -1,10 +1,17 @@
 import { EventParticipant, UserData, UserStats } from '../../types';
-import { DrawConfig, SkillGroup, TemplateMatch, TournamentPlayer } from './types';
+import { DrawConfig, SkillGroup, TemplateMatch, TournamentMatch, TournamentPlayer } from './types';
+
+export const formatSetScores = (m: TournamentMatch): string => {
+  const pairs: [number, number][] = [
+    [m.set_1_player_1 ?? 0, m.set_1_player_2 ?? 0],
+    [m.set_2_player_1 ?? 0, m.set_2_player_2 ?? 0],
+    [m.set_3_player_1 ?? 0, m.set_3_player_2 ?? 0],
+  ];
+  return pairs.filter(([a, b]) => a > 0 || b > 0).map(([a, b]) => `${a}-${b}`).join('  ');
+};
 
 export const PLAYER_LOADING = 'Player Loading';
 export const BYE = 'BYE';
-
-export const isRRMatch = (m: { format?: string }) => m.format === 'rr';
 
 export const formatPlayerName = (value?: string) => {
   const trimmed = (value || '').trim();
@@ -57,12 +64,6 @@ export const getDrawSize = (count: number, _tournamentChoice: 'Singles' | 'Doubl
   if (count <= 8) return 8;
   if (count <= 16) return 16;
   return 32;
-};
-
-export const getReservesDrawSize = (count: number): number => {
-  if (count <= 4) return 4;
-  if (count <= 8) return 8;
-  return 16;
 };
 
 export const fallbackTemplate = (drawsize: number): TemplateMatch[] => {
@@ -135,7 +136,7 @@ export const getWinnerPlaceholder = (slot: number | string, matches: TemplateMat
   return `Winner of ${sourceMatch.round}${pos}`;
 };
 
-export const getContactValue = (userData?: UserData | null) => {
+const getContactValue = (userData?: UserData | null) => {
   if (!userData) return '';
   return userData.preferred_mode_of_contact === 'phone' ? userData.phone : userData.email;
 };

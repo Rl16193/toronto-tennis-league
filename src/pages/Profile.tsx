@@ -23,14 +23,13 @@ export const Profile: React.FC = () => {
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [emailChangeData, setEmailChangeData] = useState({ newEmail: '', password: '' });
   const [emailVerificationPending, setEmailVerificationPending] = useState(false);
-  const [linkingGoogle, setLinkingGoogle] = useState(false);
   const [emailChangeLoading, setEmailChangeLoading] = useState(false);
+
+  useEffect(() => { document.title = 'My Profile — Racquets & Strings'; }, []);
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/login');
   }, [user, authLoading, navigate]);
-
-  const hasGoogleProvider = user?.providerData?.some((p) => p.providerId === 'google.com');
 
   const incompleteFields = profile ? [
     !profile.user.name.trim() ? 'name' : null,
@@ -88,12 +87,6 @@ export const Profile: React.FC = () => {
             if (savedInfo && savedSkills) setIsEditingInfo(false);
           }}
           updateLoading={updateLoading}
-          hasGoogleProvider={hasGoogleProvider}
-          onLinkGoogle={async () => {
-            setLinkingGoogle(true);
-            try { await actions.linkGoogle(); } finally { setLinkingGoogle(false); }
-          }}
-          linkingGoogle={linkingGoogle}
           showEmailForm={showEmailForm}
           setShowEmailForm={setShowEmailForm}
           emailChangeData={emailChangeData}
@@ -131,7 +124,8 @@ export const Profile: React.FC = () => {
               editData.preferences?.availability_day || profile.preferences.availability_day,
               editData.preferences?.availability_time || profile.preferences.availability_time,
               editData.preferences?.preferred_courts || profile.preferences.preferred_courts,
-              editData.preferences?.favourite_players || profile.preferences.favourite_players
+              editData.preferences?.favourite_players || profile.preferences.favourite_players,
+              editData.preferences?.preferred_zone ?? profile.preferences.preferred_zone ?? '',
             );
             if (saved) setIsEditingAvailability(false);
           }}

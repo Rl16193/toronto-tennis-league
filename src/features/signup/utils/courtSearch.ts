@@ -51,6 +51,29 @@ export const extractDropdownCourts = (csvText: string) => {
 export const mergeCourtOptions = (courts: string[]) =>
   [...new Set([...PRELOADED_COURTS, ...courts])].sort((a, b) => a.localeCompare(b));
 
+export const extractCourtsWithCoords = (csvText: string): Map<string, { lat: number; lng: number }> => {
+  const [headerLine, ...lines] = csvText.split(/\r?\n/).filter(Boolean);
+  const headers = parseCsvLine(headerLine);
+  const iDropdown = headers.indexOf('Dropdown');
+  const iName = headers.indexOf('Name');
+  const iGeom = headers.indexOf('geometry');
+  if (iGeom < 0) return new Map();
+
+  const map = new Map<string, { lat: number; lng: number }>();
+  for (const line of lines) {
+    const cells = parseCsvLine(line);
+    const geomRaw = cells[iGeom];
+    if (!geomRaw) continue;
+    try {
+      const geom = JSON.parse(geomRaw) as { coordinates: [[number, number]] };
+      const [lng, lat] = geom.coordinates[0];
+      const dropdown = (cells[iDropdown] || cells[iName] || '').trim();
+      if (dropdown && lat && lng) map.set(dropdown.toLowerCase(), { lat, lng });
+    } catch { /* skip malformed */ }
+  }
+  return map;
+};
+
 export const getCourtSuggestions = (courtOptions: string[], selectedCourts: string[], query: string) => {
   const courtQuery = query.trim().toLowerCase();
 

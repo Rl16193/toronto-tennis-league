@@ -1,23 +1,30 @@
 import React from 'react';
 import { Trophy } from 'lucide-react';
 import { Button } from '../../components/Button';
-import { RRStandingRow, ScoreSubmission, TournamentMatch, TournamentPlayer } from './types';
+import { RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
 import { RRGroupCard } from './RRGroupCard';
 import { BracketView } from './BracketView';
 import { BracketErrorBoundary } from './BracketErrorBoundary';
 
 type Props = {
   groups: TournamentPlayer[][];
+  groupLabels: string[];
+  groupIndices?: number[];
   standingsByGroup: RRStandingRow[][];
   groupMatches: TournamentMatch[];
   knockoutMatches: TournamentMatch[];
   advancementCount: number;
   isCreator: boolean;
+  isParticipant: boolean;
+  isPastEvent: boolean;
   editMode: boolean;
   editPlayers: TournamentPlayer[];
   onEditPlayer: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
   onSubmitScore: (match: TournamentMatch) => void;
-  submissions: ScoreSubmission[];
+  currentUserId?: string;
+  pendingMatchIds?: Set<string>;
+  onSaveGroupEdit: (rrGroup: number, newPlayers: TournamentPlayer[]) => void;
+  onMoveRRPlayer?: (fromRRGroup: number, toRRGroup: number, newFromPlayers: TournamentPlayer[], newToPlayers: TournamentPlayer[]) => void;
   rrKnockoutReady: boolean;
   generatingKnockout: boolean;
   onGenerateKnockout: () => void;
@@ -26,13 +33,16 @@ type Props = {
 };
 
 export const RoundRobinView: React.FC<Props> = ({
-  groups, standingsByGroup, groupMatches, knockoutMatches,
-  advancementCount, isCreator, editMode, editPlayers,
-  onEditPlayer, onSubmitScore, submissions,
+  groups, groupLabels, groupIndices, standingsByGroup, groupMatches, knockoutMatches,
+  advancementCount, isCreator, isParticipant, isPastEvent, editMode, editPlayers,
+  onEditPlayer, onSubmitScore, currentUserId, pendingMatchIds, onSaveGroupEdit, onMoveRRPlayer,
   rrKnockoutReady, generatingKnockout, onGenerateKnockout,
   roundDeadlines, onUpdateDeadline,
 }) => {
   if (groups.length === 0) return null;
+
+  // All players across all groups (for reassignment dropdowns in edit mode)
+  const allGroupPlayers = groups.flat();
 
   return (
     <div className="space-y-8">
@@ -44,16 +54,38 @@ export const RoundRobinView: React.FC<Props> = ({
             <RRGroupCard
               key={gi}
               groupIndex={gi}
+              groupLabel={groupLabels[gi] ?? `Group ${String.fromCharCode(65 + gi)}`}
               players={players}
-              matches={groupMatches.filter((m) => (m.rr_group ?? 0) === gi)}
+              matches={groupMatches.filter((m) => {
+                const ids = new Set(players.map((p) => p.user_id));
+                return ids.has(m.player_1_user_id) || ids.has(m.player_2_user_id);
+              })}
               standings={standingsByGroup[gi] ?? []}
               advancementCount={advancementCount}
               isCreator={isCreator}
+              isParticipant={isParticipant}
+              isPastEvent={isPastEvent}
               editMode={editMode}
               editPlayers={editPlayers}
+              allGroupPlayers={allGroupPlayers}
               onEditPlayer={onEditPlayer}
               onSubmitScore={onSubmitScore}
-              submissions={submissions}
+              currentUserId={currentUserId}
+              pendingMatchIds={pendingMatchIds}
+              // Translate the card's array position (gi) to the real rr_group value so
+              // saves target the correct group even when indices are non-contiguous.
+              onSaveGroupEdit={(_, newPlayers) => onSaveGroupEdit(groupIndices?.[gi] ?? gi, newPlayers)}
+              // Other groups this card's players can be moved into (positional letter + index).
+              groupTargets={onMoveRRPlayer
+                ? groups.map((_, ti) => ({ gi: ti, label: groupLabels[ti] ?? `Group ${String.fromCharCode(65 + ti)}` })).filter((t) => t.gi !== gi)
+                : []}
+              onMovePlayer={onMoveRRPlayer
+                ? (player, toGi) => {
+                    const newFrom = players.filter((p) => p.user_id !== player.user_id);
+                    const newTo = [...groups[toGi], player];
+                    onMoveRRPlayer(groupIndices?.[gi] ?? gi, groupIndices?.[toGi] ?? toGi, newFrom, newTo);
+                  }
+                : undefined}
             />
           ))}
         </div>
@@ -77,12 +109,13 @@ export const RoundRobinView: React.FC<Props> = ({
             <BracketView
               matches={knockoutMatches}
               drawTitle="Knockout"
-              editMode={false}
-              editPlayers={[]}
-              onEditPlayer={() => {}}
-              submissions={submissions}
+              editMode={editMode}
+              editPlayers={editMode ? editPlayers : []}
+              onEditPlayer={onEditPlayer}
               isCreator={isCreator}
               onSubmitScore={onSubmitScore}
+              currentUserId={currentUserId}
+              pendingMatchIds={pendingMatchIds}
               roundDeadlines={roundDeadlines}
               onUpdateDeadline={onUpdateDeadline}
             />

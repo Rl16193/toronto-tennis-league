@@ -1,6 +1,6 @@
 ﻿import React, { useMemo } from 'react';
 import { TournamentMatch, TournamentPlayer } from './types';
-import { BYE, PLAYER_LOADING, formatPlayerName } from './utils';
+import { BYE, PLAYER_LOADING, formatPlayerName, formatSetScores } from './utils';
 import { getRoundLabels } from './bracketImage';
 
 const getRoundTone = (round: string) => {
@@ -74,17 +74,6 @@ const PlayerSelect: React.FC<PlayerSelectProps> = ({ matchId, slot, currentUserI
   );
 };
 
-const formatSetScores = (match: TournamentMatch): string => {
-  const pairs: [number, number][] = [
-    [match.set_1_player_1 ?? 0, match.set_1_player_2 ?? 0],
-    [match.set_2_player_1 ?? 0, match.set_2_player_2 ?? 0],
-    [match.set_3_player_1 ?? 0, match.set_3_player_2 ?? 0],
-  ];
-  return pairs
-    .filter(([p1, p2]) => p1 > 0 || p2 > 0)
-    .map(([p1, p2]) => `${p1}-${p2}`)
-    .join('  ');
-};
 
 type Props = {
   matches: TournamentMatch[];
@@ -94,13 +83,15 @@ type Props = {
   onEditPlayer?: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
   isCreator?: boolean;
   onSubmitScore?: (match: TournamentMatch) => void;
+  currentUserId?: string;
+  pendingMatchIds?: Set<string>;
   roundDeadlines?: Record<string, string>;
   onUpdateDeadline?: (round: string, date: string) => void;
 };
 
 export const BracketView: React.FC<Props> = ({
   matches, drawTitle, editMode, editPlayers = [], onEditPlayer,
-  isCreator, onSubmitScore,
+  isCreator, onSubmitScore, currentUserId, pendingMatchIds,
   roundDeadlines = {}, onUpdateDeadline,
 }) => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
@@ -182,15 +173,20 @@ export const BracketView: React.FC<Props> = ({
               // Status dot
               const showDot = !isPreview && hasRealPlayers;
               const dotClass =
-                match.status === 'flagged' && isCreator
-                  ? 'bg-red-500'
-                  : match.status === 'complete'
+                match.status === 'complete'
                   ? 'bg-green-400'
                   : 'bg-orange-400';
 
               // Creator submit button (also shown for complete matches so creator can overwrite)
               const showCreatorSubmit =
                 isCreator && !!onSubmitScore && hasPlayableSlots && !editMode;
+
+              // Player submit: one of the two players, real match not yet complete.
+              const isMyMatch = !!currentUserId &&
+                (match.player_1_user_id === currentUserId || match.player_2_user_id === currentUserId);
+              const showPlayerSubmit =
+                !isCreator && !!onSubmitScore && hasRealPlayers && !editMode && isMyMatch && match.status !== 'complete';
+              const alreadySubmitted = !!pendingMatchIds?.has(match.id);
 
               return (
                 <div
@@ -204,9 +200,7 @@ export const BracketView: React.FC<Props> = ({
                       <span
                         className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${dotClass} z-10`}
                         title={
-                          match.status === 'flagged' && isCreator
-                            ? 'Disputed'
-                            : match.status === 'complete'
+                          match.status === 'complete'
                             ? 'Score recorded'
                             : 'Pending'
                         }
@@ -261,6 +255,23 @@ export const BracketView: React.FC<Props> = ({
                       >
                         {match.status === 'complete' ? 'Edit score' : 'Enter score'}
                       </button>
+                    )}
+
+                    {/* Player submit-score button (queues for organizer confirmation) */}
+                    {showPlayerSubmit && (
+                      alreadySubmitted ? (
+                        <div className="w-full border-t border-gray-100 px-2 py-1 text-[10px] text-green-700 text-center leading-tight">
+                          Submitted ✓ awaiting confirmation
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onSubmitScore!(match)}
+                          className="w-full border-t border-gray-100 px-2 py-1 text-[10px] text-black hover:text-clay transition-colors text-center leading-tight"
+                        >
+                          Submit score
+                        </button>
+                      )
                     )}
                   </div>
                   {roundIndex < rounds.length - 1 ? (

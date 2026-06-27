@@ -16,9 +16,6 @@ interface ProfileInfoProps {
   onSave: () => void;
   updateLoading: boolean;
   message?: { text: string; type: 'success' | 'error' } | null;
-  hasGoogleProvider: boolean | undefined;
-  onLinkGoogle: () => void;
-  linkingGoogle: boolean;
   showEmailForm: boolean;
   setShowEmailForm: (v: boolean) => void;
   emailChangeData: EmailChangeData;
@@ -34,7 +31,6 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
   isEditing, setIsEditing,
   editData, setEditData,
   onSave, updateLoading, message,
-  hasGoogleProvider, onLinkGoogle, linkingGoogle,
   showEmailForm, setShowEmailForm,
   emailChangeData, setEmailChangeData,
   emailChangeLoading, emailVerificationPending,
@@ -114,12 +110,7 @@ export const ProfileInfo: React.FC<ProfileInfoProps> = ({
                 onCancelEmailChange={onCancelEmailChange}
               />
             ) : (
-              <ProfileContactView
-                profile={profile}
-                hasGoogleProvider={hasGoogleProvider}
-                onLinkGoogle={onLinkGoogle}
-                linkingGoogle={linkingGoogle}
-              />
+              <ProfileContactView profile={profile} />
             )}
           </div>
         </div>

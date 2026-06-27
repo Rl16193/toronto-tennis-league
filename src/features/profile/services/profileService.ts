@@ -1,6 +1,6 @@
 import { doc, updateDoc, getDocs, query, where, collection, deleteDoc, writeBatch } from 'firebase/firestore';
-import { EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail, linkWithPopup, type User } from 'firebase/auth';
-import { db, googleProvider } from '../../../lib/firebase';
+import { EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail, type User } from 'firebase/auth';
+import { db } from '../../../lib/firebase';
 
 export const updateUserInfo = async (userId: string, name: string, phone: string) => {
   const normalizedPhone = phone.replace(/\D/g, '');
@@ -67,13 +67,14 @@ export const updateSkills = async (userId: string, skillLevel: number, tournamen
   }
 };
 
-export const updateAvailability = async (userId: string, availabilityDay: string[], availabilityTime: string[], preferredCourts: string[], favouritePlayers: string[]) => {
+export const updateAvailability = async (userId: string, availabilityDay: string[], availabilityTime: string[], preferredCourts: string[], favouritePlayers: string[], preferredZone?: string) => {
   const prefsRef = doc(db, 'preferences', userId);
   await updateDoc(prefsRef, {
     availability_day: availabilityDay,
     availability_time: availabilityTime,
     preferred_courts: preferredCourts,
     favourite_players: favouritePlayers,
+    preferred_zone: preferredZone ?? '',
   });
 };
 
@@ -81,10 +82,6 @@ export const changeEmail = async (user: User, newEmail: string, password: string
   const credential = EmailAuthProvider.credential(user.email || '', password);
   await reauthenticateWithCredential(user, credential);
   await verifyBeforeUpdateEmail(user, newEmail.trim());
-};
-
-export const linkGoogleAccount = async (user: User) => {
-  await linkWithPopup(user, googleProvider);
 };
 
 export const removeEventParticipant = async (participantId: string) => {

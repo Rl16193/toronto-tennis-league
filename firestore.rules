@@ -118,6 +118,32 @@ service cloud.firestore {
     }
 
     // ===============================================================
+    // Score Submissions (player-submitted scores, pending creator confirm)
+    // ===============================================================
+    match /score_submissions/{docId} {
+      allow read: if isAuthenticated();
+
+      // A player may submit only for a match they are actually in, as themselves.
+      allow create: if isAuthenticated() &&
+        request.resource.data.submitted_by == request.auth.uid &&
+        request.resource.data.event_id is string &&
+        request.resource.data.match_id is string &&
+        (
+          get(/databases/$(database)/documents/tournament_matches/$(request.resource.data.match_id)).data.player_1_user_id == request.auth.uid ||
+          get(/databases/$(database)/documents/tournament_matches/$(request.resource.data.match_id)).data.player_2_user_id == request.auth.uid
+        );
+
+      // The submitter may retract; the event creator confirms/rejects by deleting.
+      allow delete: if isAuthenticated() &&
+        (
+          resource.data.submitted_by == request.auth.uid ||
+          isCreatorOfEvent(resource.data.event_id)
+        );
+
+      allow update: if false;
+    }
+
+    // ===============================================================
     // Reserves Participants
     // ===============================================================
     match /reserves_participants/{docId} {

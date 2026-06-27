@@ -88,7 +88,7 @@ export const ProfileSkills: React.FC<ProfileSkillsProps> = ({
                     tournament_preference: editData.stats?.tournament_preference ?? profile.stats.tournament_preference,
                   },
                 })}
-                className="w-full h-2 bg-tennis-dark rounded-full appearance-none cursor-pointer accent-clay"
+                className="w-full h-2 rounded-full"
               />
               <div className="flex items-start justify-between gap-2 text-center">
                 {SKILL_LEVELS.map((level) => (

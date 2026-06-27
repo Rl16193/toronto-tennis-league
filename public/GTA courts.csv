@@ -1,0 +1,195 @@
+﻿Ada Mckenzie Park,185 South Park Road,Public,2, No,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Armadale Park,2401 Denison Street,Armadale Tennis Club,4,Yes,OPEN,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,Sundays - 10 AM to 2 PM,,,,,,,,,,,,,,,,
+Bayview Glen Park,48 Limcombe Drive,Public,2 ,No ,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Bayview Reservoir,8079 Bayview Avenue,Public,3,No,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Berzcy Park North,447 The Bridle Walk,Public,2,No ,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Berzcy Park South,432 Wilfred Murison Avenue,Public,2,No,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Blowden Davies Park,335 Donald Cousens Parkway,Public,2,No,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+Boxgrove Community Park,346 Boxgrove Bypass,Public,2,No ,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Carlton Park,101 Carlton Road,Unionville Tennis Club,9,Yes,OPEN,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,"Courts 1,2,3 & 4",,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,Tuesdays 12pm - 4pm,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,Courts 1 & 2,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,Saturdays 6pm - 10pm,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Duncan Park,265 Bayview Fairways Drive,Public ,3,Yes,OPEN - 7 AM to 11 PM,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Frisby Park,15 Murison Drive,Public,2,No,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Cornell Community Park,371 Cornell Centre Blvd.,Public,2,Yes,OPEN - 7 AM to 11 PM,,,,,,,,,,,,,,,,
+German Mills Park,15 Simonston Boulevard,German Mills Tennis Club,4,Yes,OPEN ,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,Friday 8 PM to 10 PM,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,Saturday 4 PM to 6 PM,,,,,,,,,,,,,,,,
+Grandview Park,135 Doncastor Avenue,Public,2,Yes,OPEN - 7 AM to 11 PM,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Henry White Park,135 Moss Creek Boulevard,Public,2,No,OPEN - 7AM to Dark,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Highgate Park,37 Highgate Drive,Highgate Tennis Club,3,Yes,OPEN,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,Sunday and Monday 9 PM to 11 PM,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,Wednesdays 7 AM to 9 AM,,,,,,,,,,,,,,,,
+Johnsview Park,27 Porterfield Crescent,Public,2,Yes,OPEN - 7 AM to 11 PM,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Laura & Alf Weaver Park,190 Williamson Road,Public,2,No,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Morgan Park,11 Parkway Avenue,Public ,2,Yes,OPEN - 7 AM to 11 PM,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Pomona Mills Park,200 John Street,Pomona Valley Tennis Club,6,Yes,OPEN,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,"Courts 5, 6 : Saturday and Sunday 12 PM to 6 PM",,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Roy Ramer Park,11 James Parrot Ave.,Public ,2,No,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+Reesor Park,73 Wootten Way North,Markham Tennis Club,6,Yes,OPEN,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,"Courts 4,5 and 6 : Saturday & Sunday",,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,3 PM to 7 PM,,,,,,,,,,,,,,,,
+Robinson Park,46 Robinson Street, Public,2,No,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Schoolhouse Park,7651 Ninth Line,Boxgrove Tennis Club,2,Yes,OPEN,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+,,,,,Saturday and Sunday 12 PM to 8 PM,,,,,,,,,,,,,,,,
+South Unionville Park,514 Caboto Trail,Public,2,No,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Toogood Park,58 Sciberras Road,Public,2,No,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Wismer Park,980 Bur Oak Avenue,Public,2,No,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+Warden View Park,30 Rouge Valley Drive,Public,2,No,OPEN - 7 AM to Dark,,,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,,,,,,,,
+OBJECTID,LM_ID,LM_NAME,CATEGORY,LM_TYPE,SDA_CAT,STR_ADDR,UNIT,MUN,PR,POSTAL,PHONE,AGENCY,OBTAINED,UPDATED,WEBSITE_1,NOTES,ParkUID,SchoolID,ROPADRID,Shape__Area,Shape__Length
+154,SR-PFD-0322,County Court Park,Sports and Recreation,Playing Field - Tennis,,County Court Blvd,,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0043,,,2194.148438,187.5755985
+156,SR-PFD-0324,Meadow Green,Sports and Recreation,Playing Field - Tennis,,6595 Falconer Dr,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0121,,,4317.535156,272.4534536
+191,SR-PFD-0374,Lisgar Fields,Sports and Recreation,Playing Field - Tennis,,3805 Doug Leavens Blvd,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0563,,,4211.792969,267.5426098
+203,SR-PFD-0389,Glen Eden Park,Sports and Recreation,Playing Field - Tennis,,7230 Copenhagen Rd,,Mississauga,ON,L5N 2C3,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0202,,,4342.859375,273.3204147
+211,SR-PFD-0417,Centennial Park,Sports and Recreation,Playing Field - Tennis,,,,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0081,,,3180.828125,228.2178856
+234,SR-PFD-0442,Allan Kerbel Park,Sports and Recreation,Playing Field - Tennis,,"Brickyard Way, Pressed Brick Dr, Private Rd",,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0297,,,2249.511719,189.8068653
+262,SR-PFD-0472,White Spruce Park,Sports and Recreation,Playing Field - Tennis,,"Heart Lake Rd, Barr Cres",,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0481,,,2191.476563,187.693467
+264,SR-PFD-0474,Morris Kerbel Park,Sports and Recreation,Playing Field - Tennis,,"Conestoga Dr, Wesmorland Ave",,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0342,,,4603.339844,281.1756861
+291,SR-PFD-0504,Chinguacousy Sandalwood Community Park,Sports and Recreation,Playing Field - Tennis,,"Chinguacousy Rd, Sewells Lane, Esler Lane",,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0234,,,4015.632813,261.8653209
+298,SR-PFD-0599,Hunter's Green,Sports and Recreation,Playing Field - Tennis,,2780 Gananoque Dr,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0145,,,4293.882813,271.7258344
+303,SR-PFD-0606,Northwood Park,Sports and Recreation,Playing Field - Tennis,,"Parkway Av, Cambridge Cr",,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0093,,,2075.078125,182.9275486
+308,SR-PFD-0611,Valleybrook Park,Sports and Recreation,Playing Field - Tennis,,"Williams Pkwy, Centre St N, Baronwood Crt",,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0663,,,2278.621094,191.1223721
+313,SR-PFD-0617,Brampton Tennis Club,Sports and Recreation,Playing Field - Tennis,,38 Union Street,,Brampton,ON,L6V 4J7 ,(905) 457 8805,Brampton Tennis Club,,Sep-12,http://www.bramptontennisclub.ca,,,,,9014.539063,445.1267177
+317,SR-PFD-0643,Peel Village Park,Sports and Recreation,Playing Field - Tennis,,,,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0127,,,2071.660156,183.2287546
+320,SR-PFD-0647,Ken Park,Sports and Recreation,Playing Field - Tennis,,,,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0482,,,2277.976563,191.0346226
+330,SR-PFD-0662,Sandalwood Park,Sports and Recreation,Playing Field - Tennis,,"Sandalwood Pkwy E, Conestoga Dr, Sutter Av",,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0009,,,2247.316406,189.9475156
+337,SR-PFD-0704,Churchill Meadows Community Common,Sports and Recreation,Playing Field - Tennis,,3370 McDowell Dr,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0635,,,2259.511719,190.3365722
+338,SR-PFD-0710,English Street Park,Sports and Recreation,Playing Field - Tennis,,"English St, Alison Ct, Rosebud Av",,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0011,,,2325.953125,193.1899831
+344,SR-PFD-0717,Vanier Park,Sports and Recreation,Playing Field - Tennis,,"Elgin Dr, Torrance Woods",,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0316,,,2324.980469,193.1332403
+673,SR-PFD-0942,Edenwood Middle,Sports and Recreation,Playing Field - Tennis,,6770 Edenwood Dr,,Mississauga,ON,L5N 3B2,(905) 824 1020,PDSB,,Sep-12,http://www.peelschools.org/schools/all/Pages/default.aspx,,,PE-61,,1955.707031,177.3106145
+745,SR-PFD-1028,Robert H. Lagerquist Sr.,Sports and Recreation,Playing Field - Tennis,,105 Richvale Dr N,,Brampton,ON,L6Z 1Y6,(905) 846 0576,PDSB,,Sep-12,http://www.peelschools.org/schools/all/Pages/default.aspx,,,PE-157,,2131.441406,184.8575487
+827,SR-PFD-1309,Notre Dame ,Sports and Recreation,Playing Field - Tennis,,2 Notre Dame Ave,,Brampton,ON,L6Z 4L5,(905) 840 2802,DPCDSB,,Sep-12,http://www.dpcdsb.org/cec,,,CS-10,,4461.5625,275.8943301
+847,SR-PFD-1335,West Credit Secondary School,Sports and Recreation,Playing Field - Tennis,,6325 Montevideo Rd,,Mississauga,ON,L5N 4G7,(905) 858 3087,PDSB,,Aug-15,http://schools.peelschools.org/sec/westcredit/Pages/default.aspx,,,,,3872.335938,255.818037
+861,SR-PFD-1352,Rosedale Village,Sports and Recreation,Playing Field - Tennis,,Dixie Rd W/S,,Brampton,ON,L6R 0B2,(905) 799 5000,,,Mar-11,http://www.rosedalevillage.com,,,,,2281.054688,191.2124621
+866,SR-PFD-1359,Drinkwater Community Park,Sports and Recreation,Playing Field - Tennis,,17 Drinkwater Rd,,Brampton,ON,L6Y 4T6,,,,Aug-15,,,B0213,,440950,3381.902344,234.4960605
+963,SR-PFD-1449,Chinguacousy,Sports and Recreation,Playing Field - Tennis,,1370 Williams Pky E,,Brampton,ON,L6S 1V3,(905) 791 2400,PDSB,,Sep-12,http://www.peelschools.org/schools/all/Pages/default.aspx,,,PS-07,,1489.375,287.6815277
+964,SR-PFD-1450,Donald M. Gordon Chinguacousy Park,Sports and Recreation,Playing Field - Tennis,,9050 Bramalea Rd,,Brampton,ON,L6S 6G7,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-14,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0422,,,7435.933594,399.854124
+1246,SR-PFD-0325,Mississauga Valley,Sports and Recreation,Playing Field - Tennis,,1275 Mississauga Valley Blvd,,Mississauga,ON,L5A 3R8,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0136,,,4711.273438,286.8337545
+1247,SR-PFD-0329,Dr. Martin L. Dobkin Park,Sports and Recreation,Playing Field - Tennis,,395 Fairview Rd W,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0471,,,4014.800781,263.0219108
+1252,SR-PFD-0334,Credit Pointe Village,Sports and Recreation,Playing Field - Tennis,,4635 Credit Pointe Dr,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0465,,,2332.644531,193.374329
+1260,SR-PFD-0388,Courtneypark Athletic Fields,Sports and Recreation,Playing Field - Tennis,,600 Courtneypark Dr W,,Mississauga,ON,L5W 1L9,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0663,,,4121.683594,265.6122459
+1276,SR-PFD-0409,Earnscliffe Park,Sports and Recreation,Playing Field - Tennis,,,,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0664,,,3202.8125,228.0934105
+1293,SR-PFD-0540,McKechnie Woods,Sports and Recreation,Playing Field - Tennis,,310 Bristol Rd E,,Mississauga,ON,L4Z 3V5,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0567,,,3922.117188,258.9843157
+1302,SR-PFD-0550,Century City,Sports and Recreation,Playing Field - Tennis,,933 Focal Rd,,Mississauga,ON,L5V 1M8,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0540,,,2165.042969,186.2672883
+1303,SR-PFD-0551,Bruce Reynolds Park,Sports and Recreation,Playing Field - Tennis,,2173 Springbank Rd,,Mississauga,ON,L5H 3N5,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0072,,,2311.300781,192.532082
+1305,SR-PFD-0553,Jack Darling Memorial Park,Sports and Recreation,Playing Field - Tennis,,1180 Lakeshore Rd W,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0015,,,2256,190.3324222
+1306,SR-PFD-0554,Woodeden Park,Sports and Recreation,Playing Field - Tennis,,1538 Woodeden Dr,,Mississauga,ON,L5H 2V3,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0226,,280295,4485.128906,329.387829
+1307,SR-PFD-0557,Kennedy Park,Sports and Recreation,Playing Field - Tennis,,3505 Golden Orchard Dr,,Mississauga,ON,L4Y 3H7,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0057,,,3434.308594,237.3629804
+1308,SR-PFD-0558,Kennedy Park,Sports and Recreation,Playing Field - Tennis,,3505 Golden Orchard Dr,,Mississauga,ON,L4Y 3H7,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0057,,,3353.894531,233.8556893
+1312,SR-PFD-0562,Mohawk Park,Sports and Recreation,Playing Field - Tennis,,2409 Delkus Cres,,Mississauga,ON,L5A 1K8,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0080,,,2294.371094,192.0200373
+1313,SR-PFD-0563,Westacres Park,Sports and Recreation,Playing Field - Tennis,,2166 Westfield Dr,,Mississauga,ON,L4Y 1P7,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0028,,,2209.332031,188.1869484
+1314,SR-PFD-0564,Garnetwood Park,Sports and Recreation,Playing Field - Tennis,,1996 Rathburn Rd E,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0207,,,4647.585938,294.4267492
+1315,SR-PFD-0565,Zonta Meadows,Sports and Recreation,Playing Field - Tennis,,410 Rathburn Rd W,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0477,,,2347.660156,194.2974609
+1316,SR-PFD-0566,Deer Wood Park,Sports and Recreation,Playing Field - Tennis,,1100 Rathburn Rd W,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0328,,,2337.253906,193.698552
+1322,SR-PFD-0574,Thornlodge Park,Sports and Recreation,Playing Field - Tennis,,2405 Homelands Dr,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0064,,,5110.789063,304.3425218
+1325,SR-PFD-0579,Stonebrook Park,Sports and Recreation,Playing Field - Tennis,,305 Mississauga Valley Blvd,,Mississauga,ON,L5A 1Y6,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0122,,,2291.230469,192.0574361
+1326,SR-PFD-0580,Springfield Park,Sports and Recreation,Playing Field - Tennis,,3325 The Credit Woodlands,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0029,,,4370.082031,276.1607681
+1327,SR-PFD-0581,Quenippenon Meadows,Sports and Recreation,Playing Field - Tennis,,2625 Erin Centre Blvd,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0519,,,4132.285156,266.5225625
+1334,SR-PFD-0588,Four Winds Hollow,Sports and Recreation,Playing Field - Tennis,,636 Avonwick Ave,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0547,,,2182.101563,187.0651943
+1341,SR-PFD-0604,Wildwood Park,Sports and Recreation,Playing Field - Tennis,,3430 Derry Rd E,,Mississauga,ON,L4T 1A9,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0077,,,4562.890625,281.8666302
+1344,SR-PFD-0619,Fairview Park,Sports and Recreation,Playing Field - Tennis,,3300 Palgrave Rd,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0037,,,2218.089844,188.5324354
+1345,SR-PFD-0620,Huron Park,Sports and Recreation,Playing Field - Tennis,,830 Paisley Blvd W,,Mississauga,ON,L5C 3P5,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0030,,,6868.9375,344.1749592
+1346,SR-PFD-0621,Huron Park,Sports and Recreation,Playing Field - Tennis,,830 Paisley Blvd W,,Mississauga,ON,L5C 3P5,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0030,,,2438.921875,198.0992158
+1356,SR-PFD-0636,Max Ward Park,Sports and Recreation,Playing Field - Tennis,,2380 Matheson Blvd E,,Mississauga,ON,L4W 5G9,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0441,,,2311.671875,192.6741184
+1357,SR-PFD-0637,Gulleden Park,Sports and Recreation,Playing Field - Tennis,,1500 Gulleden Dr,,Mississauga,ON,L4X 2T7,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0070,,,3027.390625,216.8486319
+1358,SR-PFD-0638,Gulleden Park,Sports and Recreation,Playing Field - Tennis,,1500 Gulleden Dr,,Mississauga,ON,L4X 2T7,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0070,,,2115.0625,184.1905341
+1360,SR-PFD-0640,Brookmede Park,Sports and Recreation,Playing Field - Tennis,,2254 Council Ring Rd,,Mississauga,ON,L5L 1B7,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0102,,,2272.019531,190.9391571
+1366,SR-PFD-0658,Clark Park,Sports and Recreation,Playing Field - Tennis,,,,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0066,,,1778.996094,168.9991016
+1370,SR-PFD-0669,River Grove,Sports and Recreation,Playing Field - Tennis,,5800 River Grove Ave,,Mississauga,ON,L5M 4R9,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0494,,,2989.804688,221.2113029
+1373,SR-PFD-0674,Camden Park,Sports and Recreation,Playing Field - Tennis,,495 Camden Cir,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0296,,,2283.570313,191.4742309
+1375,SR-PFD-0676,Woodhurst Heights,Sports and Recreation,Playing Field - Tennis,,3475 Ash Row Cres,,Mississauga,ON,L5L 1K3,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0139,,,2191.203125,187.773841
+1377,SR-PFD-0678,Sherwood Green,Sports and Recreation,Playing Field - Tennis,,1864 Deer's Wold,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0227,,,2267.640625,190.7475609
+1379,SR-PFD-0680,Meadowood Park,Sports and Recreation,Playing Field - Tennis,,1620 Orr Rd,,Mississauga,ON,L5J 4T2,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0007,,,3555.851563,242.0523012
+1388,SR-PFD-0703,South Common,Sports and Recreation,Playing Field - Tennis,,3555 Glen Erin Dr,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0232,,,4173.023438,265.4523125
+1389,SR-PFD-0705,Century City,Sports and Recreation,Playing Field - Tennis,,933 Focal Rd,,Mississauga,ON,L5V 1M8,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0540,,,382.3476563,79.80909946
+1395,SR-PFD-0719,Knightsbridge Park,Sports and Recreation,Playing Field - Tennis,,,,Brampton,ON,,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0445,,,2374.960938,195.1735801
+1396,SR-PFD-0721,Greenbriar Park South,Sports and Recreation,Playing Field - Tennis,,1098 Central Park Dr,,Brampton,ON,L6S 2C9,(905) 874 2906,City of Brampton Parks and Recreation,,Sep-12,http://www.brampton.ca/EN/residents/parks-trails/Pages/Welcome.aspx,,B0715,,427554,2706.136719,209.8839631
+1754,SR-PFD-0919,Philip Pocock ,Sports and Recreation,Playing Field - Tennis,,4555 Tomken Rd,,Mississauga,ON,L4W 1J9,(905) 602 6172,DPCDSB,,Sep-12,http://www.dpcdsb.org/cec,,,CS-12,,3147.460938,225.3380509
+1777,SR-PFD-1089,Port Credit,Sports and Recreation,Playing Field - Tennis,,70 Mineola Rd E,,Mississauga,ON,L5G 2E5,(905) 278 3382,PDSB,,Sep-12,http://www.peelschools.org/schools/all/Pages/default.aspx,,,PS-25,,2435.347656,198.3430261
+1778,SR-PFD-1090,Port Credit,Sports and Recreation,Playing Field - Tennis,,70 Mineola Rd E,,Mississauga,ON,L5G 2E5,(905) 278 3382,PDSB,,Sep-12,http://www.peelschools.org/schools/all/Pages/default.aspx,,,PS-25,,2471.308594,199.9401153
+1810,SR-PFD-1126,St. Thomas Aquinas ,Sports and Recreation,Playing Field - Tennis,,25 Corporation Dr,,Brampton,ON,L6S 6A2,(905) 791 1195,DPCDSB,,Sep-12,http://www.dpcdsb.org/cec,,,CS-26,,3346.398438,233.3805973
+1823,SR-PFD-1153,Woodlands SS,Sports and Recreation,Playing Field - Tennis,,3225 Erindale Station Rd,,Mississauga,ON,L5C 1Y5,(905) 279 0575,PDSB,,Sep-12,http://www.peelschools.org/schools/all/Pages/default.aspx,,,PS-32,,3110.265625,224.4268874
+1870,SR-PFD-1245,University of Toronto at Mississauga,Sports and Recreation,Playing Field - Tennis,,3359 Mississauga Road,,Mississauga,ON,L5L 1C6,(905) 828 5399,,,Sep-12,,,,CU-15,,2304.421875,192.3022308
+1932,SR-PFD-1315,Whiteoaks Park,Sports and Recreation,Playing Field - Tennis,,1450 Truscott Dr,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0004,,,8192.746094,371.7741659
+2072,SR-PFD-0510,Ellwood Park,Sports and Recreation,Playing Field - Tennis,,35 Ellwood Drive East,,Caledon,ON,L7E 2A7,(905) 584 2272 x4235,Caledon Dept of Parks & Recreation,,Sep-12,http://www.caledon.ca/recreation/parks_and_trails/parks.asp?page=Parks,,C0034,,,2231.117188,189.0299388
+2074,SR-PFD-0512,Edelweiss Park & Bolton Tennis Courts,Sports and Recreation,Playing Field - Tennis,,320 Glasgow Road,,Caledon,ON,L7E 0T5,(905) 584 2272 x4235,Caledon Dept of Parks & Recreation,,Sep-12,http://www.caledon.ca/recreation/parks_and_trails/parks.asp?page=Parks,,C0070,,,3956.175781,258.7009528
+2084,SR-PFD-0522,Belfountain Tennis Courts,Sports and Recreation,Playing Field - Tennis,,591 Bush Street,,Caledon,ON,L7K 0E6,(905) 584 2272 x4235,Caledon Dept of Parks & Recreation,,Sep-12,http://www.caledon.ca/recreation/parks_and_trails/parks.asp?page=Parks,,C0058,,,2256.113281,190.6756748
+2085,SR-PFD-0523,Caledon Village Tennis Courts,Sports and Recreation,Playing Field - Tennis,,18357 Hurontario Street,,Caledon,ON,L7K 0X7,(905) 584 2272 x4235,Caledon Dept of Parks & Recreation,,Sep-12,http://www.caledon.ca/recreation/parks_and_trails/parks.asp?page=Parks,,C0002,,,4658.148438,310.5915107
+2098,SR-PFD-0555,Dellwood Park,Sports and Recreation,Playing Field - Tennis,,598 Arbor Rd,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0006,,,3245.050781,230.1970436
+2099,SR-PFD-0556,Ron Searle Park,Sports and Recreation,Playing Field - Tennis,,1494 Parkridge Rd,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0341,,,2449.445313,198.2164546
+2101,SR-PFD-0575,Laughton Heights,Sports and Recreation,Playing Field - Tennis,,1519 Sherway Dr,,Mississauga,ON,L4X 1C5,(905) 615 4100,Mississauga Parks and Recreation,,Sep-12,http://www.mississauga.ca/portal/residents/parks,,M0056,,,2246.9375,189.9044617
+2103,SR-PFD-0614,Inglewood Community Centre,Sports and Recreation,Playing Field - Tennis,,15825 McLaughlin Road,,Caledon,ON,L7C 1H4,(905) 584 2272 x4235,Caledon Dept of Parks & Recreation,,Sep-12,http://www.caledon.ca/recreation/parks_and_trails/parks.asp?page=Parks,,C0053,,,2326.53125,193.5057819
+2113,SR-PFD-0691,Victoria Park,Sports and Recreation,Playing Field - Tennis,,35 Victoria Crescent,,Caledon,ON,L7K 0A1,(905) 584 2272 x4235,Caledon Dept of Parks & Recreation,,Sep-12,http://www.caledon.ca/recreation/parks_and_trails/parks.asp?page=Parks,,C0007,,,1242.339844,149.0057215
+2117,SR-PFD-0695,Caledon East Park,Sports and Recreation,Playing Field - Tennis,,6097 Old Church Road,,Caledon,ON,L7C 1J6,(905) 584 2272 x4235,Caledon Dept of Parks & Recreation,,Sep-12,http://www.caledon.ca/recreation/parks_and_trails/parks.asp?page=Parks,,C0014,,,2321.886719,192.9274463
+2129,SR-PFD-0735,Palgrave Tennis Courts,Sports and Recreation,Playing Field - Tennis,,42 Birch Avenue,,Caledon,ON,L7E 0K2,(905) 584 2272 x4235,Caledon Dept of Parks & Recreation,,Sep-12,http://www.caledon.ca/recreation/parks_and_trails/parks.asp?page=Parks,,C0073,,,4926.589844,321.2789199
+2244,SR-PFD-1060,Mayfield,Sports and Recreation,Playing Field - Tennis,,5000 Mayfield Rd,,Caledon,ON,L7C 0Z5,(905) 846 6060,PDSB,,Sep-12,http://www.peelschools.org/schools/all/Pages/default.aspx,,,PS-21,,3487.949219,244.9827479
+2272,SR-PFD-1218,Humberview,Sports and Recreation,Playing Field - Tennis,,135 Kingsview Dr,,Caledon,ON,L7E 3V8,(905) 857 0771,PDSB,,Sep-12,http://www.peelschools.org/schools/all/Pages/default.aspx,,,PS-16,,5615.824219,1241.357694
+2394,SR-PFD-,Malton Village Park,Sports and Recreation,Playing Field - Tennis,,9A Beverley St,,Mississauga,ON,,(905) 615 4100,Mississauga Parks and Recreation,,Mar-18,http://www.mississauga.ca/portal/residents/parks,,M0447,,,2156.222656,185.9675778
+Location,Tennis or Pickleball,Number of Courts,Pickleball Overlay,Lights,Nearest Intersection,Status,,,,,,,,,,,,,,,
+Allan Kerbel Park,Tennis,3,2/3 courts,No,E of Main St. on Brickyard Way,Closed / Under Improvement​,,,,,,,,,,,,,,,
+Calvert Park,Pickleball,3,-,No,E of Main St. at Williams Pkwy on the Etobicoke Creek trail.,,,,,,,,,,,,,,,,
+Cassie Campbell Community Centre,Tennis/Pickleball,4,2/4 courts,Yes,W of Chinguacousy Rd. on Sandalwood Pwky.,,,,,,,,,,,,,,,,
+Centennial Park,Tennis/Pickleball,3,2/3 courts,No,S of Queen St. E on Centre St. S,,,,,,,,,,,,,,,,
+Clark Boulevard Park,Tennis,2,2/2 courts,No,E of Dixie Rd. on Clark Blvd.,,,,,,,,,,,,,,,,
+County Court Park,Tennis/Pickleball,2,2/2 courts,Yes,E of Main St. S on County Court Blvd.,,,,,,,,,,,,,,,,
+DMG Chinguacousy Park,Tennis,6,-,Yes,"N of Queen St. E, W of Bramalea Rd.",,,,,,,,,,,,,,,,
+Drinkwater Community Park,Tennis/Pickleball,3,3/3 courts,Yes,E of Chinguacousy Rd. on Drinkwater Rd.,,,,,,,,,,,,,,,,
+Earnscliffe Park,Tennis,3,-,Yes,S of Clark Blvd. on Eastbourne Dr.,Lighting is not available due to construction,,,,,,,,,,,,,,,
+English Street Park,Tennis/Pickleball,2,2/2 courts,No,W of Isabella St. on English St.,,,,,,,,,,,,,,,,
+Flower City Community Campus,Pickleball,4,-,Yes,McLaughlin Rd. S and Queen St. W.,Open,,,,,,,,,,,,,,,
+Greenbriar Park South,Tennis,3,-,Yes,Torbram Rd. and Central Park Dr.,,,,,,,,,,,,,,,,
+Kenpark Avenue Park,Tennis/Pickleball,2,-,No,"NE of Kennedy Rd, Cristie Dr. on Hacienda Ct.",Closed / Under Improvement,,,,,,,,,,,,,,,
+Knightsbridge Park,Tennis/Pickleball,2,-,No,W of Bramalea Rd. on Knightsbridge Rd.,,,,,,,,,,,,,,,,
+Monkton Circle Park,Tennis,2,-,No,S of Queen St. on Libby Road,,,,,,,,,,,,,,,,
+Monkton Circle Park,Pickleball,3,-,No,S of Queen St. on Libby Road,,,,,,,,,,,,,,,,
+National Bank Tennis Courts at Morris Kerbal Park,Tennis,4,-,Yes,N of Bovaird Dr. on Conestoga Dr.,,,,,,,,,,,,,,,,
+Neville Lake Park,Pickleball,2,-,No,N of Williams Pkwy on Weybridge Trail,,,,,,,,,,,,,,,,
+Northwood Park,Tennis/Pickleball,2,2/2 courts,No,"On Parkway Ave., N of Queen St. W.",,,,,,,,,,,,,,,,
+Peel Village Park,Tennis/Pickleball,2,2/2 courts,Yes,NW of Steeles Ave. N and Kennedy Rd.,,,,,,,,,,,,,,,,
+Richvale Park,Tennis,2,-,Yes,E of Kennedy Rd. on Richve Rd. N.,Closed / Under Improvement,,,,,,,,,,,,,,,
+Sandalwood Park Outdoor Ice Rinks and Courts​,Tennis/Pickleball​,04-Feb,-,Yes,130 Conestoga Drive​,Open,,,,,,,,,,,,,,,
+,,,,,(Pickleball: Adjacent to West Parking Lot)​,,,,,,,,,,,,,,,,
+,,,,,(Tennis: Northwest Corner​)​,,,,,,,,,,,,,,,,
+Steacy Park,Tennis/Pickleball,3,3/3 courts,Yes,S of Harold St. on Main St. S.,,,,,,,,,,,,,,,,
+Valleybrook Park,Tennis,2,1/2 courts,Yes,N of Williams Pkwy. on Centre St. N.,Closed / Under Improvement,,,,,,,,,,,,,,,
+Vanier Park,Tennis/Pickleball,2,2/2 courts,No,McLaughlin Rd. S and Steeles Ave. W.,,,,,,,,,,,,,,,,
+White Spruce Park,Tennis,2,-,Yes,N of Bovaird Dr. on Heart Lake Rd.,Closed / Under Improvement,,,,,,,,,,,,,,,
+WJ Clifford Park,Tennis/Pickleball,1,1/1 courts,No,W of Chinguacousy Rd. on Peak Dr.,​,,,,,,,,,,,,,,,

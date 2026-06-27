@@ -1,463 +1,106 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import { divIcon } from 'leaflet';
-import { getDocs, collection } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { parseCsvLine } from '../features/signup/utils/courtSearch';
-import { Search, Loader2 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import MapGL, { Marker, Popup, NavigationControl } from 'react-map-gl/maplibre';
+import type { MapRef } from 'react-map-gl/maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { Search, Loader2, X } from 'lucide-react';
+import { ZONE_NAMES, getZone, haversineKm } from '../utils/zones';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type CsvCourt = {
-  name: string;
-  dropdown: string;
-  lat: number;
-  lng: number;
-  address: string;
-  courtType: string;
-  numCourts: number;
-  lights: boolean;
-  clubInfo: string;
-};
-
-type CourtWithCount = CsvCourt & { count: number; hasPrograms: boolean };
-
-type TennisProgram = {
-  courseId: string;
-  locationId: string;
-  locationName: string;
-  address: string;
-  title: string;
-  days: string;
-  dateRange: string;
-  timeRange: string;
-  ageRange: string;
-  minAgeYr: number | null;
-  maxAgeYr: number | null;
-  status: string;
-  activityUrl: string;
-  lat?: number;
-  lng?: number;
-};
-
-type NearestCourt = CourtWithCount & { distKm: number };
-type NearestProgram = TennisProgram & { distKm: number | null };
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
-const TORONTO_CENTER: [number, number] = [43.718, -79.38];
-
-const COURT_ALIASES: Record<string, string> = {
-  'stanley park': 'stanley park south - toronto',
-};
-
-const MONTH_ABBR: Record<string, number> = {
-  Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-  Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
-};
-
-const PROGRAM_LOCATION_ADDRESSES: Record<string, string> = {
-  '9': '101 Emmett Ave, Toronto',
-  '27': '81 Ranleigh Ave, Toronto',
-  '33': '454 Avenue Rd, Toronto',
-  '96': '181 Cleveland St, Toronto',
-  '127': '1725 Gerrard St E, Toronto',
-  '155': '870 Queen St E, Toronto',
-  '220': '19 Coleman Ave, Toronto',
-  '241': '790 Queen St W, Toronto',
-  '276': '181 Westview Blvd, Toronto',
-  '329': '1081 Pape Ave, Toronto',
-  '348': '289 Sorauren Ave, Toronto',
-  '405': '4325 Mccowan Rd, Toronto',
-  '472': '1507 Lawrence Ave W, Toronto',
-  '484': '151 Culford Rd, Toronto',
-  '487': '41 Ancaster Rd, Toronto',
-  '510': '569 Jane St, Toronto',
-  '514': '1200 Lansdowne Ave, Toronto',
-  '582': '165 Grenoble Dr, Toronto',
-  '638': '35 Glen Long Ave, Toronto',
-  '643': '45 Goulding Ave, Toronto',
-  '648': '23 Grandravine Dr, Toronto',
-  '665': '205 Wilmington Ave, Toronto',
-  '699': '300 Silver Springs Blvd, Toronto',
-  '712': '2467 Eglinton Ave E, Toronto',
-  '750': '10 Rampart Rd, Toronto',
-  '755': '850 Humberwood Blvd, Toronto',
-  '793': '18 Ourland Ave, Toronto',
-  '797': '105 Norseman St, Toronto',
-  '892': '590 Rathburn Rd, Toronto',
-  '959': '46 Kingsview Blvd, Toronto',
-  '1056': '29 St Dennis Dr, Toronto',
-  '1078': '28 Colonel Samuel Smith Park Dr, Toronto',
-  '1105': '2500 Birchmount Rd, Toronto',
-  '1132': '10 Toledo Rd, Toronto',
-  '1234': '90 Thirty First St, Toronto',
-  '1236': '95 Mimico Ave, Toronto',
-  '1237': '130 Lloyd Manor Rd, Toronto',
-  '1288': '71 Ballacaine Dr, Toronto',
-  '2831': '50 Davisville Ave, Toronto',
-};
-
-const locationGeoCache = new Map<string, { lat: number; lng: number } | null>();
-
-// ─── Pure helpers ─────────────────────────────────────────────────────────────
-
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function formatDist(km: number): string {
-  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
-}
-
-function parseDateStr(s: string): Date | null {
-  const parts = s.trim().split('-');
-  if (parts.length !== 3) return null;
-  const m = MONTH_ABBR[parts[0]];
-  if (m === undefined) return null;
-  const yr = parseInt(parts[2]);
-  const day = parseInt(parts[1]);
-  if (isNaN(yr) || isNaN(day)) return null;
-  return new Date(yr, m, day);
-}
-
-function toYears(months: string | undefined): number | null {
-  if (!months || months === 'None') return null;
-  const m = parseInt(months);
-  return isNaN(m) ? null : Math.floor(m / 12);
-}
-
-function matchCourtName(
-  preference: string,
-  byDropdown: Map<string, CsvCourt>,
-  byName: Map<string, CsvCourt>,
-): CsvCourt | undefined {
-  const raw = preference.toLowerCase().trim();
-  const pref = COURT_ALIASES[raw] ?? raw;
-  if (byDropdown.has(pref)) return byDropdown.get(pref);
-  if (byName.has(pref)) return byName.get(pref);
-  for (const [key, court] of byDropdown) {
-    if (key.startsWith(pref) || pref.startsWith(key)) return court;
-  }
-  for (const [key, court] of byName) {
-    if (key.startsWith(pref) || pref.startsWith(key)) return court;
-  }
-  return undefined;
-}
-
-function parseCourts(csvText: string): CsvCourt[] {
-  const [headerLine, ...lines] = csvText.split(/\r?\n/).filter(Boolean);
-  const headers = parseCsvLine(headerLine);
-  const idx = (col: string) => headers.indexOf(col);
-  const iName = idx('Name'), iDropdown = idx('Dropdown'), iType = idx('Type');
-  const iLights = idx('Lights'), iCourts = idx('Courts');
-  const iAddress = idx('LocationAddress'), iGeom = idx('geometry');
-  const iClubInfo = idx('ClubInfo');
-
-  const courts: CsvCourt[] = [];
-  for (const line of lines) {
-    const cells = parseCsvLine(line);
-    const geomRaw = cells[iGeom];
-    if (!geomRaw) continue;
-    try {
-      const geom = JSON.parse(geomRaw) as { coordinates: [[number, number]] };
-      const [lng, lat] = geom.coordinates[0];
-      const dropdown = cells[iDropdown]?.trim() || cells[iName]?.trim() || '';
-      if (!dropdown || !lat || !lng) continue;
-      courts.push({
-        name: cells[iName]?.trim() || dropdown,
-        dropdown,
-        lat, lng,
-        address: cells[iAddress]?.trim() || '',
-        courtType: cells[iType]?.trim() || '',
-        numCourts: parseInt(cells[iCourts]) || 0,
-        lights: cells[iLights]?.trim().toLowerCase() === 'yes',
-        clubInfo: iClubInfo >= 0 ? (cells[iClubInfo]?.trim() || '') : '',
-      });
-    } catch { /* skip malformed */ }
-  }
-  return courts;
-}
-
-function parsePrograms(
-  programCsv: string,
-  byDropdown: Map<string, CsvCourt>,
-  byName: Map<string, CsvCourt>,
-): TennisProgram[] {
-  const [headerLine, ...lines] = programCsv.split(/\r?\n/).filter(Boolean);
-  const headers = parseCsvLine(headerLine);
-  const pIdx = (col: string) => headers.indexOf(col);
-
-  const iCourseId = pIdx('Course_ID'), iLocId = pIdx('Location ID');
-  const iLocName = pIdx('Location Name'), iSection = pIdx('Section');
-  const iCourseTitle = pIdx('Course Title'), iDays = pIdx('Days of The Week');
-  const iFromTo = pIdx('From To'), iStartHr = pIdx('Start Hour');
-  const iStartMin = pIdx('Start Min'), iEndHr = pIdx('End Hour');
-  const iEndMin = pIdx('End Min'), iMinAge = pIdx('Min Age');
-  const iMaxAge = pIdx('Max Age'), iStatus = pIdx('Status / Information');
-  const iActivityUrl = pIdx('Activity URL');
-
-  const programs: TennisProgram[] = [];
-  const seen = new Set<string>();
-
-  for (const line of lines) {
-    const cells = parseCsvLine(line);
-    if (!cells[iSection]?.toLowerCase().includes('tennis')) continue;
-    const courseId = cells[iCourseId]?.trim() || '';
-    if (!courseId || seen.has(courseId)) continue;
-    seen.add(courseId);
-
-    const locationId = cells[iLocId]?.trim() || '';
-    const locationName = cells[iLocName]?.trim() || '';
-    const address = PROGRAM_LOCATION_ADDRESSES[locationId] || '';
-
-    const pad = (s: string) => s.padStart(2, '0');
-    const timeRange = `${pad(cells[iStartHr]?.trim() || '0')}:${pad(cells[iStartMin]?.trim() || '0')}–${pad(cells[iEndHr]?.trim() || '0')}:${pad(cells[iEndMin]?.trim() || '0')}`;
-
-    const minAgeYr = toYears(cells[iMinAge]?.trim());
-    const maxAgeYr = toYears(cells[iMaxAge]?.trim());
-    const ageRange = minAgeYr !== null && maxAgeYr !== null
-      ? `${minAgeYr}–${maxAgeYr} yr`
-      : minAgeYr !== null
-      ? `${minAgeYr}+ yr`
-      : 'All ages';
-
-    const courtMatch = locationName ? matchCourtName(locationName, byDropdown, byName) : undefined;
-    if (courtMatch && !locationGeoCache.has(locationId)) {
-      locationGeoCache.set(locationId, { lat: courtMatch.lat, lng: courtMatch.lng });
-    }
-    const cached = locationGeoCache.get(locationId);
-
-    programs.push({
-      courseId, locationId,
-      locationName: locationName || address,
-      address,
-      title: cells[iCourseTitle]?.trim() || '',
-      days: cells[iDays]?.trim() || '',
-      dateRange: cells[iFromTo]?.trim() || '',
-      timeRange, ageRange,
-      minAgeYr, maxAgeYr,
-      status: cells[iStatus]?.trim() || '',
-      activityUrl: iActivityUrl >= 0 ? (cells[iActivityUrl]?.trim() || '') : '',
-      lat: cached?.lat,
-      lng: cached?.lng,
-    });
-  }
-  return programs;
-}
-
-
-async function geocodeQuery(query: string): Promise<{ lat: number; lng: number } | null> {
-  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=ca`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'toronto-tennis-league' } });
-  const data = (await res.json()) as { lat: string; lon: string }[];
-  if (!data.length) return null;
-  return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-}
-
-async function geocodeLocationId(locationId: string, locationName: string): Promise<{ lat: number; lng: number } | null> {
-  if (locationGeoCache.has(locationId)) return locationGeoCache.get(locationId) ?? null;
-  const address = PROGRAM_LOCATION_ADDRESSES[locationId] || '';
-  const query = locationName ? `${locationName} Toronto` : address;
-  if (!query) { locationGeoCache.set(locationId, null); return null; }
-  try {
-    const coords = await geocodeQuery(query);
-    locationGeoCache.set(locationId, coords);
-    return coords;
-  } catch {
-    locationGeoCache.set(locationId, null);
-    return null;
-  }
-}
-
-// ─── Marker icon (SVG DivIcon) ────────────────────────────────────────────────
-
-function hasPublicHours(court: CourtWithCount): boolean {
-  return court.courtType.toLowerCase() === 'club'
-    && !!court.clubInfo
-    && !court.clubInfo.toLowerCase().includes('private');
-}
-
-function courtMarkerIcon(court: CourtWithCount) {
-  const hasPlayers = court.count > 0;
-  const bigCount = court.count >= 10;
-  const s = !hasPlayers ? 12 : bigCount ? 30 : 20;
-  const r = s / 2;
-  const label = String(court.count);
-  const fs = bigCount ? 8 : 10;
-
-  let html: string;
-  if (hasPlayers && court.hasPrograms) {
-    // Green + Yellow split: players AND programs
-    html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
-      <path d="M${r},0 A${r},${r} 0 0,0 ${r},${s} Z" fill="#15803d" opacity="0.95"/>
-      <path d="M${r},0 A${r},${r} 0 0,1 ${r},${s} Z" fill="#eab308" opacity="0.95"/>
-      <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>
-    </svg>`;
-  } else if (hasPlayers && hasPublicHours(court)) {
-    // Green + Blue split: players AND public hours
-    html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
-      <path d="M${r},0 A${r},${r} 0 0,0 ${r},${s} Z" fill="#15803d" opacity="0.95"/>
-      <path d="M${r},0 A${r},${r} 0 0,1 ${r},${s} Z" fill="#3b82f6" opacity="0.95"/>
-      <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>
-    </svg>`;
-  } else if (hasPlayers) {
-    // Green: players only
-    html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${r}" cy="${r}" r="${r}" fill="#15803d" opacity="0.95"/>
-      <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>
-    </svg>`;
-  } else if (court.hasPrograms) {
-    // Yellow: programs, no players
-    html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${r}" cy="${r}" r="${r}" fill="#eab308" opacity="0.82"/>
-    </svg>`;
-  } else if (hasPublicHours(court)) {
-    // Blue: public hours available (clubInfo non-empty and not "Private")
-    html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${r}" cy="${r}" r="${r}" fill="#3b82f6" opacity="0.82"/>
-    </svg>`;
-  } else {
-    // Orange: nothing
-    html = `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${r}" cy="${r}" r="${r}" fill="#f97316" opacity="0.82"/>
-    </svg>`;
-  }
-  return divIcon({ html, className: '', iconSize: [s, s], iconAnchor: [r, r], popupAnchor: [0, -(r + 4)] });
-}
-
-// ─── FitBounds ────────────────────────────────────────────────────────────────
-
-const FitBounds: React.FC<{ bounds: [number, number][] }> = ({ bounds }) => {
-  const map = useMap();
-  useEffect(() => {
-    if (bounds.length > 0) map.fitBounds(bounds as [number, number][], { padding: [60, 60], maxZoom: 14 });
-  }, [bounds, map]);
-  return null;
-};
-
-// ─── Filter chip UI ───────────────────────────────────────────────────────────
-
-function ChipGroup({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <span className="text-white text-xs shrink-0">{label}:</span>
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value === value ? '' : opt.value)}
-          className={`px-2 py-0.5 rounded-md text-xs transition-colors ${
-            value === opt.value
-              ? 'bg-clay text-white'
-              : 'bg-white/10 text-white/60 hover:bg-white/20'
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function DaysChips({
-  selected,
-  onChange,
-}: {
-  selected: Set<string>;
-  onChange: (s: Set<string>) => void;
-}) {
-  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <span className="text-white text-xs shrink-0">Days:</span>
-      {DAYS.map((d) => (
-        <button
-          key={d}
-          onClick={() => {
-            const next = new Set(selected);
-            if (next.has(d)) next.delete(d); else next.add(d);
-            onChange(next);
-          }}
-          className={`px-2 py-0.5 rounded-md text-xs transition-colors ${
-            selected.has(d) ? 'bg-clay text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'
-          }`}
-        >
-          {d}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ─── Main component ───────────────────────────────────────────────────────────
+import type { CourtWithCount, PickleballOnlyCourt, NearestCourt, NearestProgram, SuggestionItem } from './courtmap/courtMapTypes';
+import {
+  TORONTO_CENTER,
+  formatDist,
+  parseDateStr,
+  geocodeQuery, geocodeLocationId,
+  courtMarkerHtml, pickleballMarkerHtml, hasPublicHours,
+  GENERIC_OSM_TYPES,
+  locationGeoCache,
+} from './courtmap/courtMapUtils';
+import { FilterSelect, DaysDropdown, Badge, PickleballBadges } from './courtmap/courtMapComponents';
+import { useCourtData } from './courtmap/useCourtData';
+import { CourtResultsList } from './courtmap/CourtResultsList';
+import { useAuth } from '../context/AuthContext';
+import { ProgramResultsList } from './courtmap/ProgramResultsList';
 
 export const CourtMap: React.FC = () => {
-  const [courts, setCourts] = useState<CourtWithCount[]>([]);
-  const [programs, setPrograms] = useState<TennisProgram[]>([]);
-  const [loading, setLoading] = useState(true);
+  useEffect(() => { document.title = 'Court Locator — Racquets & Strings'; }, []);
+
+  const { user } = useAuth();
+  const { courts, programs, pickleballOnly, loading, loadingProgress, setPrograms } = useCourtData();
+
+  const [mapReady, setMapReady] = useState(false);
+  const [selectedCourt, setSelectedCourt] = useState<CourtWithCount | null>(null);
+  const [selectedPickleball, setSelectedPickleball] = useState<PickleballOnlyCourt | null>(null);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchError, setSearchError] = useState('');
   const [searching, setSearching] = useState(false);
-  const [fitBounds, setFitBounds] = useState<[number, number][]>([]);
+  const [fitBoundsData, setFitBoundsData] = useState<[number, number][]>([]);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [showCourtsTable, setShowCourtsTable] = useState(false);
-  const [showProgramsTable, setShowProgramsTable] = useState(false);
-  const [searchingMode, setSearchingMode] = useState<'courts' | 'programs' | null>(null);
 
-  // Courts filters
+  // courtTypeFilter also handles 'Programs' to switch to programs view
   const [courtTypeFilter, setCourtTypeFilter] = useState('');
   const [courtLightsFilter, setCourtLightsFilter] = useState('');
+  const [pickleballFilter, setPickleballFilter] = useState('');
+  const [zoneFilter, setZoneFilter] = useState('');
 
-  // Programs filters (Time and Program removed)
   const [progDaysFilter, setProgDaysFilter] = useState(new Set<string>());
   const [progAgeFilter, setProgAgeFilter] = useState('');
   const [progStatusFilter, setProgStatusFilter] = useState('');
+  const [progLocationFilter, setProgLocationFilter] = useState('');
 
-  const [courtsShowMore, setCourtsShowMore] = useState(false);
-  const [programsShowMore, setProgramsShowMore] = useState(false);
-
-  const [suggestions, setSuggestions] = useState<{ label: string; lat: number; lng: number }[]>([]);
+  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const geocodingActiveRef = useRef(false);
+  const lastGeocodedQuery = useRef('');
+  const lastGeocodedCoords = useRef<{ lat: number; lng: number } | null>(null);
+  const mapRef = useRef<MapRef>(null);
 
-  // ── Filtered + sorted courts ───────────────────────────────────────────────
+  const isPrograms = courtTypeFilter === 'Programs';
+
+  // ── Filtered courts ──────────────────────────────────────────────────────────
   const displayedCourts = useMemo((): NearestCourt[] => {
     let list = courts;
-    if (courtTypeFilter === 'Public') list = list.filter((c) => c.courtType.toLowerCase() === 'public');
-    if (courtTypeFilter === 'Club') list = list.filter((c) => c.courtType.toLowerCase() === 'club');
+    if (zoneFilter) list = list.filter((c) => c.zone === zoneFilter);
+    if (courtTypeFilter === 'Pickleball') {
+      list = list.filter((c) => c.pickleballEntries.length > 0);
+      if (pickleballFilter) list = list.filter((c) => c.pickleballEntries.some((pb) => pb.netType === pickleballFilter));
+    } else {
+      if (courtTypeFilter === 'Public')    list = list.filter((c) => c.courtType.toLowerCase() === 'public');
+      if (courtTypeFilter === 'Club')      list = list.filter((c) => c.courtType.toLowerCase() === 'club');
+      if (courtTypeFilter === 'OpenHours') list = list.filter((c) => hasPublicHours(c));
+      if (courtTypeFilter === 'Programs')  list = list.filter((c) => c.hasPrograms);
+      if (courtTypeFilter === 'Bookings')  list = list.filter((c) => !!c.bookingUrl);
+      if (!courtTypeFilter && pickleballFilter) list = list.filter((c) => c.pickleballEntries.some((pb) => pb.netType === pickleballFilter));
+    }
     if (courtLightsFilter === 'yes') list = list.filter((c) => c.lights);
-    if (courtLightsFilter === 'no') list = list.filter((c) => !c.lights);
-    return list
-      .map((c) => ({
-        ...c,
-        distKm: userCoords ? haversineKm(userCoords.lat, userCoords.lng, c.lat, c.lng) : 0,
-      }))
-      .sort((a, b) => a.distKm - b.distKm);
-  }, [courts, courtTypeFilter, courtLightsFilter, userCoords]);
+    if (courtLightsFilter === 'no')  list = list.filter((c) => !c.lights);
 
-  // ── Filtered + sorted programs ─────────────────────────────────────────────
+    return list
+      .map((c) => ({ ...c, distKm: userCoords ? haversineKm(userCoords.lat, userCoords.lng, c.lat, c.lng) : 0 }))
+      .sort((a, b) => {
+        if (userCoords) return a.distKm - b.distKm;
+        if (b.count !== a.count) return b.count - a.count;
+        return a.dropdown.localeCompare(b.dropdown);
+      });
+  }, [courts, zoneFilter, courtTypeFilter, courtLightsFilter, pickleballFilter, userCoords]);
+
+  const displayedPickleballOnly = useMemo((): PickleballOnlyCourt[] => {
+    if (courtTypeFilter && courtTypeFilter !== 'Pickleball') return [];
+    let list = pickleballOnly;
+    if (zoneFilter) {
+      list = list.filter((pb) =>
+        pb.lat !== undefined && pb.lng !== undefined && getZone(pb.lat, pb.lng) === zoneFilter,
+      );
+    }
+    if (!pickleballFilter) return list;
+    return list.filter((pb) => pb.entries.some((e) => e.netType === pickleballFilter));
+  }, [pickleballOnly, courtTypeFilter, pickleballFilter, zoneFilter]);
+
+  // ── Filtered programs ────────────────────────────────────────────────────────
   const displayedPrograms = useMemo((): NearestProgram[] => {
     const today = new Date();
     let list = programs;
@@ -472,636 +115,559 @@ export const CourtMap: React.FC = () => {
         return true;
       });
     }
-
     if (progDaysFilter.size > 0) {
       list = list.filter((p) => {
         const days = p.days.split(/[,\s]+/).map((d) => d.trim()).filter(Boolean);
         return days.some((d) => progDaysFilter.has(d));
       });
     }
+    if (progAgeFilter === 'under13') list = list.filter((p) => (p.minAgeYr ?? 0) < 13);
+    else if (progAgeFilter === '13to18') list = list.filter((p) => { const m = p.minAgeYr ?? 0; return m >= 13 && m <= 18; });
+    else if (progAgeFilter === '19plus') list = list.filter((p) => (p.minAgeYr ?? 0) >= 19);
 
-    if (progAgeFilter === 'under13') {
-      list = list.filter((p) => (p.minAgeYr ?? 0) < 13);
-    } else if (progAgeFilter === '13to18') {
-      list = list.filter((p) => { const m = p.minAgeYr ?? 0; return m >= 13 && m <= 18; });
-    } else if (progAgeFilter === '19plus') {
-      list = list.filter((p) => (p.minAgeYr ?? 0) >= 19);
-    }
+    if (progLocationFilter) list = list.filter((p) => p.matchedDropdown === progLocationFilter);
 
     const scored: NearestProgram[] = list.map((p) => ({
       ...p,
-      distKm:
-        p.lat !== undefined && p.lng !== undefined && userCoords
-          ? haversineKm(userCoords.lat, userCoords.lng, p.lat, p.lng)
-          : null,
+      distKm: p.lat !== undefined && p.lng !== undefined && userCoords
+        ? haversineKm(userCoords.lat, userCoords.lng, p.lat, p.lng) : null,
     }));
-    const withDist = scored.filter((p) => p.distKm !== null).sort((a, b) => a.distKm! - b.distKm!);
-    const withoutDist = scored.filter((p) => p.distKm === null);
-    return [...withDist, ...withoutDist];
-  }, [programs, progStatusFilter, progDaysFilter, progAgeFilter, userCoords]);
 
-  // ── Reset "show more" when filters change ─────────────────────────────────
-  useEffect(() => { setCourtsShowMore(false); }, [courtTypeFilter, courtLightsFilter]);
-  useEffect(() => { setProgramsShowMore(false); }, [progDaysFilter, progAgeFilter, progStatusFilter]);
+    if (userCoords) {
+      const withDist = scored.filter((p) => p.distKm !== null).sort((a, b) => a.distKm! - b.distKm!);
+      return [...withDist, ...scored.filter((p) => p.distKm === null)];
+    }
+    return scored.sort((a, b) => {
+      const da = parseDateStr(a.dateRange.split(' to ')[0]?.trim() || '');
+      const db_ = parseDateStr(b.dateRange.split(' to ')[0]?.trim() || '');
+      if (!da && !db_) return 0;
+      if (!da) return 1;
+      if (!db_) return -1;
+      return da.getTime() - db_.getTime();
+    });
+  }, [programs, progStatusFilter, progDaysFilter, progAgeFilter, userCoords, progLocationFilter]);
 
-  // ── Load data on mount ─────────────────────────────────────────────────────
+  // ── FitBounds ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      const [courtsCsv, programsCsv] = await Promise.all([
-        fetch('/Tennis Courts Facilities - 4326.csv').then((r) => (r.ok ? r.text() : '')),
-        fetch('/Registered Programs.csv').then((r) => (r.ok ? r.text() : '')),
-      ]);
-      if (cancelled) return;
+    if (!fitBoundsData.length || !mapRef.current) return;
+    const lngs = fitBoundsData.map((p) => p[1]);
+    const lats = fitBoundsData.map((p) => p[0]);
+    try {
+      mapRef.current.getMap().fitBounds(
+        [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+        { padding: 60, maxZoom: 14, duration: 800 },
+      );
+    } catch { /* map not ready */ }
+  }, [fitBoundsData]);
 
-      const rawCourts = parseCourts(courtsCsv);
-      const byDropdown = new Map<string, CsvCourt>();
-      const byName = new Map<string, CsvCourt>();
-      for (const court of rawCourts) {
-        byDropdown.set(court.dropdown.toLowerCase(), court);
-        byName.set(court.name.toLowerCase(), court);
-      }
-
-      const parsedPrograms = parsePrograms(programsCsv, byDropdown, byName);
-
-      const programDropdowns = new Set<string>();
-      for (const prog of parsedPrograms) {
-        if (prog.lat !== undefined) {
-          const c = matchCourtName(prog.locationName, byDropdown, byName);
-          if (c) programDropdowns.add(c.dropdown.toLowerCase());
-        }
-      }
-
-      if (!cancelled) {
-        setCourts(rawCourts.map((c) => ({ ...c, count: 0, hasPrograms: programDropdowns.has(c.dropdown.toLowerCase()) })));
-        setPrograms(parsedPrograms);
-        setLoading(false);
-      }
-
-      // Firestore player counts (silent fail after 10s)
-      try {
-        const TIMEOUT_MS = 10_000;
-        const withTimeout = <T,>(p: Promise<T>) =>
-          Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), TIMEOUT_MS))]);
-
-        const [prefsSnap, statsSnap, usersSnap] = await Promise.all([
-          withTimeout(getDocs(collection(db, 'preferences'))),
-          withTimeout(getDocs(collection(db, 'stats'))),
-          withTimeout(getDocs(collection(db, 'users'))),
-        ]);
-        if (cancelled) return;
-
-        const statsMap = new Map<string, number>();
-        statsSnap.forEach((d) => statsMap.set(d.id, (d.data().leaguePoints26 as number) || 0));
-
-        const lastActiveMap = new Map<string, number>();
-        usersSnap.forEach((d) => {
-          const raw = d.data().lastActive;
-          if (raw && typeof raw.toMillis === 'function') lastActiveMap.set(d.id, raw.toMillis());
-        });
-
-        const now = Date.now();
-        const courtCountMap = new Map<string, number>();
-        prefsSnap.forEach((d) => {
-          const uid = d.id;
-          const preferred: string[] = d.data().preferred_courts || [];
-          if (!preferred.length) return;
-          const points = statsMap.get(uid) ?? 0;
-          const lastActive = lastActiveMap.get(uid) ?? 0;
-          if (!points && now - lastActive >= NINETY_DAYS_MS) return;
-          for (const pref of preferred) {
-            const matched = matchCourtName(pref, byDropdown, byName);
-            if (matched) courtCountMap.set(matched.dropdown, (courtCountMap.get(matched.dropdown) ?? 0) + 1);
-          }
-        });
-
-        if (!cancelled) {
-          setCourts(rawCourts.map((c) => ({
-            ...c,
-            count: courtCountMap.get(c.dropdown) ?? 0,
-            hasPrograms: programDropdowns.has(c.dropdown.toLowerCase()),
-          })));
-        }
-      } catch { /* Firestore unavailable */ }
-    };
-    load().catch(() => setLoading(false));
-    return () => { cancelled = true; };
-  }, []);
-
-  // ── Geocode helper ─────────────────────────────────────────────────────────
-  const lastGeocodedQuery = useRef('');
-  const lastGeocodedCoords = useRef<{ lat: number; lng: number } | null>(null);
-
-  const getCoords = async (q: string) => {
+  // ── Search ───────────────────────────────────────────────────────────────────
+  const getCoords = useCallback(async (q: string) => {
     if (q === lastGeocodedQuery.current && lastGeocodedCoords.current) return lastGeocodedCoords.current;
     const coords = await geocodeQuery(q);
     lastGeocodedQuery.current = q;
     lastGeocodedCoords.current = coords;
     return coords;
-  };
+  }, []);
 
-  // ── Find nearest courts ────────────────────────────────────────────────────
-  const handleFindCourts = async (e: React.FormEvent) => {
+  const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     const q = searchQuery.trim();
     if (!q || !courts.length) return;
     setSearching(true);
-    setSearchingMode('courts');
     setSearchError('');
     try {
       const coords = await getCoords(q);
-      if (!coords) { setSearchError('Address not found. Try a more specific address.'); return; }
-      setUserCoords(coords);
-      setShowCourtsTable(true);
-      setShowProgramsTable(false);
-      const nearest5 = courts
-        .map((c) => ({ lat: c.lat, lng: c.lng, dist: haversineKm(coords.lat, coords.lng, c.lat, c.lng) }))
-        .sort((a, b) => a.dist - b.dist)
-        .slice(0, 5);
-      setFitBounds([[coords.lat, coords.lng], ...nearest5.map((c) => [c.lat, c.lng] as [number, number])]);
-    } catch { setSearchError('Could not geocode address. Please try again.'); }
-    finally { setSearching(false); setSearchingMode(null); }
-  };
-
-  // ── Find tennis programs ───────────────────────────────────────────────────
-  const handleFindPrograms = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    const q = searchQuery.trim();
-    if (!q || !programs.length) return;
-    setSearching(true);
-    setSearchingMode('programs');
-    setSearchError('');
-    try {
-      const coords = await getCoords(q);
-      if (!coords) { setSearchError('Address not found. Try a more specific address.'); return; }
-      setUserCoords(coords);
-      setShowProgramsTable(true);
-      setShowCourtsTable(false);
-      const withCoords = programs.filter((p) => p.lat !== undefined);
-      const nearest5 = withCoords
-        .map((p) => ({ lat: p.lat!, lng: p.lng!, dist: haversineKm(coords.lat, coords.lng, p.lat!, p.lng!) }))
-        .sort((a, b) => a.dist - b.dist)
-        .slice(0, 5);
-      setFitBounds([[coords.lat, coords.lng], ...nearest5.map((p) => [p.lat, p.lng] as [number, number])]);
-
-      if (!geocodingActiveRef.current) {
-        geocodingActiveRef.current = true;
-        const unresolved = [
-          ...new Map(
-            programs.filter((p) => p.lat === undefined && !locationGeoCache.has(p.locationId))
-              .map((p) => [p.locationId, p]),
-          ).values(),
-        ];
-        (async () => {
-          for (const prog of unresolved) {
-            await new Promise((r) => setTimeout(r, 1200));
-            const c = await geocodeLocationId(prog.locationId, prog.locationName);
-            if (c) setPrograms((prev) => prev.map((p) => p.locationId === prog.locationId ? { ...p, lat: c.lat, lng: c.lng } : p));
-          }
-          geocodingActiveRef.current = false;
-        })();
+      if (!coords) {
+        setSearchError("Address not found — try a more specific address (e.g. '123 Bloor St W' or 'Danforth & Pape')");
+        return;
       }
-    } catch { setSearchError('Could not geocode address. Please try again.'); }
-    finally { setSearching(false); setSearchingMode(null); }
-  };
+      setUserCoords(coords);
+      if (!isPrograms) {
+        const nearest5 = courts
+          .map((c) => ({ lat: c.lat, lng: c.lng, dist: haversineKm(coords.lat, coords.lng, c.lat, c.lng) }))
+          .sort((a, b) => a.dist - b.dist).slice(0, 5);
+        setFitBoundsData([[coords.lat, coords.lng], ...nearest5.map((c) => [c.lat, c.lng] as [number, number])]);
+      } else {
+        const withCoords = programs.filter((p) => p.lat !== undefined);
+        const nearest5 = withCoords
+          .map((p) => ({ lat: p.lat!, lng: p.lng!, dist: haversineKm(coords.lat, coords.lng, p.lat!, p.lng!) }))
+          .sort((a, b) => a.dist - b.dist).slice(0, 5);
+        setFitBoundsData([[coords.lat, coords.lng], ...nearest5.map((p) => [p.lat, p.lng] as [number, number])]);
 
-  // ── Clear ──────────────────────────────────────────────────────────────────
-  const handleClear = () => {
+        if (!geocodingActiveRef.current) {
+          geocodingActiveRef.current = true;
+          const unresolved = [
+            ...new Map(
+              programs
+                .filter((p) => p.lat === undefined && !locationGeoCache.has(p.locationId))
+                .map((p) => [p.locationId, p]),
+            ).values(),
+          ];
+          (async () => {
+            for (const prog of unresolved) {
+              await new Promise((r) => setTimeout(r, 1200));
+              const c = await geocodeLocationId(prog.locationId, prog.locationName);
+              if (c) setPrograms((prev) => prev.map((p) => p.locationId === prog.locationId ? { ...p, lat: c.lat, lng: c.lng } : p));
+            }
+            geocodingActiveRef.current = false;
+          })();
+        }
+      }
+    } catch {
+      setSearchError('Could not geocode address. Please try again.');
+    } finally {
+      setSearching(false);
+    }
+  }, [searchQuery, courts, programs, isPrograms, getCoords, setPrograms]);
+
+  const handleClear = useCallback(() => {
     setSearchQuery('');
     setSearchError('');
-    setFitBounds([]);
+    setFitBoundsData([]);
     setUserCoords(null);
-    setShowCourtsTable(false);
-    setShowProgramsTable(false);
-    setCourtTypeFilter('');
-    setCourtLightsFilter('');
-    setProgDaysFilter(new Set());
-    setProgAgeFilter('');
-    setProgStatusFilter('');
-    setCourtsShowMore(false);
-    setProgramsShowMore(false);
     setSuggestions([]);
     setShowSuggestions(false);
+    setProgLocationFilter('');
     lastGeocodedQuery.current = '';
     lastGeocodedCoords.current = null;
     inputRef.current?.focus();
-  };
+  }, []);
 
-  const hasResults = showCourtsTable || showProgramsTable;
+  const closePopups = useCallback(() => {
+    setSelectedCourt(null);
+    setSelectedPickleball(null);
+  }, []);
 
+  const handleSelectCourt = useCallback((court: CourtWithCount) => {
+    setSelectedCourt(court);
+    setSelectedPickleball(null);
+    try { mapRef.current?.getMap().flyTo({ center: [court.lng, court.lat], zoom: 15, duration: 600 }); } catch { /* ignore */ }
+  }, []);
+
+  // ── JSX ──────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-tennis-dark pt-20 pb-10">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+    <div className="flex flex-col md:flex-row h-dvh pt-16 bg-tennis-dark overflow-hidden">
 
-        {/* Header */}
-        <div className="mb-1">
-          <h1 className="text-3xl font-bold font-['Montserrat']">
-            <span className="text-white">Our </span>
-            <span className="text-clay">Courts</span>
-          </h1>
-        </div>
-
-        {/* Search bar */}
-        <form onSubmit={handleFindCourts} className="mb-3 flex flex-wrap gap-2 relative z-[1001]">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 pointer-events-none z-10" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                const value = e.target.value;
-                setSearchQuery(value);
-                if (suggestDebounceRef.current) clearTimeout(suggestDebounceRef.current);
-                if (value.trim().length < 3) { setSuggestions([]); setShowSuggestions(false); return; }
-                suggestDebounceRef.current = setTimeout(async () => {
-                  try {
-                    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(value + ' Toronto')}&limit=5&countrycodes=ca`;
-                    const res = await fetch(url, { headers: { 'User-Agent': 'toronto-tennis-league' } });
-                    const data = await res.json() as { display_name: string; lat: string; lon: string }[];
-                    const next = data.map((d) => ({
-                      label: d.display_name.split(',').slice(0, 3).join(',').trim(),
-                      lat: parseFloat(d.lat),
-                      lng: parseFloat(d.lon),
-                    }));
-                    setSuggestions(next);
-                    setShowSuggestions(next.length > 0);
-                  } catch { /* silent */ }
-                }, 600);
-              }}
-              onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              placeholder="Enter your address to find nearest courts or programs…"
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-clay/60 transition-colors"
-            />
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1 bg-[#1c1c2e] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50">
-                {suggestions.map((s, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onMouseDown={() => {
-                      setSearchQuery(s.label);
-                      lastGeocodedQuery.current = s.label;
-                      lastGeocodedCoords.current = { lat: s.lat, lng: s.lng };
-                      setSuggestions([]);
-                      setShowSuggestions(false);
-                    }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-white/70 hover:bg-white/10 hover:text-white transition-colors border-b border-white/5 last:border-0"
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            )}
+      {/* MAP — top on mobile, right on desktop */}
+      <div className="order-1 md:order-2 h-[38vh] md:h-auto md:flex-1 relative">
+        {(loading || !mapReady) && (
+          <div className="absolute inset-0 z-20 bg-[#0d1f14] flex flex-col items-center justify-center gap-4">
+            <p className="text-white font-semibold text-sm tracking-wide">Loading locations…</p>
+            <div className="w-56 h-1.5 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#4ade80] rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${loadingProgress}%` }}
+              />
+            </div>
+            <p className="text-white/40 text-xs">{loadingProgress}%</p>
           </div>
-          <button
-            type="submit"
-            disabled={searching || !searchQuery.trim()}
-            className="px-4 py-2.5 rounded-xl bg-clay text-white text-sm font-medium hover:bg-clay/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-          >
-            {searching && searchingMode === 'courts' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            Find Nearest Courts
-          </button>
-          <button
-            type="button"
-            onClick={handleFindPrograms}
-            disabled={searching || !searchQuery.trim()}
-            className="px-4 py-2.5 rounded-xl border border-white/20 text-white text-sm font-medium hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-          >
-            {searching && searchingMode === 'programs' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            Find Tennis Programs
-          </button>
-          {hasResults && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="px-3 py-2.5 rounded-xl border border-white/10 text-white/60 text-sm hover:text-white hover:border-white/30 transition-colors"
+        )}
+
+        <MapGL
+          ref={mapRef}
+          initialViewState={{ longitude: TORONTO_CENTER[1], latitude: TORONTO_CENTER[0], zoom: 11 }}
+          style={{ width: '100%', height: '100%' }}
+          mapStyle="https://tiles.openfreemap.org/styles/liberty"
+          onClick={closePopups}
+          onLoad={() => setMapReady(true)}
+        >
+          <NavigationControl position="top-right" />
+
+          {displayedCourts.map((court, i) => (
+            <Marker key={i} longitude={court.lng} latitude={court.lat} anchor="center">
+              <div
+                dangerouslySetInnerHTML={{ __html: courtMarkerHtml(court) }}
+                onClick={(e) => { e.stopPropagation(); setSelectedCourt(court); setSelectedPickleball(null); }}
+                style={{ cursor: 'pointer' }}
+              />
+            </Marker>
+          ))}
+
+          {displayedPickleballOnly
+            .filter((pb) => pb.lat !== undefined)
+            .map((pb, i) => (
+              <Marker key={`pb-${i}`} longitude={pb.lng!} latitude={pb.lat!} anchor="center">
+                <div
+                  dangerouslySetInnerHTML={{ __html: pickleballMarkerHtml() }}
+                  onClick={(e) => { e.stopPropagation(); setSelectedPickleball(pb); setSelectedCourt(null); }}
+                  style={{ cursor: 'pointer' }}
+                />
+              </Marker>
+            ))
+          }
+
+          {selectedCourt && (
+            <Popup
+              longitude={selectedCourt.lng}
+              latitude={selectedCourt.lat}
+              onClose={() => setSelectedCourt(null)}
+              closeButton anchor="bottom" maxWidth="280px"
             >
-              Clear
-            </button>
+              <div style={{ fontFamily: 'system-ui, sans-serif', padding: '4px 2px', textAlign: 'center' }}>
+                <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 3, marginTop: 0, color: '#1f2937' }}>
+                  {selectedCourt.dropdown || selectedCourt.name}
+                </p>
+                {selectedCourt.address && (
+                  <p style={{ color: '#6b7280', fontSize: 11, marginBottom: 7, marginTop: 0 }}>
+                    {selectedCourt.address}
+                  </p>
+                )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 7, justifyContent: 'center' }}>
+                  <span style={{ background: '#e5e7eb', color: '#111', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
+                    {selectedCourt.courtType.toUpperCase()}
+                  </span>
+                  {selectedCourt.numCourts > 0 && (
+                    <span style={{ background: '#e5e7eb', color: '#111', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
+                      {selectedCourt.numCourts} CT
+                    </span>
+                  )}
+                  {selectedCourt.lights && (
+                    <span style={{ background: '#fef08a', color: '#713f12', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
+                      LIGHTS
+                    </span>
+                  )}
+                  {hasPublicHours(selectedCourt) && (
+                    <span style={{ background: '#1e3a5f', color: '#93c5fd', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
+                      OPEN HOURS
+                    </span>
+                  )}
+                  {selectedCourt.bookingUrl && (
+                    <span style={{ background: '#7c2d12', color: '#fdba74', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
+                      BOOKABLE
+                    </span>
+                  )}
+                  <PickleballBadges entries={selectedCourt.pickleballEntries} popup />
+                </div>
+                {selectedCourt.count > 0 && (
+                  <p style={{ color: '#16a34a', fontSize: 11, margin: '0 0 3px' }}>
+                    {selectedCourt.count} active player{selectedCourt.count !== 1 ? 's' : ''}
+                  </p>
+                )}
+                {selectedCourt.clubInfo && (
+                  <p style={{ color: '#6b7280', fontSize: 10, margin: '0 0 6px', lineHeight: 1.4 }}>
+                    {selectedCourt.clubInfo}
+                  </p>
+                )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8, justifyContent: 'center' }}>
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${selectedCourt.lat},${selectedCourt.lng}`}
+                    target="_blank" rel="noreferrer"
+                    style={{ padding: '4px 10px', background: '#166534', color: '#fff', borderRadius: 6, fontSize: 11, textDecoration: 'none', fontWeight: 500 }}
+                  >
+                    Directions
+                  </a>
+                  {selectedCourt.website && (
+                    <a
+                      href={selectedCourt.website}
+                      target="_blank" rel="noreferrer"
+                      style={{ padding: '4px 10px', background: '#1d4ed8', color: '#fff', borderRadius: 6, fontSize: 11, textDecoration: 'none', fontWeight: 500 }}
+                    >
+                      Website
+                    </a>
+                  )}
+                  {selectedCourt.bookingUrl && (
+                    <a
+                      href={selectedCourt.bookingUrl}
+                      target="_blank" rel="noreferrer"
+                      style={{ padding: '4px 10px', background: '#166534', color: '#fff', borderRadius: 6, fontSize: 11, textDecoration: 'none', fontWeight: 500 }}
+                    >
+                      Book Online
+                    </a>
+                  )}
+                  {selectedCourt.hasPrograms && (
+                    <button
+                      onClick={() => {
+                        setProgLocationFilter(selectedCourt.dropdown || selectedCourt.name);
+                        setCourtTypeFilter('Programs');
+                        setSelectedCourt(null);
+                      }}
+                      style={{ padding: '4px 10px', background: '#ca8a04', color: '#fff', borderRadius: 6, fontSize: 11, fontWeight: 500, border: 'none', cursor: 'pointer' }}
+                    >
+                      View Available Programs
+                    </button>
+                  )}
+                </div>
+              </div>
+            </Popup>
           )}
-        </form>
 
-        {searchError && <p className="text-red-400 text-sm mb-3">{searchError}</p>}
+          {selectedPickleball && selectedPickleball.lat !== undefined && (
+            <Popup
+              longitude={selectedPickleball.lng!}
+              latitude={selectedPickleball.lat!}
+              onClose={() => setSelectedPickleball(null)}
+              closeButton anchor="bottom" maxWidth="260px"
+            >
+              <div style={{ fontFamily: 'system-ui, sans-serif', padding: '4px 2px', textAlign: 'center' }}>
+                <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 4, marginTop: 0, color: '#1f2937' }}>
+                  {selectedPickleball.location}
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 4, justifyContent: 'center' }}>
+                  <PickleballBadges entries={selectedPickleball.entries} popup />
+                </div>
+                <div style={{ display: 'flex', gap: 5, marginTop: 6, justifyContent: 'center' }}>
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${selectedPickleball.lat},${selectedPickleball.lng}`}
+                    target="_blank" rel="noreferrer"
+                    style={{ padding: '4px 10px', background: '#166534', color: '#fff', borderRadius: 6, fontSize: 11, textDecoration: 'none', fontWeight: 500 }}
+                  >
+                    Directions
+                  </a>
+                </div>
+              </div>
+            </Popup>
+          )}
+        </MapGL>
+      </div>
 
-        {/* Legend */}
-        <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-white">
-          <div className="flex items-center gap-2">
-            <svg width="14" height="14" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-              <path d="M7,0 A7,7 0 0,0 7,14 Z" fill="#15803d" opacity="0.9" />
-              <path d="M7,0 A7,7 0 0,1 7,14 Z" fill="#eab308" opacity="0.9" />
-            </svg>
-            Active players + programs
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-[#15803d] inline-block shrink-0" />
-            Active players
-          </div>
-          <div className="flex items-center gap-2">
-            <svg width="12" height="12" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-              <path d="M6,0 A6,6 0 0,0 6,12 Z" fill="#15803d" opacity="0.95" />
-              <path d="M6,0 A6,6 0 0,1 6,12 Z" fill="#3b82f6" opacity="0.95" />
-            </svg>
-            Active players + public hours
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-[#eab308] inline-block shrink-0" />
-            Tennis programs
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-[#3b82f6] inline-block shrink-0" />
-            Public hours available
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-[#f97316] inline-block shrink-0" />
-            No registered players
-          </div>
-        </div>
+      {/* SIDEBAR — bottom on mobile, left on desktop */}
+      <aside className="order-2 md:order-1 flex-1 md:flex-none md:w-[380px] flex flex-col
+                        border-t border-white/10 md:border-t-0 md:border-r overflow-hidden
+                        bg-tennis-dark">
 
-        {/* Map — normal flow, not sticky */}
-        <div className="rounded-2xl overflow-hidden border border-white/10 shadow-xl relative [isolation:isolate]" style={{ height: '55vh' }}>
-          {loading ? (
-            <div className="w-full h-full flex items-center justify-center bg-white/5">
-              <Loader2 className="w-8 h-8 text-clay animate-spin" />
+        <div className="flex-shrink-0 px-4 pt-4 pb-3 space-y-3 border-b border-white/10">
+
+          <h1 className="text-xl font-bold font-['Montserrat'] leading-tight text-center">
+            <span className="text-white">Toronto {courtTypeFilter === 'Pickleball' ? 'Pickleball' : 'Tennis'} </span>
+            <span className="text-clay">{isPrograms ? 'Programs' : 'Courts'}</span>
+          </h1>
+
+          {/* Search */}
+          <form onSubmit={handleSearch} className="relative">
+            <div className="flex gap-1.5">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/40 pointer-events-none z-10" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSearchQuery(value);
+                    const q = value.trim().toLowerCase();
+
+                    if (q.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+
+                    const courtMatches: SuggestionItem[] = courts
+                      .filter((c) => c.dropdown.toLowerCase().includes(q) || c.name.toLowerCase().includes(q))
+                      .slice(0, 3)
+                      .map((c) => ({ kind: 'court' as const, label: c.dropdown || c.name, court: c }));
+
+                    setSuggestions(courtMatches);
+                    if (courtMatches.length > 0) setShowSuggestions(true);
+
+                    if (suggestDebounceRef.current) clearTimeout(suggestDebounceRef.current);
+                    if (q.length >= 3) {
+                      suggestDebounceRef.current = setTimeout(async () => {
+                        try {
+                          const url = `https://nominatim.openstreetmap.org/search?format=json` +
+                            `&q=${encodeURIComponent(value + ' Toronto')}&limit=8&countrycodes=ca&viewbox=-79.75,43.50,-79.05,43.90`;
+                          const res = await fetch(url, { headers: { 'User-Agent': 'toronto-tennis-league' } });
+                          const data = await res.json() as { display_name: string; lat: string; lon: string; type: string; class: string }[];
+                          const addressMatches: SuggestionItem[] = data
+                            .filter((d) => !GENERIC_OSM_TYPES.has(d.type) && !GENERIC_OSM_TYPES.has(d.class))
+                            .slice(0, 4)
+                            .map((d) => ({
+                              kind: 'address' as const,
+                              label: d.display_name.split(',').slice(0, 3).join(',').trim(),
+                              lat: parseFloat(d.lat),
+                              lng: parseFloat(d.lon),
+                            }));
+                          setSuggestions((prev) => {
+                            const courtPart = prev.filter((s) => s.kind === 'court');
+                            return [...courtPart, ...addressMatches].slice(0, 6);
+                          });
+                          if (addressMatches.length > 0) setShowSuggestions(true);
+                        } catch { /* silent */ }
+                      }, 500);
+                    }
+                  }}
+                  onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  placeholder="Search courts or enter an address…"
+                  className="w-full pl-8 pr-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-clay/60 transition-colors"
+                />
+                {showSuggestions && suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-[#1c1c2e] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-50">
+                    {suggestions.map((s, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onMouseDown={() => {
+                          if (s.kind === 'court') {
+                            setSearchQuery(s.label);
+                            setSuggestions([]); setShowSuggestions(false);
+                            setSelectedCourt(s.court); setSelectedPickleball(null);
+                            try {
+                              mapRef.current?.getMap().flyTo({ center: [s.court.lng, s.court.lat], zoom: 15, duration: 600 });
+                            } catch { /* ignore */ }
+                          } else {
+                            setSearchQuery(s.label);
+                            lastGeocodedQuery.current = s.label;
+                            lastGeocodedCoords.current = { lat: s.lat, lng: s.lng };
+                            setSuggestions([]); setShowSuggestions(false);
+                          }
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs text-white/70 hover:bg-white/10 hover:text-white transition-colors border-b border-white/5 last:border-0"
+                      >
+                        <div className="flex items-center gap-2">
+                          {s.kind === 'court' && (
+                            <span className="text-[9px] text-clay font-bold shrink-0 bg-clay/10 px-1 py-0.5 rounded">
+                              COURT
+                            </span>
+                          )}
+                          <span className="truncate">{s.label}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={searching || !searchQuery.trim()}
+                className="px-3 py-2 rounded-lg bg-clay text-white text-sm font-medium hover:bg-clay/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 shrink-0"
+              >
+                {searching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                Find
+              </button>
+              {userCoords && (
+                <button
+                  type="button" onClick={handleClear}
+                  className="px-2.5 py-2 rounded-lg border border-white/10 text-white/50 hover:text-white hover:border-white/30 transition-colors shrink-0"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {searchError && <p className="text-red-400 text-xs mt-1.5">{searchError}</p>}
+          </form>
+
+          {/* Filters */}
+          {!isPrograms ? (
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
+                <FilterSelect
+                  label="Type" value={courtTypeFilter}
+                  onChange={(v) => { setCourtTypeFilter(v); }}
+                  options={[
+                    { value: 'Public',     label: 'Public'          },
+                    { value: 'Club',       label: 'Club'            },
+                    { value: 'Pickleball', label: 'Pickleball'      },
+                    { value: 'OpenHours',  label: 'Open Hours'      },
+                    { value: 'Programs',   label: 'Tennis Programs' },
+                    { value: 'Bookings',   label: 'Court Bookings'  },
+                  ]}
+                />
+                <FilterSelect
+                  label="Lights" value={courtLightsFilter}
+                  onChange={setCourtLightsFilter}
+                  options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <FilterSelect
+                  label="Zone" value={zoneFilter}
+                  onChange={setZoneFilter}
+                  options={ZONE_NAMES.map((z) => ({ value: z, label: z }))}
+                />
+                <FilterSelect
+                  label="Pickleball" value={pickleballFilter}
+                  onChange={setPickleballFilter}
+                  disabled={!!courtTypeFilter && courtTypeFilter !== 'Pickleball'}
+                  options={[
+                    { value: 'Pickleball', label: 'Standalone'       },
+                    { value: 'Tennis',     label: 'On Tennis Courts' },
+                    { value: 'No Net',     label: 'Bring Own Net'    },
+                    { value: 'Adjustable', label: 'Adjustable'       },
+                  ]}
+                />
+              </div>
             </div>
           ) : (
-            <MapContainer center={TORONTO_CENTER} zoom={11} style={{ height: '100%', width: '100%' }} scrollWheelZoom>
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              />
-              {fitBounds.length > 0 && <FitBounds bounds={fitBounds} />}
-              {courts.map((court, i) => (
-                <Marker
-                  key={i}
-                  position={[court.lat, court.lng]}
-                  icon={courtMarkerIcon(court)}
-                >
-                  <Popup>
-                    <div className="text-sm" style={{ minWidth: 180 }}>
-                      <p className="font-semibold text-base mb-1">{court.dropdown}</p>
-                      {court.address && (
-                        <p className="text-gray-500 text-xs mb-1">{court.address}</p>
-                      )}
-                      {court.count > 0 && (
-                        <p className="text-green-700 font-medium text-xs mb-1">
-                          {court.count} active player{court.count !== 1 ? 's' : ''}
-                        </p>
-                      )}
-                      {court.hasPrograms && (
-                        <p className="text-yellow-600 font-medium text-xs mb-1">Tennis programs available</p>
-                      )}
-                      {court.clubInfo && (
-                        <p className="text-blue-600 text-xs mb-1">{court.clubInfo}</p>
-                      )}
-                      <p className="text-gray-400 text-xs mt-1">
-                        {court.courtType}{court.courtType ? ' · ' : ''}{court.numCourts} court{court.numCourts !== 1 ? 's' : ''} · {court.lights ? 'Lights ✓' : 'No lights'}
-                      </p>
-                    </div>
-                  </Popup>
-                </Marker>
-              ))}
-            </MapContainer>
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
+                <FilterSelect
+                  label="Type" value={courtTypeFilter}
+                  onChange={(v) => { setCourtTypeFilter(v); setProgLocationFilter(''); }}
+                  options={[
+                    { value: 'Public',    label: 'Public'          },
+                    { value: 'Club',      label: 'Club'            },
+                    { value: 'OpenHours', label: 'Open Hours'      },
+                    { value: 'Programs',  label: 'Tennis Programs' },
+                    { value: 'Bookings',  label: 'Court Bookings'  },
+                  ]}
+                />
+                <FilterSelect
+                  label="Status" value={progStatusFilter}
+                  onChange={setProgStatusFilter}
+                  options={[{ value: 'ongoing', label: 'Ongoing' }, { value: 'upcoming', label: 'Upcoming' }]}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <FilterSelect
+                  label="Age" value={progAgeFilter}
+                  onChange={setProgAgeFilter}
+                  options={[{ value: 'under13', label: 'Under 13' }, { value: '13to18', label: '13–18' }, { value: '19plus', label: '19+' }]}
+                />
+                <DaysDropdown selected={progDaysFilter} onChange={setProgDaysFilter} />
+              </div>
+            </div>
           )}
         </div>
 
-        {/* ── Courts table ─────────────────────────────────────────────────── */}
-        {showCourtsTable && (() => {
-          const top10 = displayedCourts.slice(0, 10);
-          const visible = courtsShowMore ? top10 : top10.slice(0, 5);
-          return (
-            <div className="mt-6">
-              <h2 className="text-white font-semibold text-lg mb-2">
-                Tennis Courts{' '}
-                <span className="text-white/40 font-normal text-sm">
-                  {displayedCourts.length} result{displayedCourts.length !== 1 ? 's' : ''}, showing top {Math.min(10, displayedCourts.length)}
-                </span>
-              </h2>
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
-                <ChipGroup
-                  label="Type"
-                  value={courtTypeFilter}
-                  options={[
-                    { value: 'Public', label: 'Public' },
-                    { value: 'Club', label: 'Club' },
-                  ]}
-                  onChange={setCourtTypeFilter}
-                />
-                <ChipGroup
-                  label="Lights"
-                  value={courtLightsFilter}
-                  options={[
-                    { value: 'yes', label: 'Yes' },
-                    { value: 'no', label: 'No' },
-                  ]}
-                  onChange={setCourtLightsFilter}
-                />
-              </div>
+        {courtTypeFilter === 'Bookings' && (
+          <div className="px-4 py-2 border-b border-white/10 bg-clay/5">
+            <p className="text-clay text-[11px] leading-snug">
+              Court 1 — 1 hr slots, $5/hr fee · max 10 players
+            </p>
+          </div>
+        )}
 
-              {displayedCourts.length === 0 ? (
-                <p className="text-white/40 text-sm py-4 text-center">No courts match the current filters.</p>
-              ) : (
-                <>
-                  {/* Mobile cards */}
-                  <div className="sm:hidden space-y-2">
-                    {visible.map((c) => (
-                      <div key={`${c.dropdown}-${c.lat}`} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 space-y-1.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-semibold text-white text-sm leading-snug">{c.dropdown}</p>
-                          {userCoords && (
-                            <span className="text-clay font-medium text-sm shrink-0">{formatDist(c.distKm)}</span>
-                          )}
-                        </div>
-                        {c.address && <p className="text-white/50 text-xs">{c.address}</p>}
-                        <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-white/60">
-                          {c.numCourts > 0 && <span>{c.numCourts} court{c.numCourts !== 1 ? 's' : ''}</span>}
-                          {c.count > 0 && <span className="text-clay font-medium">{c.count} active player{c.count !== 1 ? 's' : ''}</span>}
-                          {c.lights && <span>Lights ✓</span>}
-                        </div>
-                        {c.clubInfo && <p className="text-white/40 text-xs">{c.clubInfo}</p>}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Desktop table */}
-                  <div className="hidden sm:block overflow-x-auto rounded-xl border border-white/10">
-                    <table className="w-full text-sm text-white/80">
-                      <thead className="bg-white/5 text-white/50 text-xs uppercase">
-                        <tr>
-                          <th className="px-4 py-3 text-left">Court</th>
-                          <th className="px-4 py-3 text-left"># Courts</th>
-                          <th className="px-4 py-3 text-left">Players</th>
-                          <th className="px-4 py-3 text-left">Public Hours</th>
-                          <th className="px-4 py-3 text-left">Address</th>
-                          <th className="px-4 py-3 text-left">Distance</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {visible.map((c) => (
-                          <tr key={`${c.dropdown}-${c.lat}`} className="hover:bg-white/[0.03] transition-colors">
-                            <td className="px-4 py-3 font-medium">{c.dropdown}</td>
-                            <td className="px-4 py-3">{c.numCourts || '—'}</td>
-                            <td className="px-4 py-3">
-                              {c.count > 0 ? <span className="text-clay font-medium">{c.count}</span> : '—'}
-                            </td>
-                            <td className="px-4 py-3 text-white/50 text-xs max-w-[200px]">{c.clubInfo || '—'}</td>
-                            <td className="px-4 py-3 text-white/50">{c.address || '—'}</td>
-                            <td className="px-4 py-3 text-clay font-medium">
-                              {userCoords ? formatDist(c.distKm) : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {!courtsShowMore && top10.length > 5 && (
-                    <button
-                      onClick={() => setCourtsShowMore(true)}
-                      className="mt-2 text-sm text-white/50 hover:text-white transition-colors"
-                    >
-                      Load {top10.length - 5} more
-                    </button>
-                  )}
-                </>
+        {/* Results */}
+        <div className="flex-1 overflow-y-auto">
+          {!isPrograms ? (
+            <>
+              {!user && (
+                <div className="px-4 py-3 border-b border-clay/20 bg-clay/5 flex items-center justify-between gap-3">
+                  <p className="text-white/70 text-xs leading-snug">Found your court? Meet local tennis players.</p>
+                  <Link
+                    to="/signup?returnTo=/events&intent=join-league"
+                    className="shrink-0 px-3 py-1.5 rounded-lg bg-clay text-white text-xs font-bold hover:bg-clay/80 transition-colors whitespace-nowrap"
+                  >
+                    Join Now
+                  </Link>
+                </div>
               )}
-            </div>
-          );
-        })()}
+              <CourtResultsList
+                courts={displayedCourts}
+                totalCourts={courts.length}
+                loading={loading}
+                userCoords={userCoords}
+                onSelectCourt={handleSelectCourt}
+              />
+            </>
+          ) : (
+            <ProgramResultsList
+              programs={displayedPrograms}
+              totalPrograms={programs.length}
+              loading={loading}
+              userCoords={userCoords}
+            />
+          )}
+        </div>
 
-        {/* ── Programs table ───────────────────────────────────────────────── */}
-        {showProgramsTable && (() => {
-          const top10 = displayedPrograms.slice(0, 10);
-          const visible = programsShowMore ? top10 : top10.slice(0, 5);
-          return (
-            <div className="mt-6">
-              <h2 className="text-white font-semibold text-lg mb-2">
-                Tennis Programs{' '}
-                <span className="text-white/40 font-normal text-sm">
-                  {displayedPrograms.length} result{displayedPrograms.length !== 1 ? 's' : ''}, showing top {Math.min(10, displayedPrograms.length)}
-                </span>
-              </h2>
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-3">
-                <ChipGroup
-                  label="Status"
-                  value={progStatusFilter}
-                  options={[
-                    { value: 'ongoing', label: 'Ongoing' },
-                    { value: 'upcoming', label: 'Upcoming' },
-                  ]}
-                  onChange={setProgStatusFilter}
-                />
-                <DaysChips selected={progDaysFilter} onChange={setProgDaysFilter} />
-                <ChipGroup
-                  label="Age"
-                  value={progAgeFilter}
-                  options={[
-                    { value: '', label: 'All ages' },
-                    { value: 'under13', label: 'Under 13' },
-                    { value: '13to18', label: '13–18' },
-                    { value: '19plus', label: '19+' },
-                  ]}
-                  onChange={setProgAgeFilter}
-                />
-              </div>
-
-              {displayedPrograms.length === 0 ? (
-                <p className="text-white/40 text-sm py-4 text-center">No programs match the current filters.</p>
-              ) : (
-                <>
-                  {/* Mobile cards */}
-                  <div className="sm:hidden space-y-2">
-                    {visible.map((p) => (
-                      <div key={p.courseId} className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 space-y-1.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-semibold text-white text-sm leading-snug">{p.title}</p>
-                          {p.distKm !== null && (
-                            <span className="text-clay font-medium text-sm shrink-0">{formatDist(p.distKm)}</span>
-                          )}
-                        </div>
-                        <p className="text-white/60 text-xs">{p.locationName}</p>
-                        <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-white/50">
-                          {p.days && <span>{p.days}</span>}
-                          {p.timeRange && <span>{p.timeRange}</span>}
-                          {p.dateRange && <span>{p.dateRange}</span>}
-                          <span>{p.ageRange}</span>
-                        </div>
-                        {p.activityUrl && (
-                          <a
-                            href={p.activityUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-block text-clay text-xs hover:underline"
-                          >
-                            View activity →
-                          </a>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Desktop table */}
-                  <div className="hidden sm:block overflow-x-auto rounded-xl border border-white/10">
-                    <table className="w-full text-sm text-white/80">
-                      <thead className="bg-white/5 text-white/50 text-xs uppercase">
-                        <tr>
-                          <th className="px-4 py-3 text-left">Program</th>
-                          <th className="px-4 py-3 text-left">Location</th>
-                          <th className="px-4 py-3 text-left">Days</th>
-                          <th className="px-4 py-3 text-left">Time</th>
-                          <th className="px-4 py-3 text-left">Date Range</th>
-                          <th className="px-4 py-3 text-left">Ages</th>
-                          <th className="px-4 py-3 text-left">Activity</th>
-                          <th className="px-4 py-3 text-left">Distance</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/5">
-                        {visible.map((p) => (
-                          <tr key={p.courseId} className="hover:bg-white/[0.03] transition-colors">
-                            <td className="px-4 py-3 font-medium">{p.title}</td>
-                            <td className="px-4 py-3">{p.locationName}</td>
-                            <td className="px-4 py-3">{p.days}</td>
-                            <td className="px-4 py-3 text-white/60">{p.timeRange}</td>
-                            <td className="px-4 py-3 text-white/50">{p.dateRange}</td>
-                            <td className="px-4 py-3">{p.ageRange}</td>
-                            <td className="px-4 py-3">
-                              {p.activityUrl ? (
-                                <a
-                                  href={p.activityUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-clay hover:underline text-xs whitespace-nowrap"
-                                >
-                                  View activity
-                                </a>
-                              ) : '—'}
-                            </td>
-                            <td className="px-4 py-3 text-clay font-medium">
-                              {p.distKm !== null ? formatDist(p.distKm) : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {!programsShowMore && top10.length > 5 && (
-                    <button
-                      onClick={() => setProgramsShowMore(true)}
-                      className="mt-2 text-sm text-white/50 hover:text-white transition-colors"
-                    >
-                      Load {top10.length - 5} more
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          );
-        })()}
-
-
-      </div>
+        {/* Legend */}
+        <div className="flex-shrink-0 px-4 py-2.5 border-t border-white/10 bg-white/[0.02]">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-white/50">
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#15803d] inline-block shrink-0" />Active players</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#eab308] inline-block shrink-0" />Programs</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6] inline-block shrink-0" />Open hours</span>
+            <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#f97316] inline-block shrink-0" />No Activity</span>
+          </div>
+        </div>
+      </aside>
     </div>
   );
 };

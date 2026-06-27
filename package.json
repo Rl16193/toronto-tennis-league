@@ -11,7 +11,8 @@
     "hosting:preview": "npm run build && npx firebase-tools hosting:channel:deploy preview",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "lint": "tsc --noEmit",
-    "sync:league-stats": "node scripts/syncLeagueStats.mjs"
+    "sync:league-stats": "node scripts/syncLeagueStats.mjs",
+    "regroup:rr": "node scripts/regroup-rr.js --key serviceAccount.json"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.4",
@@ -19,19 +20,18 @@
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
     "firebase": "^12.11.0",
-    "leaflet": "^1.9.4",
     "lucide-react": "^0.546.0",
     "mailcheck": "^1.1.1",
+    "maplibre-gl": "^5.24.0",
     "motion": "^12.38.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-leaflet": "^5.0.0",
+    "react-map-gl": "^8.1.1",
     "react-router-dom": "^7.14.0",
     "tailwind-merge": "^3.5.0",
     "vite": "^6.2.0"
   },
   "devDependencies": {
-    "@types/leaflet": "^1.9.21",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

@@ -76,7 +76,7 @@ export const ProfileContactEdit: React.FC<Props> = ({
           step="1"
           value={Math.max(0, SKILL_LEVELS.indexOf((editData.stats?.skill_level ?? profile.stats.skill_level) as typeof SKILL_LEVELS[number]))}
           onChange={(e) => setEditData({ ...editData, stats: { ...editData.stats, skill_level: SKILL_LEVELS[Number(e.target.value)] } })}
-          className="w-full h-2 bg-tennis-dark rounded-full appearance-none cursor-pointer accent-clay"
+          className="w-full h-2 rounded-full"
         />
         <div className="flex justify-between">
           {SKILL_LEVELS.map((level) => (

@@ -24,6 +24,7 @@ const createDefaultPreferences = (): UserPreferences => ({
   favourite_players: [],
   scheduling_preference: 'I will schedule matches on my own',
   event_creator: false,
+  preferred_zone: '',
 });
 
 export const ensureUserProfileDocuments = async (user: User) => {

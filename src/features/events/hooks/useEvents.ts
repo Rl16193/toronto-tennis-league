@@ -91,10 +91,12 @@ export function useEvents() {
   const hasJoinedAnyTournament = () =>
     joinedRegistrations.some((r) => r.tournamentChoice === 'Singles' || r.tournamentChoice === 'Doubles');
 
-  const isFullyJoinedEvent = (event: TennisEvent) =>
-    isTournamentEvent(event)
-      ? getJoinedChoices(event.id).has('Singles') && getJoinedChoices(event.id).has('Doubles')
-      : hasJoinedRegularEvent(event.id);
+  const isFullyJoinedEvent = (event: TennisEvent) => {
+    if (!isTournamentEvent(event)) return hasJoinedRegularEvent(event.id);
+    if (event.tournament_choice === 'Singles') return hasJoinedTournamentChoice(event.id, 'Singles');
+    if (event.tournament_choice === 'Doubles') return hasJoinedTournamentChoice(event.id, 'Doubles');
+    return getJoinedChoices(event.id).has('Singles') && getJoinedChoices(event.id).has('Doubles');
+  };
 
   return {
     events,

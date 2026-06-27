@@ -1,5 +1,65 @@
 import { DrawConfig, RRConfig, RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
-import { PLAYER_LOADING, fallbackTemplate } from './utils';
+import { BYE, PLAYER_LOADING, fallbackTemplate } from './utils';
+
+// ── Zone-tier group formation ─────────────────────────────────────────────────
+
+export type ZoneTierGroup = {
+  label: string;
+  players: TournamentPlayer[];
+};
+
+/**
+ * Groups players by skill first, then zone — honoring the creator's chosen group size.
+ *
+ * Skill is the dominant criterion: players are ordered by skill (descending) so each group
+ * is a contiguous skill band. Zone is a *secondary* tiebreak so same-skill players who share
+ * a zone cluster together; it never forces a split. Groups are filled to exactly `groupSize`
+ * and the remainder lands in the last group ("fill to size, leftovers in last") — so 5
+ * players at size 5 stay one group of 5, and 12 at size 5 become [5, 5, 2].
+ *
+ * A trailing group of size < 2 produces no matches (`generateGroupPairings(1) === []`) and
+ * would silently drop the player, so it is merged back into the previous group. (Groups of
+ * 2 are allowed.)
+ *
+ * Labels carry a zone suffix: one distinct zone → that zone's name; multiple → "Mixed Zones".
+ * The letter is positional here but recomputed at render by `rrGroupLabels`.
+ */
+export function buildZoneTierGroups(
+  players: TournamentPlayer[],
+  zoneMap: Record<string, string>,
+  skillMap: Record<string, number>,
+  groupSize: 4 | 5,
+): ZoneTierGroup[] {
+  if (players.length === 0) return [];
+
+  const zoneOf = (p: TournamentPlayer) => (zoneMap[p.user_id] || '').trim();
+  const skillOf = (p: TournamentPlayer) => skillMap[p.user_id] ?? p.skillLevel ?? 0;
+
+  // Skill is dominant; zone clusters same-skill players; name keeps the order stable.
+  const sorted = [...players].sort((a, b) =>
+    skillOf(b) - skillOf(a) ||
+    zoneOf(a).localeCompare(zoneOf(b)) ||
+    a.name.localeCompare(b.name),
+  );
+
+  // Fill groups to exactly groupSize; the final slice holds the remainder.
+  const groups: TournamentPlayer[][] = [];
+  for (let i = 0; i < sorted.length; i += groupSize) {
+    groups.push(sorted.slice(i, i + groupSize));
+  }
+
+  // A trailing size-1 group can't produce a match → fold it into the previous group.
+  if (groups.length > 1 && groups[groups.length - 1].length < 2) {
+    const last = groups.pop()!;
+    groups[groups.length - 1].push(...last);
+  }
+
+  return groups.map((gp, i) => {
+    const zones = [...new Set(gp.map(zoneOf).filter(Boolean))];
+    const zoneLabel = zones.length === 1 ? zones[0] : 'Mixed Zones';
+    return { label: `Group ${String.fromCharCode(65 + i)} - ${zoneLabel}`, players: gp };
+  });
+}
 
 /**
  * Circle-method round-robin scheduling.
@@ -32,39 +92,6 @@ export function generateGroupPairings(n: number): [number, number][] {
 }
 
 /**
- * Distribute players into groups, targeting groupSize per group.
- * Ensures no group has fewer than 3 players.
- */
-export function distributePlayersIntoGroups(
-  players: TournamentPlayer[],
-  groupSize: 4 | 5,
-): TournamentPlayer[][] {
-  const n = players.length;
-  if (n < 3) return n > 0 ? [players] : [];
-
-  let numGroups = Math.max(1, Math.ceil(n / groupSize));
-
-  // Reduce groups until every group has ≥ 3 players
-  while (numGroups > 1) {
-    const baseSize = Math.floor(n / numGroups);
-    const minSize = baseSize; // last groups get baseSize, first groups get baseSize+1
-    if (minSize >= 3) break;
-    numGroups--;
-  }
-
-  const groups: TournamentPlayer[][] = [];
-  const base = Math.floor(n / numGroups);
-  const extras = n % numGroups;
-  let start = 0;
-  for (let g = 0; g < numGroups; g++) {
-    const size = base + (g < extras ? 1 : 0);
-    groups.push(players.slice(start, start + size));
-    start += size;
-  }
-  return groups;
-}
-
-/**
  * Build Firestore write objects for all matches in one group.
  */
 export function buildRRGroupMatchFields(params: {
@@ -72,12 +99,13 @@ export function buildRRGroupMatchFields(params: {
   drawKey: string;
   draw: DrawConfig;
   groupIndex: number;
+  groupLabel?: string;
   groupPlayers: TournamentPlayer[];
   pairings: [number, number][];
   advancementCount: number;
   started: boolean;
 }): Array<{ docId: string; fields: Record<string, unknown> }> {
-  const { eventId, drawKey, draw, groupIndex, groupPlayers, pairings, advancementCount, started } = params;
+  const { eventId, drawKey, draw, groupIndex, groupLabel, groupPlayers, pairings, advancementCount, started } = params;
 
   return pairings.map(([i1, i2], idx) => {
     const p1 = groupPlayers[i1] ?? null;
@@ -112,6 +140,7 @@ export function buildRRGroupMatchFields(params: {
         rr_group: groupIndex,
         rr_round: idx + 1,
         rr_advancement_count: advancementCount,
+        ...(groupLabel ? { rr_group_label: groupLabel } : {}),
         created_at: new Date().toISOString(),
       },
     };
@@ -120,7 +149,8 @@ export function buildRRGroupMatchFields(params: {
 
 /**
  * Compute standings for one group from its completed matches.
- * Primary sort: matchWins DESC. Secondary: points DESC (2 per real win, 1 per walkover).
+ * Scoring: 1 pt per game won + 5 pts per match win.
+ * Sort: points DESC → gamesWon DESC.
  */
 export function computeGroupStandings(
   groupMatches: TournamentMatch[],
@@ -131,37 +161,44 @@ export function computeGroupStandings(
     if (m.player_2_user_id) playerMap.set(m.player_2_user_id, m.player_2_name);
   }
 
-  const stats = new Map<string, { matchWins: number; matchLosses: number; points: number }>();
-  for (const uid of playerMap.keys()) stats.set(uid, { matchWins: 0, matchLosses: 0, points: 0 });
+  const stats = new Map<string, { matchWins: number; matchLosses: number; gamesWon: number; gamesLost: number; points: number }>();
+  for (const uid of playerMap.keys()) stats.set(uid, { matchWins: 0, matchLosses: 0, gamesWon: 0, gamesLost: 0, points: 0 });
 
   for (const m of groupMatches) {
     if (m.status !== 'complete' || !m.winner_user_id) continue;
     const winnerUid = m.winner_user_id;
-    const loserUid =
-      winnerUid === m.player_1_user_id ? m.player_2_user_id : m.player_1_user_id;
+    const loserUid = winnerUid === m.player_1_user_id ? m.player_2_user_id : m.player_1_user_id;
+
+    const p1Games = (m.set_1_player_1 ?? 0) + (m.set_2_player_1 ?? 0) + (m.set_3_player_1 ?? 0);
+    const p2Games = (m.set_1_player_2 ?? 0) + (m.set_2_player_2 ?? 0) + (m.set_3_player_2 ?? 0);
+    const winnerGames = winnerUid === m.player_1_user_id ? p1Games : p2Games;
+    const loserGames  = winnerUid === m.player_1_user_id ? p2Games : p1Games;
 
     const w = stats.get(winnerUid);
-    if (w) { w.matchWins++; w.points += m.walkover ? 1 : 2; }
+    if (w) { w.matchWins++; w.gamesWon += winnerGames; w.gamesLost += loserGames; }
     const l = stats.get(loserUid);
-    if (l) { l.matchLosses++; }
+    if (l) { l.matchLosses++; l.gamesWon += loserGames; l.gamesLost += winnerGames; }
   }
 
   const rows: RRStandingRow[] = [];
   for (const [userId, s] of stats) {
-    rows.push({ name: playerMap.get(userId) ?? '', userId, ...s, rank: 0 });
+    const points = s.gamesWon + s.matchWins * 5;
+    rows.push({ name: playerMap.get(userId) ?? '', userId, ...s, points, rank: 0 });
   }
-  rows.sort((a, b) => b.matchWins - a.matchWins || b.points - a.points);
+  rows.sort((a, b) => b.points - a.points || b.gamesWon - a.gamesWon);
   rows.forEach((r, i) => { r.rank = i + 1; });
   return rows;
 }
 
 /**
- * Select the players who advance to the knockout stage.
+ * Select the players who advance to the knockout stage, ordered for seeding.
  *
- * 1 group  → top 2
- * 2 groups → top advancementCount from each (seeded cross-group for SF)
- * 3 groups → top 2 from each (6) globally ranked → top 4
- * 4 groups → top 1 from each
+ * - 1 group → top 2 (a single-group knockout is just a final between the top two).
+ * - ≥2 groups → top `advancementCount` from each group. Ordered by rank-within-group
+ *   first (all group winners, then all runners-up, …) then by points → gamesWon, so the
+ *   strongest qualifiers seed highest. The caller (`buildRRKnockoutDocs`) sizes the bracket
+ *   to the next power of two and gives top seeds first-round byes — no truncation, so
+ *   "top 6", "top 10", etc. all flow into a 4/8/16/32 bracket.
  */
 export function selectAdvancingPlayers(
   allGroups: TournamentPlayer[][],
@@ -172,6 +209,7 @@ export function selectAdvancingPlayers(
     allGroups[groupIdx]?.find((p) => p.user_id === row.userId);
 
   const n = allGroups.length;
+  if (n === 0) return [];
 
   if (n === 1) {
     return standingsByGroup[0]
@@ -180,40 +218,20 @@ export function selectAdvancingPlayers(
       .filter((p): p is TournamentPlayer => !!p);
   }
 
-  if (n === 2) {
-    // Cross-seed: 1A vs 2B, 2A vs 1B → pass [1A, 2B, 2A, 1B] to fallbackTemplate(4)
-    // fallbackTemplate(4) creates SF m1=seed1 vs seed4, m2=seed3 vs seed2 → [1A vs 1B, 2A vs 2B]
-    // To avoid same-group SF, interleave: [1A, 1B, 2A, 2B]
-    const g0 = standingsByGroup[0].slice(0, advancementCount);
-    const g1 = standingsByGroup[1].slice(0, advancementCount);
-    const players: TournamentPlayer[] = [];
-    for (let rank = 0; rank < advancementCount; rank++) {
-      if (g0[rank]) { const p = lookup(0, g0[rank]); if (p) players.push(p); }
-      if (g1[rank]) { const p = lookup(1, g1[rank]); if (p) players.push(p); }
-    }
-    return players;
-  }
-
-  if (n === 3) {
-    // Top 2 from each → global rank → top 4
-    const candidates: (RRStandingRow & { gi: number })[] = [];
-    for (let g = 0; g < 3; g++) {
-      standingsByGroup[g].slice(0, 2).forEach((r) => candidates.push({ ...r, gi: g }));
-    }
-    candidates.sort((a, b) => b.matchWins - a.matchWins || b.points - a.points);
-    return candidates
-      .slice(0, 4)
-      .map((r) => lookup(r.gi, r))
-      .filter((p): p is TournamentPlayer => !!p);
-  }
-
-  // n === 4: top 1 from each group
-  return standingsByGroup
-    .flatMap((standings, g) => {
-      const top = standings[0];
-      const p = top ? lookup(g, top) : undefined;
-      return p ? [p] : [];
+  const candidates: Array<{ row: RRStandingRow; gi: number; rankInGroup: number }> = [];
+  for (let g = 0; g < n; g++) {
+    (standingsByGroup[g] ?? []).slice(0, advancementCount).forEach((row, rankInGroup) => {
+      candidates.push({ row, gi: g, rankInGroup });
     });
+  }
+  candidates.sort((a, b) =>
+    a.rankInGroup - b.rankInGroup ||
+    b.row.points - a.row.points ||
+    b.row.gamesWon - a.row.gamesWon,
+  );
+  return candidates
+    .map((c) => lookup(c.gi, c.row))
+    .filter((p): p is TournamentPlayer => !!p);
 }
 
 /**
@@ -229,26 +247,53 @@ export function buildRRKnockoutDocs(params: {
 }): Array<{ docId: string; fields: Record<string, unknown> }> {
   const { eventId, drawKey, draw, advancingPlayers, started } = params;
   const n = advancingPlayers.length;
-  const drawsize = n <= 2 ? 2 : 4;
+  // Round the bracket up to the next power of two (min 2, cap 32). Leftover top slots
+  // become BYEs so the highest seeds get a first-round bye.
+  const nextPow2 = (x: number) => { let s = 2; while (s < x) s *= 2; return Math.min(s, 32); };
+  const drawsize = nextPow2(Math.max(2, n));
   const template = fallbackTemplate(drawsize);
 
   const slotMap = new Map<number, TournamentPlayer>();
   advancingPlayers.forEach((p, i) => slotMap.set(i + 1, p));
 
-  return template.map((tm, index) => {
+  // Pre-compute first-round BYE advancements: when a first-round match has one seeded
+  // player and an empty numeric partner, the real player advances straight into the next
+  // round. Bake those seatings into the next-round docs so byes resolve at generation.
+  const advanceSeat = new Map<string, TournamentPlayer>();
+  template.forEach((tm) => {
+    if (!tm.next_match_id) return;
     const p1 = typeof tm.player_1 === 'number' ? (slotMap.get(tm.player_1) ?? null) : null;
     const p2 = typeof tm.player_2 === 'number' ? (slotMap.get(tm.player_2) ?? null) : null;
+    const real = (p1 && !p2 && typeof tm.player_2 === 'number') ? p1
+      : (!p1 && p2 && typeof tm.player_1 === 'number') ? p2 : null;
+    if (!real) return;
+    let nextSlot = (tm.next_slot || '') as 'player_1' | 'player_2' | '';
+    if (!nextSlot) {
+      const sibs = template
+        .filter((s) => s.next_match_id === tm.next_match_id)
+        .sort((a, b) => template.indexOf(a) - template.indexOf(b));
+      nextSlot = sibs.findIndex((s) => s.match_id === tm.match_id) <= 0 ? 'player_1' : 'player_2';
+    }
+    advanceSeat.set(`${tm.next_match_id}_${nextSlot}`, real);
+  });
 
-    const placeholder = (slot: number | string): string => {
-      if (typeof slot !== 'string') return PLAYER_LOADING;
-      const srcId = slot.toLowerCase().match(/winner\s+(.+)/)?.[1]?.trim();
-      if (!srcId) return PLAYER_LOADING;
-      const src = template.find((m) => m.match_id === srcId);
-      if (!src) return `Winner of ${srcId.toUpperCase()}`;
-      const sameRound = template.filter((m) => m.round === src.round);
-      const pos = sameRound.findIndex((m) => m.match_id === srcId) + 1;
-      return `Winner of ${src.round}${pos}`;
-    };
+  const placeholder = (slot: number | string): string => {
+    if (typeof slot === 'number') return BYE; // numeric slot with no seeded player → BYE
+    const srcId = slot.toLowerCase().match(/winner\s+(.+)/)?.[1]?.trim();
+    if (!srcId) return PLAYER_LOADING;
+    const src = template.find((m) => m.match_id === srcId);
+    if (!src) return `Winner of ${srcId.toUpperCase()}`;
+    const sameRound = template.filter((m) => m.round === src.round);
+    const pos = sameRound.findIndex((m) => m.match_id === srcId) + 1;
+    return `Winner of ${src.round}${pos}`;
+  };
+
+  return template.map((tm, index) => {
+    let p1 = typeof tm.player_1 === 'number' ? (slotMap.get(tm.player_1) ?? null) : null;
+    let p2 = typeof tm.player_2 === 'number' ? (slotMap.get(tm.player_2) ?? null) : null;
+    // Apply baked bye advancement into this (next-round) match's slots.
+    p1 = advanceSeat.get(`${tm.match_id}_player_1`) ?? p1;
+    p2 = advanceSeat.get(`${tm.match_id}_player_2`) ?? p2;
 
     return {
       docId: `${eventId}_${drawKey}_rr_ko_${tm.match_id}`,

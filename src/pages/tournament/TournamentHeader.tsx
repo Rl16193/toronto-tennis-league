@@ -57,7 +57,7 @@ export const TournamentHeader: React.FC<Props> = ({
     </div>
   );
 
-  const mergeDropdown = !started && currentDrawFormat === 'bracket' && (
+  const mergeDropdown = !started && (currentDrawFormat === 'bracket' || currentDrawFormat === 'rr') && (
     <div className="relative">
       <Button
         variant={anyMergeActive ? 'clay' : 'outline'}
@@ -129,7 +129,7 @@ export const TournamentHeader: React.FC<Props> = ({
             <Button variant={editMode ? 'danger' : 'outline'} onClick={onToggleEdit} className="w-full text-xs px-2">
               {editMode ? <><X className="w-3.5 h-3.5 mr-1 shrink-0" />Done</> : <><Pencil className="w-3.5 h-3.5 mr-1 shrink-0" />Edit</>}
             </Button>
-            {!started && currentDrawFormat === 'bracket' ? (
+            {!started && (currentDrawFormat === 'bracket' || currentDrawFormat === 'rr') ? (
               <div className="relative w-full">
                 <Button
                   variant={anyMergeActive ? 'clay' : 'outline'}

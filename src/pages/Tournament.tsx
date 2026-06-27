@@ -13,6 +13,7 @@ import { TournamentHeader } from './tournament/TournamentHeader';
 import { OpponentCard } from './tournament/OpponentCard';
 import { DrawTabs } from './tournament/DrawTabs';
 import { ScoreModal } from './tournament/ScoreModal';
+import { PendingScoresPanel } from './tournament/PendingScoresPanel';
 import { AddPlayerPanel } from './tournament/AddPlayerPanel';
 import { RoundRobinView } from './tournament/RoundRobinView';
 import { RRConfigModal } from './tournament/RRConfigModal';
@@ -89,12 +90,12 @@ export const Tournament: React.FC = () => {
 
   const {
     authLoading, loading, user,
-    event, matches,
+    event, matches, participants,
     allTournamentEvents,
-    isCreator, started, userParticipant,
+    isCreator, started, userParticipant, zoneMap,
     currentDraw, currentMatches, displayMatches, visibleDraws,
     opponent, nextMatchOpponents,
-    editPlayers, reservesPlayers, currentDrawAllPlayers, currentDrawSize, skillMismatchedCount,
+    editPlayers, reservesPlayers, currentDrawAllPlayers, currentDrawSize,
     message, scoreForm, scoreFormMatch, setScoreForm,
     generating, resettingDraw, editMode, setEditMode,
     mergeMensSingles, setMergeMensSingles,
@@ -105,17 +106,22 @@ export const Tournament: React.FC = () => {
     handleUpdateRoundDeadline, handleSetPreviewDrawSize, handleAddPlayer,
     handleGenerateAll, handleResetDraw,
     handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
+    pendingSubmissions, pendingMatchIds, handleConfirmSubmission, handleRejectSubmission,
     currentReservesMatches, llDrawDisplayMatches, currentLLSize, allUsersAsTournamentPlayers,
     showReserves, setShowReserves, generatingReserves,
     handleSetLLDrawSize, handleGenerateReservesDraw, handleResetLLDraw,
-    submissions,
     currentDrawFormat, drawFormat,
     showRRConfig, setShowRRConfig, generatingRR,
     rrGroups, previewRRGroups, userRRGroup, rrStandingsByGroup, rrGroupMatches, rrKnockoutMatches, rrKnockoutReady, rrConfig,
-    handleGenerateRR, handleResetRR, handleGenerateRRKnockout,
+    rrGroupLabels, rrGroupIndices,
+    handleGenerateRR, handleResetRR, handleGenerateRRKnockout, handleSaveGroupEdit, handleMoveRRPlayer,
   } = useTournament(eventId);
 
-  useEffect(() => { document.title = 'Matches — Racquets & Strings'; }, []);
+  useEffect(() => {
+    document.title = event?.title
+      ? `${event.title} — Racquets & Strings`
+      : 'Matches — Racquets & Strings';
+  }, [event?.title]);
 
   // Sync tab param into state
   useEffect(() => {
@@ -210,14 +216,24 @@ export const Tournament: React.FC = () => {
         </AlertMessage>
       )}
 
-      {currentDrawFormat === 'rr' && userRRGroup && user ? (
-        <RROpponentPanel
-          group={userRRGroup}
-          userId={user.uid}
-          isDoubles={rrGroupMatches[0]?.tournament_choice === 'Doubles'}
+      {isCreator && (
+        <PendingScoresPanel
+          submissions={pendingSubmissions}
+          onConfirm={handleConfirmSubmission}
+          onReject={handleRejectSubmission}
         />
+      )}
+
+      {currentDrawFormat === 'rr' ? (
+        userRRGroup && user && (
+          <RROpponentPanel
+            group={userRRGroup}
+            userId={user.uid}
+            isDoubles={rrGroupMatches[0]?.tournament_choice === 'Doubles'}
+          />
+        )
       ) : (
-        opponent && <OpponentCard opponent={opponent} nextMatchOpponents={nextMatchOpponents} />
+        currentMatches.length > 0 && opponent && <OpponentCard opponent={opponent} nextMatchOpponents={nextMatchOpponents} />
       )}
 
       <DrawTabs
@@ -273,6 +289,8 @@ export const Tournament: React.FC = () => {
               onEditPlayer={handleEditPlayer}
               isCreator={isCreator}
               onSubmitScore={handleOpenScoreForm}
+              currentUserId={user?.uid}
+              pendingMatchIds={pendingMatchIds}
               roundDeadlines={event?.round_deadlines}
               onUpdateDeadline={isCreator ? handleUpdateRoundDeadline : undefined}
             />
@@ -308,16 +326,23 @@ export const Tournament: React.FC = () => {
           {currentDrawFormat === 'rr' ? (
             <RoundRobinView
               groups={rrGroups.length > 0 ? rrGroups : previewRRGroups}
+              groupLabels={rrGroups.length > 0 ? rrGroupLabels : previewRRGroups.map((_, i) => `Group ${String.fromCharCode(65 + i)}`)}
+              groupIndices={rrGroupIndices}
               standingsByGroup={rrGroups.length > 0 ? rrStandingsByGroup : previewRRGroups.map(() => [])}
               groupMatches={rrGroupMatches}
               knockoutMatches={rrKnockoutMatches}
               advancementCount={rrConfig?.advancementCount ?? 1}
               isCreator={isCreator}
+              isParticipant={!!userParticipant}
+              isPastEvent={pageTab === 'past'}
               editMode={editMode}
               editPlayers={editPlayers}
               onEditPlayer={handleEditPlayer}
               onSubmitScore={handleOpenScoreForm}
-              submissions={submissions}
+              currentUserId={user?.uid}
+              pendingMatchIds={pendingMatchIds}
+              onSaveGroupEdit={handleSaveGroupEdit}
+              onMoveRRPlayer={handleMoveRRPlayer}
               rrKnockoutReady={rrKnockoutReady}
               generatingKnockout={generatingRR}
               onGenerateKnockout={handleGenerateRRKnockout}
@@ -334,6 +359,8 @@ export const Tournament: React.FC = () => {
                 onEditPlayer={handleEditPlayer}
                 isCreator={isCreator}
                 onSubmitScore={handleOpenScoreForm}
+                currentUserId={user?.uid}
+                pendingMatchIds={pendingMatchIds}
                 roundDeadlines={event?.round_deadlines}
                 onUpdateDeadline={isCreator ? handleUpdateRoundDeadline : undefined}
               />
@@ -388,7 +415,7 @@ export const Tournament: React.FC = () => {
           onChange={setScoreForm}
           onClose={() => setScoreForm(null)}
           onSubmit={handleSubmitScore}
-          isCreatorSubmit={true}
+          isCreatorSubmit={isCreator}
         />
       )}
 

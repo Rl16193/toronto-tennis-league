@@ -15,42 +15,6 @@ export const Home: React.FC = () => {
 
   useEffect(() => {
     document.title = 'Racquets & Strings';
-
-    // JSON-LD Organization schema for Google
-    const schema = document.createElement('script');
-    schema.id = 'org-schema';
-    schema.type = 'application/ld+json';
-    schema.text = JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'SportsOrganization',
-      name: 'Racquets & Strings',
-      url: 'https://racquetsandstrings.ca',
-      logo: 'https://racquetsandstrings.ca/logo.png',
-      sport: 'Tennis',
-      description: "Toronto's Tennis Community — join events, play competitive matches, track results and connect with other players.",
-      areaServed: {
-        '@type': 'City',
-        name: 'Toronto',
-        containedInPlace: { '@type': 'Country', name: 'Canada' },
-      },
-      address: {
-        '@type': 'PostalAddress',
-        addressLocality: 'Toronto',
-        addressRegion: 'ON',
-        addressCountry: 'CA',
-      },
-      contactPoint: {
-        '@type': 'ContactPoint',
-        email: 'tenniscommunity.tbtc@gmail.com',
-        contactType: 'customer support',
-      },
-      sameAs: ['https://www.instagram.com/racquetsnstrings.to/'],
-    });
-    const existing = document.getElementById('org-schema');
-    if (existing) existing.replaceWith(schema);
-    else document.head.appendChild(schema);
-
-    return () => { document.getElementById('org-schema')?.remove(); };
   }, []);
 
   useEffect(() => {

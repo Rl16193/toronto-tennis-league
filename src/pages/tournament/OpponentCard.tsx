@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 export type OpponentRow = {
   round: string;
@@ -92,11 +93,23 @@ const MobileCard: React.FC<{ row: OpponentRow; isPotential?: boolean }> = ({ row
 
 export const OpponentCard: React.FC<Props> = ({ opponent, nextMatchOpponents }) => {
   const hasPotential = nextMatchOpponents.length > 0;
+  const [open, setOpen] = useState(false);
 
   return (
     <div className="mb-6">
-      <p className="text-xs uppercase tracking-widest text-white/50 font-bold mb-3">Your Matches</p>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between mb-3 group"
+      >
+        <span className="text-xs uppercase tracking-widest text-white/50 font-bold">Your Matches</span>
+        {open
+          ? <ChevronUp className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors" />
+          : <ChevronDown className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors" />}
+      </button>
 
+      {open && (
+      <>
       {/* ── Mobile: stacked cards (hidden on sm+) ── */}
       <div className="flex flex-col gap-3 sm:hidden">
         <MobileCard row={opponent} />
@@ -134,6 +147,8 @@ export const OpponentCard: React.FC<Props> = ({ opponent, nextMatchOpponents }) 
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 };

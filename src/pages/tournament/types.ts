@@ -1,6 +1,6 @@
 export type DrawTab = 'mens' | 'womens' | 'doubles';
 export type SkillGroup = 'Challengers' | 'Masters' | 'All';
-export type MatchStatus = 'pending' | 'complete' | 'flagged';
+export type MatchStatus = 'pending' | 'complete';
 
 export type TemplateMatch = {
   match_id: string;
@@ -17,6 +17,8 @@ export type TournamentPlayer = {
   contact: string;
   preferredContact: 'email' | 'phone';
   participantId: string;
+  skillLevel?: number;
+  preferredCourts?: string[];
 };
 
 export type TournamentMatch = {
@@ -56,6 +58,7 @@ export type TournamentMatch = {
   rr_group?: number;
   rr_round?: number;
   rr_advancement_count?: number;
+  rr_group_label?: string;
   walkover?: boolean;
 };
 
@@ -76,6 +79,21 @@ export type ScoreForm = {
   sets: Array<{ mine: string; opponent: string }>;
 };
 
+// A player-submitted score awaiting the creator's confirmation (collection: score_submissions).
+export type ScoreSubmissionDoc = ScoreSubmission & {
+  id: string;
+  event_id: string;
+  match_id: string;
+  match_round: string;
+  draw_label: string;
+  player_1_name: string;
+  player_2_name: string;
+  submitted_by: string;
+  submitted_by_name: string;
+  is_walkover: boolean;
+  created_at: string;
+};
+
 export type TournamentFormat = 'bracket' | 'rr';
 
 export type RRConfig = {
@@ -88,6 +106,8 @@ export type RRStandingRow = {
   userId: string;
   matchWins: number;
   matchLosses: number;
+  gamesWon: number;
+  gamesLost: number;
   points: number;
   rank: number;
 };
@@ -98,15 +118,4 @@ export type DrawConfig = {
   tournamentChoice: 'Singles' | 'Doubles';
   division: string;
   skillGroup: SkillGroup;
-};
-
-export type ReservesParticipant = {
-  id: string;
-  user_id: string;
-  user_name: string;
-  event_id: string;
-  division: string;
-  tournament_choice: 'Singles' | 'Doubles';
-  skill: number;
-  createdAt: string;
 };

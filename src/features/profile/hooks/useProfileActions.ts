@@ -3,7 +3,7 @@ import { reload } from 'firebase/auth';
 import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
-import { updateUserInfo, updateSkills, updateAvailability, changeEmail, linkGoogleAccount, removeEventParticipant, updateEventParticipantDates } from '../services/profileService';
+import { updateUserInfo, updateSkills, updateAvailability, changeEmail, removeEventParticipant, updateEventParticipantDates } from '../services/profileService';
 
 export const useProfileActions = () => {
   const { user, refreshProfile } = useAuth();
@@ -15,61 +15,33 @@ export const useProfileActions = () => {
     setTimeout(() => setMessage({ text: '', type: 'success' }), type === 'success' ? 3000 : 4000);
   };
 
+  const withProfileUpdate = async (fn: () => Promise<void>): Promise<boolean> => {
+    if (!user) return false;
+    setUpdateLoading(true);
+    try {
+      await fn();
+      await refreshProfile();
+      showMessage('Profile updated successfully!', 'success');
+      return true;
+    } catch (error: any) {
+      showMessage(error.message || 'Could not update your profile. Please try again.', 'error');
+      return false;
+    } finally {
+      setUpdateLoading(false);
+    }
+  };
+
   const handleUpdateInfo = async (name: string, phone: string) => {
-    if (!user) return false;
-    if (name.trim().length < 3 || name.length > 80) {
-      showMessage('Name must be 3–80 characters.', 'error');
-      return false;
-    }
-    if (/\d/.test(name)) {
-      showMessage('Name cannot contain numbers.', 'error');
-      return false;
-    }
-    setUpdateLoading(true);
-    try {
-      await updateUserInfo(user.uid, name, phone);
-      await refreshProfile();
-      showMessage('Profile updated successfully!', 'success');
-      return true;
-    } catch (error: any) {
-      showMessage(error.message || 'Could not update your profile. Please try again.', 'error');
-      return false;
-    } finally {
-      setUpdateLoading(false);
-    }
+    if (name.trim().length < 3 || name.length > 80) { showMessage('Name must be 3–80 characters.', 'error'); return false; }
+    if (/\d/.test(name)) { showMessage('Name cannot contain numbers.', 'error'); return false; }
+    return withProfileUpdate(() => updateUserInfo(user!.uid, name, phone));
   };
 
-  const handleUpdateSkills = async (skillLevel: number, tournamentPreference: string) => {
-    if (!user) return false;
-    setUpdateLoading(true);
-    try {
-      await updateSkills(user.uid, skillLevel, tournamentPreference);
-      await refreshProfile();
-      showMessage('Profile updated successfully!', 'success');
-      return true;
-    } catch (error: any) {
-      showMessage(error.message || 'Could not update your profile. Please try again.', 'error');
-      return false;
-    } finally {
-      setUpdateLoading(false);
-    }
-  };
+  const handleUpdateSkills = (skillLevel: number, tournamentPreference: string) =>
+    withProfileUpdate(() => updateSkills(user!.uid, skillLevel, tournamentPreference));
 
-  const handleUpdateAvailability = async (availabilityDay: string[], availabilityTime: string[], preferredCourts: string[], favouritePlayers: string[]) => {
-    if (!user) return false;
-    setUpdateLoading(true);
-    try {
-      await updateAvailability(user.uid, availabilityDay, availabilityTime, preferredCourts, favouritePlayers);
-      await refreshProfile();
-      showMessage('Profile updated successfully!', 'success');
-      return true;
-    } catch (error: any) {
-      showMessage(error.message || 'Could not update your profile. Please try again.', 'error');
-      return false;
-    } finally {
-      setUpdateLoading(false);
-    }
-  };
+  const handleUpdateAvailability = (availabilityDay: string[], availabilityTime: string[], preferredCourts: string[], favouritePlayers: string[], preferredZone?: string) =>
+    withProfileUpdate(() => updateAvailability(user!.uid, availabilityDay, availabilityTime, preferredCourts, favouritePlayers, preferredZone));
 
   const handleChangeEmail = async (newEmail: string, password: string) => {
     if (!user) return;
@@ -106,28 +78,6 @@ export const useProfileActions = () => {
         showMessage('Your email is not verified yet. Please complete verification and try again.', 'error');
       } else {
         showMessage('Unable to refresh your email verification. Please try again.', 'error');
-      }
-    }
-  };
-
-  const handleLinkGoogle = async () => {
-    if (!user) return;
-    try {
-      await linkGoogleAccount(user);
-      await refreshProfile();
-      showMessage('Google account linked successfully.', 'success');
-    } catch (error: any) {
-      const code = (error?.code || error?.message || '').toString().toLowerCase();
-      if (code.includes('popup-closed-by-user')) {
-        showMessage('Google sign-in was cancelled.', 'error');
-      } else if (code.includes('provider-already-linked')) {
-        showMessage('Your Google account is already connected.', 'error');
-      } else if (code.includes('credential-already-in-use') || code.includes('account-exists-with-different-credential')) {
-        showMessage('That Google account is already linked to another account.', 'error');
-      } else if (code.includes('requires-recent-login')) {
-        showMessage('Please sign out and sign back in to connect Google.', 'error');
-      } else {
-        showMessage('Unable to connect Google. Please try again.', 'error');
       }
     }
   };
@@ -190,7 +140,6 @@ export const useProfileActions = () => {
       updateAvailability: handleUpdateAvailability,
       changeEmail: handleChangeEmail,
       refreshEmailChange: handleRefreshEmailChange,
-      linkGoogle: handleLinkGoogle,
       removeEvent: (participantId: string, eventId: string) => handleRemoveEvent(participantId, eventId),
       updateEventDates: handleUpdateEventDates,
     },

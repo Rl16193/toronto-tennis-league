@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
+import { setAnalyticsUser, clearAnalyticsUser } from '../lib/analytics';
 import { ensureUserProfileDocuments } from '../lib/profileBootstrap';
 import { UserProfile, UserData, UserStats, UserPreferences } from '../types';
 
@@ -69,11 +70,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           userData.email = activeUser.email;
         }
 
+        const stats = statsDoc.data() as UserStats;
+        const preferences = preferencesDoc.data() as UserPreferences;
         setProfile({
           id: activeUser.uid,
           user: userData,
-          stats: statsDoc.data() as UserStats,
-          preferences: preferencesDoc.data() as UserPreferences,
+          stats,
+          preferences,
+        });
+        // GA4 non-PII user properties for segmentation (User-ID set in onAuthStateChanged).
+        setAnalyticsUser(activeUser.uid, {
+          skill_level: stats.skill_level,
+          membership_status: preferences.event_creator ? 'organizer' : 'member',
         });
         updateDoc(doc(db, 'users', activeUser.uid), { lastActive: serverTimestamp() }).catch(() => {});
       }
@@ -88,8 +96,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
+        setAnalyticsUser(currentUser.uid);
         await refreshProfile(currentUser);
       } else {
+        clearAnalyticsUser();
         setProfile(null);
         setProfileError(null);
       }

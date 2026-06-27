@@ -9,6 +9,7 @@ import { useEvents } from '../features/events/hooks/useEvents';
 import { useJoin } from '../features/events/hooks/useJoin';
 import { EventCard } from '../features/events/components/EventCard';
 import { CreatorEventModal } from '../features/events/components/CreatorEventModal';
+import { track } from '../lib/analytics';
 
 export const Events: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
@@ -41,6 +42,7 @@ export const Events: React.FC = () => {
     if (event) {
       setExpandedEventId(event.id);
       setSelectedEvent(event);
+      track('select_content', { content_type: 'tennis_event', content_id: event.id });
     } else {
       setExpandedEventId(null);
       setSelectedEvent(null);

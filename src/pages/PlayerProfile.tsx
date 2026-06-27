@@ -113,7 +113,8 @@ export const PlayerProfile: React.FC = () => {
 
   const hasAvailability =
     (preferences?.availability_day?.length ?? 0) > 0 ||
-    (preferences?.availability_time?.length ?? 0) > 0;
+    (preferences?.availability_time?.length ?? 0) > 0 ||
+    (preferences?.preferred_courts?.length ?? 0) > 0;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -276,6 +277,19 @@ export const PlayerProfile: React.FC = () => {
           <h2 className="text-xl font-black text-white mb-5">
             Availability
           </h2>
+
+          {(preferences?.preferred_courts?.length ?? 0) > 0 && (
+            <div className="mb-4">
+              <p className="text-xs uppercase tracking-widest text-white font-bold mb-2">
+                Preferred Courts
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {preferences!.preferred_courts.map((c) => (
+                  <Chip key={c} label={c} />
+                ))}
+              </div>
+            </div>
+          )}
 
           {(preferences?.availability_day?.length ?? 0) > 0 && (
             <div className="mb-4">

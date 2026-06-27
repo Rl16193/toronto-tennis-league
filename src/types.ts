@@ -31,6 +31,7 @@ export interface UserPreferences {
   favourite_players: string[];
   scheduling_preference: 'I will schedule matches on my own' | 'Tell me more about matchdays';
   event_creator: boolean;
+  preferred_zone: string;
 }
 
 // Combined for convenience in app

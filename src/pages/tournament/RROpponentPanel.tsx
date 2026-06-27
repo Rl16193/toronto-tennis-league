@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { TournamentPlayer } from './types';
 import { formatPlayerName } from './utils';
 
@@ -11,12 +12,24 @@ type Props = {
 
 export const RROpponentPanel: React.FC<Props> = ({ group, userId, isDoubles }) => {
   const others = group.filter((p) => p.user_id !== userId);
+  const [open, setOpen] = useState(false);
   if (others.length === 0) return null;
 
   return (
     <div className="mb-6">
-      <p className="text-xs uppercase tracking-widest text-white/50 font-bold mb-3">Your Group</p>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between mb-3 group"
+      >
+        <span className="text-xs uppercase tracking-widest text-white/50 font-bold">Your Group</span>
+        {open
+          ? <ChevronUp className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors" />
+          : <ChevronDown className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors" />}
+      </button>
 
+      {open && (
+      <>
       {/* Mobile: stacked cards */}
       <div className="flex flex-col gap-3 sm:hidden">
         {others.map((p) => (
@@ -82,6 +95,8 @@ export const RROpponentPanel: React.FC<Props> = ({ group, userId, isDoubles }) =
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 };
