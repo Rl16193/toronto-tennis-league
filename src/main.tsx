@@ -16,6 +16,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 
   componentDidCatch(error: unknown, info: ErrorInfo) {
     console.error('Unhandled error:', error, info);
+    const meta = document.querySelector('meta[name="robots"]');
+    if (meta) meta.setAttribute('content', 'noindex');
   }
 
   render() {

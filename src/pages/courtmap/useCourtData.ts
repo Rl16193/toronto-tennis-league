@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getDocs, collection } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import type { CourtWithCount, TennisProgram, PickleballOnlyCourt, CsvCourt } from './courtMapTypes';
+import type { CourtWithCount, TennisProgram, PickleballOnlyCourt, CsvCourt } from './courtMapUtils';
 import { parseCourts, parsePrograms, getPickleballMappings, matchCourtName, NINETY_DAYS_MS } from './courtMapUtils';
 
 const fetchCsv = async (url: string): Promise<string> => {

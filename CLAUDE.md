@@ -12,7 +12,8 @@ npm run hosting:deploy   # build + firebase deploy --only hosting
 npm run hosting:preview  # build + deploy to a preview channel
 
 # Export Firestore collections to CSV (requires serviceAccount.json in project root)
-node scripts/export-firestore.js
+# Lives in the gitignored, local-only analysis/ folder (data dumps contain user PII)
+node analysis/export-firestore.js --key serviceAccount.json
 
 # Place RR late joiners into groups (EOD automation; Admin SDK, requires serviceAccount.json)
 npm run regroup:rr              # add --dry-run via: node scripts/regroup-rr.js --key serviceAccount.json --dry-run
@@ -46,15 +47,17 @@ Draw document IDs follow the pattern: `{eventId}_{drawKey}_{matchId}` where `dra
 ### Round Robin (`rrGeneration.ts`)
 Events with `tournament_format === 'rr'` use group-stage + knockout instead of a single bracket.
 
-**Group formation (`buildZoneTierGroups`)** is **skill-first, size-honoring**: players are ordered by skill descending (zone is only a secondary tiebreak so same-skill players who share a zone cluster), then filled into groups of exactly the creator-selected size, with the remainder in the last group ("fill to size, leftovers in last"). 5 players at size 5 → one group of 5; 12 at size 5 → [5,5,2]. A trailing size-1 group is merged back (it would generate no matches and drop the player). The label's zone suffix is the group's single distinct zone, or **"Mixed Zones"** when zones differ. **Do not** reintroduce a hidden skill-tier sub-split (the old Beginner/Intermediate/Advanced `getTier`) — it overrode the creator's group size and was the cause of the 3+2 bug. Group letters are positional at render (`rrGroupLabels`); the stored `rr_group_label` only supplies the zone suffix. The preview (`previewRRGroups`) uses the same function so it matches the generated draw.
+**Group formation (`buildZoneTierGroups`)** is **skill-band × zone, auto-sized**. Players are bucketed by skill band (`skillBand` in `utils.ts`: Beginners 2–2.5, Challengers 3–3.5, Masters 4–5) and then by preferred-court zone; each bucket is split by `splitEvenly(n)` — `g = ceil(n/5)` balanced groups of 3–5 (5→[5], 6→[3,3], 7→[4,3], 8→[4,4], 9→[5,4], 10→[5,5], 11→[4,4,3], 12→[4,4,4]). A draw with **≤5 total players is one group** (zone/band ignored). A lone player in a distinct zone becomes their own placeholder group **only when the draw already has >3 zone-clustered groups**; otherwise the band's players are pooled (ordered by zone) and split, folding the singleton in. Labels are `Group X · Band · Zone`, dropping the zone segment when unassigned/mixed. Group letters are positional at render (`rrGroupLabels`); a creator-renamed label (`rr_label_custom`) is shown verbatim. The preview (`previewRRGroups`) uses the same function so it matches the generated draw. NOTE: the skill-band sub-split is intentional (it supersedes the old "no `getTier`" rule); the **size algorithm is authoritative** and is never overridden by band boundaries, so the old 3+2 bug can't recur.
 
 **Merge** — Masters + Challengers can be merged into one RR draw via the same "Merge Draws" toggle used for brackets (a merged draw has `skillGroup: 'All'`, which collects all skill levels).
 
-**Editing groups (creator)** — `handleSaveGroupEdit` rewrites one group; `handleMoveRRPlayer` does a **true move** of a player between two groups (rebuilding both in one batch). Emptying a group dissolves it; a group left with one player keeps a placeholder match so the lone player stays visible and movable (never silently dropped). Moves into/out of a group with a played match are refused.
+**Participant visibility** — a participant sees **both skill draws in their own division** (Challengers + Masters for their gender; doubles → their own division), read-only. Creators see all draws. (`visibleDraws` in `useTournament.ts`.)
 
-**Late joiners** — unlike knockout draws, **RR accepts registration after the draw is generated** (`slotStatus` in `useJoin.ts` is bypassed for RR); they are NOT sent to the reserves/LL draw. The EOD script `scripts/regroup-rr.js` (Admin SDK) places them: **fill the most incomplete group first** (below target size, closest skill, matching zone, no played matches) else form new skill-first groups for the overflow. Groups with played matches are never touched. The script duplicates the pure helpers from `rrGeneration.ts`/`utils.ts` — keep them in sync.
+**Editing groups (creator)** — `handleSaveGroupEdit` rewrites one group; `handleRenameGroup` sets a custom label; `handleCreateRRGroup` spins up a new group from unplaced players ("Add Group"); `handleMoveRRPlayer` does a **true move** of a player between two groups — including **across the sibling skill draw** (Challengers ↔ Masters, same gender) via the optional `targetDraw` arg, rewriting the player into that draw's `drawKey`/`skill_group`. Emptying a group dissolves it; a group left with one player keeps a placeholder match so the lone player stays visible and movable (never silently dropped). Moves into/out of a group with a played match are refused.
 
-The RR knockout stage auto-sizes to the next power of two (`buildRRKnockoutDocs`) with byes for top seeds.
+**Knockout** — every group winner advances, then the best second-place players (by points → gamesWon) fill up to the next 4/8/16 bracket (`selectAdvancingPlayers`; e.g. 5 groups → 5 winners + 3 best runners-up → 8-player draw). `buildRRKnockoutDocs` sizes to the next power of two; a full field needs no byes.
+
+**Late joiners** — unlike knockout draws, **RR accepts registration after the draw is generated** (`slotStatus` in `useJoin.ts` is bypassed for RR); they are NOT sent to the reserves/LL draw. The EOD script `scripts/regroup-rr.js` (Admin SDK) places them: groups with **4–5 players (or any played group) are locked**; only groups with **≤3 players** accept a joiner, needing a matching band (zone preferred), else the overflow forms new `(band, zone)` groups via `splitEvenly`. Groups with played matches are never touched. The script duplicates the pure helpers from `rrGeneration.ts`/`utils.ts` — keep them in sync.
 
 ### Stats data flow (read before changing)
 One source writes to `stats/{userId}` at runtime:

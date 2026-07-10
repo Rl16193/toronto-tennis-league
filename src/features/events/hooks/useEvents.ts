@@ -45,12 +45,16 @@ export function useEvents() {
     });
   }, [user]);
 
+  const allDisplayableEvents = useMemo(
+    () => events.filter((e) => !isTopspinMeetupEvent(e) && !isWeekendMatchdaysEvent(e)),
+    [events],
+  );
+
   const visibleEvents = useMemo(() => {
     const now = Date.now();
-    return events.filter((e) => {
-      if (isTopspinMeetupEvent(e) || isWeekendMatchdaysEvent(e)) return false;
-      // Hide if end date has passed
-      const rawEnd = (e as unknown as Record<string, unknown>).endDate ?? (e as unknown as Record<string, unknown>).end_date;
+    return allDisplayableEvents.filter((e) => {
+      const raw = e as unknown as Record<string, unknown>;
+      const rawEnd = raw.endDate ?? raw.end_date;
       if (rawEnd) {
         let endMs: number | null = null;
         if (typeof rawEnd === 'string') endMs = new Date(rawEnd).getTime();
@@ -61,9 +65,8 @@ export function useEvents() {
         }
         if (endMs !== null && endMs < now) return false;
       }
-      // Hide non-tournament events whose start date has passed
       if (!isTournamentEvent(e)) {
-        const rawStart = (e as unknown as Record<string, unknown>).startDate ?? (e as unknown as Record<string, unknown>).start_date ?? (e as unknown as Record<string, unknown>).date;
+        const rawStart = raw.startDate ?? raw.start_date ?? raw.date;
         if (rawStart) {
           let startMs: number | null = null;
           if (typeof rawStart === 'string') startMs = new Date(rawStart).getTime();
@@ -77,7 +80,7 @@ export function useEvents() {
       }
       return true;
     });
-  }, [events]);
+  }, [allDisplayableEvents]);
 
   const getJoinedChoices = (eventId: string) =>
     new Set(joinedRegistrations.filter((r) => r.eventId === eventId && r.tournamentChoice).map((r) => r.tournamentChoice));
@@ -103,6 +106,7 @@ export function useEvents() {
     setEvents: (updater: (prev: DisplayEvent[]) => DisplayEvent[]) =>
       setEvents((prev) => sortEventsByStartDate(updater(prev))),
     loading,
+    allDisplayableEvents,
     visibleEvents,
     getJoinedChoices,
     hasJoinedRegularEvent,

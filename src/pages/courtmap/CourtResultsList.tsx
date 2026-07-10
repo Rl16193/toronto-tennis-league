@@ -1,6 +1,6 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
-import type { NearestCourt, CourtWithCount } from './courtMapTypes';
+import type { NearestCourt, CourtWithCount } from './courtMapUtils';
 import { Badge, PickleballBadges } from './courtMapComponents';
 import { formatDist, hasPublicHours } from './courtMapUtils';
 
@@ -12,7 +12,7 @@ interface Props {
   onSelectCourt: (court: CourtWithCount) => void;
 }
 
-export const CourtResultsList: React.FC<Props> = ({ courts, totalCourts, loading, userCoords, onSelectCourt }) => {
+export const CourtResultsList: React.FC<Props> = ({ courts, loading, userCoords, onSelectCourt }) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-32">
@@ -23,11 +23,6 @@ export const CourtResultsList: React.FC<Props> = ({ courts, totalCourts, loading
 
   return (
     <>
-      <div className="px-4 py-1.5 border-b border-white/5">
-        <span className="text-white/40 text-[11px]">
-          Showing {courts.length} of {totalCourts} courts
-        </span>
-      </div>
       {courts.length === 0 ? (
         <p className="text-white/40 text-sm text-center py-8">No courts match the current filters.</p>
       ) : (

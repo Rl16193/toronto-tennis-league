@@ -15,7 +15,7 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import {
   Trophy, MapPin, CheckCircle2, ChevronRight, ArrowRight,
-  AlertCircle, Info, Star, Calendar, Clock,
+  AlertCircle, Info, Star, Calendar,
   Eye, EyeOff, Chrome,
 } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -23,6 +23,7 @@ import { UserData, UserStats, UserPreferences } from '../types';
 import mailcheck from 'mailcheck';
 import { defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts, getCourtSuggestions, mergeCourtOptions } from '../features/signup/utils/courtSearch';
 import { getZoneWithBorderCheck } from '../utils/zones';
+import { DAY_CODES, DAY_LABELS, gridToLegacy, type AvailabilityGrid, type TimeSlot } from '../utils/availability';
 import { getSignupErrorMessage, signupEmailRegex, emailExistsForSignup } from '../features/signup/signupValidation';
 import { getAuthErrorMessage } from '../features/auth/authMessages';
 import { useGoogleSignIn } from '../features/auth/useGoogleSignIn';
@@ -82,8 +83,7 @@ export const Signup: React.FC = () => {
     customCourtEntry: '',
     favouritePlayers: [] as string[],
     customPlayerEntry: '',
-    availabilityDay: [] as string[],
-    availabilityTime: [] as string[],
+    availabilityGrid: {} as AvailabilityGrid,
     organizer: false,
     schedulingPreference: 'I will schedule matches on my own' as any,
     preferredZone: '',
@@ -278,7 +278,7 @@ export const Signup: React.FC = () => {
         tournamentsPlayed: 0, league: '', pointswon: 0, totalPointsPlayed: 0,
       };
       const userPreferences: UserPreferences = {
-        availability_day: [], availability_time: [],
+        availability: {}, availability_day: [], availability_time: [],
         preferred_courts: [], favourite_players: [],
         scheduling_preference: 'I will schedule matches on my own',
         event_creator: false, preferred_zone: '',
@@ -311,8 +311,8 @@ export const Signup: React.FC = () => {
       const u = auth.currentUser!;
       await setDoc(doc(db, 'stats', u.uid), { skill_level: formData.skillLevel }, { merge: true });
       await setDoc(doc(db, 'preferences', u.uid), {
-        availability_day: formData.availabilityDay,
-        availability_time: formData.availabilityTime,
+        availability: formData.availabilityGrid,
+        ...gridToLegacy(formData.availabilityGrid),
         preferred_courts: formData.preferredCourts,
         favourite_players: formData.favouritePlayers,
         preferred_zone: formData.preferredZone,
@@ -830,7 +830,7 @@ export const Signup: React.FC = () => {
                       }}
                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomCourt(); } }}
                     />
-                    <Button type="button" variant="clay" size="sm" onClick={addCustomCourt} disabled={!formData.customCourtEntry.trim()}>
+                    <Button type="button" variant="clay" size="sm" className="px-3 shrink-0" onClick={addCustomCourt} disabled={!formData.customCourtEntry.trim()}>
                       Add
                     </Button>
                   </div>
@@ -930,51 +930,43 @@ export const Signup: React.FC = () => {
                 </div>
               </div>
 
-              {/* Availability */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10 pt-6 border-t border-white/5">
-                <div className="space-y-4">
-                  <label className="block text-sm font-bold text-white uppercase tracking-wider flex items-center">
-                    <Calendar className="w-4 h-4 mr-2 text-clay" />
-                    Availability Day
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((day) => (
-                      <button
-                        key={day}
-                        onClick={() => {
-                          const current = formData.availabilityDay;
-                          setFormData({ ...formData, availabilityDay: current.includes(day) ? current.filter((d) => d !== day) : [...current, day] });
-                        }}
-                        className={`w-12 h-12 flex items-center justify-center rounded-xl text-xs font-black transition-all ${
-                          formData.availabilityDay.includes(day) ? 'bg-clay text-white shadow-lg shadow-clay/20' : 'bg-white/5 text-white border border-white/5 hover:bg-white/10'
-                        }`}
-                      >
-                        {day}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <label className="block text-sm font-bold text-white uppercase tracking-wider flex items-center">
-                    <Clock className="w-4 h-4 mr-2 text-clay" />
-                    Availability Time
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {['AM', 'PM'].map((time) => (
-                      <button
-                        key={time}
-                        onClick={() => {
-                          const current = formData.availabilityTime;
-                          setFormData({ ...formData, availabilityTime: current.includes(time) ? current.filter((t) => t !== time) : [...current, time] });
-                        }}
-                        className={`w-16 h-12 flex items-center justify-center rounded-xl text-xs font-black transition-all ${
-                          formData.availabilityTime.includes(time) ? 'bg-clay text-white shadow-lg shadow-clay/20' : 'bg-white/5 text-white border border-white/5 hover:bg-white/10'
-                        }`}
-                      >
-                        {time}
-                      </button>
-                    ))}
-                  </div>
+              {/* Availability — per-day AM/PM grid */}
+              <div className="pt-6 border-t border-white/5 space-y-4">
+                <label className="block text-sm font-bold text-white uppercase tracking-wider flex items-center">
+                  <Calendar className="w-4 h-4 mr-2 text-clay" />
+                  Availability
+                </label>
+                <div className="grid grid-cols-[1fr_auto_auto] gap-x-6 gap-y-1 items-center max-w-xs">
+                  <span />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 text-center w-10">AM</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 text-center w-10">PM</span>
+                  {DAY_CODES.map((d) => (
+                    <React.Fragment key={d}>
+                      <span className="text-sm text-white/80 py-1.5">{DAY_LABELS[d]}</span>
+                      {(['AM', 'PM'] as TimeSlot[]).map((slot) => {
+                        const on = (formData.availabilityGrid[d] ?? []).includes(slot);
+                        return (
+                          <div key={slot} className="flex justify-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const cur = formData.availabilityGrid[d] ?? [];
+                                const next = cur.includes(slot) ? cur.filter((s) => s !== slot) : [...cur, slot];
+                                const grid: AvailabilityGrid = { ...formData.availabilityGrid };
+                                if (next.length) grid[d] = next; else delete grid[d];
+                                setFormData({ ...formData, availabilityGrid: grid });
+                              }}
+                              className={`w-6 h-6 rounded flex items-center justify-center border transition-colors ${
+                                on ? 'bg-clay border-clay' : 'bg-white/5 border-white/15 hover:border-clay/60'
+                              }`}
+                            >
+                              {on && <span className="text-white text-[11px]">✓</span>}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
                 </div>
               </div>
 

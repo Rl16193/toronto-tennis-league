@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { PickleballEntry } from './courtMapTypes';
+import type { PickleballEntry } from './courtMapUtils';
 
 export const Badge: React.FC<{ bg: string; color: string; children: React.ReactNode }> = ({ bg, color, children }) => (
   <span style={{

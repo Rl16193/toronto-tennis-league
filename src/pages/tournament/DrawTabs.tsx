@@ -7,11 +7,12 @@ type Props = {
   activeDoubles: string;
   currentDraw: DrawConfig | undefined;
   visibleDraws: DrawConfig[];
-  showReserves: boolean;
   onTabChange: (tab: DrawTab) => void;
   onSkillChange: (skill: SkillGroup) => void;
   onDoublesChange: (division: string) => void;
-  onReservesChange: (show: boolean) => void;
+  // Round Robin 3rd-level tabs (Groups / Knockout). Omitted for non-RR draws.
+  rrView?: 'groups' | 'knockout';
+  onRRViewChange?: (v: 'groups' | 'knockout') => void;
 };
 
 const subBtnClass = (active: boolean) =>
@@ -21,8 +22,7 @@ const subBtnClass = (active: boolean) =>
 
 export const DrawTabs: React.FC<Props> = ({
   activeTab, activeSkill, activeDoubles, currentDraw, visibleDraws,
-  showReserves,
-  onTabChange, onSkillChange, onDoublesChange, onReservesChange,
+  onTabChange, onSkillChange, onDoublesChange, rrView, onRRViewChange,
 }) => {
   const availablePrimaryTabs = (['mens', 'womens', 'doubles'] as DrawTab[]).filter(
     (tab) => visibleDraws.some((d) => d.tab === tab),
@@ -48,7 +48,7 @@ export const DrawTabs: React.FC<Props> = ({
             return (
               <button
                 key={tab}
-                onClick={() => { onTabChange(tab); onReservesChange(false); }}
+                onClick={() => onTabChange(tab)}
                 className={`px-5 py-2.5 rounded-2xl font-bold transition-colors ${
                   activeTab === tab ? 'bg-clay text-white' : 'bg-tennis-surface/60 text-white hover:text-white'
                 }`}
@@ -60,65 +60,46 @@ export const DrawTabs: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Sub-tab row — always includes LL Draw */}
-      {activeTab !== 'doubles' ? (
-        <div className="flex flex-wrap gap-2 mb-6">
-          {availableSkills.length > 0 ? (
-            availableSkills.map((skill) => (
-              <button
-                key={skill}
-                onClick={() => { onSkillChange(skill); onReservesChange(false); }}
-                className={subBtnClass(currentDraw?.skillGroup === skill && !showReserves)}
-              >
-                {skill}
-              </button>
-            ))
-          ) : (
-            // Merged single draw
-            <button
-              onClick={() => onReservesChange(false)}
-              className={subBtnClass(!showReserves)}
-            >
-              Main Draw
-            </button>
-          )}
-          <button
-            onClick={() => onReservesChange(true)}
-            className={subBtnClass(showReserves)}
-          >
-            LL Draw
-          </button>
-        </div>
-      ) : (
-        <div className="flex flex-wrap gap-2 mb-6">
-          {availableDoublesDivisions.length > 0 ? (
-            availableDoublesDivisions.map((division) => {
-              const shortLabel = division === 'Mixed Doubles' ? 'Mixed Doubles' : `${division} Doubles`;
-              return (
+      {/* Sub-tab row */}
+      {activeTab !== 'doubles'
+        ? availableSkills.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-6">
+              {availableSkills.map((skill) => (
                 <button
-                  key={division}
-                  onClick={() => { onDoublesChange(division); onReservesChange(false); }}
-                  className={subBtnClass(activeDoubles === division && !showReserves)}
+                  key={skill}
+                  onClick={() => onSkillChange(skill)}
+                  className={subBtnClass(currentDraw?.skillGroup === skill)}
                 >
-                  {shortLabel}
+                  {skill}
                 </button>
-              );
-            })
-          ) : (
-            // Consolidated doubles
-            <button
-              onClick={() => onReservesChange(false)}
-              className={subBtnClass(!showReserves)}
-            >
-              Main Draw
-            </button>
+              ))}
+            </div>
+          )
+        : availableDoublesDivisions.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-6">
+              {availableDoublesDivisions.map((division) => {
+                const shortLabel = division === 'Mixed Doubles' ? 'Mixed Doubles' : `${division} Doubles`;
+                return (
+                  <button
+                    key={division}
+                    onClick={() => onDoublesChange(division)}
+                    className={subBtnClass(activeDoubles === division)}
+                  >
+                    {shortLabel}
+                  </button>
+                );
+              })}
+            </div>
           )}
-          <button
-            onClick={() => onReservesChange(true)}
-            className={subBtnClass(showReserves)}
-          >
-            LL Draw
-          </button>
+
+      {/* 3rd-level RR tabs: Groups / Knockout */}
+      {rrView && onRRViewChange && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          {(['groups', 'knockout'] as const).map((v) => (
+            <button key={v} onClick={() => onRRViewChange(v)} className={subBtnClass(rrView === v)}>
+              {v === 'groups' ? 'Groups' : 'Knockout'}
+            </button>
+          ))}
         </div>
       )}
     </>

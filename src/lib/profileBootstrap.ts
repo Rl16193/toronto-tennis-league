@@ -18,6 +18,7 @@ const createDefaultStats = (user: User): UserStats => ({
 });
 
 const createDefaultPreferences = (): UserPreferences => ({
+  availability: {},
   availability_day: [],
   availability_time: [],
   preferred_courts: [],

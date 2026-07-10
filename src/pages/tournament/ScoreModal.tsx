@@ -1,6 +1,7 @@
 ﻿import React, { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from '../../components/Button';
+import { Sheet } from '../../components/Sheet';
 import { ScoreForm, TournamentMatch } from './types';
 
 type Props = {
@@ -27,25 +28,18 @@ export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClos
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <form onSubmit={handleSubmit} className="w-full max-w-xl rounded-[2rem] bg-tennis-surface border border-white/10 p-6 shadow-2xl">
-        <div className="relative text-center mb-4">
+    <Sheet onClose={onClose} maxWidthClassName="max-w-xl">
+      <form onSubmit={handleSubmit} className="p-6">
+        <div className="text-center mb-4 pr-10">
           <p className="text-xs uppercase tracking-widest text-clay font-black mb-2">Submit Score</p>
           <h2 className="text-2xl font-black text-white">{match.round}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute right-0 top-0 text-white hover:text-white font-semibold text-sm"
-          >
-            Close
-          </button>
         </div>
 
         <div className="flex items-center gap-2 mb-5 px-3 py-2.5 text-sm text-orange-500">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           {isCreatorSubmit
             ? 'Entering score as event organizer. This will be accepted immediately.'
-            : 'Scores to be submitted by winner only. You can only submit the score once.'}
+            : 'Pick the winner, enter the games, and submit — the organizer will confirm it.'}
         </div>
 
         <label className="block text-sm font-medium text-white mb-2">Winner</label>
@@ -100,6 +94,6 @@ export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClos
           {isCreatorSubmit ? 'Record Score' : 'Submit Score'}
         </Button>
       </form>
-    </div>
+    </Sheet>
   );
 };

@@ -7,13 +7,14 @@ import { signOut } from 'firebase/auth';
 import { Button } from './Button';
 
 const PUBLIC_NAV_LINKS = [
+  { name: 'Events', path: '/events', icon: Calendar },
+  { name: 'Leagues', path: '/leagues', icon: Medal },
   { name: 'Courts', path: '/courts', icon: MapPin },
 ] as const;
 
+// Viewable only with an account.
 const PRIVATE_NAV_LINKS = [
-  { name: 'Events', path: '/events', icon: Calendar },
   { name: 'Matches', path: '/tournament', icon: Trophy },
-  { name: 'Leagues', path: '/leagues', icon: Medal },
 ] as const;
 
 const ALL_NAV_LINKS = [...PUBLIC_NAV_LINKS, ...PRIVATE_NAV_LINKS] as const;

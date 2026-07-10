@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
-import type { NearestProgram } from './courtMapTypes';
+import type { NearestProgram } from './courtMapUtils';
 import { Badge } from './courtMapComponents';
 import { formatDist, formatDateRange, getProgramStatus } from './courtMapUtils';
 

@@ -2,12 +2,13 @@
  * RR Late-Joiner Regroup Script (EOD automation)
  *
  * For every active Round Robin tournament event, places players who registered after the
- * draw was generated. Placement rule (fill incomplete groups first, skill-first):
- *   1. Top up an existing incomplete group (below the target size, NO played matches),
- *      preferring the most incomplete group (e.g. a stranded pair), then the closest skill
- *      band, then a matching zone. This completes size-2 stragglers before anything new.
- *   2. Otherwise the overflow forms new groups: ordered by skill, filled to the target size
- *      (leftovers in the last group), labelled by zone ("Mixed Zones" when zones differ).
+ * draw was generated. Placement rule (band + zone aware):
+ *   1. Top up an existing group ONLY if it has ≤3 players and no played match — groups with
+ *      4–5 players are full and locked. A joiner needs a matching skill band; a matching zone
+ *      is preferred, then the most incomplete group.
+ *   2. Otherwise the overflow forms new groups: bucketed by (band, zone) and sized with
+ *      splitEvenly (balanced groups of 3–5), labelled "Group X · Band · Zone" (zone dropped
+ *      when unassigned/mixed).
  * Existing placements are never reshuffled; groups that already have a completed match are
  * left untouched. The script is idempotent — a run with no new joiners writes nothing.
  *
@@ -66,33 +67,36 @@ function generateGroupPairings(n) {
   return pairs;
 }
 
-// Mirror buildZoneTierGroups: skill-first ordering, fill-to-size, merge a trailing <2 group.
-// Players carry { skill, zone, name } for ordering.
-function chunkSkillZone(players, groupSize) {
-  if (players.length === 0) return [];
-  const sorted = [...players].sort((a, b) =>
-    (b.skill ?? 0) - (a.skill ?? 0) ||
-    String(a.zone || '').localeCompare(String(b.zone || '')) ||
-    String(a.name || '').localeCompare(String(b.name || '')),
-  );
-  const groups = [];
-  for (let i = 0; i < sorted.length; i += groupSize) groups.push(sorted.slice(i, i + groupSize));
-  if (groups.length > 1 && groups[groups.length - 1].length < 2) {
-    const last = groups.pop();
-    groups[groups.length - 1].push(...last);
-  }
-  return groups;
+// Skill band (mirrors utils.ts skillBand): Beginners 2–2.5, Challengers 3–3.5, Masters 4–5.
+function skillBand(skill) {
+  return skill < 3 ? 'Beginners' : skill < 4 ? 'Challengers' : 'Masters';
 }
 
-// Zone suffix for a group: one distinct real zone → that zone; otherwise "Mixed Zones".
-function zoneLabelFor(zones) {
+// Balanced group sizes (mirrors rrGeneration.splitEvenly): g = ceil(n/5), sizes differ by ≤1.
+function splitEvenly(n) {
+  if (n <= 0) return [];
+  const g = Math.max(1, Math.ceil(n / 5));
+  const base = Math.floor(n / g);
+  const rem = n % g;
+  return Array.from({ length: g }, (_, i) => (i < rem ? base + 1 : base));
+}
+
+// The single shared zone across a list of zone strings, or '' when unassigned/mixed.
+function sharedZone(zones) {
   const distinct = [...new Set(zones.map((z) => (z || '').trim()).filter((z) => z && z !== 'Unassigned'))];
-  return distinct.length === 1 ? distinct[0] : 'Mixed Zones';
+  return distinct.length === 1 ? distinct[0] : '';
+}
+
+// Auto label "Group X · Band · Zone" (drops any empty segment). Matches rrGeneration.ts.
+function autoLabel(index, band, zone) {
+  return ['Group ' + String.fromCharCode(65 + index), band, zone].filter(Boolean).join(' · ');
 }
 
 // Build Firestore match docs for one group (mirrors buildRRGroupMatchFields).
-function buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup, groupIndex, groupLabel, groupPlayers, advancementCount, started }) {
-  const pairings = generateGroupPairings(groupPlayers.length);
+function buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup, groupIndex, groupLabel, labelCustom, groupPlayers, advancementCount, started }) {
+  // A size-1 group keeps a placeholder match (player vs Player Loading) so the lone player
+  // stays visible/movable rather than being dropped.
+  const pairings = groupPlayers.length === 1 ? [[0, 1]] : generateGroupPairings(groupPlayers.length);
   return pairings.map(([i1, i2], idx) => {
     const p1 = groupPlayers[i1] ?? null;
     const p2 = groupPlayers[i2] ?? null;
@@ -127,6 +131,7 @@ function buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup,
         rr_round: idx + 1,
         rr_advancement_count: advancementCount,
         ...(groupLabel ? { rr_group_label: groupLabel } : {}),
+        ...(labelCustom ? { rr_label_custom: true } : {}),
         created_at: new Date().toISOString(),
       },
     };
@@ -251,18 +256,18 @@ async function main() {
           if (m.player_1_user_id && !seen.has(m.player_1_user_id)) { seen.add(m.player_1_user_id); players.push({ user_id: m.player_1_user_id, name: m.player_1_name, contact: m.player_1_contact }); }
           if (m.player_2_user_id && !seen.has(m.player_2_user_id)) { seen.add(m.player_2_user_id); players.push({ user_id: m.player_2_user_id, name: m.player_2_name, contact: m.player_2_contact }); }
         }
-        const label = ms.find((m) => m.rr_group_label)?.rr_group_label || '';
-        const dash = label.indexOf(' - ');
-        const zoneFromLabel = dash >= 0 ? label.slice(dash + 3) : '';
-        const zone = (zoneFromLabel === 'Unassigned Zone' || zoneFromLabel === 'Mixed Zones')
-          ? '' : (zoneFromLabel || (players[0] ? zoneOf(players[0].user_id) : ''));
+        const labelDoc = ms.find((m) => m.rr_group_label);
         const avgSkill = players.length ? players.reduce((s, p) => s + skillOf(p.user_id), 0) / players.length : 0;
+        const zone = sharedZone(players.map((p) => zoneOf(p.user_id)));
+        const band = skillBand(avgSkill);
         const hasPlayed = ms.some((m) => m.status === 'complete' || m.started);
-        return { gi, players, zone, avgSkill, hasPlayed, matchDocs: ms, dirty: false };
+        return {
+          gi, players, zone, band, avgSkill, hasPlayed,
+          custom: !!labelDoc?.rr_label_custom,
+          storedLabel: labelDoc?.rr_group_label || '',
+          matchDocs: ms, dirty: false,
+        };
       });
-
-      // Target group size: 5 if any group already holds 5+, else 4.
-      const target = groups.some((g) => g.players.length >= 5) ? 5 : 4;
 
       // Participants belonging to this draw.
       const placed = new Set(groups.flatMap((g) => g.players.map((p) => p.user_id)));
@@ -290,20 +295,24 @@ async function main() {
 
       if (unplaced.length === 0) continue;
 
-      // 1. Fill incomplete groups first: prefer the most incomplete group (stranded pairs),
-      //    then the closest skill band, then a matching zone. Never touch a played group.
+      // 1. Fill incomplete groups first. Groups with 4–5 players (or any played group) are
+      //    LOCKED; only groups with ≤3 players accept a joiner, and only when the band matches
+      //    (a matching zone is preferred, then the most incomplete group).
       const overflow = [];
       for (const player of unplaced) {
+        const band = skillBand(player.skill);
         const eligible = groups
-          .filter((g) => !g.hasPlayed && g.players.length < target)
+          .filter((g) => !g.hasPlayed && g.players.length <= 3 && g.band === band)
           .sort((a, b) =>
-            a.players.length - b.players.length ||
-            Math.abs(a.avgSkill - player.skill) - Math.abs(b.avgSkill - player.skill) ||
-            ((b.zone && b.zone === player.zone ? 1 : 0) - (a.zone && a.zone === player.zone ? 1 : 0)),
+            ((b.zone && b.zone === player.zone ? 1 : 0) - (a.zone && a.zone === player.zone ? 1 : 0)) ||
+            (a.players.length - b.players.length) ||
+            (Math.abs(a.avgSkill - player.skill) - Math.abs(b.avgSkill - player.skill)),
           )[0];
         if (eligible) {
           eligible.players.push({ user_id: player.user_id, name: player.name, contact: player.contact });
           eligible.avgSkill = eligible.players.reduce((s, p) => s + skillOf(p.user_id), 0) / eligible.players.length;
+          eligible.zone = sharedZone(eligible.players.map((p) => zoneOf(p.user_id)));
+          eligible.band = skillBand(eligible.avgSkill);
           eligible.dirty = true;
           eventAddedExisting++;
         } else {
@@ -311,25 +320,33 @@ async function main() {
         }
       }
 
-      // 2. Form new groups for the overflow — skill-first, filled to the target size.
+      // 2. Form new groups for the overflow — bucket by (band, zone), size with splitEvenly.
       let nextIndex = (groupIndices.length ? Math.max(...groupIndices) : -1) + 1;
       const newGroups = [];
-      for (const sub of chunkSkillZone(overflow, target)) {
-        newGroups.push({ gi: nextIndex, players: sub });
-        nextIndex++;
+      for (const band of [...new Set(overflow.map((p) => skillBand(p.skill)))]) {
+        const bandPlayers = overflow.filter((p) => skillBand(p.skill) === band);
+        for (const zone of [...new Set(bandPlayers.map((p) => p.zone))]) {
+          const zonePlayers = bandPlayers.filter((p) => p.zone === zone).sort((a, b) => b.skill - a.skill);
+          let offset = 0;
+          for (const size of splitEvenly(zonePlayers.length)) {
+            newGroups.push({ gi: nextIndex, players: zonePlayers.slice(offset, offset + size) });
+            offset += size;
+            nextIndex++;
+          }
+        }
       }
 
       // Emit writes: rebuild dirty existing groups, write new groups.
       for (const g of groups.filter((x) => x.dirty)) {
-        const label = g.matchDocs.find((m) => m.rr_group_label)?.rr_group_label
-          || `Group ${String.fromCharCode(65 + g.gi)} - ${g.zone || 'Mixed Zones'}`;
+        const label = g.custom ? g.storedLabel : autoLabel(g.gi, g.band, g.zone);
         g.matchDocs.forEach((m) => ops.push({ type: 'delete', ref: db.collection('tournament_matches').doc(m.id) }));
-        buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup, groupIndex: g.gi, groupLabel: label, groupPlayers: g.players, advancementCount, started })
+        buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup, groupIndex: g.gi, groupLabel: label, labelCustom: g.custom, groupPlayers: g.players, advancementCount, started })
           .forEach(({ docId, fields }) => ops.push({ type: 'set', ref: db.collection('tournament_matches').doc(docId), fields }));
       }
       for (const g of newGroups) {
-        const label = `Group ${String.fromCharCode(65 + g.gi)} - ${zoneLabelFor(g.players.map((p) => p.zone))}`;
-        buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup, groupIndex: g.gi, groupLabel: label, groupPlayers: g.players, advancementCount, started })
+        const band = skillBand(g.players.reduce((s, p) => s + p.skill, 0) / g.players.length);
+        const label = autoLabel(g.gi, band, sharedZone(g.players.map((p) => p.zone)));
+        buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup, groupIndex: g.gi, groupLabel: label, labelCustom: false, groupPlayers: g.players, advancementCount, started })
           .forEach(({ docId, fields }) => ops.push({ type: 'set', ref: db.collection('tournament_matches').doc(docId), fields }));
         eventNewGroups++;
       }

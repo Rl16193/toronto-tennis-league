@@ -1,17 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
-import { Mail, Phone, Trophy, User } from 'lucide-react';
+import { ArrowLeft, Calendar, Mail, MapPin, Phone, Star } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { Button } from '../components/Button';
 import { TennisEvent, UserData, UserPreferences, UserStats } from '../types';
+import { DAY_CODES, DAY_LABELS, getAvailabilityGrid, type TimeSlot } from '../utils/availability';
 
-const Chip: React.FC<{ label: string }> = ({ label }) => (
-  <span className="px-3 py-1 rounded-full bg-clay/20 border border-clay/30 text-clay text-sm font-semibold">
-    {label}
-  </span>
+const skillTier = (skill: number) => (skill < 3 ? 'Beginner' : skill < 4 ? 'Challenger' : 'Masters');
+
+// lucide has no racquet — small inline glyph (matches the own Profile Card).
+const RacquetIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <ellipse cx="9" cy="9" rx="6" ry="7" />
+    <path d="M13.5 14 20 20.5" />
+    <path d="M6 9h6M9 5v8" />
+  </svg>
 );
 
+const SectionLabel: React.FC<{ icon?: React.ReactNode; label: string }> = ({ icon, label }) => (
+  <span className="text-xs font-bold text-white/50 uppercase tracking-widest flex items-center gap-1.5">{icon}{label}</span>
+);
+
+const Pill: React.FC<{ label: string }> = ({ label }) => (
+  <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white/5 text-white/70 border border-white/10">{label}</span>
+);
+
+// Read-only view of another player's profile — mirrors the user's own profile page
+// (vertical, centred Profile Card + match stats + availability) with no edit controls.
 export const PlayerProfile: React.FC = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
@@ -29,9 +45,7 @@ export const PlayerProfile: React.FC = () => {
   useEffect(() => {
     const loadPlayer = async () => {
       if (!userId) return;
-
       setLoading(true);
-
       try {
         const [userDoc, statsDoc, prefsDoc] = await Promise.all([
           getDoc(doc(db, 'users', userId)),
@@ -41,13 +55,9 @@ export const PlayerProfile: React.FC = () => {
 
         const playerData = userDoc.exists() ? (userDoc.data() as UserData) : null;
         setPlayer(playerData);
-        if (playerData?.name) {
-          document.title = `${playerData.name} — Racquets & Strings`;
-        }
+        if (playerData?.name) document.title = `${playerData.name} — Racquets & Strings`;
         setStats(statsDoc.exists() ? (statsDoc.data() as UserStats) : null);
-        setPreferences(
-          prefsDoc.exists() ? (prefsDoc.data() as UserPreferences) : null
-        );
+        setPreferences(prefsDoc.exists() ? (prefsDoc.data() as UserPreferences) : null);
 
         // Load organizer from the event's creator_id
         if (eventId) {
@@ -79,186 +89,144 @@ export const PlayerProfile: React.FC = () => {
   if (!player) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
-        <h1 className="text-3xl font-black text-white mb-3">
-          Player Not Found
-        </h1>
-
-        <p className="text-white mb-6">
-          This player profile is not available.
-        </p>
-
-        <Button
-          variant="outline"
-          onClick={() => navigate('/tournament')}
-        >
-          Back to Tournament
-        </Button>
+        <h1 className="text-3xl font-black text-white mb-3">Player Not Found</h1>
+        <p className="text-white mb-6">This player profile is not available.</p>
+        <Button variant="outline" onClick={() => navigate('/tournament')}>Back to Tournament</Button>
       </div>
     );
   }
 
-  const contactItems = [
-    player.email && {
-      label: 'Email',
-      value: player.email,
-      icon: Mail
-    },
+  const initial = (player.name || player.email || '?').trim().charAt(0).toUpperCase();
+  const contact = player.phone || player.email || '';
+  const courts = preferences?.preferred_courts ?? [];
+  const favourites = preferences?.favourite_players ?? [];
+  const availGrid = getAvailabilityGrid(preferences);
+  const hasAvailability = Object.keys(availGrid).length > 0;
 
-    player.phone && {
-      label: 'Phone',
-      value: player.phone,
-      icon: Phone
-    }
-  ].filter(Boolean);
-
-  const hasAvailability =
-    (preferences?.availability_day?.length ?? 0) > 0 ||
-    (preferences?.availability_time?.length ?? 0) > 0 ||
-    (preferences?.preferred_courts?.length ?? 0) > 0;
+  const s = stats as (UserStats & { matchesPlayed?: number; wins?: number; loses?: number; pointswon?: number; totalPointsPlayed?: number }) | null;
+  const pwPct = s && (s.totalPointsPlayed ?? 0) > 0 ? `${Math.round((s.pointswon! / s.totalPointsPlayed!) * 100)}%` : '—';
+  const statTiles = [
+    { label: 'Streak (W–L)', value: `${s?.wins ?? 0}–${s?.loses ?? 0}`, accent: 'text-white' },
+    { label: 'PW %', value: pwPct, accent: 'text-clay' },
+    { label: 'MP', value: `${s?.matchesPlayed ?? 0}`, accent: 'text-white' },
+  ];
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-20 pt-8 space-y-4">
+      <Button variant="ghost" size="sm" onClick={() => navigate('/tournament')} className="px-2">
+        <ArrowLeft className="w-4 h-4 mr-1.5" />Back to Tournament
+      </Button>
 
-      <div className="rounded-[2rem] bg-tennis-surface/40 border border-white/10 p-6 md:p-8">
+      {/* Profile Card — read-only mirror of ProfileInfo */}
+      <div className="rounded-[2.5rem] border border-white/5 bg-tennis-surface/30 shadow-xl p-5 sm:p-7">
+        <h2 className="text-xl font-bold text-white mb-5">Profile Card</h2>
 
-        <div className="flex flex-col md:flex-row md:items-center gap-6">
-
-          <div className="w-24 h-24 rounded-full bg-clay/20 border border-clay/30 flex items-center justify-center">
-            <User className="w-12 h-12 text-clay" />
+        <div className="flex flex-col items-center gap-4 pb-5 border-b border-white/5">
+          <div className="w-24 h-24 rounded-full bg-tennis-surface flex items-center justify-center overflow-hidden border border-white/10">
+            {player.avatar
+              ? <img src={player.avatar} alt={player.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              : <span className="text-4xl font-black text-white/80">{initial}</span>}
           </div>
-
-          <div className="flex-1">
-            <p className="text-xs uppercase tracking-widest text-clay font-black mb-2">
-              Player Profile
-            </p>
-
-            <h1 className="text-3xl md:text-4xl font-black text-white">
-              {player.name}
-            </h1>
-
-            {stats && (
-              <p className="text-white mt-2">
-                NTRP {stats.skill_level} · {stats.tournament_preference}
-              </p>
-            )}
-          </div>
-
-          <Button
-            variant="ghost"
-            onClick={() => navigate('/tournament')}
-          >
-            Back to Tournament
-          </Button>
-
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+        <div className="divide-y divide-white/5">
+          <div className="py-3">
+            <SectionLabel label="Name" />
+            <p className="text-lg font-bold text-white mt-0.5">{player.name || '—'}</p>
+          </div>
 
-          {/* Contact Information */}
-          <div className="rounded-2xl bg-tennis-dark/40 border border-white/10 p-5">
+          <div className="py-3">
+            <SectionLabel label="Contact" />
+            <p className="text-lg font-bold text-white mt-0.5 break-all">{contact || '—'}</p>
+          </div>
 
-            <p className="text-xs uppercase tracking-widest text-white font-bold mb-4">
-              Contact Information
+          <div className="py-3">
+            <SectionLabel label="Bio" />
+            <p className="text-sm text-white/70 mt-0.5">
+              {player.bio?.trim() || <span className="text-white/40">No bio yet.</span>}
             </p>
+          </div>
 
-            <div className="space-y-4">
+          <div className="py-3">
+            <SectionLabel icon={<RacquetIcon className="w-3.5 h-3.5 text-clay" />} label="Skill Level" />
+            {stats ? (
+              <div className="mt-1 flex items-center gap-2">
+                <span className="text-lg font-bold text-white">NTRP {stats.skill_level}</span>
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                  {skillTier(stats.skill_level)}
+                </span>
+              </div>
+            ) : <p className="text-sm text-white/40 mt-1">Not set.</p>}
+          </div>
 
-              {contactItems.length > 0 ? (
-                contactItems.map((item: any) => {
-                  const Icon = item.icon;
-
-                  return (
-                    <div
-                      key={item.label}
-                      className="flex items-start gap-3"
-                    >
-                      <div className="mt-0.5">
-                        <Icon className="w-4 h-4 text-clay" />
-                      </div>
-
-                      <div className="min-w-0">
-                        <p className="text-[10px] uppercase tracking-widest text-white font-bold">
-                          {item.label}
-                        </p>
-
-                        <p className="text-white font-semibold break-all mt-1">
-                          {item.value}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-white font-semibold">
-                  Not provided
-                </p>
-              )}
-
+          <div className="py-3">
+            <SectionLabel icon={<MapPin className="w-3.5 h-3.5 text-clay" />} label="Preferred Courts" />
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {courts.length > 0 ? courts.map((c) => <Pill key={c} label={c} />) : <span className="text-sm text-white/40">None set.</span>}
             </div>
           </div>
 
-          {/* Preferred Contact Mode */}
-          <div className="rounded-2xl bg-tennis-dark/40 border border-white/10 p-5">
-            <Phone className="w-5 h-5 text-clay mb-3" />
-
-            <p className="text-xs uppercase tracking-widest text-white font-bold">
-              Contact Mode
-            </p>
-
-            <p className="text-white font-semibold capitalize mt-1">
-              {player.preferred_mode_of_contact}
-            </p>
+          <div className="py-3">
+            <SectionLabel icon={<Star className="w-3.5 h-3.5 text-clay" />} label="Favourite Players" />
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {favourites.length > 0 ? favourites.map((p) => <Pill key={p} label={p} />) : <span className="text-sm text-white/40">None set.</span>}
+            </div>
           </div>
-
-          {/* Match Stats */}
-          <div className="rounded-2xl bg-tennis-dark/40 border border-white/10 p-5">
-            <Trophy className="w-5 h-5 text-clay mb-3" />
-
-            <p className="text-xs uppercase tracking-widest text-white font-bold mb-3">
-              Match Stats
-            </p>
-
-            {stats ? (() => {
-              const s = stats as typeof stats & { matchesPlayed?: number; wins?: number; loses?: number; pointswon?: number; totalPointsPlayed?: number };
-              const pctDisplay = (s.totalPointsPlayed ?? 0) > 0
-                ? `${Math.round((s.pointswon! / s.totalPointsPlayed!) * 100)}%`
-                : '—';
-              return (
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-white/50">Played</p>
-                    <p className="text-white font-black text-lg">{s.matchesPlayed ?? 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-white/50">Wins</p>
-                    <p className="text-white font-black text-lg">{s.wins ?? 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-white/50">Losses</p>
-                    <p className="text-white font-black text-lg">{s.loses ?? 0}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase tracking-widest text-white/50">% Pts Won</p>
-                    <p className="text-clay font-black text-lg">{pctDisplay}</p>
-                  </div>
-                </div>
-              );
-            })() : (
-              <p className="text-white/60 text-sm">No stats available</p>
-            )}
-          </div>
-
         </div>
       </div>
 
+      {/* Match Stats — read-only mirror of ProfileStats */}
+      <div className="bg-tennis-surface/30 border border-white/5 rounded-[2.5rem] shadow-xl p-6">
+        <h2 className="text-lg font-bold text-white flex items-center mb-4">
+          <Star className="w-5 h-5 mr-2 text-clay" />Match Stats
+        </h2>
+        <div className="grid grid-cols-3 gap-3">
+          {statTiles.map((t) => (
+            <div key={t.label} className="rounded-2xl bg-white/[0.03] border border-white/5 px-3 py-4 text-center">
+              <p className={`text-2xl font-black ${t.accent}`}>{t.value}</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 mt-1">{t.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Availability — read-only mirror of ProfileAvailability */}
+      {hasAvailability && (
+        <div className="rounded-[2.5rem] border border-white/5 bg-tennis-surface/30 shadow-xl p-6">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
+            <Calendar className="w-5 h-5 text-clay" />Availability
+          </h2>
+          <div className="grid grid-cols-[1fr_auto_auto] gap-x-6 gap-y-1 items-center">
+            <span />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 text-center w-10">AM</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 text-center w-10">PM</span>
+            {DAY_CODES.map((d) => (
+              <React.Fragment key={d}>
+                <span className="text-sm text-white/80 py-1.5">{DAY_LABELS[d]}</span>
+                {(['AM', 'PM'] as TimeSlot[]).map((slot) => {
+                  const on = (availGrid[d] ?? []).includes(slot);
+                  return (
+                    <div key={slot} className="flex justify-center">
+                      <div className={`w-5 h-5 rounded flex items-center justify-center border ${on ? 'bg-clay border-clay' : 'bg-white/5 border-white/15'}`}>
+                        {on && <span className="text-white text-[10px]">✓</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      )}
+
       {organizer && (
-        <div className="rounded-[2rem] bg-tennis-surface/40 border border-white/10 p-6 md:p-8 mt-6">
+        <div className="rounded-[2.5rem] bg-tennis-surface/30 border border-white/5 shadow-xl p-6">
           <h2 className="text-base font-black text-white mb-3">Contact organizer if you require any assistance</h2>
           <div className="flex flex-wrap gap-6">
             {organizer.email && (
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-clay shrink-0" />
-                <span className="text-white font-semibold">{organizer.email}</span>
+                <span className="text-white font-semibold break-all">{organizer.email}</span>
               </div>
             )}
             {organizer.phone && (
@@ -268,61 +236,6 @@ export const PlayerProfile: React.FC = () => {
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {hasAvailability && (
-        <div className="rounded-[2rem] bg-tennis-surface/40 border border-white/10 p-6 md:p-8 mt-6">
-
-          <h2 className="text-xl font-black text-white mb-5">
-            Availability
-          </h2>
-
-          {(preferences?.preferred_courts?.length ?? 0) > 0 && (
-            <div className="mb-4">
-              <p className="text-xs uppercase tracking-widest text-white font-bold mb-2">
-                Preferred Courts
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {preferences!.preferred_courts.map((c) => (
-                  <Chip key={c} label={c} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {(preferences?.availability_day?.length ?? 0) > 0 && (
-            <div className="mb-4">
-
-              <p className="text-xs uppercase tracking-widest text-white font-bold mb-2">
-                Preferred Days
-              </p>
-
-              <div className="flex flex-wrap gap-2">
-                {preferences!.availability_day.map((d) => (
-                  <Chip key={d} label={d} />
-                ))}
-              </div>
-
-            </div>
-          )}
-
-          {(preferences?.availability_time?.length ?? 0) > 0 && (
-            <div className="mb-5">
-
-              <p className="text-xs uppercase tracking-widest text-white font-bold mb-2">
-                Preferred Times
-              </p>
-
-              <div className="flex flex-wrap gap-2">
-                {preferences!.availability_time.map((t) => (
-                  <Chip key={t} label={t} />
-                ))}
-              </div>
-
-            </div>
-          )}
-
         </div>
       )}
     </div>

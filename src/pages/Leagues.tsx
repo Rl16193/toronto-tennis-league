@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { useNavigate } from 'react-router-dom';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 
@@ -39,7 +38,6 @@ const TOP_N = 15;
 
 export const Leagues: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const navigate = useNavigate();
   const [rows, setRows] = useState<LeagueRow[]>([]);
 
   useEffect(() => { document.title = 'Leagues — Racquets & Strings'; }, []);
@@ -48,12 +46,8 @@ export const Leagues: React.FC = () => {
   const [stillActiveUids, setStillActiveUids] = useState<Set<string>>(new Set());
   const [hasActiveTournament, setHasActiveTournament] = useState(false);
 
+  // Public leaderboard — stats is world-readable, so it loads with or without an account.
   useEffect(() => {
-    if (!authLoading && !user) navigate('/login?returnTo=%2Fleagues');
-  }, [authLoading, user, navigate]);
-
-  useEffect(() => {
-    if (!user) return;
     getDocs(collection(db, 'stats')).then((snap) => {
       const data: LeagueRow[] = [];
       snap.forEach((d) => {
@@ -74,7 +68,7 @@ export const Leagues: React.FC = () => {
       setRows(data);
       setLoading(false);
     });
-  }, [user]);
+  }, []);
 
   // Detect active tournaments and find players still in (not yet eliminated)
   useEffect(() => {

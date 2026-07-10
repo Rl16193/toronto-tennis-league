@@ -1,12 +1,12 @@
 const PRELOADED_COURTS = [
-  'Sorauren Park',
+  'Dovercourt Park',
   'High Park',
-  'Riverdale',
-  'Trinity Bellwoods',
-  'Ramsden Park',
-  'Stanley Park',
   'Moss Park',
-  'Dovercourt',
+  'Ramsden Park',
+  'Riverdale Park East',
+  'Sorauren Avenue Park',
+  'Stanley Park',
+  'Trinity Bellwoods Park',
 ];
 
 export const defaultCourtOptions = PRELOADED_COURTS;

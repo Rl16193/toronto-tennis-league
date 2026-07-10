@@ -60,6 +60,27 @@ export const isTournamentStarted = (event: { startDate?: unknown; start_date?: u
 export const getDrawKey = (tournamentChoice: string, division: string, skillGroup: SkillGroup) =>
   `${tournamentChoice}_${division}_${skillGroup}`.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
 
+// Skill band used to sub-group players within a draw (the TOURNAMENT_OPTIONS tiers):
+// Beginners 2–2.5, Challengers 3–3.5, Masters 4–5.
+export const skillBand = (skill: number): 'Beginners' | 'Challengers' | 'Masters' =>
+  skill < 3 ? 'Beginners' : skill < 4 ? 'Challengers' : 'Masters';
+
+// Derive the display state of a match's scheduling for a given viewer.
+export type ScheduleState = {
+  status: 'unscheduled' | 'proposed' | 'scheduled';
+  date?: string;
+  slot?: 'AM' | 'PM';
+  proposedByMe: boolean;
+  requested: boolean;
+};
+export const getScheduleState = (m: TournamentMatch, uid?: string): ScheduleState => ({
+  status: m.schedule_status ?? 'unscheduled',
+  date: m.proposed_date,
+  slot: m.proposed_slot,
+  proposedByMe: !!uid && m.proposed_by === uid,
+  requested: !!m.schedule_requested,
+});
+
 export const getDrawSize = (count: number, _tournamentChoice: 'Singles' | 'Doubles') => {
   if (count <= 8) return 8;
   if (count <= 16) return 16;

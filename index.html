@@ -3,6 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Canonical host guard: Firebase can't 301 its default domains, so send
+         .web.app / .firebaseapp.com visitors to www before the app/analytics boot.
+         Exact-match only, so hosting:preview channels (…--channel.web.app) are left alone. -->
+    <script>
+      (function () {
+        var h = location.hostname;
+        if (h === 'toronto-tennis-league.web.app' ||
+            h === 'toronto-tennis-league.firebaseapp.com') {
+          location.replace('https://www.racquetsandstrings.ca' +
+            location.pathname + location.search + location.hash);
+        }
+      })();
+    </script>
+
     <title>Racquets & Strings</title>
 
     <!-- Favicon -->

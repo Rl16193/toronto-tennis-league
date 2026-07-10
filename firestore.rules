@@ -113,7 +113,16 @@ service cloud.firestore {
     match /tournament_matches/{matchId} {
       allow read: if isAuthenticated();
       allow create: if isCreatorOfEvent(request.resource.data.event_id);
-      allow update: if isCreatorOfEvent(resource.data.event_id);
+      // Organizer may edit anything; the two match players may edit ONLY the scheduling fields
+      // (propose/confirm/reschedule/ask-organizer). Scores, players and advancement stay
+      // organizer-only.
+      allow update: if isCreatorOfEvent(resource.data.event_id)
+        || (
+          isAuthenticated()
+          && (request.auth.uid == resource.data.player_1_user_id || request.auth.uid == resource.data.player_2_user_id)
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['schedule_status', 'proposed_date', 'proposed_slot', 'proposed_by', 'schedule_requested'])
+        );
       allow delete: if isCreatorOfEvent(resource.data.event_id);
     }
 
@@ -123,15 +132,13 @@ service cloud.firestore {
     match /score_submissions/{docId} {
       allow read: if isAuthenticated();
 
-      // A player may submit only for a match they are actually in, as themselves.
+      // A submission is only a *request* — the event creator confirms it before it counts,
+      // so the creator is the integrity gate. We require a signed-in user submitting as
+      // themselves; the client gates who can see the Submit button (match players/teammates).
       allow create: if isAuthenticated() &&
         request.resource.data.submitted_by == request.auth.uid &&
         request.resource.data.event_id is string &&
-        request.resource.data.match_id is string &&
-        (
-          get(/databases/$(database)/documents/tournament_matches/$(request.resource.data.match_id)).data.player_1_user_id == request.auth.uid ||
-          get(/databases/$(database)/documents/tournament_matches/$(request.resource.data.match_id)).data.player_2_user_id == request.auth.uid
-        );
+        request.resource.data.match_id is string;
 
       // The submitter may retract; the event creator confirms/rejects by deleting.
       allow delete: if isAuthenticated() &&
@@ -142,6 +149,61 @@ service cloud.firestore {
 
       allow update: if false;
     }
+
+    // ===============================================================
+    // Court Suggestions (public "Suggest an Improvement" feedback)
+    // ===============================================================
+    match /court_suggestions/{id} {
+      // Anyone (incl. logged-out) may submit, with basic validation to limit abuse.
+      // Field shape must match what SuggestImprovementModal writes: `types` (a non-empty
+      // list of issue categories) + `court` (a string; '' for a website suggestion).
+      allow create: if
+        request.resource.data.description is string &&
+        request.resource.data.description.size() > 0 &&
+        request.resource.data.description.size() < 5000 &&
+        request.resource.data.types is list &&
+        request.resource.data.types.size() > 0 &&
+        request.resource.data.court is string &&
+        request.resource.data.status == 'open';
+      // Only organizers read / triage / update image_status / delete.
+      allow read, update, delete: if isGlobalEventCreator();
+    }
+
+    // ===============================================================
+    // Notifications (organizer alerts — e.g. player scheduling requests)
+    // ===============================================================
+    match /notifications/{id} {
+      // A signed-in user may create a notification addressed to someone (e.g. a player
+      // asking the organizer to schedule). Kept generic for future warnings/messages.
+      allow create: if isAuthenticated() &&
+        request.resource.data.recipient_id is string &&
+        request.resource.data.created_at is string &&
+        request.resource.data.requested_by == request.auth.uid;
+      // Only the recipient may read, mark-read, or clear their notifications.
+      allow read, update, delete: if isAuthenticated() &&
+        resource.data.recipient_id == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Round Robin drafts (creator's pre-generation group arrangement + withdrawals)
+    // ===============================================================
+    match /rr_drafts/{id} {
+      allow read: if isAuthenticated();
+      // Only the event's creator may write the draft. Covers create/update (event_id in the
+      // incoming data) and delete (event_id on the existing doc).
+      allow write: if isAuthenticated() &&
+        (
+          (request.resource != null && isCreatorOfEvent(request.resource.data.event_id)) ||
+          (resource != null && isCreatorOfEvent(resource.data.event_id))
+        );
+    }
+
+    // Deferred (built with the Messages release): player conduct reports
+    // { reporter_uid, match_id, opponent_uid, reason, detail, created_at, status } — organizer read only.
+    // match /player_reports/{id} {
+    //   allow create: if isAuthenticated() && request.resource.data.reporter_uid == request.auth.uid;
+    //   allow read, update, delete: if isGlobalEventCreator();
+    // }
 
     // ===============================================================
     // Reserves Participants

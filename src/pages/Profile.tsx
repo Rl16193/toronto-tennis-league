@@ -1,29 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Button } from '../components/Button';
 import { useProfileData } from '../features/profile/hooks/useProfileData';
 import { useProfileActions } from '../features/profile/hooks/useProfileActions';
 import { ProfileInfo } from '../features/profile/components/ProfileInfo';
 import { ProfileStats } from '../features/profile/components/ProfileStats';
 import { ProfileAvailability } from '../features/profile/components/ProfileAvailability';
-import { ProfileEvents } from '../features/profile/components/ProfileEvents';
-import { ProfileEditData } from '../features/profile/types';
+import { getAvailabilityGrid } from '../utils/availability';
 
 export const Profile: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { joinedEvents, loading: eventsLoading } = useProfileData();
   const { updateLoading, message, actions } = useProfileActions();
-
-  const [isEditingInfo, setIsEditingInfo] = useState(false);
-  const [isEditingAvailability, setIsEditingAvailability] = useState(false);
-
-  const [editData, setEditData] = useState<ProfileEditData>({});
-  const [showEmailForm, setShowEmailForm] = useState(false);
-  const [emailChangeData, setEmailChangeData] = useState({ newEmail: '', password: '' });
-  const [emailVerificationPending, setEmailVerificationPending] = useState(false);
-  const [emailChangeLoading, setEmailChangeLoading] = useState(false);
 
   useEffect(() => { document.title = 'My Profile — Racquets & Strings'; }, []);
 
@@ -33,8 +22,7 @@ export const Profile: React.FC = () => {
 
   const incompleteFields = profile ? [
     !profile.user.name.trim() ? 'name' : null,
-    profile.preferences.availability_day.length === 0 ? 'availability day' : null,
-    profile.preferences.availability_time.length === 0 ? 'availability time' : null,
+    Object.keys(getAvailabilityGrid(profile.preferences)).length === 0 ? 'availability' : null,
     profile.preferences.preferred_courts.length === 0 ? 'preferred courts' : null,
     profile.preferences.favourite_players.length === 0 ? 'favourite players' : null,
   ].filter(Boolean) as string[] : [];
@@ -63,85 +51,21 @@ export const Profile: React.FC = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-8">
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-20 pt-8 space-y-4">
       {incompleteFields.length > 0 && (
-        <div className="mb-8 px-1">
+        <div className="px-1">
           <p className="text-sm text-orange-500 font-bold mb-1">Profile incomplete</p>
           <p className="text-sm text-orange-500">Please add details for: {incompleteFields.join(', ')}.</p>
         </div>
       )}
 
-      {/* Contact Card — full width */}
-      <div className="mb-6">
-        <ProfileInfo
-          isEditing={isEditingInfo}
-          setIsEditing={setIsEditingInfo}
-          editData={editData}
-          setEditData={setEditData}
-          message={message}
-          onSave={async () => {
-            const [savedInfo, savedSkills] = await Promise.all([
-              actions.updateInfo(editData.user?.name || profile.user.name, editData.user?.phone || profile.user.phone),
-              actions.updateSkills(editData.stats?.skill_level || profile.stats.skill_level, profile.stats.tournament_preference),
-            ]);
-            if (savedInfo && savedSkills) setIsEditingInfo(false);
-          }}
-          updateLoading={updateLoading}
-          showEmailForm={showEmailForm}
-          setShowEmailForm={setShowEmailForm}
-          emailChangeData={emailChangeData}
-          setEmailChangeData={setEmailChangeData}
-          emailChangeLoading={emailChangeLoading}
-          emailVerificationPending={emailVerificationPending}
-          onStartEmailChange={async () => {
-            setEmailChangeLoading(true);
-            try {
-              const success = await actions.changeEmail(emailChangeData.newEmail, emailChangeData.password);
-              if (success) setEmailVerificationPending(true);
-            } finally {
-              setEmailChangeLoading(false);
-            }
-          }}
-          onRefreshEmailChange={actions.refreshEmailChange}
-          onCancelEmailChange={() => {
-            setShowEmailForm(false);
-            setEmailVerificationPending(false);
-            setEmailChangeData({ newEmail: '', password: '' });
-          }}
-        />
-      </div>
+      <ProfileInfo actions={actions} updateLoading={updateLoading} message={message} />
 
-      {/* Two-column grid: Availability | Stats + Events + Calendar */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] gap-6 lg:gap-8">
-        <ProfileAvailability
-          isEditing={isEditingAvailability}
-          setIsEditing={setIsEditingAvailability}
-          editData={editData}
-          setEditData={setEditData}
-          message={message}
-          onSave={async () => {
-            const saved = await actions.updateAvailability(
-              editData.preferences?.availability_day || profile.preferences.availability_day,
-              editData.preferences?.availability_time || profile.preferences.availability_time,
-              editData.preferences?.preferred_courts || profile.preferences.preferred_courts,
-              editData.preferences?.favourite_players || profile.preferences.favourite_players,
-              editData.preferences?.preferred_zone ?? profile.preferences.preferred_zone ?? '',
-            );
-            if (saved) setIsEditingAvailability(false);
-          }}
-          updateLoading={updateLoading}
-        />
+      <ProfileStats />
 
-        <div className="space-y-6">
-          <ProfileStats />
+      <ProfileAvailability updateAvailabilityGrid={actions.updateAvailabilityGrid} updateLoading={updateLoading} />
 
-          <ProfileEvents
-            joinedEvents={joinedEvents}
-            loading={eventsLoading}
-            onRemoveEvent={(event) => actions.removeEvent(event.participantId, event.id)}
-          />
-
-          {(() => {
+      {(() => {
             const parseMayKey = (val: unknown): string | null => {
               if (typeof val === 'string') return val.startsWith('May') ? val : null;
               if (typeof val !== 'object' || val === null) return null;
@@ -194,8 +118,8 @@ export const Profile: React.FC = () => {
             for (let day = 9; day <= 31; day++) calendarDays.push(day);
 
             return (
-              <div className="bg-tennis-surface/30 border border-white/5 rounded-[2.5rem] shadow-xl p-8">
-                <h2 className="text-2xl font-bold text-white mb-1">Events Calendar</h2>
+              <div className="bg-tennis-surface/30 border border-white/5 rounded-3xl md:rounded-[2.5rem] shadow-xl p-4 md:p-8">
+                <h2 className="text-xl md:text-2xl font-bold text-white mb-1">Events Calendar</h2>
                 <p className="text-white/60 text-sm mb-1">Mark availability during the tournament</p>
                 <p className="text-white/40 text-xs mb-4">May 9 – May 31, 2026</p>
                 <div className="grid grid-cols-7 gap-2">
@@ -231,9 +155,7 @@ export const Profile: React.FC = () => {
                 )}
               </div>
             );
-          })()}
-        </div>
-      </div>
+      })()}
     </div>
   );
 };

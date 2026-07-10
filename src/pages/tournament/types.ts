@@ -59,7 +59,15 @@ export type TournamentMatch = {
   rr_round?: number;
   rr_advancement_count?: number;
   rr_group_label?: string;
+  rr_label_custom?: boolean;
   walkover?: boolean;
+  // Scheduling — players may edit only these fields (Firestore rules carve-out); scores stay
+  // organizer-only. Absent schedule_status is treated as 'unscheduled'.
+  schedule_status?: 'unscheduled' | 'proposed' | 'scheduled';
+  proposed_date?: string; // YYYY-MM-DD
+  proposed_slot?: 'AM' | 'PM';
+  proposed_by?: string; // uid of the proposer
+  schedule_requested?: boolean; // player asked the organizer to schedule
 };
 
 export type ScoreSubmission = {
@@ -97,7 +105,6 @@ export type ScoreSubmissionDoc = ScoreSubmission & {
 export type TournamentFormat = 'bracket' | 'rr';
 
 export type RRConfig = {
-  groupSize: 4 | 5;
   advancementCount: 1 | 2;
 };
 

@@ -1,0 +1,41 @@
+rules_version = '2';
+
+// NOTE: deploying this REPLACES the bucket's current console rules. It is written to
+// preserve existing behaviour: public reads (logo, gallery, event images, avatars are shown
+// on public pages) and authenticated writes to owner folders. Review before
+// `firebase deploy --only storage`.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Public assets are shown on public pages (Home gallery/logo, Events images, the
+    // now-public Leagues avatars), so reads stay public — matching current behaviour.
+    allow read: if true;
+
+    // "Suggest an Improvement" photos: a signed-in user may upload only to their own folder,
+    // images only, under 5 MB. Scanned by the moderateCourtSuggestionImage function.
+    match /court_suggestions/{userId}/{fileName} {
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // Profile avatars: signed-in owner only, images under 5 MB. Scanned by the same function.
+    match /avatars/{userId}/{fileName} {
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // Event images: signed-in owner writes to their own folder (existing behaviour).
+    match /events/{userId}/{allPaths=**} {
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Any other authenticated write (avatars, etc.) — preserves current behaviour.
+    match /{allPaths=**} {
+      allow write: if request.auth != null;
+    }
+  }
+}

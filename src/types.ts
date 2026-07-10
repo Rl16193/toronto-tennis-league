@@ -5,6 +5,7 @@ export interface UserData {
   phone: string;
   preferred_mode_of_contact: 'email' | 'phone';
   avatar?: string;
+  bio?: string;
   created_at: string;
 }
 
@@ -25,6 +26,9 @@ export interface UserStats {
 
 // Collection: preferences
 export interface UserPreferences {
+  // Per-day AM/PM grid, e.g. { MON: ['AM','PM'], SAT: ['PM'] }. Supersedes the two legacy
+  // fields below, which are retained for back-compat until the availability backfill runs.
+  availability?: Record<string, ('AM' | 'PM')[]>;
   availability_day: string[];
   availability_time: string[];
   preferred_courts: string[];

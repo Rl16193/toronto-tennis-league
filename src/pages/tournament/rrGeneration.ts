@@ -1,5 +1,5 @@
 import { DrawConfig, RRConfig, RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
-import { BYE, PLAYER_LOADING, fallbackTemplate } from './utils';
+import { BYE, PLAYER_LOADING, fallbackTemplate, skillBand } from './utils';
 
 // ── Zone-tier group formation ─────────────────────────────────────────────────
 
@@ -9,56 +9,138 @@ export type ZoneTierGroup = {
 };
 
 /**
- * Groups players by skill first, then zone — honoring the creator's chosen group size.
+ * Split a bucket of `n` players into balanced groups of 3–5.
+ * g = ceil(n/5) groups, sizes differ by at most 1, larger groups first.
+ *   5→[5] · 6→[3,3] · 7→[4,3] · 8→[4,4] · 9→[5,4] · 10→[5,5] · 11→[4,4,3] · 12→[4,4,4].
+ * (n<3 returns a single group of n — a size-2 pair is playable, size-1 is a placeholder.)
+ */
+export function splitEvenly(n: number): number[] {
+  if (n <= 0) return [];
+  const g = Math.max(1, Math.ceil(n / 5));
+  const base = Math.floor(n / g);
+  const rem = n % g;
+  return Array.from({ length: g }, (_, i) => (i < rem ? base + 1 : base));
+}
+
+// Band display order (strongest first) so groups read Masters → Challengers → Beginners.
+const BAND_ORDER: Record<string, number> = { Masters: 0, Challengers: 1, Beginners: 2 };
+
+// Zone suffix for a set of players: the single shared zone, or '' when unassigned/mixed.
+export const sharedZone = (players: TournamentPlayer[], zoneOf: (p: TournamentPlayer) => string): string => {
+  const zones = [...new Set(players.map(zoneOf).filter(Boolean))];
+  return zones.length === 1 ? zones[0] : '';
+};
+
+// Band suffix for a set of players: the single shared band, or '' when mixed.
+export const sharedBand = (players: TournamentPlayer[], bandOf: (p: TournamentPlayer) => string): string => {
+  const bands = [...new Set(players.map(bandOf).filter(Boolean))];
+  return bands.length === 1 ? bands[0] : '';
+};
+
+// Auto label: "Group X · Band · Zone", dropping any segment that isn't shared.
+export const autoLabel = (index: number, band: string, zone: string): string =>
+  ['Group ' + String.fromCharCode(65 + index), band, zone].filter(Boolean).join(' · ');
+
+/**
+ * Groups players by skill band first, then preferred-court zone, honoring the size algorithm.
  *
- * Skill is the dominant criterion: players are ordered by skill (descending) so each group
- * is a contiguous skill band. Zone is a *secondary* tiebreak so same-skill players who share
- * a zone cluster together; it never forces a split. Groups are filled to exactly `groupSize`
- * and the remainder lands in the last group ("fill to size, leftovers in last") — so 5
- * players at size 5 stay one group of 5, and 12 at size 5 become [5, 5, 2].
+ * - ≤5 total players → one group (zone/band ignored — a small field plays together).
+ * - Otherwise bucket by (band, zone) and size each bucket with `splitEvenly`.
+ * - A lone player in a distinct zone becomes their own placeholder group ONLY when the draw
+ *   already has more than 3 zone-clustered groups; in smaller draws the band's players are
+ *   pooled (ordered by zone so clusters stay together) and split, folding singletons in.
  *
- * A trailing group of size < 2 produces no matches (`generateGroupPairings(1) === []`) and
- * would silently drop the player, so it is merged back into the previous group. (Groups of
- * 2 are allowed.)
- *
- * Labels carry a zone suffix: one distinct zone → that zone's name; multiple → "Mixed Zones".
- * The letter is positional here but recomputed at render by `rrGroupLabels`.
+ * Labels carry the band and, when the whole group shares one zone, that zone. Unassigned or
+ * mixed zones produce no zone suffix. The letter is positional here and recomputed at render.
  */
 export function buildZoneTierGroups(
   players: TournamentPlayer[],
   zoneMap: Record<string, string>,
   skillMap: Record<string, number>,
-  groupSize: 4 | 5,
 ): ZoneTierGroup[] {
   if (players.length === 0) return [];
 
   const zoneOf = (p: TournamentPlayer) => (zoneMap[p.user_id] || '').trim();
   const skillOf = (p: TournamentPlayer) => skillMap[p.user_id] ?? p.skillLevel ?? 0;
+  const bandOf = (p: TournamentPlayer) => skillBand(skillOf(p));
+  const bySkillThenName = (a: TournamentPlayer, b: TournamentPlayer) =>
+    skillOf(b) - skillOf(a) || a.name.localeCompare(b.name);
 
-  // Skill is dominant; zone clusters same-skill players; name keeps the order stable.
-  const sorted = [...players].sort((a, b) =>
-    skillOf(b) - skillOf(a) ||
-    zoneOf(a).localeCompare(zoneOf(b)) ||
-    a.name.localeCompare(b.name),
-  );
-
-  // Fill groups to exactly groupSize; the final slice holds the remainder.
-  const groups: TournamentPlayer[][] = [];
-  for (let i = 0; i < sorted.length; i += groupSize) {
-    groups.push(sorted.slice(i, i + groupSize));
+  // Small field → single group regardless of band/zone.
+  if (players.length <= 5) {
+    const gp = [...players].sort(bySkillThenName);
+    return [{ label: autoLabel(0, sharedBand(gp, bandOf), sharedZone(gp, zoneOf)), players: gp }];
   }
 
-  // A trailing size-1 group can't produce a match → fold it into the previous group.
-  if (groups.length > 1 && groups[groups.length - 1].length < 2) {
-    const last = groups.pop()!;
-    groups[groups.length - 1].push(...last);
+  // Bucket by band, then zone within each band.
+  const bands = [...new Set(players.map(bandOf))].sort((a, b) => (BAND_ORDER[a] ?? 9) - (BAND_ORDER[b] ?? 9));
+
+  type Bucket = { band: string; zone: string; players: TournamentPlayer[] };
+  const multiBuckets: Bucket[] = []; // zones with ≥2 players in a band
+  const singletons: Bucket[] = [];   // zones with exactly 1 player in a band
+
+  for (const band of bands) {
+    const bandPlayers = players.filter((p) => bandOf(p) === band);
+    const zones = [...new Set(bandPlayers.map(zoneOf))].sort((a, b) => a.localeCompare(b));
+    for (const zone of zones) {
+      const zonePlayers = bandPlayers.filter((p) => zoneOf(p) === zone).sort(bySkillThenName);
+      (zonePlayers.length >= 2 ? multiBuckets : singletons).push({ band, zone, players: zonePlayers });
+    }
   }
 
-  return groups.map((gp, i) => {
-    const zones = [...new Set(gp.map(zoneOf).filter(Boolean))];
-    const zoneLabel = zones.length === 1 ? zones[0] : 'Mixed Zones';
-    return { label: `Group ${String.fromCharCode(65 + i)} - ${zoneLabel}`, players: gp };
-  });
+  const multiGroupCount = multiBuckets.reduce((sum, b) => sum + splitEvenly(b.players.length).length, 0);
+
+  const grouped: { band: string; zone: string; players: TournamentPlayer[] }[] = [];
+
+  // Chop a bucket's players into groups sized by splitEvenly.
+  const chop = (band: string, zone: string, list: TournamentPlayer[]) => {
+    let offset = 0;
+    for (const size of splitEvenly(list.length)) {
+      grouped.push({ band, zone, players: list.slice(offset, offset + size) });
+      offset += size;
+    }
+  };
+
+  if (multiGroupCount > 3) {
+    // Established clusters: keep zone-pure groups, isolate each lone-zone player.
+    for (const b of multiBuckets) chop(b.band, b.zone, b.players);
+    for (const s of singletons) grouped.push({ band: s.band, zone: s.zone, players: s.players });
+  } else {
+    // Smaller draw: pool each band (multi + singletons) ordered by zone so clusters stay
+    // together where sizes align, then split. Singletons fold in rather than stranding.
+    for (const band of bands) {
+      const bandPlayers = players
+        .filter((p) => bandOf(p) === band)
+        .sort((a, b) => zoneOf(a).localeCompare(zoneOf(b)) || bySkillThenName(a, b));
+      if (bandPlayers.length > 0) chop(band, '', bandPlayers);
+    }
+  }
+
+  // Fold lone-player groups into the smallest group that still has capacity (< 5 players),
+  // same band preferred. If every other group is at 5 the solo group remains as-is.
+  let folded = true;
+  while (folded) {
+    folded = false;
+    const sIdx = grouped.findIndex((g) => g.players.length === 1);
+    if (sIdx === -1 || grouped.length <= 1) break;
+    const solo = grouped[sIdx];
+    const target = grouped
+      .filter((_, i) => i !== sIdx && grouped[i].players.length < 5)
+      .sort((a, b) => {
+        const sa = a.band === solo.band ? 0 : 1;
+        const sb = b.band === solo.band ? 0 : 1;
+        return sa - sb || a.players.length - b.players.length;
+      })[0];
+    if (!target) break;
+    target.players.push(...solo.players);
+    grouped.splice(sIdx, 1);
+    folded = true;
+  }
+
+  return grouped.map((g, i) => ({
+    label: autoLabel(i, sharedBand(g.players, bandOf), sharedZone(g.players, zoneOf)),
+    players: g.players,
+  }));
 }
 
 /**
@@ -100,12 +182,13 @@ export function buildRRGroupMatchFields(params: {
   draw: DrawConfig;
   groupIndex: number;
   groupLabel?: string;
+  labelCustom?: boolean;
   groupPlayers: TournamentPlayer[];
   pairings: [number, number][];
   advancementCount: number;
   started: boolean;
 }): Array<{ docId: string; fields: Record<string, unknown> }> {
-  const { eventId, drawKey, draw, groupIndex, groupLabel, groupPlayers, pairings, advancementCount, started } = params;
+  const { eventId, drawKey, draw, groupIndex, groupLabel, labelCustom, groupPlayers, pairings, advancementCount, started } = params;
 
   return pairings.map(([i1, i2], idx) => {
     const p1 = groupPlayers[i1] ?? null;
@@ -141,6 +224,7 @@ export function buildRRGroupMatchFields(params: {
         rr_round: idx + 1,
         rr_advancement_count: advancementCount,
         ...(groupLabel ? { rr_group_label: groupLabel } : {}),
+        ...(labelCustom ? { rr_label_custom: true } : {}),
         created_at: new Date().toISOString(),
       },
     };
@@ -190,20 +274,22 @@ export function computeGroupStandings(
   return rows;
 }
 
+// Smallest knockout bracket size (power of two, min 2, cap 32) that seats `x` players.
+const nextPow2 = (x: number) => { let s = 2; while (s < x) s *= 2; return Math.min(s, 32); };
+
 /**
  * Select the players who advance to the knockout stage, ordered for seeding.
  *
- * - 1 group → top 2 (a single-group knockout is just a final between the top two).
- * - ≥2 groups → top `advancementCount` from each group. Ordered by rank-within-group
- *   first (all group winners, then all runners-up, …) then by points → gamesWon, so the
- *   strongest qualifiers seed highest. The caller (`buildRRKnockoutDocs`) sizes the bracket
- *   to the next power of two and gives top seeds first-round byes — no truncation, so
- *   "top 6", "top 10", etc. all flow into a 4/8/16/32 bracket.
+ * - 1 group → top 2 (a single-group knockout is a final between the top two).
+ * - ≥2 groups → EVERY group winner advances, then the best second-place players (by points →
+ *   gamesWon across all groups) fill up to the next bracket size (min 4, else next power of
+ *   two ≥ number of groups). e.g. 5 groups → 5 winners + 3 best runners-up → 8-player draw.
+ *   The caller (`buildRRKnockoutDocs`) sizes the bracket to the next power of two; a full
+ *   field needs no byes.
  */
 export function selectAdvancingPlayers(
   allGroups: TournamentPlayer[][],
   standingsByGroup: RRStandingRow[][],
-  advancementCount: number,
 ): TournamentPlayer[] {
   const lookup = (groupIdx: number, row: RRStandingRow): TournamentPlayer | undefined =>
     allGroups[groupIdx]?.find((p) => p.user_id === row.userId);
@@ -218,25 +304,57 @@ export function selectAdvancingPlayers(
       .filter((p): p is TournamentPlayer => !!p);
   }
 
-  const candidates: Array<{ row: RRStandingRow; gi: number; rankInGroup: number }> = [];
+  const winners: Array<{ row: RRStandingRow; gi: number }> = [];
+  const runnersUp: Array<{ row: RRStandingRow; gi: number }> = [];
   for (let g = 0; g < n; g++) {
-    (standingsByGroup[g] ?? []).slice(0, advancementCount).forEach((row, rankInGroup) => {
-      candidates.push({ row, gi: g, rankInGroup });
-    });
+    const rows = standingsByGroup[g] ?? [];
+    if (rows[0]) winners.push({ row: rows[0], gi: g });
+    if (rows[1]) runnersUp.push({ row: rows[1], gi: g });
   }
-  candidates.sort((a, b) =>
-    a.rankInGroup - b.rankInGroup ||
-    b.row.points - a.row.points ||
-    b.row.gamesWon - a.row.gamesWon,
-  );
-  return candidates
+
+  const byStrength = (a: { row: RRStandingRow }, b: { row: RRStandingRow }) =>
+    b.row.points - a.row.points || b.row.gamesWon - a.row.gamesWon;
+  winners.sort(byStrength);
+  runnersUp.sort(byStrength);
+
+  const bracket = Math.max(4, nextPow2(n));
+  const need = Math.max(0, bracket - winners.length);
+  return [...winners, ...runnersUp.slice(0, need)]
     .map((c) => lookup(c.gi, c.row))
     .filter((p): p is TournamentPlayer => !!p);
 }
 
 /**
+ * The #1 finisher of each group, ordered strongest-first (points → gamesWon) so the top seed
+ * lands in slot 1. Used to auto-seed the knockout; the creator fills the remaining slots.
+ */
+export function selectGroupWinners(
+  allGroups: TournamentPlayer[][],
+  standingsByGroup: RRStandingRow[][],
+): TournamentPlayer[] {
+  const strength = new Map<string, RRStandingRow>();
+  standingsByGroup.flat().forEach((r) => strength.set(r.userId, r));
+  const winners: TournamentPlayer[] = [];
+  for (let g = 0; g < allGroups.length; g++) {
+    const top = standingsByGroup[g]?.[0];
+    if (!top) continue;
+    const p = allGroups[g]?.find((x) => x.user_id === top.userId);
+    if (p) winners.push(p);
+  }
+  return winners.sort((a, b) => {
+    const ra = strength.get(a.user_id);
+    const rb = strength.get(b.user_id);
+    return (rb?.points ?? 0) - (ra?.points ?? 0) || (rb?.gamesWon ?? 0) - (ra?.gamesWon ?? 0);
+  });
+}
+
+/**
  * Build Firestore write objects for the RR knockout stage (SF + F or just F).
  * Reuses the existing fallbackTemplate infrastructure.
+ *
+ * `drawsize` forces a specific bracket size (R4/R8/R16); otherwise it's the next power of two.
+ * `manualFill` leaves unseeded numeric slots as PLAYER_LOADING (for the creator to place) instead
+ * of BYE, and skips first-round bye auto-advancement.
  */
 export function buildRRKnockoutDocs(params: {
   eventId: string;
@@ -244,13 +362,13 @@ export function buildRRKnockoutDocs(params: {
   draw: DrawConfig;
   advancingPlayers: TournamentPlayer[];
   started: boolean;
+  drawsize?: number;
+  manualFill?: boolean;
 }): Array<{ docId: string; fields: Record<string, unknown> }> {
-  const { eventId, drawKey, draw, advancingPlayers, started } = params;
+  const { eventId, drawKey, draw, advancingPlayers, started, manualFill } = params;
   const n = advancingPlayers.length;
-  // Round the bracket up to the next power of two (min 2, cap 32). Leftover top slots
-  // become BYEs so the highest seeds get a first-round bye.
-  const nextPow2 = (x: number) => { let s = 2; while (s < x) s *= 2; return Math.min(s, 32); };
-  const drawsize = nextPow2(Math.max(2, n));
+  // Round the bracket up to the next power of two (min 2, cap 32) unless an explicit size is given.
+  const drawsize = params.drawsize ?? nextPow2(Math.max(2, n));
   const template = fallbackTemplate(drawsize);
 
   const slotMap = new Map<number, TournamentPlayer>();
@@ -259,26 +377,30 @@ export function buildRRKnockoutDocs(params: {
   // Pre-compute first-round BYE advancements: when a first-round match has one seeded
   // player and an empty numeric partner, the real player advances straight into the next
   // round. Bake those seatings into the next-round docs so byes resolve at generation.
+  // Skipped in manual-fill mode — empty slots are for the creator to place, not byes.
   const advanceSeat = new Map<string, TournamentPlayer>();
-  template.forEach((tm) => {
-    if (!tm.next_match_id) return;
-    const p1 = typeof tm.player_1 === 'number' ? (slotMap.get(tm.player_1) ?? null) : null;
-    const p2 = typeof tm.player_2 === 'number' ? (slotMap.get(tm.player_2) ?? null) : null;
-    const real = (p1 && !p2 && typeof tm.player_2 === 'number') ? p1
-      : (!p1 && p2 && typeof tm.player_1 === 'number') ? p2 : null;
-    if (!real) return;
-    let nextSlot = (tm.next_slot || '') as 'player_1' | 'player_2' | '';
-    if (!nextSlot) {
-      const sibs = template
-        .filter((s) => s.next_match_id === tm.next_match_id)
-        .sort((a, b) => template.indexOf(a) - template.indexOf(b));
-      nextSlot = sibs.findIndex((s) => s.match_id === tm.match_id) <= 0 ? 'player_1' : 'player_2';
-    }
-    advanceSeat.set(`${tm.next_match_id}_${nextSlot}`, real);
-  });
+  if (!manualFill) {
+    template.forEach((tm) => {
+      if (!tm.next_match_id) return;
+      const p1 = typeof tm.player_1 === 'number' ? (slotMap.get(tm.player_1) ?? null) : null;
+      const p2 = typeof tm.player_2 === 'number' ? (slotMap.get(tm.player_2) ?? null) : null;
+      const real = (p1 && !p2 && typeof tm.player_2 === 'number') ? p1
+        : (!p1 && p2 && typeof tm.player_1 === 'number') ? p2 : null;
+      if (!real) return;
+      let nextSlot = (tm.next_slot || '') as 'player_1' | 'player_2' | '';
+      if (!nextSlot) {
+        const sibs = template
+          .filter((s) => s.next_match_id === tm.next_match_id)
+          .sort((a, b) => template.indexOf(a) - template.indexOf(b));
+        nextSlot = sibs.findIndex((s) => s.match_id === tm.match_id) <= 0 ? 'player_1' : 'player_2';
+      }
+      advanceSeat.set(`${tm.next_match_id}_${nextSlot}`, real);
+    });
+  }
 
   const placeholder = (slot: number | string): string => {
-    if (typeof slot === 'number') return BYE; // numeric slot with no seeded player → BYE
+    // Numeric slot with no seeded player → BYE (or an editable placeholder in manual-fill mode).
+    if (typeof slot === 'number') return manualFill ? PLAYER_LOADING : BYE;
     const srcId = slot.toLowerCase().match(/winner\s+(.+)/)?.[1]?.trim();
     if (!srcId) return PLAYER_LOADING;
     const src = template.find((m) => m.match_id === srcId);
@@ -335,9 +457,5 @@ export function deriveRRConfig(rrMatches: TournamentMatch[]): RRConfig | null {
   const groupStage = rrMatches.filter((m) => m.round === 'RR');
   if (groupStage.length === 0) return null;
   const adv = groupStage[0]?.rr_advancement_count ?? 1;
-  const groups = new Set(groupStage.map((m) => m.rr_group ?? 0));
-  const group0Matches = groupStage.filter((m) => (m.rr_group ?? 0) === 0);
-  const matchCount = group0Matches.length;
-  const groupSize: 4 | 5 = matchCount <= 6 ? 4 : 5;
-  return { groupSize, advancementCount: (adv as 1 | 2) };
+  return { advancementCount: (adv as 1 | 2) };
 }

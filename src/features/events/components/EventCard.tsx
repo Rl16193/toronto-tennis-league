@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Calendar, MapPin, User, Star, Clock3, CheckCircle2, X } from 'lucide-react';
+import { Calendar, MapPin, Star, CheckCircle2, X } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { DisplayEvent } from '../services/eventService';
 import { isTournamentEvent, isSeasonOpener } from '../../../utils/eventTypes';
@@ -129,36 +129,24 @@ export const EventCard: React.FC<Props> = ({
         <p className="text-xs text-white/50 line-clamp-2 leading-relaxed">{event.about || event.description}</p>
       )}
 
-      <div className="space-y-1.5 text-xs text-white/70">
+      <div className="flex flex-wrap gap-1.5">
         {dateLabel && (
-          <div className="flex items-center gap-2">
-            <Calendar className="w-3.5 h-3.5 text-clay shrink-0" />
-            <span>{dateLabel}</span>
-          </div>
+          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-white/60">
+            <Calendar className="w-3 h-3 text-clay shrink-0" />
+            {dateLabel}
+          </span>
         )}
         {event.location && (
-          <div className="flex items-center gap-2">
-            <MapPin className="w-3.5 h-3.5 text-clay shrink-0" />
-            <span className="truncate">{event.location}</span>
-          </div>
-        )}
-        {event.organizer && (
-          <div className="flex items-center gap-2">
-            <User className="w-3.5 h-3.5 text-clay shrink-0" />
-            <span className="truncate">{event.organizer}</span>
-          </div>
+          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-white/60">
+            <MapPin className="w-3 h-3 text-clay shrink-0" />
+            {event.location}
+          </span>
         )}
         {event.skill_level && (
-          <div className="flex items-center gap-2">
-            <Star className="w-3.5 h-3.5 text-clay shrink-0" />
-            <span>Skill: {event.skill_level}</span>
-          </div>
-        )}
-        {event.time && event.time !== 'Anytime' && (
-          <div className="flex items-center gap-2">
-            <Clock3 className="w-3.5 h-3.5 text-clay shrink-0" />
-            <span>{event.time}</span>
-          </div>
+          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-white/60">
+            <Star className="w-3 h-3 text-clay shrink-0" />
+            {event.skill_level}
+          </span>
         )}
       </div>
 

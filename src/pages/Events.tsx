@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
-import { Plus } from 'lucide-react';
+
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
 import { createEvent, DisplayEvent, EventFormState, INITIAL_EVENT_FORM, validateEventForm } from '../features/events/services/eventService';
@@ -10,6 +10,9 @@ import { useJoin } from '../features/events/hooks/useJoin';
 import { EventCard } from '../features/events/components/EventCard';
 import { CreatorEventModal } from '../features/events/components/CreatorEventModal';
 import { track } from '../lib/analytics';
+import { useProfileData } from '../features/profile/hooks/useProfileData';
+import { useProfileActions } from '../features/profile/hooks/useProfileActions';
+import { ProfileEvents } from '../features/profile/components/ProfileEvents';
 
 export const Events: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
@@ -25,6 +28,9 @@ export const Events: React.FC = () => {
   const [eventFormMessage, setEventFormMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [creatingEvent, setCreatingEvent] = useState(false);
 
+  const { joinedEvents, loading: joinedLoading } = useProfileData();
+  const { actions } = useProfileActions();
+
   useEffect(() => { document.title = 'Events — Racquets & Strings'; }, []);
 
   useEffect(() => {
@@ -33,7 +39,6 @@ export const Events: React.FC = () => {
     return () => clearTimeout(t);
   }, [eventFormMessage]);
 
-  // Collapse expansion when join completes (selectedEvent cleared by useJoin on success)
   useEffect(() => {
     if (!selectedEvent) setExpandedEventId(null);
   }, [selectedEvent]);
@@ -70,18 +75,16 @@ export const Events: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
-      <div className="mb-6 flex items-center justify-end gap-3">
-        {!isEventCreator && (
-          <Link to="/tournament?tab=past">
-            <Button variant="outline" size="sm">Check Past Events</Button>
-          </Link>
-        )}
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
+      <div className="mb-4 flex items-center justify-end gap-3">
         {isEventCreator && (
           <Button onClick={() => { setEventFormMessage(null); setEventForm((f) => ({ ...f, organizer: f.organizer || profile?.user.name || '' })); setShowEventForm(true); }}>
-            <Plus className="w-4 h-4 mr-2" />Add an Event
+            Add an Event
           </Button>
         )}
+        <Link to="/tournament?tab=completed">
+          <Button variant="outline">Completed Events</Button>
+        </Link>
       </div>
 
       {eventFormMessage && !showEventForm && (
@@ -119,8 +122,18 @@ export const Events: React.FC = () => {
         </div>
       ) : (
         <div className="text-center py-16">
-          <h3 className="text-xl font-bold text-white">No events yet</h3>
-          <p className="text-white/60 mt-1">Events will appear here when they are live.</p>
+          <h3 className="text-xl font-bold text-white">No upcoming events</h3>
+          <p className="text-white/60 mt-1">Events will appear here when available.</p>
+        </div>
+      )}
+
+      {user && (
+        <div className="mt-10 max-w-2xl mx-auto">
+          <ProfileEvents
+            joinedEvents={joinedEvents}
+            loading={joinedLoading}
+            onRemoveEvent={(event) => actions.removeEvent(event.participantId, event.id)}
+          />
         </div>
       )}
 

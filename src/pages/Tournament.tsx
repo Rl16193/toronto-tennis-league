@@ -1,29 +1,30 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { AnimatePresence } from 'motion/react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { ChevronDown } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { useTournament } from './tournament/useTournament';
 import { getEventDate } from './tournament/utils';
-import { downloadDrawAsPng, getRoundLabels } from './tournament/bracketImage';
+import { downloadDrawAsPng, openDrawInNewTab, getRoundLabels, downloadRRGroupsAsPng, openRRGroupsInNewTab } from './tournament/bracketImage';
 import { TournamentMatch } from './tournament/types';
 import { BracketView } from './tournament/BracketView';
 import { BracketErrorBoundary } from './tournament/BracketErrorBoundary';
 import { TournamentHeader } from './tournament/TournamentHeader';
-import { OpponentCard } from './tournament/OpponentCard';
+import { OpponentCard, RROpponentPanel } from './tournament/OpponentPanels';
 import { DrawTabs } from './tournament/DrawTabs';
 import { ScoreModal } from './tournament/ScoreModal';
 import { PendingScoresPanel } from './tournament/PendingScoresPanel';
+import { ScheduleRequestsPanel } from './tournament/ScheduleRequestsPanel';
 import { AddPlayerPanel } from './tournament/AddPlayerPanel';
 import { RoundRobinView } from './tournament/RoundRobinView';
 import { RRConfigModal } from './tournament/RRConfigModal';
-import { RROpponentPanel } from './tournament/RROpponentPanel';
 import { AlertMessage } from '../components/AlertMessage';
 import { Button } from '../components/Button';
 import { TennisEvent } from '../types';
 
-type PageTab = 'past' | 'active' | 'upcoming';
-type EventStatus = 'active' | 'past';
+type PageTab = 'completed' | 'active' | 'upcoming';
+type EventStatus = 'active' | 'completed';
 
 const getDrawState = (matches: TournamentMatch[]): string => {
   const real = matches.filter((m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_'));
@@ -79,23 +80,23 @@ const formatEventRange = (e: TennisEvent): string => {
 
 export const Tournament: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-
-  const tabParam = searchParams.get('tab') as PageTab | null;
-  const [pageTab, setPageTab] = useState<PageTab>(tabParam || 'active');
   const eventId = searchParams.get('event') || undefined;
 
+  const [navMode, setNavMode] = useState<'live' | 'past'>('live');
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [showOtherGroups, setShowOtherGroups] = useState(false);
+  const [myEventIds, setMyEventIds] = useState<Set<string>>(new Set());
   const [eventStatuses, setEventStatuses] = useState<Record<string, EventStatus>>({});
   const [statusLoading, setStatusLoading] = useState(true);
-  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
 
   const {
     authLoading, loading, user,
     event, matches, participants,
     allTournamentEvents,
-    isCreator, started, userParticipant, zoneMap,
+    isCreator, started, userParticipant, zoneMap, userMap,
     currentDraw, currentMatches, displayMatches, visibleDraws,
-    opponent, nextMatchOpponents,
-    editPlayers, reservesPlayers, currentDrawAllPlayers, currentDrawSize,
+    opponent,
+    editPlayers, currentDrawAllPlayers, currentDrawSize,
     message, scoreForm, scoreFormMatch, setScoreForm,
     generating, resettingDraw, editMode, setEditMode,
     mergeMensSingles, setMergeMensSingles,
@@ -106,16 +107,31 @@ export const Tournament: React.FC = () => {
     handleUpdateRoundDeadline, handleSetPreviewDrawSize, handleAddPlayer,
     handleGenerateAll, handleResetDraw,
     handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
-    pendingSubmissions, pendingMatchIds, handleConfirmSubmission, handleRejectSubmission,
-    currentReservesMatches, llDrawDisplayMatches, currentLLSize, allUsersAsTournamentPlayers,
-    showReserves, setShowReserves, generatingReserves,
-    handleSetLLDrawSize, handleGenerateReservesDraw, handleResetLLDraw,
+    pendingSubmissions, pendingMatchIds, submittableMatchIds, handleConfirmSubmission, handleRejectSubmission,
     currentDrawFormat, drawFormat,
     showRRConfig, setShowRRConfig, generatingRR,
-    rrGroups, previewRRGroups, userRRGroup, rrStandingsByGroup, rrGroupMatches, rrKnockoutMatches, rrKnockoutReady, rrConfig,
+    rrGroups, previewRRGroups, previewRRLabels, userRRGroup, rrStandingsByGroup, rrGroupMatches, rrKnockoutMatches, rrKnockoutReady, rrConfig,
     rrGroupLabels, rrGroupIndices,
+    rrUnplacedPlayers, rrSiblingDraw, rrSiblingGroups, rrSiblingLabels, rrSiblingIndices,
+    rrView, setRRView,
     handleGenerateRR, handleResetRR, handleGenerateRRKnockout, handleSaveGroupEdit, handleMoveRRPlayer,
+    handleCreateRRGroup, handleRenameGroup, handleRemoveParticipant,
+    visibleUserMatch, userRRMatches, scheduleRequests,
+    handleProposeTime, handleConfirmTime, handleAskOrganizerSchedule, handleSetSchedule,
   } = useTournament(eventId);
+
+  // Scheduling API passed to the current-match panels (players propose/confirm; scores via the
+  // existing submit flow). Undefined when logged out.
+  const scheduleApi = user
+    ? {
+        uid: user.uid,
+        onPropose: handleProposeTime,
+        onConfirm: handleConfirmTime,
+        onAskOrganizer: handleAskOrganizerSchedule,
+        onSubmitScore: handleOpenScoreForm,
+        submittableMatchIds,
+      }
+    : undefined;
 
   useEffect(() => {
     document.title = event?.title
@@ -123,20 +139,16 @@ export const Tournament: React.FC = () => {
       : 'Matches — Racquets & Strings';
   }, [event?.title]);
 
-  // Sync tab param into state
+  // Which tournaments the signed-in user has joined (event_participants) — combined with the
+  // ones they created, this is the set the Matches tab lists.
   useEffect(() => {
-    if (tabParam && tabParam !== pageTab) setPageTab(tabParam);
-  }, [tabParam]);
+    if (!user) { setMyEventIds(new Set()); return; }
+    getDocs(query(collection(db, 'event_participants'), where('user_id', '==', user.uid)))
+      .then((snap) => setMyEventIds(new Set(snap.docs.map((d) => (d.data().event_id as string)).filter(Boolean))))
+      .catch(() => {});
+  }, [user?.uid]);
 
-  // Auto-set event from first active event if none selected
-  useEffect(() => {
-    if (!event && allTournamentEvents.length > 0 && !loading) {
-      const first = allTournamentEvents[0];
-      setSearchParams((p) => { const n = new URLSearchParams(p); n.set('event', first.id); return n; }, { replace: true });
-    }
-  }, [event?.id, allTournamentEvents.length, loading]);
-
-  // Fetch match statuses for all events (one batch query)
+  // Fetch match statuses for all events (one batch query) — classifies completed vs live.
   useEffect(() => {
     if (allTournamentEvents.length === 0) return;
     const ids = allTournamentEvents.map((e) => e.id).slice(0, 30);
@@ -148,42 +160,41 @@ export const Tournament: React.FC = () => {
           const m = d.data();
           const eid = m.event_id as string;
           if (!statuses[eid]) statuses[eid] = 'active';
-          if (m.round === 'F' && m.status === 'complete' && m.winner_user_id) statuses[eid] = 'past';
+          if (m.round === 'F' && m.status === 'complete' && m.winner_user_id) statuses[eid] = 'completed';
         });
         setEventStatuses(statuses);
       })
       .finally(() => setStatusLoading(false));
   }, [allTournamentEvents.length]);
 
-  // Auto-expand: when tab or events change, expand user's event or first in tab
+  // Tournaments the user joined or created.
+  const myEvents = useMemo(
+    () => allTournamentEvents.filter((e) => !!user && (e.creator_id === user.uid || myEventIds.has(e.id))),
+    [allTournamentEvents, user, myEventIds],
+  );
+  const liveEvents = myEvents.filter((e) => eventStatuses[e.id] !== 'completed');
+  const pastEvents = myEvents.filter((e) => eventStatuses[e.id] === 'completed');
+  const yearOf = (e: TennisEvent) => getEventDate(e)?.getFullYear() ?? new Date().getFullYear();
+  const pastYears = [...new Set(pastEvents.map(yearOf))].sort((a, b) => b - a);
+  const activeYear = selectedYear ?? pastYears[0] ?? null;
+  const pastEventsInYear = pastEvents.filter((e) => yearOf(e) === activeYear);
+  const visibleEvents = navMode === 'live' ? liveEvents : pastEventsInYear;
+
+  const selectEvent = (id: string) =>
+    setSearchParams((p) => { const n = new URLSearchParams(p); n.set('event', id); return n; });
+
+  // Keep a valid selection: when the visible list changes and the current event isn't in it,
+  // select the first visible tournament.
+  const visibleKey = visibleEvents.map((e) => e.id).join(',');
   useEffect(() => {
-    if (statusLoading || allTournamentEvents.length === 0) return;
-    const tabEvents = allTournamentEvents.filter((e) => {
-      if (pageTab === 'past') return eventStatuses[e.id] === 'past';
-      if (pageTab === 'active') return eventStatuses[e.id] === 'active';
-      return !eventStatuses[e.id];
-    });
-    if (tabEvents.length === 0) return;
-    // Prefer event the user participated in; otherwise first
-    const preferred = userParticipant ? tabEvents.find((e) => e.id === event?.id) : null;
-    const toExpand = preferred ?? tabEvents[0];
-    setExpandedEventId(toExpand.id);
-    setSearchParams((p) => { const n = new URLSearchParams(p); n.set('event', toExpand.id); return n; }, { replace: true });
-  }, [pageTab, statusLoading, allTournamentEvents.length]);
-
-  const handleAccordionToggle = (eid: string) => {
-    if (expandedEventId === eid) {
-      setExpandedEventId(null);
-    } else {
-      setExpandedEventId(eid);
-      setSearchParams((p) => { const n = new URLSearchParams(p); n.set('event', eid); return n; });
+    if (statusLoading || visibleEvents.length === 0) return;
+    if (!eventId || !visibleEvents.some((e) => e.id === eventId)) {
+      setSearchParams((p) => { const n = new URLSearchParams(p); n.set('event', visibleEvents[0].id); return n; }, { replace: true });
     }
-  };
+  }, [navMode, activeYear, statusLoading, visibleKey, eventId]);
 
-  const handleTabChange = (tab: PageTab) => {
-    setPageTab(tab);
-    setSearchParams((p) => { const n = new URLSearchParams(p); n.set('tab', tab); return n; });
-  };
+  // Each tournament starts with the "other groups" section collapsed.
+  useEffect(() => { setShowOtherGroups(false); }, [eventId, navMode]);
 
   if (authLoading || (loading && allTournamentEvents.length === 0)) {
     return (
@@ -193,30 +204,72 @@ export const Tournament: React.FC = () => {
     );
   }
 
-  const llIsPreview = currentReservesMatches.length === 0;
   const drawState = getDrawState(currentMatches);
 
-  const pastEvents = allTournamentEvents.filter((e) => eventStatuses[e.id] === 'past');
-  const activeEvents = allTournamentEvents.filter((e) => eventStatuses[e.id] === 'active');
-  const upcomingEvents = allTournamentEvents.filter((e) => !eventStatuses[e.id]);
+  const pastMode = navMode === 'past';
+  const canEdit = isCreator && !pastMode;
+  const effEditMode = editMode && canEdit;
+  const schedule = pastMode ? undefined : scheduleApi;
+  // Creator can always enter or edit scores (including past events and already-scored matches).
+  const submitScore = isCreator ? handleOpenScoreForm : (pastMode ? undefined : handleOpenScoreForm);
+  const submittable = pastMode ? undefined : submittableMatchIds;
+  const isRR = currentDrawFormat === 'rr';
 
-  const tabEvents = pageTab === 'past' ? pastEvents : pageTab === 'active' ? activeEvents : upcomingEvents;
+  const drawSelector = (
+    <DrawTabs
+      activeTab={activeTab}
+      activeSkill={activeSkill}
+      activeDoubles={activeDoubles}
+      currentDraw={currentDraw}
+      visibleDraws={visibleDraws}
+      onTabChange={setActiveTab}
+      onSkillChange={setActiveSkill}
+      onDoublesChange={setActiveDoubles}
+      rrView={isRR && rrGroupMatches.length > 0 ? rrView : undefined}
+      onRRViewChange={isRR && rrGroupMatches.length > 0 ? setRRView : undefined}
+    />
+  );
 
-  const PAGE_TABS: { id: PageTab; label: string }[] = [
-    { id: 'upcoming', label: 'Upcoming' },
-    { id: 'active', label: 'Active' },
-    { id: 'past', label: 'Past' },
-  ];
+  const roundRobinFull = (readOnly: boolean) => (
+    <RoundRobinView
+      groups={rrGroups.length > 0 ? rrGroups : previewRRGroups}
+      groupLabels={rrGroups.length > 0 ? rrGroupLabels : previewRRLabels}
+      groupIndices={rrGroupIndices}
+      standingsByGroup={rrGroups.length > 0 ? rrStandingsByGroup : previewRRGroups.map(() => [])}
+      groupMatches={rrGroupMatches}
+      knockoutMatches={rrKnockoutMatches}
+      advancementCount={rrConfig?.advancementCount ?? 1}
+      isCreator={readOnly ? false : canEdit}
+      isParticipant={!!userParticipant}
+      isPastEvent={pastMode}
+      editMode={readOnly ? false : effEditMode}
+      editPlayers={editPlayers}
+      onEditPlayer={handleEditPlayer}
+      onSubmitScore={readOnly ? undefined : submitScore}
+      submittableMatchIds={readOnly ? undefined : submittable}
+      pendingMatchIds={pendingMatchIds}
+      onSaveGroupEdit={handleSaveGroupEdit}
+      onRenameGroup={handleRenameGroup}
+      onCreateGroup={handleCreateRRGroup}
+      unplacedPlayers={rrUnplacedPlayers}
+      rrKnockoutReady={rrKnockoutReady}
+      generatingKnockout={generatingRR}
+      onGenerateKnockout={handleGenerateRRKnockout}
+      rrView={rrView}
+      roundDeadlines={event?.round_deadlines}
+      onUpdateDeadline={canEdit ? handleUpdateRoundDeadline : undefined}
+    />
+  );
 
   const drawContent = (
-    <>
+    <div className="pt-2">
       {message && (
         <AlertMessage tone={message.type} className="mb-6">
           <p>{message.text}</p>
         </AlertMessage>
       )}
 
-      {isCreator && (
+      {!pastMode && isCreator && (
         <PendingScoresPanel
           submissions={pendingSubmissions}
           onConfirm={handleConfirmSubmission}
@@ -224,278 +277,220 @@ export const Tournament: React.FC = () => {
         />
       )}
 
-      {currentDrawFormat === 'rr' ? (
-        userRRGroup && user && (
-          <RROpponentPanel
-            group={userRRGroup}
-            userId={user.uid}
-            isDoubles={rrGroupMatches[0]?.tournament_choice === 'Doubles'}
-          />
-        )
-      ) : (
-        currentMatches.length > 0 && opponent && <OpponentCard opponent={opponent} nextMatchOpponents={nextMatchOpponents} />
+      {!pastMode && isCreator && <ScheduleRequestsPanel requests={scheduleRequests} onSetSchedule={handleSetSchedule} />}
+
+      {/* Draw tabs: division → skill → (RR) Groups / Knockout */}
+      {drawSelector}
+
+      {/* Creator edit tools */}
+      {effEditMode && (
+        <AddPlayerPanel availableUsers={availableUsers} currentDraw={currentDraw} onAdd={handleAddPlayer} />
+      )}
+      {!isRR && effEditMode && currentDraw && (
+        <div className="mb-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-bold text-white uppercase tracking-widest">Draw Size</span>
+            {[8, 16, 32].map((size) => (
+              <button
+                key={size}
+                disabled={currentMatches.length > 0}
+                onClick={() => handleSetPreviewDrawSize(currentDraw.label, size)}
+                className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
+                  currentDrawSize === size ? 'bg-clay text-white' : currentMatches.length > 0 ? 'bg-tennis-surface/30 text-white cursor-not-allowed' : 'bg-tennis-surface/60 text-white hover:text-white'
+                }`}
+              >
+                R{size}
+              </button>
+            ))}
+          </div>
+          {currentMatches.length > 0 && (
+            <p className="text-xs text-amber-400/80 mt-2">Matches already created — reset this draw first to change the size.</p>
+          )}
+        </div>
       )}
 
-      <DrawTabs
-        activeTab={activeTab}
-        activeSkill={activeSkill}
-        activeDoubles={activeDoubles}
-        currentDraw={currentDraw}
-        visibleDraws={visibleDraws}
-        showReserves={showReserves}
-        onTabChange={setActiveTab}
-        onSkillChange={setActiveSkill}
-        onDoublesChange={setActiveDoubles}
-        onReservesChange={setShowReserves}
-      />
-
-      {/* LL Draw view */}
-      {showReserves ? (
-        <>
-          {isCreator && (
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-              <span className="text-sm font-bold text-white uppercase tracking-widest">LL Draw Size</span>
-              {[4, 8, 16].map((size) => (
-                <button
-                  key={size}
-                  disabled={!llIsPreview}
-                  onClick={() => handleSetLLDrawSize(size)}
-                  className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
-                    currentLLSize === size ? 'bg-clay text-white' : !llIsPreview ? 'bg-tennis-surface/30 text-white cursor-not-allowed' : 'bg-tennis-surface/60 text-white hover:text-white'
-                  }`}
-                >
-                  R{size}
-                </button>
-              ))}
-              {llIsPreview && (
-                <Button onClick={handleGenerateReservesDraw} isLoading={generatingReserves} className="ml-2">
-                  Finalize LL Draw
-                </Button>
-              )}
-              {!llIsPreview && (
-                <>
-                  <span className="text-xs text-white">Draw finalized — use Edit Draw to modify players.</span>
-                  <Button variant="danger" onClick={handleResetLLDraw} className="ml-2">Reset LL Draw</Button>
-                </>
-              )}
-            </div>
-          )}
-          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(llDrawDisplayMatches, 'LL Draw', drawState, event?.title, event?.round_deadlines ?? {})}>
-            <BracketView
-              matches={llDrawDisplayMatches}
-              drawTitle="LL Draw"
-              editMode={editMode}
-              editPlayers={editMode ? allUsersAsTournamentPlayers : []}
-              onEditPlayer={handleEditPlayer}
-              isCreator={isCreator}
-              onSubmitScore={handleOpenScoreForm}
-              currentUserId={user?.uid}
-              pendingMatchIds={pendingMatchIds}
-              roundDeadlines={event?.round_deadlines}
-              onUpdateDeadline={isCreator ? handleUpdateRoundDeadline : undefined}
-            />
-          </BracketErrorBoundary>
-        </>
-      ) : (
-        <>
-          {editMode && isCreator && (
-            <AddPlayerPanel availableUsers={availableUsers} currentDraw={currentDraw} onAdd={handleAddPlayer} />
-          )}
-          {editMode && currentDraw && (
-            <div className="mb-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm font-bold text-white uppercase tracking-widest">Draw Size</span>
-                {[8, 16, 32].map((size) => (
-                  <button
-                    key={size}
-                    disabled={currentMatches.length > 0}
-                    onClick={() => handleSetPreviewDrawSize(currentDraw.label, size)}
-                    className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
-                      currentDrawSize === size ? 'bg-clay text-white' : currentMatches.length > 0 ? 'bg-tennis-surface/30 text-white cursor-not-allowed' : 'bg-tennis-surface/60 text-white hover:text-white'
-                    }`}
-                  >
-                    R{size}
-                  </button>
-                ))}
-              </div>
-              {currentMatches.length > 0 && (
-                <p className="text-xs text-amber-400/80 mt-2">Matches already created — reset this draw first to change the size.</p>
-              )}
-            </div>
-          )}
-          {currentDrawFormat === 'rr' ? (
-            <RoundRobinView
-              groups={rrGroups.length > 0 ? rrGroups : previewRRGroups}
-              groupLabels={rrGroups.length > 0 ? rrGroupLabels : previewRRGroups.map((_, i) => `Group ${String.fromCharCode(65 + i)}`)}
-              groupIndices={rrGroupIndices}
-              standingsByGroup={rrGroups.length > 0 ? rrStandingsByGroup : previewRRGroups.map(() => [])}
-              groupMatches={rrGroupMatches}
-              knockoutMatches={rrKnockoutMatches}
-              advancementCount={rrConfig?.advancementCount ?? 1}
-              isCreator={isCreator}
-              isParticipant={!!userParticipant}
-              isPastEvent={pageTab === 'past'}
-              editMode={editMode}
-              editPlayers={editPlayers}
-              onEditPlayer={handleEditPlayer}
-              onSubmitScore={handleOpenScoreForm}
-              currentUserId={user?.uid}
-              pendingMatchIds={pendingMatchIds}
-              onSaveGroupEdit={handleSaveGroupEdit}
-              onMoveRRPlayer={handleMoveRRPlayer}
-              rrKnockoutReady={rrKnockoutReady}
-              generatingKnockout={generatingRR}
-              onGenerateKnockout={handleGenerateRRKnockout}
-              roundDeadlines={event?.round_deadlines}
-              onUpdateDeadline={isCreator ? handleUpdateRoundDeadline : undefined}
-            />
-          ) : (
-            <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, event?.round_deadlines ?? {})}>
-              <BracketView
-                matches={displayMatches}
-                drawTitle={currentDraw?.label || 'Draw'}
-                editMode={editMode}
-                editPlayers={editPlayers}
-                onEditPlayer={handleEditPlayer}
-                isCreator={isCreator}
-                onSubmitScore={handleOpenScoreForm}
-                currentUserId={user?.uid}
-                pendingMatchIds={pendingMatchIds}
-                roundDeadlines={event?.round_deadlines}
-                onUpdateDeadline={isCreator ? handleUpdateRoundDeadline : undefined}
+      {/* Your group / your match — under all the tabs. Groups view → your group; Knockout view → your match. */}
+      {isRR ? (
+        rrView === 'knockout'
+          ? (visibleUserMatch && opponent && (
+              <OpponentCard opponent={opponent} defaultOpen currentMatch={visibleUserMatch} schedule={schedule} />
+            ))
+          : (userRRGroup && user && (
+              <RROpponentPanel
+                group={userRRGroup}
+                userId={user.uid}
+                isDoubles={rrGroupMatches[0]?.tournament_choice === 'Doubles'}
+                defaultOpen
+                pairingMatches={userRRMatches}
+                schedule={schedule}
+                contactMap={userMap}
               />
-            </BracketErrorBoundary>
-          )}
-          {reservesPlayers.length > 0 && (
-            <div className="mt-8">
-              <h3 className="text-xl font-bold text-white mb-4">
-                Reserves <span className="text-white text-base font-normal">({reservesPlayers.length})</span>
-              </h3>
-              <div className="bg-tennis-surface/30 border border-white/5 rounded-2xl p-6">
-                <ol className="space-y-2">
-                  {reservesPlayers.map((player, i) => (
-                    <li key={player.user_id} className="flex items-center gap-3 text-white">
-                      <span className="text-white text-sm w-6 text-right shrink-0">{i + 1}.</span>
-                      <span className="font-semibold">{player.name}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            </div>
-          )}
-        </>
+            ))
+      ) : (
+        currentMatches.length > 0 && opponent && (
+          <OpponentCard opponent={opponent} defaultOpen currentMatch={visibleUserMatch} schedule={schedule} />
+        )
       )}
 
-      {/* Buttons at bottom */}
-      <div className="mt-8 pt-6 border-t border-white/5">
-        <TournamentHeader
-          isCreator={isCreator}
-          hasMatches={currentMatches.length > 0}
-          isProcessing={generating || resettingDraw || generatingRR}
-          editMode={editMode}
-          started={currentMatches.some((m) => m.status === 'complete')}
-          mergeMensSingles={mergeMensSingles}
-          mergeWomensSingles={mergeWomensSingles}
-          consolidateDoubles={consolidateDoubles}
-          currentDrawFormat={currentDrawFormat}
-          onDownload={() => downloadDrawAsPng(showReserves ? llDrawDisplayMatches : displayMatches, showReserves ? 'LL Draw' : (currentDraw?.label || 'Draw'), drawState, event?.title, event?.round_deadlines ?? {})}
-          onGenerateMatches={drawFormat === 'rr' ? () => setShowRRConfig(true) : handleGenerateAll}
-          onCancelMatches={currentDrawFormat === 'rr' ? handleResetRR : handleResetDraw}
-          onToggleEdit={() => setEditMode((v) => !v)}
-          onToggleMergeMens={() => setMergeMensSingles((v) => !v)}
-          onToggleMergeWomens={() => setMergeWomensSingles((v) => !v)}
-          onToggleConsolidateDoubles={() => setConsolidateDoubles((v) => !v)}
-        />
-      </div>
-
-      {scoreForm && scoreFormMatch && (
-        <ScoreModal
-          match={scoreFormMatch}
-          scoreForm={scoreForm}
-          onChange={setScoreForm}
-          onClose={() => setScoreForm(null)}
-          onSubmit={handleSubmitScore}
-          isCreatorSubmit={isCreator}
-        />
+      {/* Full draw */}
+      {isRR ? (
+        roundRobinFull(!canEdit)
+      ) : isCreator ? (
+        /* Creator: the full draw as an interactive interface, blended with the site. */
+        <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, event?.round_deadlines ?? {})}>
+          <BracketView
+            matches={displayMatches}
+            drawTitle={currentDraw?.label || 'Draw'}
+            editMode={effEditMode}
+            editPlayers={editPlayers}
+            onEditPlayer={handleEditPlayer}
+            isCreator={isCreator}
+            onSubmitScore={submitScore}
+            submittableMatchIds={submittable}
+            pendingMatchIds={pendingMatchIds}
+            roundDeadlines={event?.round_deadlines}
+            onUpdateDeadline={canEdit ? handleUpdateRoundDeadline : undefined}
+          />
+        </BracketErrorBoundary>
+      ) : (
+        /* Players: no inline bracket — open the full draw as an image in a new tab. */
+        displayMatches.some((m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_')) && (
+          <div className="rounded-2xl border border-white/10 bg-tennis-surface/20 p-6 text-center">
+            <p className="text-sm text-white/60 mb-3">See where you sit in the full bracket.</p>
+            <Button
+              variant="outline"
+              onClick={() => openDrawInNewTab(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, event?.round_deadlines ?? {})}
+            >
+              View entire draw
+            </Button>
+          </div>
+        )
       )}
 
-      {showRRConfig && (
-        <RRConfigModal
-          playerCount={currentDrawAllPlayers.length}
-          isLoading={generatingRR}
-          onConfirm={handleGenerateRR}
-          onClose={() => setShowRRConfig(false)}
-        />
+      {/* Creator controls — hidden for past (read-only) tournaments */}
+      {!pastMode && isCreator && (
+        <div className="mt-8 pt-6 border-t border-white/5">
+          <TournamentHeader
+            isCreator={isCreator}
+            hasMatches={currentMatches.length > 0}
+            isProcessing={generating || resettingDraw || generatingRR}
+            editMode={effEditMode}
+            started={currentMatches.some((m) => m.status === 'complete')}
+            mergeMensSingles={mergeMensSingles}
+            mergeWomensSingles={mergeWomensSingles}
+            consolidateDoubles={consolidateDoubles}
+            currentDrawFormat={currentDrawFormat}
+            onDownload={() => isRR && rrKnockoutMatches.length === 0
+              ? downloadRRGroupsAsPng(rrGroups, rrGroupLabels, rrGroupMatches, currentDraw?.division || 'Draw', event?.title, userMap)
+              : downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, event?.round_deadlines ?? {})}
+            onGenerateMatches={drawFormat === 'rr' ? () => setShowRRConfig(true) : handleGenerateAll}
+            onCancelMatches={currentDrawFormat === 'rr' ? handleResetRR : handleResetDraw}
+            onToggleEdit={() => setEditMode((v) => !v)}
+            onToggleMergeMens={() => setMergeMensSingles((v) => !v)}
+            onToggleMergeWomens={() => setMergeWomensSingles((v) => !v)}
+            onToggleConsolidateDoubles={() => setConsolidateDoubles((v) => !v)}
+          />
+        </div>
       )}
-    </>
+
+      <AnimatePresence>
+        {scoreForm && scoreFormMatch && (
+          <ScoreModal
+            match={scoreFormMatch}
+            scoreForm={scoreForm}
+            onChange={setScoreForm}
+            onClose={() => setScoreForm(null)}
+            onSubmit={handleSubmitScore}
+            isCreatorSubmit={isCreator}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showRRConfig && (
+          <RRConfigModal
+            playerCount={currentDrawAllPlayers.length}
+            isLoading={generatingRR}
+            onConfirm={handleGenerateRR}
+            onClose={() => setShowRRConfig(false)}
+          />
+        )}
+      </AnimatePresence>
+    </div>
   );
+
+  const selectedLoaded = !!event && event.id === eventId && !loading;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
-      {/* Page tabs: Past / Active / Upcoming */}
-      <div className="flex gap-2 mb-6 flex-wrap">
-        {PAGE_TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => handleTabChange(t.id)}
-            className={`px-4 py-2 rounded-2xl text-sm font-semibold transition-all border ${
-              pageTab === t.id
-                ? 'bg-clay text-white border-clay'
-                : 'bg-tennis-surface/40 text-white border-white/10 hover:border-white/30'
-            }`}
-          >
-            {t.label}
-            {t.id === 'active' && activeEvents.length > 0 && (
-              <span className="ml-1.5 text-xs font-bold opacity-70">{activeEvents.length}</span>
-            )}
-          </button>
-        ))}
+      {/* Tournament name tabs (live) or year tabs (past) + Past/Current toggle */}
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div className="flex gap-2 flex-wrap">
+          {navMode === 'live'
+            ? liveEvents.map((e) => (
+                <button
+                  key={e.id}
+                  onClick={() => selectEvent(e.id)}
+                  className={`px-4 py-2 rounded-2xl text-sm font-semibold border transition-all ${
+                    eventId === e.id ? 'bg-clay text-white border-clay' : 'bg-tennis-surface/40 text-white border-white/10 hover:border-white/30'
+                  }`}
+                >
+                  {e.title}
+                </button>
+              ))
+            : pastYears.map((y) => (
+                <button
+                  key={y}
+                  onClick={() => setSelectedYear(y)}
+                  className={`px-4 py-2 rounded-2xl text-sm font-bold border transition-all ${
+                    activeYear === y ? 'bg-clay text-white border-clay' : 'bg-tennis-surface/40 text-white border-white/10 hover:border-white/30'
+                  }`}
+                >
+                  {y}
+                </button>
+              ))}
+        </div>
+        <button
+          onClick={() => { setNavMode((m) => (m === 'live' ? 'past' : 'live')); setSelectedYear(null); }}
+          className="px-4 py-2 rounded-2xl text-sm font-semibold border border-white/10 bg-tennis-surface/40 text-white hover:border-white/30 transition-all"
+        >
+          {navMode === 'live' ? 'Past Events' : '← Current'}
+        </button>
       </div>
+
+      {/* Past mode: tournament name tabs for the selected year */}
+      {navMode === 'past' && pastEventsInYear.length > 0 && (
+        <div className="flex gap-2 mb-4 flex-wrap">
+          {pastEventsInYear.map((e) => (
+            <button
+              key={e.id}
+              onClick={() => selectEvent(e.id)}
+              className={`px-4 py-2 rounded-2xl text-sm font-semibold border transition-all ${
+                eventId === e.id ? 'bg-clay text-white border-clay' : 'bg-tennis-surface/40 text-white border-white/10 hover:border-white/30'
+              }`}
+            >
+              {e.title}
+            </button>
+          ))}
+        </div>
+      )}
 
       {statusLoading && allTournamentEvents.length === 0 ? (
         <div className="space-y-3">
           {[1, 2].map((i) => <div key={i} className="h-14 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
         </div>
-      ) : tabEvents.length === 0 ? (
+      ) : visibleEvents.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-white/50 text-sm">No {pageTab} tournaments.</p>
+          <p className="text-white/50 text-sm">
+            {navMode === 'live' ? "You're not in any current tournaments." : 'No past tournaments.'}
+          </p>
+        </div>
+      ) : !selectedLoaded ? (
+        <div className="flex justify-center py-16">
+          <div className="w-10 h-10 border-4 border-clay border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="space-y-3">
-          {tabEvents.map((e) => {
-            const isOpen = expandedEventId === e.id;
-            const isLoaded = isOpen && event?.id === e.id;
-            const dateRange = formatEventRange(e);
-            return (
-              <div key={e.id} className="rounded-2xl border border-white/10 bg-tennis-surface/20 overflow-hidden">
-                {/* Accordion header */}
-                <button
-                  onClick={() => handleAccordionToggle(e.id)}
-                  className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/[0.03] transition-colors"
-                >
-                  <div>
-                    <span className="font-bold text-white">{e.title}</span>
-                    {dateRange && <span className="ml-3 text-xs text-white/50">{dateRange}</span>}
-                  </div>
-                  <ChevronDown className={`w-5 h-5 text-white/40 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {/* Accordion body */}
-                {isOpen && (
-                  <div className="px-4 pb-6 pt-2 border-t border-white/5">
-                    {!isLoaded || loading ? (
-                      <div className="flex justify-center py-8">
-                        <div className="w-10 h-10 border-4 border-clay border-t-transparent rounded-full animate-spin" />
-                      </div>
-                    ) : (
-                      drawContent
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        drawContent
       )}
     </div>
   );

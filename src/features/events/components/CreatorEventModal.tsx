@@ -1,6 +1,6 @@
 ﻿import React from 'react';
 import { Button } from '../../../components/Button';
-import { ModalShell } from '../../../components/ModalShell';
+import { Sheet } from '../../../components/Sheet';
 import {
   EVENT_SKILL_OPTIONS,
   EVENT_TYPE_OPTIONS,
@@ -28,7 +28,7 @@ export const CreatorEventModal: React.FC<Props> = ({
   onSubmit,
   onClose,
 }) => (
-  <ModalShell maxWidthClassName="max-w-4xl" onClose={onClose}>
+  <Sheet maxWidthClassName="max-w-4xl" onClose={onClose}>
     <form onSubmit={onSubmit} className="p-6 md:p-8">
       <div className="mb-6 pr-12">
         <h2 className="text-3xl font-display font-black text-white">Add an Event</h2>
@@ -205,5 +205,5 @@ export const CreatorEventModal: React.FC<Props> = ({
         </Button>
       </div>
     </form>
-  </ModalShell>
+  </Sheet>
 );

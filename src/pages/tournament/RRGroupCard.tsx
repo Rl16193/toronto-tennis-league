@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
-import { formatPlayerName, formatSetScores } from './utils';
+import { PLAYER_LOADING, formatPlayerName, formatSetScores } from './utils';
+import { PLAYER_LOADING_SENTINEL } from './AddPlayerPanel';
 
 type Props = {
   groupIndex: number;
@@ -17,26 +18,28 @@ type Props = {
   editPlayers: TournamentPlayer[];
   allGroupPlayers: TournamentPlayer[];
   onEditPlayer: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
-  onSubmitScore: (match: TournamentMatch) => void;
-  currentUserId?: string;
+  onSubmitScore?: (match: TournamentMatch) => void;
+  submittableMatchIds?: Set<string>;
   pendingMatchIds?: Set<string>;
   onSaveGroupEdit: (groupIndex: number, newPlayers: TournamentPlayer[]) => void;
-  groupTargets?: { gi: number; label: string }[];
-  onMovePlayer?: (player: TournamentPlayer, toGi: number) => void;
+  onRenameGroup?: (label: string) => void;
 };
 
 
 export const RRGroupCard: React.FC<Props> = ({
   groupIndex, groupLabel, players, matches, standings, advancementCount,
   isCreator, isParticipant, isPastEvent, editMode, editPlayers, allGroupPlayers,
-  onEditPlayer, onSubmitScore, currentUserId, pendingMatchIds, onSaveGroupEdit, groupTargets, onMovePlayer,
+  onEditPlayer, onSubmitScore, submittableMatchIds, pendingMatchIds, onSaveGroupEdit, onRenameGroup,
 }) => {
   const [matchesOpen, setMatchesOpen] = useState(false);
   // Local edit state: copy of players in this group for reassignment
   const [localPlayers, setLocalPlayers] = useState<TournamentPlayer[]>(players);
+  // Local draft of the group name (creator rename).
+  const [labelDraft, setLabelDraft] = useState(groupLabel);
 
-  // Sync local state when players prop changes (e.g. after save)
+  // Sync local state when props change (e.g. after save)
   React.useEffect(() => { setLocalPlayers(players); }, [players]);
+  React.useEffect(() => { setLabelDraft(groupLabel); }, [groupLabel]);
 
   const sortedMatches = matches.slice().sort((a, b) => a.position - b.position);
   const canSeeMatches = isCreator || isParticipant || isPastEvent;
@@ -171,16 +174,15 @@ export const RRGroupCard: React.FC<Props> = ({
                       </div>
                     </div>
 
-                    {isCreator && !isDone && !editMode && (
+                    {isCreator && !editMode && !!onSubmitScore && (
                       <button
                         onClick={() => onSubmitScore(m)}
                         className="shrink-0 px-3 py-1.5 rounded-lg bg-clay/20 text-clay text-xs font-bold hover:bg-clay/30 transition-colors whitespace-nowrap"
                       >
-                        Enter Score
+                        {isDone ? 'Edit Score' : 'Enter Score'}
                       </button>
                     )}
-                    {!isCreator && !isDone && !editMode && !!currentUserId &&
-                      (m.player_1_user_id === currentUserId || m.player_2_user_id === currentUserId) && (
+                    {!isCreator && !isDone && !editMode && !!submittableMatchIds?.has(m.id) && (
                         pendingMatchIds?.has(m.id) ? (
                           <span className="shrink-0 text-[10px] font-bold text-green-500 uppercase tracking-wider">Submitted ✓</span>
                         ) : (
@@ -203,59 +205,87 @@ export const RRGroupCard: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Group edit mode — creator only: reassign players in this group */}
+      {/* Group edit mode — creator only: rename + reassign players in this group */}
       {isCreator && editMode && (
         <div className="border-t border-white/10 px-4 py-4 space-y-3">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Reassign Players</p>
-          {localPlayers.map((p, idx) => (
-            <div key={p.user_id} className="flex items-center gap-2">
-              <span className="text-white/50 text-xs w-4">{idx + 1}.</span>
-              <select
-                value={p.user_id}
-                onChange={(e) => {
-                  const chosen = allGroupPlayers.find((pl) => pl.user_id === e.target.value);
-                  if (!chosen) return;
-                  setLocalPlayers((prev) => prev.map((pp, i) => i === idx ? chosen : pp));
-                }}
-                className="flex-1 bg-tennis-surface border border-white/10 rounded px-2 py-1 text-white text-xs"
-              >
-                {allGroupPlayers.map((pl) => (
-                  <option key={pl.user_id} value={pl.user_id} className="bg-tennis-surface text-white">{formatPlayerName(pl.name)}</option>
-                ))}
-              </select>
+          {onRenameGroup && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Group Name</p>
+              <div className="flex items-center gap-2">
+                <input
+                  value={labelDraft}
+                  onChange={(e) => setLabelDraft(e.target.value)}
+                  className="flex-1 bg-tennis-surface border border-white/10 rounded px-2 py-1 text-white text-xs"
+                />
+                <button
+                  onClick={() => onRenameGroup(labelDraft)}
+                  disabled={!labelDraft.trim() || labelDraft.trim() === groupLabel}
+                  className="px-3 py-1 rounded-lg bg-clay/20 text-clay text-xs font-bold hover:bg-clay/30 transition-colors disabled:opacity-40"
+                >
+                  Rename
+                </button>
+              </div>
             </div>
-          ))}
+          )}
+          <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Reassign Players</p>
+          {localPlayers.map((p, idx) => {
+            const hasPlayedMatch = matches.some((m) => m.status === 'complete');
+            return (
+              <div key={p.user_id} className="flex items-center gap-2">
+                <span className="text-white/50 text-xs w-4">{idx + 1}.</span>
+                <select
+                  value={p.user_id === PLAYER_LOADING_SENTINEL ? PLAYER_LOADING_SENTINEL : p.user_id}
+                  onChange={(e) => {
+                    if (e.target.value === PLAYER_LOADING_SENTINEL) {
+                      setLocalPlayers((prev) => prev.map((pp, i) => i === idx
+                        ? { user_id: PLAYER_LOADING_SENTINEL, name: PLAYER_LOADING, contact: '', preferredContact: 'email' as const, participantId: '' }
+                        : pp));
+                      return;
+                    }
+                    const chosen = allGroupPlayers.find((pl) => pl.user_id === e.target.value);
+                    if (!chosen) return;
+                    setLocalPlayers((prev) => prev.map((pp, i) => i === idx ? chosen : pp));
+                  }}
+                  className="flex-1 bg-tennis-surface border border-white/10 rounded px-2 py-1 text-white text-xs"
+                >
+                  <option value={PLAYER_LOADING_SENTINEL} className="bg-tennis-surface text-white/40">— Player Loading —</option>
+                  {allGroupPlayers.map((pl) => (
+                    <option key={pl.user_id} value={pl.user_id} className="bg-tennis-surface text-white">{formatPlayerName(pl.name)}</option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+          {/* Add a player from another group or the unplaced pool */}
+          {(() => {
+            const takenIds = new Set(localPlayers.map((p) => p.user_id));
+            const available = allGroupPlayers.filter((p) => !takenIds.has(p.user_id));
+            if (!available.length) return null;
+            return (
+              <div className="flex items-center gap-2">
+                <span className="text-white/50 text-xs w-4">+</span>
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const chosen = allGroupPlayers.find((pl) => pl.user_id === e.target.value);
+                    if (chosen) setLocalPlayers((prev) => [...prev, chosen]);
+                  }}
+                  className="flex-1 bg-tennis-surface border border-white/10 rounded px-2 py-1 text-white text-xs"
+                >
+                  <option value="">Add player…</option>
+                  {available.map((pl) => (
+                    <option key={pl.user_id} value={pl.user_id} className="bg-tennis-surface text-white">{formatPlayerName(pl.name)}</option>
+                  ))}
+                </select>
+              </div>
+            );
+          })()}
           <button
             onClick={() => onSaveGroupEdit(groupIndex, localPlayers)}
             className="w-full mt-2 py-1.5 rounded-lg bg-clay text-white text-xs font-bold hover:bg-clay/80 transition-colors"
           >
             Save Group
           </button>
-
-          {/* Move players to another group (true move / dissolve) */}
-          {onMovePlayer && groupTargets && groupTargets.length > 0 && (
-            <div className="pt-3 mt-1 border-t border-white/10 space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Move To Another Group</p>
-              {players.map((p) => (
-                <div key={p.user_id} className="flex items-center gap-2">
-                  <span className="flex-1 text-white/80 text-xs truncate">{formatPlayerName(p.name)}</span>
-                  <select
-                    value=""
-                    onChange={(e) => {
-                      if (e.target.value === '') return;
-                      onMovePlayer(p, Number(e.target.value));
-                    }}
-                    className="bg-tennis-surface border border-white/10 rounded px-2 py-1 text-white text-xs"
-                  >
-                    <option value="" className="bg-tennis-surface text-white">Move to…</option>
-                    {groupTargets.map((t) => (
-                      <option key={t.gi} value={t.gi} className="bg-tennis-surface text-white">{t.label}</option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </div>

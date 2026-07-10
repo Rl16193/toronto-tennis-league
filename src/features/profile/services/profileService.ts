@@ -1,81 +1,70 @@
 import { doc, updateDoc, getDocs, query, where, collection, deleteDoc, writeBatch } from 'firebase/firestore';
 import { EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail, type User } from 'firebase/auth';
 import { db } from '../../../lib/firebase';
+import { gridToLegacy, type AvailabilityGrid } from '../../../utils/availability';
 
-export const updateUserInfo = async (userId: string, name: string, phone: string) => {
-  const normalizedPhone = phone.replace(/\D/g, '');
-  if (normalizedPhone.length !== 10) {
-    throw new Error('Phone number must be exactly 10 digits.');
-  }
-
-  const userRef = doc(db, 'users', userId);
-  await updateDoc(userRef, {
-    name: name.trim(),
-    phone: `(${normalizedPhone.slice(0, 3)})-${normalizedPhone.slice(3, 6)}-${normalizedPhone.slice(6, 10)}`,
-  });
-
+// Sync the display name onto stats/preferences and every event_participants doc.
+const syncName = async (userId: string, name: string) => {
   await Promise.all([
-    updateDoc(doc(db, 'stats', userId), {
-      name: name.trim(),
-      user_id: userId,
-    }),
-    updateDoc(doc(db, 'preferences', userId), {
-      name: name.trim(),
-      user_id: userId,
-    }),
+    updateDoc(doc(db, 'stats', userId), { name, user_id: userId }),
+    updateDoc(doc(db, 'preferences', userId), { name, user_id: userId }),
   ]);
-
-  const participantSnapshot = await getDocs(
-    query(collection(db, 'event_participants'), where('user_id', '==', userId))
-  );
-
-  if (!participantSnapshot.empty) {
+  const snap = await getDocs(query(collection(db, 'event_participants'), where('user_id', '==', userId)));
+  if (!snap.empty) {
     const batch = writeBatch(db);
-    participantSnapshot.docs.forEach((participantDoc) => {
-      batch.update(participantDoc.ref, { user_name: name.trim() });
-    });
+    snap.docs.forEach((d) => batch.update(d.ref, { user_name: name }));
     await batch.commit();
   }
+};
+
+export const updateName = async (userId: string, name: string) => {
+  const trimmed = name.trim();
+  if (trimmed.length < 3 || trimmed.length > 80) throw new Error('Name must be 3–80 characters.');
+  if (/\d/.test(trimmed)) throw new Error('Name cannot contain numbers.');
+  await updateDoc(doc(db, 'users', userId), { name: trimmed });
+  await syncName(userId, trimmed);
+};
+
+export const updatePhone = async (userId: string, phone: string) => {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length !== 10) throw new Error('Phone number must be exactly 10 digits.');
+  await updateDoc(doc(db, 'users', userId), {
+    phone: `(${digits.slice(0, 3)})-${digits.slice(3, 6)}-${digits.slice(6, 10)}`,
+  });
+};
+
+export const updateBio = async (userId: string, bio: string) => {
+  await updateDoc(doc(db, 'users', userId), { bio: bio.trim().slice(0, 300) });
+};
+
+export const updateAvatar = async (userId: string, avatar: string) => {
+  await updateDoc(doc(db, 'users', userId), { avatar });
 };
 
 export const updateSkills = async (userId: string, skillLevel: number, tournamentPreference: string) => {
-  if (Number.isNaN(skillLevel)) {
-    throw new Error('Please select a valid skill level.');
-  }
+  if (Number.isNaN(skillLevel)) throw new Error('Please select a valid skill level.');
+  await updateDoc(doc(db, 'stats', userId), { skill_level: skillLevel, tournament_preference: tournamentPreference });
 
-  const statsRef = doc(db, 'stats', userId);
-  await updateDoc(statsRef, {
-    skill_level: skillLevel,
-    tournament_preference: tournamentPreference,
-  });
-
-  const participantSnapshot = await getDocs(
-    query(collection(db, 'event_participants'), where('user_id', '==', userId))
-  );
-
-  const participantsToSync = participantSnapshot.docs.filter((participantDoc) => {
-    const participant = participantDoc.data();
-    return (participant.tournament_choice || '') !== 'Doubles';
-  });
-
-  if (participantsToSync.length > 0) {
+  const snap = await getDocs(query(collection(db, 'event_participants'), where('user_id', '==', userId)));
+  const toSync = snap.docs.filter((d) => (d.data().tournament_choice || '') !== 'Doubles');
+  if (toSync.length > 0) {
     const batch = writeBatch(db);
-    participantsToSync.forEach((participantDoc) => {
-      batch.update(participantDoc.ref, { skill: skillLevel });
-    });
+    toSync.forEach((d) => batch.update(d.ref, { skill: skillLevel }));
     await batch.commit();
   }
 };
 
-export const updateAvailability = async (userId: string, availabilityDay: string[], availabilityTime: string[], preferredCourts: string[], favouritePlayers: string[], preferredZone?: string) => {
-  const prefsRef = doc(db, 'preferences', userId);
-  await updateDoc(prefsRef, {
-    availability_day: availabilityDay,
-    availability_time: availabilityTime,
-    preferred_courts: preferredCourts,
-    favourite_players: favouritePlayers,
-    preferred_zone: preferredZone ?? '',
-  });
+export const updatePreferredCourts = async (userId: string, courts: string[], zone: string) => {
+  await updateDoc(doc(db, 'preferences', userId), { preferred_courts: courts, preferred_zone: zone });
+};
+
+export const updateFavouritePlayers = async (userId: string, players: string[]) => {
+  await updateDoc(doc(db, 'preferences', userId), { favourite_players: players });
+};
+
+export const updateAvailabilityGrid = async (userId: string, grid: AvailabilityGrid) => {
+  // Write the grid plus the derived legacy fields so older readers keep working mid-migration.
+  await updateDoc(doc(db, 'preferences', userId), { availability: grid, ...gridToLegacy(grid) });
 };
 
 export const changeEmail = async (user: User, newEmail: string, password: string) => {
@@ -89,6 +78,5 @@ export const removeEventParticipant = async (participantId: string) => {
 };
 
 export const updateEventParticipantDates = async (participantId: string, dateselected: string[]) => {
-  const participantRef = doc(db, 'event_participants', participantId);
-  await updateDoc(participantRef, { dateselected });
+  await updateDoc(doc(db, 'event_participants', participantId), { dateselected });
 };

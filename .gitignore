@@ -13,3 +13,9 @@ serviceAccount.json
 .vscode/
 .idea/
 *.local
+
+# Local data-analysis tooling & Firestore dumps (contains user PII — never commit)
+analysis/
+
+# Git worktrees created by Claude Code sessions (local only)
+.claude/worktrees/

@@ -87,7 +87,7 @@ export default function App() {
               <Route path="/signup" element={<Signup />} />
               <Route path="/events" element={<Events />} />
               <Route path="/tournament" element={<PrivateRoute><Tournament /></PrivateRoute>} />
-              <Route path="/leagues" element={<PrivateRoute><Leagues /></PrivateRoute>} />
+              <Route path="/leagues" element={<Leagues />} />
               <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
               <Route path="/players/:userId" element={<PrivateRoute><PlayerProfile /></PrivateRoute>} />
               <Route path="/courts" element={<CourtMap />} />

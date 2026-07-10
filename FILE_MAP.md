@@ -35,7 +35,7 @@ All source files, their paths, and what they do.
 
 | File | Description |
 |------|-------------|
-| `scripts/export-firestore.js` | Exports Firestore collections (users, stats, preferences, event_participants) to CSV files in `scripts/exports/` — requires `serviceAccount.json` in project root |
+| `analysis/export-firestore.js` | Exports Firestore collections (users, stats, preferences, event_participants) to CSV files in `analysis/exports/` — requires `serviceAccount.json` in project root. Lives in the gitignored, local-only `analysis/` folder (data dumps contain user PII) |
 | `scripts/regroup-rr.js` | EOD automation (Admin SDK) — places RR late joiners into vacant matching groups or forms new groups by skill tier + zone; `npm run regroup:rr`, supports `--dry-run` |
 
 ---
