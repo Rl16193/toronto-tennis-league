@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  addDoc, collection, deleteDoc, doc, documentId, getDocs, increment, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
+  addDoc, arrayUnion, collection, deleteDoc, doc, documentId, getDocs, increment, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { EventParticipant, TennisEvent, UserData, UserStats } from '../../types';
 import { DrawConfig, DrawTab, RRConfig, RRStandingRow, ScoreForm, ScoreSubmission, ScoreSubmissionDoc, SkillGroup, TournamentFormat, TournamentMatch, TournamentPlayer } from './types';
 import {
-  autoLabel, buildRRGroupMatchFields, buildRRKnockoutDocs, buildZoneTierGroups, computeGroupStandings,
+  autoLabel, buildRRGroupMatchFields, buildRRKnockoutDocs, buildSafeGroupRewrite, buildZoneTierGroups, computeGroupStandings,
   deriveRRConfig, generateGroupPairings, selectGroupWinners, sharedBand, sharedZone, splitEvenly,
 } from './rrGeneration';
 import {
@@ -26,6 +26,13 @@ export const useTournament = (eventIdOverride?: string) => {
   const [event, setEvent] = useState<TennisEvent | null>(null);
   const [participants, setParticipants] = useState<EventParticipant[]>([]);
   const [matches, setMatches] = useState<TournamentMatch[]>([]);
+  // Tracks whether the CURRENT event's participants+matches have each delivered at least one
+  // onSnapshot payload since `event` last changed — reset on every event switch, so the UI can
+  // show a loading state instead of a flash of the previous event's data (or an empty/broken
+  // render before the first event's data has arrived at all).
+  const [participantsReady, setParticipantsReady] = useState(false);
+  const [matchesReady, setMatchesReady] = useState(false);
+  const eventDataReady = participantsReady && matchesReady;
 
   const [userMap, setUserMap] = useState<Record<string, UserData>>({});
   const [statsMap, setStatsMap] = useState<Record<string, UserStats>>({});
@@ -115,7 +122,7 @@ export const useTournament = (eventIdOverride?: string) => {
         const eventsSnap = await getDocs(collection(db, 'events'));
         const tournamentEvents = eventsSnap.docs
           .map((d) => ({ id: d.id, ...d.data() } as TennisEvent))
-          .filter((e) => e.type?.toLowerCase().includes('tournament'))
+          .filter((e) => e.type?.toLowerCase().includes('tournament') || e.type?.toLowerCase().includes('league ladder'))
           .sort((a, b) => (getEventDate(b)?.getTime() || 0) - (getEventDate(a)?.getTime() || 0));
         setAllTournamentEvents(tournamentEvents);
       } finally {
@@ -135,6 +142,8 @@ export const useTournament = (eventIdOverride?: string) => {
     setEvent(target);
     setParticipants([]);
     setMatches([]);
+    setParticipantsReady(false);
+    setMatchesReady(false);
     setEditMode(false);
     setSkillOverrides({});
     setPreviewSlotOverrides({});
@@ -151,7 +160,10 @@ export const useTournament = (eventIdOverride?: string) => {
     if (!event) return;
     return onSnapshot(
       query(collection(db, 'event_participants'), where('event_id', '==', event.id)),
-      (snap) => setParticipants(snap.docs.map((d) => ({ id: d.id, ...d.data() } as EventParticipant))),
+      (snap) => {
+        setParticipants(snap.docs.map((d) => ({ id: d.id, ...d.data() } as EventParticipant)));
+        setParticipantsReady(true);
+      },
     );
   }, [event]);
 
@@ -162,6 +174,7 @@ export const useTournament = (eventIdOverride?: string) => {
       (snap) => {
         const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentMatch));
         setMatches(loaded);
+        setMatchesReady(true);
         // Auto-enable merge/consolidate toggles if that draw data already exists in Firestore
         // Exclude reserves matches to avoid false positives
         if (loaded.some((m) => m.tournament_choice === 'Singles' && m.division === "Men's" && m.skill_group === 'All' && m.bracket !== 'reserves'))
@@ -203,7 +216,7 @@ export const useTournament = (eventIdOverride?: string) => {
   // the only ones permitted to delete other players' docs.
   const cleaningStaleRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!isCreator) return;
+    if (!isCreator || !matchesReady) return;
     const stale = pendingSubmissions.filter((s) => {
       const m = matches.find((mm) => mm.id === s.match_id);
       return !m || m.status === 'complete';
@@ -215,7 +228,7 @@ export const useTournament = (eventIdOverride?: string) => {
         .catch(() => {})
         .finally(() => cleaningStaleRef.current.delete(s.id));
     }
-  }, [isCreator, pendingSubmissions, matches]);
+  }, [isCreator, pendingSubmissions, matches, matchesReady]);
 
   // Match ids the current user may submit a score for: a slot player, or (doubles) the
   // mutually-registered teammate of a slot player. Empty for the creator (they use Enter score).
@@ -348,11 +361,11 @@ export const useTournament = (eventIdOverride?: string) => {
   }, [isCreator, userDraw, effectiveDraws]);
 
   useEffect(() => {
-    if (isCreator || !userDraw) return;
+    if (!userDraw) return;
     setActiveTab(userDraw.tab);
     if (userDraw.tab === 'doubles') setActiveDoubles(userDraw.division);
     else setActiveSkill(userDraw.skillGroup as SkillGroup);
-  }, [isCreator, userDraw]);
+  }, [userDraw]);
 
   const currentDraw = useMemo<DrawConfig | undefined>(() => {
     if (activeTab === 'doubles')
@@ -558,6 +571,8 @@ export const useTournament = (eventIdOverride?: string) => {
           contact: fallbackContact,
           email: opponentUser?.email ?? '',
           phone: opponentUser?.phone ?? fallbackContact ?? '',
+          whatsappContact: opponentUser?.whatsapp_contact ?? '',
+          whatsappSameAsPhone: !!opponentUser?.whatsapp_same_as_phone,
           round: visibleUserMatch.round,
           skill: opponentStats?.skill_level ?? null,
           wins: opponentStats?.wins ?? 0,
@@ -565,47 +580,6 @@ export const useTournament = (eventIdOverride?: string) => {
         };
       })()
     : null;
-
-  const nextMatchOpponents = useMemo(() => {
-    if (!visibleUserMatch?.next_match_id || !user) return [];
-
-    const normBracket = (b: unknown) => b ?? null;
-    const sameDraw = (m: TournamentMatch) =>
-      normBracket(m.bracket) === normBracket(visibleUserMatch.bracket) &&
-      m.tournament_choice === visibleUserMatch.tournament_choice &&
-      m.division === visibleUserMatch.division &&
-      m.skill_group === visibleUserMatch.skill_group;
-
-    const sibling = matches.find(
-      (m) => sameDraw(m) && m.next_match_id === visibleUserMatch.next_match_id && m.id !== visibleUserMatch.id,
-    );
-    if (!sibling) return [];
-
-    const nextRoundDoc = matches.find((m) => sameDraw(m) && m.match_id === visibleUserMatch.next_match_id);
-    const nextRound = nextRoundDoc?.round ?? '';
-
-    return (
-      [
-        { name: sibling.player_1_name, uid: sibling.player_1_user_id, contact: sibling.player_1_contact },
-        { name: sibling.player_2_name, uid: sibling.player_2_user_id, contact: sibling.player_2_contact },
-      ] as Array<{ name: string; uid: string; contact: string }>
-    )
-      .filter(({ name }) => !!name && name !== PLAYER_LOADING && name !== BYE)
-      .map(({ name, uid, contact }) => {
-        const userData = userMap[uid] ?? allUsers[uid];
-        const statsData = statsMap[uid];
-        return {
-          name,
-          userId: uid,
-          email: userData?.email ?? '',
-          phone: userData?.phone ?? contact ?? '',
-          round: nextRound,
-          skill: statsData?.skill_level ?? null,
-          wins: statsData?.wins ?? 0,
-          losses: statsData?.loses ?? 0,
-        };
-      });
-  }, [visibleUserMatch, matches, userMap, allUsers, statsMap, user]);
 
   // ── Round Robin derived data ──────────────────────────────────────────────
 
@@ -763,12 +737,21 @@ export const useTournament = (eventIdOverride?: string) => {
   );
 
   // Players registered for this draw but not yet in any group (late joiners) — the pool the
-  // creator's "Add Group" form draws from.
+  // creator's "Add Group" form draws from. "Placed" is taken from the authoritative match docs
+  // (any user_id seated in ANY of the event's rr groups — current draw or a sibling skill draw),
+  // not the reconstructed `rrGroups`, so a player already in a group is never treated as unplaced.
+  // This is what stops a skill-level edit from re-routing an already-placed player back into the
+  // late-joiner pool and duplicating them across groups.
   const rrUnplacedPlayers = useMemo<TournamentPlayer[]>(() => {
     if (rrGroupMatches.length === 0) return [];
-    const placed = new Set(rrGroups.flat().map((p) => p.user_id));
-    return currentDrawAllPlayers.filter((p) => !placed.has(p.user_id));
-  }, [rrGroupMatches, rrGroups, currentDrawAllPlayers]);
+    const placedAnywhere = new Set(
+      matches
+        .filter((m) => m.format === 'rr' && m.round === 'RR')
+        .flatMap((m) => [m.player_1_user_id, m.player_2_user_id])
+        .filter((id): id is string => !!id),
+    );
+    return currentDrawAllPlayers.filter((p) => !placedAnywhere.has(p.user_id));
+  }, [rrGroupMatches, matches, currentDrawAllPlayers]);
 
   // Auto-place late joiners: when unplaced players appear after the draw is generated,
   // distribute them into eligible groups (no played matches, < 5 players) automatically.
@@ -785,11 +768,44 @@ export const useTournament = (eventIdOverride?: string) => {
         const advCount = rrConfig?.advancementCount ?? 1;
         const makePairings = (n: number): [number, number][] => n >= 2 ? generateGroupPairings(n) : [[0, 1]];
 
+        // Read the authoritative placement snapshot RIGHT BEFORE writing. Deciding "who is
+        // unplaced" from a stale in-memory derivation is exactly what let a skill-level edit
+        // re-fire this effect and duplicate already-placed players into new groups. A fresh read
+        // guarantees the decision matches what is actually in Firestore.
+        const freshSnap = await getDocs(
+          query(collection(db, 'tournament_matches'), where('event_id', '==', event.id)),
+        );
+        const freshRR = freshSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as TournamentMatch))
+          .filter((m) => m.format === 'rr' && m.round === 'RR');
+        // Placed anywhere in the event's rr draws (current draw or a sibling skill draw). No
+        // user_id in this set may ever be seated again — the hard guard against duplication.
+        const placedIds = new Set<string>(
+          freshRR.flatMap((m) => [m.player_1_user_id, m.player_2_user_id]).filter((id): id is string => !!id),
+        );
+
+        // Genuine late joiners: routed to this draw, seated nowhere, not withdrawn/removed.
+        const trueUnplaced = currentDrawAllPlayers.filter((p) =>
+          !placedIds.has(p.user_id) &&
+          !rrWithdrawn.has(p.user_id) &&
+          !manuallyUnplacedIdsRef.current.has(p.user_id),
+        );
+        if (trueUnplaced.length === 0) return; // nothing genuinely new — never rewrite groups
+
+        // Rebuild the current draw's group state from the same fresh snapshot so assignments
+        // stay consistent with what we just read.
+        const freshCurrent = freshRR.filter((m) =>
+          m.tournament_choice === currentDraw.tournamentChoice &&
+          m.division === currentDraw.division &&
+          m.skill_group === currentDraw.skillGroup);
+        const freshIndices = [...new Set(freshCurrent.map((m) => m.rr_group ?? 0))].sort((a, b) => a - b);
+        const freshGroups = buildRRGroupsFrom(freshCurrent, freshIndices);
+
         type GState = { gi: number; players: TournamentPlayer[]; hasPlayed: boolean };
-        const groupStates: GState[] = rrGroupIndices.map((gi, idx) => ({
+        const groupStates: GState[] = freshIndices.map((gi, idx) => ({
           gi,
-          players: rrGroups[idx] ?? [],
-          hasPlayed: rrGroupMatches.filter((m) => (m.rr_group ?? 0) === gi).some((m) => m.status === 'complete'),
+          players: freshGroups[idx] ?? [],
+          hasPlayed: freshCurrent.filter((m) => (m.rr_group ?? 0) === gi).some((m) => m.status === 'complete'),
         }));
 
         const eligible = groupStates
@@ -799,22 +815,12 @@ export const useTournament = (eventIdOverride?: string) => {
         const assignments = new Map<number, TournamentPlayer[]>(eligible.map((gs) => [gs.gi, [...gs.players]]));
         const overflow: TournamentPlayer[] = [];
 
-        // Players already placed in the sibling draw (e.g. moved Challengers → Masters by
-        // the creator) must never be auto-placed back into this draw.
-        const siblingPlacedIds = new Set<string>(
-          matches
-            .filter((m) => m.format === 'rr' && m.round === 'RR' &&
-              m.tournament_choice === currentDraw.tournamentChoice &&
-              m.division === currentDraw.division &&
-              m.skill_group !== currentDraw.skillGroup)
-            .flatMap((m) => [m.player_1_user_id, m.player_2_user_id])
-            .filter((id): id is string => !!id),
-        );
-
-        for (const p of rrUnplacedPlayers) {
-          if (siblingPlacedIds.has(p.user_id)) continue;
-          // Persisted withdrawals (survive refresh) + in-session removals are never re-added.
-          if (rrWithdrawn.has(p.user_id) || manuallyUnplacedIdsRef.current.has(p.user_id)) continue;
+        // `written` starts from everyone already placed, so no player can be seated twice — not
+        // into an existing group, a new group, or two new groups.
+        const written = new Set<string>(placedIds);
+        for (const p of trueUnplaced) {
+          if (written.has(p.user_id)) continue;
+          written.add(p.user_id);
           const target = eligible.find((gs) => (assignments.get(gs.gi) ?? []).length < 5);
           if (target) {
             assignments.get(target.gi)!.push(p);
@@ -823,7 +829,7 @@ export const useTournament = (eventIdOverride?: string) => {
           }
         }
 
-        const nextBaseIndex = (rrGroupIndices.length ? Math.max(...rrGroupIndices) : -1) + 1;
+        const nextBaseIndex = (freshIndices.length ? Math.max(...freshIndices) : -1) + 1;
         const newGroups: TournamentPlayer[][] = [];
         if (overflow.length > 0) {
           const sizes = splitEvenly(overflow.length);
@@ -839,7 +845,7 @@ export const useTournament = (eventIdOverride?: string) => {
         for (const [gi, updatedPlayers] of assignments) {
           const gs = groupStates.find((g) => g.gi === gi)!;
           if (updatedPlayers.length === gs.players.length) continue;
-          const oldMs = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === gi);
+          const oldMs = freshCurrent.filter((m) => (m.rr_group ?? 0) === gi);
           const label = oldMs[0]?.rr_group_label ?? `Group ${String.fromCharCode(65 + gi)}`;
           const labelCustom = oldMs[0]?.rr_label_custom ?? false;
           oldMs.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
@@ -863,12 +869,12 @@ export const useTournament = (eventIdOverride?: string) => {
         }
 
         await batch.commit();
-        const unplacedCount = rrUnplacedPlayers.length;
+        const placedCount = trueUnplaced.length;
         setMessage({
           type: 'success',
           text: newGroups.length > 0
             ? `New group${newGroups.length > 1 ? 's' : ''} created — please review`
-            : `${unplacedCount} late joiner${unplacedCount > 1 ? 's' : ''} placed`,
+            : `${placedCount} late joiner${placedCount > 1 ? 's' : ''} placed`,
         });
       } catch (err) {
         console.error('Auto-place failed:', err);
@@ -1169,6 +1175,38 @@ export const useTournament = (eventIdOverride?: string) => {
 
     await batch.commit();
 
+    // RR group bonus: when confirming the last match in a group, award +5 leaguePoints26
+    // to 1st place and +3 to 2nd place. Only runs on first confirmation (match was pending).
+    const isRRGroupStage = match.format === 'rr' && match.round === 'RR';
+    if (isRRGroupStage && match.status !== 'complete') {
+      const groupMatches = matches.filter((m) =>
+        m.format === 'rr' && m.round === 'RR' &&
+        m.rr_group === match.rr_group &&
+        m.event_id === match.event_id &&
+        m.tournament_choice === match.tournament_choice &&
+        m.division === match.division &&
+        m.skill_group === match.skill_group,
+      );
+      const allComplete = groupMatches.length > 0 &&
+        groupMatches.every((m) => m.id === match.id || m.status === 'complete');
+      if (allComplete) {
+        const updatedGroup = groupMatches.map((m) =>
+          m.id === match.id
+            ? { ...m, status: 'complete' as const, winner_user_id: submission.claimed_winner_user_id, ...(isWalkover ? { walkover: true } : {}) }
+            : m,
+        );
+        const standings = computeGroupStandings(updatedGroup);
+        const bonusBatch = writeBatch(db);
+        if (standings[0]?.userId) {
+          bonusBatch.set(doc(db, 'stats', standings[0].userId), { leaguePoints26: increment(5) }, { merge: true });
+        }
+        if (standings[1]?.userId) {
+          bonusBatch.set(doc(db, 'stats', standings[1].userId), { leaguePoints26: increment(3) }, { merge: true });
+        }
+        await bonusBatch.commit();
+      }
+    }
+
     // Advance the winner into the next match as a best-effort follow-up, AFTER the
     // result is committed — so a missing/mismatched next-match document can never roll
     // back the recorded winner, scores, or stats. Resolve the next match from loaded
@@ -1254,25 +1292,73 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
+  // Reverse the stats one completed match awarded — the exact inverse of the first-confirmation
+  // increments in `updateMatchWithSubmission` — so cancelling a draw restores the leaderboard.
+  // (RR group-completion bonuses are reversed separately by `reverseRRBonusesInto`.)
+  const reverseMatchStatsInto = (batch: ReturnType<typeof writeBatch>, m: TournamentMatch) => {
+    if (m.status !== 'complete' || !m.winner_user_id) return;
+    const isLL = m.bracket === 'reserves';
+    const isRRGroupStage = m.format === 'rr' && m.round === 'RR';
+    const LOSER_PTS: Record<string, number> = isLL
+      ? { R32: 0.5, R16: 1, QF: 1.5, SF: 2.5, F: 5 }
+      : { R32: 1, R16: 2, QF: 3, RR: 1, SF: 5, F: 10 };
+    const loserPts = LOSER_PTS[m.round] ?? (isLL ? 0.5 : 1);
+    const winnerPts = isLL ? 10 : isRRGroupStage ? (m.walkover ? 1 : 2) : 20;
+    const isFinal = m.round === 'F';
+    const winnerUid = m.winner_user_id;
+    const loserUid = winnerUid === m.player_1_user_id ? m.player_2_user_id : m.player_1_user_id;
+    const p1G = (m.set_1_player_1 ?? 0) + (m.set_2_player_1 ?? 0) + (m.set_3_player_1 ?? 0);
+    const p2G = (m.set_1_player_2 ?? 0) + (m.set_2_player_2 ?? 0) + (m.set_3_player_2 ?? 0);
+    const total = p1G + p2G;
+    const winnerIsP1 = winnerUid === m.player_1_user_id;
+    if (winnerUid) {
+      batch.set(doc(db, 'stats', winnerUid), {
+        matchesPlayed: increment(-1),
+        wins: increment(-1),
+        pointswon: increment(-(winnerIsP1 ? p1G : p2G)),
+        totalPointsPlayed: increment(-total),
+        ...(isFinal ? { leaguePoints26: increment(-winnerPts), tournamentsPlayed: increment(-1) } : {}),
+      }, { merge: true });
+    }
+    if (loserUid) {
+      batch.set(doc(db, 'stats', loserUid), {
+        matchesPlayed: increment(-1),
+        loses: increment(-1),
+        leaguePoints26: increment(-loserPts),
+        tournamentsPlayed: increment(-1),
+        pointswon: increment(-(winnerIsP1 ? p2G : p1G)),
+        totalPointsPlayed: increment(-total),
+      }, { merge: true });
+    }
+  };
+
+  // Reverse the +5 / +3 leaguePoints26 group-completion bonus for every RR group that was fully
+  // played (the bonus is only awarded once all of a group's matches complete).
+  const reverseRRBonusesInto = (batch: ReturnType<typeof writeBatch>, groupMatches: TournamentMatch[]) => {
+    for (const gi of [...new Set(groupMatches.map((m) => m.rr_group ?? 0))]) {
+      const ms = groupMatches.filter((m) => (m.rr_group ?? 0) === gi);
+      if (ms.length === 0 || !ms.every((m) => m.status === 'complete')) continue;
+      const standings = computeGroupStandings(ms);
+      if (standings[0]?.userId) batch.set(doc(db, 'stats', standings[0].userId), { leaguePoints26: increment(-5) }, { merge: true });
+      if (standings[1]?.userId) batch.set(doc(db, 'stats', standings[1].userId), { leaguePoints26: increment(-3) }, { merge: true });
+    }
+  };
+
   const handleResetDraw = async () => {
     if (!isCreator || !currentDraw || currentMatches.length === 0) return;
 
-    const completedSnap = await getDocs(
-      query(collection(db, 'tournament_matches'),
-        where('event_id', '==', event!.id),
-        where('status', '==', 'complete'),
-      )
-    );
-    if (!completedSnap.empty) {
-      setMessage({ type: 'error', text: 'Cannot cancel — a match has already been played in this draw.' });
-      return;
-    }
-
-    if (!window.confirm(`Cancel all matches for ${currentDraw.label}? This will clear the draw and return to preview mode.`)) return;
+    // Cancelling deletes every match in this draw and reverses the stats any completed match
+    // awarded. Warn clearly when played matches exist; this cannot be undone.
+    const completed = currentMatches.filter((m) => m.status === 'complete');
+    const warn = completed.length > 0
+      ? `Cancel all matches for ${currentDraw.label}?\n\nAll matches will be deleted and the stats from ${completed.length} completed match${completed.length > 1 ? 'es' : ''} will be reset. This cannot be undone.`
+      : `Cancel all matches for ${currentDraw.label}? This will clear the draw and return to preview mode.`;
+    if (!window.confirm(warn)) return;
     setResettingDraw(true);
     setMessage(null);
     try {
       const batch = writeBatch(db);
+      completed.forEach((m) => reverseMatchStatsInto(batch, m));
       currentMatches.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
       await batch.commit();
       setEditMode(false);
@@ -1678,8 +1764,6 @@ export const useTournament = (eventIdOverride?: string) => {
     if (!isCreator || !event || !currentDraw) return;
     const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
     const advCount = rrConfig?.advancementCount ?? 1;
-    // 0 or 1 player → write one placeholder match so the group stays visible.
-    const makePairings = (n: number): [number, number][] => n >= 2 ? generateGroupPairings(n) : [[0, 1]];
 
     // Draft state (no matches yet): apply the edit to the preview arrangement and persist it as a
     // draft — nothing is generated. Moved players are removed from their source groups.
@@ -1701,48 +1785,27 @@ export const useTournament = (eventIdOverride?: string) => {
     }
 
     let removedUids: string[] = [];
+    // drawKey → uids to withdraw there too, for a removed player who also has leftover match
+    // docs in a draw other than the one being edited (a sibling skill draw, most commonly).
+    const extraWithdrawnByDrawKey = new Map<string, Set<string>>();
     try {
       const batch = writeBatch(db);
+      const queuedDeleteIds = new Set<string>();
+      const queueDelete = (id: string) => {
+        if (queuedDeleteIds.has(id)) return;
+        queuedDeleteIds.add(id);
+        batch.delete(doc(db, 'tournament_matches', id));
+      };
 
       {
         // Generated state: rewrite the target group and atomically update any source groups
-        // for players moved in from elsewhere.
+        // for players moved in from elsewhere. Moving a player to another group still protects
+        // one who has already played here (below) — but removing them outright (replaced with
+        // Player Loading / dropped from the roster) is a deliberate purge: it always proceeds,
+        // even if they've played, because a departed player can't sensibly "keep" a match here.
         const oldMatches = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === rrGroup);
-        if (oldMatches.some((m) => m.status === 'complete')) {
-          setMessage({ type: 'error', text: 'Cannot edit a group with played matches.' });
-          return;
-        }
         const groupLabel = oldMatches[0]?.rr_group_label ?? `Group ${String.fromCharCode(65 + rrGroup)}`;
         const labelCustom = oldMatches[0]?.rr_label_custom ?? false;
-
-        const existingIds = new Set<string>();
-        oldMatches.forEach((m) => {
-          if (m.player_1_user_id) existingIds.add(m.player_1_user_id);
-          if (m.player_2_user_id) existingIds.add(m.player_2_user_id);
-        });
-
-        // Collect edits needed on source groups for cross-group moves.
-        const srcEdits = new Map<number, { players: TournamentPlayer[]; label: string; labelCustom: boolean }>();
-        for (const p of newPlayers) {
-          if (!p.user_id || existingIds.has(p.user_id)) continue;
-          for (const srcGi of rrGroupIndices) {
-            if (srcGi === rrGroup) continue;
-            const srcMs = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === srcGi);
-            if (srcMs.some((m) => m.status === 'complete')) {
-              setMessage({ type: 'error', text: 'Cannot move — source group has played matches.' });
-              return;
-            }
-            const srcPlayers = buildRRGroupsFrom(srcMs, [srcGi])[0] ?? [];
-            if (srcPlayers.some((sp) => sp.user_id === p.user_id)) {
-              srcEdits.set(srcGi, {
-                players: srcPlayers.filter((sp) => sp.user_id !== p.user_id),
-                label: srcMs[0]?.rr_group_label ?? `Group ${String.fromCharCode(65 + srcGi)}`,
-                labelCustom: srcMs[0]?.rr_label_custom ?? false,
-              });
-              break;
-            }
-          }
-        }
 
         // Strip PLAYER_LOADING sentinels — they must not generate match pairings.
         const realNewPlayers = newPlayers.filter((p) => p.user_id !== PLAYER_LOADING_SENTINEL);
@@ -1754,128 +1817,120 @@ export const useTournament = (eventIdOverride?: string) => {
           .map((p) => p.user_id);
         removedUids.forEach((uid) => manuallyUnplacedIdsRef.current.add(uid));
 
-        oldMatches.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
-        // Empty group → dissolve it entirely; do not write a placeholder match.
-        if (realNewPlayers.length > 0) {
-          buildRRGroupMatchFields({
-            eventId: event.id, drawKey, draw: currentDraw,
-            groupIndex: rrGroup, groupLabel, labelCustom,
-            groupPlayers: realNewPlayers, pairings: makePairings(realNewPlayers.length),
-            advancementCount: advCount, started,
-          }).forEach(({ docId, fields }) => batch.set(doc(db, 'tournament_matches', docId), fields));
+        const existingIds = new Set<string>();
+        oldMatches.forEach((m) => {
+          if (m.player_1_user_id) existingIds.add(m.player_1_user_id);
+          if (m.player_2_user_id) existingIds.add(m.player_2_user_id);
+        });
+
+        // Collect edits needed on source groups for cross-group moves. Only a player who has
+        // personally played a match in their current group is protected from being moved out.
+        const srcEdits = new Map<number, { players: TournamentPlayer[]; label: string; labelCustom: boolean }>();
+        for (const p of newPlayers) {
+          if (!p.user_id || existingIds.has(p.user_id)) continue;
+          for (const srcGi of rrGroupIndices) {
+            if (srcGi === rrGroup) continue;
+            const srcMs = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === srcGi);
+            const srcPlayers = buildRRGroupsFrom(srcMs, [srcGi])[0] ?? [];
+            if (!srcPlayers.some((sp) => sp.user_id === p.user_id)) continue;
+            if (srcMs.some((m) => m.status === 'complete' && (m.player_1_user_id === p.user_id || m.player_2_user_id === p.user_id))) {
+              setMessage({ type: 'error', text: 'Cannot move — this player has already played a match in their current group.' });
+              return;
+            }
+            const prevSrcEdit = srcEdits.get(srcGi);
+            const basePlayers = prevSrcEdit ? prevSrcEdit.players : srcPlayers;
+            srcEdits.set(srcGi, {
+              players: basePlayers.filter((sp) => sp.user_id !== p.user_id),
+              label: srcMs[0]?.rr_group_label ?? `Group ${String.fromCharCode(65 + srcGi)}`,
+              labelCustom: srcMs[0]?.rr_label_custom ?? false,
+            });
+            break;
+          }
         }
+
+        const rewrite = buildSafeGroupRewrite({
+          eventId: event.id, drawKey, draw: currentDraw,
+          groupIndex: rrGroup, groupLabel, labelCustom,
+          oldMatches, newPlayers: realNewPlayers,
+          advancementCount: advCount, started,
+        });
+        rewrite.toDelete.forEach((id) => queueDelete(id));
+        rewrite.toWrite.forEach(({ docId, fields }) => batch.set(doc(db, 'tournament_matches', docId), fields));
 
         for (const [srcGi, srcEdit] of srcEdits) {
           const srcMs = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === srcGi);
-          srcMs.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
-          buildRRGroupMatchFields({
+          const srcRewrite = buildSafeGroupRewrite({
             eventId: event.id, drawKey, draw: currentDraw,
             groupIndex: srcGi, groupLabel: srcEdit.label, labelCustom: srcEdit.labelCustom,
-            groupPlayers: srcEdit.players, pairings: makePairings(srcEdit.players.length),
+            oldMatches: srcMs, newPlayers: srcEdit.players,
             advancementCount: advCount, started,
-          }).forEach(({ docId, fields }) => batch.set(doc(db, 'tournament_matches', docId), fields));
+          });
+          srcRewrite.toDelete.forEach((id) => queueDelete(id));
+          srcRewrite.toWrite.forEach(({ docId, fields }) => batch.set(doc(db, 'tournament_matches', docId), fields));
         }
       }
 
+      // A removed player is purged everywhere in the event, not just this group — any match doc
+      // (a different RR group, a sibling skill draw, the knockout bracket) that still lists them
+      // as player_1/player_2 is deleted too, played or not. Without this, one leftover doc
+      // elsewhere keeps reconstructing their name on the group card, and the late-joiner
+      // auto-placement effect re-seats them into a brand-new match the moment they next look
+      // "unplaced but still registered" — which is exactly why this has kept resurfacing.
+      if (removedUids.length) {
+        const removedSet = new Set(removedUids);
+        matches.forEach((m) => {
+          if (!removedSet.has(m.player_1_user_id ?? '') && !removedSet.has(m.player_2_user_id ?? '')) return;
+          queueDelete(m.id);
+          if (m.format === 'rr' && m.round === 'RR' && m.tournament_choice && m.division && m.skill_group) {
+            const otherDrawKey = getDrawKey(m.tournament_choice, m.division, m.skill_group);
+            if (otherDrawKey === drawKey) return;
+            if (!extraWithdrawnByDrawKey.has(otherDrawKey)) extraWithdrawnByDrawKey.set(otherDrawKey, new Set());
+            const uidsHere = extraWithdrawnByDrawKey.get(otherDrawKey)!;
+            if (removedSet.has(m.player_1_user_id ?? '')) uidsHere.add(m.player_1_user_id!);
+            if (removedSet.has(m.player_2_user_id ?? '')) uidsHere.add(m.player_2_user_id!);
+          }
+        });
+      }
+
+      // Deregister the removed player from the event entirely — this is what actually stops
+      // the late-joiner auto-placement effect from ever finding them again. Withdrawing them
+      // only in the draw(s) where we found a leftover match doc isn't enough: `event_participants`
+      // is what routes a player into a draw by skill level in the first place, so as long as
+      // that doc exists, they can still get auto-placed into a DIFFERENT draw (e.g. Challengers)
+      // they were never seated in and so never showed up as "withdrawn" there. Re-adding them
+      // later goes through Add Player, which re-creates this doc.
+      if (removedUids.length) {
+        const removedSet = new Set(removedUids);
+        participants.forEach((p) => {
+          if (removedSet.has(p.user_id)) batch.delete(doc(db, 'event_participants', p.id));
+        });
+      }
+
+      // Fold the withdrawn-list update into the SAME batch as the match-doc changes so both
+      // commit atomically. Writing this separately (a second, sequential setDoc after the match
+      // batch) left a race window: the matches change reaches the client's onSnapshot listener
+      // (and can trigger the late-joiner auto-placement effect) before the withdrawn list's own
+      // round trip completes, so the just-removed player could get silently re-seated into a
+      // group before the withdrawal was ever visible — persisting even across a page reload.
+      if (removedUids.length) {
+        const nextWithdrawn = [...new Set([...(rrDraft?.withdrawn ?? []), ...removedUids])];
+        batch.set(doc(db, 'rr_drafts', `${event.id}_${rrDraftKey()}`), {
+          event_id: event.id, draw_key: rrDraftKey(), withdrawn: nextWithdrawn, updated_at: new Date().toISOString(),
+        }, { merge: true });
+      }
+      // A different draw's rr_drafts doc isn't loaded client-side, so its existing withdrawn
+      // list is unknown here — arrayUnion appends without needing (or risking clobbering) it.
+      for (const [otherDrawKey, uids] of extraWithdrawnByDrawKey) {
+        batch.set(doc(db, 'rr_drafts', `${event.id}_${otherDrawKey}`), {
+          event_id: event.id, draw_key: otherDrawKey, withdrawn: arrayUnion(...uids), updated_at: new Date().toISOString(),
+        }, { merge: true });
+      }
+
       await batch.commit();
-      if (removedUids.length) await setRRWithdrawnMembership(removedUids);
       setMessage({ type: 'success', text: 'Group updated.' });
     } catch (err) {
       console.error('Group edit failed:', err);
       setMessage({ type: 'error', text: 'Could not save group changes.' });
-    }
-  };
-
-  // True move of one player between two groups (a "dissolve" is repeated moves until a group
-  // is emptied). `fromRRGroup`/`toRRGroup` are real rr_group values; the caller passes the
-  // rebuilt player lists for each. When `targetDraw` differs from the current draw (Challengers
-  // ↔ Masters, same gender), the player is rewritten into that draw's group (its own drawKey /
-  // skill_group). Both groups are rewritten in one batch.
-  const handleMoveRRPlayer = async (
-    fromRRGroup: number,
-    toRRGroup: number,
-    newFromPlayers: TournamentPlayer[],
-    newToPlayers: TournamentPlayer[],
-    targetDraw?: DrawConfig,
-  ) => {
-    if (!isCreator || !event || !currentDraw) return;
-    const toDraw = targetDraw ?? currentDraw;
-    const crossDraw =
-      toDraw.skillGroup !== currentDraw.skillGroup ||
-      toDraw.division !== currentDraw.division ||
-      toDraw.tournamentChoice !== currentDraw.tournamentChoice;
-    if (!crossDraw && fromRRGroup === toRRGroup) return;
-
-    // Draft state (no matches yet): apply same-draw moves to the draft; cross-skill moves need a
-    // generated draw.
-    if (rrGroupMatches.length === 0) {
-      if (crossDraw) {
-        setMessage({ type: 'error', text: 'Generate the draw before moving players across skill groups.' });
-        return;
-      }
-      try {
-        const clean = (arr: TournamentPlayer[]) => arr.filter((p) => p.user_id && p.user_id !== PLAYER_LOADING_SENTINEL);
-        const nextGroups = previewRRGroups.map((g, gi) =>
-          gi === toRRGroup ? clean(newToPlayers) : gi === fromRRGroup ? clean(newFromPlayers) : g,
-        );
-        const nextCustom = previewRRGroups.map((_, i) => !!rrDraft?.custom[i]);
-        await saveRRDraft(nextGroups, previewRRLabels, nextCustom);
-        setMessage({ type: 'success', text: 'Player moved.' });
-      } catch (err) {
-        console.error('RR draft move failed:', err);
-        setMessage({ type: 'error', text: 'Could not move the player.' });
-      }
-      return;
-    }
-
-    const fromKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
-    const toKey = getDrawKey(toDraw.tournamentChoice, toDraw.division, toDraw.skillGroup);
-    const fromMatches = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === fromRRGroup);
-    const toMatches = (crossDraw ? rrSiblingMatches : rrGroupMatches).filter((m) => (m.rr_group ?? 0) === toRRGroup);
-    // Never disturb a group with a played match.
-    if ([...fromMatches, ...toMatches].some((m) => m.status === 'complete' || m.started)) {
-      setMessage({ type: 'error', text: 'Cannot move — a match has already been played in one of these groups.' });
-      return;
-    }
-    const advCount = rrConfig?.advancementCount ?? 1;
-    const fromLabel = fromMatches[0]?.rr_group_label ?? `Group ${String.fromCharCode(65 + fromRRGroup)}`;
-    const toLabel = toMatches[0]?.rr_group_label ?? `Group ${String.fromCharCode(65 + toRRGroup)}`;
-    const fromCustom = fromMatches[0]?.rr_label_custom ?? false;
-    const toCustom = toMatches[0]?.rr_label_custom ?? false;
-    try {
-      const batch = writeBatch(db);
-      // Clear both groups, then rebuild each.
-      [...fromMatches, ...toMatches].forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
-
-      // Target group (in the current or the sibling draw) — always ≥ 2 after gaining a player.
-      buildRRGroupMatchFields({
-        eventId: event.id, drawKey: toKey, draw: toDraw,
-        groupIndex: toRRGroup, groupLabel: toLabel, labelCustom: toCustom, groupPlayers: newToPlayers,
-        pairings: newToPlayers.length === 1 ? [[0, 1]] : generateGroupPairings(newToPlayers.length),
-        advancementCount: advCount, started,
-      }).forEach(({ docId, fields }) => batch.set(doc(db, 'tournament_matches', docId), fields));
-
-      // Source group: 0 left → removed (write nothing). 1 left → keep one placeholder match
-      // (player vs PLAYER_LOADING) so the lone player stays visible and movable rather than
-      // vanishing. ≥2 → normal round-robin.
-      if (newFromPlayers.length >= 1) {
-        buildRRGroupMatchFields({
-          eventId: event.id, drawKey: fromKey, draw: currentDraw,
-          groupIndex: fromRRGroup, groupLabel: fromLabel, labelCustom: fromCustom, groupPlayers: newFromPlayers,
-          pairings: newFromPlayers.length === 1 ? [[0, 1]] : generateGroupPairings(newFromPlayers.length),
-          advancementCount: advCount, started,
-        }).forEach(({ docId, fields }) => batch.set(doc(db, 'tournament_matches', docId), fields));
-      }
-
-      await batch.commit();
-      setMessage(
-        newFromPlayers.length === 1
-          ? { type: 'success', text: 'Player moved. Finish moving the remaining player to dissolve the group.' }
-          : { type: 'success', text: 'Player moved.' },
-      );
-    } catch (err) {
-      console.error('RR player move failed:', err);
-      setMessage({ type: 'error', text: 'Could not move the player.' });
     }
   };
 
@@ -1974,26 +2029,26 @@ export const useTournament = (eventIdOverride?: string) => {
       if (currentDrawFormat === 'rr' && currentDraw) {
         const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
         const advCount = rrConfig?.advancementCount ?? 1;
-        const makePairings = (n: number): [number, number][] => n >= 2 ? generateGroupPairings(n) : [[0, 1]];
 
         for (const gi of rrGroupIndices) {
           const groupMs = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === gi);
           const groupPlayers = buildRRGroupsFrom(groupMs, [gi])[0] ?? [];
           if (!groupPlayers.some((p) => p.user_id === userId)) continue;
-          if (groupMs.some((m) => m.status === 'complete')) {
+          if (groupMs.some((m) => m.status === 'complete' && (m.player_1_user_id === userId || m.player_2_user_id === userId))) {
             setMessage({ type: 'error', text: 'Cannot remove — this player has a played match.' });
             return;
           }
           const newPlayers = groupPlayers.filter((p) => p.user_id !== userId);
           const groupLabel = groupMs[0]?.rr_group_label ?? `Group ${String.fromCharCode(65 + gi)}`;
           const labelCustom = groupMs[0]?.rr_label_custom ?? false;
-          groupMs.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
-          buildRRGroupMatchFields({
+          const rewrite = buildSafeGroupRewrite({
             eventId: event.id, drawKey, draw: currentDraw,
             groupIndex: gi, groupLabel, labelCustom,
-            groupPlayers: newPlayers, pairings: makePairings(newPlayers.length),
+            oldMatches: groupMs, newPlayers,
             advancementCount: advCount, started,
-          }).forEach(({ docId, fields }) => batch.set(doc(db, 'tournament_matches', docId), fields));
+          });
+          rewrite.toDelete.forEach((id) => batch.delete(doc(db, 'tournament_matches', id)));
+          rewrite.toWrite.forEach(({ docId, fields }) => batch.set(doc(db, 'tournament_matches', docId), fields));
           break;
         }
       }
@@ -2020,41 +2075,10 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  const handleProposeTime = (match: TournamentMatch, date: string, slot: 'AM' | 'PM') => {
-    if (!user || !date) return;
-    return writeSchedule(match.id, {
-      proposed_date: date, proposed_slot: slot, proposed_by: user.uid,
-      schedule_status: 'proposed', schedule_requested: false,
-    }, 'Time proposed — waiting for your opponent to confirm.');
-  };
-
-  const handleConfirmTime = (match: TournamentMatch) => {
-    if (!user || match.proposed_by === user.uid) return;
-    return writeSchedule(match.id, { schedule_status: 'scheduled' }, 'Match scheduled.');
-  };
-
   const handleAskOrganizerSchedule = async (match: TournamentMatch) => {
+    // Setting schedule_requested is all the client does — a Cloud Function watches for the flag
+    // and notifies the organizer (clients can no longer write notifications directly).
     await writeSchedule(match.id, { schedule_requested: true }, 'The organizer has been asked to schedule this match.');
-    // Leave a notification for the organizer — consumed later by the Notifications tab.
-    if (!event?.creator_id || match.id.startsWith('preview_')) return;
-    try {
-      await addDoc(collection(db, 'notifications'), {
-        recipient_id: event.creator_id,
-        type: 'schedule_request',
-        event_id: event.id,
-        event_title: event.title ?? '',
-        match_id: match.id,
-        match_round: match.round ?? '',
-        player_1_name: match.player_1_name ?? '',
-        player_2_name: match.player_2_name ?? '',
-        requested_by: user?.uid ?? null,
-        requested_by_name: profile?.user?.name || userParticipant?.user_name || 'A player',
-        read: false,
-        created_at: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.error('Notification write failed:', err);
-    }
   };
 
   // Organizer sets the schedule authoritatively (also clears any player request).
@@ -2067,19 +2091,23 @@ export const useTournament = (eventIdOverride?: string) => {
 
   const handleResetRR = async () => {
     if (!isCreator || !currentDraw || currentMatches.length === 0) return;
-    const hasComplete = currentMatches.some((m) => m.status === 'complete');
-    if (hasComplete) {
-      setMessage({ type: 'error', text: 'Cannot reset — a match has already been played.' });
-      return;
-    }
-    if (!window.confirm('Reset the Round Robin draw? This will clear all group and knockout matches.')) return;
+    // Cancelling deletes every group + knockout match in this draw and reverses the stats any
+    // completed match awarded (per-match results and RR group-completion bonuses). Warn clearly
+    // when played matches exist; this cannot be undone.
+    const completed = currentMatches.filter((m) => m.status === 'complete');
+    const warn = completed.length > 0
+      ? `Cancel the Round Robin draw?\n\nAll ${currentMatches.length} matches will be deleted and the stats from ${completed.length} completed match${completed.length > 1 ? 'es' : ''} will be reset. This cannot be undone.`
+      : 'Cancel the Round Robin draw? This will clear all group and knockout matches.';
+    if (!window.confirm(warn)) return;
     setResettingDraw(true);
     try {
       const batch = writeBatch(db);
+      completed.forEach((m) => reverseMatchStatsInto(batch, m));
+      reverseRRBonusesInto(batch, currentMatches.filter((m) => m.format === 'rr' && m.round === 'RR'));
       currentMatches.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
       await batch.commit();
       setEditMode(false);
-      setMessage({ type: 'success', text: 'Round Robin draw reset.' });
+      setMessage({ type: 'success', text: 'Round Robin draw cancelled — matches deleted and stats reset.' });
     } catch (err) {
       console.error('RR reset failed:', err);
       setMessage({ type: 'error', text: 'Could not reset the draw.' });
@@ -2124,6 +2152,7 @@ export const useTournament = (eventIdOverride?: string) => {
   return {
     authLoading,
     loading,
+    eventDataReady,
     user,
     allTournamentEvents,
     event,
@@ -2139,7 +2168,6 @@ export const useTournament = (eventIdOverride?: string) => {
     displayMatches,
     visibleDraws,
     opponent,
-    nextMatchOpponents,
     editPlayers,
     reservesPlayers,
     currentDrawAllPlayers,
@@ -2216,7 +2244,6 @@ export const useTournament = (eventIdOverride?: string) => {
     handleResetRR,
     handleGenerateRRKnockout,
     handleSaveGroupEdit,
-    handleMoveRRPlayer,
     handleCreateRRGroup,
     handleRenameGroup,
     handleRemoveParticipant,
@@ -2224,8 +2251,6 @@ export const useTournament = (eventIdOverride?: string) => {
     visibleUserMatch,
     userRRMatches,
     scheduleRequests,
-    handleProposeTime,
-    handleConfirmTime,
     handleAskOrganizerSchedule,
     handleSetSchedule,
   };

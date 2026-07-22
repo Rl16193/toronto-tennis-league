@@ -56,11 +56,12 @@ service cloud.firestore {
           request.resource.data.loses == 0 &&
           request.resource.data.matchesPlayed == 0 &&
           request.resource.data.tournamentsPlayed == 0);
-      // Owners may only edit profile fields; scoring fields are organizer-only.
+      // Owners may only edit profile fields (league = the Men's/Women's division they play in);
+      // scoring fields are organizer-only.
       allow update: if isGlobalEventCreator() ||
         (isOwner(userId) &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['skill_level', 'tournament_preference', 'name', 'user_id']));
+            .hasOnly(['skill_level', 'tournament_preference', 'name', 'user_id', 'league']));
       allow delete: if false;
     }
 
@@ -87,6 +88,26 @@ service cloud.firestore {
     }
 
     // ===============================================================
+    // Site Stats (public homepage counters — written by Admin scripts only)
+    // ===============================================================
+    match /site_stats/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ===============================================================
+    // Task Progress (self-serve community tasks — Tasks tab)
+    // ===============================================================
+    match /task_progress/{userId} {
+      // World-readable: the Community leaderboard ranks everyone's task points, logged out too.
+      allow read: if true;
+      // Owners mark their own tasks (profile task is client-gated on a complete profile; the
+      // social tasks are trust-based). Organizers may un-mark (revoke) falsely-claimed tasks.
+      allow create, update: if isOwner(userId) || isGlobalEventCreator();
+      allow delete: if false;
+    }
+
+    // ===============================================================
     // Event Participants
     // ===============================================================
     match /event_participants/{docId} {
@@ -104,7 +125,7 @@ service cloud.firestore {
         resource.data.user_id == request.auth.uid;
 
       allow delete: if isAuthenticated() &&
-        resource.data.user_id == request.auth.uid;
+        (resource.data.user_id == request.auth.uid || isCreatorOfEvent(resource.data.event_id));
     }
 
     // ===============================================================
@@ -151,6 +172,46 @@ service cloud.firestore {
     }
 
     // ===============================================================
+    // League Ladder challenges (head-to-head; organizer confirms the ±3 into leaguePoints26)
+    // ===============================================================
+    match /ladder_challenges/{id} {
+      allow read: if isAuthenticated();
+
+      // A player opens a challenge as themselves.
+      allow create: if isAuthenticated() &&
+        request.resource.data.challenger_id == request.auth.uid &&
+        request.resource.data.status == 'open' &&
+        request.resource.data.event_id is string &&
+        request.resource.data.opponent_id is string;
+
+      // Either participant may report the result (status -> 'reported', no points move yet);
+      // only the event organizer may confirm/reject. Points land via the organizer's stats write.
+      allow update: if isAuthenticated() && (
+        (
+          (request.auth.uid == resource.data.challenger_id || request.auth.uid == resource.data.opponent_id) &&
+          request.resource.data.status == 'reported' &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'claimed_winner_id', 'claimed_winner_name', 'score_line', 'reported_at'])
+        ) ||
+        isCreatorOfEvent(resource.data.event_id)
+      );
+
+      // Challenger may retract an open challenge; organizer may clean up.
+      allow delete: if isAuthenticated() && (
+        request.auth.uid == resource.data.challenger_id ||
+        isCreatorOfEvent(resource.data.event_id)
+      );
+    }
+
+    // ===============================================================
+    // Ranking history (written by the snapshot-ranks Admin script only)
+    // ===============================================================
+    match /ranking_history/{userId}/entries/{entryId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ===============================================================
     // Court Suggestions (public "Suggest an Improvement" feedback)
     // ===============================================================
     match /court_suggestions/{id} {
@@ -170,18 +231,113 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Notifications (organizer alerts — e.g. player scheduling requests)
+    // Mailing list (optional opt-in offered to anonymous suggestion submitters)
+    // ===============================================================
+    match /mailing_list/{id} {
+      // Anyone (incl. logged-out) may join; no client ever needs to read the list back.
+      allow create: if
+        request.resource.data.email is string &&
+        request.resource.data.email.size() > 0 &&
+        request.resource.data.email.size() < 320;
+      allow read, update, delete: if isGlobalEventCreator();
+    }
+
+    // ===============================================================
+    // Notifications (bell feed — created server-side only)
     // ===============================================================
     match /notifications/{id} {
-      // A signed-in user may create a notification addressed to someone (e.g. a player
-      // asking the organizer to schedule). Kept generic for future warnings/messages.
+      // Created exclusively by Cloud Functions (Admin SDK bypasses these rules). Clients may
+      // never create: otherwise any signed-in player could write into another player's feed.
+      allow create: if false;
+      // Only the recipient may read their own, and may only flip `read` (never rewrite the
+      // content of a notification addressed to them).
+      allow read: if isAuthenticated() && resource.data.recipient_id == request.auth.uid;
+      allow update: if isAuthenticated() &&
+        resource.data.recipient_id == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isAuthenticated() && resource.data.recipient_id == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Court Visits (check-in "passport" — one stamp per player per court)
+    // ===============================================================
+    match /court_visits/{id} {
+      allow read: if isAuthenticated();
+      // Deterministic id ({uid}_{courtKey}) — a create can only ever happen once per court per
+      // player; a second attempt is an update, which has no matching rule and is denied.
       allow create: if isAuthenticated() &&
-        request.resource.data.recipient_id is string &&
-        request.resource.data.created_at is string &&
-        request.resource.data.requested_by == request.auth.uid;
-      // Only the recipient may read, mark-read, or clear their notifications.
-      allow read, update, delete: if isAuthenticated() &&
-        resource.data.recipient_id == request.auth.uid;
+        request.resource.data.user_id == request.auth.uid &&
+        id.matches(request.auth.uid + '_.*') &&
+        request.resource.data.court_key is string &&
+        request.resource.data.dist_m is number &&
+        request.resource.data.dist_m <= 300 &&
+        request.resource.data.created_at is string;
+      allow update, delete: if false;
+    }
+
+    // ===============================================================
+    // Court Attendance (append-only daily check-in log — feeds Matchday + zone sweeps)
+    // ===============================================================
+    match /court_attendance/{id} {
+      allow read: if isAuthenticated();
+      // id is {uid}_{courtKey}_{YYYYMMDD}: a repeat check-in the same day overwrites its own
+      // entry (an update), so distinct-player counts stay accurate. Both create and update are
+      // gated to the owner's own doc.
+      allow create, update: if isAuthenticated() &&
+        request.resource.data.user_id == request.auth.uid &&
+        id.matches(request.auth.uid + '_.*') &&
+        request.resource.data.court_key is string &&
+        request.resource.data.dist_m is number &&
+        request.resource.data.dist_m <= 300 &&
+        request.resource.data.created_at is string;
+      allow delete: if false;
+    }
+
+    // ===============================================================
+    // Group award ledger + zone-sweep history (written only by Cloud Functions / Admin SDK)
+    // ===============================================================
+    match /group_awards/{id} {
+      // The bonus itself lands on task_progress.bonusPoints; this ledger is server-internal.
+      allow read, write: if false;
+    }
+    match /zone_sweeps/{id} {
+      // Community coverage timing — safe to surface publicly.
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ===============================================================
+    // Court Reports (Tasks tab "Submit a Photo": condition / waiting board / queue)
+    // ===============================================================
+    match /court_reports/{id} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        request.resource.data.user_id == request.auth.uid &&
+        request.resource.data.type in ['condition', 'waitingBoard', 'queue'] &&
+        request.resource.data.court_key is string &&
+        request.resource.data.photo_path is string &&
+        // Condition/waiting-board need review; a queue photo (useful only right now) posts
+        // pre-approved.
+        (request.resource.data.type == 'queue'
+          ? request.resource.data.status == 'approved'
+          : request.resource.data.status == 'pending');
+      // Organizer approves/rejects; Cloud Functions (Admin SDK) also write here on moderation —
+      // Admin SDK bypasses these rules entirely, so no separate allowance is needed for it.
+      allow update: if isGlobalEventCreator();
+      allow delete: if false;
+    }
+
+    // ===============================================================
+    // Task Claims (Volunteer / Ambassador / Host — organizer-approved before they count)
+    // ===============================================================
+    match /task_claims/{id} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() &&
+        request.resource.data.user_id == request.auth.uid &&
+        request.resource.data.type in ['volunteer', 'ambassador', 'host'] &&
+        request.resource.data.status == 'pending';
+      allow update: if isGlobalEventCreator();
+      allow delete: if false;
     }
 
     // ===============================================================

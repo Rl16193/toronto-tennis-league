@@ -20,7 +20,7 @@ export const Events: React.FC = () => {
   const isEventCreator = !!profile?.preferences.event_creator;
 
   const { events, setEvents, loading, visibleEvents, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament, isFullyJoinedEvent } = useEvents();
-  const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, slotStatus, slotFallbackConfirmed, setSlotFallbackConfirmed, handleSubmitJoin } = useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament });
+  const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed, handleSubmitJoin } = useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament });
 
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
   const [showEventForm, setShowEventForm] = useState(false);
@@ -114,6 +114,7 @@ export const Events: React.FC = () => {
               setJoinForm={setJoinForm}
               joinError={expandedEventId === event.id ? joinError : ''}
               slotStatus={expandedEventId === event.id ? slotStatus : null}
+              loadingMatches={expandedEventId === event.id ? loadingMatches : false}
               slotFallbackConfirmed={slotFallbackConfirmed}
               setSlotFallbackConfirmed={setSlotFallbackConfirmed}
               onSubmitJoin={handleSubmitJoin}

@@ -16,13 +16,14 @@ import { Input } from '../components/Input';
 import {
   Trophy, MapPin, CheckCircle2, ChevronRight, ArrowRight,
   AlertCircle, Info, Star, Calendar,
-  Eye, EyeOff, Chrome,
+  Eye, EyeOff, Chrome, X,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { UserData, UserStats, UserPreferences } from '../types';
 import mailcheck from 'mailcheck';
 import { defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts, getCourtSuggestions, mergeCourtOptions } from '../features/signup/utils/courtSearch';
 import { getZoneWithBorderCheck } from '../utils/zones';
+import { formatPhone } from '../utils/formatPhone';
 import { DAY_CODES, DAY_LABELS, gridToLegacy, type AvailabilityGrid, type TimeSlot } from '../utils/availability';
 import { getSignupErrorMessage, signupEmailRegex, emailExistsForSignup } from '../features/signup/signupValidation';
 import { getAuthErrorMessage } from '../features/auth/authMessages';
@@ -33,17 +34,17 @@ const FAVOURITE_PLAYERS = [
   "Roger Federer", "Novak Djokovic"
 ];
 
-type AuthPhase = 'email' | 'login' | 'account' | 'preferences';
+type AuthPhase = 'email' | 'login' | 'account' | 'preferences' | 'done';
 
 export const Signup: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, loading: authLoading, refreshProfile } = useAuth();
+  const { user, profile, loading: authLoading, refreshProfile } = useAuth();
   const [phase, setPhase] = useState<AuthPhase>('email');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
-  const [shouldRedirectToProfile, setShouldRedirectToProfile] = useState(false);
+  const [prefStep, setPrefStep] = useState<1 | 2 | 3>(1);
   const [emailSuggestion, setEmailSuggestion] = useState<any>(null);
   const [courtOptions, setCourtOptions] = useState<string[]>(defaultCourtOptions);
   const [courtCoordsMap, setCourtCoordsMap] = useState<Map<string, { lat: number; lng: number }>>(new Map());
@@ -56,6 +57,7 @@ export const Signup: React.FC = () => {
   const [showForgot, setShowForgot] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [pendingGoogleCredential, setPendingGoogleCredential] = useState<OAuthCredential | null>(null);
+  const loginPasswordRef = React.useRef<HTMLInputElement>(null);
 
   const intent = searchParams.get('intent') || '';
 
@@ -67,7 +69,7 @@ export const Signup: React.FC = () => {
       setFormData((prev) => ({ ...prev, email }));
       setPendingGoogleCredential(credential);
       setPhase('login');
-      setStatusMessage('Sign in with your password to also enable Google sign-in on this account.');
+      setStatusMessage('This email already has a password. Enter it below to sign in — this will also enable Google sign-in for next time.');
     },
   });
 
@@ -118,16 +120,23 @@ export const Signup: React.FC = () => {
     return () => clearTimeout(t);
   }, [statusMessage]);
 
-  // Single post-auth redirect, keyed off phase so destinations don't race:
-  //  - new email signup → /events (via shouldRedirectToProfile)
-  //  - while filling the signup form → wait (don't navigate)
-  //  - everything else (existing-email login, Google, already-authenticated) → /profile
+  // Google sign-in matched an existing email/password account: Google can't finish the
+  // sign-in itself, so pull focus to the password field the user actually needs to fill in.
+  useEffect(() => {
+    if (pendingGoogleCredential) loginPasswordRef.current?.focus();
+  }, [pendingGoogleCredential]);
+
+  // Auth routing state machine (no email-verification step):
+  //  - signed in but profile not filled in (name empty) → open the completion form
+  //  - mid-signup (account / preferences / done success screen) → stay put
+  //  - otherwise (existing account, complete profile) → /tournament
   useEffect(() => {
     if (authLoading || !user) return;
-    if (shouldRedirectToProfile) { navigate('/events'); return; }
-    if (phase === 'account' || phase === 'preferences') return;
-    navigate('/profile');
-  }, [authLoading, user, shouldRedirectToProfile, phase, navigate]);
+    if (phase === 'account' || phase === 'preferences' || phase === 'done') return;
+    const incomplete = !profile || profile.user.name.trim() === '';
+    if (incomplete) { setPhase('preferences'); setPrefStep(1); return; }
+    navigate('/tournament');
+  }, [authLoading, user, profile, phase, navigate]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -146,12 +155,10 @@ export const Signup: React.FC = () => {
     return () => { isMounted = false; };
   }, []);
 
-  const validateAccount = () => {
+  // Account step now collects only the password (email already entered; name/phone come after
+  // verification, in the completion step).
+  const validatePassword = () => {
     const newErrors: Record<string, string> = {};
-    const trimmedEmail = formData.email.trim();
-    if (formData.name.trim().length < 3 || formData.name.length > 80) newErrors.name = 'Name must be 3-80 characters';
-    if (/\d/.test(formData.name)) newErrors.name = 'Name cannot contain numbers';
-    if (!signupEmailRegex.test(trimmedEmail)) newErrors.email = 'Please enter a valid email address';
     const sequential = '1234567890abcdefghijklmnopqrstuvwxyz';
     if (
       formData.password.length < 6 ||
@@ -164,6 +171,19 @@ export const Signup: React.FC = () => {
     if (formData.confirmPassword !== formData.password) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const isNameValid = () =>
+    formData.name.trim().length >= 3 &&
+    formData.name.length <= 80 &&
+    !/\d/.test(formData.name);
+
+  const validateCompletion = () => {
+    const newErrors: Record<string, string> = {};
+    if (formData.name.trim().length < 3 || formData.name.length > 80) newErrors.name = 'Name must be 3-80 characters';
+    if (/\d/.test(formData.name)) newErrors.name = 'Name cannot contain numbers';
     const rawPhone = formData.phone.replace(/\D/g, '');
     if (rawPhone.length > 0 && rawPhone.length !== 10) newErrors.phone = 'Phone number must be exactly 10 digits';
     setErrors(newErrors);
@@ -217,7 +237,7 @@ export const Signup: React.FC = () => {
         setPendingGoogleCredential(null);
       }
       track('login', { method: 'email' });
-      // Success → redirect effect (phase === 'login') navigates to /profile.
+      navigate('/tournament');
     } catch (err: any) {
       // Direction 2 — Google-first user trying email/password.
       // fetchSignInMethodsForEmail is deprecated and returns [] when Firebase email-enumeration
@@ -260,44 +280,16 @@ export const Signup: React.FC = () => {
       await setAuthPersistence(true);
       const credential = await createUserWithEmailAndPassword(auth, formData.email.trim(), formData.password);
       const u = credential.user;
-      await updateProfile(u, { displayName: formData.name });
-
-      const userData: UserData = {
-        name: formData.name,
-        email: formData.email.trim(),
-        phone: formData.phone,
-        preferred_mode_of_contact: 'email',
-        avatar: '',
-        created_at: new Date().toISOString(),
-      };
-      const userStats: UserStats = {
-        name: formData.name,
-        skill_level: formData.skillLevel,
-        tournament_preference: 'Challengers',
-        matchesPlayed: 0, wins: 0, loses: 0, leaguePoints26: 0,
-        tournamentsPlayed: 0, league: '', pointswon: 0, totalPointsPlayed: 0,
-      };
-      const userPreferences: UserPreferences = {
-        availability: {}, availability_day: [], availability_time: [],
-        preferred_courts: [], favourite_players: [],
-        scheduling_preference: 'I will schedule matches on my own',
-        event_creator: false, preferred_zone: '',
-      };
-
-      await setDoc(doc(db, 'users', u.uid), userData);
-      await setDoc(doc(db, 'stats', u.uid), userStats);
-      await setDoc(doc(db, 'preferences', u.uid), userPreferences);
-
-      await refreshProfile(u);
+      // No email verification — profile docs are bootstrapped by AuthContext (name ''); name +
+      // preferences are collected in the next step, which we go straight to.
       sessionStorage.setItem(`profile-bootstrap-pending:${u.uid}`, '1');
       sessionStorage.removeItem(`profile-bootstrap-retry:${u.uid}`);
 
-      // Account exists now → fire sign_up immediately (not after optional prefs).
       track('signup_step', { step_number: 2, step_name: 'account', action: 'complete' });
       track('sign_up', { method: 'email' });
-      track('signup_step', { step_number: 3, step_name: 'preferences', action: 'enter' });
 
       setPhase('preferences');
+      setPrefStep(1);
     } catch (err: any) {
       setError(getSignupErrorMessage(err));
     } finally {
@@ -306,10 +298,13 @@ export const Signup: React.FC = () => {
   };
 
   const handleCompleteProfile = async () => {
+    if (!validateCompletion()) return;
     setLoading(true);
     try {
       const u = auth.currentUser!;
-      await setDoc(doc(db, 'stats', u.uid), { skill_level: formData.skillLevel }, { merge: true });
+      await updateProfile(u, { displayName: formData.name });
+      await setDoc(doc(db, 'users', u.uid), { name: formData.name, phone: formData.phone }, { merge: true });
+      await setDoc(doc(db, 'stats', u.uid), { name: formData.name, skill_level: formData.skillLevel }, { merge: true });
       await setDoc(doc(db, 'preferences', u.uid), {
         availability: formData.availabilityGrid,
         ...gridToLegacy(formData.availabilityGrid),
@@ -318,21 +313,21 @@ export const Signup: React.FC = () => {
         preferred_zone: formData.preferredZone,
         scheduling_preference: formData.schedulingPreference,
       }, { merge: true });
+      await refreshProfile(u);
       track('signup_step', { step_number: 3, step_name: 'preferences', action: 'complete' });
       track('complete_profile', { method: 'email' });
-      setShouldRedirectToProfile(true);
+      setPhase('done');
     } catch {
-      // Preferences failed — navigate anyway, user can update from /profile
-      track('signup_step', { step_number: 3, step_name: 'preferences', action: 'complete' });
+      // Write failed — still show the success screen; the user can finish from /profile.
       track('complete_profile', { method: 'email' });
-      setShouldRedirectToProfile(true);
+      setPhase('done');
     } finally {
       setLoading(false);
     }
   };
 
   const handleAccountContinue = async () => {
-    if (validateAccount()) await handleCreateAccount();
+    if (validatePassword()) await handleCreateAccount();
   };
 
   const goToEmailPhase = () => {
@@ -343,13 +338,6 @@ export const Signup: React.FC = () => {
     setError('');
     setErrors({});
     setPendingGoogleCredential(null);
-  };
-
-  const formatPhone = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
-    if (numbers.length <= 3) return numbers;
-    if (numbers.length <= 6) return `(${numbers.slice(0, 3)})-${numbers.slice(3)}`;
-    return `(${numbers.slice(0, 3)})-${numbers.slice(3, 6)}-${numbers.slice(6, 10)}`;
   };
 
   const nameOnlyRegex = /^[A-Za-z ]+$/;
@@ -431,6 +419,16 @@ export const Signup: React.FC = () => {
 
   const isSignupPhase = phase === 'account' || phase === 'preferences';
 
+  // Avoid flashing the email form while Firebase resolves an existing session, or in the brief
+  // window after an authenticated user lands here before the redirect/phase effect fires.
+  if (authLoading || (user && phase === 'email')) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="w-14 h-14 border-4 border-clay border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen py-8 px-4 relative overflow-hidden">
       {/* Background Glows */}
@@ -449,8 +447,8 @@ export const Signup: React.FC = () => {
               </div>
             )}
             <div className="flex justify-between items-center mb-4">
-              {[1, 2].map((i) => {
-                const stepNum = phase === 'account' ? 1 : 2;
+              {[1, 2, 3].map((i) => {
+                const stepNum = phase === 'account' ? 1 : prefStep <= 2 ? 2 : 3;
                 return (
                   <div key={i} className="flex flex-col items-center space-y-2">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg transition-all duration-300 ${
@@ -459,7 +457,7 @@ export const Signup: React.FC = () => {
                       {stepNum > i ? <CheckCircle2 className="w-6 h-6" /> : i}
                     </div>
                     <span className={`text-xs font-bold uppercase tracking-widest ${stepNum >= i ? 'text-clay' : 'text-white'}`}>
-                      {i === 1 ? 'Account' : 'Preferences'}
+                      {i === 1 ? 'Account' : i === 2 ? 'Preferences' : 'Availability'}
                     </span>
                   </div>
                 );
@@ -468,8 +466,8 @@ export const Signup: React.FC = () => {
             <div className="h-1.5 w-full bg-tennis-surface/50 rounded-full overflow-hidden">
               <motion.div
                 className="h-full clay-gradient"
-                initial={{ width: '50%' }}
-                animate={{ width: `${((phase === 'account' ? 1 : 2) / 2) * 100}%` }}
+                initial={{ width: '33%' }}
+                animate={{ width: `${((phase === 'account' ? 1 : prefStep <= 2 ? 2 : 3) / 3) * 100}%` }}
                 transition={{ duration: 0.5 }}
               />
             </div>
@@ -603,6 +601,7 @@ export const Signup: React.FC = () => {
                       <label className="block text-sm font-medium text-white">Password</label>
                       <div className="relative">
                         <input
+                          ref={loginPasswordRef}
                           type={showPassword ? 'text' : 'password'}
                           placeholder="••••••••"
                           value={loginPassword}
@@ -647,7 +646,10 @@ export const Signup: React.FC = () => {
                     </div>
                   )}
 
-                  {!showForgot && (
+                  {/* Google can't complete sign-in for an email that already has a password —
+                      hide the option while linking is pending so the user isn't tempted to
+                      retry it and loop back to this same screen. */}
+                  {!showForgot && !pendingGoogleCredential && (
                     <div>
                       <div className="relative py-2">
                         <div className="absolute inset-0 flex items-center">
@@ -690,26 +692,9 @@ export const Signup: React.FC = () => {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Name | Phone */}
-                <Input
-                  label="Full Name"
-                  placeholder="Roger Federer"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  error={errors.name}
-                  required
-                />
-                <Input
-                  label="Phone Number"
-                  placeholder="(416)-555-0123"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: formatPhone(e.target.value) })}
-                  error={errors.phone}
-                />
-
+              <div className="grid grid-cols-1 gap-6">
                 {/* Password | Confirm Password */}
-                <div className="col-span-1 md:col-span-2 grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="w-full space-y-1.5">
                     <label className="block text-sm font-medium text-white">
                       Password <span className="text-orange-500">*</span>
@@ -761,222 +746,284 @@ export const Signup: React.FC = () => {
             </div>
           )}
 
-          {/* PHASE: PREFERENCES */}
+          {/* PHASE: VERIFY EMAIL */}
+          {phase === 'done' && (
+            <div className="relative max-w-md mx-auto text-center rounded-3xl border border-green-500/25 bg-green-500/5 p-8">
+              {/* Cross — closes the message and opens the app (Matches page). */}
+              <button
+                type="button"
+                onClick={() => navigate('/tournament')}
+                aria-label="Close and continue to the app"
+                className="absolute top-4 right-4 text-white/40 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="mx-auto w-16 h-16 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center mb-5">
+                <CheckCircle2 className="w-9 h-9 text-green-400" />
+              </div>
+              <h1 className="text-2xl font-black text-white mb-3">Thank you for joining the league</h1>
+              <p className="text-white/70 text-sm leading-relaxed">
+                A welcome email containing further instructions has been sent. Please check your
+                junk / spam folder if you don't see it.
+              </p>
+
+              <Button size="lg" className="w-full mt-7" onClick={() => navigate('/tournament')}>
+                Continue
+              </Button>
+            </div>
+          )}
+
+          {/* PHASE: PREFERENCES — 3 screens */}
           {phase === 'preferences' && (
-            <div className="space-y-10">
-              {/* Skill Level Slider — unboxed */}
-              <div className="space-y-6">
-                <div className="flex justify-between items-end">
-                  <h3 className="text-xl font-bold text-white flex items-center">
-                    <Trophy className="w-5 h-5 mr-2 text-clay" />
-                    NTRP Skill Level
-                  </h3>
-                  <div className="text-4xl font-black text-clay">{formData.skillLevel}</div>
-                </div>
-                <div className="relative pt-6">
-                  <input
-                    type="range"
-                    min="0" max={SKILL_LEVELS.length - 1} step="1"
-                    value={selectedSkillIndex}
-                    onChange={(e) => setFormData({ ...formData, skillLevel: SKILL_LEVELS[Number(e.target.value)] })}
-                    className="w-full h-3 rounded-full"
-                  />
-                  <div className="mt-4 flex items-start justify-between gap-2 text-center">
-                    {SKILL_LEVELS.map((level) => (
-                      <div key={level} className="flex flex-col items-center gap-2">
-                        <span className={`w-2.5 h-2.5 rounded-full ${formData.skillLevel === level ? 'bg-clay' : 'bg-white/20'}`} />
-                        <span className={`text-[10px] font-black tracking-widest ${formData.skillLevel === level ? 'text-clay' : 'text-white'}`}>
-                          {level.toFixed(1)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3 p-4 rounded-2xl bg-clay/10 border border-clay/20">
-                  <Info className="w-5 h-5 text-clay shrink-0" />
-                  <p className="text-sm font-medium text-white italic">"{SKILL_DESCRIPTIONS[formData.skillLevel]}"</p>
-                </div>
-              </div>
+            <div className="space-y-8">
 
-              {/* Court Selection */}
-              <div className="space-y-4">
-                <label className="block text-sm font-bold text-white uppercase tracking-wider">Preferred Courts</label>
-                <p className="text-xs text-white/50">Tip: select <span className="text-clay font-semibold">Stanley Park South - Toronto</span> for the downtown area.</p>
-
-                {formData.preferredCourts.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {formData.preferredCourts.map((court) => (
-                      <button
-                        key={court}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, preferredCourts: formData.preferredCourts.filter((c) => c !== court) })}
-                        className="px-3 py-1 rounded-xl text-xs font-bold bg-clay text-white flex items-center gap-1.5 shadow-lg shadow-clay/20"
-                      >
-                        {court} <span className="opacity-70">✕</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                <div className="relative">
-                  <div className="flex gap-3">
+              {/* Screen 1: Name + Phone + Skill */}
+              {prefStep === 1 && (
+                <div className="space-y-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <Input
+                        label="Full Name"
+                        placeholder="Roger Federer"
+                        value={formData.name}
+                        onChange={(e) => { setFormData({ ...formData, name: e.target.value }); setErrors({ ...errors, name: '' }); }}
+                        error={errors.name}
+                        required
+                      />
+                      {formData.name && !isNameValid() && !errors.name && (
+                        <p className="text-xs text-red-500 mt-1 ml-1">Name must be 3–80 letters, no numbers.</p>
+                      )}
+                    </div>
                     <Input
-                      placeholder="Search courts by name..."
-                      value={formData.customCourtEntry}
-                      error={errors.customCourtEntry}
-                      onChange={(e) => {
-                        setFormData({ ...formData, customCourtEntry: e.target.value });
-                        if (errors.customCourtEntry) setErrors({ ...errors, customCourtEntry: '' });
-                      }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomCourt(); } }}
+                      label="Phone Number"
+                      placeholder="(416)-555-0123"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: formatPhone(e.target.value) })}
+                      error={errors.phone}
                     />
-                    <Button type="button" variant="clay" size="sm" className="px-3 shrink-0" onClick={addCustomCourt} disabled={!formData.customCourtEntry.trim()}>
-                      Add
-                    </Button>
                   </div>
-                  {courtSuggestions.length > 0 && (
-                    <div className="mt-3 max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-tennis-dark/95 p-2 shadow-2xl">
-                      {courtSuggestions.map((court) => (
-                        <button
-                          key={court}
-                          type="button"
-                          onClick={() => selectCourt(court)}
-                          className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-clay/20 hover:text-white"
-                        >
-                          {court}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
 
-                {formData.pendingZoneChoice ? (
-                  <div className="mt-3 p-4 rounded-2xl bg-clay/10 border border-clay/20 space-y-3">
-                    <p className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-clay" />
-                      Your court is near a zone boundary — choose your zone
-                    </p>
-                    <div className="flex gap-2">
-                      {[formData.pendingZoneChoice.primary, formData.pendingZoneChoice.adjacent].map((zone) => (
-                        <button
-                          key={zone}
-                          type="button"
-                          onClick={() => setFormData({ ...formData, preferredZone: zone, pendingZoneChoice: null })}
-                          className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
-                            formData.preferredZone === zone
-                              ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
-                              : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
-                          }`}
-                        >
-                          {zone}
-                        </button>
-                      ))}
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-end">
+                      <h3 className="text-xl font-bold text-white flex items-center">
+                        <Trophy className="w-5 h-5 mr-2 text-clay" />
+                        NTRP Skill Level
+                      </h3>
+                      <div className="text-4xl font-black text-clay">{formData.skillLevel}</div>
+                    </div>
+                    <div className="relative pt-6">
+                      <input
+                        type="range"
+                        min="0" max={SKILL_LEVELS.length - 1} step="1"
+                        value={selectedSkillIndex}
+                        onChange={(e) => setFormData({ ...formData, skillLevel: SKILL_LEVELS[Number(e.target.value)] })}
+                        className="w-full h-3 rounded-full"
+                      />
+                      <div className="mt-4 flex items-start justify-between gap-2 text-center">
+                        {SKILL_LEVELS.map((level) => (
+                          <div key={level} className="flex flex-col items-center gap-2">
+                            <span className={`w-2.5 h-2.5 rounded-full ${formData.skillLevel === level ? 'bg-clay' : 'bg-white/20'}`} />
+                            <span className={`text-[10px] font-black tracking-widest ${formData.skillLevel === level ? 'text-clay' : 'text-white'}`}>
+                              {level.toFixed(1)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3 p-4 rounded-2xl bg-clay/10 border border-clay/20">
+                      <Info className="w-5 h-5 text-clay shrink-0" />
+                      <p className="text-sm font-medium text-white italic">"{SKILL_DESCRIPTIONS[formData.skillLevel]}"</p>
                     </div>
                   </div>
-                ) : formData.preferredZone ? (
-                  <div className="mt-3 flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-clay shrink-0" />
-                    <span className="text-xs text-white/70">Zone auto-assigned:</span>
-                    <span className="px-2.5 py-1 rounded-lg bg-clay/20 border border-clay/30 text-clay text-xs font-bold">
-                      {formData.preferredZone}
-                    </span>
-                  </div>
-                ) : null}
-              </div>
-
-              {/* Favourite Players */}
-              <div className="space-y-4">
-                <label className="block text-sm font-bold text-white uppercase tracking-wider flex items-center">
-                  <Star className="w-4 h-4 mr-2 text-clay" />
-                  Favourite Players
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {[...new Set([...FAVOURITE_PLAYERS, ...formData.favouritePlayers])].map((player) => (
-                    <button
-                      key={player}
-                      onClick={() => {
-                        const current = formData.favouritePlayers;
-                        setFormData({
-                          ...formData,
-                          favouritePlayers: current.includes(player)
-                            ? current.filter((p) => p !== player)
-                            : [...current, player],
-                        });
-                      }}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                        formData.favouritePlayers.includes(player)
-                          ? 'bg-clay text-white shadow-lg shadow-clay/20'
-                          : 'bg-white/5 text-white hover:bg-white/10 border border-white/5'
-                      }`}
-                    >
-                      {player}
-                    </button>
-                  ))}
                 </div>
-                <div className="flex gap-3">
-                  <Input
-                    placeholder="Add your own player..."
-                    value={formData.customPlayerEntry}
-                    error={errors.customPlayerEntry}
-                    onChange={(e) => {
-                      setFormData({ ...formData, customPlayerEntry: e.target.value });
-                      if (errors.customPlayerEntry) setErrors({ ...errors, customPlayerEntry: '' });
-                    }}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomPlayer(); } }}
-                  />
-                  <Button type="button" variant="clay" size="sm" onClick={addCustomPlayer} disabled={!formData.customPlayerEntry.trim()}>
-                    Add
-                  </Button>
-                </div>
-              </div>
+              )}
 
-              {/* Availability — per-day AM/PM grid */}
-              <div className="pt-6 border-t border-white/5 space-y-4">
-                <label className="block text-sm font-bold text-white uppercase tracking-wider flex items-center">
-                  <Calendar className="w-4 h-4 mr-2 text-clay" />
-                  Availability
-                </label>
-                <div className="grid grid-cols-[1fr_auto_auto] gap-x-6 gap-y-1 items-center max-w-xs">
-                  <span />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 text-center w-10">AM</span>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 text-center w-10">PM</span>
-                  {DAY_CODES.map((d) => (
-                    <React.Fragment key={d}>
-                      <span className="text-sm text-white/80 py-1.5">{DAY_LABELS[d]}</span>
-                      {(['AM', 'PM'] as TimeSlot[]).map((slot) => {
-                        const on = (formData.availabilityGrid[d] ?? []).includes(slot);
-                        return (
-                          <div key={slot} className="flex justify-center">
+              {/* Screen 2: Courts + Players */}
+              {prefStep === 2 && (
+                <div className="space-y-8">
+                  <div className="space-y-4">
+                    <label className="block text-sm font-bold text-white uppercase tracking-wider">Preferred Courts</label>
+                    <p className="text-xs text-white/50">Tip: select <span className="text-clay font-semibold">Stanley Park South - Toronto</span> for the downtown area.</p>
+
+                    {formData.preferredCourts.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {formData.preferredCourts.map((court) => (
+                          <button
+                            key={court}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, preferredCourts: formData.preferredCourts.filter((c) => c !== court) })}
+                            className="px-3 py-1 rounded-xl text-xs font-bold bg-clay text-white flex items-center gap-1.5 shadow-lg shadow-clay/20"
+                          >
+                            {court} <span className="opacity-70">✕</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="relative">
+                      <div className="flex gap-3">
+                        <Input
+                          placeholder="Search courts by name..."
+                          value={formData.customCourtEntry}
+                          error={errors.customCourtEntry}
+                          onChange={(e) => {
+                            setFormData({ ...formData, customCourtEntry: e.target.value });
+                            if (errors.customCourtEntry) setErrors({ ...errors, customCourtEntry: '' });
+                          }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomCourt(); } }}
+                        />
+                        <Button type="button" variant="clay" size="sm" className="px-3 shrink-0" onClick={addCustomCourt} disabled={!formData.customCourtEntry.trim()}>
+                          Add
+                        </Button>
+                      </div>
+                      {courtSuggestions.length > 0 && (
+                        <div className="mt-3 max-h-48 overflow-y-auto rounded-2xl border border-white/10 bg-tennis-dark/95 p-2 shadow-2xl">
+                          {courtSuggestions.map((court) => (
                             <button
+                              key={court}
                               type="button"
-                              onClick={() => {
-                                const cur = formData.availabilityGrid[d] ?? [];
-                                const next = cur.includes(slot) ? cur.filter((s) => s !== slot) : [...cur, slot];
-                                const grid: AvailabilityGrid = { ...formData.availabilityGrid };
-                                if (next.length) grid[d] = next; else delete grid[d];
-                                setFormData({ ...formData, availabilityGrid: grid });
-                              }}
-                              className={`w-6 h-6 rounded flex items-center justify-center border transition-colors ${
-                                on ? 'bg-clay border-clay' : 'bg-white/5 border-white/15 hover:border-clay/60'
+                              onClick={() => selectCourt(court)}
+                              className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-clay/20 hover:text-white"
+                            >
+                              {court}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {formData.pendingZoneChoice ? (
+                      <div className="mt-3 p-4 rounded-2xl bg-clay/10 border border-clay/20 space-y-3">
+                        <p className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                          <MapPin className="w-3.5 h-3.5 text-clay" />
+                          Your court is near a zone boundary — choose your zone
+                        </p>
+                        <div className="flex gap-2">
+                          {[formData.pendingZoneChoice.primary, formData.pendingZoneChoice.adjacent].map((zone) => (
+                            <button
+                              key={zone}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, preferredZone: zone, pendingZoneChoice: null })}
+                              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                                formData.preferredZone === zone
+                                  ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
+                                  : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
                               }`}
                             >
-                              {on && <span className="text-white text-[11px]">✓</span>}
+                              {zone}
                             </button>
-                          </div>
-                        );
-                      })}
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : formData.preferredZone ? (
+                      <div className="mt-3 flex items-center gap-2">
+                        <MapPin className="w-3.5 h-3.5 text-clay shrink-0" />
+                        <span className="text-xs text-white/70">Zone auto-assigned:</span>
+                        <span className="px-2.5 py-1 rounded-lg bg-clay/20 border border-clay/30 text-clay text-xs font-bold">
+                          {formData.preferredZone}
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
 
-              {/* Consent */}
-              <p className="text-xs text-white/50 text-center px-2 pt-2">
-                By joining you agree to our{' '}
-                <Link to="/rules" className="text-clay hover:underline">league rules</Link>
-                {' '}and{' '}
-                <Link to="/terms" className="text-clay hover:underline">terms of service</Link>.
-              </p>
+                  <div className="space-y-4">
+                    <label className="block text-sm font-bold text-white uppercase tracking-wider flex items-center">
+                      <Star className="w-4 h-4 mr-2 text-clay" />
+                      Favourite Players
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {[...new Set([...FAVOURITE_PLAYERS, ...formData.favouritePlayers])].map((player) => (
+                        <button
+                          key={player}
+                          onClick={() => {
+                            const current = formData.favouritePlayers;
+                            setFormData({
+                              ...formData,
+                              favouritePlayers: current.includes(player)
+                                ? current.filter((p) => p !== player)
+                                : [...current, player],
+                            });
+                          }}
+                          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                            formData.favouritePlayers.includes(player)
+                              ? 'bg-clay text-white shadow-lg shadow-clay/20'
+                              : 'bg-white/5 text-white hover:bg-white/10 border border-white/5'
+                          }`}
+                        >
+                          {player}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-3">
+                      <Input
+                        placeholder="Add your own player..."
+                        value={formData.customPlayerEntry}
+                        error={errors.customPlayerEntry}
+                        onChange={(e) => {
+                          setFormData({ ...formData, customPlayerEntry: e.target.value });
+                          if (errors.customPlayerEntry) setErrors({ ...errors, customPlayerEntry: '' });
+                        }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomPlayer(); } }}
+                      />
+                      <Button type="button" variant="clay" size="sm" onClick={addCustomPlayer} disabled={!formData.customPlayerEntry.trim()}>
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Screen 3: Availability */}
+              {prefStep === 3 && (
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <label className="block text-sm font-bold text-white uppercase tracking-wider flex items-center">
+                      <Calendar className="w-4 h-4 mr-2 text-clay" />
+                      Availability
+                    </label>
+                    <div className="grid grid-cols-[1fr_auto_auto] gap-x-6 gap-y-1 items-center max-w-xs">
+                      <span />
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 text-center w-10">AM</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 text-center w-10">PM</span>
+                      {DAY_CODES.map((d) => (
+                        <React.Fragment key={d}>
+                          <span className="text-sm text-white/80 py-1.5">{DAY_LABELS[d]}</span>
+                          {(['AM', 'PM'] as TimeSlot[]).map((slot) => {
+                            const on = (formData.availabilityGrid[d] ?? []).includes(slot);
+                            return (
+                              <div key={slot} className="flex justify-center">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const cur = formData.availabilityGrid[d] ?? [];
+                                    const next = cur.includes(slot) ? cur.filter((s) => s !== slot) : [...cur, slot];
+                                    const grid: AvailabilityGrid = { ...formData.availabilityGrid };
+                                    if (next.length) grid[d] = next; else delete grid[d];
+                                    setFormData({ ...formData, availabilityGrid: grid });
+                                  }}
+                                  className={`w-6 h-6 rounded flex items-center justify-center border transition-colors ${
+                                    on ? 'bg-clay border-clay' : 'bg-white/5 border-white/15 hover:border-clay/60'
+                                  }`}
+                                >
+                                  {on && <span className="text-white text-[11px]">✓</span>}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-white/50 text-center px-2">
+                    By joining you agree to our{' '}
+                    <Link to="/rules" className="text-clay hover:underline">league rules</Link>
+                    {' '}and{' '}
+                    <Link to="/terms" className="text-clay hover:underline">terms of service</Link>.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -990,11 +1037,27 @@ export const Signup: React.FC = () => {
             </div>
           )}
           {phase === 'preferences' && (
-            <div className="flex justify-end items-center gap-3 mt-4 pt-8 border-t border-white/5">
-              <Button onClick={handleCompleteProfile} isLoading={loading}>
-                Complete Sign Up
-                <CheckCircle2 className="ml-2 w-5 h-5" />
-              </Button>
+            <div className="flex justify-between items-center gap-3 mt-4 pt-8 border-t border-white/5">
+              {prefStep > 1 ? (
+                <Button variant="outline" onClick={() => setPrefStep((s) => (s - 1) as 1 | 2 | 3)}>
+                  Back
+                </Button>
+              ) : <div />}
+              {prefStep < 3 ? (
+                <Button
+                  onClick={() => setPrefStep((s) => (s + 1) as 1 | 2 | 3)}
+                  disabled={prefStep === 1 && !isNameValid()}
+                  className="group"
+                >
+                  Next
+                  <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              ) : (
+                <Button onClick={handleCompleteProfile} isLoading={loading}>
+                  Complete Profile
+                  <CheckCircle2 className="ml-2 w-5 h-5" />
+                </Button>
+              )}
             </div>
           )}
         </motion.div>

@@ -19,6 +19,50 @@
   }
 }
 
+/* ── Dropdown popups (global, dark theme) ──────────────────────────────────────
+   Native <select> popups and third-party widgets (e.g. intl-tel-input's country list)
+   don't inherit the page background — they default to the browser's white popup chrome,
+   which combined with our white body text makes the list unreadable. `color-scheme: dark`
+   tells the browser to theme its native form-control popups (select lists, etc.) dark
+   automatically; the explicit rules below are the cross-browser fallback/override, and
+   apply to every <select>/<option> site-wide, current and future, without per-component fixes. */
+:root {
+  color-scheme: dark;
+}
+select, option, optgroup {
+  background-color: #143D34;
+  color: #ffffff;
+}
+
+/* intl-tel-input country dropdown — ships with no background/text color of its own
+   (relies on inheriting the page), so on this dark site it renders invisible/white-on-white. */
+.iti__country-list {
+  background-color: #0B3027;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.iti__country {
+  color: #ffffff;
+}
+.iti__country.iti__highlight {
+  background-color: rgba(255, 107, 53, 0.18);
+}
+.iti__country-name, .iti__dial-code {
+  color: inherit;
+}
+.iti__search-input {
+  background-color: #143D34;
+  color: #ffffff;
+}
+.iti__search-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+.iti__no-results {
+  color: rgba(255, 255, 255, 0.6);
+}
+.iti__selected-country-primary {
+  color: #ffffff;
+}
+
 /* Range input — orange track, white thumb */
 input[type='range'] {
   -webkit-appearance: none;

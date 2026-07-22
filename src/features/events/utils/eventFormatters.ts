@@ -1,5 +1,5 @@
 import { TennisEvent } from '../../../types';
-import { isMeetupEvent, isRecurringWeekly, isSpecialEvent } from '../../../utils/eventTypes';
+import { isRecurringWeekly } from '../../../utils/eventTypes';
 import { getEventEndDate, getEventStartDate, parseValidDate } from '../../../utils/eventDates';
 
 const WEEKDAY_MAP: Record<string, number> = {
@@ -38,11 +38,4 @@ export const formatTournamentRange = (event: TennisEvent): string | null => {
   if (!start || !end) return null;
   const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
   return `${fmt(start)} - ${fmt(end)}`;
-};
-
-export const getRecurringEventLabel = (event: TennisEvent): string | null => {
-  if (!isRecurringWeekly(event)) return null;
-  if (isMeetupEvent(event)) return 'Weekly Skill-Based Meetups';
-  if (isSpecialEvent(event)) return 'Play Tourney Matches on Selected Matchdays';
-  return null;
 };

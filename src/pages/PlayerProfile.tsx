@@ -1,13 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
-import { ArrowLeft, Calendar, Mail, MapPin, Phone, Star } from 'lucide-react';
+import { ArrowLeft, Calendar, Mail, MapPin, Phone, Star, Users } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { Button } from '../components/Button';
 import { TennisEvent, UserData, UserPreferences, UserStats } from '../types';
 import { DAY_CODES, DAY_LABELS, getAvailabilityGrid, type TimeSlot } from '../utils/availability';
+import { BadgeRow } from '../features/tasks/BadgeRow';
 
 const skillTier = (skill: number) => (skill < 3 ? 'Beginner' : skill < 4 ? 'Challenger' : 'Masters');
+
+// Normalize free-text stats.league into a display division ("women" first — it contains "men").
+const leagueDivision = (league?: string): string => {
+  const l = (league || '').toLowerCase();
+  if (l.includes('wom') || l.includes('female')) return "Women's";
+  if (l.includes('men') || l.includes('male')) return "Men's";
+  return '';
+};
 
 // lucide has no racquet — small inline glyph (matches the own Profile Card).
 const RacquetIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -44,8 +53,8 @@ export const PlayerProfile: React.FC = () => {
 
   useEffect(() => {
     const loadPlayer = async () => {
-      if (!userId) return;
       setLoading(true);
+      if (!userId) { setLoading(false); return; }
       try {
         const [userDoc, statsDoc, prefsDoc] = await Promise.all([
           getDoc(doc(db, 'users', userId)),
@@ -59,7 +68,9 @@ export const PlayerProfile: React.FC = () => {
         setStats(statsDoc.exists() ? (statsDoc.data() as UserStats) : null);
         setPreferences(prefsDoc.exists() ? (prefsDoc.data() as UserPreferences) : null);
 
-        // Load organizer from the event's creator_id
+        // Reset before resolving — otherwise a previous player's organizer can keep showing
+        // if this player has no event/organizer to resolve (switching :userId doesn't remount).
+        setOrganizer(null);
         if (eventId) {
           const eventDoc = await getDoc(doc(db, 'events', eventId));
           if (eventDoc.exists()) {
@@ -76,7 +87,7 @@ export const PlayerProfile: React.FC = () => {
     };
 
     loadPlayer();
-  }, [userId]);
+  }, [userId, eventId]);
 
   if (loading) {
     return (
@@ -132,7 +143,10 @@ export const PlayerProfile: React.FC = () => {
         <div className="divide-y divide-white/5">
           <div className="py-3">
             <SectionLabel label="Name" />
-            <p className="text-lg font-bold text-white mt-0.5">{player.name || '—'}</p>
+            <p className="text-lg font-bold text-white mt-0.5">
+              {player.name || '—'}
+              <BadgeRow ids={player.display_badges} className="ml-2 align-middle" />
+            </p>
           </div>
 
           <div className="py-3">
@@ -158,6 +172,17 @@ export const PlayerProfile: React.FC = () => {
               </div>
             ) : <p className="text-sm text-white/40 mt-1">Not set.</p>}
           </div>
+
+          {/* League & Age — only when the player opted in ("Make visible to others"). */}
+          {player.profile_details_visible && (leagueDivision(stats?.league) || player.age_bracket) && (
+            <div className="py-3">
+              <SectionLabel icon={<Users className="w-3.5 h-3.5 text-clay" />} label="League & Age" />
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {leagueDivision(stats?.league) && <Pill label={`${leagueDivision(stats?.league)} League`} />}
+                {player.age_bracket && <Pill label={player.age_bracket} />}
+              </div>
+            </div>
+          )}
 
           <div className="py-3">
             <SectionLabel icon={<MapPin className="w-3.5 h-3.5 text-clay" />} label="Preferred Courts" />

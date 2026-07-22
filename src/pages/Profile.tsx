@@ -1,10 +1,12 @@
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { Instagram, Mail } from 'lucide-react';
+import { INSTAGRAM_URL } from '../features/tasks/useTasks';
 import { useAuth } from '../context/AuthContext';
 import { useProfileData } from '../features/profile/hooks/useProfileData';
 import { useProfileActions } from '../features/profile/hooks/useProfileActions';
 import { ProfileInfo } from '../features/profile/components/ProfileInfo';
-import { ProfileStats } from '../features/profile/components/ProfileStats';
+import { RecentMatches } from '../features/profile/components/RecentMatches';
 import { ProfileAvailability } from '../features/profile/components/ProfileAvailability';
 import { getAvailabilityGrid } from '../utils/availability';
 
@@ -61,11 +63,13 @@ export const Profile: React.FC = () => {
 
       <ProfileInfo actions={actions} updateLoading={updateLoading} message={message} />
 
-      <ProfileStats />
+      <RecentMatches />
 
       <ProfileAvailability updateAvailabilityGrid={actions.updateAvailabilityGrid} updateLoading={updateLoading} />
 
-      {(() => {
+      {eventsLoading ? (
+        <div className="h-48 bg-tennis-surface/30 rounded-3xl md:rounded-[2.5rem] animate-pulse" />
+      ) : (() => {
             const parseMayKey = (val: unknown): string | null => {
               if (typeof val === 'string') return val.startsWith('May') ? val : null;
               if (typeof val !== 'object' || val === null) return null;
@@ -156,6 +160,21 @@ export const Profile: React.FC = () => {
               </div>
             );
       })()}
+
+      {/* Site links relocated here from the removed global footer. */}
+      <div className="pt-6 mt-2 border-t border-white/5">
+        <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-white/50">
+          <Link to="/rules" className="hover:text-clay transition-colors">League Rules</Link>
+          <Link to="/terms" className="hover:text-clay transition-colors">Terms of Service</Link>
+          <Link to="/privacy" className="hover:text-clay transition-colors">Privacy Policy</Link>
+          <a href="mailto:tenniscommunity.tbtc@gmail.com" className="inline-flex items-center gap-1 hover:text-clay transition-colors">
+            <Mail className="w-3.5 h-3.5" /> Contact
+          </a>
+          <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-clay transition-colors">
+            <Instagram className="w-3.5 h-3.5" /> Instagram
+          </a>
+        </div>
+      </div>
     </div>
   );
 };

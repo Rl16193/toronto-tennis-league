@@ -8,6 +8,7 @@ import { Input } from '../../components/Input';
 import { db, storage } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { track } from '../../lib/analytics';
+import { bumpCounter, setTaskDone } from '../../features/tasks/useTasks';
 
 type Props = {
   courtNames: string[];
@@ -19,31 +20,34 @@ type Props = {
 
 const TYPE_OPTIONS = [
   { value: 'existing_website', label: 'Website' },
-  { value: 'infrastructure', label: 'Infrastructure upgrades' },
-  { value: 'more_courts', label: 'Need more courts' },
-  { value: 'lights', label: 'Need lights' },
-  { value: 'wait_times', label: 'Unclear wait-time instructions' },
-  { value: 'other', label: 'Other' },
+  { value: 'public_court', label: 'Public Court' },
 ] as const;
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGES = 3;
 
 export const SuggestImprovementModal: React.FC<Props> = ({ courtNames, onClose, presetCourt }) => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const [types, setTypes] = useState<string[]>([]);
   const [selectedCourt, setSelectedCourt] = useState(presetCourt ?? '');
   const [courtSearch, setCourtSearch] = useState(presetCourt ?? '');
   const [showCourtDropdown, setShowCourtDropdown] = useState(false);
   const [description, setDescription] = useState('');
-  const [email, setEmail] = useState('');
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  // Anonymous submitters (the only ones who can complete this form while logged out) get offered
+  // a mailing-list opt-in after their suggestion is safely recorded — never before, and never
+  // required. The sheet's own close (✕) button lets them skip it and stay anonymous.
+  const [mailingEmail, setMailingEmail] = useState('');
+  const [mailingBusy, setMailingBusy] = useState(false);
+  const [mailingDone, setMailingDone] = useState(false);
+  const [mailingError, setMailingError] = useState('');
 
   const courtInputRef = useRef<HTMLInputElement>(null);
 
@@ -118,7 +122,6 @@ export const SuggestImprovementModal: React.FC<Props> = ({ courtNames, onClose, 
         types,
         court: courtDisabled ? '' : selectedCourt,
         description: description.trim(),
-        ...(email.trim() ? { email: email.trim() } : {}),
         user_id: user?.uid ?? null,
         ...(imagePaths.length > 0 ? { image_paths: imagePaths, image_status: 'pending' } : {}),
         status: 'open',
@@ -140,12 +143,39 @@ export const SuggestImprovementModal: React.FC<Props> = ({ courtNames, onClose, 
       if (imageFiles.length > 0) setUploadProgress(100);
 
       track('court_map_interaction', { interaction_type: 'suggest_improvement', suggestion_types: types.join(',') });
+      // Community Member Starter: a real submission auto-ticks the "Submit a court improvement"
+      // task (best-effort — never blocks the suggestion itself).
+      if (user) {
+        const name = profile?.user.name || user.displayName || '';
+        setTaskDone(user.uid, name, 'courtSuggestion', true).catch(() => {});
+        // Court Care tiers count submissions; suggestions aren't readable by their author
+        // (organizer-only), so the tally is kept here.
+        bumpCounter(user.uid, name, 'suggestions').catch(() => {});
+      }
       setSuccess(true);
     } catch (err) {
       console.error('Suggestion submit failed:', err);
       setError('Could not submit your suggestion. Please try again.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const joinMailingList = async () => {
+    if (!mailingEmail.trim()) { setMailingError('Please enter an email.'); return; }
+    setMailingBusy(true);
+    setMailingError('');
+    try {
+      await addDoc(collection(db, 'mailing_list'), {
+        email: mailingEmail.trim(),
+        source: 'suggest_improvement',
+        created_at: new Date().toISOString(),
+      });
+      setMailingDone(true);
+    } catch {
+      setMailingError('Could not join right now. Please try again.');
+    } finally {
+      setMailingBusy(false);
     }
   };
 
@@ -165,6 +195,26 @@ export const SuggestImprovementModal: React.FC<Props> = ({ courtNames, onClose, 
               <h3 className="text-xl font-bold text-white">Thank you!</h3>
               <p className="text-white/60 text-sm">Your suggestion has been sent to the organizers.</p>
             </div>
+
+            {!user && (
+              mailingDone ? (
+                <p className="text-sm text-green-400">You're on the list — thanks!</p>
+              ) : (
+                <div className="text-left rounded-2xl bg-white/[0.03] border border-white/10 p-4 space-y-3">
+                  <p className="text-sm font-semibold text-white">Want to stay in the loop?</p>
+                  <p className="text-xs text-white/50">Leave your email to hear about upcoming events. Totally optional — close this window to stay anonymous.</p>
+                  {mailingError && <p className="text-red-400 text-xs">{mailingError}</p>}
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={mailingEmail}
+                    onChange={(e) => setMailingEmail(e.target.value)}
+                  />
+                  <Button size="sm" onClick={joinMailingList} isLoading={mailingBusy} className="w-full">Join the mailing list</Button>
+                </div>
+              )
+            )}
+
             <Button variant="outline" className="w-full" onClick={onClose}>Done</Button>
           </div>
         ) : (
@@ -266,14 +316,6 @@ export const SuggestImprovementModal: React.FC<Props> = ({ courtNames, onClose, 
                 className="w-full rounded-2xl bg-tennis-surface/50 border border-white/10 px-4 py-3 text-white placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none transition-all"
               />
             </div>
-
-            <Input
-              label="Email"
-              type="email"
-              placeholder="So we can follow up"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
 
             {/* Photos */}
             <div className="space-y-1.5">

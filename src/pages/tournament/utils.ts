@@ -1,5 +1,18 @@
 import { EventParticipant, UserData, UserStats } from '../../types';
+import { parseValidDate, type FirestoreDateLike } from '../../utils/eventDates';
 import { DrawConfig, SkillGroup, TemplateMatch, TournamentMatch, TournamentPlayer } from './types';
+
+// Format a scheduled match date+slot as e.g. "Jul 4th, 6pm". Shared by the bracket and
+// round-robin opponent panels and the schedule controls so they read identically.
+export const formatScheduledDate = (d?: string, slot?: string) => {
+  if (!d) return slot ?? '';
+  const dt = new Date(`${d}T00:00:00`);
+  if (Number.isNaN(dt.getTime())) return slot ?? d;
+  const day = dt.getDate();
+  const sfx = ['th', 'st', 'nd', 'rd'][((day % 100) - 20) % 10] ?? ['th', 'st', 'nd', 'rd'][day % 100] ?? 'th';
+  const month = dt.toLocaleDateString(undefined, { month: 'short' });
+  return `${month} ${day}${sfx}${slot ? `, ${slot}` : ''}`;
+};
 
 export const formatSetScores = (m: TournamentMatch): string => {
   const pairs: [number, number][] = [
@@ -37,17 +50,9 @@ export const getParticipantDisplayName = (participant: EventParticipant, userDat
   return formatPlayerName(userData?.name || participant.doubles || participant.user_id || 'Player');
 };
 
-export const parseDateValue = (value: unknown) => {
-  if (!value) return null;
-  if (typeof value === 'object' && value !== null && typeof (value as { toDate?: unknown }).toDate === 'function') {
-    return (value as { toDate: () => Date }).toDate();
-  }
-  if (typeof value === 'object' && value !== null && typeof (value as { seconds?: unknown }).seconds === 'number') {
-    return new Date((value as { seconds: number }).seconds * 1000);
-  }
-  const parsed = new Date(value as string);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
+// Kept as a thin alias over the canonical parser so the two Firestore-date shapes are handled
+// in one place (src/utils/eventDates.ts). Callers pass raw event fields, hence the `unknown`.
+export const parseDateValue = (value: unknown) => parseValidDate(value as FirestoreDateLike);
 
 export const getEventDate = (event: { startDate?: unknown; start_date?: unknown; date?: unknown; endDate?: unknown; end_date?: unknown }) =>
   parseDateValue(event.startDate || event.start_date || event.date || event.endDate || event.end_date);
@@ -67,17 +72,15 @@ export const skillBand = (skill: number): 'Beginners' | 'Challengers' | 'Masters
 
 // Derive the display state of a match's scheduling for a given viewer.
 export type ScheduleState = {
-  status: 'unscheduled' | 'proposed' | 'scheduled';
+  status: 'unscheduled' | 'scheduled';
   date?: string;
   slot?: 'AM' | 'PM';
-  proposedByMe: boolean;
   requested: boolean;
 };
-export const getScheduleState = (m: TournamentMatch, uid?: string): ScheduleState => ({
+export const getScheduleState = (m: TournamentMatch): ScheduleState => ({
   status: m.schedule_status ?? 'unscheduled',
   date: m.proposed_date,
   slot: m.proposed_slot,
-  proposedByMe: !!uid && m.proposed_by === uid,
   requested: !!m.schedule_requested,
 });
 

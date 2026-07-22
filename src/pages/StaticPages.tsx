@@ -228,8 +228,8 @@ export const Contact: React.FC = () => (
         </div>
         <div className="rounded-[2rem] border border-white/5 bg-white/5 p-6">
           <p className="text-xs font-bold uppercase tracking-widest text-white/50 mb-2">Instagram</p>
-          <a href="https://www.instagram.com/racquetsnstrings.to/" target="_blank" rel="noopener noreferrer" className="text-clay font-bold hover:underline">
-            @racquetsnstrings.to
+          <a href="https://www.instagram.com/racqnstringstoronto?igsh=MTQ0eXA1bXZpbXltaQ==" target="_blank" rel="noopener noreferrer" className="text-clay font-bold hover:underline">
+            @racqnstringstoronto
           </a>
         </div>
       </section>

@@ -1,47 +1,25 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Calendar, Trophy, Medal, User, Menu, X, MapPin, ArrowLeft } from 'lucide-react';
+import { LogOut, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../lib/firebase';
 import { signOut } from 'firebase/auth';
 import { Button } from './Button';
+import { NotificationBell } from '../features/notifications/NotificationBell';
 
-const PUBLIC_NAV_LINKS = [
-  { name: 'Events', path: '/events', icon: Calendar },
-  { name: 'Leagues', path: '/leagues', icon: Medal },
-  { name: 'Courts', path: '/courts', icon: MapPin },
-] as const;
-
-// Viewable only with an account.
-const PRIVATE_NAV_LINKS = [
-  { name: 'Matches', path: '/tournament', icon: Trophy },
-] as const;
-
-const ALL_NAV_LINKS = [...PUBLIC_NAV_LINKS, ...PRIVATE_NAV_LINKS] as const;
-
+// Slim top bar: brand (→ Home) + auth only. Primary navigation lives in the bottom tab bar
+// (BottomNav), app-style.
 export const Navbar: React.FC = () => {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [scrolled, setScrolled] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    if (menuOpen) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [menuOpen]);
 
   const handleLogout = async () => {
     try {
@@ -52,7 +30,6 @@ export const Navbar: React.FC = () => {
     }
   };
 
-  const desktopNavLinks = user ? ALL_NAV_LINKS : PUBLIC_NAV_LINKS;
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
 
   return (
@@ -64,7 +41,7 @@ export const Navbar: React.FC = () => {
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between relative">
+        <div className="flex items-center justify-between">
 
           {/* Logo — back arrow on the auth page */}
           {isAuthPage ? (
@@ -77,7 +54,7 @@ export const Navbar: React.FC = () => {
               <span className="text-sm font-semibold">Back</span>
             </Link>
           ) : (
-            <Link to={user ? '/profile' : '/'} className="flex items-center shrink-0">
+            <Link to="/" className="flex items-center shrink-0" aria-label="Home">
               <span className="text-lg md:text-xl font-bold font-['Montserrat'] tracking-tight">
                 <span className="text-white">RACQUETS</span>
                 <span className="text-clay"> &</span>
@@ -86,116 +63,43 @@ export const Navbar: React.FC = () => {
             </Link>
           )}
 
-          {/* Desktop Nav */}
-          <div className="hidden md:flex items-center gap-8">
-            {desktopNavLinks.map((link) => (
-              <Link
-                key={link.path}
-                to={link.path}
-                className={`text-sm font-medium transition-colors hover:text-clay ${
-                  location.pathname === link.path ? 'text-clay' : 'text-white'
-                }`}
-              >
-                {link.name}
-              </Link>
-            ))}
-          </div>
-
-          {/* Desktop Auth */}
-          <div className="hidden md:flex items-center gap-4 shrink-0">
-            {user ? (
-              <>
-                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-white hover:text-white">
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Logout
-                </Button>
-                <Link to="/profile">
-                  <div className="w-9 h-9 rounded-full border-2 border-clay p-0.5 overflow-hidden hover:scale-105 transition-transform">
-                    <img
-                      src={profile?.user.avatar || `https://ui-avatars.com/api/?name=${profile?.user.name || user.email}&background=C25E44&color=fff`}
-                      alt="Profile"
-                      className="w-full h-full rounded-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
-                </Link>
-              </>
-            ) : (
-              <Link to="/login">
-                <Button size="sm">Join or Log In</Button>
-              </Link>
-            )}
-          </div>
-
-          {/* Mobile Nav */}
-          <div className="md:hidden flex items-center gap-2 shrink-0" ref={menuRef}>
-            {user ? (
-              <>
-                <button
-                  onClick={handleLogout}
-                  className="p-2 rounded-xl text-white hover:text-red-400 hover:bg-red-500/5 transition-colors"
-                  aria-label="Logout"
-                >
-                  <LogOut className="w-5 h-5" />
-                </button>
-                <Link to="/profile">
-                  <div className="w-8 h-8 rounded-full border-2 border-clay p-0.5 overflow-hidden hover:scale-105 transition-transform">
-                    <img
-                      src={profile?.user.avatar || `https://ui-avatars.com/api/?name=${profile?.user.name || user.email}&background=C25E44&color=fff`}
-                      alt="Profile"
-                      className="w-full h-full rounded-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
-                </Link>
-                <button
-                  onClick={() => setMenuOpen((o) => !o)}
-                  className="p-2 rounded-xl text-white hover:bg-white/5 transition-colors"
-                  aria-label="Menu"
-                >
-                  {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-                </button>
-
-                {menuOpen && (
-                  <div className="absolute top-full right-4 mt-2 w-48 rounded-2xl bg-tennis-dark border border-white/10 shadow-xl overflow-hidden z-50">
-                    {ALL_NAV_LINKS.map((link) => (
-                      <Link
-                        key={link.path}
-                        to={link.path}
-                        className={`flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors hover:bg-white/5 ${location.pathname === link.path ? 'text-clay' : 'text-white'}`}
-                      >
-                        <link.icon className="w-4 h-4 shrink-0" />
-                        {link.name}
-                      </Link>
-                    ))}
-                    <Link
-                      to="/profile"
-                      className={`flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors hover:bg-white/5 border-t border-white/5 ${location.pathname === '/profile' ? 'text-clay' : 'text-white'}`}
-                    >
-                      <User className="w-4 h-4 shrink-0" />
-                      Profile
-                    </Link>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                {PUBLIC_NAV_LINKS.map((link) => (
-                  <Link
-                    key={link.path}
-                    to={link.path}
-                    className={`p-2 rounded-xl transition-colors hover:bg-white/5 ${location.pathname === link.path ? 'text-clay' : 'text-white'}`}
-                    aria-label={link.name}
+          {/* Auth */}
+          {!isAuthPage && (
+            <div className="flex items-center gap-3 shrink-0">
+              {user ? (
+                <>
+                  <NotificationBell />
+                  <button
+                    onClick={handleLogout}
+                    className="p-2 rounded-xl text-white/80 hover:text-red-400 hover:bg-red-500/5 transition-colors"
+                    aria-label="Logout"
                   >
-                    <link.icon className="w-5 h-5" />
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                  <Link to="/profile" aria-label="Profile">
+                    <div className="w-9 h-9 rounded-full border-2 border-clay p-0.5 overflow-hidden hover:scale-105 transition-transform">
+                      {profile?.user.avatar ? (
+                        <img
+                          src={profile.user.avatar}
+                          alt="Profile"
+                          className="w-full h-full rounded-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <span className="w-full h-full rounded-full bg-tennis-surface flex items-center justify-center text-sm font-black text-white/80">
+                          {(profile?.user.name || user.email || '?').charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
                   </Link>
-                ))}
+                </>
+              ) : (
                 <Link to="/login">
-                  <Button size="sm" className="text-sm px-3">Join or Log In</Button>
+                  <Button size="sm">Join or Log In</Button>
                 </Link>
-              </>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
         </div>
       </div>

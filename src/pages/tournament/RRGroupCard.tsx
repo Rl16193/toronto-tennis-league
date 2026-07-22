@@ -37,8 +37,20 @@ export const RRGroupCard: React.FC<Props> = ({
   // Local draft of the group name (creator rename).
   const [labelDraft, setLabelDraft] = useState(groupLabel);
 
-  // Sync local state when props change (e.g. after save)
-  React.useEffect(() => { setLocalPlayers(players); }, [players]);
+  // Sync local state when the roster actually changes (e.g. after a save completes) — NOT on
+  // every new `players` array reference. `players` is derived from the live matches feed, so an
+  // unrelated Firestore write anywhere else in the event (another group's score, etc.) produces
+  // a new reference on every render; resyncing on reference alone silently discarded an
+  // in-progress "Reassign Players" edit before the creator could click Save.
+  const playersKey = players.map((p) => p.user_id).sort().join(',');
+  const lastPlayersKeyRef = React.useRef(playersKey);
+  React.useEffect(() => {
+    if (playersKey !== lastPlayersKeyRef.current) {
+      lastPlayersKeyRef.current = playersKey;
+      setLocalPlayers(players);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playersKey]);
   React.useEffect(() => { setLabelDraft(groupLabel); }, [groupLabel]);
 
   const sortedMatches = matches.slice().sort((a, b) => a.position - b.position);

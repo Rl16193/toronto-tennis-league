@@ -75,6 +75,8 @@ All fields are camelCase (`matchesPlayed`, `leaguePoints26`, etc.). Snake_case a
 
 Security rules (`firestore.rules`): owners can only update `skill_level / tournament_preference / name / user_id` in `stats` — scoring fields are organiser-only. `event_creator` in `preferences` can only be set by the super-admin UID (`7PvfzNtDmsOq5GLMieId7QRT7wH3`). Rules require `firebase deploy --only firestore:rules` to take effect — a git push alone does not deploy them.
 
+Storage rules (`storage.rules`) also require a manual deploy — `firebase deploy --only storage`, or paste into Firebase Console → Storage → Rules → Publish. A git push alone does not deploy them.
+
 ### Auth flow
 `AuthContext.tsx` calls `ensureUserProfileDocuments` (`profileBootstrap.ts`) on every login to guarantee `users/stats/preferences` docs exist. The `profile` object (`UserProfile` type) bundles all three docs and is consumed throughout the app via `useAuth()`.
 

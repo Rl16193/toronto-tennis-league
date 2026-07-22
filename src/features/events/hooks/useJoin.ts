@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, getDocs, query, updateDoc, doc, where } from 'firebase/firestore';
 import { NavigateFunction } from 'react-router-dom';
-import { db, analyticsPromise } from '../../../lib/firebase';
+import { auth, db, analyticsPromise } from '../../../lib/firebase';
 import { logEvent } from 'firebase/analytics';
 import { TennisEvent } from '../../../types';
 import { TournamentMatch } from '../../../pages/tournament/types';
@@ -28,22 +28,32 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
   const [joinError, setJoinError] = useState('');
   const [joining, setJoining] = useState(false);
   const [tournamentMatches, setTournamentMatches] = useState<TournamentMatch[]>([]);
+  const [loadingMatches, setLoadingMatches] = useState(false);
   const [slotFallbackConfirmed, setSlotFallbackConfirmed] = useState(false);
 
   const participantName = profile?.user.name?.trim() || user?.email || '';
 
+  // Runs on ANY change of which event is selected — including switching directly from one
+  // event to another without passing through null (e.g. clicking "Join Event" on a different
+  // card while one is already expanded). Clearing joinForm/tournamentMatches here (rather than
+  // only when selectedEvent becomes null) prevents the previous event's division/matches from
+  // ever being used to compute slotStatus or get submitted against the newly selected event.
   useEffect(() => {
-    if (!selectedEvent) {
-      setJoinForm(INITIAL_JOIN_FORM);
-      setJoinError('');
-      setTournamentMatches([]);
-    }
-  }, [selectedEvent]);
+    setJoinForm(INITIAL_JOIN_FORM);
+    setJoinError('');
+    setTournamentMatches([]);
 
-  useEffect(() => {
-    if (!selectedEvent || !isTournamentEvent(selectedEvent)) { setTournamentMatches([]); return; }
+    if (!selectedEvent || !isTournamentEvent(selectedEvent)) { setLoadingMatches(false); return; }
+
+    let cancelled = false;
+    setLoadingMatches(true);
     getDocs(query(collection(db, 'tournament_matches'), where('event_id', '==', selectedEvent.id)))
-      .then((snap) => setTournamentMatches(snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentMatch))));
+      .then((snap) => {
+        if (cancelled) return;
+        setTournamentMatches(snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentMatch)));
+      })
+      .finally(() => { if (!cancelled) setLoadingMatches(false); });
+    return () => { cancelled = true; };
   }, [selectedEvent?.id]);
 
   useEffect(() => { setSlotFallbackConfirmed(false); }, [joinForm.division, joinForm.tournamentChoice]);
@@ -122,6 +132,10 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
 
   const handleSubmitJoin = async () => {
     if (!selectedEvent || !user) return;
+
+    // Defense in depth: the UI disables submit while matches are loading, but never act on a
+    // tournament event's slotStatus/matches before they've actually loaded for THIS event.
+    if (isTournamentEvent(selectedEvent) && loadingMatches) return;
 
     if (hasJoinedTournamentChoice(selectedEvent.id, joinForm.tournamentChoice)) {
       setJoinError(`You are already registered for ${joinForm.tournamentChoice.toLowerCase()} in this event.`);
@@ -218,7 +232,7 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
     selectedEvent, setSelectedEvent,
     joinForm, setJoinForm,
     joinError,
-    joining, slotStatus,
+    joining, slotStatus, loadingMatches,
     slotFallbackConfirmed, setSlotFallbackConfirmed,
     handleStartJoin, handleSubmitJoin,
   };

@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { TournamentMatch, TournamentPlayer } from './types';
-import { formatPlayerName, formatSetScores, getScheduleState } from './utils';
+import { formatPlayerName, formatScheduledDate, formatSetScores, getScheduleState } from './utils';
 import { ScheduleControls, type ScheduleApi } from './ScheduleControls';
+import { ContactOpponentButton } from './ContactOpponentButton';
 
 // ─── Bracket: your matches + potential next-round opponents ──────────────────────
 
@@ -13,6 +14,8 @@ export type OpponentRow = {
   userId: string;
   email: string;
   phone: string;
+  whatsappContact: string;
+  whatsappSameAsPhone: boolean;
   skill: number | null;
   wins: number;
   losses: number;
@@ -27,6 +30,23 @@ const ProfileLink: React.FC<{ userId: string }> = ({ userId }) =>
       View Profile
     </Link>
   ) : null;
+
+// Shared scheduling status badge for a match — used by both the bracket (Your Match) and the
+// round-robin (Your Group) panels so they read identically. A completed match is always
+// "Completed" (and scheduling is locked wherever this is shown).
+const scheduleBadge = (m: TournamentMatch): { text: string; cls: string } => {
+  const isComplete = m.status === 'complete';
+  const st = getScheduleState(m);
+  const cls = isComplete || st?.status === 'scheduled'
+    ? 'bg-green-500/15 text-green-300 border-green-500/25'
+    : 'bg-white/5 text-white/60 border-white/10';
+  const text = isComplete
+    ? 'Completed'
+    : st?.status === 'scheduled'
+      ? `Scheduled on ${formatScheduledDate(st.date, st.slot ?? '')}`
+      : 'Unscheduled';
+  return { text, cls };
+};
 
 /** Compact bracket-style cell for the viewer's current match — dark, blended with the site. */
 const CurrentMatchCell: React.FC<{ match: TournamentMatch }> = ({ match }) => {
@@ -59,6 +79,8 @@ export const OpponentCard: React.FC<{
 }> = ({ opponent, defaultOpen = false, currentMatch, schedule }) => {
   const [open, setOpen] = useState(defaultOpen);
   const canSchedule = !!currentMatch && !!schedule && !currentMatch.id.startsWith('preview_');
+  const isComplete = currentMatch?.status === 'complete';
+  const badge = canSchedule ? scheduleBadge(currentMatch!) : null;
 
   return (
     <div className="mb-6">
@@ -80,21 +102,34 @@ export const OpponentCard: React.FC<{
           )}
           {currentMatch && <CurrentMatchCell match={currentMatch} />}
 
-          {/* Opponent contact + profile (read-only; you can't edit another player's profile).
-              Show the phone number; fall back to email only when no phone is on file. */}
-          <div className="rounded-2xl border border-white/10 bg-tennis-surface/30 p-4 flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-white font-bold">{opponent.name}</p>
-              <div className="mt-1 text-sm">
+          {/* RR-style card: status badge · opponent · contact · View Profile. Contact is read-only
+              (you can't edit another player's profile). Phone first, email as a fallback. */}
+          <div className="rounded-2xl border border-white/10 bg-tennis-surface/30 p-4">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:grid sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-4 sm:gap-y-0">
+              {badge && (
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border shrink-0 ${badge.cls}`}>{badge.text}</span>
+              )}
+              <div className="min-w-0">
+                <p className="text-white font-bold">{opponent.name}</p>
                 {opponent.phone || opponent.email
-                  ? <p className="text-white/70 break-all">{opponent.phone || opponent.email}</p>
-                  : <p className="text-white/40">No contact on file</p>}
+                  ? <p className="text-white/70 text-sm break-all">{opponent.phone || opponent.email}</p>
+                  : <p className="text-white/40 text-sm">No contact on file</p>}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <ContactOpponentButton
+                  name={opponent.name}
+                  phone={opponent.phone}
+                  email={opponent.email}
+                  whatsappContact={opponent.whatsappContact}
+                  whatsappSameAsPhone={opponent.whatsappSameAsPhone}
+                />
+                <ProfileLink userId={opponent.userId} />
               </div>
             </div>
-            <ProfileLink userId={opponent.userId} />
           </div>
 
-          {canSchedule && <ScheduleControls match={currentMatch!} api={schedule!} showMessage />}
+          {/* Scheduling is locked once the match is complete. */}
+          {canSchedule && !isComplete && <ScheduleControls match={currentMatch!} api={schedule!} />}
         </div>
       )}
     </div>
@@ -111,7 +146,7 @@ export const RROpponentPanel: React.FC<{
   pairingMatches?: TournamentMatch[];
   schedule?: ScheduleApi;
   // uid → contact details, so we can show the phone number (email only when no phone).
-  contactMap?: Record<string, { phone?: string; email?: string }>;
+  contactMap?: Record<string, { phone?: string; email?: string; whatsapp_contact?: string; whatsapp_same_as_phone?: boolean }>;
 }> = ({ group, userId, isDoubles, defaultOpen = false, pairingMatches, schedule, contactMap }) => {
   const others = group.filter((p) => p.user_id !== userId);
   const [open, setOpen] = useState(defaultOpen);
@@ -140,57 +175,44 @@ export const RROpponentPanel: React.FC<{
       <div className="space-y-3">
         {others.map((p) => {
           const contact = contactFor(p);
+          const c = contactMap?.[p.user_id];
           const m = pairingMatches?.find((mm) => mm.player_1_user_id === p.user_id || mm.player_2_user_id === p.user_id);
           const canSchedule = !!schedule && !!m && !m.id.startsWith('preview_');
-          const schedState = canSchedule ? getScheduleState(m!, schedule!.uid) : null;
           const isComplete = m?.status === 'complete';
-
-          const badgeCls = isComplete
-            ? 'bg-green-500/15 text-green-300 border-green-500/25'
-            : schedState?.status === 'scheduled'
-              ? 'bg-green-500/15 text-green-300 border-green-500/25'
-              : schedState?.status === 'proposed'
-                ? 'bg-amber-500/15 text-amber-300 border-amber-500/25'
-                : 'bg-white/5 text-white/60 border-white/10';
-
-          const fmtDate = (d?: string) => {
-            if (!d) return '';
-            const dt = new Date(`${d}T00:00:00`);
-            return Number.isNaN(dt.getTime()) ? d : dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-          };
-
-          const badgeText = isComplete
-            ? 'Completed'
-            : schedState?.status === 'scheduled'
-              ? `Scheduled · ${fmtDate(schedState.date)} ${schedState.slot ?? ''}`.trim()
-              : schedState?.status === 'proposed'
-                ? (schedState.proposedByMe
-                  ? `You proposed ${fmtDate(schedState.date)} ${schedState.slot} · awaiting confirm`
-                  : `Opponent proposed ${fmtDate(schedState.date)} ${schedState.slot}`)
-                : 'Unscheduled';
+          const badge = canSchedule ? scheduleBadge(m!) : null;
 
           return (
             <div key={p.user_id} className="rounded-2xl border border-white/10 bg-tennis-dark/40 p-4 space-y-2.5">
-              {/* Status badge — first */}
-              {canSchedule && (
-                <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-bold border ${badgeCls}`}>{badgeText}</span>
-              )}
-              {/* Name · contact · View Profile — one row */}
-              <div className="flex items-center gap-3 flex-wrap">
+              {/* Row 1: status badge · name · contact · Contact/View Profile
+                  Mobile: flex-wrap. Desktop: 4-col grid so items spread across the full card. */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:grid sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:gap-x-4 sm:gap-y-0">
+                {badge && (
+                  <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border shrink-0 ${badge.cls}`}>{badge.text}</span>
+                )}
                 <span className="text-white font-bold text-sm">{formatPlayerName(p.name)}</span>
                 <span className="text-white/50 text-xs">{contact || '—'}</span>
-                {p.user_id && (
-                  <Link
-                    to={`/players/${p.user_id}`}
-                    className="inline-flex items-center px-3 py-1.5 rounded-lg bg-clay text-white text-xs font-bold hover:bg-clay/80 transition-colors"
-                  >
-                    View Profile
-                  </Link>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  <ContactOpponentButton
+                    name={formatPlayerName(p.name)}
+                    phone={c?.phone}
+                    email={c?.email}
+                    whatsappContact={c?.whatsapp_contact}
+                    whatsappSameAsPhone={c?.whatsapp_same_as_phone}
+                    size="sm"
+                  />
+                  {p.user_id && (
+                    <Link
+                      to={`/players/${p.user_id}`}
+                      className="inline-flex items-center px-3 py-1.5 rounded-lg bg-clay text-white text-xs font-bold hover:bg-clay/80 transition-colors whitespace-nowrap"
+                    >
+                      View Profile
+                    </Link>
+                  )}
+                </div>
               </div>
-              {/* Scheduling action buttons — below the info row, no badge (already shown above) */}
+              {/* Row 2: Request Scheduling Assistance — locked once complete. */}
               {canSchedule && !isComplete && (
-                <ScheduleControls match={m!} api={schedule!} hideRule hideBadge className="space-y-2" />
+                <ScheduleControls match={m!} api={schedule!} hideRule hideBadge buttonLayout="grid-2" className="space-y-2" />
               )}
             </div>
           );

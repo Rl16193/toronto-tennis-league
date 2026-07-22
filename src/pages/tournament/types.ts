@@ -63,10 +63,9 @@ export type TournamentMatch = {
   walkover?: boolean;
   // Scheduling — players may edit only these fields (Firestore rules carve-out); scores stay
   // organizer-only. Absent schedule_status is treated as 'unscheduled'.
-  schedule_status?: 'unscheduled' | 'proposed' | 'scheduled';
+  schedule_status?: 'unscheduled' | 'scheduled';
   proposed_date?: string; // YYYY-MM-DD
   proposed_slot?: 'AM' | 'PM';
-  proposed_by?: string; // uid of the proposer
   schedule_requested?: boolean; // player asked the organizer to schedule
 };
 

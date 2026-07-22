@@ -3,7 +3,7 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent } from '../../../types';
-import { isTopspinMeetupEvent, isTournamentEvent, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
+import { isLadderEvent, isTopspinMeetupEvent, isTournamentEvent, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
 import { sortEventsByStartDate } from '../../../utils/eventDates';
 import { DisplayEvent, fetchEvents, resolveStorageUrl } from '../services/eventService';
 import type { JoinedRegistration } from '../types';
@@ -65,7 +65,7 @@ export function useEvents() {
         }
         if (endMs !== null && endMs < now) return false;
       }
-      if (!isTournamentEvent(e)) {
+      if (!isTournamentEvent(e) && !isLadderEvent(e)) {
         const rawStart = raw.startDate ?? raw.start_date ?? raw.date;
         if (rawStart) {
           let startMs: number | null = null;

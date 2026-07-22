@@ -14,6 +14,7 @@ const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.P
 const Tournament = lazy(() => import('./pages/Tournament').then((m) => ({ default: m.Tournament })));
 const PlayerProfile = lazy(() => import('./pages/PlayerProfile').then((m) => ({ default: m.PlayerProfile })));
 const Leagues = lazy(() => import('./pages/Leagues').then((m) => ({ default: m.Leagues })));
+const Tasks = lazy(() => import('./pages/Tasks').then((m) => ({ default: m.Tasks })));
 const CourtMap = lazy(() => import('./pages/CourtMap').then((m) => ({ default: m.CourtMap })));
 const Rules = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Rules })));
 const Terms = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Terms })));
@@ -68,12 +69,6 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   return user ? <>{children}</> : <Navigate to="/login" />;
 };
 
-const HomeRoute: React.FC = () => {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  return user ? <Navigate to="/profile" replace /> : <Home />;
-};
-
 export default function App() {
   return (
     <AuthProvider>
@@ -82,12 +77,13 @@ export default function App() {
         <Layout>
           <Suspense fallback={<RouteFallback />}>
             <Routes>
-              <Route path="/" element={<HomeRoute />} />
+              <Route path="/" element={<Home />} />
               <Route path="/login" element={<Signup />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/events" element={<Events />} />
               <Route path="/tournament" element={<PrivateRoute><Tournament /></PrivateRoute>} />
               <Route path="/leagues" element={<Leagues />} />
+              <Route path="/tasks" element={<PrivateRoute><Tasks /></PrivateRoute>} />
               <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
               <Route path="/players/:userId" element={<PrivateRoute><PlayerProfile /></PrivateRoute>} />
               <Route path="/courts" element={<CourtMap />} />

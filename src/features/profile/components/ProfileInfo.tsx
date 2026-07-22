@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, Pencil, X, Check, MapPin, Star, Loader2 } from 'lucide-react';
+import { Camera, Pencil, X, Check, MapPin, Star, Loader2, Users, Award } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import IntlTelInput from '@intl-tel-input/react/with-utils';
+import 'intl-tel-input/styles';
 import { useAuth } from '../../../context/AuthContext';
 import { storage } from '../../../lib/firebase';
 import { Button } from '../../../components/Button';
@@ -11,13 +13,19 @@ import {
   getCourtSuggestions, mergeCourtOptions,
 } from '../../signup/utils/courtSearch';
 import { getZoneWithBorderCheck } from '../../../utils/zones';
+import { formatPhone } from '../../../utils/formatPhone';
+import { AGE_BRACKETS } from '../../../types';
+import { BadgePicker } from '../../tasks/BadgePicker';
 
 type Actions = {
   updateName: (name: string) => Promise<boolean>;
   updatePhone: (phone: string) => Promise<boolean>;
+  updateWhatsappContact: (whatsappContact: string, sameAsPhone: boolean) => Promise<boolean>;
   updateBio: (bio: string) => Promise<boolean>;
   updateAvatar: (url: string) => Promise<boolean>;
   updateSkills: (skill: number, pref: string) => Promise<boolean>;
+  updateLeagueAge: (league: "Men's" | "Women's" | '', ageBracket: string, visible: boolean) => Promise<boolean>;
+  updateDisplayBadges: (badgeIds: string[]) => Promise<boolean>;
   updatePreferredCourts: (courts: string[], zone: string) => Promise<boolean>;
   updateFavouritePlayers: (players: string[]) => Promise<boolean>;
   changeEmail: (email: string, password: string) => Promise<boolean | undefined>;
@@ -35,6 +43,15 @@ const FAVOURITE_PLAYERS = ['Jannik Sinner', 'Carlos Alcaraz', 'Rafael Nadal', 'R
 const skillTier = (skill: number) => (skill < 3 ? 'Beginner' : skill < 4 ? 'Challenger' : 'Masters');
 const tournamentPref = (skill: number) => (skill < 3 ? 'Beginners' : skill < 4 ? 'Challengers' : 'Masters');
 
+// Normalize the free-text stats.league into the Men's/Women's selector value ("women" first —
+// it contains "men").
+const leagueDivision = (league: string): "Men's" | "Women's" | '' => {
+  const l = (league || '').toLowerCase();
+  if (l.includes('wom') || l.includes('female')) return "Women's";
+  if (l.includes('men') || l.includes('male')) return "Men's";
+  return '';
+};
+
 // lucide has no racquet — small inline glyph.
 const RacquetIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -44,7 +61,7 @@ const RacquetIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
-type Row = 'name' | 'phone' | 'bio' | 'skill' | 'courts' | 'favourites' | 'email' | null;
+type Row = 'name' | 'phone' | 'whatsapp' | 'bio' | 'skill' | 'league' | 'courts' | 'favourites' | 'email' | null;
 
 const SectionHeader: React.FC<{ icon: React.ReactNode; label: string; editing: boolean; onEdit: () => void; onCancel: () => void }> = ({ icon, label, editing, onEdit, onCancel }) => (
   <div className="flex items-center justify-between gap-3">
@@ -74,8 +91,14 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
   // Drafts
   const [nameDraft, setNameDraft] = useState('');
   const [phoneDraft, setPhoneDraft] = useState('');
+  const [waDraft, setWaDraft] = useState('');
+  const [waSameAsPhone, setWaSameAsPhone] = useState(false);
+  const [waValid, setWaValid] = useState(true);
   const [bioDraft, setBioDraft] = useState('');
   const [skillDraft, setSkillDraft] = useState(2);
+  const [leagueDraft, setLeagueDraft] = useState<"Men's" | "Women's" | ''>('');
+  const [ageDraft, setAgeDraft] = useState('');
+  const [visibleDraft, setVisibleDraft] = useState(false);
   const [courtsDraft, setCourtsDraft] = useState<string[]>([]);
   const [courtInput, setCourtInput] = useState('');
   const [favDraft, setFavDraft] = useState<string[]>([]);
@@ -94,21 +117,20 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
   const open = (row: Row) => {
     setNameDraft(user.name);
     setPhoneDraft(user.phone);
+    setWaDraft(user.whatsapp_contact ?? '');
+    setWaSameAsPhone(!!user.whatsapp_same_as_phone);
+    setWaValid(true);
     setBioDraft(user.bio ?? '');
     setSkillDraft(stats.skill_level);
+    setLeagueDraft(leagueDivision(stats.league));
+    setAgeDraft(user.age_bracket ?? '');
+    setVisibleDraft(!!user.profile_details_visible);
     setCourtsDraft(preferences.preferred_courts);
     setFavDraft(preferences.favourite_players);
     setCourtInput(''); setFavInput(''); setEmailDraft(''); setEmailPassword(''); setEmailSent(false);
     setEditing(row);
   };
   const save = async (fn: () => Promise<boolean>) => { if (await fn()) setEditing(null); };
-
-  const formatPhone = (v: string) => {
-    const n = v.replace(/\D/g, '');
-    if (n.length <= 3) return n;
-    if (n.length <= 6) return `(${n.slice(0, 3)})-${n.slice(3)}`;
-    return `(${n.slice(0, 3)})-${n.slice(3, 6)}-${n.slice(6, 10)}`;
-  };
 
   const computeZone = (courts: string[]): string => {
     const first = courts[0];
@@ -190,6 +212,49 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
           ) : <p className="text-lg font-bold text-white mt-0.5">{user.phone || '—'}</p>}
         </div>
 
+        {/* WhatsApp Contact */}
+        <div className="py-3">
+          <SectionHeader icon={null} label="WhatsApp Contact" editing={editing === 'whatsapp'} onEdit={() => open('whatsapp')} onCancel={() => setEditing(null)} />
+          {editing === 'whatsapp' ? (
+            <div className="mt-2 space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-white/70">
+                <input
+                  type="checkbox"
+                  checked={waSameAsPhone}
+                  onChange={(e) => setWaSameAsPhone(e.target.checked)}
+                  className="accent-clay"
+                />
+                Same as phone number
+              </label>
+              {!waSameAsPhone && (
+                <IntlTelInput
+                  value={waDraft}
+                  onChangeNumber={setWaDraft}
+                  onChangeValidity={setWaValid}
+                  initialCountry="ca"
+                  separateDialCode
+                  inputProps={{
+                    placeholder: 'WhatsApp number',
+                    className: 'w-full rounded-2xl bg-tennis-surface/50 border border-white/10 px-4 py-3 text-white placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none',
+                  }}
+                />
+              )}
+              <Button
+                size="sm"
+                onClick={() => save(() => actions.updateWhatsappContact(waDraft, waSameAsPhone))}
+                isLoading={updateLoading}
+                disabled={!waSameAsPhone && !!waDraft && !waValid}
+              >
+                Save
+              </Button>
+            </div>
+          ) : (
+            <p className="text-lg font-bold text-white mt-0.5">
+              {user.whatsapp_same_as_phone ? 'Same as phone number' : (user.whatsapp_contact || '—')}
+            </p>
+          )}
+        </div>
+
         {/* Bio */}
         <div className="py-3">
           <SectionHeader icon={null} label="Bio" editing={editing === 'bio'} onEdit={() => open('bio')} onCancel={() => setEditing(null)} />
@@ -224,6 +289,67 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
               <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">{skillTier(stats.skill_level)}</span>
             </div>
           )}
+        </div>
+
+        {/* League & Age */}
+        <div className="py-3">
+          <SectionHeader icon={<Users className="w-3.5 h-3.5 text-clay" />} label="League & Age" editing={editing === 'league'} onEdit={() => open('league')} onCancel={() => setEditing(null)} />
+          {editing === 'league' ? (
+            <div className="mt-2 space-y-3">
+              <div>
+                <label className="block text-xs text-white/50 mb-1">League you want to participate in</label>
+                <select
+                  value={leagueDraft}
+                  onChange={(e) => setLeagueDraft(e.target.value as "Men's" | "Women's" | '')}
+                  className="w-full rounded-2xl bg-tennis-surface/50 border border-white/10 px-4 py-3 text-white text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
+                >
+                  <option value="">Not set</option>
+                  <option value="Men's">Men's</option>
+                  <option value="Women's">Women's</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-white/50 mb-1">Age bracket</label>
+                <select
+                  value={ageDraft}
+                  onChange={(e) => setAgeDraft(e.target.value)}
+                  className="w-full rounded-2xl bg-tennis-surface/50 border border-white/10 px-4 py-3 text-white text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
+                >
+                  <option value="">Not set</option>
+                  {AGE_BRACKETS.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-white/70">
+                <input type="checkbox" checked={visibleDraft} onChange={(e) => setVisibleDraft(e.target.checked)} className="accent-clay" />
+                Make visible to others
+              </label>
+              <Button size="sm" onClick={() => save(() => actions.updateLeagueAge(leagueDraft, ageDraft, visibleDraft))} isLoading={updateLoading}>Save</Button>
+            </div>
+          ) : (
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              {leagueDivision(stats.league) && (
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white/5 text-white/70 border border-white/10">{leagueDivision(stats.league)} League</span>
+              )}
+              {user.age_bracket && (
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white/5 text-white/70 border border-white/10">{user.age_bracket}</span>
+              )}
+              {!leagueDivision(stats.league) && !user.age_bracket
+                ? <span className="text-sm text-white/40">Not set.</span>
+                : <span className="text-[11px] text-white/40 ml-1">{user.profile_details_visible ? 'Visible to others' : 'Hidden from others'}</span>}
+            </div>
+          )}
+        </div>
+
+        {/* Badges */}
+        <div className="py-3">
+          <span className="text-xs font-bold text-white/50 uppercase tracking-widest flex items-center gap-1.5">
+            <Award className="w-3.5 h-3.5 text-clay" />Badges
+          </span>
+          <BadgePicker
+            selected={user.display_badges ?? []}
+            onSave={actions.updateDisplayBadges}
+            saving={updateLoading}
+          />
         </div>
 
         {/* Preferred Courts */}

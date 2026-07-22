@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
@@ -84,6 +84,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           membership_status: preferences.event_creator ? 'organizer' : 'member',
         });
         updateDoc(doc(db, 'users', activeUser.uid), { lastActive: serverTimestamp() }).catch(() => {});
+
+        // Email verification was removed from signup, so any signed-in user is trusted: mark
+        // them verified and trigger the one-shot welcome email (Cloud Function fires when
+        // welcomeEmailSent flips false → true). Both flags are idempotent.
+        const updates: Record<string, boolean> = {};
+        if (!(userData as { isVerified?: boolean }).isVerified) updates.isVerified = true;
+        if (!(userData as { welcomeEmailSent?: boolean }).welcomeEmailSent) updates.welcomeEmailSent = true;
+        if (Object.keys(updates).length > 0) {
+          updateDoc(doc(db, 'users', activeUser.uid), updates).catch(() => {});
+        }
       }
     } catch (error) {
       console.error("Error fetching user profile:", error);
@@ -92,8 +102,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Tracks the last-seen uid so `loading` only re-arms when the signed-in identity actually
+  // changes (login/logout/account switch) — not on every onAuthStateChanged firing, which also
+  // happens on routine token refreshes for the SAME user and would otherwise flash a spinner
+  // for idle logged-in users. Pages that trust `loading === false` as "profile is ready" would
+  // otherwise briefly pair a new `user` with the previous identity's stale `profile`.
+  const lastUidRef = useRef<string | null>(null);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      const uidChanged = (currentUser?.uid ?? null) !== lastUidRef.current;
+      lastUidRef.current = currentUser?.uid ?? null;
+      if (uidChanged) setLoading(true);
+
       setUser(currentUser);
       if (currentUser) {
         setAnalyticsUser(currentUser.uid);

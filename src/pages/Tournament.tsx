@@ -21,7 +21,10 @@ import { RoundRobinView } from './tournament/RoundRobinView';
 import { RRConfigModal } from './tournament/RRConfigModal';
 import { AlertMessage } from '../components/AlertMessage';
 import { Button } from '../components/Button';
+import { LoadingBar } from '../components/LoadingBar';
 import { TennisEvent } from '../types';
+import { isLadderEvent } from '../utils/eventTypes';
+import { LadderView } from '../features/leagues/LadderView';
 
 type PageTab = 'completed' | 'active' | 'upcoming';
 type EventStatus = 'active' | 'completed';
@@ -90,7 +93,7 @@ export const Tournament: React.FC = () => {
   const [statusLoading, setStatusLoading] = useState(true);
 
   const {
-    authLoading, loading, user,
+    authLoading, loading, eventDataReady, user,
     event, matches, participants,
     allTournamentEvents,
     isCreator, started, userParticipant, zoneMap, userMap,
@@ -114,19 +117,16 @@ export const Tournament: React.FC = () => {
     rrGroupLabels, rrGroupIndices,
     rrUnplacedPlayers, rrSiblingDraw, rrSiblingGroups, rrSiblingLabels, rrSiblingIndices,
     rrView, setRRView,
-    handleGenerateRR, handleResetRR, handleGenerateRRKnockout, handleSaveGroupEdit, handleMoveRRPlayer,
+    handleGenerateRR, handleResetRR, handleGenerateRRKnockout, handleSaveGroupEdit,
     handleCreateRRGroup, handleRenameGroup, handleRemoveParticipant,
     visibleUserMatch, userRRMatches, scheduleRequests,
-    handleProposeTime, handleConfirmTime, handleAskOrganizerSchedule, handleSetSchedule,
+    handleAskOrganizerSchedule, handleSetSchedule,
   } = useTournament(eventId);
 
-  // Scheduling API passed to the current-match panels (players propose/confirm; scores via the
-  // existing submit flow). Undefined when logged out.
+  // Scheduling API passed to the current-match panels (Request Scheduling Assistance; scores via
+  // the existing submit flow). Undefined when logged out.
   const scheduleApi = user
     ? {
-        uid: user.uid,
-        onPropose: handleProposeTime,
-        onConfirm: handleConfirmTime,
         onAskOrganizer: handleAskOrganizerSchedule,
         onSubmitScore: handleOpenScoreForm,
         submittableMatchIds,
@@ -167,9 +167,10 @@ export const Tournament: React.FC = () => {
       .finally(() => setStatusLoading(false));
   }, [allTournamentEvents.length]);
 
-  // Tournaments the user joined or created.
+  // Tournaments the user joined or created — plus League Ladder events, which need no join and
+  // are visible to every signed-in player.
   const myEvents = useMemo(
-    () => allTournamentEvents.filter((e) => !!user && (e.creator_id === user.uid || myEventIds.has(e.id))),
+    () => allTournamentEvents.filter((e) => !!user && (e.creator_id === user.uid || myEventIds.has(e.id) || isLadderEvent(e))),
     [allTournamentEvents, user, myEventIds],
   );
   const liveEvents = myEvents.filter((e) => eventStatuses[e.id] !== 'completed');
@@ -196,11 +197,19 @@ export const Tournament: React.FC = () => {
   // Each tournament starts with the "other groups" section collapsed.
   useEffect(() => { setShowOtherGroups(false); }, [eventId, navMode]);
 
-  if (authLoading || (loading && allTournamentEvents.length === 0)) {
+  // Gate on BOTH the initial event-list fetch AND the currently-selected event's own data
+  // (participants + matches) actually arriving — otherwise switching tournaments (or the gap
+  // between the event list loading and the specific event being selected) briefly renders a
+  // flash of empty/wrong content instead of a loading state.
+  const initialLoading = authLoading || (loading && allTournamentEvents.length === 0);
+  const eventSwitching = !initialLoading && allTournamentEvents.length > 0 && !eventDataReady;
+  if (initialLoading || eventSwitching) {
     return (
-      <div className="min-h-[50vh] flex items-center justify-center">
-        <div className="w-14 h-14 border-4 border-clay border-t-transparent rounded-full animate-spin" />
-      </div>
+      <LoadingBar
+        label="Loading matches…"
+        progress={initialLoading ? 20 : event ? 75 : 45}
+        className="min-h-[50vh] flex flex-col items-center justify-center gap-4"
+      />
     );
   }
 
@@ -489,6 +498,8 @@ export const Tournament: React.FC = () => {
         <div className="flex justify-center py-16">
           <div className="w-10 h-10 border-4 border-clay border-t-transparent rounded-full animate-spin" />
         </div>
+      ) : event && isLadderEvent(event) ? (
+        <LadderView key={event.id} event={event} isCreator={isCreator} />
       ) : (
         drawContent
       )}

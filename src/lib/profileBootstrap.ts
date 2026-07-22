@@ -46,6 +46,8 @@ export const ensureUserProfileDocuments = async (user: User) => {
       email: user.email || '',
       phone: '',
       preferred_mode_of_contact: 'email',
+      whatsapp_contact: '',
+      whatsapp_same_as_phone: false,
       avatar: user.photoURL || '',
       created_at: new Date().toISOString(),
     };

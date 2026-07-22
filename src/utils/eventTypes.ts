@@ -5,6 +5,8 @@ export const isRecurringWeekly = (event: TennisEvent) =>
 
 export const isTournamentEvent = (event: TennisEvent) => event.type.toLowerCase().includes('tournament');
 
+export const isLadderEvent = (event: TennisEvent) => event.type.toLowerCase().includes('league ladder');
+
 export const isMeetupEvent = (event: TennisEvent) => event.type.toLowerCase().includes('meetup');
 
 export const isSpecialEvent = (event: TennisEvent) => event.type.toLowerCase().includes('special');

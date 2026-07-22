@@ -25,16 +25,6 @@ export const parseValidDate = (value?: FirestoreDateLike) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-export const formatDateLabel = (value?: FirestoreDateLike) => {
-  const parsed = parseValidDate(value);
-  if (!parsed) return 'Date TBD';
-  return parsed.toLocaleDateString('en-CA', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
-
 export const sortEventsByStartDate = <T extends TennisEvent>(events: T[]) => {
   const now = Date.now();
   return [...events].sort((a, b) => {

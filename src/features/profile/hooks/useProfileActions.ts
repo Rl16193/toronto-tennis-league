@@ -4,8 +4,8 @@ import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/fire
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import {
-  updateName, updatePhone, updateBio, updateAvatar, updateSkills,
-  updatePreferredCourts, updateFavouritePlayers, updateAvailabilityGrid,
+  updateName, updatePhone, updateWhatsappContact, updateBio, updateAvatar, updateSkills,
+  updateLeagueAndAge, updateDisplayBadges, updatePreferredCourts, updateFavouritePlayers, updateAvailabilityGrid,
   changeEmail, removeEventParticipant, updateEventParticipantDates,
 } from '../services/profileService';
 import type { AvailabilityGrid } from '../../../utils/availability';
@@ -107,9 +107,14 @@ export const useProfileActions = () => {
     actions: {
       updateName: (name: string) => withProfileUpdate(() => updateName(user!.uid, name)),
       updatePhone: (phone: string) => withProfileUpdate(() => updatePhone(user!.uid, phone)),
+      updateWhatsappContact: (whatsappContact: string, sameAsPhone: boolean) =>
+        withProfileUpdate(() => updateWhatsappContact(user!.uid, whatsappContact, sameAsPhone)),
       updateBio: (bio: string) => withProfileUpdate(() => updateBio(user!.uid, bio)),
       updateAvatar: (url: string) => withProfileUpdate(() => updateAvatar(user!.uid, url)),
       updateSkills: (skillLevel: number, tournamentPreference: string) => withProfileUpdate(() => updateSkills(user!.uid, skillLevel, tournamentPreference)),
+      updateLeagueAge: (league: "Men's" | "Women's" | '', ageBracket: string, visible: boolean) =>
+        withProfileUpdate(() => updateLeagueAndAge(user!.uid, league, ageBracket, visible)),
+      updateDisplayBadges: (badgeIds: string[]) => withProfileUpdate(() => updateDisplayBadges(user!.uid, badgeIds)),
       updatePreferredCourts: (courts: string[], zone: string) => withProfileUpdate(() => updatePreferredCourts(user!.uid, courts, zone)),
       updateFavouritePlayers: (players: string[]) => withProfileUpdate(() => updateFavouritePlayers(user!.uid, players)),
       updateAvailabilityGrid: (grid: AvailabilityGrid) => withProfileUpdate(() => updateAvailabilityGrid(user!.uid, grid)),

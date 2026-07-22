@@ -18,12 +18,14 @@ import {
   locationGeoCache,
 } from './courtmap/courtMapUtils';
 import { FilterSelect, DaysDropdown, Badge, PickleballBadges } from './courtmap/courtMapComponents';
+import { CourtPopup } from './courtmap/CourtPopup';
 import { SuggestImprovementModal } from './courtmap/SuggestImprovementModal';
 import { useCourtData } from './courtmap/useCourtData';
 import { CourtResultsList } from './courtmap/CourtResultsList';
 import { useAuth } from '../context/AuthContext';
 import { ProgramResultsList } from './courtmap/ProgramResultsList';
 import { track } from '../lib/analytics';
+import { LoadingBar } from '../components/LoadingBar';
 
 export const CourtMap: React.FC = () => {
   useEffect(() => { document.title = 'Court Locator — Racquets & Strings'; }, []);
@@ -171,7 +173,7 @@ export const CourtMap: React.FC = () => {
     try {
       mapRef.current.getMap().fitBounds(
         [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
-        { padding: 60, maxZoom: 13, duration: 800 },
+        { padding: 60, maxZoom: 11, duration: 800 },
       );
     } catch { /* map not ready */ }
   }, [fitBoundsData]);
@@ -276,31 +278,22 @@ export const CourtMap: React.FC = () => {
     setSelectedCourt(court);
     setSelectedPickleball(null);
     trackMap('select_court', { court_name: court.dropdown || court.name, court_type: court.courtType });
-    try { mapRef.current?.getMap().flyTo({ center: [court.lng, court.lat], zoom: 15, duration: 600 }); } catch { /* ignore */ }
+    try { mapRef.current?.getMap().flyTo({ center: [court.lng, court.lat], zoom: 13, duration: 600 }); } catch { /* ignore */ }
   }, [trackMap]);
 
   // ── JSX ──────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col md:flex-row h-dvh pt-16 bg-tennis-dark overflow-hidden">
+    <div className="flex flex-col md:flex-row h-dvh pt-16 pb-16 bg-tennis-dark overflow-hidden">
 
       {/* MAP — top on mobile, right on desktop */}
       <div className="order-1 md:order-2 h-[38vh] md:h-auto md:flex-1 relative">
         {(loading || !mapReady) && (
-          <div className="absolute inset-0 z-20 bg-[#0d1f14] flex flex-col items-center justify-center gap-4">
-            <p className="text-white font-semibold text-sm tracking-wide">Loading locations…</p>
-            <div className="w-56 h-1.5 bg-white/10 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-[#4ade80] rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${loadingProgress}%` }}
-              />
-            </div>
-            <p className="text-white/40 text-xs">{loadingProgress}%</p>
-          </div>
+          <LoadingBar label="Loading locations…" progress={loadingProgress} barColorClassName="bg-[#4ade80]" />
         )}
 
         <MapGL
           ref={mapRef}
-          initialViewState={{ longitude: TORONTO_CENTER[1], latitude: TORONTO_CENTER[0], zoom: 11 }}
+          initialViewState={{ longitude: TORONTO_CENTER[1], latitude: TORONTO_CENTER[0], zoom: 9 }}
           style={{ width: '100%', height: '100%' }}
           mapStyle="https://tiles.openfreemap.org/styles/liberty"
           onClick={closePopups}
@@ -338,104 +331,19 @@ export const CourtMap: React.FC = () => {
               onClose={() => setSelectedCourt(null)}
               closeButton anchor="bottom" maxWidth="280px"
             >
-              <div style={{ fontFamily: 'system-ui, sans-serif', padding: '4px 2px', textAlign: 'center' }}>
-                <p style={{ fontWeight: 700, fontSize: 14, marginBottom: 3, marginTop: 0, color: '#1f2937' }}>
-                  {selectedCourt.dropdown || selectedCourt.name}
-                </p>
-                {selectedCourt.address && (
-                  <p style={{ color: '#6b7280', fontSize: 11, marginBottom: 7, marginTop: 0 }}>
-                    {selectedCourt.address}
-                  </p>
-                )}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 7, justifyContent: 'center' }}>
-                  <span style={{ background: '#e5e7eb', color: '#111', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
-                    {selectedCourt.courtType.toUpperCase()}
-                  </span>
-                  {selectedCourt.numCourts > 0 && (
-                    <span style={{ background: '#e5e7eb', color: '#111', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
-                      {selectedCourt.numCourts} CT
-                    </span>
-                  )}
-                  {selectedCourt.lights && (
-                    <span style={{ background: '#fef08a', color: '#713f12', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
-                      LIGHTS
-                    </span>
-                  )}
-                  {hasPublicHours(selectedCourt) && (
-                    <span style={{ background: '#1e3a5f', color: '#93c5fd', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
-                      OPEN HOURS
-                    </span>
-                  )}
-                  {selectedCourt.bookingUrl && (
-                    <span style={{ background: '#7c2d12', color: '#fdba74', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
-                      BOOKABLE
-                    </span>
-                  )}
-                  <PickleballBadges entries={selectedCourt.pickleballEntries} popup />
-                </div>
-                {selectedCourt.count > 0 && (
-                  <p style={{ color: '#16a34a', fontSize: 11, margin: '0 0 3px' }}>
-                    {selectedCourt.count} active player{selectedCourt.count !== 1 ? 's' : ''}
-                  </p>
-                )}
-                {selectedCourt.clubInfo && (
-                  <p style={{ color: '#6b7280', fontSize: 10, margin: '0 0 6px', lineHeight: 1.4 }}>
-                    {selectedCourt.clubInfo}
-                  </p>
-                )}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8, justifyContent: 'center' }}>
-                  <a
-                    href={`https://www.google.com/maps/dir/?api=1&destination=${selectedCourt.lat},${selectedCourt.lng}`}
-                    target="_blank" rel="noreferrer"
-                    style={{ padding: '4px 10px', background: '#166534', color: '#fff', borderRadius: 6, fontSize: 11, textDecoration: 'none', fontWeight: 500 }}
-                  >
-                    Directions
-                  </a>
-                  {selectedCourt.website && (
-                    <a
-                      href={selectedCourt.website}
-                      target="_blank" rel="noreferrer"
-                      style={{ padding: '4px 10px', background: '#1d4ed8', color: '#fff', borderRadius: 6, fontSize: 11, textDecoration: 'none', fontWeight: 500 }}
-                    >
-                      Website
-                    </a>
-                  )}
-                  {selectedCourt.bookingUrl && (
-                    <a
-                      href={selectedCourt.bookingUrl}
-                      target="_blank" rel="noreferrer"
-                      style={{ padding: '4px 10px', background: '#166534', color: '#fff', borderRadius: 6, fontSize: 11, textDecoration: 'none', fontWeight: 500 }}
-                    >
-                      Book Online
-                    </a>
-                  )}
-                  {selectedCourt.hasPrograms && (
-                    <button
-                      onClick={() => {
-                        setProgLocationFilter(selectedCourt.dropdown || selectedCourt.name);
-                        setCourtTypeFilter('Programs');
-                        setSelectedCourt(null);
-                      }}
-                      style={{ padding: '4px 10px', background: '#ca8a04', color: '#fff', borderRadius: 6, fontSize: 11, fontWeight: 500, border: 'none', cursor: 'pointer' }}
-                    >
-                      View Available Programs
-                    </button>
-                  )}
-                </div>
-                {/* Suggest an improvement about this specific court */}
-                <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
-                  <button
-                    onClick={() => {
-                      setSuggestPresetCourt(selectedCourt.dropdown || selectedCourt.name);
-                      setShowSuggestModal(true);
-                      setSelectedCourt(null);
-                    }}
-                    style={{ padding: '5px 12px', background: '#ea580c', color: '#fff', borderRadius: 6, fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer' }}
-                  >
-                    Suggest an Improvement
-                  </button>
-                </div>
-              </div>
+              <CourtPopup
+                court={selectedCourt}
+                onViewPrograms={selectedCourt.hasPrograms ? () => {
+                  setProgLocationFilter(selectedCourt.dropdown || selectedCourt.name);
+                  setCourtTypeFilter('Programs');
+                  setSelectedCourt(null);
+                } : undefined}
+                onSuggest={() => {
+                  setSuggestPresetCourt(selectedCourt.dropdown || selectedCourt.name);
+                  setShowSuggestModal(true);
+                  setSelectedCourt(null);
+                }}
+              />
             </Popup>
           )}
 
@@ -494,8 +402,6 @@ export const CourtMap: React.FC = () => {
             <span className="text-white">Toronto {courtTypeFilter === 'Pickleball' ? 'Pickleball' : 'Tennis'} </span>
             <span className="text-clay">{isPrograms ? 'Programs' : 'Courts'}</span>
           </h1>
-
-          <p className="text-xs text-white/40 text-center">Click on a location for more information</p>
 
           {/* Search */}
           <div>
@@ -719,9 +625,10 @@ export const CourtMap: React.FC = () => {
           </div>
         )}
 
-        {/* Guest CTA */}
+        {/* Guest CTA — desktop only; on mobile this fixed-height bar was eating into the
+            scrollable results area and blocking scroll to the court list. */}
         {!user && (
-          <div className="flex-shrink-0 px-4 py-3 border-t border-white/10 bg-clay/5 flex items-center justify-between gap-3">
+          <div className="hidden md:flex flex-shrink-0 px-4 py-3 border-t border-white/10 bg-clay/5 items-center justify-between gap-3">
             <p className="text-white/70 text-xs leading-snug">Found your court? Meet local tennis players.</p>
             <Link
               to="/signup?returnTo=/events&intent=join-league"

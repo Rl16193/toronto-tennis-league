@@ -33,6 +33,16 @@ export const updatePhone = async (userId: string, phone: string) => {
   });
 };
 
+export const updateWhatsappContact = async (userId: string, whatsappContact: string, sameAsPhone: boolean) => {
+  if (!sameAsPhone && whatsappContact && !/^\+[1-9]\d{6,14}$/.test(whatsappContact)) {
+    throw new Error('Enter a valid WhatsApp number.');
+  }
+  await updateDoc(doc(db, 'users', userId), {
+    whatsapp_contact: sameAsPhone ? '' : whatsappContact,
+    whatsapp_same_as_phone: sameAsPhone,
+  });
+};
+
 export const updateBio = async (userId: string, bio: string) => {
   await updateDoc(doc(db, 'users', userId), { bio: bio.trim().slice(0, 300) });
 };
@@ -52,6 +62,27 @@ export const updateSkills = async (userId: string, skillLevel: number, tournamen
     toSync.forEach((d) => batch.update(d.ref, { skill: skillLevel }));
     await batch.commit();
   }
+};
+
+// League (gender division) lives on stats.league — the same field the Leagues page and League
+// Ladder split on. Age bracket + the "visible to others" flag live on the users doc.
+export const updateLeagueAndAge = async (
+  userId: string,
+  league: "Men's" | "Women's" | '',
+  ageBracket: string,
+  visible: boolean,
+) => {
+  await updateDoc(doc(db, 'users', userId), {
+    age_bracket: ageBracket,
+    profile_details_visible: visible,
+  });
+  // Only write the league when one is chosen — never clobber an existing value with ''.
+  if (league) await updateDoc(doc(db, 'stats', userId), { league });
+};
+
+// The up-to-three badges a player chose to display.
+export const updateDisplayBadges = async (userId: string, badgeIds: string[]) => {
+  await updateDoc(doc(db, 'users', userId), { display_badges: badgeIds.slice(0, 3) });
 };
 
 export const updatePreferredCourts = async (userId: string, courts: string[], zone: string) => {

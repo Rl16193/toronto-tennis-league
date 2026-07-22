@@ -187,13 +187,14 @@ export function buildRRGroupMatchFields(params: {
   pairings: [number, number][];
   advancementCount: number;
   started: boolean;
-}): Array<{ docId: string; fields: Record<string, unknown> }> {
+}, startPosition = 1): Array<{ docId: string; fields: Record<string, unknown> }> {
   const { eventId, drawKey, draw, groupIndex, groupLabel, labelCustom, groupPlayers, pairings, advancementCount, started } = params;
 
   return pairings.map(([i1, i2], idx) => {
     const p1 = groupPlayers[i1] ?? null;
     const p2 = groupPlayers[i2] ?? null;
-    const docId = `${eventId}_${drawKey}_rr_g${groupIndex}_m${idx + 1}`;
+    const pos = idx + startPosition;
+    const docId = `${eventId}_${drawKey}_rr_g${groupIndex}_m${pos}`;
     return {
       docId,
       fields: {
@@ -203,9 +204,9 @@ export function buildRRGroupMatchFields(params: {
         division: draw.division,
         skill_group: draw.skillGroup,
         drawsize: groupPlayers.length,
-        match_id: `rr_g${groupIndex}_m${idx + 1}`,
+        match_id: `rr_g${groupIndex}_m${pos}`,
         round: 'RR',
-        position: idx + 1,
+        position: pos,
         player_1_slot: i1 + 1,
         player_2_slot: i2 + 1,
         player_1_name: p1?.name ?? PLAYER_LOADING,
@@ -232,9 +233,44 @@ export function buildRRGroupMatchFields(params: {
 }
 
 /**
+ * Rebuild one group's matches after its roster changes, without ever touching an
+ * already-played match. Only the not-yet-played pairings are deleted and regenerated for the
+ * new roster — a player who has personally played in this group is always kept in
+ * `newPlayers` by the caller, so their match is naturally preserved.
+ */
+export function buildSafeGroupRewrite(params: {
+  eventId: string;
+  drawKey: string;
+  draw: DrawConfig;
+  groupIndex: number;
+  groupLabel?: string;
+  labelCustom?: boolean;
+  oldMatches: TournamentMatch[];
+  newPlayers: TournamentPlayer[];
+  advancementCount: number;
+  started: boolean;
+}): { toDelete: string[]; toWrite: Array<{ docId: string; fields: Record<string, unknown> }> } {
+  const { eventId, drawKey, draw, groupIndex, groupLabel, labelCustom, oldMatches, newPlayers, advancementCount, started } = params;
+  const completedOld = oldMatches.filter((m) => m.status === 'complete');
+  const pendingOld = oldMatches.filter((m) => m.status !== 'complete');
+  const playedPairs = new Set(completedOld.map((m) => [m.player_1_user_id, m.player_2_user_id].sort().join('|')));
+  const basePairings = newPlayers.length >= 2 ? generateGroupPairings(newPlayers.length) : newPlayers.length === 1 ? [[0, 1]] as [number, number][] : [];
+  const pairings = basePairings.filter(([i1, i2]) => {
+    const a = newPlayers[i1]?.user_id, b = newPlayers[i2]?.user_id;
+    return !(a && b && playedPairs.has([a, b].sort().join('|')));
+  });
+  const startPosition = 1 + Math.max(0, ...oldMatches.map((m) => m.position ?? 0));
+  const toWrite = newPlayers.length > 0
+    ? buildRRGroupMatchFields({ eventId, drawKey, draw, groupIndex, groupLabel, labelCustom, groupPlayers: newPlayers, pairings, advancementCount, started }, startPosition)
+    : [];
+  return { toDelete: pendingOld.map((m) => m.id), toWrite };
+}
+
+/**
  * Compute standings for one group from its completed matches.
- * Scoring: 1 pt per game won + 5 pts per match win.
- * Sort: points DESC → gamesWon DESC.
+ * Scoring: 2 pts per match win; 1 pt each for a walkover (both players).
+ * After all group matches complete: +5 for 1st place, +3 for 2nd place.
+ * Sort: points DESC → gamesWon DESC. Bonus applied after ranking is locked.
  */
 export function computeGroupStandings(
   groupMatches: TournamentMatch[],
@@ -259,18 +295,32 @@ export function computeGroupStandings(
     const loserGames  = winnerUid === m.player_1_user_id ? p2Games : p1Games;
 
     const w = stats.get(winnerUid);
-    if (w) { w.matchWins++; w.gamesWon += winnerGames; w.gamesLost += loserGames; }
     const l = stats.get(loserUid);
-    if (l) { l.matchLosses++; l.gamesWon += loserGames; l.gamesLost += winnerGames; }
+    if (m.walkover) {
+      // Walkover: 1 pt each; games still tracked if scores were entered
+      if (w) { w.matchWins++; w.gamesWon += winnerGames; w.gamesLost += loserGames; w.points += 1; }
+      if (l) { l.matchLosses++; l.gamesWon += loserGames; l.gamesLost += winnerGames; l.points += 1; }
+    } else {
+      // Regular win: 2 pts to winner, 0 to loser
+      if (w) { w.matchWins++; w.gamesWon += winnerGames; w.gamesLost += loserGames; w.points += 2; }
+      if (l) { l.matchLosses++; l.gamesWon += loserGames; l.gamesLost += winnerGames; }
+    }
   }
 
   const rows: RRStandingRow[] = [];
   for (const [userId, s] of stats) {
-    const points = s.gamesWon + s.matchWins * 5;
-    rows.push({ name: playerMap.get(userId) ?? '', userId, ...s, points, rank: 0 });
+    rows.push({ name: playerMap.get(userId) ?? '', userId, ...s, rank: 0 });
   }
   rows.sort((a, b) => b.points - a.points || b.gamesWon - a.gamesWon);
   rows.forEach((r, i) => { r.rank = i + 1; });
+
+  // After all group matches complete, award end-of-group bonus (does not affect rank order)
+  const allComplete = groupMatches.length > 0 && groupMatches.every((m) => m.status === 'complete');
+  if (allComplete) {
+    if (rows[0]) rows[0].points += 5;
+    if (rows[1]) rows[1].points += 3;
+  }
+
   return rows;
 }
 

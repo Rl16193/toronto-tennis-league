@@ -43,12 +43,8 @@ export function useGoogleSignIn({
           await ensureUserProfileDocuments(result.user);
           sessionStorage.setItem(`profile-bootstrap-pending:${result.user.uid}`, '1');
           sessionStorage.removeItem(`profile-bootstrap-retry:${result.user.uid}`);
-          if (isNewGoogleUser) {
-            track('sign_up', { method: 'google' });
-            navigate('/profile');
-          } else {
-            track('login', { method: 'google' });
-          }
+          track(isNewGoogleUser ? 'sign_up' : 'login', { method: 'google' });
+          navigate(isNewGoogleUser ? '/login' : '/tournament');
         } catch (err: any) {
           setError(await getGoogleSignInErrorMessage(err, ''));
         } finally {
@@ -71,12 +67,8 @@ export function useGoogleSignIn({
       await ensureUserProfileDocuments(result.user);
       sessionStorage.setItem(`profile-bootstrap-pending:${result.user.uid}`, '1');
       sessionStorage.removeItem(`profile-bootstrap-retry:${result.user.uid}`);
-      if (isNewGoogleUser) {
-        track('sign_up', { method: 'google' });
-        navigate('/profile');
-      } else {
-        track('login', { method: 'google' });
-      }
+      track(isNewGoogleUser ? 'sign_up' : 'login', { method: 'google' });
+      navigate(isNewGoogleUser ? '/login' : '/tournament');
     } catch (err: any) {
       // Google email matches an existing email/password account → let caller handle linking.
       if (err.code === 'auth/account-exists-with-different-credential') {

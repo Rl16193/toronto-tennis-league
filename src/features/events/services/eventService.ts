@@ -39,7 +39,7 @@ export const INITIAL_EVENT_FORM: EventFormState = {
 };
 
 export const EVENT_SKILL_OPTIONS = ['All', '2.5+', '3.0+', '3.5+', '4.0+', '4.5+', '5.0+'];
-export const EVENT_TYPE_OPTIONS = ['Tournament', 'Meetup', 'Special Event', 'League Event', 'Social'];
+export const EVENT_TYPE_OPTIONS = ['Tournament', 'League Ladder', 'Meetup', 'Special Event', 'League Event', 'Social'];
 export const ACCEPTED_EVENT_IMAGE_TYPES = [
   'image/jpeg',
   'image/png',

@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Calendar, MapPin, Star, CheckCircle2, X } from 'lucide-react';
+import { Calendar, MapPin, Star, CheckCircle2, Swords, X } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { DisplayEvent } from '../services/eventService';
-import { isTournamentEvent, isSeasonOpener } from '../../../utils/eventTypes';
+import { isTournamentEvent, isSeasonOpener, isLadderEvent } from '../../../utils/eventTypes';
 import { formatEventSchedule, formatTournamentRange } from '../utils/eventFormatters';
 import { JoinFormState, SlotResult } from '../types';
 
@@ -49,6 +50,7 @@ interface Props {
   setJoinForm: (form: JoinFormState) => void;
   joinError: string;
   slotStatus: SlotResult | null;
+  loadingMatches?: boolean;
   slotFallbackConfirmed: boolean;
   setSlotFallbackConfirmed: (v: boolean) => void;
   onSubmitJoin: () => void;
@@ -60,10 +62,15 @@ const DOUBLES_DIVISIONS = ["Men's", "Women's", 'Mixed Doubles'] as const;
 export const EventCard: React.FC<Props> = ({
   event, index, isJoined, joining, authLoading, isLoggedIn,
   isExpanded, onExpand, joinForm, setJoinForm, joinError,
-  slotStatus, slotFallbackConfirmed, setSlotFallbackConfirmed, onSubmitJoin,
+  slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed, onSubmitJoin,
 }) => {
   const dateLabel = isTournamentEvent(event) ? formatTournamentRange(event) : formatEventSchedule(event);
   const isTournament = isTournamentEvent(event);
+  // League Ladder: no registration — the card's action is "Challenge Now", which opens the
+  // ladder tab (Matches page) where the player picks an opponent to challenge.
+  const isLadder = isLadderEvent(event);
+  const navigate = useNavigate();
+
   const isLate = isLateRegistration(event);
   const isHardClosed = isJoinHardClosed(event);
   // Non-tournament events have no draw slots — late registration doesn't apply.
@@ -278,33 +285,46 @@ export const EventCard: React.FC<Props> = ({
           )}
 
           {joinError && (
-            <p className="text-xs text-red-400 font-semibold">{joinError}</p>
+            <p className="text-xs font-semibold text-red-400">{joinError}</p>
           )}
 
           <Button
             onClick={onSubmitJoin}
-            isLoading={joining}
-            disabled={joining || slotStatus?.status === 'full' || (slotStatus?.status === 'fallback' && !slotFallbackConfirmed)}
+            isLoading={joining || loadingMatches}
+            disabled={joining || loadingMatches || slotStatus?.status === 'full' || (slotStatus?.status === 'fallback' && !slotFallbackConfirmed)}
             className="w-full"
           >
-            Join Event
+            {loadingMatches ? 'Loading draw…' : 'Join Event'}
           </Button>
         </div>
       )}
 
-      {/* Join / status button */}
+      {/* Join / status button (League Ladder: no signup — straight to the ladder) */}
       <div className="pt-3 mt-auto border-t border-white/5">
-        <Button
-          variant={isJoined ? 'secondary' : isExpanded ? 'ghost' : 'primary'}
-          size="sm"
-          onClick={handleJoinClick}
-          disabled={isJoined || joinClosed || !isLoggedIn || authLoading}
-          className="w-full"
-        >
-          {isExpanded && !isJoined ? (
-            <><X className="w-3.5 h-3.5 mr-1" />Cancel</>
-          ) : buttonLabel}
-        </Button>
+        {isLadder ? (
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => navigate(isLoggedIn ? `/tournament?event=${event.id}` : '/login')}
+            disabled={authLoading}
+            className="w-full"
+          >
+            <Swords className="w-3.5 h-3.5 mr-1" />
+            {isLoggedIn ? 'Challenge Now' : 'Log In to Challenge'}
+          </Button>
+        ) : (
+          <Button
+            variant={isJoined ? 'secondary' : isExpanded ? 'ghost' : 'primary'}
+            size="sm"
+            onClick={handleJoinClick}
+            disabled={isJoined || joinClosed || !isLoggedIn || authLoading}
+            className="w-full"
+          >
+            {isExpanded && !isJoined ? (
+              <><X className="w-3.5 h-3.5 mr-1" />Cancel</>
+            ) : buttonLabel}
+          </Button>
+        )}
       </div>
     </motion.div>
   );

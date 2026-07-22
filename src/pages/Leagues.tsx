@@ -1,74 +1,41 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { collection, getDocs, query, where } from 'firebase/firestore';
+import { ArrowUp, ArrowDown, Minus, ChevronDown } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
+import { DIV_TABS, DivTab, LeagueRow, inDivision, toTitleCase, useStandings } from '../features/leagues/useStandings';
+import { useUserMatches } from '../features/matches/useUserMatches';
+import { AreaChart } from './home/AreaChart';
+import { TOTAL_MILESTONES, TOTAL_TASKS, useCommunityStandings } from '../features/tasks/useTasks';
+import { BadgeRow } from '../features/tasks/BadgeRow';
 
-type LeagueRow = {
-  user_id: string;
-  name: string;
-  skill_level: number;
-  tournamentsPlayed: number;
-  matchesPlayed: number;
-  wins: number;
-  loses: number;
-  leaguePoints26: number;
-  league: string;
-};
+// Two boards on the Leaderboard: Tournament (playing points, per division) and Community
+// (the "Community Member Starter" — completing it awards SETUP_POINTS).
+type Board = 'tournament' | 'community';
 
-type DivTab = 'mens' | 'womens' | 'doubles';
+const pgWinPct = (r: LeagueRow) =>
+  r.totalPointsPlayed > 0 ? `${Math.round((r.pointswon / r.totalPointsPlayed) * 100)}%` : '—';
 
-const DIV_TABS: { id: DivTab; label: string }[] = [
-  { id: 'mens', label: "Men's" },
-  { id: 'womens', label: "Women's" },
-  { id: 'doubles', label: 'Doubles' },
-];
-
-const toTitleCase = (s: string) =>
-  s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-
-const inDivision = (league: string, tab: DivTab): boolean => {
-  const l = (league || '').toLowerCase();
-  if (tab === 'mens') return (l.includes('men') || l.includes('male')) && !l.includes('women') && !l.includes('female');
-  if (tab === 'womens') return l.includes('wom') || l.includes('female');
-  if (tab === 'doubles') return l.includes('double') || l.includes('mixed');
-  return false;
-};
-
-const TOP_N = 15;
+const Trend: React.FC<{ t: 'up' | 'down' | 'flat' }> = ({ t }) =>
+  t === 'up' ? <ArrowUp className="w-4 h-4 text-green-400 inline" aria-label="rising" />
+    : t === 'down' ? <ArrowDown className="w-4 h-4 text-red-400 inline" aria-label="falling" />
+      : <Minus className="w-4 h-4 text-white/30 inline" aria-label="no change" />;
 
 export const Leagues: React.FC = () => {
-  const { user, loading: authLoading } = useAuth();
-  const [rows, setRows] = useState<LeagueRow[]>([]);
+  const { user, profile, loading: authLoading } = useAuth();
+  const { rows, loading } = useStandings();
+  const { matches: userMatches } = useUserMatches(user?.uid);
+  const { rows: communityRows, loading: communityLoading, reload: reloadCommunity } = useCommunityStandings();
 
-  useEffect(() => { document.title = 'Leagues — Racquets & Strings'; }, []);
-  const [loading, setLoading] = useState(true);
+  useEffect(() => { document.title = 'Leaderboard — Racquets & Strings'; }, []);
+  const [board, setBoard] = useState<Board>('tournament');
   const [activeDiv, setActiveDiv] = useState<DivTab>('mens');
   const [stillActiveUids, setStillActiveUids] = useState<Set<string>>(new Set());
+  // uid → the badges each player chose to display (users is world-readable).
+  const [badgeMap, setBadgeMap] = useState<Record<string, string[]>>({});
   const [hasActiveTournament, setHasActiveTournament] = useState(false);
-
-  // Public leaderboard — stats is world-readable, so it loads with or without an account.
-  useEffect(() => {
-    getDocs(collection(db, 'stats')).then((snap) => {
-      const data: LeagueRow[] = [];
-      snap.forEach((d) => {
-        const s = d.data();
-        if (!s.leaguePoints26 || s.leaguePoints26 <= 0) return;
-        data.push({
-          user_id: d.id,
-          name: s.name || '',
-          skill_level: s.skill_level ?? 0,
-          tournamentsPlayed: s.tournamentsPlayed ?? 0,
-          matchesPlayed: s.matchesPlayed ?? 0,
-          wins: s.wins ?? 0,
-          loses: s.loses ?? 0,
-          leaguePoints26: s.leaguePoints26,
-          league: s.league || '',
-        });
-      });
-      setRows(data);
-      setLoading(false);
-    });
-  }, []);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   // Detect active tournaments and find players still in (not yet eliminated)
   useEffect(() => {
@@ -109,13 +76,51 @@ export const Leagues: React.FC = () => {
     fetchActive();
   }, [user]);
 
-  const sorted = rows
-    .filter((r) => inDivision(r.league, activeDiv))
-    .sort((a, b) => b.leaguePoints26 - a.leaguePoints26);
+  useEffect(() => { setExpanded(new Set()); }, [activeDiv]);
 
-  const top15 = sorted.slice(0, TOP_N);
-  const userRank = user ? sorted.findIndex((r) => r.user_id === user.uid) : -1;
-  const userRow = userRank >= TOP_N ? sorted[userRank] : null;
+  // Displayed badges for everyone on the boards — one read, works logged out.
+  useEffect(() => {
+    getDocs(collection(db, 'users'))
+      .then((snap) => {
+        const map: Record<string, string[]> = {};
+        snap.docs.forEach((d) => {
+          const b = d.data().display_badges;
+          if (Array.isArray(b) && b.length) map[d.id] = b;
+        });
+        setBadgeMap(map);
+      })
+      .catch(() => { /* badges are decorative — the boards work without them */ });
+  }, []);
+
+  const sorted = useMemo(
+    () => rows.filter((r) => inDivision(r.league, activeDiv)).sort((a, b) => b.leaguePoints26 - a.leaguePoints26),
+    [rows, activeDiv],
+  );
+
+  // Logged-out visitors see only the top 15 of each league; signed-in members see the full table.
+  const visible = user ? sorted : sorted.slice(0, 15);
+  const communityVisible = user ? communityRows : communityRows.slice(0, 15);
+
+  // Your Progress (signed-in): rank within the division + own stats + trend chart.
+  const userRankIdx = user ? sorted.findIndex((r) => r.user_id === user.uid) : -1;
+  const userStats = profile?.stats;
+  // Only show Your Progress on the division the player actually belongs to (not every tab).
+  const userInThisDiv = !!userStats?.league && inDivision(userStats.league, activeDiv);
+  const userWinPct = userStats && (userStats.matchesPlayed ?? 0) > 0
+    ? `${Math.round(((userStats.wins ?? 0) / (userStats.matchesPlayed ?? 1)) * 100)}%` : '—';
+  const progressSeries = useMemo(() => {
+    const asc = [...userMatches].sort((a, b) => a.completedAt - b.completedAt);
+    let net = 0;
+    const s = [0];
+    for (const m of asc) { net += m.won ? 1 : -1; s.push(net); }
+    return s;
+  }, [userMatches]);
+
+  const toggle = (uid: string) => setExpanded((prev) => {
+    const next = new Set(prev);
+    if (next.has(uid)) next.delete(uid); else next.add(uid);
+    return next;
+  });
 
   if (authLoading) {
     return (
@@ -126,15 +131,27 @@ export const Leagues: React.FC = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
-      {/* Organizer tabs */}
-      <div className="flex gap-2 mb-6 flex-wrap">
-        <button className="px-5 py-2 rounded-2xl text-sm font-bold bg-clay text-white border border-clay">
-          TBTC
-        </button>
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
+      <h1 className="text-2xl md:text-3xl font-display font-bold text-white mb-4">Leaderboard</h1>
+
+      {/* Board toggle: Tournament (playing points, per division) · Community (task points) */}
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {(['tournament', 'community'] as const).map((b) => (
+          <button
+            key={b}
+            onClick={() => setBoard(b)}
+            className={`px-5 py-2 rounded-2xl text-sm font-bold transition-all border ${
+              board === b
+                ? 'bg-clay text-white border-clay'
+                : 'bg-tennis-surface/40 text-white border-white/10 hover:border-white/30'
+            }`}
+          >
+            {b === 'tournament' ? 'Tournament' : 'Community'}
+          </button>
+        ))}
       </div>
 
-      {/* Division sub-tabs */}
+      {board === 'tournament' && (<>
       <div className="flex gap-2 mb-6 flex-wrap">
         {DIV_TABS.map((tab) => (
           <button
@@ -151,85 +168,224 @@ export const Leagues: React.FC = () => {
         ))}
       </div>
 
+      {/* Your Progress */}
+      {user && userStats && userInThisDiv && (
+        <div className="bg-tennis-surface/30 border border-white/5 rounded-3xl p-5 mb-6">
+          <h2 className="text-lg font-bold text-white mb-4">Your Progress</h2>
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {[
+              { label: 'Rank', value: userRankIdx >= 0 ? `#${userRankIdx + 1}` : '—' },
+              { label: 'Matches', value: `${userStats.matchesPlayed ?? 0}` },
+              { label: 'Win %', value: userWinPct },
+            ].map((t) => (
+              <div key={t.label} className="rounded-2xl bg-white/[0.03] border border-white/5 px-3 py-3 text-center">
+                <p className="text-2xl font-black text-clay">{t.value}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 mt-1">{t.label}</p>
+              </div>
+            ))}
+          </div>
+          <AreaChart data={progressSeries} className="w-full h-24" />
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-2">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-12 bg-tennis-surface/30 rounded-xl animate-pulse" />
-          ))}
+          {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-12 bg-tennis-surface/30 rounded-xl animate-pulse" />)}
         </div>
-      ) : top15.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-xl font-bold text-white">No standings yet</p>
           <p className="text-white/60 mt-1 text-sm">Standings will appear once matches are played.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-2xl bg-tennis-surface/30 border border-white/5">
-          <table className="w-full text-xs sm:text-sm">
-            <thead>
-              <tr className="border-b border-white/10">
-                <th className="px-2 sm:px-3 py-2.5 text-left text-[10px] font-black uppercase tracking-widest text-white/50 w-7">#</th>
-                <th className="px-2 sm:px-3 py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-white/50 w-10">Skill</th>
-                <th className="px-2 sm:px-3 py-2.5 text-left text-[10px] font-black uppercase tracking-widest text-white/50">Name</th>
-                <th className="px-2 sm:px-3 py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-clay">Matches</th>
-                <th className="px-2 sm:px-3 py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-white/50">Wins</th>
-                <th className="px-2 sm:px-3 py-2.5 text-center text-[10px] font-black uppercase tracking-widest text-clay">Pts</th>
-              </tr>
-            </thead>
-            <tbody>
-              {top15.map((row, i) => {
-                const isCurrentUser = user?.uid === row.user_id;
-                const activeMarker = stillActiveUids.has(row.user_id);
-                return (
-                  <tr
-                    key={row.user_id}
-                    className={`border-b border-white/5 transition-colors hover:bg-white/[0.04] ${
-                      isCurrentUser ? 'bg-clay/10' : i % 2 !== 0 ? 'bg-white/[0.02]' : ''
-                    }`}
-                  >
-                    <td className="px-2 sm:px-3 py-2 text-white/40 font-mono text-[10px]">{i + 1}</td>
-                    <td className="px-2 sm:px-3 py-2 text-center text-white/70 text-[11px]">{row.skill_level}</td>
-                    <td className="px-2 sm:px-3 py-2 font-semibold text-white text-xs sm:text-sm">
-                      {toTitleCase(row.name)}{isCurrentUser ? <span className="ml-1 text-clay text-[10px]">(you)</span> : null}
-                    </td>
-                    <td className="px-2 sm:px-3 py-2 text-center font-bold text-clay">
-                      {row.matchesPlayed}{activeMarker ? <span className="text-clay font-black">*</span> : null}
-                    </td>
-                    <td className="px-2 sm:px-3 py-2 text-center text-white/80">{row.wins}</td>
-                    <td className="px-2 sm:px-3 py-2 text-center font-black text-clay text-sm sm:text-base">{row.leaguePoints26}</td>
-                  </tr>
-                );
-              })}
+        <>
+          {/* ── Desktop table (sm+) ── */}
+          <div className="hidden sm:block overflow-x-auto rounded-2xl bg-tennis-surface/30 border border-white/5">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-[10px] font-black uppercase tracking-widest">
+                  <th className="px-3 py-2.5 text-left text-white/50 w-10">#</th>
+                  <th className="px-3 py-2.5 text-center text-white/50 w-12">Skill</th>
+                  <th className="px-3 py-2.5 text-left text-white/50">Name</th>
+                  <th className="px-3 py-2.5 text-center text-white/50">Matches</th>
+                  <th className="px-3 py-2.5 text-center text-white/50">Wins</th>
+                  <th className="px-3 py-2.5 text-center text-clay">P/G Win %</th>
+                  <th className="px-3 py-2.5 text-center text-white/50">P/G Played</th>
+                  <th className="px-3 py-2.5 text-center text-clay">Pts</th>
+                  <th className="px-3 py-2.5 text-center text-white/50 w-12">Trend</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((row, i) => {
+                  const isUser = user?.uid === row.user_id;
+                  const active = stillActiveUids.has(row.user_id);
+                  return (
+                    <tr key={row.user_id} className={`border-b border-white/5 hover:bg-white/[0.04] ${isUser ? 'bg-clay/10' : i % 2 !== 0 ? 'bg-white/[0.02]' : ''}`}>
+                      <td className="px-3 py-2 text-white/40 font-mono text-[11px]">{i + 1}</td>
+                      <td className="px-3 py-2 text-center text-white/70 text-xs">{row.skill_level}</td>
+                      <td className="px-3 py-2 font-semibold text-white">
+                        {toTitleCase(row.name)}
+                        <BadgeRow ids={badgeMap[row.user_id]} size="sm" className="ml-1.5 align-middle" />
+                        {isUser ? <span className="ml-1 text-clay text-[10px]">(you)</span> : null}
+                      </td>
+                      <td className="px-3 py-2 text-center font-bold text-clay">
+                        {row.matchesPlayed}{active ? <span className="text-clay font-black">*</span> : null}
+                      </td>
+                      <td className="px-3 py-2 text-center text-white/80">{row.wins}</td>
+                      <td className="px-3 py-2 text-center text-white/80">{pgWinPct(row)}</td>
+                      <td className="px-3 py-2 text-center text-white/60">{row.totalPointsPlayed}</td>
+                      <td className="px-3 py-2 text-center font-black text-clay text-base">{row.leaguePoints26}</td>
+                      <td className="px-3 py-2 text-center"><Trend t={row.rankTrend} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-              {userRow && (
-                <>
-                  <tr>
-                    <td colSpan={6} className="px-3 py-1.5">
-                      <div className="border-t border-dashed border-white/20" />
-                    </td>
-                  </tr>
-                  <tr className="bg-clay/10">
-                    <td className="px-2 sm:px-3 py-2 text-white/40 font-mono text-[10px]">{userRank + 1}</td>
-                    <td className="px-2 sm:px-3 py-2 text-center text-white/70 text-[11px]">{userRow.skill_level}</td>
-                    <td className="px-2 sm:px-3 py-2 font-semibold text-white text-xs sm:text-sm">
-                      {toTitleCase(userRow.name)}<span className="ml-1 text-clay text-[10px]">(you)</span>
-                    </td>
-                    <td className="px-2 sm:px-3 py-2 text-center font-bold text-clay">
-                      {userRow.matchesPlayed}{stillActiveUids.has(userRow.user_id) ? <span className="text-clay font-black">*</span> : null}
-                    </td>
-                    <td className="px-2 sm:px-3 py-2 text-center text-white/80">{userRow.wins}</td>
-                    <td className="px-2 sm:px-3 py-2 text-center font-black text-clay text-sm sm:text-base">{userRow.leaguePoints26}</td>
-                  </tr>
-                </>
-              )}
-            </tbody>
-          </table>
-        </div>
+          {/* ── Mobile list (< sm): compact + per-row expand ── */}
+          <div className="sm:hidden space-y-2">
+            {visible.map((row, i) => {
+              const isUser = user?.uid === row.user_id;
+              const active = stillActiveUids.has(row.user_id);
+              const isOpen = expanded.has(row.user_id);
+              return (
+                <div key={row.user_id} className={`rounded-2xl border ${isUser ? 'bg-clay/10 border-clay/20' : 'bg-tennis-surface/30 border-white/5'}`}>
+                  <button type="button" onClick={() => toggle(row.user_id)} className="w-full flex items-center gap-3 px-3 py-2.5 text-left">
+                    <span className="text-white/40 font-mono text-xs w-6 shrink-0">{i + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white font-semibold text-sm truncate">
+                        {toTitleCase(row.name)}
+                        <BadgeRow ids={badgeMap[row.user_id]} size="sm" className="ml-1.5 align-middle" />
+                        {isUser ? <span className="ml-1 text-clay text-[10px]">(you)</span> : null}
+                      </p>
+                      <p className="text-white/40 text-[11px]">Skill {row.skill_level}</p>
+                    </div>
+                    <span className="font-black text-clay text-base shrink-0">{row.leaguePoints26}</span>
+                    <span className="shrink-0"><Trend t={row.rankTrend} /></span>
+                    <ChevronDown className={`w-4 h-4 text-white/30 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {isOpen && (
+                    <div className="grid grid-cols-3 gap-2 px-3 pb-3 pt-1 border-t border-white/5">
+                      {[
+                        { label: 'P/G Played', value: `${row.totalPointsPlayed}` },
+                        { label: 'Matches Played', value: `${row.matchesPlayed}${active ? '*' : ''}` },
+                        { label: 'Matches Won', value: `${row.wins}` },
+                      ].map((s) => (
+                        <div key={s.label} className="rounded-xl bg-white/[0.03] px-2 py-2 text-center">
+                          <p className="text-white font-bold text-sm">{s.value}</p>
+                          <p className="text-white/40 text-[9px] uppercase tracking-wide mt-0.5">{s.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
-      {hasActiveTournament && (
-        <p className="mt-3 text-xs text-white/40">
-          <span className="text-clay font-black">*</span> points to be updated after event ends
+      {/* Footnotes */}
+      <div className="mt-4 space-y-1">
+        {hasActiveTournament && (
+          <p className="text-xs text-white/40">
+            <span className="text-clay font-black">*</span> points to be updated after event ends
+          </p>
+        )}
+        <p className="text-xs text-white/40">
+          <span className="font-semibold text-white/60">P/G</span> — Points or Games, depending on the match format chosen by the players.
         </p>
+      </div>
+      </>)}
+
+      {/* ── Community board: points from completing tasks (Tasks tab) ── */}
+      {board === 'community' && (
+        communityLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-12 bg-tennis-surface/30 rounded-xl animate-pulse" />)}
+          </div>
+        ) : communityVisible.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-xl font-bold text-white">No Community points yet</p>
+            <p className="text-white/60 mt-1 text-sm">
+              Complete tasks in the <Link to="/tasks" className="text-clay font-semibold">Tasks</Link> tab to earn points.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* ── Desktop table (sm+) ── */}
+            <div className="hidden sm:block overflow-x-auto rounded-2xl bg-tennis-surface/30 border border-white/5">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-[10px] font-black uppercase tracking-widest">
+                    <th className="px-3 py-2.5 text-left text-white/50 w-10">#</th>
+                    <th className="px-3 py-2.5 text-left text-white/50">Name</th>
+                    <th className="px-3 py-2.5 text-center text-white/50">Tasks Completed</th>
+                    <th className="px-3 py-2.5 text-center text-white/50">Milestones</th>
+                    <th className="px-3 py-2.5 text-center text-clay">Pts</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {communityVisible.map((row, i) => {
+                    const isUser = user?.uid === row.user_id;
+                    return (
+                      <tr key={row.user_id} className={`border-b border-white/5 hover:bg-white/[0.04] ${isUser ? 'bg-clay/10' : i % 2 !== 0 ? 'bg-white/[0.02]' : ''}`}>
+                        <td className="px-3 py-2 text-white/40 font-mono text-[11px]">{i + 1}</td>
+                        <td className="px-3 py-2 font-semibold text-white">
+                          {toTitleCase(row.name || '')}
+                          <BadgeRow ids={badgeMap[row.user_id]} size="sm" className="ml-1.5 align-middle" />
+                          {isUser ? <span className="ml-1 text-clay text-[10px]">(you)</span> : null}
+                        </td>
+                        <td className="px-3 py-2 text-center text-white/80">{row.tasksCompleted}/{TOTAL_TASKS}</td>
+                        <td className="px-3 py-2 text-center text-white/80">{row.milestones}/{TOTAL_MILESTONES}</td>
+                        <td className="px-3 py-2 text-center font-black text-clay text-base">{row.points}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Mobile list (< sm): compact + per-row expand ── */}
+            <div className="sm:hidden space-y-2">
+              {communityVisible.map((row, i) => {
+                const isUser = user?.uid === row.user_id;
+                const isOpen = expanded.has(row.user_id);
+                return (
+                  <div key={row.user_id} className={`rounded-2xl border ${isUser ? 'bg-clay/10 border-clay/20' : 'bg-tennis-surface/30 border-white/5'}`}>
+                    <button type="button" onClick={() => toggle(row.user_id)} className="w-full flex items-center gap-3 px-3 py-2.5 text-left">
+                      <span className="text-white/40 font-mono text-xs w-6 shrink-0">{i + 1}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-white font-semibold text-sm truncate">
+                          {toTitleCase(row.name || '')}
+                          <BadgeRow ids={badgeMap[row.user_id]} size="sm" className="ml-1.5 align-middle" />
+                          {isUser ? <span className="ml-1 text-clay text-[10px]">(you)</span> : null}
+                        </p>
+                        <p className="text-white/40 text-[11px]">{row.tasksCompleted} tasks · {row.milestones} milestones</p>
+                      </div>
+                      <span className="font-black text-clay text-base shrink-0">{row.points}</span>
+                      <ChevronDown className={`w-4 h-4 text-white/30 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                    {isOpen && (
+                      <div className="grid grid-cols-2 gap-2 px-3 pb-3 pt-1 border-t border-white/5">
+                        {[
+                          { label: 'Tasks Completed', value: `${row.tasksCompleted}/${TOTAL_TASKS}` },
+                          { label: 'Milestones', value: `${row.milestones}/${TOTAL_MILESTONES}` },
+                        ].map((s) => (
+                          <div key={s.label} className="rounded-xl bg-white/[0.03] px-2 py-2 text-center">
+                            <p className="text-white font-bold text-sm">{s.value}</p>
+                            <p className="text-white/40 text-[9px] uppercase tracking-wide mt-0.5">{s.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )
       )}
     </div>
   );

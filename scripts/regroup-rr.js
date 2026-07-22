@@ -209,6 +209,14 @@ async function main() {
 
     const participants = partSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
+    // A user seated in ANY of this event's rr draws is already placed and must never be re-added.
+    // A creator can move a player across skill draws (Challengers ↔ Masters) without changing their
+    // skill; without this guard the player would look "unplaced" in their skill-routed draw and get
+    // duplicated. Mirrors the client guard in useTournament.ts (rrUnplacedPlayers / auto-place).
+    const placedEventWide = new Set(
+      rrMatches.flatMap((m) => [m.player_1_user_id, m.player_2_user_id]).filter(Boolean),
+    );
+
     // Skills + zones for everyone who could be involved in this event.
     const allUserIds = [
       ...participants.map((p) => p.user_id),
@@ -283,7 +291,7 @@ async function main() {
       });
 
       const unplaced = drawParticipants
-        .filter((p) => !placed.has(p.user_id))
+        .filter((p) => !placed.has(p.user_id) && !placedEventWide.has(p.user_id))
         .map((p) => ({
           user_id: p.user_id,
           name: usersMap.get(p.user_id)?.name || p.user_name,
