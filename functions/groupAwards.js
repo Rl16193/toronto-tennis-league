@@ -3,7 +3,7 @@
  * counter. Unlike taskPoints.js (per-player tiers), these read across many players' documents,
  * then pay a whole group at once. Two ideas make that safe:
  *
- *   1. A deterministic award id per event (e.g. `matchday_20260722_high-park`, `sweep_north-york_0`)
+ *   1. A deterministic award id per event (e.g. `matchday_20260722`, `sweep_north-york_0`)
  *      whose group_awards/{awardId} doc is CREATED inside the payout transaction. If the doc
  *      already exists the payout is skipped — so a bonus is paid exactly once even if two
  *      near-simultaneous writes both cross the threshold.
@@ -27,7 +27,7 @@ const TZ = 'America/Toronto';
 const db = () => admin.firestore();
 
 // ─── Tunable thresholds (all easily adjusted here) ──────────────────────────────────────────
-const MATCHDAY_MIN_PLAYERS = 6;   // distinct players checking in at one court on one day
+const MATCHDAY_MIN_MATCHES = 4;   // "more than 3" real matches league-wide on one Toronto day
 const MATCHDAY_POINTS = 10;
 
 const HOURLY_OPEN_HOUR = 8;       // inclusive — start of the "every hour covered" window (Toronto)
@@ -61,23 +61,31 @@ function torontoParts(iso) {
 }
 
 // ─── Payout primitive ───────────────────────────────────────────────────────────────────────
-// recipients: [{ uid, name }]. Returns true if it paid, false if the award already existed.
-async function payGroupAward(awardId, { type, key, pointsEach, recipients }) {
+// recipients: [{ uid, name }]. Returns true if anyone got paid.
+// One-shot awards (the default) pay exactly once — a second call is a no-op. `allowTopUp`
+// awards (Matchday) may pay again on the SAME award id, but only ever to recipients who
+// haven't received it yet — so a player finishing a late match still collects, and nobody
+// is ever paid twice.
+async function payGroupAward(awardId, { type, key, pointsEach, recipients, allowTopUp = false }) {
   const clean = recipients.filter((r) => r && r.uid);
   if (clean.length === 0) return false;
   const awardRef = db().doc(`group_awards/${awardId}`);
   return db().runTransaction(async (tx) => {
     const snap = await tx.get(awardRef);
-    if (snap.exists) return false;
+    if (snap.exists && !allowTopUp) return false;
+    const already = new Set(snap.exists ? (snap.data().recipient_ids || []) : []);
+    const newOnes = clean.filter((r) => !already.has(r.uid));
+    if (newOnes.length === 0) return false;
+    const allIds = [...already, ...newOnes.map((r) => r.uid)];
     tx.set(awardRef, {
       type,
       key: key || null,
       points_each: pointsEach,
-      recipient_ids: clean.map((r) => r.uid),
-      recipient_count: clean.length,
-      created_at: new Date().toISOString(),
-    });
-    for (const r of clean) {
+      recipient_ids: allIds,
+      recipient_count: allIds.length,
+      ...(snap.exists ? { updated_at: new Date().toISOString() } : { created_at: new Date().toISOString() }),
+    }, { merge: true });
+    for (const r of newOnes) {
       tx.set(db().doc(`task_progress/${r.uid}`), {
         user_id: r.uid,
         ...(r.name ? { name: r.name } : {}),
@@ -94,33 +102,51 @@ async function payGroupAward(awardId, { type, key, pointsEach, recipients }) {
 // Daily Group Tasks (reset every day — the day is baked into the award id)
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 
-// Matchday + Full Zone Sweep both read off the append-only attendance log.
+// Full Zone Sweep reads off the append-only attendance log.
 exports.onCourtAttendanceGroupBonus = onDocumentCreated(
   { document: 'court_attendance/{id}', region: REGION },
   async (event) => {
     const a = event.data?.data();
     if (!a?.user_id || !a.court_key) return;
-    const { day } = torontoParts(a.created_at);
-    await matchdayCheck(a.court_key, day);
     await zoneSweepCheck(a);
   },
 );
 
-// ≥ MATCHDAY_MIN_PLAYERS distinct players checked in at the same court on the same day → 10 each.
-async function matchdayCheck(courtKey, day) {
-  const snap = await db().collection('court_attendance').where('court_key', '==', courtKey).get();
-  const byUid = new Map();
-  snap.forEach((d) => {
-    const x = d.data();
-    if (torontoParts(x.created_at).day !== day) return;
-    if (x.user_id && !byUid.has(x.user_id)) byUid.set(x.user_id, x.user_name || '');
-  });
-  if (byUid.size < MATCHDAY_MIN_PLAYERS) return;
-  const recipients = [...byUid].map(([uid, name]) => ({ uid, name }));
-  await payGroupAward(`matchday_${day}_${courtKey}`, {
-    type: 'matchday', key: courtKey, pointsEach: MATCHDAY_POINTS, recipients,
-  });
-}
+// Matchday: MORE THAN 3 real matches (walkover-excluded — same gate as taskPoints.js) completed
+// league-wide on one Toronto day → 10 to every player who played that day. Top-up award: players
+// whose match lands later the same day still collect, exactly once.
+exports.onMatchCompletedMatchdayBonus = onDocumentUpdated(
+  { document: 'tournament_matches/{matchId}', region: REGION },
+  async (event) => {
+    const before = event.data?.before.data() || {};
+    const after = event.data?.after.data() || {};
+    if (before.status === 'complete' || after.status !== 'complete') return;
+    if (after.walkover === true) return;
+    if (after.set_1_player_1 == null || after.set_1_player_2 == null) return;
+
+    const { day } = torontoParts(after.completed_at);
+
+    // League scale is a few hundred matches — a status filter plus in-memory day filter beats
+    // maintaining a UTC-shifted range index on completed_at.
+    const snap = await db().collection('tournament_matches').where('status', '==', 'complete').get();
+    let dayMatches = 0;
+    const byUid = new Map();
+    snap.forEach((d) => {
+      const m = d.data();
+      if (m.walkover === true) return;
+      if (m.set_1_player_1 == null || m.set_1_player_2 == null) return;
+      if (torontoParts(m.completed_at).day !== day) return;
+      dayMatches += 1;
+      if (m.player_1_user_id && !byUid.has(m.player_1_user_id)) byUid.set(m.player_1_user_id, m.player_1_name || '');
+      if (m.player_2_user_id && !byUid.has(m.player_2_user_id)) byUid.set(m.player_2_user_id, m.player_2_name || '');
+    });
+    if (dayMatches < MATCHDAY_MIN_MATCHES) return;
+    const recipients = [...byUid].map(([uid, name]) => ({ uid, name }));
+    await payGroupAward(`matchday_${day}`, {
+      type: 'matchday', key: day, pointsEach: MATCHDAY_POINTS, recipients, allowTopUp: true,
+    });
+  },
+);
 
 // Every hour in the [OPEN, CLOSE) window has ≥1 queue photo at this court today → 10 to each
 // player who posted a queue photo there today.

@@ -96,6 +96,11 @@ export const BADGES: BadgeDef[] = [
     requirement: 'Play in 12 different months',
     earned: (_p, c) => c.monthsActive >= 12,
   },
+  {
+    id: 'master', name: 'Master', icon: '🏆',
+    requirement: 'Reach the top playing and ladder tiers',
+    earned: (_p, _c, count) => count(PLAYING_TIER_IDS) >= 15 && count(LADDER_TIER_IDS) >= 10,
+  },
 ];
 
 export const BADGE_BY_ID = Object.fromEntries(BADGES.map((b) => [b.id, b])) as Record<string, BadgeDef>;

@@ -1,38 +1,59 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
-import { ArrowLeft, Calendar, Mail, MapPin, Phone, Star, Users } from 'lucide-react';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { ArrowLeft, Mail, MapPin, Phone, Star, Users } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { Button } from '../components/Button';
+import { RacquetIcon } from '../components/RacquetIcon';
 import { TennisEvent, UserData, UserPreferences, UserStats } from '../types';
-import { DAY_CODES, DAY_LABELS, getAvailabilityGrid, type TimeSlot } from '../utils/availability';
+import type { TournamentMatch } from './tournament/types';
 import { BadgeRow } from '../features/tasks/BadgeRow';
+import { useCommunityStandings } from '../features/tasks/useTasks';
+import { skillTier, leagueDivision } from '../utils/skillLevels';
 
-const skillTier = (skill: number) => (skill < 3 ? 'Beginner' : skill < 4 ? 'Challenger' : 'Masters');
-
-// Normalize free-text stats.league into a display division ("women" first — it contains "men").
-const leagueDivision = (league?: string): string => {
-  const l = (league || '').toLowerCase();
-  if (l.includes('wom') || l.includes('female')) return "Women's";
-  if (l.includes('men') || l.includes('male')) return "Men's";
-  return '';
+// Furthest-round derivation for Best Finish / Best Result from a player's tournament matches.
+const ROUND_ORDER = ['R64', 'R32', 'R16', 'QF', 'SF', 'F'];
+const ROUND_LABEL: Record<string, string> = {
+  R64: 'Round of 64', R32: 'Round of 32', R16: 'Round of 16', QF: 'Quarterfinal', SF: 'Semifinal', F: 'Final',
 };
 
-// lucide has no racquet — small inline glyph (matches the own Profile Card).
-const RacquetIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <ellipse cx="9" cy="9" rx="6" ry="7" />
-    <path d="M13.5 14 20 20.5" />
-    <path d="M6 9h6M9 5v8" />
-  </svg>
-);
+const deriveResults = (mine: TournamentMatch[], uid: string) => {
+  const completed = mine
+    .filter((m) => m.status === 'complete' && m.winner_user_id)
+    .sort((a, b) => (Date.parse(b.completed_at || '') || 0) - (Date.parse(a.completed_at || '') || 0));
+
+  let streak = '—';
+  if (completed.length) {
+    const firstWon = completed[0].winner_user_id === uid;
+    let n = 0;
+    for (const m of completed) { if ((m.winner_user_id === uid) !== firstWon) break; n += 1; }
+    streak = `${n}${firstWon ? 'W' : 'L'}`;
+  }
+
+  let bestIdx = -1;
+  let wonFinal = false;
+  for (const m of mine) {
+    const idx = ROUND_ORDER.indexOf(m.round);
+    if (idx < 0) continue;
+    if (idx > bestIdx) bestIdx = idx;
+    if (m.round === 'F' && m.status === 'complete' && m.winner_user_id === uid) wonFinal = true;
+  }
+  const bestFinish = bestIdx >= 0 ? ROUND_LABEL[ROUND_ORDER[bestIdx]] : '—';
+  let bestResult = '—';
+  if (wonFinal) bestResult = 'Champion';
+  else if (bestIdx >= 0) {
+    const r = ROUND_ORDER[bestIdx];
+    bestResult = r === 'F' ? 'Finalist' : r === 'SF' ? 'Semifinalist' : r === 'QF' ? 'Quarterfinalist' : ROUND_LABEL[r];
+  }
+  return { streak, bestFinish, bestResult };
+};
 
 const SectionLabel: React.FC<{ icon?: React.ReactNode; label: string }> = ({ icon, label }) => (
-  <span className="text-xs font-bold text-white/50 uppercase tracking-widest flex items-center gap-1.5">{icon}{label}</span>
+  <span className="text-xs font-bold text-fg/50 uppercase tracking-widest flex items-center gap-1.5">{icon}{label}</span>
 );
 
 const Pill: React.FC<{ label: string }> = ({ label }) => (
-  <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white/5 text-white/70 border border-white/10">{label}</span>
+  <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70 border border-fg/10">{label}</span>
 );
 
 // Read-only view of another player's profile — mirrors the user's own profile page
@@ -48,6 +69,9 @@ export const PlayerProfile: React.FC = () => {
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [organizer, setOrganizer] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [results, setResults] = useState({ streak: '—', bestFinish: '—', bestResult: '—' });
+  const { rows: communityRows } = useCommunityStandings();
+  const rsPoints = userId ? (communityRows.find((r) => r.user_id === userId)?.points ?? 0) : 0;
 
   useEffect(() => { document.title = 'Player Profile — Racquets & Strings'; }, []);
 
@@ -67,6 +91,17 @@ export const PlayerProfile: React.FC = () => {
         if (playerData?.name) document.title = `${playerData.name} — Racquets & Strings`;
         setStats(statsDoc.exists() ? (statsDoc.data() as UserStats) : null);
         setPreferences(prefsDoc.exists() ? (prefsDoc.data() as UserPreferences) : null);
+
+        // Derive Streak / Best Finish / Best Result from this player's tournament matches.
+        try {
+          const [m1, m2] = await Promise.all([
+            getDocs(query(collection(db, 'tournament_matches'), where('player_1_user_id', '==', userId))),
+            getDocs(query(collection(db, 'tournament_matches'), where('player_2_user_id', '==', userId))),
+          ]);
+          const byId = new Map<string, TournamentMatch>();
+          [...m1.docs, ...m2.docs].forEach((d) => byId.set(d.id, { id: d.id, ...d.data() } as TournamentMatch));
+          setResults(deriveResults([...byId.values()], userId));
+        } catch { setResults({ streak: '—', bestFinish: '—', bestResult: '—' }); }
 
         // Reset before resolving — otherwise a previous player's organizer can keep showing
         // if this player has no event/organizer to resolve (switching :userId doesn't remount).
@@ -100,8 +135,8 @@ export const PlayerProfile: React.FC = () => {
   if (!player) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
-        <h1 className="text-3xl font-black text-white mb-3">Player Not Found</h1>
-        <p className="text-white mb-6">This player profile is not available.</p>
+        <h1 className="text-3xl font-black text-fg mb-3">Player Not Found</h1>
+        <p className="text-fg mb-6">This player profile is not available.</p>
         <Button variant="outline" onClick={() => navigate('/tournament')}>Back to Tournament</Button>
       </div>
     );
@@ -111,39 +146,39 @@ export const PlayerProfile: React.FC = () => {
   const contact = player.phone || player.email || '';
   const courts = preferences?.preferred_courts ?? [];
   const favourites = preferences?.favourite_players ?? [];
-  const availGrid = getAvailabilityGrid(preferences);
-  const hasAvailability = Object.keys(availGrid).length > 0;
 
-  const s = stats as (UserStats & { matchesPlayed?: number; wins?: number; loses?: number; pointswon?: number; totalPointsPlayed?: number }) | null;
-  const pwPct = s && (s.totalPointsPlayed ?? 0) > 0 ? `${Math.round((s.pointswon! / s.totalPointsPlayed!) * 100)}%` : '—';
+  const s = stats as (UserStats & { matchesPlayed?: number; leaguePoints26?: number }) | null;
   const statTiles = [
-    { label: 'Streak (W–L)', value: `${s?.wins ?? 0}–${s?.loses ?? 0}`, accent: 'text-white' },
-    { label: 'PW %', value: pwPct, accent: 'text-clay' },
-    { label: 'MP', value: `${s?.matchesPlayed ?? 0}`, accent: 'text-white' },
+    { label: 'Streak', value: results.streak, accent: 'text-clay' },
+    { label: 'RS Points', value: `${rsPoints}`, accent: 'text-fg' },
+    { label: 'League Points', value: `${s?.leaguePoints26 ?? 0}`, accent: 'text-fg' },
+    { label: 'Matches', value: `${s?.matchesPlayed ?? 0}`, accent: 'text-fg' },
+    { label: 'Best Finish', value: results.bestFinish, accent: 'text-fg' },
+    { label: 'Best Result', value: results.bestResult, accent: 'text-fg' },
   ];
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-20 pt-8 space-y-4">
-      <Button variant="ghost" size="sm" onClick={() => navigate('/tournament')} className="px-2">
-        <ArrowLeft className="w-4 h-4 mr-1.5" />Back to Tournament
+      <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="px-2">
+        <ArrowLeft className="w-4 h-4 mr-1.5" />Back
       </Button>
 
       {/* Profile Card — read-only mirror of ProfileInfo */}
-      <div className="rounded-[2.5rem] border border-white/5 bg-tennis-surface/30 shadow-xl p-5 sm:p-7">
-        <h2 className="text-xl font-bold text-white mb-5">Profile Card</h2>
+      <div className="rounded-[2.5rem] border border-fg/5 bg-tennis-surface/30 shadow-xl p-5 sm:p-7">
+        <h2 className="text-xl font-bold text-fg mb-5">Profile Card</h2>
 
-        <div className="flex flex-col items-center gap-4 pb-5 border-b border-white/5">
-          <div className="w-24 h-24 rounded-full bg-tennis-surface flex items-center justify-center overflow-hidden border border-white/10">
+        <div className="flex flex-col items-center gap-4 pb-5 border-b border-fg/5">
+          <div className="w-24 h-24 rounded-full bg-tennis-surface flex items-center justify-center overflow-hidden border border-fg/10">
             {player.avatar
               ? <img src={player.avatar} alt={player.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              : <span className="text-4xl font-black text-white/80">{initial}</span>}
+              : <span className="text-4xl font-black text-fg/80">{initial}</span>}
           </div>
         </div>
 
         <div className="divide-y divide-white/5">
           <div className="py-3">
             <SectionLabel label="Name" />
-            <p className="text-lg font-bold text-white mt-0.5">
+            <p className="text-lg font-bold text-fg mt-0.5">
               {player.name || '—'}
               <BadgeRow ids={player.display_badges} className="ml-2 align-middle" />
             </p>
@@ -151,13 +186,13 @@ export const PlayerProfile: React.FC = () => {
 
           <div className="py-3">
             <SectionLabel label="Contact" />
-            <p className="text-lg font-bold text-white mt-0.5 break-all">{contact || '—'}</p>
+            <p className="text-lg font-bold text-fg mt-0.5 break-all">{contact || '—'}</p>
           </div>
 
           <div className="py-3">
             <SectionLabel label="Bio" />
-            <p className="text-sm text-white/70 mt-0.5">
-              {player.bio?.trim() || <span className="text-white/40">No bio yet.</span>}
+            <p className="text-sm text-fg/70 mt-0.5">
+              {player.bio?.trim() || <span className="text-fg/40">No bio yet.</span>}
             </p>
           </div>
 
@@ -165,12 +200,12 @@ export const PlayerProfile: React.FC = () => {
             <SectionLabel icon={<RacquetIcon className="w-3.5 h-3.5 text-clay" />} label="Skill Level" />
             {stats ? (
               <div className="mt-1 flex items-center gap-2">
-                <span className="text-lg font-bold text-white">NTRP {stats.skill_level}</span>
+                <span className="text-lg font-bold text-fg">NTRP {stats.skill_level}</span>
                 <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">
                   {skillTier(stats.skill_level)}
                 </span>
               </div>
-            ) : <p className="text-sm text-white/40 mt-1">Not set.</p>}
+            ) : <p className="text-sm text-fg/40 mt-1">Not set.</p>}
           </div>
 
           {/* League & Age — only when the player opted in ("Make visible to others"). */}
@@ -187,77 +222,48 @@ export const PlayerProfile: React.FC = () => {
           <div className="py-3">
             <SectionLabel icon={<MapPin className="w-3.5 h-3.5 text-clay" />} label="Preferred Courts" />
             <div className="mt-1 flex flex-wrap gap-1.5">
-              {courts.length > 0 ? courts.map((c) => <Pill key={c} label={c} />) : <span className="text-sm text-white/40">None set.</span>}
+              {courts.length > 0 ? courts.map((c) => <Pill key={c} label={c} />) : <span className="text-sm text-fg/40">None set.</span>}
             </div>
           </div>
 
           <div className="py-3">
             <SectionLabel icon={<Star className="w-3.5 h-3.5 text-clay" />} label="Favourite Players" />
             <div className="mt-1 flex flex-wrap gap-1.5">
-              {favourites.length > 0 ? favourites.map((p) => <Pill key={p} label={p} />) : <span className="text-sm text-white/40">None set.</span>}
+              {favourites.length > 0 ? favourites.map((p) => <Pill key={p} label={p} />) : <span className="text-sm text-fg/40">None set.</span>}
             </div>
           </div>
         </div>
       </div>
 
       {/* Match Stats — read-only mirror of ProfileStats */}
-      <div className="bg-tennis-surface/30 border border-white/5 rounded-[2.5rem] shadow-xl p-6">
-        <h2 className="text-lg font-bold text-white flex items-center mb-4">
+      <div className="bg-tennis-surface/30 border border-fg/5 rounded-[2.5rem] shadow-xl p-6">
+        <h2 className="text-lg font-bold text-fg flex items-center mb-4">
           <Star className="w-5 h-5 mr-2 text-clay" />Match Stats
         </h2>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {statTiles.map((t) => (
-            <div key={t.label} className="rounded-2xl bg-white/[0.03] border border-white/5 px-3 py-4 text-center">
+            <div key={t.label} className="rounded-2xl bg-white/[0.03] border border-fg/5 px-3 py-4 text-center">
               <p className={`text-2xl font-black ${t.accent}`}>{t.value}</p>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-white/40 mt-1">{t.label}</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-fg/40 mt-1">{t.label}</p>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Availability — read-only mirror of ProfileAvailability */}
-      {hasAvailability && (
-        <div className="rounded-[2.5rem] border border-white/5 bg-tennis-surface/30 shadow-xl p-6">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-4">
-            <Calendar className="w-5 h-5 text-clay" />Availability
-          </h2>
-          <div className="grid grid-cols-[1fr_auto_auto] gap-x-6 gap-y-1 items-center">
-            <span />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 text-center w-10">AM</span>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 text-center w-10">PM</span>
-            {DAY_CODES.map((d) => (
-              <React.Fragment key={d}>
-                <span className="text-sm text-white/80 py-1.5">{DAY_LABELS[d]}</span>
-                {(['AM', 'PM'] as TimeSlot[]).map((slot) => {
-                  const on = (availGrid[d] ?? []).includes(slot);
-                  return (
-                    <div key={slot} className="flex justify-center">
-                      <div className={`w-5 h-5 rounded flex items-center justify-center border ${on ? 'bg-clay border-clay' : 'bg-white/5 border-white/15'}`}>
-                        {on && <span className="text-white text-[10px]">✓</span>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
-      )}
-
       {organizer && (
-        <div className="rounded-[2.5rem] bg-tennis-surface/30 border border-white/5 shadow-xl p-6">
-          <h2 className="text-base font-black text-white mb-3">Contact organizer if you require any assistance</h2>
+        <div className="rounded-[2.5rem] bg-tennis-surface/30 border border-fg/5 shadow-xl p-6">
+          <h2 className="text-base font-black text-fg mb-3">Contact organizer if you require any assistance</h2>
           <div className="flex flex-wrap gap-6">
             {organizer.email && (
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-clay shrink-0" />
-                <span className="text-white font-semibold break-all">{organizer.email}</span>
+                <span className="text-fg font-semibold break-all">{organizer.email}</span>
               </div>
             )}
             {organizer.phone && (
               <div className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-clay shrink-0" />
-                <span className="text-white font-semibold">{organizer.phone}</span>
+                <span className="text-fg font-semibold">{organizer.phone}</span>
               </div>
             )}
           </div>

@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { TournamentMatch, TournamentPlayer } from './types';
 import { formatPlayerName, formatScheduledDate, formatSetScores, getScheduleState } from './utils';
 import { ScheduleControls, type ScheduleApi } from './ScheduleControls';
-import { ContactOpponentButton } from './ContactOpponentButton';
+import { ContactOpponentButton, pillButtonCls } from './ContactOpponentButton';
 
 // ─── Bracket: your matches + potential next-round opponents ──────────────────────
 
@@ -21,31 +21,17 @@ export type OpponentRow = {
   losses: number;
 };
 
-const ProfileLink: React.FC<{ userId: string }> = ({ userId }) =>
-  userId ? (
-    <Link
-      to={`/players/${userId}`}
-      className="inline-flex items-center px-3 py-1.5 rounded-lg bg-clay text-white text-xs font-bold hover:bg-clay/80 transition-colors whitespace-nowrap"
-    >
-      View Profile
-    </Link>
-  ) : null;
-
 // Shared scheduling status badge for a match — used by both the bracket (Your Match) and the
 // round-robin (Your Group) panels so they read identically. A completed match is always
-// "Completed" (and scheduling is locked wherever this is shown).
-const scheduleBadge = (m: TournamentMatch): { text: string; cls: string } => {
-  const isComplete = m.status === 'complete';
+// "Completed" (and scheduling is locked wherever this is shown). No badge at all once unscheduled
+// — that's the default state, so showing it just crowds the row and squeezes the player's name.
+const scheduleBadge = (m: TournamentMatch): { text: string; cls: string } | null => {
+  if (m.status === 'complete') return { text: 'Completed', cls: 'bg-green-500/15 text-green-300 border-green-500/25' };
   const st = getScheduleState(m);
-  const cls = isComplete || st?.status === 'scheduled'
-    ? 'bg-green-500/15 text-green-300 border-green-500/25'
-    : 'bg-white/5 text-white/60 border-white/10';
-  const text = isComplete
-    ? 'Completed'
-    : st?.status === 'scheduled'
-      ? `Scheduled on ${formatScheduledDate(st.date, st.slot ?? '')}`
-      : 'Unscheduled';
-  return { text, cls };
+  if (st?.status === 'scheduled') {
+    return { text: `Scheduled on ${formatScheduledDate(st.date, st.slot ?? '')}`, cls: 'bg-green-500/15 text-green-300 border-green-500/25' };
+  }
+  return null;
 };
 
 /** Compact bracket-style cell for the viewer's current match — dark, blended with the site. */
@@ -57,15 +43,15 @@ const CurrentMatchCell: React.FC<{ match: TournamentMatch }> = ({ match }) => {
     { name: match.player_2_name, won: done && match.winner_user_id === match.player_2_user_id },
   ];
   return (
-    <div className="rounded-2xl border border-white/10 bg-tennis-dark/50 overflow-hidden">
+    <div className="rounded-2xl border border-fg/10 bg-tennis-dark/50 overflow-hidden">
       {rows.map((r, i) => (
-        <div key={i} className={`flex items-center justify-between gap-3 px-3.5 h-11 ${i === 1 ? 'border-t border-white/10' : ''}`}>
-          <span className={`text-sm truncate ${r.won ? 'text-clay font-bold' : 'text-white/90'}`}>{formatPlayerName(r.name)}</span>
+        <div key={i} className={`flex items-center justify-between gap-3 px-3.5 h-11 ${i === 1 ? 'border-t border-fg/10' : ''}`}>
+          <span className={`text-sm truncate ${r.won ? 'text-clay font-bold' : 'text-fg/90'}`}>{formatPlayerName(r.name)}</span>
           {r.won && <span className="text-[10px] uppercase tracking-widest text-clay font-bold shrink-0">Won</span>}
         </div>
       ))}
       {done && score && (
-        <div className="border-t border-white/10 px-3.5 py-1.5 text-[11px] font-mono tracking-wide text-white/50">{score}</div>
+        <div className="border-t border-fg/10 px-3.5 py-1.5 text-[11px] font-mono tracking-wide text-fg/50">{score}</div>
       )}
     </div>
   );
@@ -76,11 +62,20 @@ export const OpponentCard: React.FC<{
   defaultOpen?: boolean;
   currentMatch?: TournamentMatch | null;
   schedule?: ScheduleApi;
-}> = ({ opponent, defaultOpen = false, currentMatch, schedule }) => {
+  // A creator who's also playing uses the same Enter/Edit Score flow they have in the Match List
+  // (RRGroupCard) — unlike a participant's one-time Submit Score, it stays available after the
+  // match is scored (to edit) and isn't limited to an allow-list.
+  isCreator?: boolean;
+}> = ({ opponent, defaultOpen = false, currentMatch, schedule, isCreator }) => {
   const [open, setOpen] = useState(defaultOpen);
   const canSchedule = !!currentMatch && !!schedule && !currentMatch.id.startsWith('preview_');
   const isComplete = currentMatch?.status === 'complete';
   const badge = canSchedule ? scheduleBadge(currentMatch!) : null;
+  const showAskInline = canSchedule && !isComplete && !getScheduleState(currentMatch!).requested;
+  const showSubmitInline = canSchedule && !!schedule!.onSubmitScore && (
+    isCreator || (!isComplete && !!schedule!.submittableMatchIds?.has(currentMatch!.id))
+  );
+  const submitLabel = isCreator ? (isComplete ? 'Edit Score' : 'Enter Score') : 'Submit Score';
 
   return (
     <div className="mb-6">
@@ -89,10 +84,10 @@ export const OpponentCard: React.FC<{
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between mb-3 group"
       >
-        <span className="text-xs uppercase tracking-widest text-white/50 font-bold">Your Match</span>
+        <span className="text-xs uppercase tracking-widest text-fg/50 font-bold">Your Match</span>
         {open
-          ? <ChevronUp className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors" />
-          : <ChevronDown className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors" />}
+          ? <ChevronUp className="w-4 h-4 text-fg/40 group-hover:text-fg/70 transition-colors" />
+          : <ChevronDown className="w-4 h-4 text-fg/40 group-hover:text-fg/70 transition-colors" />}
       </button>
 
       {open && (
@@ -102,34 +97,41 @@ export const OpponentCard: React.FC<{
           )}
           {currentMatch && <CurrentMatchCell match={currentMatch} />}
 
-          {/* RR-style card: status badge · opponent · contact · View Profile. Contact is read-only
-              (you can't edit another player's profile). Phone first, email as a fallback. */}
-          <div className="rounded-2xl border border-white/10 bg-tennis-surface/30 p-4">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:grid sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-x-4 sm:gap-y-0">
-              {badge && (
-                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border shrink-0 ${badge.cls}`}>{badge.text}</span>
+          {/* Sleek single row — matches the Upcoming Matches list on the Profile page: name
+              (links to their profile) · status badge · Contact. Read-only (you can't edit
+              another player's profile); phone first, email/WhatsApp as fallbacks. */}
+          <div className="rounded-2xl border border-fg/5 overflow-hidden">
+            <div className="flex items-center gap-2.5 px-3.5 py-2.5 min-h-[44px] flex-wrap">
+              {opponent.userId ? (
+                <Link to={`/players/${opponent.userId}`} className="flex-1 min-w-[4.5rem] text-sm font-semibold text-fg truncate hover:text-clay transition-colors">
+                  {opponent.name}
+                </Link>
+              ) : (
+                <span className="flex-1 min-w-[4.5rem] text-sm font-semibold text-fg truncate">{opponent.name}</span>
               )}
-              <div className="min-w-0">
-                <p className="text-white font-bold">{opponent.name}</p>
-                {opponent.phone || opponent.email
-                  ? <p className="text-white/70 text-sm break-all">{opponent.phone || opponent.email}</p>
-                  : <p className="text-white/40 text-sm">No contact on file</p>}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <ContactOpponentButton
-                  name={opponent.name}
-                  phone={opponent.phone}
-                  email={opponent.email}
-                  whatsappContact={opponent.whatsappContact}
-                  whatsappSameAsPhone={opponent.whatsappSameAsPhone}
-                />
-                <ProfileLink userId={opponent.userId} />
-              </div>
+              {badge && (
+                <span className={`shrink-0 px-2 py-0.5 rounded-lg text-[9px] font-bold border ${badge.cls}`}>{badge.text}</span>
+              )}
+              {showAskInline && (
+                <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => schedule!.onAskOrganizer(currentMatch!)}>Schedule</button>
+              )}
+              {showSubmitInline && (
+                <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => schedule!.onSubmitScore!(currentMatch!)}>{submitLabel}</button>
+              )}
+              <ContactOpponentButton
+                name={opponent.name}
+                phone={opponent.phone}
+                email={opponent.email}
+                whatsappContact={opponent.whatsappContact}
+                whatsappSameAsPhone={opponent.whatsappSameAsPhone}
+                variant="white"
+                size="sm"
+              />
             </div>
           </div>
 
-          {/* Scheduling is locked once the match is complete. */}
-          {canSchedule && !isComplete && <ScheduleControls match={currentMatch!} api={schedule!} />}
+          {/* Scheduling is locked once the match is complete. Ask-organizer + Submit Score live inline above. */}
+          {canSchedule && !isComplete && <ScheduleControls match={currentMatch!} api={schedule!} hideBadge hideAskButton hideSubmitButton />}
         </div>
       )}
     </div>
@@ -145,18 +147,14 @@ export const RROpponentPanel: React.FC<{
   defaultOpen?: boolean;
   pairingMatches?: TournamentMatch[];
   schedule?: ScheduleApi;
+  // A creator who's also playing uses the same Enter/Edit Score flow as the Match List (RRGroupCard).
+  isCreator?: boolean;
   // uid → contact details, so we can show the phone number (email only when no phone).
   contactMap?: Record<string, { phone?: string; email?: string; whatsapp_contact?: string; whatsapp_same_as_phone?: boolean }>;
-}> = ({ group, userId, isDoubles, defaultOpen = false, pairingMatches, schedule, contactMap }) => {
+}> = ({ group, userId, isDoubles, defaultOpen = false, pairingMatches, schedule, isCreator, contactMap }) => {
   const others = group.filter((p) => p.user_id !== userId);
   const [open, setOpen] = useState(defaultOpen);
   if (others.length === 0) return null;
-
-  // Phone first, email only if no phone, then the match-snapshot contact as a last resort.
-  const contactFor = (p: TournamentPlayer) => {
-    const c = contactMap?.[p.user_id];
-    return c?.phone || c?.email || p.contact || '';
-  };
 
   return (
     <div className="mb-6">
@@ -165,61 +163,62 @@ export const RROpponentPanel: React.FC<{
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between mb-3 group"
       >
-        <span className="text-xs uppercase tracking-widest text-white/50 font-bold">Your Group</span>
+        <span className="text-xs uppercase tracking-widest text-fg/50 font-bold">Your Group</span>
         {open
-          ? <ChevronUp className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors" />
-          : <ChevronDown className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors" />}
+          ? <ChevronUp className="w-4 h-4 text-fg/40 group-hover:text-fg/70 transition-colors" />
+          : <ChevronDown className="w-4 h-4 text-fg/40 group-hover:text-fg/70 transition-colors" />}
       </button>
 
       {open && (
       <div className="space-y-3">
         {others.map((p) => {
-          const contact = contactFor(p);
           const c = contactMap?.[p.user_id];
           const m = pairingMatches?.find((mm) => mm.player_1_user_id === p.user_id || mm.player_2_user_id === p.user_id);
           const canSchedule = !!schedule && !!m && !m.id.startsWith('preview_');
           const isComplete = m?.status === 'complete';
           const badge = canSchedule ? scheduleBadge(m!) : null;
+          const showAskInline = canSchedule && !isComplete && !getScheduleState(m!).requested;
+          const showSubmitInline = canSchedule && !!schedule!.onSubmitScore && (
+            isCreator || (!isComplete && !!schedule!.submittableMatchIds?.has(m!.id))
+          );
+          const submitLabel = isCreator ? (isComplete ? 'Edit Score' : 'Enter Score') : 'Submit Score';
 
           return (
-            <div key={p.user_id} className="rounded-2xl border border-white/10 bg-tennis-dark/40 p-4 space-y-2.5">
-              {/* Row 1: status badge · name · contact · Contact/View Profile
-                  Mobile: flex-wrap. Desktop: 4-col grid so items spread across the full card. */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 sm:grid sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:gap-x-4 sm:gap-y-0">
-                {badge && (
-                  <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border shrink-0 ${badge.cls}`}>{badge.text}</span>
+            <div key={p.user_id} className="rounded-2xl border border-fg/5 overflow-hidden">
+              {/* Sleek single row — matches the Upcoming Matches list on the Profile page. */}
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5 min-h-[44px] flex-wrap">
+                {p.user_id ? (
+                  <Link to={`/players/${p.user_id}`} className="flex-1 min-w-[4.5rem] text-sm font-semibold text-fg truncate hover:text-clay transition-colors">
+                    {formatPlayerName(p.name)}
+                  </Link>
+                ) : (
+                  <span className="flex-1 min-w-[4.5rem] text-sm font-semibold text-fg truncate">{formatPlayerName(p.name)}</span>
                 )}
-                <span className="text-white font-bold text-sm">{formatPlayerName(p.name)}</span>
-                <span className="text-white/50 text-xs">{contact || '—'}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  <ContactOpponentButton
-                    name={formatPlayerName(p.name)}
-                    phone={c?.phone}
-                    email={c?.email}
-                    whatsappContact={c?.whatsapp_contact}
-                    whatsappSameAsPhone={c?.whatsapp_same_as_phone}
-                    size="sm"
-                  />
-                  {p.user_id && (
-                    <Link
-                      to={`/players/${p.user_id}`}
-                      className="inline-flex items-center px-3 py-1.5 rounded-lg bg-clay text-white text-xs font-bold hover:bg-clay/80 transition-colors whitespace-nowrap"
-                    >
-                      View Profile
-                    </Link>
-                  )}
-                </div>
+                {badge && (
+                  <span className={`shrink-0 px-2 py-0.5 rounded-lg text-[9px] font-bold border ${badge.cls}`}>{badge.text}</span>
+                )}
+                {showAskInline && (
+                  <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => schedule!.onAskOrganizer(m!)}>Schedule</button>
+                )}
+                {showSubmitInline && (
+                  <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => schedule!.onSubmitScore!(m!)}>{submitLabel}</button>
+                )}
+                <ContactOpponentButton
+                  name={formatPlayerName(p.name)}
+                  phone={c?.phone}
+                  email={c?.email}
+                  whatsappContact={c?.whatsapp_contact}
+                  whatsappSameAsPhone={c?.whatsapp_same_as_phone}
+                  variant="white"
+                  size="sm"
+                />
               </div>
-              {/* Row 2: Request Scheduling Assistance — locked once complete. */}
-              {canSchedule && !isComplete && (
-                <ScheduleControls match={m!} api={schedule!} hideRule hideBadge buttonLayout="grid-2" className="space-y-2" />
-              )}
             </div>
           );
         })}
 
         {/* No-show rule — shown once for the whole group */}
-        <p className="text-[11px] text-white/40 leading-snug px-1">
+        <p className="text-[11px] text-fg/40 leading-snug px-1">
           Play on weekend matchdays — schedule set by the organizer. Both players must attend; if only one shows up, they advance.
         </p>
       </div>

@@ -171,17 +171,18 @@ async function markInitiationTask(uid, name, taskId) {
 }
 
 // ─── Organizer digest: totals only, never names ─────────────────────────────
+// Photo reports no longer need review (they auto-approve at creation) — only claims do.
 async function notifyOrganizersOfQueue(link) {
-  const [photos, claims, organizers] = await Promise.all([
-    db().collection('court_reports').where('status', '==', 'pending').get(),
+  const [claims, organizers] = await Promise.all([
     db().collection('task_claims').where('status', '==', 'pending').get(),
     organizerUids(),
   ]);
-  if (photos.size === 0 && claims.size === 0) return;
-  const parts = [];
-  if (photos.size > 0) parts.push(`${photos.size} photo${photos.size > 1 ? 's' : ''} to review`);
-  if (claims.size > 0) parts.push(`${claims.size} task${claims.size > 1 ? 's' : ''} need approval`);
-  await notify(organizers, { type: 'organizer_review_pending', title: parts.join(', '), link });
+  if (claims.size === 0) return;
+  await notify(organizers, {
+    type: 'organizer_review_pending',
+    title: `${claims.size} task${claims.size > 1 ? 's' : ''} need approval`,
+    link,
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -253,46 +254,40 @@ exports.onCourtVisitAwardPoints = onDocumentCreated(
   },
 );
 
-// A racquet-queue photo is useful right now only — auto-approved at submit time.
-exports.onQueueReportAwardPoints = onDocumentCreated(
+// "Submit a Photo" reports auto-approve at creation (no organizer review step) — award points
+// immediately. Anonymous reports (no user_id) earn nothing, since there's no account to credit.
+exports.onPhotoReportAwardPoints = onDocumentCreated(
   { document: 'court_reports/{id}', region: REGION },
   async (event) => {
     const r = event.data?.data();
-    if (!r || r.type !== 'queue') return;
-    await bumpCounterAndAward(r.user_id, r.user_name || '', 'queueUpdates', 1, 'queuePhoto');
+    if (!r?.user_id) return;
+    if (r.type === 'waitingBoard') {
+      await bumpCounterAndAward(r.user_id, r.user_name || '', 'boardPhotos', 1, 'waitingBoard');
+    } else if (r.type === 'queue') {
+      await bumpCounterAndAward(r.user_id, r.user_name || '', 'queueUpdates', 1, 'queuePhoto');
+    } else {
+      // 'condition' — the only type the unified "Submit a Photo" flow writes today. Same counter
+      // the legacy text-only suggestion flow used.
+      await bumpCounterAndAward(r.user_id, r.user_name || '', 'suggestions', 1, 'courtSuggestion');
+    }
   },
 );
 
-// Waiting-board / condition photos need a human look before they count.
-exports.onPhotoReportReviewed = onDocumentUpdated(
+// Automated image moderation (functions/index.js) can still flip an already-approved report to
+// 'rejected' after the fact if the photo is unsafe — let the submitter know. (Points already
+// awarded at creation are not reversed here — a deliberate simplification for this rare edge case.)
+exports.onPhotoReportRejected = onDocumentUpdated(
   { document: 'court_reports/{id}', region: REGION },
   async (event) => {
     const before = event.data?.before.data() || {};
     const after = event.data?.after.data() || {};
-    if (before.status !== 'pending') return;
-
-    if (after.status === 'approved') {
-      if (after.type === 'waitingBoard') {
-        await bumpCounterAndAward(after.user_id, after.user_name || '', 'boardPhotos', 1, 'waitingBoard');
-      } else if (after.type === 'condition') {
-        // Same counter the existing text-suggestion flow uses — a condition photo IS a court
-        // improvement contribution.
-        await bumpCounterAndAward(after.user_id, after.user_name || '', 'suggestions', 1, 'courtSuggestion');
-      }
-      await notify(after.user_id, {
-        type: 'photo_approved',
-        title: 'Your photo was approved',
-        body: after.court_name || '',
-        link: '/tasks',
-      });
-    } else if (after.status === 'rejected') {
-      await notify(after.user_id, {
-        type: 'photo_rejected',
-        title: 'Your photo wasn’t approved',
-        body: after.reviewer_note || after.court_name || '',
-        link: '/tasks',
-      });
-    }
+    if (before.status !== 'approved' || after.status !== 'rejected' || !after.user_id) return;
+    await notify(after.user_id, {
+      type: 'photo_rejected',
+      title: 'Your photo was removed',
+      body: after.reviewer_note || '',
+      link: '/tasks',
+    });
   },
 );
 
@@ -350,17 +345,8 @@ exports.onClaimReviewed = onDocumentUpdated(
   },
 );
 
-// Organizer digest — fires whenever either review queue gains a new pending item. Presents
-// totals only (never names); the link opens the matching section of the review queue.
-exports.onPhotoReportCreated = onDocumentCreated(
-  { document: 'court_reports/{id}', region: REGION },
-  async (event) => {
-    const r = event.data?.data();
-    if (r?.status !== 'pending') return;
-    await notifyOrganizersOfQueue('/tasks?review=photos');
-  },
-);
-
+// Organizer digest — fires whenever a claim needs approval. Totals only (never names); the link
+// opens the review queue.
 exports.onTaskClaimCreated = onDocumentCreated(
   { document: 'task_claims/{id}', region: REGION },
   async () => {

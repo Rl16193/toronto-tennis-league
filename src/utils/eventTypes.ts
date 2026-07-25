@@ -7,10 +7,6 @@ export const isTournamentEvent = (event: TennisEvent) => event.type.toLowerCase(
 
 export const isLadderEvent = (event: TennisEvent) => event.type.toLowerCase().includes('league ladder');
 
-export const isMeetupEvent = (event: TennisEvent) => event.type.toLowerCase().includes('meetup');
-
-export const isSpecialEvent = (event: TennisEvent) => event.type.toLowerCase().includes('special');
-
 export const isSeasonOpener = (event: TennisEvent) => event.title.toLowerCase().includes('season opener 2026');
 
 export const isWeekendMatchdaysEvent = (event: TennisEvent) => event.title.toLowerCase().includes('weekend matchdays');

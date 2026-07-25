@@ -1,5 +1,5 @@
 import { addDoc, collection, getDocs } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, ref } from 'firebase/storage';
 import { db, storage } from '../../../lib/firebase';
 import { TennisEvent } from '../../../types';
 import { sortEventsByStartDate } from '../../../utils/eventDates';
@@ -40,15 +40,6 @@ export const INITIAL_EVENT_FORM: EventFormState = {
 
 export const EVENT_SKILL_OPTIONS = ['All', '2.5+', '3.0+', '3.5+', '4.0+', '4.5+', '5.0+'];
 export const EVENT_TYPE_OPTIONS = ['Tournament', 'League Ladder', 'Meetup', 'Special Event', 'League Event', 'Social'];
-export const ACCEPTED_EVENT_IMAGE_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/jpg',
-  'image/webp',
-  'image/gif',
-  'image/heic',
-  'image/heif',
-];
 
 export const fetchEvents = async () => {
   const snapshot = await getDocs(collection(db, 'events'));
@@ -86,18 +77,6 @@ export const validateEventForm = (eventForm: EventFormState) => {
   if (eventForm.joinLastDate && eventForm.joinLastDate > eventForm.endDate) return 'Join last date must be on or before the end date.';
   if (!eventForm.time.trim()) return 'Please enter the event time.';
   return '';
-};
-
-export const uploadEventImage = async (userId: string, title: string, eventImageFile: File | null) => {
-  if (!eventImageFile) return '';
-
-  const extension = eventImageFile.name.split('.').pop() || 'jpg';
-  const imageRef = ref(
-    storage,
-    `events/${userId}/${Date.now()}-${title.trim().replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.${extension}`,
-  );
-  await uploadBytes(imageRef, eventImageFile);
-  return getDownloadURL(imageRef);
 };
 
 export const createEvent = async (userId: string, eventForm: EventFormState, imageUrl: string) => {

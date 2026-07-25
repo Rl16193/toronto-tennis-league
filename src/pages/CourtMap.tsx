@@ -4,7 +4,7 @@ import { AnimatePresence } from 'motion/react';
 import MapGL, { Marker, Popup, NavigationControl } from 'react-map-gl/maplibre';
 import type { MapRef } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Search, Loader2, ChevronDown, X } from 'lucide-react';
+import { Search, Loader2, X } from 'lucide-react';
 import { ZONE_NAMES, getZone, haversineKm } from '../utils/zones';
 
 import type { CourtWithCount, PickleballOnlyCourt, NearestCourt, NearestProgram, SuggestionItem } from './courtmap/courtMapUtils';
@@ -19,13 +19,15 @@ import {
 } from './courtmap/courtMapUtils';
 import { FilterSelect, DaysDropdown, Badge, PickleballBadges } from './courtmap/courtMapComponents';
 import { CourtPopup } from './courtmap/CourtPopup';
-import { SuggestImprovementModal } from './courtmap/SuggestImprovementModal';
+import { PhotoSubmitModal } from '../features/tasks/PhotoSubmitModal';
 import { useCourtData } from './courtmap/useCourtData';
 import { CourtResultsList } from './courtmap/CourtResultsList';
 import { useAuth } from '../context/AuthContext';
 import { ProgramResultsList } from './courtmap/ProgramResultsList';
 import { track } from '../lib/analytics';
 import { LoadingBar } from '../components/LoadingBar';
+import { Sheet } from '../components/Sheet';
+import { Button } from '../components/Button';
 
 export const CourtMap: React.FC = () => {
   useEffect(() => { document.title = 'Court Locator — Racquets & Strings'; }, []);
@@ -48,6 +50,9 @@ export const CourtMap: React.FC = () => {
   const [courtLightsFilter, setCourtLightsFilter] = useState('');
   const [pickleballFilter, setPickleballFilter] = useState('');
   const [zoneFilter, setZoneFilter] = useState('');
+  // Default view: only courts where members are currently present. "Show all courts" reveals
+  // the rest (empty courts, programs-only, etc.) as a deliberate opt-in layer toggle.
+  const [showAllCourts, setShowAllCourts] = useState(false);
 
   const [progDaysFilter, setProgDaysFilter] = useState(new Set<string>());
   const [progAgeFilter, setProgAgeFilter] = useState('');
@@ -56,10 +61,9 @@ export const CourtMap: React.FC = () => {
 
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [showSuggestModal, setShowSuggestModal] = useState(false);
-  // When the suggest form is opened from a court pop-up, pre-fill that court's name.
-  const [suggestPresetCourt, setSuggestPresetCourt] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
-  const [showResults, setShowResults] = useState(false);
+  // Mobile-only layout (wireframe 1j): filters live in a bottom sheet; results in a pull-up panel.
+  const [showFiltersSheet, setShowFiltersSheet] = useState(false);
+  const [mobileResultsOpen, setMobileResultsOpen] = useState(false);
   const suggestDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -96,6 +100,7 @@ export const CourtMap: React.FC = () => {
     }
     if (courtLightsFilter === 'yes') list = list.filter((c) => c.lights);
     if (courtLightsFilter === 'no')  list = list.filter((c) => !c.lights);
+    if (!showAllCourts) list = list.filter((c) => c.count > 0);
 
     return list
       .map((c) => ({ ...c, distKm: userCoords ? haversineKm(userCoords.lat, userCoords.lng, c.lat, c.lng) : 0 }))
@@ -104,9 +109,10 @@ export const CourtMap: React.FC = () => {
         if (b.count !== a.count) return b.count - a.count;
         return a.dropdown.localeCompare(b.dropdown);
       });
-  }, [courts, zoneFilter, courtTypeFilter, courtLightsFilter, pickleballFilter, userCoords]);
+  }, [courts, zoneFilter, courtTypeFilter, courtLightsFilter, pickleballFilter, userCoords, showAllCourts]);
 
   const displayedPickleballOnly = useMemo((): PickleballOnlyCourt[] => {
+    if (!showAllCourts) return [];
     if (courtTypeFilter && courtTypeFilter !== 'Pickleball') return [];
     let list = pickleballOnly;
     if (zoneFilter) {
@@ -116,7 +122,7 @@ export const CourtMap: React.FC = () => {
     }
     if (!pickleballFilter) return list;
     return list.filter((pb) => pb.entries.some((e) => e.netType === pickleballFilter));
-  }, [pickleballOnly, courtTypeFilter, pickleballFilter, zoneFilter]);
+  }, [pickleballOnly, courtTypeFilter, pickleballFilter, zoneFilter, showAllCourts]);
 
   // ── Filtered programs ────────────────────────────────────────────────────────
   const displayedPrograms = useMemo((): NearestProgram[] => {
@@ -205,7 +211,6 @@ export const CourtMap: React.FC = () => {
         return;
       }
       setUserCoords(coords);
-      setShowResults(true);
       if (!isPrograms) {
         const nearest5 = courts
           .map((c) => ({ lat: c.lat, lng: c.lng, dist: haversineKm(coords.lat, coords.lng, c.lat, c.lng) }))
@@ -265,8 +270,6 @@ export const CourtMap: React.FC = () => {
     setProgDaysFilter(new Set());
     setProgAgeFilter('');
     setProgStatusFilter('');
-    setShowResults(false);
-    setShowFilters(false);
   }, [handleClear]);
 
   const closePopups = useCallback(() => {
@@ -281,12 +284,159 @@ export const CourtMap: React.FC = () => {
     try { mapRef.current?.getMap().flyTo({ center: [court.lng, court.lat], zoom: 13, duration: 600 }); } catch { /* ignore */ }
   }, [trackMap]);
 
+  // Search-as-you-type: court matches instantly, debounced Nominatim address lookup after.
+  // Shared by the desktop sidebar input and the mobile floating input.
+  const handleSearchInput = useCallback((value: string) => {
+    setSearchQuery(value);
+    const q = value.trim().toLowerCase();
+    if (q.length < 2) { setSuggestions([]); return; }
+
+    const courtMatches: SuggestionItem[] = courts
+      .filter((c) => c.dropdown.toLowerCase().includes(q) || c.name.toLowerCase().includes(q))
+      .slice(0, 3)
+      .map((c) => ({ kind: 'court' as const, label: c.dropdown || c.name, court: c }));
+    setSuggestions(courtMatches);
+
+    if (suggestDebounceRef.current) clearTimeout(suggestDebounceRef.current);
+    if (q.length >= 3) {
+      suggestDebounceRef.current = setTimeout(async () => {
+        try {
+          const url = `https://nominatim.openstreetmap.org/search?format=json` +
+            `&q=${encodeURIComponent(value + ' Toronto')}&limit=5&countrycodes=ca&viewbox=-79.75,43.50,-79.05,43.90&bounded=1`;
+          const res = await fetch(url, { headers: { 'User-Agent': 'toronto-tennis-league' } });
+          const data = await res.json() as { display_name: string; lat: string; lon: string; type: string; class: string }[];
+          const addressMatches: SuggestionItem[] = data
+            .filter((d) => !GENERIC_OSM_TYPES.has(d.type) && !GENERIC_OSM_TYPES.has(d.class))
+            .slice(0, 4)
+            .map((d) => ({
+              kind: 'address' as const,
+              label: d.display_name.split(',').slice(0, 2).join(',').trim(),
+              lat: parseFloat(d.lat),
+              lng: parseFloat(d.lon),
+            }));
+          setSuggestions((prev) => {
+            const courtPart = prev.filter((s) => s.kind === 'court');
+            return [...courtPart, ...addressMatches].slice(0, 6);
+          });
+        } catch { /* silent */ }
+      }, 500);
+    }
+  }, [courts]);
+
+  const applySuggestion = useCallback((s: SuggestionItem) => {
+    setSuggestions([]);
+    if (s.kind === 'court') {
+      setSearchQuery(s.label);
+      handleSelectCourt(s.court);
+    } else {
+      const coords = { lat: s.lat, lng: s.lng };
+      setSearchQuery(s.label);
+      lastGeocodedQuery.current = s.label;
+      lastGeocodedCoords.current = coords;
+      setUserCoords(coords);
+      const nearest5 = courts
+        .map((c) => ({ lat: c.lat, lng: c.lng, dist: haversineKm(coords.lat, coords.lng, c.lat, c.lng) }))
+        .sort((a, b) => a.dist - b.dist).slice(0, 5);
+      setFitBoundsData([[coords.lat, coords.lng], ...nearest5.map((c) => [c.lat, c.lng] as [number, number])]);
+      trackMap('search', { search_term: s.label.slice(0, 100), view: isPrograms ? 'programs' : 'courts', found: true });
+    }
+  }, [courts, handleSelectCourt, isPrograms, trackMap]);
+
+  // ── Shared pieces (rendered in the desktop sidebar AND the mobile overlay/sheet) ─────────────
+  const resultsBody = !isPrograms ? (
+    <CourtResultsList
+      courts={displayedCourts}
+      totalCourts={courts.length}
+      loading={loading}
+      userCoords={userCoords}
+      onSelectCourt={handleSelectCourt}
+    />
+  ) : (
+    <ProgramResultsList
+      programs={displayedPrograms}
+      totalPrograms={programs.length}
+      loading={loading}
+      userCoords={userCoords}
+    />
+  );
+
+  const filtersBody = !isPrograms ? (
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-2 gap-1.5">
+        <FilterSelect
+          label="Type" value={courtTypeFilter}
+          onChange={(v) => { setCourtTypeFilter(v); trackMap('filter', { filter_name: 'type', filter_value: v || '(all)' }); }}
+          options={[
+            { value: 'Public',     label: 'Public'          },
+            { value: 'Club',       label: 'Club'            },
+            { value: 'Pickleball', label: 'Pickleball'      },
+            { value: 'OpenHours',  label: 'Open Hours'      },
+            { value: 'Programs',   label: 'Tennis Programs' },
+            { value: 'Bookings',   label: 'Court Bookings'  },
+          ]}
+        />
+        <FilterSelect
+          label="Lights" value={courtLightsFilter}
+          onChange={(v) => { setCourtLightsFilter(v); trackMap('filter', { filter_name: 'lights', filter_value: v || '(all)' }); }}
+          options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        <FilterSelect
+          label="Zone" value={zoneFilter}
+          onChange={(v) => { setZoneFilter(v); trackMap('filter', { filter_name: 'zone', filter_value: v || '(all)' }); }}
+          options={ZONE_NAMES.map((z) => ({ value: z, label: z }))}
+        />
+        <FilterSelect
+          label="Pickleball" value={pickleballFilter}
+          onChange={(v) => { setPickleballFilter(v); trackMap('filter', { filter_name: 'pickleball', filter_value: v || '(all)' }); }}
+          disabled={!!courtTypeFilter && courtTypeFilter !== 'Pickleball'}
+          options={[
+            { value: 'Pickleball', label: 'Standalone'       },
+            { value: 'Tennis',     label: 'On Tennis Courts' },
+            { value: 'No Net',     label: 'Bring Own Net'    },
+            { value: 'Adjustable', label: 'Adjustable'       },
+          ]}
+        />
+      </div>
+    </div>
+  ) : (
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-2 gap-1.5">
+        <FilterSelect
+          label="Type" value={courtTypeFilter}
+          onChange={(v) => { setCourtTypeFilter(v); setProgLocationFilter(''); trackMap('filter', { filter_name: 'type', filter_value: v || '(all)' }); }}
+          options={[
+            { value: 'Public',    label: 'Public'          },
+            { value: 'Club',      label: 'Club'            },
+            { value: 'OpenHours', label: 'Open Hours'      },
+            { value: 'Programs',  label: 'Tennis Programs' },
+            { value: 'Bookings',  label: 'Court Bookings'  },
+          ]}
+        />
+        <FilterSelect
+          label="Status" value={progStatusFilter}
+          onChange={(v) => { setProgStatusFilter(v); trackMap('filter', { filter_name: 'program_status', filter_value: v || '(all)' }); }}
+          options={[{ value: 'ongoing', label: 'Ongoing' }, { value: 'upcoming', label: 'Upcoming' }]}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-1.5">
+        <FilterSelect
+          label="Age" value={progAgeFilter}
+          onChange={(v) => { setProgAgeFilter(v); trackMap('filter', { filter_name: 'program_age', filter_value: v || '(all)' }); }}
+          options={[{ value: 'under13', label: 'Under 13' }, { value: '13to18', label: '13–18' }, { value: '19plus', label: '19+' }]}
+        />
+        <DaysDropdown selected={progDaysFilter} onChange={setProgDaysFilter} />
+      </div>
+    </div>
+  );
+
   // ── JSX ──────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col md:flex-row h-dvh pt-16 pb-16 bg-tennis-dark overflow-hidden">
+    <div className="flex flex-col h-dvh pt-16 pb-16 bg-tennis-dark overflow-hidden">
 
-      {/* MAP — top on mobile, right on desktop */}
-      <div className="order-1 md:order-2 h-[38vh] md:h-auto md:flex-1 relative">
+      {/* MAP — full screen (mobile-only layout; wireframe 1j) */}
+      <div className="flex-1 relative">
         {(loading || !mapReady) && (
           <LoadingBar label="Loading locations…" progress={loadingProgress} barColorClassName="bg-[#4ade80]" />
         )}
@@ -339,7 +489,6 @@ export const CourtMap: React.FC = () => {
                   setSelectedCourt(null);
                 } : undefined}
                 onSuggest={() => {
-                  setSuggestPresetCourt(selectedCourt.dropdown || selectedCourt.name);
                   setShowSuggestModal(true);
                   setSelectedCourt(null);
                 }}
@@ -389,282 +538,119 @@ export const CourtMap: React.FC = () => {
             </Marker>
           )}
         </MapGL>
-      </div>
 
-      {/* SIDEBAR — bottom on mobile, left on desktop */}
-      <aside className="order-2 md:order-1 flex-1 md:flex-none md:w-[380px] flex flex-col
-                        border-t border-white/10 md:border-t-0 md:border-r overflow-hidden
-                        bg-tennis-dark">
-
-        <div className="flex-shrink-0 px-4 pt-4 pb-3 space-y-3 border-b border-white/10">
-
-          <h1 className="text-xl font-bold font-['Montserrat'] leading-tight text-center">
-            <span className="text-white">Toronto {courtTypeFilter === 'Pickleball' ? 'Pickleball' : 'Tennis'} </span>
-            <span className="text-clay">{isPrograms ? 'Programs' : 'Courts'}</span>
-          </h1>
-
-          {/* Search */}
-          <div>
-            <div className={`flex items-center gap-2 px-3 py-2.5 bg-white/5 border border-white/10 transition-colors focus-within:border-clay/50 ${suggestions.length > 0 ? 'rounded-t-xl' : 'rounded-xl'}`}>
-              <Search className="w-3.5 h-3.5 text-white/40 shrink-0 pointer-events-none" />
+        {/* Search + Filters float OVER the map (wireframe 1j) ── */}
+        <div className="absolute top-3 left-3 right-3 z-10 flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <div className={`flex items-center gap-2 px-3 py-2.5 bg-tennis-dark/95 backdrop-blur border border-fg/10 shadow-xl transition-colors focus-within:border-clay/50 ${suggestions.length > 0 ? 'rounded-t-2xl' : 'rounded-2xl'}`}>
+              <Search className="w-3.5 h-3.5 text-fg/40 shrink-0 pointer-events-none" />
               <input
-                ref={inputRef}
                 type="text"
                 value={searchQuery}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setSearchQuery(value);
-                  const q = value.trim().toLowerCase();
-
-                  if (q.length < 2) { setSuggestions([]); return; }
-
-                  const courtMatches: SuggestionItem[] = courts
-                    .filter((c) => c.dropdown.toLowerCase().includes(q) || c.name.toLowerCase().includes(q))
-                    .slice(0, 3)
-                    .map((c) => ({ kind: 'court' as const, label: c.dropdown || c.name, court: c }));
-
-                  setSuggestions(courtMatches);
-
-                  if (suggestDebounceRef.current) clearTimeout(suggestDebounceRef.current);
-                  if (q.length >= 3) {
-                    suggestDebounceRef.current = setTimeout(async () => {
-                      try {
-                        const url = `https://nominatim.openstreetmap.org/search?format=json` +
-                          `&q=${encodeURIComponent(value + ' Toronto')}&limit=5&countrycodes=ca&viewbox=-79.75,43.50,-79.05,43.90&bounded=1`;
-                        const res = await fetch(url, { headers: { 'User-Agent': 'toronto-tennis-league' } });
-                        const data = await res.json() as { display_name: string; lat: string; lon: string; type: string; class: string }[];
-                        const addressMatches: SuggestionItem[] = data
-                          .filter((d) => !GENERIC_OSM_TYPES.has(d.type) && !GENERIC_OSM_TYPES.has(d.class))
-                          .slice(0, 4)
-                          .map((d) => ({
-                            kind: 'address' as const,
-                            label: d.display_name.split(',').slice(0, 2).join(',').trim(),
-                            lat: parseFloat(d.lat),
-                            lng: parseFloat(d.lon),
-                          }));
-                        setSuggestions((prev) => {
-                          const courtPart = prev.filter((s) => s.kind === 'court');
-                          return [...courtPart, ...addressMatches].slice(0, 6);
-                        });
-                      } catch { /* silent */ }
-                    }, 500);
-                  }
-                }}
-                placeholder="Search courts or enter an address…"
-                className="flex-1 bg-transparent text-white placeholder-white/30 text-sm outline-none min-w-0"
+                onChange={(e) => handleSearchInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(e); }}
+                placeholder="Search courts or an address…"
+                className="flex-1 bg-transparent text-fg placeholder-fg/30 text-sm outline-none min-w-0"
               />
               {searching
                 ? <Loader2 className="w-3.5 h-3.5 text-clay animate-spin shrink-0" />
                 : searchQuery && (
-                  <button type="button" onClick={handleReset} aria-label="Clear" className="text-white/40 hover:text-white transition-colors shrink-0">
+                  <button type="button" onClick={handleReset} aria-label="Clear" className="text-fg/40 hover:text-fg transition-colors shrink-0">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )
               }
             </div>
             {suggestions.length > 0 && (
-              <div className="border border-white/10 border-t-0 rounded-b-xl overflow-hidden bg-white/5">
+              <div className="border border-fg/10 border-t-0 rounded-b-2xl overflow-hidden bg-tennis-dark/95 backdrop-blur shadow-xl">
                 {suggestions.map((s, i) => (
                   <button
                     key={i}
                     type="button"
-                    onMouseDown={() => {
-                      setSuggestions([]);
-                      if (s.kind === 'court') {
-                        setSearchQuery(s.label);
-                        handleSelectCourt(s.court);
-                        setShowResults(true);
-                      } else {
-                        const coords = { lat: s.lat, lng: s.lng };
-                        setSearchQuery(s.label);
-                        lastGeocodedQuery.current = s.label;
-                        lastGeocodedCoords.current = coords;
-                        setUserCoords(coords);
-                        setShowResults(true);
-                        const nearest5 = courts
-                          .map((c) => ({ lat: c.lat, lng: c.lng, dist: haversineKm(coords.lat, coords.lng, c.lat, c.lng) }))
-                          .sort((a, b) => a.dist - b.dist).slice(0, 5);
-                        setFitBoundsData([[coords.lat, coords.lng], ...nearest5.map((c) => [c.lat, c.lng] as [number, number])]);
-                        trackMap('search', { search_term: s.label.slice(0, 100), view: isPrograms ? 'programs' : 'courts', found: true });
-                      }
-                    }}
-                    className="w-full text-left px-4 py-3 text-sm text-white/80 hover:bg-white/10 hover:text-white transition-colors border-b border-white/5 last:border-0"
+                    onMouseDown={() => applySuggestion(s)}
+                    className="w-full text-left px-4 py-3 text-sm text-fg/80 hover:bg-fg/10 hover:text-fg transition-colors border-b border-fg/5 last:border-0"
                   >
                     {s.label}
                   </button>
                 ))}
               </div>
             )}
-            {searchError && <p className="text-red-400 text-xs mt-1.5">{searchError}</p>}
+            {searchError && <p className="text-red-400 text-xs mt-1.5 bg-tennis-dark/80 rounded-lg px-2 py-1">{searchError}</p>}
           </div>
-
-          {/* Filters toggle */}
           <button
             type="button"
-            onClick={() => setShowFilters(f => !f)}
-            className="w-full flex items-center justify-between py-0.5 text-sm font-semibold text-white/60 hover:text-white transition-colors"
+            onClick={() => setShowAllCourts((v) => !v)}
+            className={`shrink-0 px-3.5 py-2.5 rounded-2xl backdrop-blur border shadow-xl text-xs font-bold transition-colors ${
+              showAllCourts
+                ? 'bg-clay/15 border-clay/40 text-clay'
+                : 'bg-tennis-dark/95 border-fg/10 text-fg hover:border-clay/50'
+            }`}
           >
-            <span>Filters</span>
-            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showFilters ? 'rotate-180' : ''}`} />
+            {showAllCourts ? 'All Courts' : 'Members Only'}
           </button>
+          <button
+            type="button"
+            onClick={() => setShowFiltersSheet(true)}
+            className="shrink-0 px-3.5 py-2.5 rounded-2xl bg-tennis-dark/95 backdrop-blur border border-fg/10 shadow-xl text-xs font-bold text-fg hover:border-clay/50 transition-colors"
+          >
+            Filters
+          </button>
+        </div>
 
-          {showFilters && (!isPrograms ? (
-            <div className="space-y-1.5">
-              <div className="grid grid-cols-2 gap-1.5">
-                <FilterSelect
-                  label="Type" value={courtTypeFilter}
-                  onChange={(v) => { setCourtTypeFilter(v); trackMap('filter', { filter_name: 'type', filter_value: v || '(all)' }); }}
-                  options={[
-                    { value: 'Public',     label: 'Public'          },
-                    { value: 'Club',       label: 'Club'            },
-                    { value: 'Pickleball', label: 'Pickleball'      },
-                    { value: 'OpenHours',  label: 'Open Hours'      },
-                    { value: 'Programs',   label: 'Tennis Programs' },
-                    { value: 'Bookings',   label: 'Court Bookings'  },
-                  ]}
-                />
-                <FilterSelect
-                  label="Lights" value={courtLightsFilter}
-                  onChange={(v) => { setCourtLightsFilter(v); trackMap('filter', { filter_name: 'lights', filter_value: v || '(all)' }); }}
-                  options={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]}
-                />
+        {/* Pull-up results panel (Maps/Uber model) ── */}
+        <div className="absolute bottom-0 left-0 right-0 z-10 bg-tennis-dark rounded-t-3xl border-t border-fg/10 shadow-[0_-8px_24px_rgba(0,0,0,0.4)]">
+          <button
+            type="button"
+            onClick={() => setMobileResultsOpen((v) => !v)}
+            className="w-full pt-2.5 pb-2 flex flex-col items-center"
+            aria-expanded={mobileResultsOpen}
+          >
+            <span className="h-1.5 w-10 rounded-full bg-fg/20 mb-1.5" />
+            <span className="text-xs font-bold text-fg">
+              {isPrograms ? `${displayedPrograms.length} programs` : `${displayedCourts.length} courts`}
+              {userCoords ? ' near you' : ''} {mobileResultsOpen ? '▾' : '▴'}
+            </span>
+          </button>
+          {mobileResultsOpen && (
+            <>
+              <div className="max-h-[45vh] overflow-y-auto border-t border-fg/5">{resultsBody}</div>
+              <div className="border-t border-fg/10 px-4 py-2.5 flex items-center justify-between gap-3">
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-fg/50 pointer-events-none">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#15803d] inline-block shrink-0" />Active</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#eab308] inline-block shrink-0" />Programs</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#3b82f6] inline-block shrink-0" />Open hours</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSuggestModal(true)}
+                  className="shrink-0 px-3 py-1.5 rounded-xl border border-clay/40 text-clay text-[11px] font-semibold hover:bg-clay/10 transition-colors"
+                >
+                  Submit a Photo
+                </button>
               </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                <FilterSelect
-                  label="Zone" value={zoneFilter}
-                  onChange={(v) => { setZoneFilter(v); trackMap('filter', { filter_name: 'zone', filter_value: v || '(all)' }); }}
-                  options={ZONE_NAMES.map((z) => ({ value: z, label: z }))}
-                />
-                <FilterSelect
-                  label="Pickleball" value={pickleballFilter}
-                  onChange={(v) => { setPickleballFilter(v); trackMap('filter', { filter_name: 'pickleball', filter_value: v || '(all)' }); }}
-                  disabled={!!courtTypeFilter && courtTypeFilter !== 'Pickleball'}
-                  options={[
-                    { value: 'Pickleball', label: 'Standalone'       },
-                    { value: 'Tennis',     label: 'On Tennis Courts' },
-                    { value: 'No Net',     label: 'Bring Own Net'    },
-                    { value: 'Adjustable', label: 'Adjustable'       },
-                  ]}
-                />
-              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Filters sheet */}
+      {showFiltersSheet && (
+        <Sheet onClose={() => setShowFiltersSheet(false)} title="Filters" maxWidthClassName="max-w-md">
+          <div className="p-6 pt-3 space-y-4">
+            {filtersBody}
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="flex-1" onClick={() => { handleReset(); setShowFiltersSheet(false); }}>
+                Reset
+              </Button>
+              <Button className="flex-1" onClick={() => setShowFiltersSheet(false)}>Done</Button>
             </div>
-          ) : (
-            <div className="space-y-1.5">
-              <div className="grid grid-cols-2 gap-1.5">
-                <FilterSelect
-                  label="Type" value={courtTypeFilter}
-                  onChange={(v) => { setCourtTypeFilter(v); setProgLocationFilter(''); trackMap('filter', { filter_name: 'type', filter_value: v || '(all)' }); }}
-                  options={[
-                    { value: 'Public',    label: 'Public'          },
-                    { value: 'Club',      label: 'Club'            },
-                    { value: 'OpenHours', label: 'Open Hours'      },
-                    { value: 'Programs',  label: 'Tennis Programs' },
-                    { value: 'Bookings',  label: 'Court Bookings'  },
-                  ]}
-                />
-                <FilterSelect
-                  label="Status" value={progStatusFilter}
-                  onChange={(v) => { setProgStatusFilter(v); trackMap('filter', { filter_name: 'program_status', filter_value: v || '(all)' }); }}
-                  options={[{ value: 'ongoing', label: 'Ongoing' }, { value: 'upcoming', label: 'Upcoming' }]}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                <FilterSelect
-                  label="Age" value={progAgeFilter}
-                  onChange={(v) => { setProgAgeFilter(v); trackMap('filter', { filter_name: 'program_age', filter_value: v || '(all)' }); }}
-                  options={[{ value: 'under13', label: 'Under 13' }, { value: '13to18', label: '13–18' }, { value: '19plus', label: '19+' }]}
-                />
-                <DaysDropdown selected={progDaysFilter} onChange={setProgDaysFilter} />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {courtTypeFilter === 'Bookings' && (
-          <div className="px-4 py-2 border-b border-white/10 bg-clay/5">
-            <p className="text-clay text-[11px] leading-snug">
-              Court 1 — 1 hr slots, $5/hr fee · max 10 players
-            </p>
           </div>
-        )}
-
-        {/* Count + results toggle */}
-        <div className="flex-shrink-0 px-4 py-2.5 border-b border-white/10 flex items-center justify-between">
-          <span className="text-xs text-white/50">
-            Showing {isPrograms ? displayedPrograms.length : displayedCourts.length} of {isPrograms ? programs.length : courts.length} {isPrograms ? 'programs' : 'courts'}
-          </span>
-          <button
-            type="button"
-            onClick={() => setShowResults(r => !r)}
-            className="flex items-center gap-1 text-xs text-white/50 hover:text-white transition-colors font-medium"
-          >
-            {isPrograms ? 'Programs' : 'Courts'}
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showResults ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
-
-        {/* Collapsible results */}
-        {showResults && (
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            {!isPrograms ? (
-              <CourtResultsList
-                courts={displayedCourts}
-                totalCourts={courts.length}
-                loading={loading}
-                userCoords={userCoords}
-                onSelectCourt={handleSelectCourt}
-              />
-            ) : (
-              <ProgramResultsList
-                programs={displayedPrograms}
-                totalPrograms={programs.length}
-                loading={loading}
-                userCoords={userCoords}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Guest CTA — desktop only; on mobile this fixed-height bar was eating into the
-            scrollable results area and blocking scroll to the court list. */}
-        {!user && (
-          <div className="hidden md:flex flex-shrink-0 px-4 py-3 border-t border-white/10 bg-clay/5 items-center justify-between gap-3">
-            <p className="text-white/70 text-xs leading-snug">Found your court? Meet local tennis players.</p>
-            <Link
-              to="/signup?returnTo=/events&intent=join-league"
-              className="shrink-0 px-3 py-1.5 rounded-lg bg-clay text-white text-xs font-bold hover:bg-clay/80 transition-colors whitespace-nowrap"
-            >
-              Join Now
-            </Link>
-          </div>
-        )}
-
-        {/* Sidebar footer: legend + suggest */}
-        <div className="mt-auto flex-shrink-0 border-t border-white/10 px-4 py-3">
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-white/50 mb-2.5 pointer-events-none">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#15803d] inline-block shrink-0" />Active</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#eab308] inline-block shrink-0" />Programs</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#3b82f6] inline-block shrink-0" />Open hours</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#f97316] inline-block shrink-0" />No Activity</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => { setSuggestPresetCourt(null); setShowSuggestModal(true); }}
-            className="w-full px-3 py-2 rounded-xl border border-clay/40 text-clay text-xs font-semibold hover:bg-clay/10 transition-colors"
-          >
-            Suggest an Improvement
-          </button>
-        </div>
-
-      </aside>
+        </Sheet>
+      )}
 
       <AnimatePresence>
         {showSuggestModal && (
-          <SuggestImprovementModal
-            courtNames={courts.map((c) => c.dropdown || c.name)}
-            presetCourt={suggestPresetCourt ?? undefined}
-            onClose={() => { setShowSuggestModal(false); setSuggestPresetCourt(null); }}
-          />
+          <PhotoSubmitModal onClose={() => setShowSuggestModal(false)} />
         )}
       </AnimatePresence>
     </div>

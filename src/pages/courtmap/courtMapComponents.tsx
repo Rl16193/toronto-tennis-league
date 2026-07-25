@@ -26,14 +26,14 @@ export function FilterSelect({
   const selStyle = { background: SEL_BG, color: '#fff' } as const;
   return (
     <div className={`flex flex-col gap-0.5 ${disabled ? 'opacity-35 pointer-events-none' : ''}`}>
-      <span className="text-white/50 text-[10px] uppercase tracking-wide">{label}</span>
+      <span className="text-fg/50 text-[10px] uppercase tracking-wide">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         style={{ background: SEL_BG }}
-        className="w-full text-xs text-white rounded-md px-2 py-1.5 border border-white/20
-                   focus:outline-none focus:border-white/40 appearance-none cursor-pointer"
+        className="w-full text-xs text-fg rounded-md px-2 py-1.5 border border-fg/20
+                   focus:outline-none focus:border-fg/40 appearance-none cursor-pointer"
       >
         <option value="" style={selStyle}>All</option>
         {options.map((o) => (
@@ -56,21 +56,21 @@ export function DaysDropdown({
 
   return (
     <div className="flex flex-col gap-0.5 relative">
-      <span className="text-white/50 text-[10px] uppercase tracking-wide">Days</span>
+      <span className="text-fg/50 text-[10px] uppercase tracking-wide">Days</span>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full text-left text-xs text-white rounded-md px-2 py-1.5
-                   border border-white/20 flex items-center justify-between"
+        className="w-full text-left text-xs text-fg rounded-md px-2 py-1.5
+                   border border-fg/20 flex items-center justify-between"
         style={{ background: SEL_BG }}
       >
         <span className="truncate">{label}</span>
-        <span className="text-white/40 ml-1 text-[9px]">{open ? '▲' : '▼'}</span>
+        <span className="text-fg/40 ml-1 text-[9px]">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
         <div
           className="absolute top-full left-0 right-0 z-50 mt-0.5 rounded-md p-1.5
-                     grid grid-cols-7 gap-1 shadow-xl border border-white/20"
+                     grid grid-cols-7 gap-1 shadow-xl border border-fg/20"
           style={{ background: SEL_BG }}
         >
           {DAYS.map((d) => (
@@ -83,7 +83,7 @@ export function DaysDropdown({
                 onChange(next);
               }}
               className={`text-[10px] py-1 rounded font-medium transition-colors
-                ${selected.has(d) ? 'bg-clay text-white' : 'text-white/50 hover:bg-white/10 hover:text-white'}`}
+                ${selected.has(d) ? 'bg-clay text-fg' : 'bg-white text-tennis-dark hover:bg-fg/90'}`}
             >
               {d[0]}
             </button>

@@ -21,7 +21,7 @@ export const Tasks: React.FC = () => {
   const { profile } = useAuth();
   const { user, progress, progressLoaded, counters, points } = useTasks();
   const [saving, setSaving] = useState<TaskId | null>(null);
-  const [openSection, setOpenSection] = useState<string | null>('initiation');
+  const [openSection, setOpenSection] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => { document.title = 'Tasks — Racquets & Strings'; }, []);
@@ -32,7 +32,8 @@ export const Tasks: React.FC = () => {
   const checkinOpen = searchParams.get('checkin') === '1';
   const photoOpen = searchParams.get('photo') === '1';
   const claimType = searchParams.get('claim') as ClaimType | null;
-  const reviewOpen = searchParams.get('review') as 'photos' | 'claims' | null;
+  // 'photos' is a stale deep-link value from before photo reports stopped needing review.
+  const reviewOpen = searchParams.get('review') === 'claims' ? 'claims' : null;
 
   if (!user) return null; // route is private; auth redirect handles this
 
@@ -41,7 +42,7 @@ export const Tasks: React.FC = () => {
       <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
         <div className="flex items-center gap-2 mb-5">
           <ListChecks className="w-6 h-6 text-clay" />
-          <h1 className="text-2xl md:text-3xl font-display font-bold text-white">Tasks</h1>
+          <h1 className="text-2xl md:text-3xl font-display font-bold text-fg">Tasks</h1>
         </div>
         <div className="h-24 bg-tennis-surface/30 rounded-3xl animate-pulse mb-6" />
         <div className="h-64 bg-tennis-surface/30 rounded-3xl animate-pulse" />
@@ -70,17 +71,17 @@ export const Tasks: React.FC = () => {
   }> = ({ id, title, right, locked, children }) => {
     const open = openSection === id;
     return (
-      <div className={`rounded-3xl border p-5 ${locked ? 'bg-tennis-surface/15 border-white/5' : 'bg-tennis-surface/30 border-white/5'}`}>
+      <div className={`rounded-3xl border p-5 ${locked ? 'bg-tennis-surface/15 border-fg/5' : 'bg-tennis-surface/30 border-fg/5'}`}>
         <button
           type="button"
           onClick={() => toggleSection(id)}
           className="w-full flex items-center justify-between gap-3 text-left"
           aria-expanded={open}
         >
-          <h2 className={`font-bold ${locked ? 'text-white/40' : 'text-white'}`}>{title}</h2>
+          <h2 className={`font-bold ${locked ? 'text-fg/40' : 'text-fg'}`}>{title}</h2>
           <span className="flex items-center gap-2 shrink-0">
             {right}
-            <ChevronDown className={`w-4 h-4 text-white/40 transition-transform ${open ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-4 h-4 text-fg/40 transition-transform ${open ? 'rotate-180' : ''}`} />
           </span>
         </button>
         {open && <div className="divide-y divide-white/5 mt-2">{children}</div>}
@@ -98,10 +99,10 @@ export const Tasks: React.FC = () => {
         locked={c.locked}
         right={
           c.locked ? (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-white/30 border border-white/10">Soon</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-fg/30 border border-fg/10">Soon</span>
           ) : (
-            <span className="text-xs font-bold text-white/40">
-              {earnedPoints}<span className="text-white/25">/{categoryTotal(c)} pts</span>
+            <span className="text-xs font-bold text-fg/40">
+              {earnedPoints}<span className="text-fg/25">/{categoryTotal(c)} pts</span>
             </span>
           )
         }
@@ -118,15 +119,15 @@ export const Tasks: React.FC = () => {
                 className={`w-4 h-4 shrink-0 accent-clay ${c.locked ? 'opacity-25' : done ? '' : 'opacity-60'}`}
                 aria-label={t.title}
               />
-              <span className={`text-sm flex-1 min-w-0 ${c.locked ? 'text-white/30' : done ? 'text-white/50' : 'text-white'}`}>
+              <span className={`text-sm flex-1 min-w-0 ${c.locked ? 'text-fg/30' : done ? 'text-fg/50' : 'text-fg'}`}>
                 {t.title}
               </span>
               {!done && !c.locked && have > 0 && (
-                <span className="text-[11px] text-white/40 shrink-0">{have}/{t.need}</span>
+                <span className="text-[11px] text-fg/40 shrink-0">{have}/{t.need}</span>
               )}
-              <span className={`text-xs font-bold shrink-0 ${done ? 'text-clay' : 'text-white/30'}`}>{t.points}</span>
+              <span className={`text-xs font-bold shrink-0 ${done ? 'text-clay' : 'text-fg/30'}`}>{t.points}</span>
               {!done && !c.locked && c.to && (
-                <Link to={c.to} className="text-white/30 hover:text-clay transition-colors shrink-0" aria-label={`Go to ${t.title}`}>
+                <Link to={c.to} className="text-fg/30 hover:text-clay transition-colors shrink-0" aria-label={`Go to ${t.title}`}>
                   <ChevronRight className="w-4 h-4" />
                 </Link>
               )}
@@ -148,10 +149,10 @@ export const Tasks: React.FC = () => {
       {tasks.map((g) => (
         <div key={g.id} className="py-3">
           <div className="flex items-start justify-between gap-3">
-            <span className="text-sm font-bold text-white">{g.name}</span>
+            <span className="text-sm font-bold text-fg">{g.name}</span>
             <span className="text-xs font-bold text-clay shrink-0">{g.points}</span>
           </div>
-          <p className="text-xs text-white/50 mt-1 leading-relaxed">{g.trigger}</p>
+          <p className="text-xs text-fg/50 mt-1 leading-relaxed">{g.trigger}</p>
         </div>
       ))}
     </Section>
@@ -161,22 +162,36 @@ export const Tasks: React.FC = () => {
     <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
       <div className="flex items-center gap-2 mb-5">
         <ListChecks className="w-6 h-6 text-clay" />
-        <h1 className="text-2xl md:text-3xl font-display font-bold text-white">Tasks</h1>
+        <h1 className="text-2xl md:text-3xl font-display font-bold text-fg">Tasks</h1>
       </div>
 
       {isOrganizer && <ReviewQueue defaultOpen={reviewOpen} />}
 
+      {/* Completion bar — at-a-glance progress (wireframe 1k) */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between text-[11px] font-bold text-fg/40 mb-1.5">
+          <span>{points} / {TOTAL_AVAILABLE} pts</span>
+          <span>{Math.round((points / TOTAL_AVAILABLE) * 100)}%</span>
+        </div>
+        <div className="h-1.5 rounded-full bg-fg/10 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-clay transition-all duration-500"
+            style={{ width: `${Math.min(100, (points / TOTAL_AVAILABLE) * 100)}%` }}
+          />
+        </div>
+      </div>
+
       {/* Points summary */}
-      <div className="rounded-3xl bg-tennis-surface/30 border border-white/5 p-5 mb-6 flex items-center justify-between gap-4 flex-wrap">
+      <div className="rounded-3xl bg-tennis-surface/30 border border-fg/5 p-5 mb-6 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-clay/15 border border-clay/30 flex items-center justify-center">
             <Sparkles className="w-5 h-5 text-clay" />
           </div>
           <div>
             <p className="text-2xl font-black text-clay leading-none">
-              {points}<span className="text-sm text-white/30 font-bold"> / {TOTAL_AVAILABLE}</span>
+              {points}<span className="text-sm text-fg/30 font-bold"> / {TOTAL_AVAILABLE}</span>
             </p>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-white/40 mt-1">Community Points</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-fg/40 mt-1">RS Points</p>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -190,6 +205,9 @@ export const Tasks: React.FC = () => {
       </div>
 
       <div className="space-y-3">
+        <GroupSection id="dailyGroup" title="Daily Group Tasks" tasks={DAILY_GROUP_TASKS} />
+        <GroupSection id="communityGroup" title="Community Tasks" tasks={COMMUNITY_GROUP_TASKS} />
+
         {/* Community Member Initiation — flat award for the whole checklist */}
         <Section
           id="initiation"
@@ -199,7 +217,7 @@ export const Tasks: React.FC = () => {
               +{SETUP_POINTS} pts
             </span>
           ) : (
-            <span className="text-xs font-bold text-white/40">{doneUnlocked}/{UNLOCKED_TASK_IDS.length}</span>
+            <span className="text-xs font-bold text-fg/40">{doneUnlocked}/{UNLOCKED_TASK_IDS.length}</span>
           )}
         >
           {TASKS.map((t) => {
@@ -215,11 +233,11 @@ export const Tasks: React.FC = () => {
                   className={`w-4 h-4 shrink-0 accent-clay ${trust ? 'cursor-pointer' : ''} ${t.locked ? 'opacity-25' : done ? '' : 'opacity-60'}`}
                   aria-label={t.title}
                 />
-                <span className={`text-sm flex-1 min-w-0 ${t.locked ? 'text-white/30' : done ? 'text-white/50' : 'text-white'}`}>
+                <span className={`text-sm flex-1 min-w-0 ${t.locked ? 'text-fg/30' : done ? 'text-fg/50' : 'text-fg'}`}>
                   {t.title}
                 </span>
                 {t.locked ? (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-white/30 border border-white/10 shrink-0">
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-fg/30 border border-fg/10 shrink-0">
                     Soon
                   </span>
                 ) : t.link ? (
@@ -228,7 +246,7 @@ export const Tasks: React.FC = () => {
                     <ExternalLink className="w-4 h-4" />
                   </a>
                 ) : t.to && !done ? (
-                  <Link to={t.to} className="text-white/30 hover:text-clay transition-colors shrink-0" aria-label={`Go to ${t.title}`}>
+                  <Link to={t.to} className="text-fg/30 hover:text-clay transition-colors shrink-0" aria-label={`Go to ${t.title}`}>
                     <ChevronRight className="w-4 h-4" />
                   </Link>
                 ) : null}
@@ -238,21 +256,18 @@ export const Tasks: React.FC = () => {
         </Section>
 
         {CATEGORIES.map((c) => <CategorySection key={c.id} c={c} />)}
-
-        <GroupSection id="dailyGroup" title="Daily Group Tasks" tasks={DAILY_GROUP_TASKS} />
-        <GroupSection id="communityGroup" title="Community Tasks" tasks={COMMUNITY_GROUP_TASKS} />
       </div>
 
       {/* Socials, WhatsApp and contact links. */}
       <div className="pt-6 mt-2">
-        <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-white/50">
+        <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-fg/50">
           <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-clay transition-colors">
             <Instagram className="w-3.5 h-3.5" /> Instagram
           </a>
           <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-clay transition-colors">
             <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
           </a>
-          <a href="mailto:tenniscommunity.tbtc@gmail.com" className="inline-flex items-center gap-1 hover:text-clay transition-colors">
+          <a href="mailto:events.racquetsandstrings@gmail.com" className="inline-flex items-center gap-1 hover:text-clay transition-colors">
             <Mail className="w-3.5 h-3.5" /> Contact
           </a>
         </div>

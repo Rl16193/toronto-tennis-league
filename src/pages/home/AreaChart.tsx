@@ -1,39 +1,44 @@
 import React from 'react';
 
-// Tiny dependency-free area chart. Green when the series ends at/above where it started
-// (trending up), red when it ends lower (trending down).
-export const AreaChart: React.FC<{ data: number[]; className?: string }> = ({ data, className }) => {
-  const id = React.useId();
-  if (data.length < 2) {
+export type TrendSeries = { label: string; color: string; data: number[] };
+
+// Small dependency-free multi-line trend chart with a colored legend row below it.
+export const AreaChart: React.FC<{ series: TrendSeries[]; className?: string }> = ({ series, className }) => {
+  const longest = Math.max(0, ...series.map((s) => s.data.length));
+  if (longest < 2) {
     return <div className={`flex items-center justify-center text-white/30 text-xs ${className ?? ''}`}>Not enough matches yet</div>;
   }
 
   const W = 300, H = 80, PAD = 6;
-  const min = Math.min(...data);
-  const max = Math.max(...data);
+  const allValues = series.flatMap((s) => s.data);
+  const min = Math.min(...allValues);
+  const max = Math.max(...allValues);
   const range = max - min || 1;
-  const up = data[data.length - 1] >= data[0];
-  const color = up ? '#22c55e' : '#ef4444';
 
-  const pts = data.map((v, i) => {
-    const x = PAD + (i / (data.length - 1)) * (W - 2 * PAD);
-    const y = PAD + (1 - (v - min) / range) * (H - 2 * PAD);
-    return [x, y] as const;
-  });
-
-  const line = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  const area = `${line} L${pts[pts.length - 1][0].toFixed(1)},${H - PAD} L${pts[0][0].toFixed(1)},${H - PAD} Z`;
+  const lineFor = (data: number[]) => {
+    const pts = data.map((v, i) => {
+      const x = PAD + (i / (longest - 1)) * (W - 2 * PAD);
+      const y = PAD + (1 - (v - min) / range) * (H - 2 * PAD);
+      return [x, y] as const;
+    });
+    return pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  };
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className={className} preserveAspectRatio="none" role="img" aria-label="Ranking trend">
-      <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill={`url(#${id})`} />
-      <path d={line} fill="none" stroke={color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
-    </svg>
+    <div className={`flex flex-col ${className ?? ''}`}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full flex-1 min-h-0" preserveAspectRatio="none" role="img" aria-label="Progress trend">
+        {series.map((s) => (
+          <path key={s.label} d={lineFor(s.data)} fill="none" stroke={s.color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        ))}
+      </svg>
+      <div className="flex items-center justify-center gap-4 pt-1.5 shrink-0">
+        {series.map((s) => (
+          <span key={s.label} className="flex items-center gap-1.5 text-[10px] text-white/50">
+            <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: s.color }} />
+            {s.label}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 };

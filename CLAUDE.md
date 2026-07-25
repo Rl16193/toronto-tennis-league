@@ -34,7 +34,7 @@ React 19 + TypeScript + Vite 6. Tailwind CSS v4 (via `@tailwindcss/vite` plugin 
 `src/features/` contains self-contained modules (`events/`, `profile/`, `auth/`) each with `components/`, `hooks/`, `services/`, and `types.ts`. `src/pages/` holds top-level route components that wire features together. The tournament system is large enough to live entirely under `src/pages/tournament/`.
 
 ### Tournament draw engine (`src/pages/tournament/`)
-The core is `useTournament.ts` (~960 lines), a single hook consumed only by `Tournament.tsx`. It manages:
+The core is `useTournament.ts` (~2000 lines), a single hook consumed only by `Tournament.tsx`. It manages:
 - Live Firestore subscriptions (`onSnapshot`) for `event_participants` and `tournament_matches`
 - Preview draw (client-side, in `displayMatches`) vs. generated draw (Firestore docs)
 - Draw size auto-calculation: `getDrawSize(count)` in `utils.ts` — Singles and Doubles both scale 8/16/32 with participant count
@@ -42,7 +42,7 @@ The core is `useTournament.ts` (~960 lines), a single hook consumed only by `Tou
 - Winner advancement resolves the next match from loaded state (`matches` array) using normalized bracket comparison (`m.bracket ?? null`), with reconstructed doc ID as fallback.
 - Participant draw visibility (`userDraw`): a participant sees the draw they are **actually placed in** — `userDraw` first looks for the participant's `user_id` in a generated (non-reserves) match and returns that match's draw. Only when they aren't placed yet (preview / pre-generation) does it fall back to skill-derived routing (`skill_level >= 4 → Masters else Challengers`). **Do not** revert `userDraw` to skill-only: a creator can move a player across skill groups (e.g. Challengers → Masters) without changing their `event_participants` skill, and skill-only routing would hide the draw they're really in.
 
-Draw document IDs follow the pattern: `{eventId}_{drawKey}_{matchId}` where `drawKey = getDrawKey(tournamentChoice, division, skillGroup)`. LL (reserves) docs prefix with `{eventId}_reserves_{drawKey}_`.
+Draw document IDs follow the pattern: `{eventId}_{drawKey}_{matchId}` where `drawKey = getDrawKey(tournamentChoice, division, skillGroup)`. (The `{eventId}_reserves_{drawKey}_` LL/Lucky-Loser draw variant was a client feature with no UI consumer and was removed as dead code — nothing generates or reads `bracket: 'reserves'` docs anymore.)
 
 ### Round Robin (`rrGeneration.ts`)
 Events with `tournament_format === 'rr'` use group-stage + knockout instead of a single bracket.
@@ -53,17 +53,22 @@ Events with `tournament_format === 'rr'` use group-stage + knockout instead of a
 
 **Participant visibility** — a participant sees **both skill draws in their own division** (Challengers + Masters for their gender; doubles → their own division), read-only. Creators see all draws. (`visibleDraws` in `useTournament.ts`.)
 
-**Editing groups (creator)** — `handleSaveGroupEdit` rewrites one group; `handleRenameGroup` sets a custom label; `handleCreateRRGroup` spins up a new group from unplaced players ("Add Group"); `handleMoveRRPlayer` does a **true move** of a player between two groups — including **across the sibling skill draw** (Challengers ↔ Masters, same gender) via the optional `targetDraw` arg, rewriting the player into that draw's `drawKey`/`skill_group`. Emptying a group dissolves it; a group left with one player keeps a placeholder match so the lone player stays visible and movable (never silently dropped). Moves into/out of a group with a played match are refused.
+**Editing groups (creator)** — `handleSaveGroupEdit(rrGroup, newPlayers)` rewrites one group's roster; a cross-group move (including across two groups **within the same draw**) is expressed by including the moved player in the target group's `newPlayers` and omitting them from the source — the function reconciles both groups' Firestore docs atomically. There is no separate cross-*skill-draw* move action (Challengers ↔ Masters): instead, a background effect in `useTournament.ts` reactively removes a player from this draw's groups if they're found seated in the sibling skill draw's groups, so a creator moving someone via `event_participants`/skill edits elsewhere self-heals without a dedicated "move" call. `handleRenameGroup` sets a custom label; `handleCreateRRGroup` spins up a new group from unplaced players ("Add Group"). Emptying a group dissolves it; a group left with one player keeps a placeholder match so the lone player stays visible and movable (never silently dropped). Moves into/out of a group with a played match are refused.
 
 **Knockout** — every group winner advances, then the best second-place players (by points → gamesWon) fill up to the next 4/8/16 bracket (`selectAdvancingPlayers`; e.g. 5 groups → 5 winners + 3 best runners-up → 8-player draw). `buildRRKnockoutDocs` sizes to the next power of two; a full field needs no byes.
 
 **Late joiners** — unlike knockout draws, **RR accepts registration after the draw is generated** (`slotStatus` in `useJoin.ts` is bypassed for RR); they are NOT sent to the reserves/LL draw. The EOD script `scripts/regroup-rr.js` (Admin SDK) places them: groups with **4–5 players (or any played group) are locked**; only groups with **≤3 players** accept a joiner, needing a matching band (zone preferred), else the overflow forms new `(band, zone)` groups via `splitEvenly`. Groups with played matches are never touched. The script duplicates the pure helpers from `rrGeneration.ts`/`utils.ts` — keep them in sync.
+
+### Leagues, Friendlies & Matches (`src/pages/Matches.tsx`)
+League Ladder standings and challenges no longer live on the Tournament page — they moved to `/matches` (`Matches.tsx`), which has a Friendlies/Challenges segmented control. The **Challenges** tab reuses the unchanged `src/features/leagues/` module (`ladderService.ts`, `useLadder.ts`, `useStandings.ts`). The **Friendlies** tab is a separate, newer module, `src/features/friendlies/` (`rallyService.ts`), implementing a parallel non-competitive request/accept flow (a `rallies` collection) modelled on the ladder-challenge loop but with no points, standings impact, or organizer step. `src/pages/Leagues.tsx` is now pure standings/leaderboard (tournament + community boards) — it no longer renders any challenge UI.
 
 ### Stats data flow (read before changing)
 One source writes to `stats/{userId}` at runtime:
 - **`useTournament.ts`** (`updateMatchWithSubmission`) — live increments on score confirmation
 
 All fields are camelCase (`matchesPlayed`, `leaguePoints26`, etc.). Snake_case and `_xlsx` fields are dead.
+
+Separately, `functions/taskPoints.js` awards **per-player** Community Task tiers/points server-side (`task_progress/{uid}`), and `functions/groupAwards.js` is a complementary **collective/group** bonus engine (Matchday, Hourly Coverage, Court Pioneer, Board Freshness, Full Zone Sweep) that reads across many players' documents and pays into `task_progress.bonusPoints` via an idempotent `group_awards/{awardId}` ledger — the two files award different things and don't overlap.
 
 ### Firestore collections
 | Collection | Written by |

@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { logEvent } from 'firebase/analytics';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { analyticsPromise } from './lib/firebase';
 import { Layout } from './components/Layout';
 
@@ -16,7 +17,11 @@ const PlayerProfile = lazy(() => import('./pages/PlayerProfile').then((m) => ({ 
 const Leagues = lazy(() => import('./pages/Leagues').then((m) => ({ default: m.Leagues })));
 const Tasks = lazy(() => import('./pages/Tasks').then((m) => ({ default: m.Tasks })));
 const CourtMap = lazy(() => import('./pages/CourtMap').then((m) => ({ default: m.CourtMap })));
-const Rules = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Rules })));
+const History = lazy(() => import('./pages/History').then((m) => ({ default: m.History })));
+const Matches = lazy(() => import('./pages/Matches').then((m) => ({ default: m.Matches })));
+const Notifications = lazy(() => import('./pages/Notifications').then((m) => ({ default: m.Notifications })));
+const About = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.About })));
+const HowItWorks = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.HowItWorks })));
 const Terms = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Terms })));
 const Privacy = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Privacy })));
 const Contact = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Contact })));
@@ -71,31 +76,39 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <ScrollToTop />
-        <Layout>
-          <Suspense fallback={<RouteFallback />}>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/login" element={<Signup />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/events" element={<Events />} />
-              <Route path="/tournament" element={<PrivateRoute><Tournament /></PrivateRoute>} />
-              <Route path="/leagues" element={<Leagues />} />
-              <Route path="/tasks" element={<PrivateRoute><Tasks /></PrivateRoute>} />
-              <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
-              <Route path="/players/:userId" element={<PrivateRoute><PlayerProfile /></PrivateRoute>} />
-              <Route path="/courts" element={<CourtMap />} />
-              <Route path="/rules" element={<Rules />} />
-              <Route path="/terms" element={<Terms />} />
-              <Route path="/privacy" element={<Privacy />} />
-              <Route path="/contact" element={<Contact />} />
-              <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
-          </Suspense>
-        </Layout>
-      </Router>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <ScrollToTop />
+          <Layout>
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/login" element={<Signup />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route path="/events" element={<Events />} />
+                <Route path="/tournament" element={<PrivateRoute><Tournament /></PrivateRoute>} />
+                <Route path="/leagues" element={<Leagues />} />
+                <Route path="/tasks" element={<PrivateRoute><Tasks /></PrivateRoute>} />
+                <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+                <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
+                <Route path="/matches" element={<PrivateRoute><Matches /></PrivateRoute>} />
+                <Route path="/friendlies" element={<Navigate to="/matches" replace />} />
+                <Route path="/challenges" element={<Navigate to="/matches" replace />} />
+                <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
+                <Route path="/players/:userId" element={<PrivateRoute><PlayerProfile /></PrivateRoute>} />
+                <Route path="/courts" element={<CourtMap />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/how-it-works" element={<HowItWorks />} />
+                <Route path="/terms" element={<Terms />} />
+                <Route path="/privacy" element={<Privacy />} />
+                <Route path="/contact" element={<Contact />} />
+                <Route path="*" element={<Navigate to="/" />} />
+              </Routes>
+            </Suspense>
+          </Layout>
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

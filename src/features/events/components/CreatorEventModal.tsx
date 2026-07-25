@@ -31,7 +31,7 @@ export const CreatorEventModal: React.FC<Props> = ({
   <Sheet maxWidthClassName="max-w-4xl" onClose={onClose}>
     <form onSubmit={onSubmit} className="p-6 md:p-8">
       <div className="mb-6 pr-12">
-        <h2 className="text-3xl font-display font-black text-white">Add an Event</h2>
+        <h2 className="text-3xl font-display font-black text-fg">Add an Event</h2>
       </div>
 
       {eventFormMessage && (
@@ -44,23 +44,23 @@ export const CreatorEventModal: React.FC<Props> = ({
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 gap-5">
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-white">Title <span className="text-orange-500">*</span></span>
+          <span className="block text-sm font-medium text-fg">Title <span className="text-orange-500">*</span></span>
           <input
             value={eventForm.title}
             onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
+            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
             placeholder="Spring Ladder Tournament"
           />
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-white">Type <span className="text-orange-500">*</span></span>
+          <span className="block text-sm font-medium text-fg">Type <span className="text-orange-500">*</span></span>
           <select
             value={eventForm.type}
             onChange={(e) => setEventForm({ ...eventForm, type: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
+            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
           >
             {EVENT_TYPE_OPTIONS.map((type) => (
               <option key={type} value={type}>{type}</option>
@@ -69,71 +69,71 @@ export const CreatorEventModal: React.FC<Props> = ({
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-white">Location</span>
+          <span className="block text-sm font-medium text-fg">Location</span>
           <input
             value={eventForm.location}
             onChange={(e) => setEventForm({ ...eventForm, location: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
+            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
             placeholder="High Park"
           />
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-white">Organizer <span className="text-orange-500">*</span></span>
+          <span className="block text-sm font-medium text-fg">Organizer <span className="text-orange-500">*</span></span>
           <input
             value={eventForm.organizer}
             onChange={(e) => setEventForm({ ...eventForm, organizer: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
+            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
             placeholder={organizerPlaceholder}
           />
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-white">Start Date <span className="text-orange-500">*</span></span>
+          <span className="block text-sm font-medium text-fg">Start Date <span className="text-orange-500">*</span></span>
           <input
             type="date"
             value={eventForm.startDate}
             onChange={(e) => setEventForm({ ...eventForm, startDate: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
+            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
           />
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-white">End Date <span className="text-orange-500">*</span></span>
+          <span className="block text-sm font-medium text-fg">End Date <span className="text-orange-500">*</span></span>
           <input
             type="date"
             value={eventForm.endDate}
             onChange={(e) => setEventForm({ ...eventForm, endDate: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
+            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
           />
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-white">Join Last Date <span className="text-white/50 font-normal">(Optional)</span></span>
+          <span className="block text-sm font-medium text-fg">Join Last Date <span className="text-fg/50 font-normal">(Optional)</span></span>
           <input
             type="date"
             value={eventForm.joinLastDate}
             onChange={(e) => setEventForm({ ...eventForm, joinLastDate: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
+            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
           />
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-white">Time</span>
+          <span className="block text-sm font-medium text-fg">Time</span>
           <input
             value={eventForm.time}
             onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
+            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
             placeholder="10:00 AM - 2:00 PM"
           />
         </label>
 
         <label className="space-y-2">
-          <span className="block text-sm font-medium text-white">Skill Level</span>
+          <span className="block text-sm font-medium text-fg">Skill Level</span>
           <select
             value={eventForm.skillLevel}
             onChange={(e) => setEventForm({ ...eventForm, skillLevel: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
+            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
           >
             {EVENT_SKILL_OPTIONS.map((skill) => (
               <option key={skill} value={skill}>{skill}</option>
@@ -143,7 +143,7 @@ export const CreatorEventModal: React.FC<Props> = ({
 
         {eventForm.type === 'Tournament' && (
           <div className="space-y-2">
-            <span className="block text-sm font-medium text-white">Format</span>
+            <span className="block text-sm font-medium text-fg">Format</span>
             <div className="flex gap-2">
               {(['knockout', 'rr'] as const).map((f) => (
                 <button
@@ -153,7 +153,7 @@ export const CreatorEventModal: React.FC<Props> = ({
                   className={`flex-1 py-3 rounded-2xl text-sm font-semibold border transition-colors ${
                     eventForm.tournamentFormat === f
                       ? 'bg-clay text-white border-clay'
-                      : 'bg-tennis-dark/70 text-white/60 border-white/10 hover:border-white/30'
+                      : 'bg-tennis-dark/70 text-fg/60 border-fg/10 hover:border-fg/30'
                   }`}
                 >
                   {f === 'knockout' ? 'Knockout' : 'Round Robin'}
@@ -165,7 +165,7 @@ export const CreatorEventModal: React.FC<Props> = ({
 
         {eventForm.type === 'Tournament' && (
           <div className="space-y-2">
-            <span className="block text-sm font-medium text-white">Participant Type</span>
+            <span className="block text-sm font-medium text-fg">Participant Type</span>
             <div className="flex gap-2">
               {(['Singles', 'Doubles'] as const).map((c) => (
                 <button
@@ -175,7 +175,7 @@ export const CreatorEventModal: React.FC<Props> = ({
                   className={`flex-1 py-3 rounded-2xl text-sm font-semibold border transition-colors ${
                     eventForm.tournamentChoice === c
                       ? 'bg-clay text-white border-clay'
-                      : 'bg-tennis-dark/70 text-white/60 border-white/10 hover:border-white/30'
+                      : 'bg-tennis-dark/70 text-fg/60 border-fg/10 hover:border-fg/30'
                   }`}
                 >
                   {c}
@@ -186,11 +186,11 @@ export const CreatorEventModal: React.FC<Props> = ({
         )}
 
         <label className="space-y-2 md:col-span-2">
-          <span className="block text-sm font-medium text-white">About <span className="text-orange-500">*</span></span>
+          <span className="block text-sm font-medium text-fg">About <span className="text-orange-500">*</span></span>
           <textarea
             value={eventForm.about}
             onChange={(e) => setEventForm({ ...eventForm, about: e.target.value })}
-            className="min-h-32 w-full rounded-2xl bg-tennis-dark/70 border border-white/10 px-4 py-3 text-white outline-none focus:border-clay"
+            className="min-h-32 w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
             placeholder="Describe the event format, expectations, and anything players should know."
           />
         </label>

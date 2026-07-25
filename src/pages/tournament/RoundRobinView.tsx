@@ -17,6 +17,8 @@ type Props = {
   advancementCount: number;
   isCreator: boolean;
   isParticipant: boolean;
+  // The viewer's own uid — lets a non-creator's group card show only their own match(es).
+  currentUserId?: string;
   isPastEvent: boolean;
   editMode: boolean;
   editPlayers: TournamentPlayer[];
@@ -43,20 +45,20 @@ const KnockoutSizeBar: React.FC<{
   onSelect: (size: number) => void;
 }> = ({ currentSize, generating, onSelect }) => (
   <div className="mb-5 flex flex-wrap items-center gap-3">
-    <span className="text-sm font-bold text-white uppercase tracking-widest">Knockout round size</span>
+    <span className="text-sm font-bold text-fg uppercase tracking-widest">Knockout round size</span>
     {[4, 8, 16].map((size) => (
       <button
         key={size}
         disabled={generating}
         onClick={() => onSelect(size)}
         className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
-          currentSize === size ? 'bg-clay text-white' : 'bg-tennis-surface/60 text-white hover:text-white'
+          currentSize === size ? 'bg-clay text-white' : 'bg-tennis-surface/60 text-fg hover:text-fg'
         } ${generating ? 'opacity-60 cursor-not-allowed' : ''}`}
       >
         R{size}
       </button>
     ))}
-    <span className="text-xs text-white/50">Group winners are seeded automatically — place the rest with Edit Draw.</span>
+    <span className="text-xs text-fg/50">Group winners are seeded automatically — place the rest with Edit Draw.</span>
   </div>
 );
 
@@ -96,25 +98,25 @@ const AddGroupForm: React.FC<{
   }
 
   return (
-    <div className="mt-4 rounded-2xl border border-white/10 bg-tennis-surface/30 p-4 space-y-3">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">New Group</p>
+    <div className="mt-4 rounded-2xl border border-fg/10 bg-tennis-surface/30 p-4 space-y-3">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-fg/40">New Group</p>
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Group name (optional)"
-        className="w-full bg-tennis-surface border border-white/10 rounded px-2 py-1.5 text-white text-xs"
+        className="w-full bg-tennis-surface border border-fg/10 rounded px-2 py-1.5 text-fg text-xs"
       />
       {unplacedPlayers.length > 0 ? (
         <div className="max-h-48 overflow-y-auto space-y-1">
           {unplacedPlayers.map((p) => (
-            <label key={p.user_id} className="flex items-center gap-2 text-white/80 text-xs cursor-pointer">
+            <label key={p.user_id} className="flex items-center gap-2 text-fg/80 text-xs cursor-pointer">
               <input type="checkbox" checked={selected.has(p.user_id)} onChange={() => toggle(p.user_id)} className="accent-clay" />
               {formatPlayerName(p.name)}
             </label>
           ))}
         </div>
       ) : (
-        <p className="text-xs text-white/40">
+        <p className="text-xs text-fg/40">
           No unplaced players. You can still create an empty group and use &quot;Add player...&quot; inside a group card to move players in.
         </p>
       )}
@@ -132,7 +134,7 @@ const AddGroupForm: React.FC<{
 
 export const RoundRobinView: React.FC<Props> = ({
   groups, groupLabels, groupIndices, standingsByGroup, groupMatches, knockoutMatches,
-  advancementCount, isCreator, isParticipant, isPastEvent, editMode, editPlayers,
+  advancementCount, isCreator, isParticipant, currentUserId, isPastEvent, editMode, editPlayers,
   onEditPlayer, onSubmitScore, submittableMatchIds, pendingMatchIds, onSaveGroupEdit,
   onRenameGroup, onCreateGroup, unplacedPlayers,
   rrKnockoutReady, generatingKnockout, onGenerateKnockout, rrView,
@@ -176,8 +178,8 @@ export const RoundRobinView: React.FC<Props> = ({
             />
           </BracketErrorBoundary>
         ) : (
-          <div className="rounded-2xl border border-white/10 bg-tennis-surface/20 p-8 text-center">
-            <p className="text-sm text-white/60">
+          <div className="rounded-2xl border border-fg/10 bg-tennis-surface/20 p-8 text-center">
+            <p className="text-sm text-fg/60">
               {isCreator ? 'Pick a round size above to build the knockout bracket.' : 'The knockout bracket has not been set up yet.'}
             </p>
           </div>
@@ -190,8 +192,8 @@ export const RoundRobinView: React.FC<Props> = ({
     <div className="space-y-8">
       {/* Group stage */}
       <div>
-        <p className="text-xs uppercase tracking-widest text-white/40 font-bold mb-4">Group Stage</p>
-        <div className={`grid gap-4 ${groups.length >= 2 ? 'sm:grid-cols-2' : ''}`}>
+        <p className="text-xs uppercase tracking-widest text-fg/40 font-bold mb-4">Group Stage</p>
+        <div className="grid gap-4">
           {groups.map((players, gi) => (
             <RRGroupCard
               key={gi}
@@ -206,6 +208,7 @@ export const RoundRobinView: React.FC<Props> = ({
               advancementCount={advancementCount}
               isCreator={isCreator}
               isParticipant={isParticipant}
+              currentUserId={currentUserId}
               isPastEvent={isPastEvent}
               editMode={editMode}
               editPlayers={editPlayers}

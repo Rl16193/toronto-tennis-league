@@ -7,7 +7,8 @@ import { useAuth } from '../../../context/AuthContext';
 import { storage } from '../../../lib/firebase';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
-import { SKILL_LEVELS, SKILL_DESCRIPTIONS } from '../../../utils/skillLevels';
+import { RacquetIcon } from '../../../components/RacquetIcon';
+import { SELECTABLE_SKILL_LEVELS, SKILL_DESCRIPTIONS, skillTier, leagueDivision } from '../../../utils/skillLevels';
 import {
   defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts,
   getCourtSuggestions, mergeCourtOptions,
@@ -40,33 +41,15 @@ interface Props {
 
 const FAVOURITE_PLAYERS = ['Jannik Sinner', 'Carlos Alcaraz', 'Rafael Nadal', 'Roger Federer', 'Novak Djokovic'];
 
-const skillTier = (skill: number) => (skill < 3 ? 'Beginner' : skill < 4 ? 'Challenger' : 'Masters');
 const tournamentPref = (skill: number) => (skill < 3 ? 'Beginners' : skill < 4 ? 'Challengers' : 'Masters');
 
-// Normalize the free-text stats.league into the Men's/Women's selector value ("women" first —
-// it contains "men").
-const leagueDivision = (league: string): "Men's" | "Women's" | '' => {
-  const l = (league || '').toLowerCase();
-  if (l.includes('wom') || l.includes('female')) return "Women's";
-  if (l.includes('men') || l.includes('male')) return "Men's";
-  return '';
-};
-
-// lucide has no racquet — small inline glyph.
-const RacquetIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <ellipse cx="9" cy="9" rx="6" ry="7" />
-    <path d="M13.5 14 20 20.5" />
-    <path d="M6 9h6M9 5v8" />
-  </svg>
-);
 
 type Row = 'name' | 'phone' | 'whatsapp' | 'bio' | 'skill' | 'league' | 'courts' | 'favourites' | 'email' | null;
 
 const SectionHeader: React.FC<{ icon: React.ReactNode; label: string; editing: boolean; onEdit: () => void; onCancel: () => void }> = ({ icon, label, editing, onEdit, onCancel }) => (
   <div className="flex items-center justify-between gap-3">
-    <span className="text-xs font-bold text-white/50 uppercase tracking-widest flex items-center gap-1.5">{icon}{label}</span>
-    <button type="button" onClick={editing ? onCancel : onEdit} className="text-white/40 hover:text-white transition-colors" aria-label={editing ? 'Cancel' : `Edit ${label}`}>
+    <span className="text-xs font-bold text-fg/50 uppercase tracking-widest flex items-center gap-1.5">{icon}{label}</span>
+    <button type="button" onClick={editing ? onCancel : onEdit} className="text-fg/40 hover:text-fg transition-colors" aria-label={editing ? 'Cancel' : `Edit ${label}`}>
       {editing ? <X className="w-4 h-4" /> : <Pencil className="w-3.5 h-3.5" />}
     </button>
   </div>
@@ -166,21 +149,21 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
   const initial = (user.name || user.email || '?').trim().charAt(0).toUpperCase();
 
   return (
-    <div className="rounded-[2.5rem] border border-white/5 bg-tennis-surface/30 shadow-xl p-5 sm:p-7">
-      <h2 className="text-xl font-bold text-white mb-5">Profile Card</h2>
+    <div className="rounded-[2.5rem] border border-fg/5 bg-tennis-surface/30 shadow-xl p-5 sm:p-7">
+      <h2 className="text-xl font-bold text-fg mb-5">Profile Card</h2>
 
       {/* Avatar + name/phone/bio, vertical */}
-      <div className="flex flex-col items-center gap-4 pb-5 border-b border-white/5">
+      <div className="flex flex-col items-center gap-4 pb-5 border-b border-fg/5">
         <div className="relative">
-          <div className="w-24 h-24 rounded-full bg-tennis-surface flex items-center justify-center overflow-hidden border border-white/10">
+          <div className="w-24 h-24 rounded-full bg-tennis-surface flex items-center justify-center overflow-hidden border border-fg/10">
             {user.avatar
               ? <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              : <span className="text-4xl font-black text-white/80">{initial}</span>}
+              : <span className="text-4xl font-black text-fg/80">{initial}</span>}
           </div>
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-clay text-white flex items-center justify-center shadow-lg hover:bg-clay/80 transition-colors"
+            className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-clay text-fg flex items-center justify-center shadow-lg hover:bg-clay/80 transition-colors"
             aria-label="Upload avatar"
           >
             {avatarUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
@@ -198,7 +181,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
               <Input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} />
               <Button size="sm" onClick={() => save(() => actions.updateName(nameDraft))} isLoading={updateLoading}><Check className="w-4 h-4" /></Button>
             </div>
-          ) : <p className="text-lg font-bold text-white mt-0.5">{user.name || '—'}</p>}
+          ) : <p className="text-lg font-bold text-fg mt-0.5">{user.name || '—'}</p>}
         </div>
 
         {/* Phone */}
@@ -209,7 +192,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
               <Input value={phoneDraft} onChange={(e) => setPhoneDraft(formatPhone(e.target.value))} placeholder="(416)-555-0123" />
               <Button size="sm" onClick={() => save(() => actions.updatePhone(phoneDraft))} isLoading={updateLoading}><Check className="w-4 h-4" /></Button>
             </div>
-          ) : <p className="text-lg font-bold text-white mt-0.5">{user.phone || '—'}</p>}
+          ) : <p className="text-lg font-bold text-fg mt-0.5">{user.phone || '—'}</p>}
         </div>
 
         {/* WhatsApp Contact */}
@@ -217,7 +200,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
           <SectionHeader icon={null} label="WhatsApp Contact" editing={editing === 'whatsapp'} onEdit={() => open('whatsapp')} onCancel={() => setEditing(null)} />
           {editing === 'whatsapp' ? (
             <div className="mt-2 space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer text-sm text-white/70">
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-fg/70">
                 <input
                   type="checkbox"
                   checked={waSameAsPhone}
@@ -235,7 +218,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
                   separateDialCode
                   inputProps={{
                     placeholder: 'WhatsApp number',
-                    className: 'w-full rounded-2xl bg-tennis-surface/50 border border-white/10 px-4 py-3 text-white placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none',
+                    className: 'w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 px-4 py-3 text-fg placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none',
                   }}
                 />
               )}
@@ -249,7 +232,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
               </Button>
             </div>
           ) : (
-            <p className="text-lg font-bold text-white mt-0.5">
+            <p className="text-lg font-bold text-fg mt-0.5">
               {user.whatsapp_same_as_phone ? 'Same as phone number' : (user.whatsapp_contact || '—')}
             </p>
           )}
@@ -262,10 +245,10 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
             <div className="mt-2 space-y-2">
               <textarea value={bioDraft} onChange={(e) => setBioDraft(e.target.value)} rows={3} maxLength={300}
                 placeholder="Your tennis vibe — play times, rally or games, and any other details?"
-                className="w-full rounded-2xl bg-tennis-surface/50 border border-white/10 px-4 py-3 text-white placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none" />
+                className="w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 px-4 py-3 text-fg placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none" />
               <Button size="sm" onClick={() => save(() => actions.updateBio(bioDraft))} isLoading={updateLoading}>Save</Button>
             </div>
-          ) : <p className="text-sm text-white/70 mt-0.5">{user.bio?.trim() || <span className="text-white/40">No bio yet.</span>}</p>}
+          ) : <p className="text-sm text-fg/70 mt-0.5">{user.bio?.trim() || <span className="text-fg/40">No bio yet.</span>}</p>}
         </div>
 
         {/* Skill */}
@@ -277,15 +260,15 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
                 <span className="text-3xl font-black text-clay">{skillDraft}</span>
                 <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">{skillTier(skillDraft)}</span>
               </div>
-              <input type="range" min={0} max={SKILL_LEVELS.length - 1} step={1}
-                value={Math.max(0, SKILL_LEVELS.indexOf(skillDraft as typeof SKILL_LEVELS[number]))}
-                onChange={(e) => setSkillDraft(SKILL_LEVELS[Number(e.target.value)])} className="w-full" />
-              <p className="text-xs text-white/60 italic">"{SKILL_DESCRIPTIONS[skillDraft]}"</p>
+              <input type="range" min={0} max={SELECTABLE_SKILL_LEVELS.length - 1} step={1}
+                value={(() => { const i = SELECTABLE_SKILL_LEVELS.indexOf(skillDraft as typeof SELECTABLE_SKILL_LEVELS[number]); return i >= 0 ? i : SELECTABLE_SKILL_LEVELS.length - 1; })()}
+                onChange={(e) => setSkillDraft(SELECTABLE_SKILL_LEVELS[Number(e.target.value)])} className="w-full" />
+              <p className="text-xs text-fg/60 italic">"{SKILL_DESCRIPTIONS[skillDraft]}"</p>
               <Button size="sm" onClick={() => save(() => actions.updateSkills(skillDraft, tournamentPref(skillDraft)))} isLoading={updateLoading}>Save</Button>
             </div>
           ) : (
             <div className="mt-1 flex items-center gap-2">
-              <span className="text-lg font-bold text-white">NTRP {stats.skill_level}</span>
+              <span className="text-lg font-bold text-fg">NTRP {stats.skill_level}</span>
               <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">{skillTier(stats.skill_level)}</span>
             </div>
           )}
@@ -297,11 +280,11 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
           {editing === 'league' ? (
             <div className="mt-2 space-y-3">
               <div>
-                <label className="block text-xs text-white/50 mb-1">League you want to participate in</label>
+                <label className="block text-xs text-fg/50 mb-1">League you want to participate in</label>
                 <select
                   value={leagueDraft}
                   onChange={(e) => setLeagueDraft(e.target.value as "Men's" | "Women's" | '')}
-                  className="w-full rounded-2xl bg-tennis-surface/50 border border-white/10 px-4 py-3 text-white text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
+                  className="w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 px-4 py-3 text-fg text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
                 >
                   <option value="">Not set</option>
                   <option value="Men's">Men's</option>
@@ -309,17 +292,36 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-white/50 mb-1">Age bracket</label>
+                <label className="block text-xs text-fg/50 mb-1">Age bracket</label>
                 <select
                   value={ageDraft}
                   onChange={(e) => setAgeDraft(e.target.value)}
-                  className="w-full rounded-2xl bg-tennis-surface/50 border border-white/10 px-4 py-3 text-white text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
+                  className="w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 px-4 py-3 text-fg text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
                 >
                   <option value="">Not set</option>
                   {AGE_BRACKETS.map((a) => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
-              <label className="flex items-center gap-2 cursor-pointer text-sm text-white/70">
+              {/* Seniors opt-in — only offered once the player selects the 55+ age group. */}
+              {ageDraft === '55+' && (
+                <div className="rounded-2xl border border-clay/30 bg-clay/5 p-3 space-y-2">
+                  <p className="text-xs text-fg/70">
+                    {user.age_bracket === '55+'
+                      ? "You're in the 55+ League — you can join the Seniors draw in singles events."
+                      : 'Play in the age-based Seniors (55+) group.'}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="clay"
+                    onClick={() => save(() => actions.updateLeagueAge(leagueDraft, '55+', visibleDraft))}
+                    isLoading={updateLoading}
+                    disabled={user.age_bracket === '55+'}
+                  >
+                    {user.age_bracket === '55+' ? 'Joined ✓' : 'Join the 55+ League'}
+                  </Button>
+                </div>
+              )}
+              <label className="flex items-center gap-2 cursor-pointer text-sm text-fg/70">
                 <input type="checkbox" checked={visibleDraft} onChange={(e) => setVisibleDraft(e.target.checked)} className="accent-clay" />
                 Make visible to others
               </label>
@@ -328,21 +330,21 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
           ) : (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {leagueDivision(stats.league) && (
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white/5 text-white/70 border border-white/10">{leagueDivision(stats.league)} League</span>
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70 border border-fg/10">{leagueDivision(stats.league)} League</span>
               )}
               {user.age_bracket && (
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white/5 text-white/70 border border-white/10">{user.age_bracket}</span>
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70 border border-fg/10">{user.age_bracket}</span>
               )}
               {!leagueDivision(stats.league) && !user.age_bracket
-                ? <span className="text-sm text-white/40">Not set.</span>
-                : <span className="text-[11px] text-white/40 ml-1">{user.profile_details_visible ? 'Visible to others' : 'Hidden from others'}</span>}
+                ? <span className="text-sm text-fg/40">Not set.</span>
+                : <span className="text-[11px] text-fg/40 ml-1">{user.profile_details_visible ? 'Visible to others' : 'Hidden from others'}</span>}
             </div>
           )}
         </div>
 
         {/* Badges */}
         <div className="py-3">
-          <span className="text-xs font-bold text-white/50 uppercase tracking-widest flex items-center gap-1.5">
+          <span className="text-xs font-bold text-fg/50 uppercase tracking-widest flex items-center gap-1.5">
             <Award className="w-3.5 h-3.5 text-clay" />Badges
           </span>
           <BadgePicker
@@ -361,7 +363,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
                 <div className="flex flex-wrap gap-1.5">
                   {courtsDraft.map((c) => (
                     <button key={c} type="button" onClick={() => setCourtsDraft(courtsDraft.filter((x) => x !== c))}
-                      className="px-2.5 py-1 rounded-lg text-xs font-bold bg-clay text-white flex items-center gap-1.5">{c} <span className="opacity-70">✕</span></button>
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold bg-clay text-fg flex items-center gap-1.5">{c} <span className="opacity-70">✕</span></button>
                   ))}
                 </div>
               )}
@@ -371,9 +373,9 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
                 <Button size="sm" variant="clay" className="px-3 shrink-0" onClick={() => addCourt(courtInput)} disabled={!courtInput.trim()}>Add</Button>
               </div>
               {courtSuggestions.length > 0 && (
-                <div className="max-h-40 overflow-y-auto rounded-xl border border-white/10 bg-tennis-dark/95 p-1">
+                <div className="max-h-40 overflow-y-auto rounded-xl border border-fg/10 bg-tennis-dark/95 p-1">
                   {courtSuggestions.map((c) => (
-                    <button key={c} type="button" onClick={() => addCourt(c)} className="w-full text-left px-3 py-2 text-sm text-white/80 rounded-lg hover:bg-clay/20">{c}</button>
+                    <button key={c} type="button" onClick={() => addCourt(c)} className="w-full text-left px-3 py-2 text-sm text-fg/80 rounded-lg hover:bg-clay/20">{c}</button>
                   ))}
                 </div>
               )}
@@ -382,8 +384,8 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
           ) : (
             <div className="mt-1 flex flex-wrap gap-1.5">
               {preferences.preferred_courts.length > 0
-                ? preferences.preferred_courts.map((c) => <span key={c} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white/5 text-white/70 border border-white/10">{c}</span>)
-                : <span className="text-sm text-white/40">None set.</span>}
+                ? preferences.preferred_courts.map((c) => <span key={c} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70 border border-fg/10">{c}</span>)
+                : <span className="text-sm text-fg/40">None set.</span>}
             </div>
           )}
         </div>
@@ -396,7 +398,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
               <div className="flex flex-wrap gap-1.5">
                 {[...new Set([...FAVOURITE_PLAYERS, ...favDraft])].map((p) => (
                   <button key={p} type="button" onClick={() => setFavDraft(favDraft.includes(p) ? favDraft.filter((x) => x !== p) : [...favDraft, p])}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${favDraft.includes(p) ? 'bg-clay text-white border-clay' : 'bg-white/5 text-white/70 border-white/10'}`}>{p}</button>
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${favDraft.includes(p) ? 'bg-clay text-fg border-clay' : 'bg-white text-tennis-dark border-fg'}`}>{p}</button>
                 ))}
               </div>
               <div className="flex gap-2">
@@ -409,21 +411,21 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
           ) : (
             <div className="mt-1 flex flex-wrap gap-1.5">
               {preferences.favourite_players.length > 0
-                ? preferences.favourite_players.map((p) => <span key={p} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-white/5 text-white/70 border border-white/10">{p}</span>)
-                : <span className="text-sm text-white/40">None set.</span>}
+                ? preferences.favourite_players.map((p) => <span key={p} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70 border border-fg/10">{p}</span>)
+                : <span className="text-sm text-fg/40">None set.</span>}
             </div>
           )}
         </div>
       </div>
 
       {/* Change email — hidden until requested */}
-      <div className="pt-4 mt-1 border-t border-white/5">
+      <div className="pt-4 mt-1 border-t border-fg/5">
         {editing === 'email' ? (
           <div className="space-y-2">
-            <p className="text-xs font-bold text-white/50 uppercase tracking-widest">Change Email Address</p>
+            <p className="text-xs font-bold text-fg/50 uppercase tracking-widest">Change Email Address</p>
             {emailSent ? (
               <div className="space-y-2">
-                <p className="text-sm text-white/70">Verification sent to <span className="text-white">{emailDraft}</span>. Confirm it, then refresh.</p>
+                <p className="text-sm text-fg/70">Verification sent to <span className="text-fg">{emailDraft}</span>. Confirm it, then refresh.</p>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => actions.refreshEmailChange()}>Refresh</Button>
                   <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Done</Button>

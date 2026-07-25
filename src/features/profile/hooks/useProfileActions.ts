@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import { reload } from 'firebase/auth';
-import { collection, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import {
   updateName, updatePhone, updateWhatsappContact, updateBio, updateAvatar, updateSkills,
   updateLeagueAndAge, updateDisplayBadges, updatePreferredCourts, updateFavouritePlayers, updateAvailabilityGrid,
-  changeEmail, removeEventParticipant, updateEventParticipantDates,
+  changeEmail, updateEventParticipantDates,
 } from '../services/profileService';
 import type { AvailabilityGrid } from '../../../utils/availability';
 
@@ -66,31 +64,6 @@ export const useProfileActions = () => {
     }
   };
 
-  const handleRemoveEvent = async (participantId: string, eventId: string) => {
-    try {
-      await removeEventParticipant(participantId);
-      // Best-effort: clearing match slots is organizer-only (Firestore rules). The participant
-      // doc is already removed; if the player can't edit the bracket, the organizer reconciles.
-      try {
-        if (user && eventId) {
-          const matchesSnap = await getDocs(query(collection(db, 'tournament_matches'), where('event_id', '==', eventId)));
-          const updates: Promise<void>[] = [];
-          matchesSnap.docs.forEach((matchDoc) => {
-            const data = matchDoc.data();
-            if (data.set_1_player_1 != null || data.set_1_player_2 != null) return;
-            if (data.player_1_user_id === user.uid) updates.push(updateDoc(doc(db, 'tournament_matches', matchDoc.id), { player_1_name: 'Player Loading', player_1_user_id: '', player_1_contact: '' }));
-            if (data.player_2_user_id === user.uid) updates.push(updateDoc(doc(db, 'tournament_matches', matchDoc.id), { player_2_name: 'Player Loading', player_2_user_id: '', player_2_contact: '' }));
-          });
-          await Promise.all(updates);
-        }
-      } catch { /* player not permitted to edit the bracket; organizer will clear the slot */ }
-      showMessage('You have been removed from the event.', 'success');
-    } catch (error) {
-      console.error('Error removing event:', error);
-      showMessage('Could not remove you from the event right now.', 'error');
-    }
-  };
-
   const handleUpdateEventDates = async (participantId: string, dateselected: string[]) => {
     try {
       await updateEventParticipantDates(participantId, dateselected);
@@ -120,7 +93,6 @@ export const useProfileActions = () => {
       updateAvailabilityGrid: (grid: AvailabilityGrid) => withProfileUpdate(() => updateAvailabilityGrid(user!.uid, grid)),
       changeEmail: handleChangeEmail,
       refreshEmailChange: handleRefreshEmailChange,
-      removeEvent: (participantId: string, eventId: string) => handleRemoveEvent(participantId, eventId),
       updateEventDates: handleUpdateEventDates,
     },
   };

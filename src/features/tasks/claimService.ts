@@ -106,11 +106,3 @@ export async function reviewClaim(id: string, approve: boolean, reviewerNote?: s
     ...(reviewerNote?.trim() ? { reviewer_note: reviewerNote.trim() } : {}),
   });
 }
-
-export async function reviewPhotoReport(id: string, approve: boolean, reviewerNote?: string): Promise<void> {
-  await updateDoc(doc(db, 'court_reports', id), {
-    status: approve ? 'approved' : 'rejected',
-    reviewed_at: new Date().toISOString(),
-    ...(reviewerNote?.trim() ? { reviewer_note: reviewerNote.trim() } : {}),
-  });
-}

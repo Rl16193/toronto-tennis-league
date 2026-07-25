@@ -212,22 +212,38 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Court Suggestions (public "Suggest an Improvement" feedback)
+    // Court Suggestions — legacy collection, retained read-only for historical data.
+    // "Suggest an Improvement" was merged into Court Reports ("Submit a Photo"); nothing writes
+    // here anymore.
     // ===============================================================
     match /court_suggestions/{id} {
-      // Anyone (incl. logged-out) may submit, with basic validation to limit abuse.
-      // Field shape must match what SuggestImprovementModal writes: `types` (a non-empty
-      // list of issue categories) + `court` (a string; '' for a website suggestion).
-      allow create: if
-        request.resource.data.description is string &&
-        request.resource.data.description.size() > 0 &&
-        request.resource.data.description.size() < 5000 &&
-        request.resource.data.types is list &&
-        request.resource.data.types.size() > 0 &&
-        request.resource.data.court is string &&
-        request.resource.data.status == 'open';
-      // Only organizers read / triage / update image_status / delete.
+      allow create: if false;
       allow read, update, delete: if isGlobalEventCreator();
+    }
+
+    // ===============================================================
+    // Rallies (friendly-match requests — no points, no organizer step)
+    // ===============================================================
+    match /rallies/{id} {
+      allow read: if isAuthenticated();
+      // Sender creates an open rally addressed to someone else.
+      allow create: if isAuthenticated() &&
+        request.resource.data.from_id == request.auth.uid &&
+        request.resource.data.to_id is string &&
+        request.resource.data.to_id != request.auth.uid &&
+        request.resource.data.status == 'open' &&
+        request.resource.data.created_at is string;
+      // Only the recipient responds, and only by settling the status.
+      allow update: if isAuthenticated() &&
+        resource.data.to_id == request.auth.uid &&
+        resource.data.status == 'open' &&
+        request.resource.data.status in ['accepted', 'declined'] &&
+        request.resource.data.from_id == resource.data.from_id &&
+        request.resource.data.to_id == resource.data.to_id;
+      // Sender may retract an open rally.
+      allow delete: if isAuthenticated() &&
+        resource.data.from_id == request.auth.uid &&
+        resource.data.status == 'open';
     }
 
     // ===============================================================
@@ -307,23 +323,27 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Court Reports (Tasks tab "Submit a Photo": condition / waiting board / queue)
+    // Court Reports ("Submit a Photo" — the unified report/suggestion flow)
     // ===============================================================
     match /court_reports/{id} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() &&
-        request.resource.data.user_id == request.auth.uid &&
+      // Anyone (incl. logged-out) may submit — no organizer review step, every report
+      // auto-approves at creation. Cloud Functions still run automated image moderation and can
+      // flip status to 'rejected' after the fact if the photo is unsafe.
+      allow create: if
         request.resource.data.type in ['condition', 'waitingBoard', 'queue'] &&
         request.resource.data.court_key is string &&
-        request.resource.data.photo_path is string &&
-        // Condition/waiting-board need review; a queue photo (useful only right now) posts
-        // pre-approved.
-        (request.resource.data.type == 'queue'
-          ? request.resource.data.status == 'approved'
-          : request.resource.data.status == 'pending');
-      // Organizer approves/rejects; Cloud Functions (Admin SDK) also write here on moderation —
-      // Admin SDK bypasses these rules entirely, so no separate allowance is needed for it.
-      allow update: if isGlobalEventCreator();
+        request.resource.data.photo_paths is list &&
+        request.resource.data.photo_paths.size() > 0 &&
+        request.resource.data.status == 'approved' &&
+        (
+          (isAuthenticated() && request.resource.data.user_id == request.auth.uid) ||
+          request.resource.data.user_id == null
+        );
+      // Cloud Functions (Admin SDK) flip status on moderation — Admin SDK bypasses these rules
+      // entirely, so no separate allowance is needed for it. No client-side update path remains
+      // now that organizer review is gone.
+      allow update: if false;
       allow delete: if false;
     }
 

@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { haversineKm } from '../../utils/zones';
 import { courtKey } from '../../utils/courtKey';
@@ -51,10 +51,26 @@ export async function logAttendance(
   });
 }
 
-// What the player is at the court for — captured on check-in so we know the kind of activity
-// (and, for the match types, what's actually being played).
-export const VISIT_TYPES = ['Solo', 'Friendly Practice', 'Tournament Match', 'Visit'] as const;
+// What the player is at the court for — captured on check-in so we know the kind of activity.
+export const VISIT_TYPES = ['Practice', 'Friendlies', 'Tournament', 'Other'] as const;
 export type VisitType = (typeof VISIT_TYPES)[number];
+
+// Most-checked-in courts, computed from a bounded window of recent attendance (newest 300 rows).
+// Best-effort "what's busy lately" list for the check-in start screen — not an all-time tally.
+export type TopCheckIn = { court: string; zone: string; count: number };
+export async function getTopCheckIns(max = 5): Promise<TopCheckIn[]> {
+  const snap = await getDocs(query(collection(db, 'court_attendance'), orderBy('created_at', 'desc'), limit(300)));
+  const counts = new Map<string, TopCheckIn>();
+  snap.docs.forEach((d) => {
+    const data = d.data();
+    const court = (data.court_name as string) || '';
+    if (!court) return;
+    const cur = counts.get(court) ?? { court, zone: (data.zone as string) || '', count: 0 };
+    cur.count += 1;
+    counts.set(court, cur);
+  });
+  return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, max);
+}
 
 // One geolocation prompt, wrapped as a promise. Rejects with a friendly message on denial/error.
 export function getCurrentPosition(): Promise<GeolocationPosition> {

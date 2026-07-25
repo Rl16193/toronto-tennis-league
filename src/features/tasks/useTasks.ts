@@ -57,9 +57,7 @@ export const TASKS: TaskDef[] = [
   { id: 'ladderMatch', title: 'Play a League Ladder Match', label: 'Ladder', kind: 'auto', to: '/tournament' },
 ];
 
-export const TASK_IDS: TaskId[] = TASKS.map((t) => t.id);
 export const UNLOCKED_TASK_IDS: TaskId[] = TASKS.filter((t) => !t.locked).map((t) => t.id);
-export const TASK_LABELS = Object.fromEntries(TASKS.map((t) => [t.id, t.label])) as Record<TaskId, string>;
 
 // A category = one group of tasks. The Community Member Initiation is a category too; the rest
 // come from the catalogue. TASKS COMPLETED = every done item across all categories. MILESTONES =

@@ -17,8 +17,8 @@ export class BracketErrorBoundary extends React.Component<Props, State> {
       return (
         <div className="rounded-[2rem] bg-red-500/10 border border-red-500/20 p-10 text-center space-y-4">
           <AlertCircle className="w-10 h-10 text-red-400 mx-auto" />
-          <p className="text-white font-bold text-lg">Failed to load the bracket.</p>
-          <p className="text-white text-sm">Download the draw to view it offline.</p>
+          <p className="text-fg font-bold text-lg">Failed to load the bracket.</p>
+          <p className="text-fg text-sm">Download the draw to view it offline.</p>
           <Button variant="outline" onClick={this.props.onDownload}>
             <Download className="w-4 h-4 mr-2" />
             Download Draw

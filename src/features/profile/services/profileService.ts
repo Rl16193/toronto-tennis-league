@@ -1,4 +1,4 @@
-import { doc, updateDoc, getDocs, query, where, collection, deleteDoc, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, getDocs, query, where, collection, writeBatch } from 'firebase/firestore';
 import { EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail, type User } from 'firebase/auth';
 import { db } from '../../../lib/firebase';
 import { gridToLegacy, type AvailabilityGrid } from '../../../utils/availability';
@@ -102,10 +102,6 @@ export const changeEmail = async (user: User, newEmail: string, password: string
   const credential = EmailAuthProvider.credential(user.email || '', password);
   await reauthenticateWithCredential(user, credential);
   await verifyBeforeUpdateEmail(user, newEmail.trim());
-};
-
-export const removeEventParticipant = async (participantId: string) => {
-  await deleteDoc(doc(db, 'event_participants', participantId));
 };
 
 export const updateEventParticipantDates = async (participantId: string, dateselected: string[]) => {

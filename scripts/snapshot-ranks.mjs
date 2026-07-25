@@ -81,13 +81,13 @@ async function main() {
 
   // ── Public homepage counters (site_stats/summary) ──────────────────────────
   // Active Players = distinct users who joined an event OR played a match. Matches Organized =
-  // completed matches + 80 (last year's offline matches). event_participants / tournament_matches
+  // completed matches + 70 (last year's total). event_participants / tournament_matches
   // aren't world-readable, so these are precomputed here for the public landing to read.
   const active = new Set();
   (await db.collection('event_participants').get()).forEach((d) => { const u = d.data().user_id; if (u) active.add(u); });
   snap.forEach((d) => { if ((d.data().matchesPlayed ?? 0) > 0) active.add(d.id); });
   const completed = await db.collection('tournament_matches').where('status', '==', 'complete').count().get();
-  const siteStats = { activePlayers: active.size, matchesOrganized: completed.data().count + 80, updatedAt: date };
+  const siteStats = { activePlayers: active.size, matchesOrganized: completed.data().count + 70, updatedAt: date };
   console.log(`site_stats → activePlayers=${siteStats.activePlayers}, matchesOrganized=${siteStats.matchesOrganized}`);
 
   if (dryRun) { console.log('\n(dry run — no writes)'); process.exit(0); }

@@ -2,13 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { ChevronDown } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { db } from '../lib/firebase';
+import { Sheet } from '../components/Sheet';
 import { useTournament } from './tournament/useTournament';
 import { getEventDate } from './tournament/utils';
-import { downloadDrawAsPng, openDrawInNewTab, getRoundLabels, downloadRRGroupsAsPng, openRRGroupsInNewTab } from './tournament/bracketImage';
+import { downloadDrawAsPng, getRoundLabels, downloadRRGroupsAsPng } from './tournament/bracketImage';
 import { TournamentMatch } from './tournament/types';
 import { BracketView } from './tournament/BracketView';
+import { BracketAccordion } from './tournament/BracketAccordion';
 import { BracketErrorBoundary } from './tournament/BracketErrorBoundary';
 import { TournamentHeader } from './tournament/TournamentHeader';
 import { OpponentCard, RROpponentPanel } from './tournament/OpponentPanels';
@@ -20,13 +22,9 @@ import { AddPlayerPanel } from './tournament/AddPlayerPanel';
 import { RoundRobinView } from './tournament/RoundRobinView';
 import { RRConfigModal } from './tournament/RRConfigModal';
 import { AlertMessage } from '../components/AlertMessage';
-import { Button } from '../components/Button';
 import { LoadingBar } from '../components/LoadingBar';
 import { TennisEvent } from '../types';
-import { isLadderEvent } from '../utils/eventTypes';
-import { LadderView } from '../features/leagues/LadderView';
 
-type PageTab = 'completed' | 'active' | 'upcoming';
 type EventStatus = 'active' | 'completed';
 
 const getDrawState = (matches: TournamentMatch[]): string => {
@@ -85,12 +83,11 @@ export const Tournament: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const eventId = searchParams.get('event') || undefined;
 
-  const [navMode, setNavMode] = useState<'live' | 'past'>('live');
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [showOtherGroups, setShowOtherGroups] = useState(false);
   const [myEventIds, setMyEventIds] = useState<Set<string>>(new Set());
   const [eventStatuses, setEventStatuses] = useState<Record<string, EventStatus>>({});
   const [statusLoading, setStatusLoading] = useState(true);
+  const [showEventSheet, setShowEventSheet] = useState(false);
 
   const {
     authLoading, loading, eventDataReady, user,
@@ -115,10 +112,10 @@ export const Tournament: React.FC = () => {
     showRRConfig, setShowRRConfig, generatingRR,
     rrGroups, previewRRGroups, previewRRLabels, userRRGroup, rrStandingsByGroup, rrGroupMatches, rrKnockoutMatches, rrKnockoutReady, rrConfig,
     rrGroupLabels, rrGroupIndices,
-    rrUnplacedPlayers, rrSiblingDraw, rrSiblingGroups, rrSiblingLabels, rrSiblingIndices,
+    rrUnplacedPlayers,
     rrView, setRRView,
     handleGenerateRR, handleResetRR, handleGenerateRRKnockout, handleSaveGroupEdit,
-    handleCreateRRGroup, handleRenameGroup, handleRemoveParticipant,
+    handleCreateRRGroup, handleRenameGroup,
     visibleUserMatch, userRRMatches, scheduleRequests,
     handleAskOrganizerSchedule, handleSetSchedule,
   } = useTournament(eventId);
@@ -167,35 +164,34 @@ export const Tournament: React.FC = () => {
       .finally(() => setStatusLoading(false));
   }, [allTournamentEvents.length]);
 
-  // Tournaments the user joined or created — plus League Ladder events, which need no join and
-  // are visible to every signed-in player.
+  // Tournaments the user joined or created. League Ladder events live on their own page
+  // (/matches, Challenges tab) now — this page shows only bracket/RR tournaments.
   const myEvents = useMemo(
-    () => allTournamentEvents.filter((e) => !!user && (e.creator_id === user.uid || myEventIds.has(e.id) || isLadderEvent(e))),
+    () => allTournamentEvents.filter((e) => !!user && (e.creator_id === user.uid || myEventIds.has(e.id))),
     [allTournamentEvents, user, myEventIds],
   );
-  const liveEvents = myEvents.filter((e) => eventStatuses[e.id] !== 'completed');
-  const pastEvents = myEvents.filter((e) => eventStatuses[e.id] === 'completed');
-  const yearOf = (e: TennisEvent) => getEventDate(e)?.getFullYear() ?? new Date().getFullYear();
-  const pastYears = [...new Set(pastEvents.map(yearOf))].sort((a, b) => b - a);
-  const activeYear = selectedYear ?? pastYears[0] ?? null;
-  const pastEventsInYear = pastEvents.filter((e) => yearOf(e) === activeYear);
-  const visibleEvents = navMode === 'live' ? liveEvents : pastEventsInYear;
+  // Completed tournaments are reached from History via ?event= deep links — no Past mode here.
+  const tabEvents = myEvents.filter((e) => eventStatuses[e.id] !== 'completed');
 
   const selectEvent = (id: string) =>
     setSearchParams((p) => { const n = new URLSearchParams(p); n.set('event', id); return n; });
 
-  // Keep a valid selection: when the visible list changes and the current event isn't in it,
-  // select the first visible tournament.
-  const visibleKey = visibleEvents.map((e) => e.id).join(',');
+  const selectedMeta = myEvents.find((e) => e.id === eventId);
+
+  // Keep a valid selection: any of my events counts (completed ones arrive via History).
+  // Otherwise pick the first event on the current tab.
+  const tabKey = tabEvents.map((e) => e.id).join(',');
   useEffect(() => {
-    if (statusLoading || visibleEvents.length === 0) return;
-    if (!eventId || !visibleEvents.some((e) => e.id === eventId)) {
-      setSearchParams((p) => { const n = new URLSearchParams(p); n.set('event', visibleEvents[0].id); return n; }, { replace: true });
+    if (statusLoading) return;
+    if (eventId && myEvents.some((e) => e.id === eventId)) return;
+    if (tabEvents.length > 0) {
+      setSearchParams((p) => { const n = new URLSearchParams(p); n.set('event', tabEvents[0].id); return n; }, { replace: true });
     }
-  }, [navMode, activeYear, statusLoading, visibleKey, eventId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusLoading, tabKey, eventId, myEvents.length]);
 
   // Each tournament starts with the "other groups" section collapsed.
-  useEffect(() => { setShowOtherGroups(false); }, [eventId, navMode]);
+  useEffect(() => { setShowOtherGroups(false); }, [eventId]);
 
   // Gate on BOTH the initial event-list fetch AND the currently-selected event's own data
   // (participants + matches) actually arriving — otherwise switching tournaments (or the gap
@@ -215,7 +211,9 @@ export const Tournament: React.FC = () => {
 
   const drawState = getDrawState(currentMatches);
 
-  const pastMode = navMode === 'past';
+  // Read-only mode is per-event now: a completed tournament opened from History renders
+  // exactly like the old Past mode did.
+  const pastMode = !!event && eventStatuses[event.id] === 'completed';
   const canEdit = isCreator && !pastMode;
   const effEditMode = editMode && canEdit;
   const schedule = pastMode ? undefined : scheduleApi;
@@ -224,13 +222,22 @@ export const Tournament: React.FC = () => {
   const submittable = pastMode ? undefined : submittableMatchIds;
   const isRR = currentDrawFormat === 'rr';
 
+  // Past events: hide draws that were never played (no submitted scores) — e.g. an empty Seniors
+  // or Doubles draw in a season opener. Live events keep every draw so setup stays visible.
+  const drawHasCompleted = (d: { tournamentChoice: string; division: string; skillGroup: string }) =>
+    matches.some((m) =>
+      m.tournament_choice === d.tournamentChoice && m.division === d.division &&
+      m.skill_group === d.skillGroup && m.bracket !== 'reserves' && m.status === 'complete');
+  const playedDraws = pastMode ? visibleDraws.filter(drawHasCompleted) : visibleDraws;
+  const shownDraws = playedDraws.length > 0 ? playedDraws : visibleDraws;
+
   const drawSelector = (
     <DrawTabs
       activeTab={activeTab}
       activeSkill={activeSkill}
       activeDoubles={activeDoubles}
       currentDraw={currentDraw}
-      visibleDraws={visibleDraws}
+      visibleDraws={shownDraws}
       onTabChange={setActiveTab}
       onSkillChange={setActiveSkill}
       onDoublesChange={setActiveDoubles}
@@ -250,6 +257,7 @@ export const Tournament: React.FC = () => {
       advancementCount={rrConfig?.advancementCount ?? 1}
       isCreator={readOnly ? false : canEdit}
       isParticipant={!!userParticipant}
+      currentUserId={user?.uid}
       isPastEvent={pastMode}
       editMode={readOnly ? false : effEditMode}
       editPlayers={editPlayers}
@@ -298,14 +306,14 @@ export const Tournament: React.FC = () => {
       {!isRR && effEditMode && currentDraw && (
         <div className="mb-4">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm font-bold text-white uppercase tracking-widest">Draw Size</span>
+            <span className="text-sm font-bold text-fg uppercase tracking-widest">Draw Size</span>
             {[8, 16, 32].map((size) => (
               <button
                 key={size}
                 disabled={currentMatches.length > 0}
                 onClick={() => handleSetPreviewDrawSize(currentDraw.label, size)}
                 className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
-                  currentDrawSize === size ? 'bg-clay text-white' : currentMatches.length > 0 ? 'bg-tennis-surface/30 text-white cursor-not-allowed' : 'bg-tennis-surface/60 text-white hover:text-white'
+                  currentDrawSize === size ? 'bg-clay text-white' : currentMatches.length > 0 ? 'bg-tennis-surface/30 text-fg cursor-not-allowed' : 'bg-tennis-surface/60 text-fg hover:text-fg'
                 }`}
               >
                 R{size}
@@ -321,9 +329,13 @@ export const Tournament: React.FC = () => {
       {/* Your group / your match — under all the tabs. Groups view → your group; Knockout view → your match. */}
       {isRR ? (
         rrView === 'knockout'
-          ? (visibleUserMatch && opponent && (
-              <OpponentCard opponent={opponent} defaultOpen currentMatch={visibleUserMatch} schedule={schedule} />
-            ))
+          ? (visibleUserMatch && opponent
+              ? <OpponentCard opponent={opponent} defaultOpen currentMatch={visibleUserMatch} schedule={schedule} isCreator={isCreator} />
+              : !isCreator && (
+                  <div className="mb-6 rounded-2xl border border-fg/10 bg-tennis-surface/30 px-4 py-6 text-center">
+                    <p className="text-sm font-semibold text-fg/50">Draw not released yet</p>
+                  </div>
+                ))
           : (userRRGroup && user && (
               <RROpponentPanel
                 group={userRRGroup}
@@ -332,53 +344,60 @@ export const Tournament: React.FC = () => {
                 defaultOpen
                 pairingMatches={userRRMatches}
                 schedule={schedule}
+                isCreator={isCreator}
                 contactMap={userMap}
               />
             ))
       ) : (
         currentMatches.length > 0 && opponent && (
-          <OpponentCard opponent={opponent} defaultOpen currentMatch={visibleUserMatch} schedule={schedule} />
+          <OpponentCard opponent={opponent} defaultOpen currentMatch={visibleUserMatch} schedule={schedule} isCreator={isCreator} />
         )
       )}
 
-      {/* Full draw */}
+      {/* Full draw — everyone gets a real bracket now (wireframe 1b): a vertical round-by-round
+          accordion on mobile, the wide grid on desktop. The old PNG-in-new-tab player fallback
+          is retired (PNG export stays in Manage Draw → Download). */}
       {isRR ? (
         roundRobinFull(!canEdit)
-      ) : isCreator ? (
-        /* Creator: the full draw as an interactive interface, blended with the site. */
-        <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, event?.round_deadlines ?? {})}>
-          <BracketView
-            matches={displayMatches}
-            drawTitle={currentDraw?.label || 'Draw'}
-            editMode={effEditMode}
-            editPlayers={editPlayers}
-            onEditPlayer={handleEditPlayer}
-            isCreator={isCreator}
-            onSubmitScore={submitScore}
-            submittableMatchIds={submittable}
-            pendingMatchIds={pendingMatchIds}
-            roundDeadlines={event?.round_deadlines}
-            onUpdateDeadline={canEdit ? handleUpdateRoundDeadline : undefined}
-          />
-        </BracketErrorBoundary>
       ) : (
-        /* Players: no inline bracket — open the full draw as an image in a new tab. */
-        displayMatches.some((m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_')) && (
-          <div className="rounded-2xl border border-white/10 bg-tennis-surface/20 p-6 text-center">
-            <p className="text-sm text-white/60 mb-3">See where you sit in the full bracket.</p>
-            <Button
-              variant="outline"
-              onClick={() => openDrawInNewTab(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, event?.round_deadlines ?? {})}
-            >
-              View entire draw
-            </Button>
-          </div>
+        (isCreator || displayMatches.some((m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_'))) && (
+          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, event?.round_deadlines ?? {})}>
+            <div className="sm:hidden">
+              <BracketAccordion
+                matches={displayMatches}
+                editMode={effEditMode}
+                editPlayers={editPlayers}
+                onEditPlayer={handleEditPlayer}
+                isCreator={isCreator}
+                onSubmitScore={submitScore}
+                submittableMatchIds={submittable}
+                pendingMatchIds={pendingMatchIds}
+                roundDeadlines={event?.round_deadlines}
+                onUpdateDeadline={canEdit ? handleUpdateRoundDeadline : undefined}
+              />
+            </div>
+            <div className="hidden sm:block">
+              <BracketView
+                matches={displayMatches}
+                drawTitle={currentDraw?.label || 'Draw'}
+                editMode={effEditMode}
+                editPlayers={editPlayers}
+                onEditPlayer={handleEditPlayer}
+                isCreator={isCreator}
+                onSubmitScore={submitScore}
+                submittableMatchIds={submittable}
+                pendingMatchIds={pendingMatchIds}
+                roundDeadlines={event?.round_deadlines}
+                onUpdateDeadline={canEdit ? handleUpdateRoundDeadline : undefined}
+              />
+            </div>
+          </BracketErrorBoundary>
         )
       )}
 
       {/* Creator controls — hidden for past (read-only) tournaments */}
       {!pastMode && isCreator && (
-        <div className="mt-8 pt-6 border-t border-white/5">
+        <div className="mt-8 pt-6 border-t border-fg/5">
           <TournamentHeader
             isCreator={isCreator}
             hasMatches={currentMatches.length > 0}
@@ -430,76 +449,74 @@ export const Tournament: React.FC = () => {
 
   const selectedLoaded = !!event && event.id === eventId && !loading;
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-6">
-      {/* Tournament name tabs (live) or year tabs (past) + Past/Current toggle */}
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div className="flex gap-2 flex-wrap">
-          {navMode === 'live'
-            ? liveEvents.map((e) => (
-                <button
-                  key={e.id}
-                  onClick={() => selectEvent(e.id)}
-                  className={`px-4 py-2 rounded-2xl text-sm font-semibold border transition-all ${
-                    eventId === e.id ? 'bg-clay text-white border-clay' : 'bg-tennis-surface/40 text-white border-white/10 hover:border-white/30'
-                  }`}
-                >
-                  {e.title}
-                </button>
-              ))
-            : pastYears.map((y) => (
-                <button
-                  key={y}
-                  onClick={() => setSelectedYear(y)}
-                  className={`px-4 py-2 rounded-2xl text-sm font-bold border transition-all ${
-                    activeYear === y ? 'bg-clay text-white border-clay' : 'bg-tennis-surface/40 text-white border-white/10 hover:border-white/30'
-                  }`}
-                >
-                  {y}
-                </button>
-              ))}
-        </div>
-        <button
-          onClick={() => { setNavMode((m) => (m === 'live' ? 'past' : 'live')); setSelectedYear(null); }}
-          className="px-4 py-2 rounded-2xl text-sm font-semibold border border-white/10 bg-tennis-surface/40 text-white hover:border-white/30 transition-all"
-        >
-          {navMode === 'live' ? 'Past Events' : '← Current'}
-        </button>
-      </div>
+  // The dropdown lists the current tab's events, plus the selected one if it came from a
+  // History deep link (a completed tournament that isn't in either live list).
+  const dropdownEvents = selectedMeta && !tabEvents.some((e) => e.id === selectedMeta.id)
+    ? [selectedMeta, ...tabEvents]
+    : tabEvents;
 
-      {/* Past mode: tournament name tabs for the selected year */}
-      {navMode === 'past' && pastEventsInYear.length > 0 && (
-        <div className="flex gap-2 mb-4 flex-wrap">
-          {pastEventsInYear.map((e) => (
-            <button
-              key={e.id}
-              onClick={() => selectEvent(e.id)}
-              className={`px-4 py-2 rounded-2xl text-sm font-semibold border transition-all ${
-                eventId === e.id ? 'bg-clay text-white border-clay' : 'bg-tennis-surface/40 text-white border-white/10 hover:border-white/30'
-              }`}
-            >
-              {e.title}
-            </button>
-          ))}
+  return (
+    <div className="max-w-xl mx-auto px-4 pb-20 pt-6">
+      {/* Event picker — hamburger opens a sheet listing events, instead of an inline dropdown */}
+      {dropdownEvents.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-fg/10 bg-tennis-surface/40 px-4 py-2.5 flex items-center gap-3 max-w-xl">
+          <button
+            type="button"
+            onClick={() => setShowEventSheet(true)}
+            aria-label="Switch event"
+            className="shrink-0 w-9 h-9 rounded-xl bg-fg/5 hover:bg-fg/10 flex items-center justify-center text-fg/70 hover:text-fg transition-colors"
+          >
+            <Menu className="w-4 h-4" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-fg truncate">{selectedMeta?.title ?? 'Select event'}</p>
+          </div>
+          {selectedMeta && (
+            <span className={`shrink-0 text-[10px] font-bold rounded-full border px-2.5 py-1 whitespace-nowrap ${
+              pastMode ? 'text-fg/50 border-fg/20' : 'text-clay border-clay/50'
+            }`}>
+              {pastMode ? 'Completed' : formatEventRange(selectedMeta) || 'Live'}
+            </span>
+          )}
         </div>
       )}
+
+      <AnimatePresence>
+        {showEventSheet && (
+          <Sheet onClose={() => setShowEventSheet(false)} title="Switch Event" maxWidthClassName="max-w-md">
+            <div className="p-3 pt-1 space-y-1 max-h-[70vh] overflow-y-auto">
+              {dropdownEvents.map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => { selectEvent(e.id); setShowEventSheet(false); }}
+                  className={`w-full flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors ${
+                    e.id === eventId ? 'bg-clay/15 border border-clay/40' : 'bg-fg/5 border border-transparent hover:border-fg/20'
+                  }`}
+                >
+                  <span className="text-sm font-semibold text-fg truncate">{e.title}</span>
+                  {eventStatuses[e.id] === 'completed' && (
+                    <span className="shrink-0 text-[10px] font-bold text-fg/40">Completed</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </Sheet>
+        )}
+      </AnimatePresence>
 
       {statusLoading && allTournamentEvents.length === 0 ? (
         <div className="space-y-3">
           {[1, 2].map((i) => <div key={i} className="h-14 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
         </div>
-      ) : visibleEvents.length === 0 ? (
+      ) : dropdownEvents.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-white/50 text-sm">
-            {navMode === 'live' ? "You're not in any current tournaments." : 'No past tournaments.'}
-          </p>
+          <p className="text-fg/50 text-sm">You're not in any current tournaments.</p>
         </div>
       ) : !selectedLoaded ? (
         <div className="flex justify-center py-16">
           <div className="w-10 h-10 border-4 border-clay border-t-transparent rounded-full animate-spin" />
         </div>
-      ) : event && isLadderEvent(event) ? (
-        <LadderView key={event.id} event={event} isCreator={isCreator} />
       ) : (
         drawContent
       )}

@@ -4,44 +4,75 @@
 @theme {
   --font-sans: "Montserrat", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  /* Clay stays the accent color in both themes — only the neutrals below flip. */
   --color-clay: #FF6B35;
   --color-clay-dark: #E84A27;
   --color-tennis-dark: #143D34;
   --color-tennis-surface: #143D34;
+  --color-tennis-deep: #0B3027;
+  /* Primary text/icon color — white in dark mode, brand-dark-green in light. Every
+     `text-white`/`border-white` in the app is being migrated to `text-fg`/`border-fg` so it
+     follows the toggle; see ThemeContext.tsx for how `data-theme` gets set on <html>. */
+  --color-fg: #ffffff;
+  /* Fixed dark text — NEVER flips with the theme. For text on elements that are always a light
+     fill by design (e.g. Button's `white` variant, a solid-white chip state), not page body
+     text. Using --color-tennis-dark there would break in light mode, since that token IS the
+     page background and flips to a light color. */
+  --color-ink: #143D34;
+}
+
+/* Light theme overrides — these are the SAME CSS variables the @theme block above registers,
+   so every utility built from them (bg-tennis-dark, bg-tennis-surface, text-fg, border-fg, …)
+   picks up the new values automatically with no component changes needed. Toggled by
+   ThemeContext.tsx setting data-theme="light" on <html> (defaults to dark; persisted). */
+:root[data-theme="light"] {
+  --color-tennis-dark: #EDEDE7;
+  --color-tennis-surface: #FFFFFF;
+  --color-tennis-deep: #DEDED5;
+  --color-fg: #16261F;
+  color-scheme: light;
+}
+
+/* Horizontally scrollable rows (chip rows, card strips) — scrollable but chromeless. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 @layer base {
   body {
-    @apply bg-tennis-dark text-white font-sans antialiased;
+    @apply bg-tennis-dark text-fg font-sans antialiased;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-display font-bold;
   }
 }
 
-/* ── Dropdown popups (global, dark theme) ──────────────────────────────────────
+/* ── Dropdown popups (theme-aware) ──────────────────────────────────────────────
    Native <select> popups and third-party widgets (e.g. intl-tel-input's country list)
-   don't inherit the page background — they default to the browser's white popup chrome,
-   which combined with our white body text makes the list unreadable. `color-scheme: dark`
-   tells the browser to theme its native form-control popups (select lists, etc.) dark
-   automatically; the explicit rules below are the cross-browser fallback/override, and
-   apply to every <select>/<option> site-wide, current and future, without per-component fixes. */
+   don't inherit the page background — they default to the browser's white popup chrome.
+   `color-scheme` (set per-theme above) tells the browser to theme its native form-control
+   popups automatically; the explicit rules below are the cross-browser fallback/override,
+   built from the same CSS variables so they flip with the toggle too. */
 :root {
   color-scheme: dark;
 }
 select, option, optgroup {
-  background-color: #143D34;
-  color: #ffffff;
+  background-color: var(--color-tennis-dark);
+  color: var(--color-fg);
 }
 
 /* intl-tel-input country dropdown — ships with no background/text color of its own
-   (relies on inheriting the page), so on this dark site it renders invisible/white-on-white. */
+   (relies on inheriting the page), so it renders invisible without an explicit override. */
 .iti__country-list {
-  background-color: #0B3027;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: var(--color-tennis-deep);
+  border: 1px solid color-mix(in srgb, var(--color-fg) 10%, transparent);
 }
 .iti__country {
-  color: #ffffff;
+  color: var(--color-fg);
 }
 .iti__country.iti__highlight {
   background-color: rgba(255, 107, 53, 0.18);
@@ -50,17 +81,17 @@ select, option, optgroup {
   color: inherit;
 }
 .iti__search-input {
-  background-color: #143D34;
-  color: #ffffff;
+  background-color: var(--color-tennis-dark);
+  color: var(--color-fg);
 }
 .iti__search-input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+  color: color-mix(in srgb, var(--color-fg) 50%, transparent);
 }
 .iti__no-results {
-  color: rgba(255, 255, 255, 0.6);
+  color: color-mix(in srgb, var(--color-fg) 60%, transparent);
 }
 .iti__selected-country-primary {
-  color: #ffffff;
+  color: var(--color-fg);
 }
 
 /* Range input — orange track, white thumb */
@@ -100,9 +131,9 @@ input[type='range']::-moz-range-thumb {
 }
 
 .clay-gradient {
-  background: linear-gradient(135deg, #FF6B35 0%, #E84A27 100%);
+  background: linear-gradient(135deg, var(--color-clay) 0%, var(--color-clay-dark) 100%);
 }
 
 .dark-gradient {
-  background: linear-gradient(180deg, #0B3027 0%, #143D34 100%);
+  background: linear-gradient(180deg, var(--color-tennis-deep) 0%, var(--color-tennis-dark) 100%);
 }

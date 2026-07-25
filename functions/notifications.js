@@ -277,6 +277,59 @@ exports.onLadderChallengeDeleted = onDocumentDeleted(
   },
 );
 
+// ─── Rallies (friendlies) ───────────────────────────────────────────────────
+// Same shape as the ladder-challenge triggers, minus points/organizer steps.
+
+exports.onRallyCreated = onDocumentCreated(
+  { document: 'rallies/{id}', region: REGION },
+  async (event) => {
+    const r = event.data?.data();
+    if (!r?.to_id) return;
+    await notify(r.to_id, {
+      type: 'rally_requested',
+      title: `${r.from_name || 'A player'} wants to rally`,
+      body: 'Accept to set up a friendly match.',
+      link: '/friendlies',
+    });
+  },
+);
+
+exports.onRallyUpdated = onDocumentUpdated(
+  { document: 'rallies/{id}', region: REGION },
+  async (event) => {
+    const before = event.data?.before.data() || {};
+    const after = event.data?.after.data() || {};
+    if (before.status === after.status || !after.from_id) return;
+    if (after.status === 'accepted') {
+      await notify(after.from_id, {
+        type: 'rally_accepted',
+        title: `${after.to_name || 'Your rally partner'} is in — rally on!`,
+        body: 'Arrange a time and court together.',
+        link: '/friendlies',
+      });
+    } else if (after.status === 'declined') {
+      await notify(after.from_id, {
+        type: 'rally_declined',
+        title: `${after.to_name || 'That player'} can’t rally right now`,
+        link: '/friendlies',
+      });
+    }
+  },
+);
+
+exports.onRallyDeleted = onDocumentDeleted(
+  { document: 'rallies/{id}', region: REGION },
+  async (event) => {
+    const r = event.data?.data();
+    if (!r || r.status !== 'open' || !r.to_id) return;
+    await notify(r.to_id, {
+      type: 'rally_cancelled',
+      title: `${r.from_name || 'A player'} withdrew their rally request`,
+      link: '/friendlies',
+    });
+  },
+);
+
 // ─── Tasks ──────────────────────────────────────────────────────────────────
 
 exports.onTaskProgressUpdated = onDocumentUpdated(

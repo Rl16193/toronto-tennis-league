@@ -36,5 +36,12 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*')
         && request.resource.size < 5 * 1024 * 1024;
     }
+
+    // Anonymous "Report" photos (logged-out reporters) land under the fixed `anon/` prefix.
+    // No auth required, still image-only and size-capped to limit abuse.
+    match /court_reports/anon/{fileName} {
+      allow write: if request.resource.contentType.matches('image/.*')
+        && request.resource.size < 5 * 1024 * 1024;
+    }
   }
 }

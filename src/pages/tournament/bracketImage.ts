@@ -242,13 +242,6 @@ const buildRRGroupSvg = (
   return { svg, width, height };
 };
 
-export const openRRGroupsInNewTab = (groups: TournamentPlayer[][], groupLabels: string[], groupMatches: TournamentMatch[], drawTitle: string, eventTitle?: string, contacts?: RRContactMap): void => {
-  const { svg } = buildRRGroupSvg(groups, groupLabels, groupMatches, drawTitle, eventTitle, contacts);
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
-  window.open(url, '_blank', 'noopener,noreferrer');
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-};
-
 export const downloadRRGroupsAsPng = (groups: TournamentPlayer[][], groupLabels: string[], groupMatches: TournamentMatch[], drawTitle: string, eventTitle?: string, contacts?: RRContactMap): void => {
   // Use the exact dimensions the SVG was built with (previously recomputed with an averaging
   // approximation, which stretched the PNG and left empty space).
@@ -279,17 +272,6 @@ export const downloadRRGroupsAsPng = (groups: TournamentPlayer[][], groupLabels:
   };
 
   svgImg.src = svgUrl;
-};
-
-// Open the draw as a crisp SVG in a new browser tab. Runs synchronously inside the click
-// handler (no async canvas step) so it isn't caught by popup blockers. Used by the player-facing
-// "View entire draw" button in place of the old inline bracket.
-export const openDrawInNewTab = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, roundDeadlines: Record<string, string> = {}): void => {
-  const svg = buildDrawSvg(matches, drawTitle, drawState, eventTitle, roundDeadlines);
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
-  window.open(url, '_blank', 'noopener,noreferrer');
-  // Give the new tab time to load before releasing the object URL.
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 };
 
 export const downloadDrawAsPng = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, roundDeadlines: Record<string, string> = {}): void => {

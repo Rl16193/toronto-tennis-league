@@ -558,12 +558,12 @@ export function courtMarkerHtml(court: CourtWithCount): string {
     </svg>`;
   }
   return `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="${r}" cy="${r}" r="${r}" fill="#f97316" opacity="0.82"/>
+    <circle cx="${r}" cy="${r}" r="${r}" fill="#94a3b8" opacity="0.75"/>
   </svg>`;
 }
 
 export function pickleballMarkerHtml(): string {
   return `<svg width="12" height="12" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="6" cy="6" r="6" fill="#f97316" opacity="0.82"/>
+    <circle cx="6" cy="6" r="6" fill="#94a3b8" opacity="0.75"/>
   </svg>`;
 }

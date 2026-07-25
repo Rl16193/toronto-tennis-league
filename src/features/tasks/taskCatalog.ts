@@ -195,8 +195,8 @@ export const DAILY_GROUP_TASKS: GroupTaskDef[] = [
   {
     id: 'matchday',
     name: 'Matchday',
-    trigger: 'When 6 or more members check in at the same court on the same day (verified by the '
-      + 'check-in feature), everyone who checked in there that day unlocks the bonus.',
+    trigger: 'When more than 3 matches are played across the league on the same day, every member '
+      + 'who played a match that day unlocks the bonus. Walkovers don’t count.',
     points: '+10 each',
   },
   {

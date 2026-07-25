@@ -1,18 +1,19 @@
-import React, { useState } from 'react';
-import { MapPin, CheckCircle2, Loader2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { MapPin, CheckCircle2, Loader2, Navigation } from 'lucide-react';
 import { Sheet } from '../../components/Sheet';
 import { Button } from '../../components/Button';
 import { useAuth } from '../../context/AuthContext';
 import {
-  CHECKIN_RADIUS_M, NearbyCourt, VISIT_TYPES, VisitType,
-  checkIn, checkZoneComplete, findNearbyCourts, getCurrentPosition, hasCheckedIn, logAttendance,
+  CHECKIN_RADIUS_M, NearbyCourt, TopCheckIn, VISIT_TYPES, VisitType,
+  checkIn, checkZoneComplete, findNearbyCourts, getCurrentPosition, getTopCheckIns, hasCheckedIn, logAttendance,
 } from './checkinService';
 import { bumpCounter, setTaskDone } from './useTasks';
 
 type Step = 'start' | 'locating' | 'pick' | 'success' | 'error';
 
-// Court passport check-in. Location is requested only when the player taps "Check in" — never
-// on page load — and only the nearest court within CHECKIN_RADIUS_M can actually be stamped.
+// Court check-in. The start screen shows a Top check-ins list and a "Courts nearby" button;
+// location is only requested when the player taps that button (never on load). Only the nearest
+// court within CHECKIN_RADIUS_M can actually be checked into.
 export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const { user, profile } = useAuth();
   const [step, setStep] = useState<Step>('start');
@@ -22,7 +23,12 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [checkedInto, setCheckedInto] = useState<NearbyCourt | null>(null);
   const [wasNewStamp, setWasNewStamp] = useState(false);
-  const [visitType, setVisitType] = useState<VisitType>('Visit');
+  const [visitType, setVisitType] = useState<VisitType>('Practice');
+  const [topCheckIns, setTopCheckIns] = useState<TopCheckIn[]>([]);
+
+  useEffect(() => {
+    getTopCheckIns().then(setTopCheckIns).catch(() => {});
+  }, []);
 
   const locate = async () => {
     setStep('locating');
@@ -50,14 +56,11 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
       const firstVisit = !(await hasCheckedIn(user.uid, court));
       setWasNewStamp(firstVisit);
 
-      // Always log daily attendance — this is the repeatable signal (feeds Matchday + zone sweeps).
-      // The passport stamp below is once-per-court-forever, so it only runs on the first visit.
+      // Always log daily attendance — the repeatable signal (feeds Matchday + zone sweeps).
       await logAttendance(user.uid, name, court, full, visitType);
 
       if (firstVisit) {
         await checkIn(user.uid, name, court, full, visitType);
-        // Best-effort local extras: the zone-complete tier and unlocking the courtVisit Initiation
-        // task. courtsVisited itself is awarded server-side (see functions/taskPoints.js).
         setTaskDone(user.uid, name, 'courtVisit', true).catch(() => {});
         const zone = profile?.preferences.preferred_zone || court.zone;
         checkZoneComplete(user.uid, zone)
@@ -77,24 +80,54 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
     <Sheet onClose={onClose} title="Court Check-In" maxWidthClassName="max-w-md">
       <div className="p-6 pt-2 space-y-5">
         {step === 'start' && (
-          <div className="text-center space-y-4 py-6">
-            <div className="w-16 h-16 bg-clay/10 rounded-full flex items-center justify-center mx-auto">
-              <MapPin className="w-8 h-8 text-clay" />
+          <div className="space-y-5">
+            {/* Activity type */}
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-fg/50 uppercase tracking-widest">What are you here for?</p>
+              <div className="grid grid-cols-2 gap-2">
+                {VISIT_TYPES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setVisitType(t)}
+                    className={`px-3 py-2.5 rounded-2xl text-sm font-bold border transition-colors ${
+                      visitType === t ? 'bg-clay text-white border-clay' : 'bg-white text-ink border-fg hover:bg-white/90'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="space-y-1">
-              <h3 className="text-lg font-bold text-white">Stamp your passport</h3>
-              <p className="text-white/60 text-sm px-2">
-                We’ll ask for your location to confirm you’re actually at the court.
-              </p>
+
+            {/* Top check-ins */}
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-fg/50 uppercase tracking-widest">Top check-ins</p>
+              {topCheckIns.length === 0 ? (
+                <p className="text-fg/40 text-sm">No check-ins yet — be the first.</p>
+              ) : (
+                <div className="rounded-2xl border border-fg/10 bg-tennis-surface/40 divide-y divide-white/5">
+                  {topCheckIns.map((c, i) => (
+                    <div key={c.court} className="flex items-center gap-3 px-4 py-2.5">
+                      <span className="text-fg/30 font-black text-sm w-4 shrink-0">{i + 1}</span>
+                      <p className="text-fg font-semibold text-sm truncate flex-1 min-w-0">{c.court}</p>
+                      <span className="text-[11px] text-fg/40 shrink-0">{c.count} check-ins</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <Button onClick={locate} className="w-full">Use my location</Button>
+
+            <Button onClick={locate} className="w-full">
+              <Navigation className="w-4 h-4 mr-2" />Courts nearby
+            </Button>
           </div>
         )}
 
         {step === 'locating' && (
           <div className="text-center py-10">
             <Loader2 className="w-8 h-8 text-clay animate-spin mx-auto mb-3" />
-            <p className="text-white/60 text-sm">Finding your location…</p>
+            <p className="text-fg/60 text-sm">Finding your location…</p>
           </div>
         )}
 
@@ -108,41 +141,21 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         {step === 'pick' && (
           <div className="space-y-2">
             {error && <p className="text-red-400 text-xs text-center">{error}</p>}
-
-            {/* What are you here for? — captured on the check-in so we know the activity type. */}
-            <div className="space-y-2 pb-1">
-              <p className="text-xs font-bold text-white/50 uppercase tracking-widest">Type</p>
-              <div className="flex flex-wrap gap-2">
-                {VISIT_TYPES.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setVisitType(t)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
-                      visitType === t ? 'bg-clay text-white border-clay' : 'bg-white/5 text-white/70 border-white/10 hover:border-white/30'
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {nearby.length === 0 ? (
-              <p className="text-white/50 text-sm text-center py-8">No courts nearby.</p>
+              <p className="text-fg/50 text-sm text-center py-8">No courts nearby.</p>
             ) : (
               nearby.slice(0, 6).map((c) => {
                 const here = c.distM <= CHECKIN_RADIUS_M;
                 return (
-                  <div key={c.dropdown} className="rounded-2xl border border-white/10 bg-tennis-surface/40 px-4 py-3 flex items-center justify-between gap-3">
+                  <div key={c.dropdown} className="rounded-2xl border border-fg/10 bg-tennis-surface/40 px-4 py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-white font-semibold text-sm truncate">{c.dropdown}</p>
-                      <p className="text-white/40 text-xs">{Math.round(c.distM)} m away</p>
+                      <p className="text-fg font-semibold text-sm truncate">{c.dropdown}</p>
+                      <p className="text-fg/40 text-xs">{Math.round(c.distM)} m away</p>
                     </div>
                     {here ? (
                       <Button size="sm" onClick={() => doCheckIn(c)} isLoading={busy}>Check in</Button>
                     ) : (
-                      <span className="text-[11px] text-white/30 shrink-0">Get closer</span>
+                      <span className="text-[11px] text-fg/30 shrink-0">Get closer</span>
                     )}
                   </div>
                 );
@@ -157,10 +170,10 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
               <CheckCircle2 className="w-8 h-8 text-green-500" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-lg font-bold text-white">{wasNewStamp ? 'Stamped!' : 'Checked in!'}</h3>
-              <p className="text-white/60 text-sm">
+              <h3 className="text-lg font-bold text-fg">Checked in!</h3>
+              <p className="text-fg/60 text-sm">
                 {wasNewStamp
-                  ? `${checkedInto.dropdown} is now in your passport.`
+                  ? `${checkedInto.dropdown} added to your courts.`
                   : `You’re checked in at ${checkedInto.dropdown}.`}
               </p>
             </div>

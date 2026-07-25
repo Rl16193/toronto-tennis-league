@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, ArrowLeft } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { ArrowLeft, Moon, Sun, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { auth } from '../lib/firebase';
-import { signOut } from 'firebase/auth';
+import { useTheme } from '../context/ThemeContext';
 import { Button } from './Button';
-import { NotificationBell } from '../features/notifications/NotificationBell';
+import { HeaderMenu } from './HeaderMenu';
 
-// Slim top bar: brand (→ Home) + auth only. Primary navigation lives in the bottom tab bar
-// (BottomNav), app-style.
+// Slim top bar: brand (→ Home) + the header hamburger (About Us / How It Works always;
+// Notifications / Profile / Logout when signed in — see HeaderMenu). Primary navigation lives
+// in the bottom tab bar (BottomNav), app-style.
 export const Navbar: React.FC = () => {
   const { user, profile } = useAuth();
-  const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const [scrolled, setScrolled] = useState(false);
 
@@ -21,22 +21,13 @@ export const Navbar: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      navigate('/login');
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  };
-
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
 
   return (
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? 'bg-tennis-dark/90 backdrop-blur-md py-2 shadow-xl border-b border-white/5'
+          ? 'bg-tennis-dark/90 backdrop-blur-md py-2 shadow-xl border-b border-fg/5'
           : 'bg-transparent py-4'
       }`}
     >
@@ -47,7 +38,7 @@ export const Navbar: React.FC = () => {
           {isAuthPage ? (
             <Link
               to="/"
-              className="flex items-center gap-2 shrink-0 text-white hover:text-clay transition-colors"
+              className="flex items-center gap-2 shrink-0 text-fg hover:text-clay transition-colors"
               aria-label="Back to home"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -56,44 +47,39 @@ export const Navbar: React.FC = () => {
           ) : (
             <Link to="/" className="flex items-center shrink-0" aria-label="Home">
               <span className="text-lg md:text-xl font-bold font-['Montserrat'] tracking-tight">
-                <span className="text-white">RACQUETS</span>
+                <span className="text-fg">RACQUETS</span>
                 <span className="text-clay"> &</span>
-                <span className="text-white"> STRINGS</span>
+                <span className="text-fg"> STRINGS</span>
               </span>
             </Link>
           )}
 
-          {/* Auth */}
+          {/* Theme toggle, hamburger (About Us / How It Works / Notifications / Profile / Logout), plus Join or Log In when logged out */}
           {!isAuthPage && (
-            <div className="flex items-center gap-3 shrink-0">
-              {user ? (
-                <>
-                  <NotificationBell />
-                  <button
-                    onClick={handleLogout}
-                    className="p-2 rounded-xl text-white/80 hover:text-red-400 hover:bg-red-500/5 transition-colors"
-                    aria-label="Logout"
-                  >
-                    <LogOut className="w-5 h-5" />
-                  </button>
-                  <Link to="/profile" aria-label="Profile">
-                    <div className="w-9 h-9 rounded-full border-2 border-clay p-0.5 overflow-hidden hover:scale-105 transition-transform">
-                      {profile?.user.avatar ? (
-                        <img
-                          src={profile.user.avatar}
-                          alt="Profile"
-                          className="w-full h-full rounded-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <span className="w-full h-full rounded-full bg-tennis-surface flex items-center justify-center text-sm font-black text-white/80">
-                          {(profile?.user.name || user.email || '?').charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                </>
-              ) : (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="p-2 rounded-xl text-fg/80 hover:text-clay hover:bg-clay/5 transition-colors"
+                aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+              >
+                {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              </button>
+              {user && (
+                <Link
+                  to="/profile"
+                  className="p-2 rounded-xl text-fg/80 hover:text-clay hover:bg-clay/5 transition-colors"
+                  aria-label="Profile"
+                >
+                  {profile?.user.avatar ? (
+                    <img src={profile.user.avatar} alt="" className="w-5 h-5 rounded-full object-cover" />
+                  ) : (
+                    <User className="w-5 h-5" />
+                  )}
+                </Link>
+              )}
+              <HeaderMenu />
+              {!user && (
                 <Link to="/login">
                   <Button size="sm">Join or Log In</Button>
                 </Link>

@@ -6,11 +6,10 @@ import {
   linkWithCredential, type OAuthCredential,
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import { auth, db, storage, setAuthPersistence } from '../lib/firebase';
-import { getDownloadURL, ref } from 'firebase/storage';
+import { auth, db, setAuthPersistence } from '../lib/firebase';
 import { track } from '../lib/analytics';
 import { useAuth } from '../context/AuthContext';
-import { SKILL_DESCRIPTIONS, SKILL_LEVELS } from '../utils/skillLevels';
+import { SKILL_DESCRIPTIONS, SELECTABLE_SKILL_LEVELS } from '../utils/skillLevels';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import {
@@ -36,6 +35,16 @@ const FAVOURITE_PLAYERS = [
 
 type AuthPhase = 'email' | 'login' | 'account' | 'preferences' | 'done';
 
+// Wordmark used in place of the logo image on every auth phase.
+const BrandMark: React.FC = () => (
+  <div className="mx-auto mb-2 text-center">
+    <span className="text-2xl font-black font-display tracking-tight">
+      <span className="text-fg">RACQUETS</span><span className="text-clay"> &amp; </span><span className="text-fg">STRINGS</span>
+    </span>
+    <p className="text-clay font-bold text-xs tracking-widest uppercase mt-1">L&apos;ŒUF FOR THE GAME</p>
+  </div>
+);
+
 export const Signup: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -50,7 +59,6 @@ export const Signup: React.FC = () => {
   const [courtCoordsMap, setCourtCoordsMap] = useState<Map<string, { lat: number; lng: number }>>(new Map());
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [logoUrl, setLogoUrl] = useState('');
 
   // Login sub-flow (existing email)
   const [loginPassword, setLoginPassword] = useState('');
@@ -91,7 +99,8 @@ export const Signup: React.FC = () => {
     preferredZone: '',
     pendingZoneChoice: null as { primary: string; adjacent: string } | null,
   });
-  const selectedSkillIndex = Math.max(0, SKILL_LEVELS.indexOf(formData.skillLevel as typeof SKILL_LEVELS[number]));
+  const selectedSkillIdxRaw = SELECTABLE_SKILL_LEVELS.indexOf(formData.skillLevel as typeof SELECTABLE_SKILL_LEVELS[number]);
+  const selectedSkillIndex = selectedSkillIdxRaw >= 0 ? selectedSkillIdxRaw : SELECTABLE_SKILL_LEVELS.length - 1;
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -100,12 +109,6 @@ export const Signup: React.FC = () => {
   // Funnel: entering step 1 (email gate) on first load.
   useEffect(() => {
     track('signup_step', { step_number: 1, step_name: 'email', action: 'enter' });
-  }, []);
-
-  useEffect(() => {
-    getDownloadURL(ref(storage, 'LandingPage/Screenshot 2026-06-01 130844.png'))
-      .then(setLogoUrl)
-      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -129,13 +132,13 @@ export const Signup: React.FC = () => {
   // Auth routing state machine (no email-verification step):
   //  - signed in but profile not filled in (name empty) → open the completion form
   //  - mid-signup (account / preferences / done success screen) → stay put
-  //  - otherwise (existing account, complete profile) → /tournament
+  //  - otherwise (existing account, complete profile) → /profile
   useEffect(() => {
     if (authLoading || !user) return;
     if (phase === 'account' || phase === 'preferences' || phase === 'done') return;
     const incomplete = !profile || profile.user.name.trim() === '';
     if (incomplete) { setPhase('preferences'); setPrefStep(1); return; }
-    navigate('/tournament');
+    navigate('/profile');
   }, [authLoading, user, profile, phase, navigate]);
 
   useEffect(() => {
@@ -237,7 +240,7 @@ export const Signup: React.FC = () => {
         setPendingGoogleCredential(null);
       }
       track('login', { method: 'email' });
-      navigate('/tournament');
+      navigate('/profile');
     } catch (err: any) {
       // Direction 2 — Google-first user trying email/password.
       // fetchSignInMethodsForEmail is deprecated and returns [] when Firebase email-enumeration
@@ -440,7 +443,7 @@ export const Signup: React.FC = () => {
         {isSignupPhase && (
           <div className="mb-12">
             {(intent === 'join-event' || intent === 'join-league') && (
-              <div className="mb-6 rounded-2xl border border-clay/20 bg-clay/10 px-5 py-4 text-sm text-white">
+              <div className="mb-6 rounded-2xl border border-clay/20 bg-clay/10 px-5 py-4 text-sm text-fg">
                 {intent === 'join-league'
                   ? 'Create your league profile to access events and get match updates.'
                   : 'Create your league profile to join events and receive updates.'}
@@ -452,11 +455,11 @@ export const Signup: React.FC = () => {
                 return (
                   <div key={i} className="flex flex-col items-center space-y-2">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg transition-all duration-300 ${
-                      stepNum >= i ? 'clay-gradient text-white shadow-lg shadow-clay/20' : 'bg-tennis-surface/50 text-white border border-white/5'
+                      stepNum >= i ? 'clay-gradient text-white shadow-lg shadow-clay/20' : 'bg-tennis-surface/50 text-fg border border-fg/5'
                     }`}>
                       {stepNum > i ? <CheckCircle2 className="w-6 h-6" /> : i}
                     </div>
-                    <span className={`text-xs font-bold uppercase tracking-widest ${stepNum >= i ? 'text-clay' : 'text-white'}`}>
+                    <span className={`text-xs font-bold uppercase tracking-widest ${stepNum >= i ? 'text-clay' : 'text-fg'}`}>
                       {i === 1 ? 'Account' : i === 2 ? 'Preferences' : 'Availability'}
                     </span>
                   </div>
@@ -498,14 +501,12 @@ export const Signup: React.FC = () => {
           {phase === 'email' && (
             <div className="max-w-md mx-auto space-y-6">
               <div className="text-center space-y-2">
-                {logoUrl && (
-                  <img src={logoUrl} alt="Racquets & Strings" className="mx-auto h-20 w-auto object-contain mb-2" />
-                )}
+                <BrandMark />
                 {intent === 'join-event' && (
-                  <p className="text-sm text-white">Sign in to join an event.</p>
+                  <p className="text-sm text-fg">Sign in to join an event.</p>
                 )}
                 {intent === 'join-league' && (
-                  <p className="text-sm text-white">Create a profile to get updates on events.</p>
+                  <p className="text-sm text-fg">Create a profile to get updates on events.</p>
                 )}
               </div>
 
@@ -544,16 +545,16 @@ export const Signup: React.FC = () => {
               <div>
                 <div className="relative py-2">
                   <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-white/5" />
+                    <div className="w-full border-t border-fg/5" />
                   </div>
                   <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-tennis-dark px-4 text-white/40 font-bold tracking-widest">Or continue with</span>
+                    <span className="bg-tennis-dark px-4 text-fg/40 font-bold tracking-widest">Or continue with</span>
                   </div>
                 </div>
                 <Button
                   type="button"
                   variant="secondary"
-                  className="w-full border border-white/5"
+                  className="w-full border border-fg/5"
                   onClick={handleGoogleSignIn}
                   isLoading={loading}
                 >
@@ -573,9 +574,9 @@ export const Signup: React.FC = () => {
                     <CheckCircle2 className="w-10 h-10 text-green-500" />
                   </div>
                   <div className="space-y-2">
-                    <h3 className="text-xl font-bold text-white">Reset Link Sent</h3>
-                    <p className="text-white/70">If the email is linked with an account, you will receive a reset link.</p>
-                    <p className="text-white/50 text-sm">Check your spam folder too.</p>
+                    <h3 className="text-xl font-bold text-fg">Reset Link Sent</h3>
+                    <p className="text-fg/70">If the email is linked with an account, you will receive a reset link.</p>
+                    <p className="text-fg/50 text-sm">Check your spam folder too.</p>
                   </div>
                   <Button variant="outline" className="w-full" onClick={() => { setResetSent(false); setShowForgot(false); }}>
                     Back to Sign In
@@ -584,11 +585,9 @@ export const Signup: React.FC = () => {
               ) : (
                 <>
                   <div className="text-center space-y-2">
-                    {logoUrl && (
-                      <img src={logoUrl} alt="Racquets & Strings" className="mx-auto h-20 w-auto object-contain mb-2" />
-                    )}
-                    <h1 className="text-3xl font-black text-white">{showForgot ? 'Reset Password' : 'Welcome Back'}</h1>
-                    <p className="text-white/60 text-sm">
+                    <BrandMark />
+                    {showForgot && <h1 className="text-3xl font-black text-fg">Reset Password</h1>}
+                    <p className="text-fg/60 text-sm">
                       {formData.email}{' '}
                       <button type="button" onClick={goToEmailPhase} className="text-clay hover:underline font-semibold">
                         (change)
@@ -598,7 +597,7 @@ export const Signup: React.FC = () => {
 
                   {!showForgot && (
                     <div className="space-y-1.5">
-                      <label className="block text-sm font-medium text-white">Password</label>
+                      <label className="block text-sm font-medium text-fg">Password</label>
                       <div className="relative">
                         <input
                           ref={loginPasswordRef}
@@ -608,9 +607,9 @@ export const Signup: React.FC = () => {
                           onChange={(e) => setLoginPassword(e.target.value)}
                           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleLogin(); } }}
                           autoFocus
-                          className="w-full rounded-2xl bg-tennis-surface/50 border border-white/10 px-4 py-3 pr-10 text-white placeholder-gray-500 transition-all duration-200 focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
+                          className="w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 px-4 py-3 pr-10 text-fg placeholder-fg/40 transition-all duration-200 focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
                         />
-                        <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white transition-colors" tabIndex={-1}>
+                        <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-fg transition-colors" tabIndex={-1}>
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
@@ -653,16 +652,16 @@ export const Signup: React.FC = () => {
                     <div>
                       <div className="relative py-2">
                         <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t border-white/5" />
+                          <div className="w-full border-t border-fg/5" />
                         </div>
                         <div className="relative flex justify-center text-xs uppercase">
-                          <span className="bg-tennis-dark px-4 text-white/40 font-bold tracking-widest">Or continue with</span>
+                          <span className="bg-tennis-dark px-4 text-fg/40 font-bold tracking-widest">Or continue with</span>
                         </div>
                       </div>
                       <Button
                         type="button"
                         variant="secondary"
-                        className="w-full border border-white/5"
+                        className="w-full border border-fg/5"
                         onClick={handleGoogleSignIn}
                         isLoading={loading}
                       >
@@ -680,11 +679,8 @@ export const Signup: React.FC = () => {
           {phase === 'account' && (
             <div className="space-y-8">
               <div className="text-center space-y-2">
-                {logoUrl && (
-                  <img src={logoUrl} alt="Racquets & Strings" className="mx-auto h-20 w-auto object-contain mb-2" />
-                )}
-                <h1 className="text-3xl font-black text-white">Create Your Account</h1>
-                <p className="text-white/60 text-sm">
+                <BrandMark />
+                <p className="text-fg/60 text-sm">
                   {formData.email}{' '}
                   <button type="button" onClick={goToEmailPhase} className="text-clay hover:underline font-semibold">
                     (change)
@@ -696,7 +692,7 @@ export const Signup: React.FC = () => {
                 {/* Password | Confirm Password */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="w-full space-y-1.5">
-                    <label className="block text-sm font-medium text-white">
+                    <label className="block text-sm font-medium text-fg">
                       Password <span className="text-orange-500">*</span>
                     </label>
                     <div className="relative">
@@ -705,9 +701,9 @@ export const Signup: React.FC = () => {
                         placeholder="••••••••"
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-10 text-white placeholder-gray-500 transition-all duration-200 focus:ring-2 outline-none ${errors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-white/10 focus:border-clay focus:ring-clay/20'}`}
+                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-10 text-fg placeholder-fg/40 transition-all duration-200 focus:ring-2 outline-none ${errors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-fg/10 focus:border-clay focus:ring-clay/20'}`}
                       />
-                      <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white transition-colors" tabIndex={-1}>
+                      <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-fg transition-colors" tabIndex={-1}>
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
@@ -715,7 +711,7 @@ export const Signup: React.FC = () => {
                   </div>
 
                   <div className="w-full space-y-1.5">
-                    <label className="block text-sm font-medium text-white">
+                    <label className="block text-sm font-medium text-fg">
                       Re-enter Password <span className="text-orange-500">*</span>
                     </label>
                     <div className="relative">
@@ -724,13 +720,13 @@ export const Signup: React.FC = () => {
                         placeholder="••••••••"
                         value={formData.confirmPassword}
                         onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-10 text-white placeholder-gray-500 transition-all duration-200 focus:ring-2 outline-none ${
+                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-10 text-fg placeholder-fg/40 transition-all duration-200 focus:ring-2 outline-none ${
                           (errors.confirmPassword || (formData.confirmPassword && formData.confirmPassword !== formData.password))
                             ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
-                            : 'border-white/10 focus:border-clay focus:ring-clay/20'
+                            : 'border-fg/10 focus:border-clay focus:ring-clay/20'
                         }`}
                       />
-                      <button type="button" onClick={() => setShowConfirmPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white transition-colors" tabIndex={-1}>
+                      <button type="button" onClick={() => setShowConfirmPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-fg transition-colors" tabIndex={-1}>
                         {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
@@ -752,9 +748,9 @@ export const Signup: React.FC = () => {
               {/* Cross — closes the message and opens the app (Matches page). */}
               <button
                 type="button"
-                onClick={() => navigate('/tournament')}
+                onClick={() => navigate('/profile')}
                 aria-label="Close and continue to the app"
-                className="absolute top-4 right-4 text-white/40 hover:text-white transition-colors"
+                className="absolute top-4 right-4 text-fg/40 hover:text-fg transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -762,13 +758,13 @@ export const Signup: React.FC = () => {
               <div className="mx-auto w-16 h-16 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center mb-5">
                 <CheckCircle2 className="w-9 h-9 text-green-400" />
               </div>
-              <h1 className="text-2xl font-black text-white mb-3">Thank you for joining the league</h1>
-              <p className="text-white/70 text-sm leading-relaxed">
+              <h1 className="text-2xl font-black text-fg mb-3">Thank you for joining the league</h1>
+              <p className="text-fg/70 text-sm leading-relaxed">
                 A welcome email containing further instructions has been sent. Please check your
                 junk / spam folder if you don't see it.
               </p>
 
-              <Button size="lg" className="w-full mt-7" onClick={() => navigate('/tournament')}>
+              <Button size="lg" className="w-full mt-7" onClick={() => navigate('/profile')}>
                 Continue
               </Button>
             </div>
@@ -781,7 +777,7 @@ export const Signup: React.FC = () => {
               {/* Screen 1: Name + Phone + Skill */}
               {prefStep === 1 && (
                 <div className="space-y-8">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 gap-6">
                     <div>
                       <Input
                         label="Full Name"
@@ -806,7 +802,7 @@ export const Signup: React.FC = () => {
 
                   <div className="space-y-6">
                     <div className="flex justify-between items-end">
-                      <h3 className="text-xl font-bold text-white flex items-center">
+                      <h3 className="text-xl font-bold text-fg flex items-center">
                         <Trophy className="w-5 h-5 mr-2 text-clay" />
                         NTRP Skill Level
                       </h3>
@@ -815,16 +811,16 @@ export const Signup: React.FC = () => {
                     <div className="relative pt-6">
                       <input
                         type="range"
-                        min="0" max={SKILL_LEVELS.length - 1} step="1"
+                        min="0" max={SELECTABLE_SKILL_LEVELS.length - 1} step="1"
                         value={selectedSkillIndex}
-                        onChange={(e) => setFormData({ ...formData, skillLevel: SKILL_LEVELS[Number(e.target.value)] })}
+                        onChange={(e) => setFormData({ ...formData, skillLevel: SELECTABLE_SKILL_LEVELS[Number(e.target.value)] })}
                         className="w-full h-3 rounded-full"
                       />
                       <div className="mt-4 flex items-start justify-between gap-2 text-center">
-                        {SKILL_LEVELS.map((level) => (
+                        {SELECTABLE_SKILL_LEVELS.map((level) => (
                           <div key={level} className="flex flex-col items-center gap-2">
-                            <span className={`w-2.5 h-2.5 rounded-full ${formData.skillLevel === level ? 'bg-clay' : 'bg-white/20'}`} />
-                            <span className={`text-[10px] font-black tracking-widest ${formData.skillLevel === level ? 'text-clay' : 'text-white'}`}>
+                            <span className={`w-2.5 h-2.5 rounded-full ${formData.skillLevel === level ? 'bg-clay' : 'bg-fg/20'}`} />
+                            <span className={`text-[10px] font-black tracking-widest ${formData.skillLevel === level ? 'text-clay' : 'text-fg'}`}>
                               {level.toFixed(1)}
                             </span>
                           </div>
@@ -833,7 +829,7 @@ export const Signup: React.FC = () => {
                     </div>
                     <div className="flex items-center space-x-3 p-4 rounded-2xl bg-clay/10 border border-clay/20">
                       <Info className="w-5 h-5 text-clay shrink-0" />
-                      <p className="text-sm font-medium text-white italic">"{SKILL_DESCRIPTIONS[formData.skillLevel]}"</p>
+                      <p className="text-sm font-medium text-fg italic">"{SKILL_DESCRIPTIONS[formData.skillLevel]}"</p>
                     </div>
                   </div>
                 </div>
@@ -843,8 +839,8 @@ export const Signup: React.FC = () => {
               {prefStep === 2 && (
                 <div className="space-y-8">
                   <div className="space-y-4">
-                    <label className="block text-sm font-bold text-white uppercase tracking-wider">Preferred Courts</label>
-                    <p className="text-xs text-white/50">Tip: select <span className="text-clay font-semibold">Stanley Park South - Toronto</span> for the downtown area.</p>
+                    <label className="block text-sm font-bold text-fg uppercase tracking-wider">Preferred Courts</label>
+                    <p className="text-xs text-fg/50">Tip: select <span className="text-clay font-semibold">Stanley Park South - Toronto</span> for the downtown area.</p>
 
                     {formData.preferredCourts.length > 0 && (
                       <div className="flex flex-wrap gap-2">
@@ -878,13 +874,13 @@ export const Signup: React.FC = () => {
                         </Button>
                       </div>
                       {courtSuggestions.length > 0 && (
-                        <div className="mt-3 max-h-48 overflow-y-auto rounded-2xl border border-white/10 bg-tennis-dark/95 p-2 shadow-2xl">
+                        <div className="mt-3 max-h-48 overflow-y-auto rounded-2xl border border-fg/10 bg-tennis-dark/95 p-2 shadow-2xl">
                           {courtSuggestions.map((court) => (
                             <button
                               key={court}
                               type="button"
                               onClick={() => selectCourt(court)}
-                              className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-white transition-colors hover:bg-clay/20 hover:text-white"
+                              className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-fg transition-colors hover:bg-clay/20 hover:text-fg"
                             >
                               {court}
                             </button>
@@ -895,7 +891,7 @@ export const Signup: React.FC = () => {
 
                     {formData.pendingZoneChoice ? (
                       <div className="mt-3 p-4 rounded-2xl bg-clay/10 border border-clay/20 space-y-3">
-                        <p className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <p className="text-xs font-bold text-fg uppercase tracking-wider flex items-center gap-2">
                           <MapPin className="w-3.5 h-3.5 text-clay" />
                           Your court is near a zone boundary — choose your zone
                         </p>
@@ -908,7 +904,7 @@ export const Signup: React.FC = () => {
                               className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
                                 formData.preferredZone === zone
                                   ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
-                                  : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+                                  : 'bg-fg/5 border-fg/10 text-fg hover:bg-fg/10'
                               }`}
                             >
                               {zone}
@@ -919,7 +915,7 @@ export const Signup: React.FC = () => {
                     ) : formData.preferredZone ? (
                       <div className="mt-3 flex items-center gap-2">
                         <MapPin className="w-3.5 h-3.5 text-clay shrink-0" />
-                        <span className="text-xs text-white/70">Zone auto-assigned:</span>
+                        <span className="text-xs text-fg/70">Zone auto-assigned:</span>
                         <span className="px-2.5 py-1 rounded-lg bg-clay/20 border border-clay/30 text-clay text-xs font-bold">
                           {formData.preferredZone}
                         </span>
@@ -928,7 +924,7 @@ export const Signup: React.FC = () => {
                   </div>
 
                   <div className="space-y-4">
-                    <label className="block text-sm font-bold text-white uppercase tracking-wider flex items-center">
+                    <label className="block text-sm font-bold text-fg uppercase tracking-wider flex items-center">
                       <Star className="w-4 h-4 mr-2 text-clay" />
                       Favourite Players
                     </label>
@@ -948,7 +944,7 @@ export const Signup: React.FC = () => {
                           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                             formData.favouritePlayers.includes(player)
                               ? 'bg-clay text-white shadow-lg shadow-clay/20'
-                              : 'bg-white/5 text-white hover:bg-white/10 border border-white/5'
+                              : 'bg-fg/5 text-fg hover:bg-fg/10 border border-fg/5'
                           }`}
                         >
                           {player}
@@ -978,17 +974,17 @@ export const Signup: React.FC = () => {
               {prefStep === 3 && (
                 <div className="space-y-6">
                   <div className="space-y-4">
-                    <label className="block text-sm font-bold text-white uppercase tracking-wider flex items-center">
+                    <label className="block text-sm font-bold text-fg uppercase tracking-wider flex items-center">
                       <Calendar className="w-4 h-4 mr-2 text-clay" />
                       Availability
                     </label>
                     <div className="grid grid-cols-[1fr_auto_auto] gap-x-6 gap-y-1 items-center max-w-xs">
                       <span />
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 text-center w-10">AM</span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-white/40 text-center w-10">PM</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-fg/40 text-center w-10">AM</span>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-fg/40 text-center w-10">PM</span>
                       {DAY_CODES.map((d) => (
                         <React.Fragment key={d}>
-                          <span className="text-sm text-white/80 py-1.5">{DAY_LABELS[d]}</span>
+                          <span className="text-sm text-fg/80 py-1.5">{DAY_LABELS[d]}</span>
                           {(['AM', 'PM'] as TimeSlot[]).map((slot) => {
                             const on = (formData.availabilityGrid[d] ?? []).includes(slot);
                             return (
@@ -1003,10 +999,10 @@ export const Signup: React.FC = () => {
                                     setFormData({ ...formData, availabilityGrid: grid });
                                   }}
                                   className={`w-6 h-6 rounded flex items-center justify-center border transition-colors ${
-                                    on ? 'bg-clay border-clay' : 'bg-white/5 border-white/15 hover:border-clay/60'
+                                    on ? 'bg-clay border-clay' : 'bg-fg/5 border-fg/15 hover:border-clay/60'
                                   }`}
                                 >
-                                  {on && <span className="text-white text-[11px]">✓</span>}
+                                  {on && <span className="text-fg text-[11px]">✓</span>}
                                 </button>
                               </div>
                             );
@@ -1016,10 +1012,8 @@ export const Signup: React.FC = () => {
                     </div>
                   </div>
 
-                  <p className="text-xs text-white/50 text-center px-2">
+                  <p className="text-xs text-fg/50 text-center px-2">
                     By joining you agree to our{' '}
-                    <Link to="/rules" className="text-clay hover:underline">league rules</Link>
-                    {' '}and{' '}
                     <Link to="/terms" className="text-clay hover:underline">terms of service</Link>.
                   </p>
                 </div>
@@ -1029,7 +1023,7 @@ export const Signup: React.FC = () => {
 
           {/* Navigation — signup phases only */}
           {phase === 'account' && (
-            <div className="flex justify-end items-center gap-3 mt-4 pt-8 border-t border-white/5">
+            <div className="flex justify-end items-center gap-3 mt-4 pt-8 border-t border-fg/5">
               <Button onClick={handleAccountContinue} className="group" isLoading={loading}>
                 Continue
                 <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -1037,7 +1031,7 @@ export const Signup: React.FC = () => {
             </div>
           )}
           {phase === 'preferences' && (
-            <div className="flex justify-between items-center gap-3 mt-4 pt-8 border-t border-white/5">
+            <div className="flex justify-between items-center gap-3 mt-4 pt-8 border-t border-fg/5">
               {prefStep > 1 ? (
                 <Button variant="outline" onClick={() => setPrefStep((s) => (s - 1) as 1 | 2 | 3)}>
                   Back

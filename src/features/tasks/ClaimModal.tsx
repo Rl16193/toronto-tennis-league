@@ -92,8 +92,8 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
               <CheckCircle2 className="w-8 h-8 text-green-500" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-lg font-bold text-white">Sent for review</h3>
-              <p className="text-white/60 text-sm">An organizer will approve it before it counts.</p>
+              <h3 className="text-lg font-bold text-fg">Sent for review</h3>
+              <p className="text-fg/60 text-sm">An organizer will approve it before it counts.</p>
             </div>
             <Button variant="outline" className="w-full" onClick={onClose}>Done</Button>
           </div>
@@ -105,11 +105,11 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
 
             {type === 'volunteer' && (
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-white/50 uppercase tracking-widest">Which event?</label>
+                <label className="block text-xs font-bold text-fg/50 uppercase tracking-widest">Which event?</label>
                 <select
                   value={eventId}
                   onChange={(e) => setEventId(e.target.value)}
-                  className="w-full rounded-2xl bg-tennis-surface/50 border border-white/10 px-4 py-2.5 text-sm text-white outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                  className="w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 px-4 py-2.5 text-sm text-fg outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
                 >
                   <option value="">Select an event…</option>
                   {events.map((e) => <option key={e.id} value={e.id}>{e.title}</option>)}
@@ -126,31 +126,31 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
 
             {type === 'ambassador' && (
               <div className="space-y-1.5 relative">
-                <label className="block text-xs font-bold text-white/50 uppercase tracking-widest">Who did you invite?</label>
+                <label className="block text-xs font-bold text-fg/50 uppercase tracking-widest">Who did you invite?</label>
                 {selected ? (
                   <div className="flex items-center justify-between rounded-2xl bg-clay/15 border border-clay/30 px-4 py-2.5">
-                    <span className="text-sm font-bold text-white">{selected.name}</span>
-                    <button type="button" onClick={() => setSelected(null)} className="text-xs text-white/50 hover:text-white">Change</button>
+                    <span className="text-sm font-bold text-fg">{selected.name}</span>
+                    <button type="button" onClick={() => setSelected(null)} className="text-xs text-fg/50 hover:text-fg">Change</button>
                   </div>
                 ) : (
                   <>
                     <div className="relative">
-                      <Search className="w-4 h-4 text-white/30 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <Search className="w-4 h-4 text-fg/30 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
                         type="text"
                         placeholder="Search members…"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="w-full rounded-2xl bg-tennis-surface/50 border border-white/10 pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                        className="w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 pl-10 pr-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
                       />
                     </div>
-                    <div className="max-h-40 overflow-y-auto rounded-2xl border border-white/10 bg-tennis-dark/60 p-1">
+                    <div className="max-h-40 overflow-y-auto rounded-2xl border border-fg/10 bg-tennis-dark/60 p-1">
                       {memberMatches.map((m) => (
                         <button
                           key={m.id}
                           type="button"
                           onClick={() => setSelected(m)}
-                          className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-white hover:bg-clay/20 transition-colors"
+                          className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
                         >
                           {m.name}
                         </button>
@@ -158,17 +158,17 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
                     </div>
                   </>
                 )}
-                <p className="text-[11px] text-white/40">Only counts once they’ve played their first match.</p>
+                <p className="text-[11px] text-fg/40">Only counts once they’ve played their first match.</p>
               </div>
             )}
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-white/50 uppercase tracking-widest">Note (optional)</label>
+              <label className="block text-xs font-bold text-fg/50 uppercase tracking-widest">Note (optional)</label>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 rows={2}
-                className="w-full rounded-2xl bg-tennis-surface/50 border border-white/10 px-4 py-3 text-white placeholder-gray-500 text-sm outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                className="w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 px-4 py-3 text-fg placeholder-gray-500 text-sm outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
               />
             </div>
 

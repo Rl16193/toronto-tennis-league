@@ -2,67 +2,67 @@
 
 Full function-by-function inventory across the codebase (React/TS frontend, Firebase Cloud Functions, admin scripts). Grouped by feature area, then by file. Line numbers refer to current file state.
 
+**Refreshed** after a dead-code removal + de-duplication pass (see CLAUDE.md and git history). The app has changed substantially since the previous version of this document — several pages were rebuilt, several files were removed, and several new modules were added (`Matches.tsx`, `History.tsx`, `Notifications.tsx`, `features/friendlies/`, several shared UI components, `ThemeContext`, `functions/groupAwards.js`). This version reflects the current codebase; it does not reproduce every removed/superseded entry from the prior version.
+
 ---
 
 ## 1. Tournament Engine (`src/pages/tournament/`, `src/pages/Tournament.tsx`)
 
-### `useTournament.ts` (~85 functions/closures — the core draw engine hook)
+### `useTournament.ts` (~2020 lines — the core draw engine hook)
 | Function | Line | Description |
 |---|---|---|
 | `useTournament` | 22 | Root hook; owns all tournament state, Firestore subscriptions, and every handler below. |
-| `load` (participants effect) | 119 | Live `onSnapshot` loader for `event_participants`. |
-| `norm` | 237 | Normalizes a string (trim/lowercase/collapse spaces) for name matching. |
-| `liveName` | 674 | Resolves a player's current display name from live user data, falling back to the match snapshot. |
-| `liveContact` | 678 | Resolves a player's current contact info live, falling back to snapshot. |
-| `run` (matches effect) | 765 | Live `onSnapshot` loader for `tournament_matches` + score submissions. |
-| `run` (draw-state effect) | 948 | Recomputes derived draw state (started/finished/preview) when matches change. |
-| `generateDraw` | 1007 | Creates a bracket draw's Firestore match docs from placed/seeded players for a given `DrawConfig`. |
-| `updateMatchWithSubmission` | 1077 | Confirms a score: (1) writes match result, (2) best-effort stats batch, (3) best-effort winner advancement — three isolated steps per CLAUDE.md. |
-| `sameDraw` | 1220 | Predicate matching another match in the same bracket/draw. |
-| `handleUpdateRoundDeadline` | 1257 | Creator sets/edits a round's scheduling deadline. |
-| `handleSetPreviewDrawSize` | 1273 | Overrides the auto-calculated preview draw size for a label. |
-| `handleGenerateAll` | 1277 | Generates every eligible draw for the event in one action. |
-| `reverseMatchStatsInto` | 1298 | Un-applies a match's stat contributions into a batch (used when resetting/editing). |
-| `reverseRRBonusesInto` | 1337 | Un-applies Round Robin group-stage bonus points into a batch. |
-| `handleResetDraw` | 1347 | Deletes a generated bracket draw and reverses its stats. |
-| `handleEditPlayer` | 1379 | Creator swaps a player into/out of a match slot. |
-| `handleSubmitScore` | 1442 | Validates and submits a score — player path creates a `score_submissions` doc, creator path writes directly via `updateMatchWithSubmission`. |
-| `handleConfirmSubmission` | 1518 | Creator approves a pending player-submitted score. |
-| `handleRejectSubmission` | 1548 | Creator rejects a pending player-submitted score. |
-| `handleAddPlayer` | 1559 | Creator manually adds a player/team to the event. |
-| `handleOpenScoreForm` | 1614 | Opens the score-entry modal for a match. |
-| `handleSetLLDrawSize` | 1623 | Sets the Lucky Loser / reserves draw size. |
-| `handleResetLLDraw` | 1628 | Deletes the reserves (LL) draw. |
-| `handleGenerateReservesDraw` | 1646 | Generates the reserves/Lucky-Loser draw from unplaced participants. |
-| `rrDraftKey` | 1688 | Builds the localStorage/Firestore key for the current RR draft. |
-| `saveRRDraft` | 1694 | Persists an in-progress (ungenerated) RR group draft. |
-| `setRRWithdrawnMembership` | 1714 | Adds/removes players from the RR "withdrawn" set. |
-| `handleGenerateRR` | 1722 | Generates the Round Robin group-stage draw from an `RRConfig`. |
-| `handleSaveGroupEdit` | 1763 | Rewrites one RR group's roster, including cross-draw moves (Challengers ↔ Masters). |
-| `handleCreateRRGroup` | 1891 | Creates a new RR group from unplaced players ("Add Group"). |
-| `handleRenameGroup` | 1940 | Sets a custom label on an RR group. |
-| `handleRemoveParticipant` | 1973 | Removes a participant from the event entirely. |
-| `writeSchedule` | 2019 | Shared helper writing a schedule patch to a match doc. |
-| `handleAskOrganizerSchedule` | 2030 | Player requests organizer help scheduling a match. |
-| `handleSetSchedule` | 2037 | Sets a match's date/AM-PM slot. |
-| `handleResetRR` | 2044 | Deletes the entire RR group stage. |
-| `handleGenerateRRKnockout` | 2075 | Builds the knockout bracket from RR group winners + best runners-up. |
+| `load` (participants effect) | 115 | Live `onSnapshot` loader for `event_participants`. |
+| `norm` | 233 | Normalizes a string (trim/lowercase/collapse spaces) for name matching. |
+| `liveName` | 589 | Resolves a player's current display name from live user data, falling back to the match snapshot. |
+| `liveContact` | 593 | Resolves a player's current contact info live, falling back to snapshot. |
+| `run` (matches effect) | 680 | Live `onSnapshot` loader for `tournament_matches` + score submissions. |
+| `run` (auto-place late joiners) | 848 | Distributes newly-joined RR players into eligible groups automatically. |
+| `generateDraw` | 907 | Creates a bracket draw's Firestore match docs from placed/seeded players for a given `DrawConfig`. |
+| `updateMatchWithSubmission` | 977 | Confirms a score: writes the match result, updates stats/points, then (best-effort) advances the winner — isolated so a rules rejection never rolls back a recorded score. |
+| `sameDraw` | 1120 | Predicate matching another match in the same bracket/draw. |
+| `handleUpdateRoundDeadline` | 1157 | Creator sets/edits a round's scheduling deadline. |
+| `handleSetPreviewDrawSize` | 1173 | Overrides the auto-calculated preview draw size for a label. |
+| `handleGenerateAll` | 1177 | Generates every eligible draw for the event in one action. |
+| `reverseMatchStatsInto` | 1198 | Un-applies a match's stat/points contributions into a batch (used when resetting/editing). |
+| `reverseRRBonusesInto` | 1237 | Un-applies Round Robin group-stage bonus points into a batch. |
+| `handleResetDraw` | 1247 | Deletes a generated bracket draw and reverses its stats. |
+| `handleEditPlayer` | 1279 | Creator swaps a player into/out of a match slot. |
+| `handleSubmitScore` | 1331 | Validates and submits a score — player path creates a `score_submissions` doc, creator path writes directly via `updateMatchWithSubmission`. |
+| `handleConfirmSubmission` | 1407 | Creator approves a pending player-submitted score. |
+| `handleRejectSubmission` | 1437 | Creator rejects a pending player-submitted score. |
+| `handleAddPlayer` | 1448 | Creator manually adds a player/team to the event. |
+| `handleOpenScoreForm` | 1503 | Opens the score-entry modal for a match. |
+| `rrDraftKey` | 1514 | Builds the Firestore key for the current RR draft. |
+| `saveRRDraft` | 1520 | Persists an in-progress (ungenerated) RR group draft. |
+| `setRRWithdrawnMembership` | 1540 | Adds/removes players from the RR "withdrawn" set. |
+| `handleGenerateRR` | 1548 | Generates the Round Robin group-stage draw from an `RRConfig`. |
+| `handleSaveGroupEdit` | 1589 | Rewrites one RR group's roster, including moves in from other groups within the same draw. |
+| `handleCreateRRGroup` | 1765 | Creates a new RR group from unplaced players ("Add Group"). |
+| `handleRenameGroup` | 1814 | Sets a custom label on an RR group. |
+| `writeSchedule` | 1849 | Shared helper writing a schedule patch to a match doc. |
+| `handleAskOrganizerSchedule` | 1860 | Player requests organizer help scheduling a match. |
+| `handleSetSchedule` | 1867 | Sets a match's date/AM-PM slot. |
+| `handleResetRR` | 1874 | Deletes the entire RR group stage. |
+| `handleGenerateRRKnockout` | 1905 | Builds the knockout bracket from RR group winners + best runners-up. |
 
-*(Plus ~45 smaller inline closures — one-line comparators, predicates, and `useMemo`/`useEffect` bodies — that compute `userDraw`, `visibleDraws`, `displayMatches`, and similar derived view state referenced throughout CLAUDE.md.)*
+*(Plus a background cross-draw deduplication effect keyed on `rrSiblingDraw`/`rrSiblingMatches` that silently removes a player from this draw's groups if they're found seated in the sibling skill draw's groups — no dedicated "move between skill draws" action exists; see CLAUDE.md. Plus ~35 smaller inline closures — comparators, predicates, and `useMemo`/`useEffect` bodies — computing `userDraw`, `visibleDraws`, `displayMatches`, etc.)*
 
-### `Tournament.tsx` (top-level route/page)
+*Cleanup note: the entire Reserves/Lucky-Loser (LL) draw subsystem (`reservesPlayers`, `currentReservesMatches`, `llDrawDisplayMatches`, `handleSetLLDrawSize`, `handleGenerateReservesDraw`, `handleResetLLDraw`, etc.) and the unused `handleRemoveParticipant` were removed as dead code — no UI consumer called any of them.*
+
+### `Tournament.tsx` (top-level route/page, 525 lines)
 | Function | Line | Description |
 |---|---|---|
-| `getDrawState` | 32 | Labels a set of matches as preview/in-progress/finished. |
-| `formatEventRange` | 61 | Formats an event's start–end date range for display. |
-| `Tournament` | 84 | Page component; wires `useTournament()` to the draw UI, tabs, and modals. |
-| `yearOf` | 178 | Extracts the year from an event's date. |
-| `selectEvent` | 184 | Navigates to/selects a specific tournament event. |
-| `drawSelector` (JSX var) | 227 | Renders the draw-tab selector UI. |
-| `roundRobinFull` | 242 | Renders the full-width RR groups + knockout view. |
-| `drawContent` (JSX var) | 273 | Renders the active draw's bracket/RR content. |
+| `getDrawState` | 30 | Labels a set of matches as preview/in-progress/finished. |
+| `formatEventRange` | 59 | Formats an event's start–end date range for display. |
+| `Tournament` | 82 | Page component; wires `useTournament()` to the draw UI, tabs, and modals. |
+| `selectEvent` | 176 | Navigates to/selects a specific tournament event. |
+| `drawHasCompleted` | 227 | Whether a draw config has at least one completed, non-reserves match (used to hide unplayed draws on completed events). |
+| `drawSelector` (JSX var) | 234 | Renders the draw-tab selector UI. |
+| `roundRobinFull` | 249 | Renders the full-width RR groups + knockout view. |
+| `drawContent` (JSX var) | 281 | Renders the active draw's bracket/RR content. |
 
-### `rrGeneration.ts` (Round Robin generation — pure functions)
+### `rrGeneration.ts` (Round Robin generation — pure functions, unchanged)
 | Function | Line | Description |
 |---|---|---|
 | `splitEvenly` | 17 | Splits `n` players into balanced groups of 3–5 (the core group-sizing algorithm). |
@@ -80,82 +80,83 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 | `buildRRKnockoutDocs` | 409 | Builds the Firestore match docs for the post-group knockout bracket. |
 | `deriveRRConfig` | 506 | Reconstructs an `RRConfig` from existing RR match docs (for re-editing/display). |
 
-### `utils.ts` (tournament shared helpers)
+### `utils.ts` (tournament shared helpers, 394 lines)
 | Function | Line | Description |
 |---|---|---|
 | `formatScheduledDate` | 7 | Formats a scheduled match date + AM/PM slot for display. |
-| `formatSetScores` | 17 | Formats a match's set scores as a string (e.g. "6-3, 6-4"). |
-| `formatPlayerName` | 29 | Formats/cleans a player name for display. |
-| `getParticipantDisplayName` | 43 | Resolves the display name for a participant, using live user data if available. |
-| `parseDateValue` | 55 | Parses a Firestore date-like value into a `Date`. |
-| `getEventDate` | 57 | Resolves an event's canonical start date across legacy field name variants. |
-| `isTournamentStarted` | 60 | Whether a tournament's start date has passed. |
-| `getDrawKey` | 65 | Builds the draw's Firestore doc-ID key from choice/division/skill group. |
-| `skillBand` | 70 | Maps a numeric skill level to a band label (Beginners/Challengers/Masters). |
-| `getScheduleState` | 80 | Derives a match's scheduling state object. |
-| `getDrawSize` | 87 | Auto-calculates bracket size (8/16/32) from participant count. |
-| `fallbackTemplate` | 93 | Builds a placeholder bracket template before real matches exist. |
-| `normalizeTemplateMatches` | 142 | Normalizes template match objects to a consistent shape. |
-| `getWinnerPlaceholder` | 152 | Builds the "Winner of Match X" placeholder label for a future round slot. |
-| `getContactValue` | 163 | Extracts a usable contact value from user data. |
-| `normalizeForMatch` | 170 | Normalizes a name for fuzzy participant matching. |
-| `deduplicateDoublesTeams` | 178 | Removes duplicate doubles-team entries from a participant list. |
-| `filterParticipantsForDraw` | 212 | Filters the participant pool down to those eligible for a specific draw. |
-| `isSpecialDraw` | 230 | Whether a draw config is a merged/special (non-standard) draw. |
-| `sortParticipantsForDraw` | 235 | Sorts participants into seeding order for draw generation. |
-| `mapParticipantsToPlayers` | 253 | Maps raw participant docs into `TournamentPlayer` view objects. |
-| `buildMatchFields` | 274 | Builds the Firestore fields for a single bracket match doc. |
-| `buildPlayerList` | 313 | Assembles the ordered player list feeding draw generation. |
+| `formatSetScores` | 24 | Formats a match's set scores as a string (e.g. "6-3, 6-4"). Now typed against a minimal `ScoredSets` shape so it also accepts a `ScoreSubmissionDoc`. |
+| `getMatchDisplayFlags` | 53 | **New (de-dup).** Derives the shared per-match display state (preview/editable/score-text/submit-button visibility) used identically by `BracketView` and `BracketAccordion`. |
+| `formatPlayerName` | 93 | Formats/cleans a player name for display. |
+| `getParticipantDisplayName` | 107 | Resolves the display name for a participant, using live user data if available. |
+| `parseDateValue` | 119 | Parses a Firestore date-like value into a `Date`. |
+| `getEventDate` | 121 | Resolves an event's canonical start date across legacy field name variants. |
+| `isTournamentStarted` | 124 | Whether a tournament's start date has passed. |
+| `getDrawKey` | 129 | Builds the draw's Firestore doc-ID key from choice/division/skill group. |
+| `skillBand` | 134 | Maps a numeric skill level to a band label (Beginners/Challengers/Masters). |
+| `getScheduleState` | 144 | Derives a match's scheduling state object. |
+| `getDrawSize` | 151 | Auto-calculates bracket size (8/16/32) from participant count. |
+| `fallbackTemplate` | 157 | Builds a placeholder bracket template before real matches exist. |
+| `normalizeTemplateMatches` | 206 | Normalizes template match objects to a consistent shape. |
+| `getWinnerPlaceholder` | 216 | Builds the "Winner of Match X" placeholder label for a future round slot. |
+| `getContactValue` | 227 | Extracts a usable contact value from user data. |
+| `normalizeForMatch` | 234 | Normalizes a name for fuzzy participant matching. |
+| `deduplicateDoublesTeams` | 242 | Removes duplicate doubles-team entries from a participant list. |
+| `filterParticipantsForDraw` | 276 | Filters the participant pool down to those eligible for a specific draw. |
+| `isSpecialDraw` | 298 | Whether a draw config is a merged/special (non-standard) draw. |
+| `sortParticipantsForDraw` | 303 | Sorts participants into seeding order for draw generation. |
+| `mapParticipantsToPlayers` | 321 | Maps raw participant docs into `TournamentPlayer` view objects. |
+| `buildMatchFields` | 342 | Builds the Firestore fields for a single bracket match doc. |
+| `buildPlayerList` | 381 | Assembles the ordered player list feeding draw generation. |
 
-### `bracketImage.ts` (SVG/PNG export)
+### `bracketImage.ts` (SVG/PNG export, 309 lines)
 | Function | Line | Description |
 |---|---|---|
 | `getRoundLabels` | 4 | Returns round names (Round of 16, QF, SF, Final…) for a draw size. |
 | `escapeSvg` | 12 | Escapes text for safe SVG embedding. |
 | `truncate` | 15 | Truncates long names for the exported image. |
-| `formatDeadline` | 19 | Formats a round deadline for the exported image. |
-| `formatSvgScore` | 27 | Formats a match score for SVG rendering. |
+| `formatDeadline` | 19 | Formats a round deadline for the exported image (SVG-specific: `"Till "` prefix + empty guard). |
+| `formatSvgScore` | 27 | Formats a match score for SVG rendering (kept separate from `formatSetScores` — different escaping needs). |
 | `buildDrawSvg` | 56 | Builds the full bracket SVG markup. |
 | `buildRRGroupSvg` | 130 | Builds an RR group-table SVG. |
 | `doublesShortNames` | 154 | Shortens doubles team names to fit the image. |
 | `contactOf` | 176 | Resolves a player's contact info for the exported image. |
-| `openRRGroupsInNewTab` | 245 | Opens the generated RR groups image in a new tab. |
-| `downloadRRGroupsAsPng` | 252 | Downloads the RR groups image as PNG. |
-| `openDrawInNewTab` | 287 | Opens the generated bracket image in a new tab. |
-| `downloadDrawAsPng` | 295 | Downloads the bracket image as PNG. |
+| `downloadRRGroupsAsPng` | 245 | Downloads the RR groups image as PNG. |
+| `downloadDrawAsPng` | 277 | Downloads the bracket image as PNG. |
+
+*Cleanup note: `openDrawInNewTab` and `openRRGroupsInNewTab` (the retired "PNG in a new tab" player fallback) were removed as dead code.*
 
 ### Tournament sub-components
 | File | Function | Description |
 |---|---|---|
 | `BracketView.tsx` | `getRoundTone` | Picks a round's accent color/style. |
 | | `isPlaceholder` | Whether a slot name is an unresolved placeholder. |
-| | `getRoundState` | Derives a round's preview/loading/started/finished state. |
-| | `formatDeadline` | Formats a round deadline for display. |
+| | `getRoundState` (exported) | Derives a round's preview/loading/started/finished state — imported by `BracketAccordion.tsx`. |
+| | `formatDeadline` (exported) | Formats a round deadline for the desktop UI badge (no `"Till "` prefix — different shape than `bracketImage.ts`'s). Imported by `BracketAccordion.tsx`. |
 | | `BracketPlayer` | Renders one player row in a bracket cell. |
-| | `PlayerSelect` | Dropdown for creator to assign a player into a bracket slot. |
-| | `BracketView` | Main bracket-rendering component. |
+| | `PlayerSelect` (exported) | Dropdown for creator to assign a player into a bracket slot — shared with `BracketAccordion.tsx`. |
+| | `BracketView` | Main desktop bracket-rendering component; per-match flags now come from `getMatchDisplayFlags` (utils.ts) instead of an inline block. |
+| `BracketAccordion.tsx` | `BracketAccordion` | **New.** Mobile round-by-round accordion view for bracket draws — round chips + one-open-at-a-time sections. Sibling to `BracketView`, not a replacement (`Tournament.tsx` renders one or the other by breakpoint). Reuses `PlayerSelect`/`formatDeadline`/`getRoundState` from `BracketView.tsx` and `getMatchDisplayFlags` from `utils.ts`. |
 | `RoundRobinView.tsx` | `toggle` | Toggles a player's selection in the group-editor UI. |
 | | `submit` | Submits an edited group's roster. |
 | | `RoundRobinView` | Main RR groups + standings + knockout rendering component. |
 | `RRGroupCard.tsx` | `RRGroupCard` | Renders one RR group's standings table and match list. |
 | `RRConfigModal.tsx` | `RRConfigModal` | Modal for configuring/confirming RR draw generation. |
-| `DrawTabs.tsx` | `subBtnClass` | CSS class helper for a sub-tab button's active state. |
+| `DrawTabs.tsx` | `drawKey` / `chipLabel` / `select` | Draw-tab identity/label helpers and the tab-select handler (now built on the shared `ChipRow`/`SegmentedControl` components). |
 | | `DrawTabs` | Renders the division/skill-group draw-selector tabs. |
-| `OpponentPanels.tsx` | `ProfileLink` | Links a name to that player's profile. |
-| | `scheduleBadge` | Renders a match's scheduling-status badge. |
+| `OpponentPanels.tsx` | `scheduleBadge` | Renders a match's scheduling-status badge (returns `null` when nothing to show, unlike the old always-render version). |
 | | `CurrentMatchCell` | Renders a player's current/next-match cell. |
-| | `contactFor` | Resolves the opponent's contact info to display. |
 | `ScoreModal.tsx` | `ScoreModal` | Modal for entering/submitting a match score. |
 | | `handleSubmit` | Form submit handler inside the modal. |
+| | `setSetValue` | Updates one set's score value (now built on the shared `Stepper` component). |
 | `AddPlayerPanel.tsx` | `AddPlayerPanel` | Creator UI panel for manually adding a player. |
 | | `handler` (outside-click) | Closes the panel on outside click. |
 | | `handleAdd` | Submits the add-player action. |
-| `PendingScoresPanel.tsx` | `setScoreString` | Formats a pending submission's score for display. |
-| | `PendingScoresPanel` | Lists pending player-submitted scores for creator confirm/reject. |
+| `PendingScoresPanel.tsx` | `PendingScoresPanel` | Lists pending player-submitted scores for creator confirm/reject. *(De-dup: its local `setScoreString` duplicate was removed — it now imports `formatSetScores` from `utils.ts`.)* |
 | `TournamentHeader.tsx` | `TournamentHeader` | Renders the tournament page header (title, dates, actions). |
 | `ContactOpponentButton.tsx` | `toE164Phone` | Normalizes a phone number to E.164 for `tel:`/WhatsApp links. |
-| | `outlineCls` | CSS class helper for the button's outline style. |
-| | (outside-click handler) | Closes a popover on outside click. |
+| | `pillButtonCls` (exported) | Shared pill-button CSS-class builder, reused by `ScheduleControls.tsx` and other inline action buttons. |
+| | `btnCls` | Thin wrapper over `pillButtonCls`. |
+| | `ContactOpponentButton` | Contact dropdown (WhatsApp/Text/Call/Email), portalled to `<body>` with its own scroll-tracked positioning; only one instance open at a time app-wide via a window event. |
 | `ScheduleControls.tsx` | `ScheduleControls` | Renders "Request Scheduling Assistance" / "Submit Score" action buttons. |
 | `ScheduleRequestsPanel.tsx` | `RequestRow` | One row letting a creator set a date/slot for a scheduling request. |
 | | `ScheduleRequestsPanel` | Lists all pending scheduling requests for a creator. |
@@ -168,7 +169,7 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 | File | Function | Description |
 |---|---|---|
 | `Events.tsx` | `Events` | Events listing/creation page component. |
-| | `handleExpand` | Expands/collapses an event card's detail view. |
+| | `handleJoin` | Opens the join flow for an event (renamed from `handleExpand`; now opens `JoinEventSheet` rather than expanding an inline form). |
 | | `handleCreateEvent` | Submits the creator's new-event form. |
 | `useEvents.ts` | `useEvents` | Hook loading all events + the user's join state. |
 | | `getJoinedChoices` | Returns which tournament choices (Singles/Doubles) a user joined for an event. |
@@ -176,94 +177,84 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 | | `hasJoinedTournamentChoice` | Whether the user joined a specific tournament choice. |
 | | `hasJoinedAnyTournament` | Whether the user joined any tournament draw for the event. |
 | | `isFullyJoinedEvent` | Whether the user has joined every available slot in the event. |
-| `useJoin.ts` | `useJoin` | Hook handling the join-event flow (singles/doubles branch, slot assignment). |
+| `useJoin.ts` | `useJoin` | Hook handling the join-event flow (singles/doubles branch, slot assignment). *(De-code: `handleStartJoin`/`SIGNUP_ROUTE` and the `navigate` param were removed — dead; `JoinEventSheet.tsx` is now the sole join-flow UI.)* |
 | | `isOpenSlot` | Whether a participant slot is empty/placeholder (Player Loading/BYE). |
 | | `findSlot` | Finds an open slot for a given tournament choice/division/group. |
-| | `handleStartJoin` | Opens the join form/modal for an event. |
 | | `handleSubmitJoin` | Submits the join request, writing `event_participants`. |
+| `JoinEventSheet.tsx` | `chip` | CSS-class helper for a selectable chip's active state. |
+| | `JoinEventSheet` | **New.** The join-flow bottom sheet — replaced the old in-card expanding join form; calls `useJoin`'s state/`handleSubmitJoin`. |
 | `eventService.ts` | `fetchEvents` | Fetches all events from Firestore. |
 | | `resolveStorageUrl` | Resolves a Storage path to a public download URL. |
 | | `validateEventForm` | Validates the creator's new-event form fields. |
-| | `uploadEventImage` | Uploads an event's cover image to Storage. |
-| | `createEvent` | Writes a new event doc to Firestore. |
+| | `createEvent` | Writes a new event doc to Firestore. *(Cleanup: `uploadEventImage`/`ACCEPTED_EVENT_IMAGE_TYPES` were removed — dead, no file-input consumer.)* |
 | `EventCard.tsx` | `getJoinLastDateMs` | Extracts an event's join-deadline as a timestamp. |
-| | `isLateRegistration` | Whether the event is within its late-registration window. |
+| | `isLateRegistration` (exported) | Whether the event is within its late-registration window. |
 | | `isJoinHardClosed` | Whether joining is fully closed. |
 | | `EventCard` | Renders one event's card (info, join button, status). |
-| | `resendVerification` | Resends the email-verification link from the card's join gate. |
-| | `handleJoinClick` | Handles the card's join button click. |
 | `CreatorEventModal.tsx` | `CreatorEventModal` | Modal form for creating/editing an event (creator-only). |
 | `eventFormatters.ts` | `getEventDays` | Returns which weekdays a recurring event runs on. |
 | | `formatEventSchedule` | Formats a recurring event's schedule string. |
 | | `formatTournamentRange` | Formats a tournament's date range string. |
-| `eventTypes.ts` | `isRecurringWeekly` / `isTournamentEvent` / `isLadderEvent` / `isMeetupEvent` / `isSpecialEvent` / `isSeasonOpener` / `isWeekendMatchdaysEvent` / `isTopspinMeetupEvent` | Type-predicate helpers classifying an event by its `type`/`title`. |
+| `eventTypes.ts` | `isRecurringWeekly` / `isTournamentEvent` / `isLadderEvent` / `isSeasonOpener` / `isWeekendMatchdaysEvent` / `isTopspinMeetupEvent` | Type-predicate helpers classifying an event by its `type`/`title`. *(Cleanup: `isMeetupEvent`/`isSpecialEvent` were removed — unused.)* |
 
 ---
 
 ## 3. Profile (`src/pages/Profile.tsx`, `src/pages/PlayerProfile.tsx`, `src/features/profile/`)
 | File | Function | Description |
 |---|---|---|
-| `Profile.tsx` | `Profile` | Own-profile page component (wires info/availability/events/actions). |
-| `PlayerProfile.tsx` | `skillTier` | Maps skill number to a tier label. |
-| | `leagueDivision` | Derives Men's/Women's division from league string. |
-| | `RacquetIcon` | Small decorative icon component. |
+| `Profile.tsx` | `Profile` | Own-profile page (314 lines — now inlines its own streak/points/upcoming-matches hub tiles directly rather than delegating to separate `RecentMatches`/`ProfileEvents` components). |
+| `PlayerProfile.tsx` | `deriveResults` | Derives streak, best-finish, and won-final flags from a player's tournament matches. |
 | | `SectionLabel` | Renders a labeled section heading. |
 | | `Pill` | Renders a small pill/badge element. |
 | | `PlayerProfile` | Public player-profile page (another user's view). |
 | | `loadPlayer` | Loads the viewed player's profile + stats. |
 | | `initial` | Computes the avatar-fallback initial letter. |
-| `ProfileInfo.tsx` | `skillTier` / `tournamentPref` / `leagueDivision` | Same classification helpers as above, local copies. |
-| | `RacquetIcon` | Decorative icon. |
+| `ProfileInfo.tsx` | `tournamentPref` | Maps skill number to a tournament-preference label (local — `PlayerProfile.tsx` has no counterpart use for it). |
 | | `ProfileInfo` | Renders/edits the profile's personal-info fields. |
 | | `open` | Opens the inline editor for a given field row. |
 | | `save` | Persists an inline edit via the passed action + closes the editor. |
 | | `computeZone` | Derives the player's zone from selected courts. |
 | | `addCourt` | Adds a preferred court to the profile. |
 | | `onPickAvatar` | Handles avatar file selection/upload. |
-| `ProfileEvents.tsx` | `parseEventDate` | Parses a joined event's date field. |
-| | `ProfileEvents` | Lists the user's joined events with cancel/reschedule actions. |
-| | `openConfirm` / `closeConfirm` | Open/close the leave-event confirmation dialog. |
-| | `handleConfirm` | Confirms leaving an event. |
-| `ProfileAvailability.tsx` | `ProfileAvailability` | Edits the player's weekly availability grid. |
-| | `has` | Checks if a day/slot is selected in the draft grid. |
-| | `startEdit` | Enters edit mode, seeding the draft from current preferences. |
-| | `toggle` | Toggles one day/slot cell. |
-| | `save` | Persists the edited availability grid. |
-| `RecentMatches.tsx` | `RecentMatches` | Shows the player's recent match results + current streak. |
-| | `streak` (computed) | Computes the current win/loss streak from recent results. |
 | `useProfileData.ts` | `useProfileData` | Hook loading the current user's full profile bundle. |
 | `useProfileActions.ts` | `useProfileActions` | Hook bundling all profile mutation actions with loading/message state. |
 | | `showMessage` | Sets a transient success/error message. |
 | | `withProfileUpdate` | Wraps an update call with loading state + success/error messaging. |
 | | `handleChangeEmail` | Changes the account email (re-auth + Firestore + Auth update). |
 | | `handleRefreshEmailChange` | Re-checks verification status after an email change. |
-| | `handleRemoveEvent` | Leaves a joined event. |
 | | `handleUpdateEventDates` | Updates which dates the user is attending a recurring event. |
 | `profileService.ts` | `syncName` | Internal: writes name to `users`. |
-| | `updateName` / `updatePhone` / `updateWhatsappContact` / `updateBio` / `updateAvatar` / `updateSkills` / `updateLeagueAndAge` / `updateDisplayBadges` / `updatePreferredCourts` / `updateFavouritePlayers` / `updateAvailabilityGrid` | One Firestore-write function per editable profile field. |
+| | `updateName` / `updatePhone` / `updateWhatsappContact` / `updateBio` / `updateAvatar` / `updateSkills` / `updateLeagueAndAge` / `updateDisplayBadges` / `updatePreferredCourts` / `updateFavouritePlayers` / `updateAvailabilityGrid` | One Firestore-write function per editable profile field. `updateAvailabilityGrid` currently has no UI caller since the availability editor was removed — kept because rebuilding that editor (not removing the write path) is the intended fix. |
 | | `changeEmail` | Re-authenticates and updates the Firebase Auth email. |
-| | `removeEventParticipant` | Deletes an `event_participants` doc. |
 | | `updateEventParticipantDates` | Updates a participant's attendance dates. |
+
+*Cleanup note: `ProfileEvents.tsx` and `RecentMatches.tsx` (whole files) were deleted — neither was imported anywhere; `Profile.tsx` now inlines the same functionality. `useProfileActions.ts`'s `handleRemoveEvent` and `profileService.ts`'s `removeEventParticipant` were removed with them (their only caller). `profile/types.ts`'s unused `ProfileEditData` type was also removed.*
+
+*De-dup note: `skillTier` and `leagueDivision` were duplicated in both `PlayerProfile.tsx` and `ProfileInfo.tsx` — both now import them from `src/utils/skillLevels.ts` instead.*
 
 ---
 
-## 4. Leagues / League Ladder (`src/pages/Leagues.tsx`, `src/features/leagues/`)
+## 4. Leagues, Friendlies & Matches (`src/pages/Leagues.tsx`, `src/pages/Matches.tsx`, `src/features/leagues/`, `src/features/friendlies/`)
+League Ladder standings/challenges no longer live on the Tournament page — they moved to `/matches`. `Leagues.tsx` is now pure standings/leaderboard.
+
 | File | Function | Description |
 |---|---|---|
 | `Leagues.tsx` | `pgWinPct` | Computes a player's win percentage for the standings table. |
 | | `Trend` | Renders an up/down/flat trend arrow. |
-| | `Leagues` | Leagues/ladder standings page. |
+| | `Leagues` | Standings/leaderboard page (tournament + community boards) — no longer renders any challenge UI. |
 | | `fetchActive` | Loads active league standings. |
 | | `toggle` | Expands/collapses a player row. |
-| `LadderView.tsx` | `sortRows` | Sort comparator for ladder standings rows. |
-| | `clamp` | Numeric clamp helper. |
-| | `randomUsesKey` | Builds the localStorage key tracking "random opponent" uses. |
-| | `getRandomUses` / `bumpRandomUses` | Read/increment the random-challenge usage counter. |
-| | `LadderView` | Renders the ladder standings + challenge UI for an event. |
-| | `rollRandom` | Picks a random eligible opponent to challenge. |
-| | `challenge` | Sends a ladder challenge to an opponent. |
-| | `challengeState` | Derives the current challenge-button state vs. an opponent. |
-| | `rankOf` | Computes a row's display rank from its window position. |
+| `Matches.tsx` | `weekKey` | Computes the current ISO-ish week key (for the weekly randomizer budget). |
+| | `randStoreKey` | Builds the localStorage key for a mode's randomizer state. |
+| | `loadRandState` / `saveRandState` | Read/write the randomizer state (which slots are randomized + overrides) from localStorage. |
+| | `seededRand` | Deterministic pseudo-random from a string seed — gives the Friendlies pool a stable weekly ordering. |
+| | `rankWindow` | Computes the ±6 rank window around the viewer for the Challenges tab's player pool. |
+| | `Matches` | **New page** (`/matches`). Friendlies + Challenges hub with a segmented-control mode toggle; Friendlies pool = same skill band + shared preferred court (falling back to band-only, then activity-only); Challenges pool = a rank window. |
+| | `byActivity` / `sameBand` / `sharesCourtWithMe` | Player-pool filter/sort predicates for building each tab's 12-player list. |
+| | `randomizeSlot` / `resetSlot` | Randomize or restore one of the 12 pool slots (spends/returns a weekly randomizer credit). |
+| | `sendRally` | Sends a Friendlies request via `createRally`. |
+| | `sendChallenge` | Sends a ladder challenge via `createChallenge`. |
+| | `RallyRow` | Renders one sent/received rally request row. |
 | `ladderService.ts` | `createChallenge` | Writes a new `ladder_challenges` doc. |
 | | `reportChallenge` | Reports a result for a challenge. |
 | | `rejectChallenge` / `cancelChallenge` | Reject or cancel a pending challenge. |
@@ -271,23 +262,30 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 | | `recordLadderClimb` | Records the winner's ladder-position climb after a confirmed challenge. |
 | `useStandings.ts` | `toTitleCase` | Capitalization helper. |
 | | `inDivision` | Whether a league string matches a division tab. |
-| | `useStandings` | Hook loading and filtering league standings by division tab. |
+| | `useStandings` | Hook loading and filtering league standings by division tab — used by both `Leagues.tsx` and `Matches.tsx`. |
 | `useLadder.ts` | `useLadder` | Hook loading a user's ladder challenges (sent/received) for an event. |
+| `useCrossEventConflicts.ts` | `useCrossEventConflicts` | Hook flagging players already committed elsewhere (unchanged; pre-existing, now also consumed by `Matches.tsx`). |
+| `friendlies/rallyService.ts` | `createRally` | **New module.** Writes a new `rallies` doc — a non-competitive, no-points, no-organizer-step request modeled on the ladder-challenge loop. |
+| | `respondRally` | Accepts/declines a pending rally request. |
+| | `cancelRally` | Cancels a sent rally request. |
+| | `useRallies` | Hook loading a user's sent/received rallies + active-partner IDs. |
 
 ---
 
 ## 5. Community Tasks / Points (`src/pages/Tasks.tsx`, `src/features/tasks/`)
 | File | Function | Description |
 |---|---|---|
-| `Tasks.tsx` | `Tasks` | Community Tasks page (points, tiers, badges, check-in/photo entry points). |
+| `Tasks.tsx` | `Tasks` | Community Tasks page (points, tiers, badges, check-in/photo entry points, group-bonus display). |
 | | `clearParams` | Clears the modal-controlling query params. |
 | | `toggleTask` | Marks/unmarks a task as done. |
 | | `toggleSection` | Expands/collapses a task category section. |
-| | `CategorySection` | Renders one category's tier list. |
-| `useTasks.ts` | `asRecord` | Casts task-progress data to a plain record for field access. |
-| | `doneCount` | Counts completed Initiation tasks. |
-| | `taskPoints` | Computes a user's total earned points. |
-| | `earnedTierCount` | Counts earned milestone tiers. |
+| | `Section` | Shared collapsible-section shell used by both `CategorySection` and `GroupSection`. |
+| | `CategorySection` | Renders one per-player tier category's checklist. |
+| | `GroupSection` | **New.** Renders a read-only list of collective/group bonus tasks (Matchday, Zone Sweep, etc. — see `functions/groupAwards.js`), each a descriptive card rather than a checkbox. |
+| `useTasks.ts` | `tasksCompletedCount` (renamed from `doneCount`) | Total individual tasks completed across every category. |
+| | `milestoneCount` (renamed from `earnedTierCount`) | Count of categories where every task is done. |
+| | `asRecord` | Casts task-progress data to a plain record for field access. |
+| | `taskPoints` | Computes a user's total points: flat Initiation award + earned tiers + server-awarded `bonusPoints` (group awards). |
 | | `profileMissingFields` | Lists which profile fields are still incomplete. |
 | | `setTaskDone` | Writes a task's done/not-done state. |
 | | `bumpCounter` | Increments a named counter field. |
@@ -297,32 +295,34 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 | | `distinctMonths` | Counts distinct active months from a result list. |
 | | `useTasks` | Main hook: full client-side recompute of counters/tiers on page load. |
 | | `useCommunityStandings` | Hook loading the Community leaderboard rows. |
-| `taskCatalog.ts` | `categoryTotal` | Sums a category's available points. |
+| `taskCatalog.ts` | `categoryTotal` | Sums a category's available points. Also now defines `COMMUNITY_GROUP_TASKS`/`DAILY_GROUP_TASKS` (`GroupTaskDef[]`) — the descriptive catalogue backing `GroupSection`, mirroring `functions/groupAwards.js`'s bonus catalogue. |
 | `badges.ts` | `earnedBadges` | Computes which badges a user has earned from their tier progress. |
 | | `tierCount` | Internal: counts how many of a badge's required tiers are met. |
-| `checkinService.ts` | `getCurrentPosition` | Wraps the browser geolocation API in a Promise. |
+| `checkinService.ts` | `torontoDayKey` | **New.** Toronto-local calendar-day key (YYYYMMDD) — the Matchday-bonus boundary and daily-attendance dedup key. |
+| | `logAttendance` | **New.** Append-only daily attendance record (`court_attendance`, one row per player per court per day) — distinct from the once-forever check-in "passport". |
+| | `getTopCheckIns` | **New.** Most-checked-in courts from a bounded recent window — "what's busy lately" for the check-in start screen. |
+| | `getCurrentPosition` | Wraps the browser geolocation API in a Promise. |
 | | `findNearbyCourts` | Finds courts near a given lat/lng. |
-| | `hasCheckedIn` | Whether the user already checked into a given court. |
-| | `checkIn` | Records a court check-in. |
+| | `hasCheckedIn` | Whether the user already checked into a given court (the once-forever passport stamp). |
+| | `checkIn` | Records a court check-in (passport stamp; `firestore.rules` deny overwriting, so it's a one-time award). |
 | | `checkZoneComplete` | Whether the user has checked into every court in a zone. |
-| `CheckInModal.tsx` | `CheckInModal` | Modal for the "Check In" court-visit flow. |
+| `CheckInModal.tsx` | `CheckInModal` | Modal for the "Check In" court-visit flow (now also records a visit type and daily attendance). |
 | | `locate` | Requests the user's location and finds nearby courts. |
 | | `doCheckIn` | Submits the check-in for a selected court. |
-| `PhotoSubmitModal.tsx` | `PhotoSubmitModal` | Modal for submitting a court-condition/waiting-board photo report. |
-| | `handleSubmit` | Uploads the photo and writes the report. |
-| `photoReportService.ts` | `waitEstimateFor` | Text describing estimated wait time for a racquet-count bucket. |
-| | `submitPhotoReport` | Writes a new photo report doc (with optional image upload). |
+| `PhotoSubmitModal.tsx` | `PhotoSubmitModal` | Modal for submitting a court photo report — the single unified flow (merges the former "Report"/"Submit a Photo" and "Suggest an Improvement" flows). |
+| | `addFiles` / `removeFile` | Manage the up-to-`MAX_PHOTOS` attached-file list. |
+| | `handleSubmit` | Uploads the photo(s) and writes the report. |
+| `photoReportService.ts` | `extractPhotoMetadata` | **New.** Best-effort EXIF/file provenance extraction (capture time, camera, GPS) stored alongside each report — a signal, never proof. |
+| | `submitPhotoReport` | Uploads photo(s) and writes a `court_reports` doc with `status: 'approved'` — reports auto-approve; no organizer review step anymore (server-side Vision SafeSearch can still flip a report to rejected after the fact). |
 | `ClaimModal.tsx` | `ClaimModal` | Modal for submitting a Volunteer/Ambassador/Host claim. |
 | | `submit` | Submits the claim. |
 | `claimService.ts` | `createVolunteerClaim` / `createHostClaim` | Write a volunteer or host claim doc. |
 | | `hasPlayedAMatch` | Whether a user has a real (non-walkover) played match — Ambassador eligibility gate. |
 | | `alreadyClaimed` | Whether an invitee has already been claimed by an ambassador. |
 | | `createAmbassadorClaim` | Writes an ambassador-invite claim doc. |
-| | `reviewClaim` | Organizer approves/rejects a claim. |
-| | `reviewPhotoReport` | Organizer approves/rejects a photo report. |
-| `ReviewQueue.tsx` | `PhotoThumb` | Renders a thumbnail for a queued photo report. |
-| | `ReviewQueue` | Organizer's review queue for pending photos + claims. |
-| | `approvePhoto` / `rejectPhoto` / `approveClaim` / `rejectClaim` | Per-item approve/reject handlers. |
+| | `reviewClaim` | Organizer approves/rejects a volunteer/ambassador/host claim. |
+| `ReviewQueue.tsx` | `ReviewQueue` | Organizer's review queue — **claims only now** (photo reports no longer need review; the `'photos'` queue param is a stale deep-link value handled as a no-op). |
+| | `approveClaim` / `rejectClaim` | Per-item approve/reject handlers. |
 | `BadgePicker.tsx` | `BadgePicker` | Lets a user pick which earned badges to display on their profile. |
 | | `toggle` | Toggles a badge's selected state. |
 | `BadgeRow.tsx` | `BadgeRow` | Renders a compact row of badge icons. |
@@ -331,6 +331,8 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 ---
 
 ## 6. Court Map (`src/pages/CourtMap.tsx`, `src/pages/courtmap/`)
+Unchanged from the previous inventory pass except line-number drift; not re-verified function-by-function in this refresh.
+
 | File | Function | Description |
 |---|---|---|
 | `CourtMap.tsx` | `CourtMap` | Interactive court-map page (Leaflet map + filters + results list). |
@@ -346,10 +348,7 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 | | `toYears` | Converts a months string to years. |
 | | `matchCourtName` | Fuzzy-matches a preferred-court string to a known court. |
 | | `parseCourts` | Parses the courts CSV into structured records. |
-| | `idx` | Internal column-index lookup. |
 | | `parsePrograms` | Parses the programs CSV into structured records. |
-| | `pIdx` | Internal column-index lookup (programs). |
-| | `pad` | Zero-pads a number string. |
 | | `geocodeQuery` | Geocodes a free-text location query. |
 | | `geocodeLocationId` | Geocodes using a stored location ID, falling back to name. |
 | | `hasPublicHours` | Whether a court has posted public hours. |
@@ -361,12 +360,8 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 | `ProgramResultsList.tsx` | `ProgramResultsList` | Renders the filtered list of programs. |
 | `CourtResultsList.tsx` | `CourtResultsList` | Renders the filtered list of courts. |
 | `CourtPopup.tsx` | `CourtPopup` | Map marker popup showing a court's details + actions. |
-| `SuggestImprovementModal.tsx` | `SuggestImprovementModal` | "Suggest an improvement" form modal. |
-| | `toggleType` | Toggles a selected suggestion type. |
-| | `selectCourt` / `clearCourt` | Set/clear the associated court. |
-| | `onPickImages` | Handles image attachment selection. |
-| | `handleSubmit` | Submits the suggestion. |
-| | `joinMailingList` | Submits the optional post-submit mailing-list opt-in for anonymous users. |
+
+*The old `SuggestImprovementModal.tsx` (already removed before this pass) is fully absorbed into `features/tasks/PhotoSubmitModal.tsx` — see section 5.*
 
 ---
 
@@ -382,9 +377,9 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 | | `handleGoogleSignIn` | Runs the Google sign-in popup flow. |
 | `authMessages.ts` | `getAuthErrorMessage` | Maps a Firebase Auth error code to a friendly message. |
 | | `getGoogleSignInErrorMessage` | Same, for Google sign-in–specific errors. |
-| `verification.ts` | `accountNeedsVerification` | Whether the signed-in account still needs email verification. |
 | `accountService.ts` | `emailExistsInProfiles` | Checks whether an email is already registered. |
-| `Signup.tsx` | `Signup` | Combined login/signup/complete-profile page. |
+| `Signup.tsx` | `BrandMark` | Small decorative logo/brand mark component. |
+| | `Signup` | Combined login/signup/complete-profile page (1062 lines). |
 | | `validatePassword` | Validates the password field. |
 | | `isNameValid` | Validates the name field. |
 | | `validateCompletion` | Validates the profile-completion step. |
@@ -392,7 +387,6 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 | | `handleLogin` | Submits login. |
 | | `handleResetPassword` | Sends a password-reset email. |
 | | `handleCreateAccount` | Creates a new account. |
-| | `handleResendVerification` | Resends the verification email. |
 | | `handleCompleteProfile` | Submits the post-signup profile-completion form. |
 | | `handleAccountContinue` | Advances the multi-step signup flow. |
 | | `goToEmailPhase` | Returns to the email-entry step. |
@@ -407,50 +401,71 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 | | `extractCourtsWithCoords` | Builds a name→coordinates map from the CSV. |
 | | `getCourtSuggestions` | Filters court options by a search query, excluding already-selected. |
 
+*Note: `src/features/auth/verification.ts` (`accountNeedsVerification`), listed in the previous inventory version, no longer exists in the repo — likely already folded into `Signup.tsx`'s inline verification checks.*
+
 ---
 
-## 8. Notifications (`src/features/notifications/`)
+## 8. Notifications (`src/features/notifications/`, `src/pages/Notifications.tsx`, `src/components/HeaderMenu.tsx`)
+The old bell-dropdown (`NotificationBell.tsx`, already removed before this pass) is replaced by a hamburger `HeaderMenu` (with an unread badge) deep-linking to a full-screen `Notifications` page.
+
 | File | Function | Description |
 |---|---|---|
 | `useNotifications.ts` | `normalize` | Normalizes a raw notification doc into `AppNotification` shape. |
 | | `useNotifications` | Hook loading/subscribing to the user's notifications. |
 | | `timeAgo` | Formats an ISO timestamp as a relative "time ago" string. |
-| `NotificationBell.tsx` | `NotificationBell` | Bell icon + dropdown list of notifications. |
-| | (outside-click handler) | Closes the dropdown on outside click. |
-| | `toggle` | Opens/closes the dropdown. |
+| `Notifications.tsx` | `Notifications` | **New page** (`/notifications`) — full-screen notifications feed. |
 | | `openItem` | Navigates to a notification's linked item and marks it read. |
+| `HeaderMenu.tsx` | `HeaderMenu` | **New.** Hamburger menu sheet (About/How It Works/Notifications w/ unread badge/Profile/Logout), rendered from `Navbar.tsx`. |
+| | `close` | Closes the menu sheet. |
+| | `handleLogout` | Signs the user out. |
 
 ---
 
-## 9. Matches (`src/features/matches/`)
+## 9. Matches / User Match History (`src/features/matches/`, `src/pages/History.tsx`)
 | File | Function | Description |
 |---|---|---|
 | `useUserMatches.ts` | `num` | Safe-numeric coercion helper. |
-| | `useUserMatches` | Hook loading a user's recent match history. |
+| | `isRealOpponent` | Whether an opponent-name placeholder (BYE/Player Loading/"Winner of…") represents a real, contactable person. |
+| | `useUserMatches` | Hook loading a user's completed match history **and** upcoming (unplayed) matches — expanded from the previous version, which only returned completed matches. |
+| `History.tsx` | `History` | **New page** (`/history`) — "My Matches" (via `useUserMatches`) + a past-tournaments archive. |
 
 ---
 
 ## 10. Shared Components (`src/components/`)
 | File | Function | Description |
 |---|---|---|
-| `Button.tsx` | `cn` | Class-name join/merge helper. |
-| | `Button` | Shared button component (variants/sizes). |
-| `Input.tsx` | `cn` | Class-name join/merge helper (local copy). |
-| | `Input` | Shared text-input component. |
+| `Button.tsx` | `Button` | Shared button component (variants/sizes). *(De-dup: local `cn()` removed — now imports the shared one from `src/lib/cn.ts`.)* |
+| `Input.tsx` | `Input` | Shared text-input component. *(Same de-dup.)* |
 | `AlertMessage.tsx` | `AlertMessage` | Inline success/error/info banner component. |
 | `Sheet.tsx` | `Sheet` | Slide-up/modal sheet container (mobile-aware). |
 | | `onChange` (media query) | Updates mobile/desktop mode on viewport change. |
 | | `onKey` | Closes the sheet on Escape key. |
-| `Navbar.tsx` | `Navbar` | Top navigation bar. |
+| `Navbar.tsx` | `Navbar` | Top navigation bar — now includes the theme toggle (`useTheme`) and renders `HeaderMenu`. |
 | | `handleScroll` | Toggles the navbar's scrolled style. |
-| | `handleLogout` | Signs the user out. |
 | `BottomNav.tsx` | `BottomNav` | Mobile bottom tab-bar navigation. |
 | `LoadingBar.tsx` | `LoadingBar` | Top-of-page route-transition loading indicator. |
 | `Layout.tsx` | `Layout` | Page shell wrapping Navbar/BottomNav/content. |
+| `Accordion.tsx` | `Accordion` | **New.** Generic controlled collapsible-card primitive (open/onToggle owned by the parent) — used by `BracketAccordion.tsx` and the Tasks page's category sections. |
+| `ChipRow.tsx` | `ChipRow` | **New.** Horizontally-scrollable chip/tab selector — used by `DrawTabs.tsx`. |
+| `SegmentedControl.tsx` | `SegmentedControl` | **New.** 2/3-way segmented toggle — used by `DrawTabs.tsx` (Groups/Knockout) and `Matches.tsx` (Friendlies/Challenges). |
+| `Fab.tsx` | `Fab` | **New.** Floating action button — used by `Events.tsx`. |
+| `HeaderMenu.tsx` | *(see Notifications section)* | |
+| `RacquetIcon.tsx` | `RacquetIcon` | **New.** Shared SVG mark — the single source now used by `BottomNav.tsx`, `Matches.tsx`, `Profile.tsx`, `PlayerProfile.tsx`, `ProfileInfo.tsx`, `EventCard.tsx` (previously duplicated locally in two profile files). |
+| `Stepper.tsx` | `Stepper` | **New.** +/− number input, used by `ScoreModal.tsx` for game-score entry. |
 
 ---
 
-## 11. Utilities & Lib (`src/utils/`, `src/lib/`)
+## 11. Theming (`src/context/ThemeContext.tsx`)
+| File | Function | Description |
+|---|---|---|
+| `ThemeContext.tsx` | `readInitialTheme` | Resolves the starting theme from localStorage/system preference. |
+| | `ThemeProvider` | **New.** Light/dark theme provider — sets the `data-theme` attribute and persists to localStorage. Wraps the app in `App.tsx`. |
+| | `toggleTheme` | Flips between light and dark. |
+| | `useTheme` | Hook exposing the current theme + toggle, consumed by `Navbar.tsx`. |
+
+---
+
+## 12. Utilities & Lib (`src/utils/`, `src/lib/`)
 | File | Function | Description |
 |---|---|---|
 | `zones.ts` | `getZone` | Maps lat/lng to a named city zone. |
@@ -458,42 +473,48 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 | | `getZoneWithBorderCheck` | Zone lookup with border-buffer handling. |
 | `availability.ts` | `normalizeDay` | Normalizes a day string to a `DayCode`. |
 | | `asSlots` | Filters a value down to valid AM/PM slot entries. |
-| | `getAvailabilityGrid` | Reads the availability grid from preferences (with legacy fallback). |
+| | `getAvailabilityGrid` | Reads the availability grid from preferences (with legacy fallback). Currently has no UI caller (the edit screen was removed) — kept for the write path (`Signup.tsx`) and pending a rebuilt editor. |
 | | `gridToLegacy` | Converts the grid format back to the legacy shape for writes. |
 | `eventDates.ts` | `getEventStartDate` / `getEventEndDate` | Resolve an event's start/end across legacy field names. |
 | | `parseValidDate` | Parses a Firestore date-like value, returning `null` if invalid. |
 | `eventTypes.ts` | *(see Events section above)* | |
 | `courtKey.ts` | `courtKey` | Normalizes a court's dropdown label into a stable key. |
 | `formatPhone.ts` | `formatPhone` | Formats a phone number for display. |
-| `skillLevels.ts` | *(constants only — no functions)* | |
+| `skillLevels.ts` | `skillTier` **(new here — de-dup)** | Maps a numeric skill level to a tier label (Beginner/Challenger/Masters). Hoisted from duplicate copies in `PlayerProfile.tsx`/`ProfileInfo.tsx`. |
+| | `leagueDivision` **(new here — de-dup)** | Normalizes a free-text league string into `"Men's" \| "Women's" \| ''`. Same hoist. |
 | `firebase.ts` | `setAuthPersistence` | Sets Firebase Auth's persistence mode (stay-logged-in toggle). |
 | `analytics.ts` | `track` | Logs an analytics event. |
 | | `setAnalyticsUser` | Sets the analytics user ID/properties. |
 | | `clearAnalyticsUser` | Clears the analytics user on logout. |
 | `accountService.ts` | *(see Auth section above)* | |
+| `cn.ts` | `cn` | **New (de-dup).** Shared Tailwind class-merge helper (`twMerge(clsx(...))`), hoisted out of duplicate local copies in `Button.tsx` and `Input.tsx`. |
 
 ---
 
-## 12. App Shell & Misc Pages
+## 13. App Shell & Misc Pages
 | File | Function | Description |
 |---|---|---|
 | `App.tsx` | `RouteFallback` | Loading fallback shown during route code-splitting. |
 | | `ScrollToTop` | Scrolls to top on route change. |
 | | `PrivateRoute` | Route guard requiring authentication. |
-| | `App` | Root component defining all routes. |
+| | `App` | Root component defining all routes (now lazy-routes to `History.tsx`/`Matches.tsx`/`Notifications.tsx`; `/friendlies` and `/challenges` redirect to `/matches`; wraps the tree in `ThemeProvider`). |
 | `Home.tsx` | `plus` | Formats a count as a rounded "N+" label. |
-| | `greenMarkerHtml` | Builds HTML for the homepage's activity-map marker. |
-| | `Home` | Landing/home page. |
-| `home/AreaChart.tsx` | `AreaChart` | Small sparkline/area-chart component. |
+| | `useCountUp` | **New.** Animates a number counting up to a target value. |
+| | `readCachedSlides` | **New.** Reads cached homepage carousel image URLs from localStorage. |
+| | `Home` | Landing/home page (expanded — count-up stats, cached carousel, in-page check-in/report shortcuts). |
+| | `onCheckIn` / `onReport` | **New.** Homepage shortcuts opening the check-in or photo-report flow directly (redirect to login first if signed out). |
+| `home/AreaChart.tsx` | `AreaChart` | Small sparkline/area-chart component — now takes multiple named `series` rather than a single data array. |
+| | `lineFor` | Builds one series' SVG path. |
 | `StaticPages.tsx` | `PageWrapper` | Shared layout wrapper for static content pages. |
-| | `Rules` / `Terms` / `Privacy` / `Contact` | Static content page components. |
+| | `HowItWorks` / `About` **(new)** | Additional static content pages. |
+| | `Terms` / `Privacy` / `Contact` | Static content page components. |
 
 ---
 
-## 13. Cloud Functions (`functions/`)
+## 14. Cloud Functions (`functions/`)
 | File | Function | Description |
 |---|---|---|
-| `index.js` | `moderateUploadedImage` | Storage-triggered moderation check on uploaded images. |
+| `index.js` | `moderateUploadedImage` | Storage-triggered SafeSearch moderation check on uploaded images — can flip an already-auto-approved photo report to rejected. |
 | | `sendWelcomeEmail` | Sends a welcome email when a user doc is created/verified. |
 | | `buildWelcomeEmail` | Builds the welcome email's HTML content. |
 | `notifications.js` | `onMatchCreated` | Notifies players when a new match is created. |
@@ -508,25 +529,16 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 | | `onParticipantJoined` | Notifies the creator when a player joins their event. |
 | | `weeklyReminders` | Scheduled (Tuesday 9am) reminder digest for outstanding matches/challenges. |
 | | `pruneNotifications` | Scheduled cleanup of old notification docs. |
-| `taskPoints.js` | `recordPlayResult` | Transactionally records a played result's counters for a user. |
-| | `bumpCounterAndAward` | Increments a counter field and checks/awards any newly-crossed tier. |
-| | `markInitiationTask` | Marks one Initiation checkbox true. |
-| | `notifyOrganizersOfQueue` | Sends the organizer digest for a new queue-report. |
-| | `onMatchCompletedAwardPoints` | Trigger: awards Tournament/Streak tiers on match completion (excludes walkovers). |
-| | `onLadderConfirmedAwardPoints` | Trigger: awards Ladder/Streak tiers on challenge confirmation. |
-| | `onEventJoinedAwardPoints` | Trigger: marks the "joined an event" Initiation task. |
-| | `onCourtVisitAwardPoints` | Trigger: awards Traveller tiers on a court check-in. |
-| | `onQueueReportAwardPoints` | Trigger: awards points + organizer notify on a queue photo report. |
-| | `onPhotoReportReviewed` | Trigger: awards Court Info/Care tiers + notifies submitter on photo review. |
-| | `onClaimReviewed` | Trigger: awards Volunteer/Ambassador/Host tiers + notifies on claim review. |
-| | `onPhotoReportCreated` | Trigger: sends the organizer digest when a new photo enters the queue. |
-| | `onTaskClaimCreated` | Trigger: sends the organizer digest when a new claim is submitted. |
+| `taskPoints.js` | *(per-player award triggers)* | Same trigger set as before — awards individual tier/counter progress on match/ladder/event/court-visit/claim events. See CLAUDE.md's Stats data flow section. |
+| `groupAwards.js` | *(collective/group bonus engine)* | **New file.** Reads across many players' documents to award group bonuses — Matchday, Hourly Coverage, Court Pioneer, Board Freshness, Full Zone Sweep — into `task_progress.bonusPoints` via an idempotent `group_awards/{awardId}` ledger. Complementary to, not overlapping with, `taskPoints.js`. |
 | `lib/notify.js` | `notify` | Low-level helper writing notification docs to a list of recipients. |
 | | `organizerUids` | Resolves the current list of organizer/creator UIDs. |
 
 ---
 
-## 14. Admin / One-off Scripts (`scripts/`)
+## 15. Admin / One-off Scripts (`scripts/`)
+Not re-verified in this refresh pass — unchanged since the previous inventory version (still mirror the client-side pure helpers per CLAUDE.md's documented keep-in-sync tradeoff).
+
 | File | Function | Description |
 |---|---|---|
 | `regroup-rr.js` | `getDrawKey` / `generateGroupPairings` / `skillBand` / `splitEvenly` / `sharedZone` / `autoLabel` | Mirrors of the client-side `rrGeneration.ts`/`utils.ts` pure helpers (kept in sync per CLAUDE.md). |
@@ -557,6 +569,6 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 ---
 
 ## Notes
-- This supersedes the earlier "93 functions" inventory (that conversation/output could not be located in local session history) and expands coverage to every page and feature folder in the repo, plus Cloud Functions and admin scripts.
+- This is a refresh of the earlier version, after (1) other, unrelated development sessions substantially reworked the app (new Friendlies/Matches/History/Notifications pages, several new shared components, theming, expanded check-ins/photo reports/group bonuses), and (2) a targeted dead-code-removal + de-duplication pass documented in CLAUDE.md.
+- Sections 1–5 and 8–14 were individually re-verified against current file content for this refresh. Sections 6 (Court Map) and 15 (Admin Scripts) were not touched by either the drift or the cleanup pass and are carried forward from the prior version with only line-number awareness, not a fresh line-by-line read.
 - Small one-line inline closures that are pure JSX event-handler wrappers (e.g. `onClick={() => ...}`) are generally omitted unless independently named — the table favors named, reusable functions.
-- No code was changed to produce this report.

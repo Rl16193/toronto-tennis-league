@@ -27,7 +27,7 @@ export const BadgePicker: React.FC<{
 
   if (earned.length === 0) {
     return (
-      <p className="text-sm text-white/40 mt-1">
+      <p className="text-sm text-fg/40 mt-1">
         No badges yet — complete tasks to earn them.
       </p>
     );
@@ -35,7 +35,7 @@ export const BadgePicker: React.FC<{
 
   return (
     <div className="mt-2 space-y-3">
-      <p className="text-xs text-white/50">
+      <p className="text-xs text-fg/50">
         Pick up to {MAX_DISPLAY_BADGES} to show on your profile and next to your name.
       </p>
       <div className="flex flex-wrap gap-1.5">
@@ -48,7 +48,7 @@ export const BadgePicker: React.FC<{
               onClick={() => toggle(b.id)}
               title={b.requirement}
               className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
-                on ? 'bg-clay text-white border-clay' : 'bg-white/5 text-white/70 border-white/10 hover:border-white/30'
+                on ? 'bg-clay text-white border-clay' : 'bg-white text-ink border-fg hover:bg-white/90'
               }`}
             >
               <span className="mr-1">{b.icon}</span>{b.name}

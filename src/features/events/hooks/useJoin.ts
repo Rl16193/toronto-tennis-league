@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, getDocs, query, updateDoc, doc, where } from 'firebase/firestore';
-import { NavigateFunction } from 'react-router-dom';
-import { auth, db, analyticsPromise } from '../../../lib/firebase';
+import { db, analyticsPromise } from '../../../lib/firebase';
 import { logEvent } from 'firebase/analytics';
 import { TennisEvent } from '../../../types';
 import { TournamentMatch } from '../../../pages/tournament/types';
@@ -10,19 +9,15 @@ import { isTournamentEvent, isSeasonOpener, isWeekendMatchdaysEvent } from '../.
 import { DisplayEvent } from '../services/eventService';
 import { INITIAL_JOIN_FORM, JoinFormState, SlotResult } from '../types';
 
-export const LOGIN_ROUTE = '/login?returnTo=%2Fevents&intent=join-event';
-export const SIGNUP_ROUTE = '/signup?returnTo=%2Fevents&intent=join-event';
-
 interface Params {
   user: { uid: string; email: string | null } | null;
-  profile: { user: { name: string }; stats: { skill_level: number } } | null;
-  navigate: NavigateFunction;
+  profile: { user: { name: string; age_bracket?: string }; stats: { skill_level: number } } | null;
   hasJoinedRegularEvent: (id: string) => boolean;
   hasJoinedTournamentChoice: (id: string, choice: 'Singles' | 'Doubles') => boolean;
   hasJoinedAnyTournament: () => boolean;
 }
 
-export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament }: Params) {
+export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament }: Params) {
   const [selectedEvent, setSelectedEvent] = useState<DisplayEvent | null>(null);
   const [joinForm, setJoinForm] = useState<JoinFormState>(INITIAL_JOIN_FORM);
   const [joinError, setJoinError] = useState('');
@@ -89,6 +84,11 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
 
     if (joinForm.tournamentChoice === 'Singles') {
       const skill = Number(profile?.stats.skill_level || 0);
+      // Seniors is a deliberate opt-in — no skill fallback into another draw.
+      if (joinForm.seniors) {
+        const slot = findSlot('Singles', joinForm.division, 'Seniors');
+        return slot ? { status: 'available', ...slot, skillOverride: skill } : { status: 'full', skillOverride: skill };
+      }
       const intendedGroup = skill >= 4 ? 'Masters' : 'Challengers';
       const altGroup = skill >= 4 ? 'Challengers' : 'Masters';
       // Merged draw: skill_group 'All', division matches selected or 'All'
@@ -122,13 +122,7 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
     }
 
     return null;
-  }, [selectedEvent, tournamentMatches, joinForm.division, joinForm.tournamentChoice, joinForm.combinedSkill, profile]);
-
-  const handleStartJoin = (event: DisplayEvent) => {
-    if (!user) { navigate(LOGIN_ROUTE); return; }
-    setSelectedEvent(event);
-    setJoinError('');
-  };
+  }, [selectedEvent, tournamentMatches, joinForm.division, joinForm.tournamentChoice, joinForm.seniors, joinForm.combinedSkill, profile]);
 
   const handleSubmitJoin = async () => {
     if (!selectedEvent || !user) return;
@@ -170,6 +164,11 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
 
     if (!joinForm.division) { setJoinError('Please select a division.'); return; }
     if (joinForm.tournamentChoice === 'Singles' && joinForm.division === 'Mixed Doubles') { setJoinError('Mixed Doubles is locked for singles.'); return; }
+    // Seniors draw is age-gated: 55+ per the profile's age bracket.
+    if (joinForm.seniors && profile?.user.age_bracket !== '55+') {
+      setJoinError('The Seniors draw is for players 55+. Set your age bracket on your profile first.');
+      return;
+    }
     if (joinForm.tournamentChoice === 'Doubles') {
       if (!joinForm.partnerName.trim()) { setJoinError('Please enter your partner name for doubles.'); return; }
       if (joinForm.partnerName.trim().length < 3 || joinForm.partnerName.length > 80) { setJoinError('Partner name must be 3–80 characters.'); return; }
@@ -195,6 +194,7 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
         user_id: user.uid, user_name: participantName,
         event_id: selectedEvent.id, event_name: selectedEvent.title,
         tournament_choice: joinForm.tournamentChoice, division: joinForm.division,
+        ...(joinForm.tournamentChoice === 'Singles' && joinForm.seniors ? { skill_group: 'Seniors' } : {}),
         doubles: joinForm.tournamentChoice === 'Doubles' ? joinForm.partnerName.trim() : '',
         partner_in_app: joinForm.tournamentChoice === 'Doubles' ? (joinForm.partnerInApp || 'no') : '',
         skill: slotStatus?.skillOverride ?? (joinForm.tournamentChoice === 'Singles' ? Number(profile?.stats.skill_level || 0) : Number(joinForm.combinedSkill || 3)),
@@ -234,6 +234,6 @@ export function useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoi
     joinError,
     joining, slotStatus, loadingMatches,
     slotFallbackConfirmed, setSlotFallbackConfirmed,
-    handleStartJoin, handleSubmitJoin,
+    handleSubmitJoin,
   };
 }

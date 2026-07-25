@@ -1,5 +1,7 @@
 export type DrawTab = 'mens' | 'womens' | 'doubles';
-export type SkillGroup = 'Challengers' | 'Masters' | 'All';
+// 'Seniors' is age-based (55+, chosen at join time via participant.skill_group), not derived
+// from skill_level like Challengers/Masters.
+export type SkillGroup = 'Challengers' | 'Masters' | 'Seniors' | 'All';
 export type MatchStatus = 'pending' | 'complete';
 
 export type TemplateMatch = {

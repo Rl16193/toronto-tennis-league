@@ -125,6 +125,9 @@ export interface TennisEvent {
   round_deadlines?: Record<string, string>; // round → 'YYYY-MM-DD'
   tournament_format?: 'knockout' | 'rr';
   tournament_choice?: 'Singles' | 'Doubles';
+  // One-off per-event override: hides the Men's/Women's Seniors draw tabs on this event only —
+  // the Seniors option (drawConfigs.ts) otherwise applies to every Singles tournament.
+  hide_seniors?: boolean;
 }
 
 export interface EventParticipant {
@@ -138,6 +141,9 @@ export interface EventParticipant {
   doubles?: string;
   partner_in_app?: 'yes' | 'no' | '';
   skill?: number;
+  // 'Seniors' opts the player into the age-based Seniors (55+) draw; absent means normal
+  // skill-derived routing (Challengers/Masters).
+  skill_group?: 'Seniors';
   dateselected?: string[];
   createdAt: string;
 }

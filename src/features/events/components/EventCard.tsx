@@ -1,12 +1,12 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Calendar, MapPin, Star, CheckCircle2, Swords, X } from 'lucide-react';
+import { Calendar, MapPin, Star, CheckCircle2 } from 'lucide-react';
 import { Button } from '../../../components/Button';
+import { RacquetIcon } from '../../../components/RacquetIcon';
 import { DisplayEvent } from '../services/eventService';
 import { isTournamentEvent, isSeasonOpener, isLadderEvent } from '../../../utils/eventTypes';
 import { formatEventSchedule, formatTournamentRange } from '../utils/eventFormatters';
-import { JoinFormState, SlotResult } from '../types';
 
 const getJoinLastDateMs = (event: DisplayEvent): number | null => {
   const raw = (event as unknown as Record<string, unknown>).join_last_date;
@@ -23,7 +23,7 @@ const getJoinLastDateMs = (event: DisplayEvent): number | null => {
 const LATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 /** After join_last_date but within the 7-day late-registration window (tournament only). */
-const isLateRegistration = (event: DisplayEvent): boolean => {
+export const isLateRegistration = (event: DisplayEvent): boolean => {
   const ms = getJoinLastDateMs(event);
   if (ms === null) return false;
   const now = Date.now();
@@ -41,33 +41,17 @@ interface Props {
   event: DisplayEvent;
   index: number;
   isJoined: boolean;
-  joining: boolean;
   authLoading: boolean;
   isLoggedIn: boolean;
-  isExpanded: boolean;
-  onExpand: (event: DisplayEvent | null) => void;
-  joinForm: JoinFormState;
-  setJoinForm: (form: JoinFormState) => void;
-  joinError: string;
-  slotStatus: SlotResult | null;
-  loadingMatches?: boolean;
-  slotFallbackConfirmed: boolean;
-  setSlotFallbackConfirmed: (v: boolean) => void;
-  onSubmitJoin: () => void;
+  onJoin: (event: DisplayEvent) => void; // opens the join sheet (wireframe 1g)
 }
 
-const SINGLES_DIVISIONS = ["Men's", "Women's"] as const;
-const DOUBLES_DIVISIONS = ["Men's", "Women's", 'Mixed Doubles'] as const;
-
-export const EventCard: React.FC<Props> = ({
-  event, index, isJoined, joining, authLoading, isLoggedIn,
-  isExpanded, onExpand, joinForm, setJoinForm, joinError,
-  slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed, onSubmitJoin,
-}) => {
+// Event card — display only. The join form lives in JoinEventSheet now, so tapping Join never
+// reflows the grid.
+export const EventCard: React.FC<Props> = ({ event, index, isJoined, authLoading, isLoggedIn, onJoin }) => {
   const dateLabel = isTournamentEvent(event) ? formatTournamentRange(event) : formatEventSchedule(event);
   const isTournament = isTournamentEvent(event);
-  // League Ladder: no registration — the card's action is "Challenge Now", which opens the
-  // ladder tab (Matches page) where the player picks an opponent to challenge.
+  // League Ladder: no registration — the card's action opens the ladder Challenges tab.
   const isLadder = isLadderEvent(event);
   const navigate = useNavigate();
 
@@ -75,24 +59,6 @@ export const EventCard: React.FC<Props> = ({
   const isHardClosed = isJoinHardClosed(event);
   // Non-tournament events have no draw slots — late registration doesn't apply.
   const joinClosed = isHardClosed || (isLate && !isTournament);
-
-  const fixedChoice = event.tournament_choice; // set on new events; undefined on old events
-  const displayChoice = fixedChoice ?? joinForm.tournamentChoice;
-  const divisions = displayChoice === 'Doubles' ? DOUBLES_DIVISIONS : SINGLES_DIVISIONS;
-
-  useEffect(() => {
-    if (!isExpanded || !fixedChoice) return;
-    if (joinForm.tournamentChoice !== fixedChoice) {
-      setJoinForm({ ...joinForm, tournamentChoice: fixedChoice, division: '' });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isExpanded]);
-
-  const handleJoinClick = () => {
-    if (!isLoggedIn) return;
-    if (isExpanded) { onExpand(null); return; }
-    onExpand(event);
-  };
 
   const buttonLabel = isJoined
     ? 'Joined'
@@ -102,227 +68,79 @@ export const EventCard: React.FC<Props> = ({
         ? 'Loading...'
         : !isLoggedIn
           ? 'Log In to Join'
-          : isExpanded
-            ? 'Cancel'
-            : isLate
-              ? 'Late Registration'
-              : 'Join Event';
+          : isLate
+            ? 'Late Registration'
+            : 'Join Event';
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      className={`bg-tennis-surface/30 border rounded-2xl p-5 flex flex-col gap-3 transition-colors ${
-        isExpanded ? 'border-clay/40' : 'border-white/5 hover:border-clay/30'
-      }`}
+      className="bg-tennis-surface/30 border border-fg/5 hover:border-clay/30 rounded-2xl p-5 flex flex-col gap-3 transition-colors"
     >
       {/* Card header */}
       <div className="flex items-start justify-between gap-2">
         <span className="px-2.5 py-0.5 bg-clay/10 border border-clay/20 rounded-lg text-[10px] font-bold text-clay uppercase tracking-widest">
-          {event.type}
+          {isLadder ? 'Challenges' : event.type}
         </span>
         {isJoined && <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />}
       </div>
 
       <div>
-        <h3 className="text-base font-bold text-white leading-snug">{event.title}</h3>
+        <h3 className="text-base font-bold text-fg leading-snug">{event.title}</h3>
         {isSeasonOpener(event) && (
           <p className="text-xs font-semibold uppercase tracking-wider text-amber-300 mt-1">First Tournament of 2026</p>
         )}
       </div>
 
       {(event.about || event.description) && (
-        <p className="text-xs text-white/50 line-clamp-2 leading-relaxed">{event.about || event.description}</p>
+        <p className="text-xs text-fg/50 line-clamp-2 leading-relaxed">{event.about || event.description}</p>
       )}
 
       <div className="flex flex-wrap gap-1.5">
         {dateLabel && (
-          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-white/60">
+          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-fg/5 border border-fg/10 text-xs text-fg/60">
             <Calendar className="w-3 h-3 text-clay shrink-0" />
             {dateLabel}
           </span>
         )}
         {event.location && (
-          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-white/60">
+          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-fg/5 border border-fg/10 text-xs text-fg/60">
             <MapPin className="w-3 h-3 text-clay shrink-0" />
             {event.location}
           </span>
         )}
         {event.skill_level && (
-          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-white/60">
+          <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-fg/5 border border-fg/10 text-xs text-fg/60">
             <Star className="w-3 h-3 text-clay shrink-0" />
             {event.skill_level}
           </span>
         )}
       </div>
 
-      {/* Inline join form */}
-      {isExpanded && !isJoined && (
-        <div className="pt-3 border-t border-white/10 space-y-4">
-          {isTournament ? (
-            <>
-              {/* Format toggle — only for old events without a locked tournament_choice */}
-              {!fixedChoice && (
-                <div>
-                  <p className="text-xs font-bold text-white/50 uppercase tracking-widest mb-2">Format</p>
-                  <div className="flex gap-2">
-                    {(['Singles', 'Doubles'] as const).map((choice) => (
-                      <button
-                        key={choice}
-                        type="button"
-                        onClick={() => setJoinForm({ ...joinForm, tournamentChoice: choice, division: '' })}
-                        className={`flex-1 py-2 rounded-xl text-sm font-bold border transition-colors ${
-                          joinForm.tournamentChoice === choice
-                            ? 'bg-clay text-white border-clay'
-                            : 'bg-white/5 text-white/70 border-white/10 hover:border-white/30'
-                        }`}
-                      >
-                        {choice}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Division */}
-              <div>
-                <p className="text-xs font-bold text-white/50 uppercase tracking-widest mb-2">Division</p>
-                <div className="flex flex-wrap gap-2">
-                  {divisions.map((div) => (
-                    <button
-                      key={div}
-                      type="button"
-                      onClick={() => setJoinForm({ ...joinForm, division: div as JoinFormState['division'] })}
-                      className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-colors ${
-                        joinForm.division === div
-                          ? 'bg-clay text-white border-clay'
-                          : 'bg-white/5 text-white/70 border-white/10 hover:border-white/30'
-                      }`}
-                    >
-                      {div}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Doubles-only fields */}
-              {displayChoice === 'Doubles' && (
-                <>
-                  <div>
-                    <p className="text-xs font-bold text-white/50 uppercase tracking-widest mb-2">Partner Name</p>
-                    <input
-                      value={joinForm.partnerName}
-                      onChange={(e) => setJoinForm({ ...joinForm, partnerName: e.target.value })}
-                      placeholder="Full name"
-                      className="w-full rounded-xl bg-tennis-dark/70 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-clay"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-white/50 uppercase tracking-widest mb-2">Partner in app?</p>
-                    <div className="flex gap-2">
-                      {(['yes', 'no'] as const).map((v) => (
-                        <button
-                          key={v}
-                          type="button"
-                          onClick={() => setJoinForm({ ...joinForm, partnerInApp: v })}
-                          className={`flex-1 py-2 rounded-xl text-sm font-bold border transition-colors ${
-                            joinForm.partnerInApp === v
-                              ? 'bg-clay text-white border-clay'
-                              : 'bg-white/5 text-white/70 border-white/10 hover:border-white/30'
-                          }`}
-                        >
-                          {v === 'yes' ? 'Yes' : 'No'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-white/50 uppercase tracking-widest mb-2">Combined Skill (1–5)</p>
-                    <input
-                      type="number"
-                      min={1} max={5} step={0.5}
-                      value={joinForm.combinedSkill}
-                      onChange={(e) => setJoinForm({ ...joinForm, combinedSkill: e.target.value })}
-                      placeholder="e.g. 3.5"
-                      className="w-full rounded-xl bg-tennis-dark/70 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-clay"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* Late registration notice */}
-              {isLate && (
-                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300">
-                  <p className="font-semibold">Late registration — limited spots remaining.</p>
-                  <p className="mt-0.5 text-amber-300/70">You'll be placed directly into an open draw slot.</p>
-                </div>
-              )}
-
-              {/* Slot feedback */}
-              {slotStatus?.status === 'fallback' && (
-                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300">
-                  <p className="font-semibold mb-1">
-                    {slotStatus.intendedGroup} draw is full — you'll be placed in the {slotStatus.actualGroup} draw.
-                  </p>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={slotFallbackConfirmed}
-                      onChange={(e) => setSlotFallbackConfirmed(e.target.checked)}
-                      className="accent-clay"
-                    />
-                    I understand and wish to continue
-                  </label>
-                </div>
-              )}
-              {slotStatus?.status === 'full' && (
-                <p className="text-xs text-red-400 font-semibold">This draw is currently full.</p>
-              )}
-            </>
-          ) : (
-            <p className="text-sm text-white/70">Reserve your spot in this event.</p>
-          )}
-
-          {joinError && (
-            <p className="text-xs font-semibold text-red-400">{joinError}</p>
-          )}
-
-          <Button
-            onClick={onSubmitJoin}
-            isLoading={joining || loadingMatches}
-            disabled={joining || loadingMatches || slotStatus?.status === 'full' || (slotStatus?.status === 'fallback' && !slotFallbackConfirmed)}
-            className="w-full"
-          >
-            {loadingMatches ? 'Loading draw…' : 'Join Event'}
-          </Button>
-        </div>
-      )}
-
-      {/* Join / status button (League Ladder: no signup — straight to the ladder) */}
-      <div className="pt-3 mt-auto border-t border-white/5">
+      {/* Join / status button (Challenges: no signup — straight to the Matches page) */}
+      <div className="pt-3 mt-auto border-t border-fg/5">
         {isLadder ? (
           <Button
             variant="primary"
             size="sm"
-            onClick={() => navigate(isLoggedIn ? `/tournament?event=${event.id}` : '/login')}
+            onClick={() => navigate(isLoggedIn ? '/matches?mode=challenges' : '/login')}
             disabled={authLoading}
             className="w-full"
           >
-            <Swords className="w-3.5 h-3.5 mr-1" />
+            <RacquetIcon className="w-3.5 h-3.5 mr-1" />
             {isLoggedIn ? 'Challenge Now' : 'Log In to Challenge'}
           </Button>
         ) : (
           <Button
-            variant={isJoined ? 'secondary' : isExpanded ? 'ghost' : 'primary'}
+            variant={isJoined ? 'secondary' : 'primary'}
             size="sm"
-            onClick={handleJoinClick}
+            onClick={() => isLoggedIn && onJoin(event)}
             disabled={isJoined || joinClosed || !isLoggedIn || authLoading}
             className="w-full"
           >
-            {isExpanded && !isJoined ? (
-              <><X className="w-3.5 h-3.5 mr-1" />Cancel</>
-            ) : buttonLabel}
+            {buttonLabel}
           </Button>
         )}
       </div>

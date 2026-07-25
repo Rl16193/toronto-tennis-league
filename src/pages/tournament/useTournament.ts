@@ -69,11 +69,6 @@ export const useTournament = (eventIdOverride?: string) => {
   // Server-persisted RR draft for the current draw (edited groups + withdrawn players) — lets the
   // creator arrange groups before generation without writing matches, surviving refresh.
   const [rrDraft, setRRDraft] = useState<{ groups: string[][]; custom: boolean[]; customLabels: string[]; withdrawn: string[] } | null>(null);
-  const [generatingReserves, setGeneratingReserves] = useState(false);
-  const [showReserves, setShowReserves] = useState(false);
-  // LL Draw state — keyed by draw key so each division has independent size/slots
-  const [llDrawSizes, setLLDrawSizes] = useState<Record<string, number>>({});
-  const [llDrawSlotOverrides, setLLDrawSlotOverrides] = useState<Record<string, Record<number, TournamentPlayer | null>>>({});
 
   // Round Robin state
   const [showRRConfig, setShowRRConfig] = useState(false);
@@ -104,6 +99,7 @@ export const useTournament = (eventIdOverride?: string) => {
       if (consolidateDoubles && d.tab === 'doubles') return false;
       if (eventChoice === 'Singles' && d.tournamentChoice !== 'Singles') return false;
       if (eventChoice === 'Doubles' && d.tournamentChoice !== 'Doubles') return false;
+      if (event?.hide_seniors && d.skillGroup === 'Seniors') return false;
       return true;
     });
     if (mergeMensSingles) draws = [...draws, MENS_MERGED_DRAW];
@@ -111,7 +107,7 @@ export const useTournament = (eventIdOverride?: string) => {
     if (consolidateDoubles) draws = [...draws, CONSOLIDATED_DOUBLES_DRAW];
     const tabOrder = { mens: 0, womens: 1, doubles: 2 };
     return draws.sort((a, b) => tabOrder[a.tab] - tabOrder[b.tab]);
-  }, [mergeMensSingles, mergeWomensSingles, consolidateDoubles, event?.tournament_choice]);
+  }, [mergeMensSingles, mergeWomensSingles, consolidateDoubles, event?.tournament_choice, event?.hide_seniors]);
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -122,7 +118,9 @@ export const useTournament = (eventIdOverride?: string) => {
         const eventsSnap = await getDocs(collection(db, 'events'));
         const tournamentEvents = eventsSnap.docs
           .map((d) => ({ id: d.id, ...d.data() } as TennisEvent))
-          .filter((e) => e.type?.toLowerCase().includes('tournament') || e.type?.toLowerCase().includes('league ladder'))
+          // League Ladder events have no draw — ladder matches are a match type surfaced in
+          // Matches/Challenges instead, so they don't belong on the Tournament page at all.
+          .filter((e) => e.type?.toLowerCase().includes('tournament'))
           .sort((a, b) => (getEventDate(b)?.getTime() || 0) - (getEventDate(a)?.getTime() || 0));
         setAllTournamentEvents(tournamentEvents);
       } finally {
@@ -148,8 +146,6 @@ export const useTournament = (eventIdOverride?: string) => {
     setSkillOverrides({});
     setPreviewSlotOverrides({});
     setPreviewDrawSize({});
-    setLLDrawSizes({});
-    setLLDrawSlotOverrides({});
     setShowRRConfig(false);
     setMergeMensSingles(false);
     setMergeWomensSingles(false);
@@ -387,7 +383,7 @@ export const useTournament = (eventIdOverride?: string) => {
       .sort((a, b) => a.position - b.position);
   }, [currentDraw, matches]);
 
-  // Full sorted player list for the current draw — shared by displayMatches, editPlayers, and reservesPlayers.
+  // Full sorted player list for the current draw — shared by displayMatches and editPlayers.
   const currentDrawAllPlayers = useMemo(() => {
     if (!currentDraw) return [];
     return buildPlayerList(
@@ -431,23 +427,19 @@ export const useTournament = (eventIdOverride?: string) => {
   }, [currentDraw, currentDrawAllPlayers, currentMatches, event?.id, previewDrawSize, previewSlotOverrides, started]);
 
 
+  // Excludes round-robin group-stage docs (round === 'RR') — a no-op for plain bracket draws
+  // (never that literal round) and, for RR draws, makes this resolve only to a real knockout-round
+  // match. Without it, viewing the Knockout tab before the bracket is generated could still
+  // resolve to the player's (possibly completed) group-stage match instead of nothing.
   const visibleUserMatch = useMemo(() => {
     if (!user) return null;
-    const pool = showReserves
-      ? matches.filter(
-          (m) =>
-            m.bracket === 'reserves' &&
-            m.status !== 'complete' &&
-            m.player_1_name !== BYE &&
-            m.player_2_name !== BYE,
-        )
-      : displayMatches.filter(
-          (m) => m.player_1_name !== BYE && m.player_2_name !== BYE,
-        );
+    const pool = displayMatches.filter(
+      (m) => m.round !== 'RR' && m.player_1_name !== BYE && m.player_2_name !== BYE,
+    );
     return pool.find((m) =>
       [m.player_1_user_id, m.player_2_user_id].includes(user.uid),
     ) ?? null;
-  }, [displayMatches, matches, showReserves, user]);
+  }, [displayMatches, user]);
 
 
   // For the edit dropdown, include ALL participants for this division/choice regardless of skill group
@@ -469,14 +461,6 @@ export const useTournament = (eventIdOverride?: string) => {
 
   const currentDrawSize = displayMatches[0]?.drawsize ?? 16;
 
-  const reservesPlayers = useMemo(() => {
-    if (currentMatches.length > 0) return [];
-    const placedIds = new Set(
-      displayMatches.flatMap((m) => [m.player_1_user_id, m.player_2_user_id]).filter(Boolean),
-    );
-    return currentDrawAllPlayers.filter((p) => !placedIds.has(p.user_id));
-  }, [currentDrawAllPlayers, currentMatches, displayMatches]);
-
   const availableUsers = useMemo(() => {
     const joinedIds = new Set(participants.map((p) => p.user_id));
     return Object.entries(allUsers)
@@ -484,75 +468,6 @@ export const useTournament = (eventIdOverride?: string) => {
       .map(([id, data]) => ({ id, name: data.name || data.email || id, email: data.email || '' }))
       .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [allUsers, participants]);
-
-  const currentReservesMatches = useMemo(() => {
-    if (!currentDraw) return [];
-    return matches
-      .filter((m) =>
-        m.bracket === 'reserves' &&
-        m.tournament_choice === currentDraw.tournamentChoice &&
-        m.division === currentDraw.division,
-      )
-      .sort((a, b) => a.position - b.position);
-  }, [currentDraw, matches]);
-
-  // LL Draw per-division key and current preview state
-  const llCurrentKey = currentDraw
-    ? getDrawKey(currentDraw.tournamentChoice, currentDraw.division, 'All')
-    : '';
-  const currentLLSize = llCurrentKey ? (llDrawSizes[llCurrentKey] ?? 4) : 4;
-  const currentLLSlotOverrides = llCurrentKey ? (llDrawSlotOverrides[llCurrentKey] ?? {}) : {};
-
-  // LL Draw preview — always shown when no finalized LL matches exist
-  const llDrawDisplayMatches = useMemo(() => {
-    if (currentReservesMatches.length > 0) return currentReservesMatches;
-    if (!currentDraw) return [];
-    const drawsize = currentLLSize;
-    const templateMatches = normalizeTemplateMatches(fallbackTemplate(drawsize));
-    const slotMap = new Map<number, TournamentPlayer>();
-    Object.entries(currentLLSlotOverrides).forEach(([slotStr, player]) => {
-      if (player !== null) slotMap.set(Number(slotStr), player);
-    });
-    const cfg = {
-      eventId: event?.id || 'preview',
-      tournamentChoice: currentDraw.tournamentChoice,
-      division: currentDraw.division,
-      skillGroup: 'All' as const,
-      drawsize,
-      allMatches: templateMatches,
-    };
-    return templateMatches.map<TournamentMatch>((tm, index) => ({
-      id: `ll_preview_${llCurrentKey}_${tm.match_id}`,
-      bracket: 'reserves',
-      started: false,
-      ...buildMatchFields(tm, index, slotMap, cfg),
-    }));
-  }, [currentReservesMatches, currentDraw, currentLLSize, currentLLSlotOverrides, llCurrentKey, event?.id]);
-
-  // LL Draw dropdown: only participants of the CURRENT draw's division/choice who are
-  // NOT already placed in the main draw. Prevents main-draw players (e.g. semi-finalists)
-  // from being added to the reserves draw — applies uniformly to every draw.
-  const allUsersAsTournamentPlayers = useMemo(
-    () => {
-      if (!currentDraw) return [];
-      const mainMatches = currentMatches.length > 0 ? currentMatches : displayMatches;
-      const placedIds = new Set(
-        mainMatches.flatMap((m) => [m.player_1_user_id, m.player_2_user_id]).filter(Boolean),
-      );
-      const divisionParticipants = participants.filter((p) => {
-        if (p.tournament_choice !== currentDraw.tournamentChoice) return false;
-        if (currentDraw.division !== 'All' && p.division !== currentDraw.division) return false;
-        return true;
-      });
-      return buildPlayerList(
-        divisionParticipants,
-        { ...currentDraw, skillGroup: 'All' },
-        effectiveStatsMap,
-        userMap,
-      ).filter((p) => !placedIds.has(p.user_id));
-    },
-    [currentDraw, currentMatches, displayMatches, participants, effectiveStatsMap, userMap],
-  );
 
   const opponent = visibleUserMatch && user
     ? (() => {
@@ -903,21 +818,6 @@ export const useTournament = (eventIdOverride?: string) => {
       m.skill_group === rrSiblingDraw.skillGroup &&
       m.bracket !== 'reserves')),
     [rrSiblingDraw, matches],
-  );
-
-  const rrSiblingIndices = useMemo<number[]>(
-    () => [...new Set(rrSiblingMatches.map((m) => m.rr_group ?? 0))].sort((a, b) => a - b),
-    [rrSiblingMatches],
-  );
-
-  const rrSiblingGroups = useMemo<TournamentPlayer[][]>(
-    () => (rrSiblingMatches.length === 0 ? [] : buildRRGroupsFrom(rrSiblingMatches, rrSiblingIndices)),
-    [rrSiblingMatches, rrSiblingIndices, buildRRGroupsFrom],
-  );
-
-  const rrSiblingLabels = useMemo<string[]>(
-    () => (rrSiblingMatches.length === 0 ? [] : buildRRLabelsFrom(rrSiblingMatches, rrSiblingIndices)),
-    [rrSiblingMatches, rrSiblingIndices, buildRRLabelsFrom],
   );
 
   // Cross-draw deduplication: if a player appears in both this draw's groups and the sibling
@@ -1377,17 +1277,6 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   const handleEditPlayer = async (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => {
-    if (matchId.startsWith('ll_preview_')) {
-      const match = llDrawDisplayMatches.find((m) => m.id === matchId);
-      if (!match || !llCurrentKey) return;
-      const slotNum = slot === 'player_1' ? match.player_1_slot : match.player_2_slot;
-      if (typeof slotNum !== 'number') return;
-      setLLDrawSlotOverrides((prev) => ({
-        ...prev,
-        [llCurrentKey]: { ...(prev[llCurrentKey] ?? {}), [slotNum]: player },
-      }));
-      return;
-    }
     if (matchId.startsWith('preview_')) {
       const match = displayMatches.find((m) => m.id === matchId);
       if (!match || !currentDraw) return;
@@ -1618,69 +1507,6 @@ export const useTournament = (eventIdOverride?: string) => {
       winnerUserId: match.player_1_user_id,
       sets: [{ mine: '', opponent: '' }, { mine: '', opponent: '' }, { mine: '', opponent: '' }],
     });
-  };
-
-  const handleSetLLDrawSize = (size: number) => {
-    if (!llCurrentKey) return;
-    setLLDrawSizes((prev) => ({ ...prev, [llCurrentKey]: size }));
-  };
-
-  const handleResetLLDraw = async () => {
-    if (!isCreator || !currentDraw || currentReservesMatches.length === 0) return;
-    if (!window.confirm('Reset the LL Draw? This will delete all LL Draw matches and return to preview mode.')) return;
-    try {
-      const batch = writeBatch(db);
-      currentReservesMatches.forEach((m) => batch.delete(doc(db, 'tournament_matches', m.id)));
-      await batch.commit();
-      if (llCurrentKey) {
-        setLLDrawSizes((prev) => deleteKey(prev, llCurrentKey));
-        setLLDrawSlotOverrides((prev) => deleteKey(prev, llCurrentKey));
-      }
-      setMessage({ type: 'success', text: 'LL Draw reset.' });
-    } catch (err) {
-      console.error('LL Draw reset failed:', err);
-      setMessage({ type: 'error', text: 'Could not reset the LL Draw.' });
-    }
-  };
-
-  const handleGenerateReservesDraw = async () => {
-    if (!event || !isCreator || !currentDraw || !llCurrentKey) return;
-    setGeneratingReserves(true);
-    setMessage(null);
-    try {
-      const drawsize = currentLLSize;
-      const templateMatches = normalizeTemplateMatches(fallbackTemplate(drawsize));
-      const slotMap = new Map<number, TournamentPlayer>();
-      Object.entries(currentLLSlotOverrides).forEach(([slotStr, player]) => {
-        if (player !== null) slotMap.set(Number(slotStr), player);
-      });
-      const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, 'All');
-      const batch = writeBatch(db);
-      const cfg = {
-        eventId: event.id,
-        tournamentChoice: currentDraw.tournamentChoice,
-        division: currentDraw.division,
-        skillGroup: 'All' as const,
-        drawsize,
-        allMatches: templateMatches,
-      };
-      templateMatches.forEach((tm, index) => {
-        batch.set(
-          doc(db, 'tournament_matches', `${event.id}_reserves_${drawKey}_${tm.match_id}`),
-          { ...buildMatchFields(tm, index, slotMap, cfg), bracket: 'reserves', started: false, created_at: new Date().toISOString() },
-          { merge: true },
-        );
-      });
-      await batch.commit();
-      setLLDrawSlotOverrides((prev) => deleteKey(prev, llCurrentKey));
-      setShowReserves(true);
-      setMessage({ type: 'success', text: 'LL Draw finalized.' });
-    } catch (err) {
-      console.error('LL Draw generation failed:', err);
-      setMessage({ type: 'error', text: 'Could not finalize the LL Draw.' });
-    } finally {
-      setGeneratingReserves(false);
-    }
   };
 
   // ── Round Robin action handlers ───────────────────────────────────────────
@@ -2017,50 +1843,6 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  // ── Remove participant ────────────────────────────────────────────────────
-  const handleRemoveParticipant = async (userId: string) => {
-    if (!isCreator || !event) return;
-    const participantDoc = participants.find((p) => p.user_id === userId && p.event_id === event.id);
-    if (!participantDoc) return;
-    try {
-      const batch = writeBatch(db);
-      batch.delete(doc(db, 'event_participants', participantDoc.id));
-
-      if (currentDrawFormat === 'rr' && currentDraw) {
-        const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
-        const advCount = rrConfig?.advancementCount ?? 1;
-
-        for (const gi of rrGroupIndices) {
-          const groupMs = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === gi);
-          const groupPlayers = buildRRGroupsFrom(groupMs, [gi])[0] ?? [];
-          if (!groupPlayers.some((p) => p.user_id === userId)) continue;
-          if (groupMs.some((m) => m.status === 'complete' && (m.player_1_user_id === userId || m.player_2_user_id === userId))) {
-            setMessage({ type: 'error', text: 'Cannot remove — this player has a played match.' });
-            return;
-          }
-          const newPlayers = groupPlayers.filter((p) => p.user_id !== userId);
-          const groupLabel = groupMs[0]?.rr_group_label ?? `Group ${String.fromCharCode(65 + gi)}`;
-          const labelCustom = groupMs[0]?.rr_label_custom ?? false;
-          const rewrite = buildSafeGroupRewrite({
-            eventId: event.id, drawKey, draw: currentDraw,
-            groupIndex: gi, groupLabel, labelCustom,
-            oldMatches: groupMs, newPlayers,
-            advancementCount: advCount, started,
-          });
-          rewrite.toDelete.forEach((id) => batch.delete(doc(db, 'tournament_matches', id)));
-          rewrite.toWrite.forEach(({ docId, fields }) => batch.set(doc(db, 'tournament_matches', docId), fields));
-          break;
-        }
-      }
-
-      await batch.commit();
-      setMessage({ type: 'success', text: 'Player removed from event.' });
-    } catch (err) {
-      console.error('Remove participant failed:', err);
-      setMessage({ type: 'error', text: 'Could not remove the player.' });
-    }
-  };
-
   // ── Match scheduling ──────────────────────────────────────────────────────
   // Players may write only the scheduling fields (Firestore rules carve-out); scores stay
   // organizer-only. Preview (ungenerated) matches have no doc, so they're guarded out.
@@ -2169,7 +1951,6 @@ export const useTournament = (eventIdOverride?: string) => {
     visibleDraws,
     opponent,
     editPlayers,
-    reservesPlayers,
     currentDrawAllPlayers,
     currentDrawSize,
     message,
@@ -2206,16 +1987,6 @@ export const useTournament = (eventIdOverride?: string) => {
     submittableMatchIds,
     handleConfirmSubmission,
     handleRejectSubmission,
-    currentReservesMatches,
-    llDrawDisplayMatches,
-    currentLLSize,
-    allUsersAsTournamentPlayers,
-    showReserves,
-    setShowReserves,
-    generatingReserves,
-    handleSetLLDrawSize,
-    handleGenerateReservesDraw,
-    handleResetLLDraw,
     // Round Robin
     currentDrawFormat,
     drawFormat,
@@ -2234,10 +2005,6 @@ export const useTournament = (eventIdOverride?: string) => {
     rrGroupLabels,
     rrGroupIndices,
     rrUnplacedPlayers,
-    rrSiblingDraw,
-    rrSiblingGroups,
-    rrSiblingLabels,
-    rrSiblingIndices,
     rrView,
     setRRView,
     handleGenerateRR,
@@ -2246,7 +2013,6 @@ export const useTournament = (eventIdOverride?: string) => {
     handleSaveGroupEdit,
     handleCreateRRGroup,
     handleRenameGroup,
-    handleRemoveParticipant,
     // Scheduling
     visibleUserMatch,
     userRRMatches,

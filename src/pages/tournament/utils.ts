@@ -14,7 +14,14 @@ export const formatScheduledDate = (d?: string, slot?: string) => {
   return `${month} ${day}${sfx}${slot ? `, ${slot}` : ''}`;
 };
 
-export const formatSetScores = (m: TournamentMatch): string => {
+// Any doc shape carrying the six set-score fields — a TournamentMatch or a ScoreSubmission(Doc).
+type ScoredSets = {
+  set_1_player_1?: number; set_1_player_2?: number;
+  set_2_player_1?: number; set_2_player_2?: number;
+  set_3_player_1?: number; set_3_player_2?: number;
+};
+
+export const formatSetScores = (m: ScoredSets): string => {
   const pairs: [number, number][] = [
     [m.set_1_player_1 ?? 0, m.set_1_player_2 ?? 0],
     [m.set_2_player_1 ?? 0, m.set_2_player_2 ?? 0],
@@ -25,6 +32,63 @@ export const formatSetScores = (m: TournamentMatch): string => {
 
 export const PLAYER_LOADING = 'Player Loading';
 export const BYE = 'BYE';
+
+export type MatchDisplayFlags = {
+  isPreview: boolean;
+  isPreviewFirstRound: boolean;
+  isEditable: boolean;
+  scoreText: string;
+  hasBye: boolean;
+  hasRealPlayers: boolean;
+  hasPlayableSlots: boolean;
+  showDot: boolean;
+  showCreatorSubmit: boolean;
+  showPlayerSubmit: boolean;
+  alreadySubmitted: boolean;
+};
+
+// Derived per-match display state shared by the desktop bracket grid (BracketView) and the
+// mobile round accordion (BracketAccordion) — keeps preview/editable/submit-button logic
+// identical between the two layouts.
+export const getMatchDisplayFlags = (
+  match: TournamentMatch,
+  opts: {
+    editMode?: boolean;
+    hasEditHandler: boolean;
+    isCreator?: boolean;
+    hasSubmitHandler: boolean;
+    submittableMatchIds?: Set<string>;
+    pendingMatchIds?: Set<string>;
+  },
+): MatchDisplayFlags => {
+  const { editMode, hasEditHandler, isCreator, hasSubmitHandler, submittableMatchIds, pendingMatchIds } = opts;
+
+  const isPreview = match.id.startsWith('preview_') || match.id.startsWith('ll_preview_');
+  const isPreviewFirstRound = isPreview &&
+    typeof match.player_1_slot === 'number' && typeof match.player_2_slot === 'number';
+  const isEditable = !!editMode && hasEditHandler && (!isPreview || isPreviewFirstRound);
+
+  const scoreText = !isPreview && match.status === 'complete' ? formatSetScores(match) : '';
+  const hasBye = match.player_1_name === BYE || match.player_2_name === BYE;
+  const hasRealPlayers = !isPreview && !hasBye && !!match.player_1_user_id && !!match.player_2_user_id;
+  // For the creator, also allow submitting when a slot is PLAYER_LOADING (winner pending).
+  const hasPlayableSlots = !isPreview && !hasBye && (
+    (!!match.player_1_user_id || match.player_1_name === PLAYER_LOADING) &&
+    (!!match.player_2_user_id || match.player_2_name === PLAYER_LOADING)
+  );
+  const showDot = !isPreview && hasRealPlayers;
+  // Creator submit button (also shown for complete matches so creator can overwrite).
+  const showCreatorSubmit = !!isCreator && hasSubmitHandler && hasPlayableSlots && !editMode;
+  // Player submit: current user is in this match (or doubles teammate), not yet complete.
+  const showPlayerSubmit = !isCreator && hasSubmitHandler && hasRealPlayers && !editMode &&
+    !!submittableMatchIds?.has(match.id) && match.status !== 'complete';
+  const alreadySubmitted = !!pendingMatchIds?.has(match.id);
+
+  return {
+    isPreview, isPreviewFirstRound, isEditable, scoreText, hasBye, hasRealPlayers,
+    hasPlayableSlots, showDot, showCreatorSubmit, showPlayerSubmit, alreadySubmitted,
+  };
+};
 
 export const formatPlayerName = (value?: string) => {
   const trimmed = (value || '').trim();
@@ -220,6 +284,10 @@ export const filterParticipantsForDraw = (
     if (p.division !== draw.division) return false;
     if (draw.tournamentChoice === 'Doubles') return true;
     if (draw.skillGroup === 'All') return true;
+    // Seniors is opt-in at join time (age 55+), not skill-derived: a seniors participant
+    // belongs ONLY to the Seniors draw, and never falls into Challengers/Masters.
+    if (p.skill_group === 'Seniors') return draw.skillGroup === 'Seniors';
+    if (draw.skillGroup === 'Seniors') return false;
     const effectiveSkill = statsMap[p.user_id]?.skill_level ?? Number(p.skill || 0);
     return (effectiveSkill >= 4 ? 'Masters' : 'Challengers') === draw.skillGroup;
   });

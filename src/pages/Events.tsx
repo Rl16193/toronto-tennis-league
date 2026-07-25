@@ -1,35 +1,40 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
+import { ChevronRight, Plus, Trophy } from 'lucide-react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 
+import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
+import { Fab } from '../components/Fab';
+import { SegmentedControl } from '../components/SegmentedControl';
 import { createEvent, DisplayEvent, EventFormState, INITIAL_EVENT_FORM, validateEventForm } from '../features/events/services/eventService';
 import { useEvents } from '../features/events/hooks/useEvents';
 import { useJoin } from '../features/events/hooks/useJoin';
-import { EventCard } from '../features/events/components/EventCard';
+import { EventCard, isLateRegistration } from '../features/events/components/EventCard';
 import { CreatorEventModal } from '../features/events/components/CreatorEventModal';
+import { JoinEventSheet } from '../features/events/components/JoinEventSheet';
 import { track } from '../lib/analytics';
-import { useProfileData } from '../features/profile/hooks/useProfileData';
-import { useProfileActions } from '../features/profile/hooks/useProfileActions';
-import { ProfileEvents } from '../features/profile/components/ProfileEvents';
+import { getEventDate } from './tournament/utils';
+
+type EventsTab = 'upcoming' | 'completed';
+type CompletedEvent = { id: string; title: string; when: Date | null };
 
 export const Events: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
-  const navigate = useNavigate();
   const isEventCreator = !!profile?.preferences.event_creator;
 
   const { events, setEvents, loading, visibleEvents, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament, isFullyJoinedEvent } = useEvents();
-  const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed, handleSubmitJoin } = useJoin({ user, profile, navigate, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament });
+  const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed, handleSubmitJoin } = useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament });
 
-  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [tab, setTab] = useState<EventsTab>('upcoming');
+  const [completedEvents, setCompletedEvents] = useState<CompletedEvent[]>([]);
+  const [completedLoading, setCompletedLoading] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
   const [eventForm, setEventForm] = useState<EventFormState>(INITIAL_EVENT_FORM);
   const [eventFormMessage, setEventFormMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [creatingEvent, setCreatingEvent] = useState(false);
-
-  const { joinedEvents, loading: joinedLoading } = useProfileData();
-  const { actions } = useProfileActions();
 
   useEffect(() => { document.title = 'Events — Racquets & Strings'; }, []);
 
@@ -39,19 +44,37 @@ export const Events: React.FC = () => {
     return () => clearTimeout(t);
   }, [eventFormMessage]);
 
+  // Completed events, loaded on first visit to the Completed tab (final has a winner —
+  // same classification the Tournament/History pages use).
   useEffect(() => {
-    if (!selectedEvent) setExpandedEventId(null);
-  }, [selectedEvent]);
+    if (tab !== 'completed' || completedEvents.length > 0) return;
+    setCompletedLoading(true);
+    Promise.all([
+      getDocs(collection(db, 'events')),
+      getDocs(query(collection(db, 'tournament_matches'), where('round', '==', 'F'), where('status', '==', 'complete'))),
+    ])
+      .then(([eventsSnap, finalsSnap]) => {
+        const completedIds = new Set(
+          finalsSnap.docs.filter((d) => d.data().winner_user_id).map((d) => d.data().event_id as string),
+        );
+        setCompletedEvents(
+          eventsSnap.docs
+            .filter((d) => completedIds.has(d.id))
+            .map((d) => ({
+              id: d.id,
+              title: (d.data().title as string) || 'Tournament',
+              when: getEventDate(d.data() as Record<string, unknown>),
+            }))
+            .sort((a, b) => (b.when?.getTime() ?? 0) - (a.when?.getTime() ?? 0)),
+        );
+      })
+      .catch(() => {})
+      .finally(() => setCompletedLoading(false));
+  }, [tab, completedEvents.length]);
 
-  const handleExpand = (event: DisplayEvent | null) => {
-    if (event) {
-      setExpandedEventId(event.id);
-      setSelectedEvent(event);
-      track('select_content', { content_type: 'tennis_event', content_id: event.id });
-    } else {
-      setExpandedEventId(null);
-      setSelectedEvent(null);
-    }
+  const handleJoin = (event: DisplayEvent) => {
+    setSelectedEvent(event);
+    track('select_content', { content_type: 'tennis_event', content_id: event.id });
   };
 
   const handleCreateEvent = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -75,17 +98,13 @@ export const Events: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
-      <div className="mb-4 flex items-center justify-end gap-3">
-        {isEventCreator && (
-          <Button onClick={() => { setEventFormMessage(null); setEventForm((f) => ({ ...f, organizer: f.organizer || profile?.user.name || '' })); setShowEventForm(true); }}>
-            Add an Event
-          </Button>
-        )}
-        <Link to="/tournament?tab=completed">
-          <Button variant="outline">Completed Events</Button>
-        </Link>
-      </div>
+    <div className="max-w-xl mx-auto px-4 pb-20 pt-4">
+      <SegmentedControl<EventsTab>
+        options={[{ value: 'upcoming', label: 'Upcoming' }, { value: 'completed', label: 'Completed' }]}
+        value={tab}
+        onChange={setTab}
+        className="mb-5 max-w-xs"
+      />
 
       {eventFormMessage && !showEventForm && (
         <div className={`mb-6 rounded-2xl border px-5 py-4 text-sm ${eventFormMessage.type === 'success' ? 'border-green-500/20 bg-green-500/10 text-green-300' : 'border-red-500/20 bg-red-500/10 text-red-300'}`}>
@@ -93,50 +112,98 @@ export const Events: React.FC = () => {
         </div>
       )}
 
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {tab === 'completed' ? (
+        completedLoading ? (
+          <div className="space-y-2 max-w-xl">
+            {[1, 2].map((i) => <div key={i} className="h-14 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
+          </div>
+        ) : completedEvents.length === 0 ? (
+          <div className="text-center py-16">
+            <p className="text-fg/50 text-sm">No completed events yet.</p>
+          </div>
+        ) : (
+          <div className="rounded-3xl bg-tennis-surface/30 border border-fg/5 overflow-hidden divide-y divide-white/5 max-w-xl">
+            {completedEvents.map((e) => (
+              <Link
+                key={e.id}
+                to={`/tournament?event=${e.id}`}
+                className="flex items-center gap-3 px-4 py-3.5 hover:bg-fg/[0.04] transition-colors"
+              >
+                <span className="w-8 h-8 shrink-0 rounded-xl bg-clay/15 border border-clay/25 flex items-center justify-center">
+                  <Trophy className="w-4 h-4 text-clay" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-fg truncate">{e.title}</p>
+                  {e.when && (
+                    <p className="text-[11px] text-fg/40">
+                      {e.when.toLocaleDateString('en-CA', { month: 'short', year: 'numeric' })}
+                    </p>
+                  )}
+                </div>
+                <ChevronRight className="w-4 h-4 text-fg/30 shrink-0" />
+              </Link>
+            ))}
+          </div>
+        )
+      ) : loading ? (
+        <div className="space-y-4">
           {[1, 2, 3].map((i) => <div key={i} className="h-48 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
         </div>
       ) : visibleEvents.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="space-y-4">
           {visibleEvents.map((event, i) => (
             <EventCard
               key={event.id}
               event={event}
               index={i}
               isJoined={isFullyJoinedEvent(event)}
-              joining={joining}
               authLoading={authLoading}
               isLoggedIn={!!user}
-              isExpanded={expandedEventId === event.id}
-              onExpand={handleExpand}
-              joinForm={joinForm}
-              setJoinForm={setJoinForm}
-              joinError={expandedEventId === event.id ? joinError : ''}
-              slotStatus={expandedEventId === event.id ? slotStatus : null}
-              loadingMatches={expandedEventId === event.id ? loadingMatches : false}
-              slotFallbackConfirmed={slotFallbackConfirmed}
-              setSlotFallbackConfirmed={setSlotFallbackConfirmed}
-              onSubmitJoin={handleSubmitJoin}
+              onJoin={handleJoin}
             />
           ))}
         </div>
       ) : (
         <div className="text-center py-16">
-          <h3 className="text-xl font-bold text-white">No upcoming events</h3>
-          <p className="text-white/60 mt-1">Events will appear here when available.</p>
+          <h3 className="text-xl font-bold text-fg">No upcoming events</h3>
+          <p className="text-fg/60 mt-1">Events will appear here when available.</p>
         </div>
       )}
 
-      {user && (
-        <div className="mt-10 max-w-2xl mx-auto">
-          <ProfileEvents
-            joinedEvents={joinedEvents}
-            loading={joinedLoading}
-            onRemoveEvent={(event) => actions.removeEvent(event.participantId, event.id)}
-          />
-        </div>
+      {/* Organizer "Add Event" — floating action button (wireframe 1g) */}
+      {isEventCreator && tab === 'upcoming' && (
+        <Fab
+          ariaLabel="Add an event"
+          onClick={() => {
+            setEventFormMessage(null);
+            setEventForm((f) => ({ ...f, organizer: f.organizer || profile?.user.name || '' }));
+            setShowEventForm(true);
+          }}
+        >
+          <Plus className="w-6 h-6" />
+        </Fab>
       )}
+
+      {/* Join flow — bottom sheet */}
+      <AnimatePresence>
+        {selectedEvent && !isFullyJoinedEvent(selectedEvent) && (
+          <JoinEventSheet
+            event={selectedEvent}
+            isLate={isLateRegistration(selectedEvent)}
+            seniorsEligible={profile?.user.age_bracket === '55+'}
+            joinForm={joinForm}
+            setJoinForm={setJoinForm}
+            joinError={joinError}
+            slotStatus={slotStatus}
+            loadingMatches={loadingMatches}
+            slotFallbackConfirmed={slotFallbackConfirmed}
+            setSlotFallbackConfirmed={setSlotFallbackConfirmed}
+            joining={joining}
+            onSubmitJoin={handleSubmitJoin}
+            onClose={() => setSelectedEvent(null)}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showEventForm && (

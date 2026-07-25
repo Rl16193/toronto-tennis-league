@@ -1,6 +1,7 @@
-﻿import React, { useState } from 'react';
-import { ChevronDown, Download, Pencil, Play, X, XCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Download, Pencil, Play, Settings2, X, XCircle } from 'lucide-react';
 import { Button } from '../../components/Button';
+import { Sheet } from '../../components/Sheet';
 import { TournamentFormat } from './types';
 
 type Props = {
@@ -22,6 +23,9 @@ type Props = {
   onToggleConsolidateDoubles: () => void;
 };
 
+// Organizer controls, mobile remodel (wireframe 1a): the old Download / Generate / Edit / Merge
+// button rows collapse into one "Manage Draw" button that opens a bottom sheet listing every
+// action. Non-creators never render this (gated at the call site).
 export const TournamentHeader: React.FC<Props> = ({
   isCreator, hasMatches, isProcessing, editMode, started,
   mergeMensSingles, mergeWomensSingles, consolidateDoubles,
@@ -29,122 +33,104 @@ export const TournamentHeader: React.FC<Props> = ({
   onDownload, onGenerateMatches, onCancelMatches, onToggleEdit,
   onToggleMergeMens, onToggleMergeWomens, onToggleConsolidateDoubles,
 }) => {
-  const [mergeOpen, setMergeOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
-  const anyMergeActive = mergeMensSingles || mergeWomensSingles || consolidateDoubles;
+  if (!isCreator) return null;
 
-  const mergeMenuItems = [
-    { label: "Men's Singles", active: mergeMensSingles, onToggle: onToggleMergeMens },
-    { label: "Women's Singles", active: mergeWomensSingles, onToggle: onToggleMergeWomens },
-    { label: 'Doubles', active: consolidateDoubles, onToggle: onToggleConsolidateDoubles },
+  const canMerge = !started && (currentDrawFormat === 'bracket' || currentDrawFormat === 'rr');
+  const mergeItems = [
+    { label: "Merge Men's Singles", active: mergeMensSingles, onToggle: onToggleMergeMens },
+    { label: "Merge Women's Singles", active: mergeWomensSingles, onToggle: onToggleMergeWomens },
+    { label: 'Merge Doubles', active: consolidateDoubles, onToggle: onToggleConsolidateDoubles },
   ];
 
-  const mergeMenu = mergeOpen && (
-    <div className="absolute left-0 bottom-full mb-2 z-50 min-w-[200px] rounded-2xl border border-white/10 bg-tennis-dark shadow-2xl p-2 space-y-1">
-      {mergeMenuItems.map(({ label, active, onToggle }) => (
-        <button
-          key={label}
-          type="button"
-          onClick={() => { onToggle(); setMergeOpen(false); }}
-          className={`w-full flex items-center justify-between gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
-            active ? 'bg-clay/20 text-clay' : 'text-white hover:bg-white/5 hover:text-white'
-          }`}
-        >
-          <span>{label}</span>
-          {active && <span className="text-xs font-bold text-clay shrink-0">Unmerge</span>}
-        </button>
-      ))}
-    </div>
-  );
-
-  const mergeDropdown = !started && (currentDrawFormat === 'bracket' || currentDrawFormat === 'rr') && (
-    <div className="relative">
-      <Button
-        variant={anyMergeActive ? 'clay' : 'outline'}
-        onClick={() => setMergeOpen((v) => !v)}
-      >
-        Merge Draws
-        <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${mergeOpen ? 'rotate-180' : ''}`} />
-      </Button>
-      {mergeMenu}
-    </div>
+  const Row: React.FC<{
+    icon: React.ReactNode; label: string; hint?: string; danger?: boolean; active?: boolean;
+    onClick: () => void; busy?: boolean;
+  }> = ({ icon, label, hint, danger, active, onClick, busy }) => (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onClick}
+      className={`w-full flex items-center gap-4 rounded-2xl border px-4 py-3.5 text-left transition-colors disabled:opacity-50 ${
+        active
+          ? 'border-clay/50 bg-clay/10'
+          : danger
+            ? 'border-red-500/25 bg-red-500/5 hover:border-red-500/50'
+            : 'border-fg/10 bg-fg/5 hover:border-fg/30'
+      }`}
+    >
+      <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+        danger ? 'bg-red-500/15 text-red-400' : active ? 'bg-clay/20 text-clay' : 'bg-fg/5 text-fg/70'
+      }`}>
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-sm font-bold ${danger ? 'text-red-400' : 'text-fg'}`}>{label}</span>
+        {hint && <span className="block text-xs text-fg/40 mt-0.5">{hint}</span>}
+      </span>
+      {active && <span className="text-[10px] font-black uppercase tracking-wide text-clay shrink-0">On</span>}
+    </button>
   );
 
   return (
     <div className="mb-8">
-      {/* Desktop: all in one row */}
-      <div className="hidden sm:flex items-center gap-3 flex-wrap">
-        <Button variant="outline" onClick={onDownload}>
-          <Download className="w-4 h-4 mr-2" />Download Draw
-        </Button>
-        {!isCreator && (
-          <span className="text-xs text-orange-500 font-medium">
-            Draw updates after scores are submitted to the organizer in person, WhatsApp or Instagram.
-          </span>
-        )}
-        {isCreator && (
-          <>
-            {hasMatches ? (
-              <Button variant="danger" onClick={onCancelMatches} isLoading={isProcessing}>
-                <XCircle className="w-4 h-4 mr-2" />Cancel Matches
-              </Button>
-            ) : (
-              <Button onClick={onGenerateMatches} isLoading={isProcessing}>
-                <Play className="w-4 h-4 mr-2" />Generate Matches
-              </Button>
-            )}
-            <Button variant={editMode ? 'danger' : 'outline'} onClick={onToggleEdit}>
-              {editMode ? <><X className="w-4 h-4 mr-2" />Done Editing</> : <><Pencil className="w-4 h-4 mr-2" />Edit Draw</>}
-            </Button>
-            {mergeDropdown}
-          </>
-        )}
-      </div>
+      <Button variant="white" onClick={() => setOpen(true)} className="w-full sm:w-auto">
+        <Settings2 className="w-4 h-4 mr-2" />Manage Draw
+      </Button>
 
-      {/* Mobile: 2-row 35/65 grid */}
-      <div className="sm:hidden space-y-2">
-        {!isCreator && (
-          <span className="block text-xs text-orange-500 font-medium mb-2">
-            Draw updates after scores are submitted to the organizer in person, WhatsApp or Instagram.
-          </span>
-        )}
-        <div className="grid gap-2" style={{ gridTemplateColumns: '35fr 65fr' }}>
-          <Button variant="outline" onClick={onDownload} className="w-full text-xs px-2">
-            <Download className="w-3.5 h-3.5 mr-1 shrink-0" />Download
-          </Button>
-          {isCreator ? (
-            hasMatches ? (
-              <Button variant="danger" onClick={onCancelMatches} isLoading={isProcessing} className="w-full text-xs px-2">
-                <XCircle className="w-3.5 h-3.5 mr-1 shrink-0" />Cancel Matches
-              </Button>
+      {open && (
+        <Sheet onClose={() => setOpen(false)} title="Manage Draw" maxWidthClassName="max-w-md">
+          <div className="p-6 pt-3 space-y-2.5">
+            <Row
+              icon={<Download className="w-4 h-4" />}
+              label="Download Draw"
+              hint="Save the current draw as an image"
+              onClick={() => { onDownload(); setOpen(false); }}
+            />
+            {hasMatches ? (
+              <Row
+                icon={<XCircle className="w-4 h-4" />}
+                label="Cancel Matches"
+                hint="Delete this draw's generated matches"
+                danger
+                busy={isProcessing}
+                onClick={() => { onCancelMatches(); setOpen(false); }}
+              />
             ) : (
-              <Button onClick={onGenerateMatches} isLoading={isProcessing} className="w-full text-xs px-2">
-                <Play className="w-3.5 h-3.5 mr-1 shrink-0" />Generate Matches
-              </Button>
-            )
-          ) : <div />}
-        </div>
-        {isCreator && (
-          <div className="grid gap-2" style={{ gridTemplateColumns: '35fr 65fr' }}>
-            <Button variant={editMode ? 'danger' : 'outline'} onClick={onToggleEdit} className="w-full text-xs px-2">
-              {editMode ? <><X className="w-3.5 h-3.5 mr-1 shrink-0" />Done</> : <><Pencil className="w-3.5 h-3.5 mr-1 shrink-0" />Edit</>}
-            </Button>
-            {!started && (currentDrawFormat === 'bracket' || currentDrawFormat === 'rr') ? (
-              <div className="relative w-full">
-                <Button
-                  variant={anyMergeActive ? 'clay' : 'outline'}
-                  className="w-full text-xs px-2"
-                  onClick={() => setMergeOpen((v) => !v)}
-                >
-                  Merge Draws
-                  <ChevronDown className={`w-3.5 h-3.5 ml-1 transition-transform ${mergeOpen ? 'rotate-180' : ''}`} />
-                </Button>
-                {mergeMenu}
-              </div>
-            ) : <div />}
+              <Row
+                icon={<Play className="w-4 h-4" />}
+                label="Generate Matches"
+                hint="Lock the draw in and create matches"
+                busy={isProcessing}
+                onClick={() => { onGenerateMatches(); setOpen(false); }}
+              />
+            )}
+            <Row
+              icon={editMode ? <X className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+              label={editMode ? 'Done Editing' : 'Edit Draw'}
+              hint={editMode ? undefined : 'Reassign players, set draw size'}
+              active={editMode}
+              onClick={() => { onToggleEdit(); setOpen(false); }}
+            />
+            {canMerge && (
+              <>
+                <p className="text-[11px] font-bold uppercase tracking-widest text-fg/40 pt-2">Merge Draws</p>
+                {mergeItems.map((m) => (
+                  <Row
+                    key={m.label}
+                    icon={<Settings2 className="w-4 h-4" />}
+                    label={m.label}
+                    hint={m.active ? 'Tap to unmerge' : undefined}
+                    active={m.active}
+                    onClick={() => { m.onToggle(); setOpen(false); }}
+                  />
+                ))}
+              </>
+            )}
           </div>
-        )}
-      </div>
+        </Sheet>
+      )}
     </div>
   );
 };

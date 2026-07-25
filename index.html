@@ -81,9 +81,21 @@
     <link rel="preconnect" href="https://firestore.googleapis.com" />
     <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
 
+    <!-- Apply the stored light/dark choice before first paint, so returning light-mode users
+         never see a flash of the dark splash screen. Defaults to dark (matches ThemeContext.tsx). -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('rs-theme');
+          if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+        } catch (e) {}
+      })();
+    </script>
+
     <!-- Instant loading screen (replaced by React on mount; no extra JS/CSS request) -->
     <style>
       html { background-color: #143D34; }
+      html[data-theme="light"] { background-color: #EDEDE7; }
       #app-splash {
         position: fixed;
         inset: 0;
@@ -95,12 +107,14 @@
         background-color: #143D34;
         font-family: 'Montserrat', system-ui, -apple-system, sans-serif;
       }
+      html[data-theme="light"] #app-splash { background-color: #EDEDE7; }
       #app-splash .splash-wordmark {
         font-size: 22px;
         font-weight: 700;
         letter-spacing: 0.02em;
         color: #ffffff;
       }
+      html[data-theme="light"] #app-splash .splash-wordmark { color: #16261F; }
       #app-splash .splash-wordmark span { color: #FF6B35; }
       #app-splash .splash-spinner {
         width: 44px;

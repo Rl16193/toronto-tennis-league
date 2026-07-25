@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { motion, useDragControls } from 'motion/react';
 
@@ -42,7 +43,10 @@ export const Sheet: React.FC<Props> = ({ onClose, title, maxWidthClassName = 'ma
     };
   }, [onClose]);
 
-  return (
+  // Portalled to <body> — a scrolled Navbar picks up `backdrop-blur` (a `backdrop-filter`),
+  // which creates a new containing block for `position: fixed` descendants. Rendered inline,
+  // that pins this sheet to the navbar's box instead of the viewport once the page is scrolled.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -70,7 +74,7 @@ export const Sheet: React.FC<Props> = ({ onClose, title, maxWidthClassName = 'ma
         dragConstraints={{ top: 0, bottom: 0 }}
         dragElastic={{ top: 0, bottom: 0.5 }}
         onDragEnd={(_, info) => { if (info.offset.y > 100 || info.velocity.y > 500) onClose(); }}
-        className={`relative w-full ${maxWidthClassName} bg-tennis-surface border border-white/10
+        className={`relative w-full ${maxWidthClassName} bg-tennis-surface border border-fg/10
                     rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl
                     max-h-[92vh] sm:max-h-[90vh] overflow-y-auto`}
       >
@@ -80,12 +84,12 @@ export const Sheet: React.FC<Props> = ({ onClose, title, maxWidthClassName = 'ma
           style={{ touchAction: 'none' }}
           onPointerDown={(e) => dragControls.start(e)}
         >
-          <span className="h-1.5 w-10 rounded-full bg-white/20" />
+          <span className="h-1.5 w-10 rounded-full bg-fg/20" />
         </div>
 
         {title && (
-          <div className="sticky top-0 sm:top-0 z-10 flex items-center justify-between gap-4 bg-tennis-surface px-6 pt-3 sm:pt-6 pb-3 border-b border-white/5">
-            <h2 className="text-lg font-bold text-white">{title}</h2>
+          <div className="sticky top-0 sm:top-0 z-10 flex items-center justify-between gap-4 bg-tennis-surface px-6 pt-3 sm:pt-6 pb-3 border-b border-fg/5">
+            <h2 className="text-lg font-bold text-fg">{title}</h2>
           </div>
         )}
 
@@ -94,13 +98,14 @@ export const Sheet: React.FC<Props> = ({ onClose, title, maxWidthClassName = 'ma
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute top-3.5 right-4 sm:top-5 sm:right-5 z-30 w-9 h-9 bg-tennis-dark/50 hover:bg-tennis-dark rounded-full flex items-center justify-center text-white transition-colors"
+          className="absolute top-3.5 right-4 sm:top-5 sm:right-5 z-30 w-9 h-9 bg-tennis-dark/50 hover:bg-tennis-dark rounded-full flex items-center justify-center text-fg transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
 
         {children}
       </motion.div>
-    </div>
+    </div>,
+    document.body,
   );
 };

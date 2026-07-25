@@ -3,8 +3,10 @@ import { DrawConfig } from './types';
 export const VISIBLE_DRAWS: DrawConfig[] = [
   { tab: 'mens', label: "Men's Challengers", tournamentChoice: 'Singles', division: "Men's", skillGroup: 'Challengers' },
   { tab: 'mens', label: "Men's Masters", tournamentChoice: 'Singles', division: "Men's", skillGroup: 'Masters' },
+  { tab: 'mens', label: "Men's Seniors", tournamentChoice: 'Singles', division: "Men's", skillGroup: 'Seniors' },
   { tab: 'womens', label: "Women's Challengers", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'Challengers' },
   { tab: 'womens', label: "Women's Masters", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'Masters' },
+  { tab: 'womens', label: "Women's Seniors", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'Seniors' },
   { tab: 'doubles', label: "Men's Doubles", tournamentChoice: 'Doubles', division: "Men's", skillGroup: 'All' },
   { tab: 'doubles', label: "Women's Doubles", tournamentChoice: 'Doubles', division: "Women's", skillGroup: 'All' },
   { tab: 'doubles', label: 'Mixed Doubles', tournamentChoice: 'Doubles', division: 'Mixed Doubles', skillGroup: 'All' },

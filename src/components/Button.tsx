@@ -1,13 +1,8 @@
 import React from 'react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../lib/cn';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'clay';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'clay' | 'white';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
 }
@@ -23,11 +18,12 @@ export const Button: React.FC<ButtonProps> = ({
 }) => {
   const variants = {
     primary: 'bg-clay hover:bg-clay-dark text-white shadow-lg shadow-clay/20',
-    secondary: 'bg-tennis-surface hover:bg-tennis-surface/80 text-white',
+    secondary: 'bg-tennis-surface hover:bg-tennis-surface/80 text-fg',
     outline: 'border-2 border-clay text-clay hover:bg-clay hover:text-white',
-    ghost: 'hover:bg-white/10 text-white',
+    ghost: 'hover:bg-fg/10 text-fg',
     danger: 'bg-red-500 hover:bg-red-600 text-white',
     clay: 'bg-clay hover:bg-clay-dark text-white shadow-lg shadow-clay/20',
+    white: 'bg-white hover:bg-white/90 text-ink shadow-lg shadow-black/10',
   };
 
   const sizes = {

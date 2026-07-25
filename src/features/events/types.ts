@@ -1,6 +1,8 @@
 export type JoinFormState = {
   tournamentChoice: 'Singles' | 'Doubles';
   division: '' | "Men's" | "Women's" | 'Mixed Doubles';
+  // Singles only: opt into the age-based Seniors (55+) draw instead of skill routing.
+  seniors: boolean;
   partnerName: string;
   partnerInApp: 'yes' | 'no' | '';
   combinedSkill: string;
@@ -24,6 +26,7 @@ export type SlotResult = {
 export const INITIAL_JOIN_FORM: JoinFormState = {
   tournamentChoice: 'Singles',
   division: '',
+  seniors: false,
   partnerName: '',
   partnerInApp: '',
   combinedSkill: '',
