@@ -11,7 +11,10 @@ const { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } = require('fir
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
-const { notify } = require('./lib/notify');
+const { notify, sendEmailOnce, resendApiKey } = require('./lib/notify');
+const {
+  buildRallyEmail, buildRallyAcceptedEmail, buildChallengeEmail, buildChallengeAcceptedEmail, buildIncompleteMatchesEmail,
+} = require('./lib/emailTemplates');
 
 const REGION = 'us-central1';
 const TZ = 'America/Toronto';
@@ -83,19 +86,6 @@ exports.onMatchUpdated = onDocumentUpdated(
       })));
     }
 
-    // Score recorded (organizer direct, or a confirmed submission).
-    if (before.status !== 'complete' && after.status === 'complete') {
-      await Promise.all(matchPlayers(after).map((uid) => {
-        const won = after.winner_user_id === uid;
-        return notify(uid, {
-          type: 'score_confirmed',
-          title: won ? 'You won your match' : 'Your match result is in',
-          body: after.winner_name ? `Winner: ${after.winner_name}` : '',
-          link: matchLink(after),
-        });
-      }));
-    }
-
     // Advancement: an empty player slot became filled — the next-round pairing is known.
     const slots = ['player_1_user_id', 'player_2_user_id'];
     const newlyFilled = slots.some((s) => !before[s] && after[s]);
@@ -120,10 +110,7 @@ exports.onScoreSubmitted = onDocumentCreated(
   async (event) => {
     const s = event.data?.data();
     if (!s?.event_id) return;
-    const [eventDoc, matchDoc] = await Promise.all([
-      db().doc(`events/${s.event_id}`).get(),
-      s.match_id ? db().doc(`tournament_matches/${s.match_id}`).get() : Promise.resolve(null),
-    ]);
+    const eventDoc = await db().doc(`events/${s.event_id}`).get();
     const creatorId = eventDoc.exists ? eventDoc.data().creator_id : null;
     const link = `/tournament?event=${s.event_id}`;
 
@@ -133,18 +120,6 @@ exports.onScoreSubmitted = onDocumentCreated(
       body: `${s.player_1_name || ''} vs ${s.player_2_name || ''}`.trim(),
       link,
     });
-
-    // The opponent of whoever submitted.
-    if (matchDoc?.exists) {
-      const m = matchDoc.data();
-      const opponentUid = otherPlayer(m, s.submitted_by);
-      await notify(opponentUid, {
-        type: 'score_submitted',
-        title: 'A score was submitted for your match',
-        body: s.claimed_winner_name ? `Reported winner: ${s.claimed_winner_name}` : 'Awaiting organizer confirmation.',
-        link,
-      });
-    }
   },
 );
 
@@ -195,27 +170,66 @@ exports.onScheduleRequested = onDocumentUpdated(
 // ─── League Ladder ──────────────────────────────────────────────────────────
 
 exports.onLadderChallengeCreated = onDocumentCreated(
-  { document: 'ladder_challenges/{id}', region: REGION },
+  { document: 'ladder_challenges/{id}', region: REGION, secrets: [resendApiKey] },
   async (event) => {
     const c = event.data?.data();
     if (!c?.opponent_id) return;
-    await notify(c.opponent_id, {
-      type: 'ladder_challenged',
-      title: `${c.challenger_name || 'A player'} challenged you`,
-      body: 'Arrange a time and report the result when you’ve played.',
-      link: `/tournament?event=${c.event_id}`,
-    });
+    // A conversion proposal (source set) is a distinct ask from a from-scratch challenge —
+    // the opponent already played the match/rally and is being asked to confirm it counts.
+    if (c.source) {
+      await notify(c.opponent_id, {
+        type: 'challenge_conversion_proposed',
+        title: `${c.challenger_name || 'A player'} converted your ${c.source === 'friendly' ? 'rally' : 'match'} to a challenge`,
+        body: 'Review and confirm the result to register it as a challenge.',
+        link: '/matches?mode=challenges',
+      });
+    } else {
+      await notify(c.opponent_id, {
+        type: 'ladder_challenged',
+        title: `${c.challenger_name || 'A player'} challenged you`,
+        body: 'Arrange a time and report the result when you’ve played.',
+        link: '/matches?mode=challenges',
+      });
+    }
+    const eventDoc = await db().doc(`events/${c.event_id}`).get();
+    const ladderName = eventDoc.exists ? (eventDoc.data().title || 'League Ladder') : 'League Ladder';
+    await sendEmailOnce(
+      c.opponent_id,
+      `challenge-received:${event.params.id}`,
+      'You have received a challenge!',
+      buildChallengeEmail(c.challenger_name || 'A player', ladderName),
+    );
   },
 );
 
 exports.onLadderChallengeUpdated = onDocumentUpdated(
-  { document: 'ladder_challenges/{id}', region: REGION },
+  { document: 'ladder_challenges/{id}', region: REGION, secrets: [resendApiKey] },
   async (event) => {
     const before = event.data?.before.data() || {};
     const after = event.data?.after.data() || {};
     if (before.status === after.status) return;
-    const link = `/tournament?event=${after.event_id}`;
+    const link = '/matches?mode=challenges';
     const both = [after.challenger_id, after.opponent_id];
+
+    // Opponent accepted a from-scratch challenge (not a conversion — those go straight from
+    // 'open' to 'reported' and already have their own "conversion proposed" notification).
+    if (before.status === 'open' && after.status === 'accepted' && !after.source) {
+      await notify(after.challenger_id, {
+        type: 'ladder_accepted',
+        title: `${after.opponent_name || 'Your opponent'} accepted your challenge`,
+        body: 'Arrange a time and report the result when you’ve played.',
+        link,
+      });
+      const eventDoc = await db().doc(`events/${after.event_id}`).get();
+      const ladderName = eventDoc.exists ? (eventDoc.data().title || 'League Ladder') : 'League Ladder';
+      await sendEmailOnce(
+        after.challenger_id,
+        `challenge-accepted:${event.params.id}`,
+        `${after.opponent_name || 'Your opponent'} accepted your challenge!`,
+        buildChallengeAcceptedEmail(after.opponent_name || 'Your opponent', ladderName),
+      );
+      return;
+    }
 
     if (after.status === 'reported') {
       // Tell whoever didn't report it.
@@ -239,24 +253,13 @@ exports.onLadderChallengeUpdated = onDocumentUpdated(
       return;
     }
 
-    if (after.status === 'confirmed') {
-      await Promise.all(both.filter(Boolean).map((uid) => {
-        const won = after.claimed_winner_id === uid;
-        return notify(uid, {
-          type: 'ladder_confirmed',
-          title: won ? 'Ladder win confirmed — +3 points' : 'Ladder result confirmed — −3 points',
-          body: after.claimed_winner_name ? `Winner: ${after.claimed_winner_name}` : '',
-          link,
-        });
-      }));
-      return;
-    }
-
-    if (after.status === 'rejected') {
-      await notify(both, {
-        type: 'ladder_rejected',
-        title: 'Your ladder result was rejected',
-        body: 'The organizer didn’t accept the reported result.',
+    // A conversion proposal (source set) that got declined while still 'open' — tell the
+    // proposer specifically, since they're the one who won't otherwise hear back.
+    if (before.status === 'open' && after.status === 'rejected' && after.source) {
+      await notify(after.challenger_id, {
+        type: 'challenge_conversion_rejected',
+        title: `${after.opponent_name || 'The other player'} declined your challenge conversion`,
+        body: '',
         link,
       });
     }
@@ -272,7 +275,7 @@ exports.onLadderChallengeDeleted = onDocumentDeleted(
     await notify(c.opponent_id, {
       type: 'ladder_cancelled',
       title: `${c.challenger_name || 'A player'} cancelled their challenge`,
-      link: `/tournament?event=${c.event_id}`,
+      link: '/matches?mode=challenges',
     });
   },
 );
@@ -281,7 +284,7 @@ exports.onLadderChallengeDeleted = onDocumentDeleted(
 // Same shape as the ladder-challenge triggers, minus points/organizer steps.
 
 exports.onRallyCreated = onDocumentCreated(
-  { document: 'rallies/{id}', region: REGION },
+  { document: 'rallies/{id}', region: REGION, secrets: [resendApiKey] },
   async (event) => {
     const r = event.data?.data();
     if (!r?.to_id) return;
@@ -289,13 +292,19 @@ exports.onRallyCreated = onDocumentCreated(
       type: 'rally_requested',
       title: `${r.from_name || 'A player'} wants to rally`,
       body: 'Accept to set up a friendly match.',
-      link: '/friendlies',
+      link: '/matches?mode=friendlies',
     });
+    await sendEmailOnce(
+      r.to_id,
+      `rally-invite:${event.params.id}`,
+      `${r.from_name || 'A player'} wants to rally with you 🤝`,
+      buildRallyEmail(r.from_name || 'A player'),
+    );
   },
 );
 
 exports.onRallyUpdated = onDocumentUpdated(
-  { document: 'rallies/{id}', region: REGION },
+  { document: 'rallies/{id}', region: REGION, secrets: [resendApiKey] },
   async (event) => {
     const before = event.data?.before.data() || {};
     const after = event.data?.after.data() || {};
@@ -305,13 +314,19 @@ exports.onRallyUpdated = onDocumentUpdated(
         type: 'rally_accepted',
         title: `${after.to_name || 'Your rally partner'} is in — rally on!`,
         body: 'Arrange a time and court together.',
-        link: '/friendlies',
+        link: '/matches?mode=friendlies',
       });
+      await sendEmailOnce(
+        after.from_id,
+        `rally-accepted:${event.params.id}`,
+        `${after.to_name || 'Your rally partner'} accepted your rally invite!`,
+        buildRallyAcceptedEmail(after.to_name || 'Your rally partner'),
+      );
     } else if (after.status === 'declined') {
       await notify(after.from_id, {
         type: 'rally_declined',
         title: `${after.to_name || 'That player'} can’t rally right now`,
-        link: '/friendlies',
+        link: '/matches?mode=friendlies',
       });
     }
   },
@@ -325,7 +340,7 @@ exports.onRallyDeleted = onDocumentDeleted(
     await notify(r.to_id, {
       type: 'rally_cancelled',
       title: `${r.from_name || 'A player'} withdrew their rally request`,
-      link: '/friendlies',
+      link: '/matches?mode=friendlies',
     });
   },
 );
@@ -394,15 +409,22 @@ exports.onParticipantJoined = onDocumentCreated(
 
 // Tuesday 9am: your outstanding matches + ladder challenges reset.
 exports.weeklyReminders = onSchedule(
-  { schedule: '0 9 * * 2', timeZone: TZ, region: REGION },
+  { schedule: '0 9 * * 2', timeZone: TZ, region: REGION, secrets: [resendApiKey] },
   async () => {
-    // Pending matches, grouped per player.
+    // Pending matches, grouped per player AND per event (for the email breakdown — "2 Summer
+    // Gauntlet Matches"); the in-app notification below still uses the flat per-player count.
     const matches = await db().collection('tournament_matches').where('status', '==', 'pending').get();
     const pendingByUser = new Map();
+    const pendingByUserEvent = new Map(); // uid -> Map<event_id, count>
     matches.docs.forEach((d) => {
       const m = d.data();
       if (!isRealMatch(d.id, m)) return;
-      matchPlayers(m).forEach((uid) => pendingByUser.set(uid, (pendingByUser.get(uid) || 0) + 1));
+      matchPlayers(m).forEach((uid) => {
+        pendingByUser.set(uid, (pendingByUser.get(uid) || 0) + 1);
+        if (!pendingByUserEvent.has(uid)) pendingByUserEvent.set(uid, new Map());
+        const byEvent = pendingByUserEvent.get(uid);
+        byEvent.set(m.event_id, (byEvent.get(m.event_id) || 0) + 1);
+      });
     });
     await Promise.all([...pendingByUser.entries()].map(([uid, count]) => notify(uid, {
       type: 'reminder_pending_matches',
@@ -410,6 +432,66 @@ exports.weeklyReminders = onSchedule(
       body: 'Arrange a time with your opponent this week.',
       link: '/tournament',
     })));
+
+    // Event titles for the pending-match event ids above.
+    const eventIds = new Set();
+    pendingByUserEvent.forEach((byEvent) => byEvent.forEach((_, eventId) => eventIds.add(eventId)));
+    const eventTitles = new Map();
+    await Promise.all([...eventIds].map(async (id) => {
+      const snap = await db().doc(`events/${id}`).get();
+      eventTitles.set(id, snap.exists ? (snap.data().title || 'Tournament') : 'Tournament');
+    }));
+
+    // Accepted rallies/challenges — "still needs to be played." A rally already converted to a
+    // Challenge (source: 'friendly') is excluded, since it's no longer an unresolved friendly.
+    const [acceptedRallies, acceptedChallenges, friendlyChallenges] = await Promise.all([
+      db().collection('rallies').where('status', '==', 'accepted').get(),
+      db().collection('ladder_challenges').where('status', '==', 'accepted').get(),
+      db().collection('ladder_challenges').where('source', '==', 'friendly').get(),
+    ]);
+    const resolvedFriendlyPairs = new Set(
+      friendlyChallenges.docs.map((d) => [d.data().challenger_id, d.data().opponent_id].sort().join('|')),
+    );
+    const friendlyCountByUser = new Map();
+    acceptedRallies.docs.forEach((d) => {
+      const r = d.data();
+      if (!r.from_id || !r.to_id) return;
+      if (resolvedFriendlyPairs.has([r.from_id, r.to_id].sort().join('|'))) return;
+      [r.from_id, r.to_id].forEach((uid) => friendlyCountByUser.set(uid, (friendlyCountByUser.get(uid) || 0) + 1));
+    });
+    const challengeCountByUser = new Map();
+    acceptedChallenges.docs.forEach((d) => {
+      const c = d.data();
+      if (!c.challenger_id || !c.opponent_id) return;
+      [c.challenger_id, c.opponent_id].forEach((uid) => challengeCountByUser.set(uid, (challengeCountByUser.get(uid) || 0) + 1));
+    });
+
+    // One digest email per player who has anything pending across all three categories. Keyed
+    // by today's date so a retry of this same run doesn't double-send (next week's date differs).
+    const weekKey = new Date().toISOString().slice(0, 10);
+    const allUids = new Set([...pendingByUserEvent.keys(), ...friendlyCountByUser.keys(), ...challengeCountByUser.keys()]);
+    await Promise.all([...allUids].map((uid) => {
+      const lines = [];
+      let total = 0;
+      const byEvent = pendingByUserEvent.get(uid);
+      if (byEvent) {
+        byEvent.forEach((count, eventId) => {
+          total += count;
+          lines.push(`${count} ${eventTitles.get(eventId) || 'Tournament'} Match${count === 1 ? '' : 'es'}`);
+        });
+      }
+      const friendlyCount = friendlyCountByUser.get(uid) || 0;
+      if (friendlyCount > 0) { total += friendlyCount; lines.push(`${friendlyCount} ${friendlyCount === 1 ? 'friendly' : 'friendlies'}`); }
+      const challengeCount = challengeCountByUser.get(uid) || 0;
+      if (challengeCount > 0) { total += challengeCount; lines.push(`${challengeCount} challenge${challengeCount === 1 ? '' : 's'}`); }
+      if (total === 0) return Promise.resolve();
+      return sendEmailOnce(
+        uid,
+        `incomplete-matches:${uid}:${weekKey}`,
+        `You have ${total} incomplete match${total === 1 ? '' : 'es'}`,
+        buildIncompleteMatchesEmail(lines, total),
+      );
+    }));
 
     // Weekly ladder allowance reset — anyone who used a challenge last week.
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();

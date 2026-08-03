@@ -26,11 +26,7 @@ export const BadgePicker: React.FC<{
   };
 
   if (earned.length === 0) {
-    return (
-      <p className="text-sm text-fg/40 mt-1">
-        No badges yet — complete tasks to earn them.
-      </p>
-    );
+    return null;
   }
 
   return (

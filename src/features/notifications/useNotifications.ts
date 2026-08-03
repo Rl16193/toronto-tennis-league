@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { collection, doc, limit, onSnapshot, orderBy, query, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 
@@ -9,13 +9,15 @@ import { useAuth } from '../../context/AuthContext';
 export type NotificationType =
   // matches
   | 'match_scheduled' | 'draw_published' | 'match_advanced' | 'match_bye'
-  | 'score_submitted' | 'score_confirmed' | 'score_rejected'
+  | 'score_rejected'
   | 'group_assigned' | 'draw_cancelled'
-  // ladder
-  | 'ladder_challenged' | 'ladder_reported' | 'ladder_confirmed'
-  | 'ladder_rejected' | 'ladder_cancelled' | 'ladder_challenges_reset' | 'ladder_cooldown_expired'
+  // ladder / challenges
+  | 'ladder_challenged' | 'ladder_reported'
+  | 'ladder_cancelled' | 'ladder_challenges_reset' | 'ladder_cooldown_expired'
+  | 'challenge_conversion_proposed' | 'challenge_conversion_rejected'
   // tasks
   | 'task_completed' | 'initiation_complete' | 'task_revoked' | 'tasks_unlocked'
+  | 'claim_approved' | 'claim_rejected' | 'group_award_received'
   // ranking
   | 'rank_moved' | 'rank_first'
   // account
@@ -25,7 +27,7 @@ export type NotificationType =
   | 'reminder_event_tomorrow' | 'reminder_signup_closing'
   // organizer
   | 'organizer_score_pending' | 'organizer_schedule_request'
-  | 'organizer_ladder_pending' | 'organizer_event_roster';
+  | 'organizer_ladder_pending' | 'organizer_event_roster' | 'organizer_review_pending';
 
 export interface AppNotification {
   id: string;
@@ -35,6 +37,7 @@ export interface AppNotification {
   body?: string;
   link?: string; // in-app route to open on tap
   read?: boolean;
+  read_at?: string; // set when marked read — read items are purged 24h after this
   created_at: string;
   // Legacy fields from the pre-bell schedule_request docs (no title/body/link).
   event_id?: string;
@@ -46,6 +49,7 @@ export interface AppNotification {
 }
 
 const FEED_LIMIT = 30;
+const READ_TTL_MS = 24 * 60 * 60 * 1000; // read notifications are deleted 24h after being read
 
 // Fallback wording for notifications written before the bell existed (they carry a `type` and
 // raw fields but no title/body/link). Keeps old items readable instead of blank rows.
@@ -83,8 +87,19 @@ export function useNotifications() {
     return onSnapshot(
       query(collection(db, 'notifications'), where('recipient_id', '==', user.uid), limit(100)),
       (snap) => {
-        const rows = snap.docs
-          .map((d) => normalize({ id: d.id, ...d.data() } as AppNotification))
+        const all = snap.docs.map((d) => normalize({ id: d.id, ...d.data() } as AppNotification));
+
+        // Sweep: read notifications older than 24h (since being read) are deleted for good.
+        // Best-effort, client-driven — whichever client next loads the feed does the cleanup.
+        const now = Date.now();
+        const expired = all.filter((n) => n.read && n.read_at && now - new Date(n.read_at).getTime() > READ_TTL_MS);
+        if (expired.length > 0) {
+          expired.forEach((n) => { deleteDoc(doc(db, 'notifications', n.id)).catch(() => {}); });
+        }
+        const expiredIds = new Set(expired.map((n) => n.id));
+
+        const rows = all
+          .filter((n) => !expiredIds.has(n.id))
           .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
           .slice(0, FEED_LIMIT);
         setItems(rows);
@@ -97,7 +112,7 @@ export function useNotifications() {
   const unreadCount = items.filter((n) => !n.read).length;
 
   const markRead = useCallback(async (id: string) => {
-    try { await updateDoc(doc(db, 'notifications', id), { read: true }); } catch { /* best-effort */ }
+    try { await updateDoc(doc(db, 'notifications', id), { read: true, read_at: new Date().toISOString() }); } catch { /* best-effort */ }
   }, []);
 
   const markAllRead = useCallback(async () => {
@@ -105,7 +120,8 @@ export function useNotifications() {
     if (unread.length === 0) return;
     try {
       const batch = writeBatch(db);
-      unread.forEach((n) => batch.update(doc(db, 'notifications', n.id), { read: true }));
+      const readAt = new Date().toISOString();
+      unread.forEach((n) => batch.update(doc(db, 'notifications', n.id), { read: true, read_at: readAt }));
       await batch.commit();
     } catch { /* best-effort */ }
   }, [items]);

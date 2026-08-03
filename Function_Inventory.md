@@ -8,23 +8,26 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 
 ## 1. Tournament Engine (`src/pages/tournament/`, `src/pages/Tournament.tsx`)
 
-### `useTournament.ts` (~2020 lines — the core draw engine hook)
+### `useTournament.ts` (~2030 lines — the core draw engine hook)
 | Function | Line | Description |
 |---|---|---|
-| `useTournament` | 22 | Root hook; owns all tournament state, Firestore subscriptions, and every handler below. |
+| `computeMatchPoints` | 24 | **New (de-dup).** Module-level: computes a match's loser/winner points + final/apply flags — shared by `updateMatchWithSubmission` (apply) and `reverseMatchStatsInto` (its exact inverse). |
+| `useTournament` | ~40 | Root hook; owns all tournament state, Firestore subscriptions, and every handler below. |
 | `load` (participants effect) | 115 | Live `onSnapshot` loader for `event_participants`. |
 | `norm` | 233 | Normalizes a string (trim/lowercase/collapse spaces) for name matching. |
 | `liveName` | 589 | Resolves a player's current display name from live user data, falling back to the match snapshot. |
 | `liveContact` | 593 | Resolves a player's current contact info live, falling back to snapshot. |
 | `run` (matches effect) | 680 | Live `onSnapshot` loader for `tournament_matches` + score submissions. |
 | `run` (auto-place late joiners) | 848 | Distributes newly-joined RR players into eligible groups automatically. |
+| `currentDrawKey` | 393 | **New (de-dup).** Memoized `getDrawKey(...)` for `currentDraw`, referenced at every one of its ~8 call sites below instead of each recomputing it. |
+| `autoLabelFor` | 563 | **New (de-dup).** Shared band/zone auto-label computation, used by both `previewRRLabels` and `buildRRLabelsFrom`. |
 | `generateDraw` | 907 | Creates a bracket draw's Firestore match docs from placed/seeded players for a given `DrawConfig`. |
-| `updateMatchWithSubmission` | 977 | Confirms a score: writes the match result, updates stats/points, then (best-effort) advances the winner — isolated so a rules rejection never rolls back a recorded score. |
+| `updateMatchWithSubmission` | 1004 | Confirms a score: writes the match result, updates stats/points (via `computeMatchPoints`), then (best-effort) advances the winner — isolated so a rules rejection never rolls back a recorded score. |
 | `sameDraw` | 1120 | Predicate matching another match in the same bracket/draw. |
 | `handleUpdateRoundDeadline` | 1157 | Creator sets/edits a round's scheduling deadline. |
 | `handleSetPreviewDrawSize` | 1173 | Overrides the auto-calculated preview draw size for a label. |
 | `handleGenerateAll` | 1177 | Generates every eligible draw for the event in one action. |
-| `reverseMatchStatsInto` | 1198 | Un-applies a match's stat/points contributions into a batch (used when resetting/editing). |
+| `reverseMatchStatsInto` | 1232 | Un-applies a match's stat/points contributions into a batch (used when resetting/editing), via `computeMatchPoints`. |
 | `reverseRRBonusesInto` | 1237 | Un-applies Round Robin group-stage bonus points into a batch. |
 | `handleResetDraw` | 1247 | Deletes a generated bracket draw and reverses its stats. |
 | `handleEditPlayer` | 1279 | Creator swaps a player into/out of a match slot. |
@@ -180,7 +183,7 @@ Full function-by-function inventory across the codebase (React/TS frontend, Fire
 | `useJoin.ts` | `useJoin` | Hook handling the join-event flow (singles/doubles branch, slot assignment). *(De-code: `handleStartJoin`/`SIGNUP_ROUTE` and the `navigate` param were removed — dead; `JoinEventSheet.tsx` is now the sole join-flow UI.)* |
 | | `isOpenSlot` | Whether a participant slot is empty/placeholder (Player Loading/BYE). |
 | | `findSlot` | Finds an open slot for a given tournament choice/division/group. |
-| | `handleSubmitJoin` | Submits the join request, writing `event_participants`. |
+| | `handleSubmitJoin` | Submits the join request, writing `event_participants`. Its local `trackJoin` closure **(new, de-dup)** fires the `join_event` analytics event, called from both the regular-event and tournament-event branches instead of duplicating the block. |
 | `JoinEventSheet.tsx` | `chip` | CSS-class helper for a selectable chip's active state. |
 | | `JoinEventSheet` | **New.** The join-flow bottom sheet — replaced the old in-card expanding join form; calls `useJoin`'s state/`handleSubmitJoin`. |
 | `eventService.ts` | `fetchEvents` | Fetches all events from Firestore. |
@@ -279,8 +282,8 @@ League Ladder standings/challenges no longer live on the Tournament page — the
 | | `clearParams` | Clears the modal-controlling query params. |
 | | `toggleTask` | Marks/unmarks a task as done. |
 | | `toggleSection` | Expands/collapses a task category section. |
-| | `Section` | Shared collapsible-section shell used by both `CategorySection` and `GroupSection`. |
-| | `CategorySection` | Renders one per-player tier category's checklist. |
+| | `sectionProps` | **New (de-dup).** Builds the `open`/`onToggle`/`titleClassName`/`bodyClassName` prop set for the shared `Accordion` component, reproducing the page's prior look — replaces the local `Section` shell (removed) that both `CategorySection` and `GroupSection` used. |
+| | `CategorySection` | Renders one per-player tier category's checklist (now via `Accordion`). |
 | | `GroupSection` | **New.** Renders a read-only list of collective/group bonus tasks (Matchday, Zone Sweep, etc. — see `functions/groupAwards.js`), each a descriptive card rather than a checkbox. |
 | `useTasks.ts` | `tasksCompletedCount` (renamed from `doneCount`) | Total individual tasks completed across every category. |
 | | `milestoneCount` (renamed from `earnedTierCount`) | Count of categories where every task is done. |
@@ -289,8 +292,9 @@ League Ladder standings/challenges no longer live on the Tournament page — the
 | | `profileMissingFields` | Lists which profile fields are still incomplete. |
 | | `setTaskDone` | Writes a task's done/not-done state. |
 | | `bumpCounter` | Increments a named counter field. |
-| | `loadTournamentResults` | Loads the user's completed tournament matches (excludes walkovers/blank scores). |
-| | `loadLadderResults` | Loads the user's confirmed ladder challenge results. |
+| | `dedupePlayedResults` | **New (de-dup).** Shared by both loaders below: de-dupes docs by id, then maps each to a `PlayedResult` via a caller-supplied `toResult` (returning `null` skips a doc — used for the tournament walkover/blank-score guard). |
+| | `loadTournamentResults` | Loads the user's completed tournament matches (excludes walkovers/blank scores, via `dedupePlayedResults`). |
+| | `loadLadderResults` | Loads the user's confirmed ladder challenge results (via `dedupePlayedResults`). |
 | | `longestWinStreak` | Computes the best win streak from a chronological result list. |
 | | `distinctMonths` | Counts distinct active months from a result list. |
 | | `useTasks` | Main hook: full client-side recompute of counters/tiers on page load. |
@@ -299,6 +303,7 @@ League Ladder standings/challenges no longer live on the Tournament page — the
 | `badges.ts` | `earnedBadges` | Computes which badges a user has earned from their tier progress. |
 | | `tierCount` | Internal: counts how many of a badge's required tiers are met. |
 | `checkinService.ts` | `torontoDayKey` | **New.** Toronto-local calendar-day key (YYYYMMDD) — the Matchday-bonus boundary and daily-attendance dedup key. |
+| | `baseVisitDoc` | **New (de-dup).** Shared field builder (`user_id`/`user_name`/`court_key`/`court_name`/`zone`/`lat`/`lng`/`dist_m`/`created_at`) spread by both `logAttendance` and `checkIn` before their one collection-specific extra field. |
 | | `logAttendance` | **New.** Append-only daily attendance record (`court_attendance`, one row per player per court per day) — distinct from the once-forever check-in "passport". |
 | | `getTopCheckIns` | **New.** Most-checked-in courts from a bounded recent window — "what's busy lately" for the check-in start screen. |
 | | `getCurrentPosition` | Wraps the browser geolocation API in a Promise. |
@@ -352,7 +357,8 @@ Unchanged from the previous inventory pass except line-number drift; not re-veri
 | | `geocodeQuery` | Geocodes a free-text location query. |
 | | `geocodeLocationId` | Geocodes using a stored location ID, falling back to name. |
 | | `hasPublicHours` | Whether a court has posted public hours. |
-| | `courtMarkerHtml` | Builds the HTML for a tennis-court map marker. |
+| | `splitMarkerSvg` / `soloMarkerSvg` | **New (de-dup).** Shared two-tone/single-color circle SVG templates, factored out of `courtMarkerHtml`'s 6 near-identical branches. |
+| | `courtMarkerHtml` | Builds the HTML for a tennis-court map marker (now a short sequence of `splitMarkerSvg`/`soloMarkerSvg` calls). |
 | | `pickleballMarkerHtml` | Builds the HTML for a pickleball map marker. |
 | `courtMapComponents.tsx` | `Badge` | Small colored badge component. |
 | | `FilterSelect` | Dropdown filter control. |
@@ -415,7 +421,8 @@ The old bell-dropdown (`NotificationBell.tsx`, already removed before this pass)
 | | `timeAgo` | Formats an ISO timestamp as a relative "time ago" string. |
 | `Notifications.tsx` | `Notifications` | **New page** (`/notifications`) — full-screen notifications feed. |
 | | `openItem` | Navigates to a notification's linked item and marks it read. |
-| `HeaderMenu.tsx` | `HeaderMenu` | **New.** Hamburger menu sheet (About/How It Works/Notifications w/ unread badge/Profile/Logout), rendered from `Navbar.tsx`. |
+| `HeaderMenu.tsx` | `badgeLabel` | **New (de-dup).** Formats an unread count as `"9+"` past the cap — used at both the trigger-icon and Notifications-row badge sites. |
+| | `HeaderMenu` | **New.** Hamburger menu sheet (About/How It Works/Notifications w/ unread badge/Profile/Logout), rendered from `Navbar.tsx`. |
 | | `close` | Closes the menu sheet. |
 | | `handleLogout` | Signs the user out. |
 
@@ -529,7 +536,8 @@ The old bell-dropdown (`NotificationBell.tsx`, already removed before this pass)
 | | `onParticipantJoined` | Notifies the creator when a player joins their event. |
 | | `weeklyReminders` | Scheduled (Tuesday 9am) reminder digest for outstanding matches/challenges. |
 | | `pruneNotifications` | Scheduled cleanup of old notification docs. |
-| `taskPoints.js` | *(per-player award triggers)* | Same trigger set as before — awards individual tier/counter progress on match/ladder/event/court-visit/claim events. See CLAUDE.md's Stats data flow section. |
+| `taskPoints.js` | `awardPairPoints` | **New (de-dup).** Shared by `onMatchCompletedAwardPoints` and `onLadderConfirmedAwardPoints`: records both players' play results (`recordPlayResult`) and, if a court was recorded, checks both in (`checkInFromMatch`). |
+| | *(per-player award triggers)* | Same trigger set as before — awards individual tier/counter progress on match/ladder/event/court-visit/claim events. See CLAUDE.md's Stats data flow section. |
 | `groupAwards.js` | *(collective/group bonus engine)* | **New file.** Reads across many players' documents to award group bonuses — Matchday, Hourly Coverage, Court Pioneer, Board Freshness, Full Zone Sweep — into `task_progress.bonusPoints` via an idempotent `group_awards/{awardId}` ledger. Complementary to, not overlapping with, `taskPoints.js`. |
 | `lib/notify.js` | `notify` | Low-level helper writing notification docs to a list of recipients. |
 | | `organizerUids` | Resolves the current list of organizer/creator UIDs. |
@@ -569,6 +577,6 @@ Not re-verified in this refresh pass — unchanged since the previous inventory 
 ---
 
 ## Notes
-- This is a refresh of the earlier version, after (1) other, unrelated development sessions substantially reworked the app (new Friendlies/Matches/History/Notifications pages, several new shared components, theming, expanded check-ins/photo reports/group bonuses), and (2) a targeted dead-code-removal + de-duplication pass documented in CLAUDE.md.
+- This is a refresh of the earlier version, after (1) other, unrelated development sessions substantially reworked the app (new Friendlies/Matches/History/Notifications pages, several new shared components, theming, expanded check-ins/photo reports/group bonuses), (2) a targeted dead-code-removal + de-duplication pass documented in CLAUDE.md, and (3) a second lean-code pass merging remaining duplicate logic (`computeMatchPoints`, `currentDrawKey`, `autoLabelFor` in `useTournament.ts`; `trackJoin` in `useJoin.ts`; `awardPairPoints` in `taskPoints.js`; `splitMarkerSvg`/`soloMarkerSvg` in `courtMapUtils.ts`; `Tasks.tsx`'s local `Section` merged into the shared `Accordion`; `badgeLabel` in `HeaderMenu.tsx`; `dedupePlayedResults` in `useTasks.ts`; `baseVisitDoc` in `checkinService.ts`) — all behavior-preserving.
 - Sections 1–5 and 8–14 were individually re-verified against current file content for this refresh. Sections 6 (Court Map) and 15 (Admin Scripts) were not touched by either the drift or the cleanup pass and are carried forward from the prior version with only line-number awareness, not a fresh line-by-line read.
 - Small one-line inline closures that are pure JSX event-handler wrappers (e.g. `onClick={() => ...}`) are generally omitted unless independently named — the table favors named, reusable functions.

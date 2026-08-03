@@ -26,6 +26,9 @@ Object.assign(exports, require('./taskPoints'));
 // Group / community bonuses
 Object.assign(exports, require('./groupAwards'));
 
+// Weekly ranking snapshot + public site_stats counters (was a manual script)
+Object.assign(exports, require('./rankSnapshot'));
+
 // Likelihood levels we treat as unsafe.
 const UNSAFE = new Set(['LIKELY', 'VERY_LIKELY']);
 
@@ -70,8 +73,9 @@ exports.moderateUploadedImage = onObjectFinalized(
     }
 
     if (isReport) {
-      // A report can carry multiple photos (photo_paths array) — one unsafe photo rejects
-      // the whole report.
+      // A report can carry multiple photos (photo_paths array). The note is the substantive
+      // content now (photos are optional evidence) — an unsafe photo just gets pulled from the
+      // report, it no longer rejects the whole thing (points already awarded on the note stand).
       const snap = await admin.firestore()
         .collection('court_reports')
         .where('photo_paths', 'array-contains', filePath)
@@ -81,8 +85,8 @@ exports.moderateUploadedImage = onObjectFinalized(
         await admin.storage().bucket(bucketName).file(filePath).delete().catch((e) => logger.error('delete failed', e));
         if (!snap.empty) {
           await snap.docs[0].ref.update({
-            status: 'rejected',
-            reviewer_note: 'Removed by automatic image check.',
+            photo_paths: admin.firestore.FieldValue.arrayRemove(filePath),
+            photo_moderation_note: 'A photo on this report was removed by our automatic image check.',
           });
         }
       }
@@ -139,26 +143,57 @@ function buildWelcomeEmail(firstName) {
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html dir="ltr" lang="en"><head><meta content="width=device-width" name="viewport"/><meta content="text/html; charset=UTF-8" http-equiv="Content-Type"/><meta name="x-apple-disable-message-reformatting"/><meta content="IE=edge" http-equiv="X-UA-Compatible"/><meta name="x-apple-disable-message-reformatting"/><meta content="telephone=no,address=no,email=no,date=no,url=no" name="format-detection"/><title>Get ready to play with these quick next steps.</title><style>@media (prefers-color-scheme: dark){li::marker{color:#c4c4c4}}</style><style>@media (prefers-color-scheme: dark){li::marker{color:#c4c4c4}}</style></head><body dir="ltr" lang="en" style="background-color:#f4f4f4;margin:0;padding:0"><!--$--><!--html--><!--head--><div style="display:none;overflow:hidden;line-height:1px;opacity:0;max-height:0;max-width:0" data-skip-in-text="true">Get ready to play with these quick next steps.<div> ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏  ‌‍‎‏</div></div><!--body--><table border="0" width="100%" cellPadding="0" cellSpacing="0" role="presentation" align="center"><tbody><tr><td dir="ltr" lang="en" align="center" style="background-color:#f4f4f4;width:100%"><table align="center" width="100%" border="0" cellPadding="0" cellSpacing="0" role="presentation" style="max-width:600px;margin:0 auto;width:100%;color:#000000;background-color:transparent;border-radius:0px;border-color:#000000"><tbody><tr style="width:100%"><td style="padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px"><div style="margin:0;padding:0;display:none;overflow:hidden;line-height:1px;opacity:0;max-height:0;max-width:0"><p style="margin:0;padding:0">Get ready to play with these quick next steps.</p></div><table align="center" width="100%" border="0" cellPadding="0" cellSpacing="0" role="presentation" style="margin-top:0;margin-right:auto;margin-bottom:0;margin-left:auto;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0"><tbody><tr style="margin:0;padding:0"><td data-id="__react-email-column" style="margin:0;padding:0;background-color:#f4f4f4"><table align="center" width="100%" border="0" cellPadding="0" cellSpacing="0" role="presentation" style="max-width:600px;margin:0 auto;width:100%;color:#000000;background-color:transparent;border-radius:0px;border-color:#000000"><tbody><tr style="width:100%"><td style="padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px"><table width="100%" border="0" cellPadding="0" cellSpacing="0" role="presentation" style="margin-top:0;margin-right:0;margin-bottom:0;margin-left:0;padding-top:32px;padding-right:16px;padding-bottom:32px;padding-left:16px;background-color:#f4f4f4"><tbody><tr style="margin:0;padding:0"><td align="center" data-id="__react-email-column" style="margin:0;padding:0"><table align="center" width="600" border="0" cellPadding="0" cellSpacing="0" role="presentation" style="margin-top:0;margin-right:auto;margin-bottom:0;margin-left:auto;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0;max-width:600px;width:100%;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.10)"><tbody><tr style="margin:0;padding:0"><td align="center" data-id="__react-email-column" style="margin:0;padding:40px 40px 32px;background-color:#1B4332;text-align:center"><p style="margin:0 0 8px 0;padding:0;color:#84CC9A;font-size:11px;letter-spacing:4px;text-transform:uppercase;font-weight:bold;font-family:Arial,Helvetica,sans-serif;text-align:center">Toronto&#x27;s Tennis Community</p><h1 style="margin:0;padding:0;text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:30px;font-weight:bold;letter-spacing:0.5px"><span style="color:#C0622A"><span style="text-transform:uppercase">Racquets &amp; Strings</span></span></h1></td></tr><tr style="margin:0;padding:0"><td data-id="__react-email-column" style="margin:0;padding:40px 40px 8px"><h2 style="margin:0 0 14px 0;padding:0;color:#1B4332;font-size:24px;font-weight:bold;font-family:Arial,Helvetica,sans-serif">You&#x27;re in, ${firstName}! <!-- -->🎾</h2><p style="margin:0;padding:0;color:#444444;font-size:15px;line-height:1.75;font-family:Arial,Helvetica,sans-serif">Your email is verified and you&#x27;re officially part of Toronto&#x27;s fastest-growing tennis community. Here&#x27;s everything you need to get started.</p></td></tr><tr style="margin:0;padding:0"><td data-id="__react-email-column" style="margin:0;padding:28px 40px 8px"><h3 style="margin:0 0 20px 0;padding:0;color:#1B4332;font-size:13px;text-transform:uppercase;letter-spacing:2px;font-weight:bold;font-family:Arial,Helvetica,sans-serif">Beginner Package</h3><table width="100%" border="0" cellPadding="0" cellSpacing="0" role="presentation" style="margin-top:0;margin-right:0;margin-bottom:18px;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0"><tbody><tr style="margin:0;padding:0"><td data-id="__react-email-column" style="margin:0;padding:0;width:36px;vertical-align:top;padding-top:1px"><div style="margin:0;padding:0;width:30px;height:30px;background-color:#C0622A;border-radius:50%;color:#ffffff;font-size:13px;font-weight:bold;text-align:center;line-height:30px;font-family:Arial,Helvetica,sans-serif"><p style="margin:0;padding:0">1</p></div></td><td data-id="__react-email-column" style="margin:0;padding:0;padding-left:14px;vertical-align:top"><p style="margin:0 0 4px 0;padding:0;color:#1B4332;font-size:15px;font-weight:bold;font-family:Arial,Helvetica,sans-serif">Complete your profile</p><p style="margin:0;padding:0;color:#555555;font-size:14px;line-height:1.6;font-family:Arial,Helvetica,sans-serif">Add your skill level, court preferences, and availability so we can match you with the right opponent.</p></td></tr></tbody></table><table width="100%" border="0" cellPadding="0" cellSpacing="0" role="presentation" style="margin-top:0;margin-right:0;margin-bottom:18px;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0"><tbody><tr style="margin:0;padding:0"><td data-id="__react-email-column" style="margin:0;padding:0;width:36px;vertical-align:top;padding-top:1px"><div style="margin:0;padding:0;width:30px;height:30px;background-color:#C0622A;border-radius:50%;color:#ffffff;font-size:13px;font-weight:bold;text-align:center;line-height:30px;font-family:Arial,Helvetica,sans-serif"><p style="margin:0;padding:0">2</p></div></td><td data-id="__react-email-column" style="margin:0;padding:0;padding-left:14px;vertical-align:top"><p style="margin:0 0 4px 0;padding:0;color:#1B4332;font-size:15px;font-weight:bold;font-family:Arial,Helvetica,sans-serif">Browse open events</p><p style="margin:0;padding:0;color:#555555;font-size:14px;line-height:1.6;font-family:Arial,Helvetica,sans-serif">The Summer Gauntlet is live right now. Free entry, all skill levels welcome. Sign up before July 25th.</p></td></tr></tbody></table><table width="100%" border="0" cellPadding="0" cellSpacing="0" role="presentation" style="margin-top:0;margin-right:0;margin-bottom:18px;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0"><tbody><tr style="margin:0;padding:0"><td data-id="__react-email-column" style="margin:0;padding:0;width:36px;vertical-align:top;padding-top:1px"><div style="margin:0;padding:0;width:30px;height:30px;background-color:#C0622A;border-radius:50%;color:#ffffff;font-size:13px;font-weight:bold;text-align:center;line-height:30px;font-family:Arial,Helvetica,sans-serif"><p style="margin:0;padding:0">3</p></div></td><td data-id="__react-email-column" style="margin:0;padding:0;padding-left:14px;vertical-align:top"><p style="margin:0 0 4px 0;padding:0;color:#1B4332;font-size:15px;font-weight:bold;font-family:Arial,Helvetica,sans-serif">Read the rules</p><p style="margin:0;padding:0;color:#555555;font-size:14px;line-height:1.6;font-family:Arial,Helvetica,sans-serif">Understand how scoring and advancement work before your first match.</p></td></tr></tbody></table><table width="100%" border="0" cellPadding="0" cellSpacing="0" role="presentation" style="margin-top:0;margin-right:0;margin-bottom:18px;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0"><tbody><tr style="margin:0;padding:0"><td data-id="__react-email-column" style="margin:0;padding:0;width:36px;vertical-align:top;padding-top:1px"><div style="margin:0;padding:0;width:30px;height:30px;background-color:#C0622A;border-radius:50%;color:#ffffff;font-size:13px;font-weight:bold;text-align:center;line-height:30px;font-family:Arial,Helvetica,sans-serif"><p style="margin:0;padding:0">4</p></div></td><td data-id="__react-email-column" style="margin:0;padding:0;padding-left:14px;vertical-align:top"><p style="margin:0 0 4px 0;padding:0;color:#1B4332;font-size:15px;font-weight:bold;font-family:Arial,Helvetica,sans-serif">Join the WhatsApp community</p><p style="margin:0;padding:0;color:#555555;font-size:14px;line-height:1.6;font-family:Arial,Helvetica,sans-serif">Stay updated on events, find hitting partners.</p></td></tr></tbody></table><table width="100%" border="0" cellPadding="0" cellSpacing="0" role="presentation" style="margin-top:0;margin-right:0;margin-bottom:4px;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0"><tbody><tr style="margin:0;padding:0"><td data-id="__react-email-column" style="margin:0;padding:0;width:36px;vertical-align:top;padding-top:1px"><div style="margin:0;padding:0;width:30px;height:30px;background-color:#cccccc;border-radius:50%;color:#ffffff;font-size:13px;font-weight:bold;text-align:center;line-height:30px;font-family:Arial,Helvetica,sans-serif"><p style="margin:0;padding:0">5</p></div></td><td data-id="__react-email-column" style="margin:0;padding:0;padding-left:14px;vertical-align:top"><table border="0" cellPadding="0" cellSpacing="0" role="presentation" style="margin-top:0;margin-right:0;margin-bottom:0;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0"><tbody><tr style="margin:0;padding:0"><td data-id="__react-email-column" style="margin:0;padding:0;vertical-align:middle"><p style="margin:0;padding:0;color:#999999;font-size:15px;font-weight:bold;font-family:Arial,Helvetica,sans-serif">Tell us about your local court</p></td><td data-id="__react-email-column" style="margin:0;padding:0;padding-left:8px;vertical-align:middle"><p style="margin:0;padding:0"><span style="color:#999999"><span style="text-transform:uppercase">Coming Soon</span></span></p></td></tr></tbody></table><p style="margin:4px 0 0 0;padding:0;color:#aaaaaa;font-size:14px;line-height:1.6;font-family:Arial,Helvetica,sans-serif">Suggest an improvement or complete a task to support our initiatives.</p></td></tr></tbody></table></td></tr><tr style="margin:0;padding:0"><td align="center" data-id="__react-email-column" style="margin:0;padding:32px 40px 36px;text-align:center;border-top:1px solid #eeeeee"><p style="margin:0 0 22px 0;padding:0;color:#444444;font-size:15px;font-family:Arial,Helvetica,sans-serif">Everything you need, right here:</p><table border="0" cellPadding="0" cellSpacing="0" role="presentation" style="margin-top:0;margin-right:auto;margin-bottom:10px;margin-left:auto;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0"><tbody><tr style="margin:0;padding:0"><td data-id="__react-email-column" style="margin:0;padding:0 5px"><p style="margin:0;padding:0"><a href="https://www.racquetsandstrings.ca/events" rel="noopener noreferrer nofollow" style="color:#ffffff;text-decoration-line:none;text-decoration:none;display:inline-block;background-color:#C0622A;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;padding:14px 32px;border-radius:10px;letter-spacing:0.3px" target="_blank"> Browse Events</a></p></td></tr></tbody></table><table border="0" cellPadding="0" cellSpacing="0" role="presentation" style="margin-top:0;margin-right:auto;margin-bottom:0;margin-left:auto;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0"><tbody><tr style="margin:0;padding:0"><td data-id="__react-email-column" style="margin:0;padding:0 5px"><p style="margin:0;padding:0"><a href="https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX" rel="noopener noreferrer nofollow" style="color:#ffffff;text-decoration-line:none;text-decoration:none;display:inline-block;background-color:#25D366;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;padding:14px 22px;border-radius:10px;letter-spacing:0.3px" target="_blank"> Join WhatsApp</a></p></td><td data-id="__react-email-column" style="margin:0;padding:0 5px"><p style="margin:0;padding:0"><a href="https://docs.google.com/document/d/17lyP5f62iuXRIiwDtrcn4EZo6vnx0jbr87kxdkEIzYY/edit?tab=t.0" rel="noopener noreferrer nofollow" style="color:#ffffff;text-decoration-line:none;text-decoration:none;display:inline-block;background-color:#1B4332;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;padding:14px 22px;border-radius:10px;letter-spacing:0.3px" target="_blank"> View FAQ</a></p></td></tr></tbody></table></td></tr><tr style="margin:0;padding:0"><td data-id="__react-email-column" style="margin:0;padding:0 40px 36px"><table width="100%" border="0" cellPadding="0" cellSpacing="0" role="presentation" style="margin-top:0;margin-right:0;margin-bottom:0;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0;background-color:#f0f7f3;border-radius:12px;border-left:4px solid #C0622A;overflow:hidden"><tbody><tr style="margin:0;padding:0"><td data-id="__react-email-column" style="margin:0;padding:20px 24px"><p style="margin:0 0 8px 0;padding:0;color:#1B4332;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:1.5px;font-family:Arial,Helvetica,sans-serif">🏆<!-- --> Community Points (Coming Soon!!)</p><p style="margin:0;padding:0;color:#444444;font-size:14px;line-height:1.7;font-family:Arial,Helvetica,sans-serif">A rewards system. Another way to win prizes. Complete your profile, participate in events, and finish tasks to earn community points. Unlock awards!!</p></td></tr></tbody></table></td></tr><tr style="margin:0;padding:0"><td align="center" data-id="__react-email-column" style="margin:0;padding:24px 40px;background-color:#f9f9f9;text-align:center;border-top:1px solid #eeeeee"><p style="margin:0 0 6px 0;padding:0;color:#999999;font-size:12px;line-height:1.6;font-family:Arial,Helvetica,sans-serif;text-align:center">Racquets &amp; Strings · Toronto, ON</p><p style="margin:0 0 10px 0;padding:0;text-align:center"><a href="https://www.racquetsandstrings.ca" rel="noopener noreferrer nofollow" style="color:#C0622A;text-decoration-line:none;text-decoration:none;font-size:12px;font-family:Arial,Helvetica,sans-serif" target="_blank">www.racquetsandstrings.ca</a></p><p style="margin:0;padding:0;color:#bbbbbb;font-size:11px;line-height:1.6;font-family:Arial,Helvetica,sans-serif;text-align:center">You&#x27;re receiving this because you signed up with Racquets &amp; Strings.</p></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table><!--/$--></body></html>`;
 }
 
-// ─── Google Sheets Bi-Weekly Sync ──────────────────────────────────────────
+// ─── Google Sheets Weekly Sync (Saturdays, midnight America/Toronto) ──────
 const SPREADSHEET_ID = '1RpEowUk-fN08Y-zpZwIWL5XVbDESc7L_ZYRoUcbHkvI';
 
+// Export-only mirror of the real collections. Field names are the actual Firestore fields (the
+// header row upper-cases them). Adjust the `fields` lists to add/remove columns.
 const COLLECTION_MAP = [
-  { collection: 'players', sheetTab: 'Players', fields: ['name', 'email', 'imageUrl'] },
-  { collection: 'matches', sheetTab: 'Matches', fields: ['player1', 'player2', 'score'] },
-  { collection: 'challenges', sheetTab: 'Challenges', fields: ['challenger', 'opponent', 'status'] }
+  { collection: 'users', sheetTab: 'Players', fields: ['name', 'email', 'phone', 'avatar'] },
+  {
+    collection: 'tournament_matches', sheetTab: 'Matches',
+    fields: [
+      'player_1_name', 'player_2_name',
+      'set_1_player_1', 'set_1_player_2', 'set_2_player_1', 'set_2_player_2', 'set_3_player_1', 'set_3_player_2',
+      'status', 'round',
+    ],
+  },
+  {
+    collection: 'ladder_challenges', sheetTab: 'Challenges',
+    fields: ['challenger_name', 'opponent_name', 'claimed_winner_name', 'score_line', 'status', 'division'],
+  },
 ];
 
-exports.syncFirestoreAndSheets = onSchedule('0 0 1,15 * *', async (event) => {
+exports.syncFirestoreAndSheets = onSchedule(
+  { schedule: '0 0 * * 6', timeZone: 'America/Toronto', region: 'us-central1' },
+  async (event) => {
   const { google } = require('googleapis');
 
   const auth = new google.auth.GoogleAuth({
-    keyFile: path.join(__dirname, 'service-account-key.json'),
+    keyFile: path.join(__dirname, 'service-account-key-gs.json'),
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
   const sheets = google.sheets({ version: 'v4', auth });
 
+  // Ensure every configured tab exists first. A missing tab makes values.update fail with
+  // "Unable to parse range: <Tab>!A1" — the HTTP 500 the Cloud Scheduler job was hitting — and
+  // because it throws on the first collection, nothing else syncs either. Creating any absent
+  // tabs up front makes the sync self-healing if a tab is renamed or deleted.
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+  const existingTabs = new Set((meta.data.sheets || []).map((s) => s.properties.title));
+  const missingTabs = [...new Set(COLLECTION_MAP.map((c) => c.sheetTab))].filter((t) => !existingTabs.has(t));
+  if (missingTabs.length > 0) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      resource: { requests: missingTabs.map((title) => ({ addSheet: { properties: { title } } })) },
+    });
+    logger.info(`Created missing sheet tab(s): ${missingTabs.join(', ')}.`);
+  }
+
   for (const config of COLLECTION_MAP) {
     const { collection, sheetTab, fields } = config;
+    // Isolate each collection so one bad tab/collection can't fail the whole scheduled job.
+    try {
 
     // 1. FIRESTORE -> GOOGLE SHEETS
     const snapshot = await admin.firestore().collection(collection).get();
@@ -170,7 +205,8 @@ exports.syncFirestoreAndSheets = onSchedule('0 0 1,15 * *', async (event) => {
 
       fields.forEach((field) => {
         let value = data[field] || '';
-        if (field.toLowerCase().includes('image') && value) {
+        // Render image-URL fields (avatar/photo/image) as an inline image in the sheet.
+        if (/(image|avatar|photo)/i.test(field) && value) {
           value = `=IMAGE("${value}")`;
         }
         rowData.push(value);
@@ -179,6 +215,8 @@ exports.syncFirestoreAndSheets = onSchedule('0 0 1,15 * *', async (event) => {
       rows.push(rowData);
     });
 
+    // Export-only: clear the tab first so rows for deleted docs don't linger, then write fresh.
+    await sheets.spreadsheets.values.clear({ spreadsheetId: SPREADSHEET_ID, range: `${sheetTab}!A:Z` });
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
       range: `${sheetTab}!A1`,
@@ -186,33 +224,11 @@ exports.syncFirestoreAndSheets = onSchedule('0 0 1,15 * *', async (event) => {
       resource: { values: rows },
     });
 
-    // 2. GOOGLE SHEETS -> FIRESTORE
-    const sheetData = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetTab}!A2:Z`,
-    });
+    logger.info(`Exported ${snapshot.size} doc(s) from "${collection}" to sheet tab "${sheetTab}".`);
 
-    const currentRows = sheetData.data.values || [];
-    const batch = admin.firestore().batch();
-
-    currentRows.forEach((row) => {
-      const docId = row[0];
-      if (docId) {
-        const docRef = admin.firestore().collection(collection).doc(docId);
-        const updateData = {};
-
-        fields.forEach((field, index) => {
-          const cellValue = row[index + 1];
-          if (cellValue !== undefined) {
-            updateData[field] = cellValue;
-          }
-        });
-
-        batch.set(docRef, updateData, { merge: true });
-      }
-    });
-
-    await batch.commit();
-    logger.info(`Synced collection "${collection}" with sheet tab "${sheetTab}".`);
+    } catch (err) {
+      // Log and move on — a single collection's failure shouldn't 500 the whole job.
+      logger.error(`Sync failed for collection "${collection}" / tab "${sheetTab}":`, err);
+    }
   }
 });

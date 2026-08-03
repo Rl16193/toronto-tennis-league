@@ -3,8 +3,8 @@ import { reload } from 'firebase/auth';
 import { useAuth } from '../../../context/AuthContext';
 import {
   updateName, updatePhone, updateWhatsappContact, updateBio, updateAvatar, updateSkills,
-  updateLeagueAndAge, updateDisplayBadges, updatePreferredCourts, updateFavouritePlayers, updateAvailabilityGrid,
-  changeEmail, updateEventParticipantDates,
+  updateLeagueAndAgeCategory, updateDisplayBadges, updatePreferredCourts, updateFavouritePlayers, updateAvailabilityGrid,
+  updateEmailNotifications, updateAvailabilityTags, changeEmail, updateEventParticipantDates,
 } from '../services/profileService';
 import type { AvailabilityGrid } from '../../../utils/availability';
 
@@ -85,12 +85,14 @@ export const useProfileActions = () => {
       updateBio: (bio: string) => withProfileUpdate(() => updateBio(user!.uid, bio)),
       updateAvatar: (url: string) => withProfileUpdate(() => updateAvatar(user!.uid, url)),
       updateSkills: (skillLevel: number, tournamentPreference: string) => withProfileUpdate(() => updateSkills(user!.uid, skillLevel, tournamentPreference)),
-      updateLeagueAge: (league: "Men's" | "Women's" | '', ageBracket: string, visible: boolean) =>
-        withProfileUpdate(() => updateLeagueAndAge(user!.uid, league, ageBracket, visible)),
+      updateLeagueAgeCategory: (league: "Men's" | "Women's" | '', ageCategory: 'Retired Pro' | 'Juniors' | '', visible: boolean) =>
+        withProfileUpdate(() => updateLeagueAndAgeCategory(user!.uid, league, ageCategory, visible)),
       updateDisplayBadges: (badgeIds: string[]) => withProfileUpdate(() => updateDisplayBadges(user!.uid, badgeIds)),
       updatePreferredCourts: (courts: string[], zone: string) => withProfileUpdate(() => updatePreferredCourts(user!.uid, courts, zone)),
       updateFavouritePlayers: (players: string[]) => withProfileUpdate(() => updateFavouritePlayers(user!.uid, players)),
       updateAvailabilityGrid: (grid: AvailabilityGrid) => withProfileUpdate(() => updateAvailabilityGrid(user!.uid, grid)),
+      updateEmailNotifications: (enabled: boolean) => withProfileUpdate(() => updateEmailNotifications(user!.uid, enabled)),
+      updateAvailabilityTags: (tags: string[]) => withProfileUpdate(() => updateAvailabilityTags(user!.uid, tags)),
       changeEmail: handleChangeEmail,
       refreshEmailChange: handleRefreshEmailChange,
       updateEventDates: handleUpdateEventDates,

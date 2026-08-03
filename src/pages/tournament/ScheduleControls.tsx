@@ -29,14 +29,20 @@ export const ScheduleControls: React.FC<{
   className?: string;
   /** 'grid-2' lays the action buttons in a 2-column grid instead of flex-wrap */
   buttonLayout?: 'flex' | 'grid-2';
-}> = ({ match, api, hideRule, hideBadge, hideAskButton, hideSubmitButton, className, buttonLayout = 'flex' }) => {
+  /** Signed-in user, so a completed match reads "Win"/"Loss" instead of a generic "Completed". */
+  viewerUid?: string;
+}> = ({ match, api, hideRule, hideBadge, hideAskButton, hideSubmitButton, className, buttonLayout = 'flex', viewerUid }) => {
   const s = getScheduleState(match);
   const isComplete = match.status === 'complete';
 
   const badge = isComplete
-    ? { text: 'Completed', cls: 'bg-green-500/15 text-green-300 border-green-500/25' }
+    ? (viewerUid && match.winner_user_id
+      ? (match.winner_user_id === viewerUid
+        ? { text: 'Win', cls: 'bg-green-500/15 text-badge-win border-green-500/25' }
+        : { text: 'Loss', cls: 'bg-red-500/15 text-badge-loss border-red-500/25' })
+      : { text: 'Completed', cls: 'bg-green-500/15 text-badge-win border-green-500/25' })
     : s.status === 'scheduled'
-      ? { text: `Scheduled on ${formatScheduledDate(s.date, s.slot ?? '')}`, cls: 'bg-green-500/15 text-green-300 border-green-500/25' }
+      ? { text: `Scheduled on ${formatScheduledDate(s.date, s.slot ?? '')}`, cls: 'bg-green-500/15 text-badge-win border-green-500/25' }
       : { text: 'Unscheduled', cls: 'bg-fg/5 text-fg/60 border-fg/10' };
 
   const showSubmit = !!api.onSubmitScore && !!api.submittableMatchIds?.has(match.id) && !isComplete && !hideSubmitButton;
@@ -63,7 +69,7 @@ export const ScheduleControls: React.FC<{
       )}
       {!hideRule && !isComplete && (
         <p className="text-[11px] text-fg/40 leading-snug">
-          Play on weekend matchdays — schedule set by the organizer. Both players must attend; if only one shows up, they advance.
+          Matchdays. Schedule prepared by organizer based on your availability.
         </p>
       )}
     </div>

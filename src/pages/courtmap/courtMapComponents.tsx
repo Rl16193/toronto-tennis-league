@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { PickleballEntry } from './courtMapUtils';
 
 export const Badge: React.FC<{ bg: string; color: string; children: React.ReactNode }> = ({ bg, color, children }) => (
@@ -12,7 +13,7 @@ export const Badge: React.FC<{ bg: string; color: string; children: React.ReactN
   </span>
 );
 
-const SEL_BG = '#163a22';
+const SEL_BG = 'var(--color-tennis-deep)';
 
 export function FilterSelect({
   label, value, options, onChange, disabled,
@@ -23,7 +24,7 @@ export function FilterSelect({
   onChange: (v: string) => void;
   disabled?: boolean;
 }) {
-  const selStyle = { background: SEL_BG, color: '#fff' } as const;
+  const selStyle = { background: SEL_BG, color: 'var(--color-fg)' } as const;
   return (
     <div className={`flex flex-col gap-0.5 ${disabled ? 'opacity-35 pointer-events-none' : ''}`}>
       <span className="text-fg/50 text-[10px] uppercase tracking-wide">{label}</span>
@@ -67,29 +68,35 @@ export function DaysDropdown({
         <span className="truncate">{label}</span>
         <span className="text-fg/40 ml-1 text-[9px]">{open ? '▲' : '▼'}</span>
       </button>
-      {open && (
-        <div
-          className="absolute top-full left-0 right-0 z-50 mt-0.5 rounded-md p-1.5
-                     grid grid-cols-7 gap-1 shadow-xl border border-fg/20"
-          style={{ background: SEL_BG }}
-        >
-          {DAYS.map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => {
-                const next = new Set(selected);
-                if (next.has(d)) next.delete(d); else next.add(d);
-                onChange(next);
-              }}
-              className={`text-[10px] py-1 rounded font-medium transition-colors
-                ${selected.has(d) ? 'bg-clay text-fg' : 'bg-white text-tennis-dark hover:bg-fg/90'}`}
-            >
-              {d[0]}
-            </button>
-          ))}
-        </div>
-      )}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-full left-0 right-0 z-50 mt-0.5 rounded-md p-1.5
+                       grid grid-cols-7 gap-1 shadow-xl border border-fg/20"
+            style={{ background: SEL_BG }}
+          >
+            {DAYS.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => {
+                  const next = new Set(selected);
+                  if (next.has(d)) next.delete(d); else next.add(d);
+                  onChange(next);
+                }}
+                className={`text-[10px] py-1 rounded font-medium transition-colors
+                  ${selected.has(d) ? 'bg-clay text-fg' : 'bg-white text-tennis-dark hover:bg-fg/90'}`}
+              >
+                {d[0]}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

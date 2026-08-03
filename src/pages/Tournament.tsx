@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { AnimatePresence } from 'motion/react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { AnimatePresence, motion } from 'motion/react';
+import { tapScale } from '../lib/motion';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { Menu } from 'lucide-react';
+import { Lock, Menu } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { Sheet } from '../components/Sheet';
 import { useTournament } from './tournament/useTournament';
@@ -24,6 +25,11 @@ import { RRConfigModal } from './tournament/RRConfigModal';
 import { AlertMessage } from '../components/AlertMessage';
 import { LoadingBar } from '../components/LoadingBar';
 import { TennisEvent } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { fetchEvents } from '../features/events/services/eventService';
+import { isLadderEvent } from '../utils/eventTypes';
+import { leagueDivision } from '../utils/skillLevels';
+import { proposeConversion, LadderDivision } from '../features/leagues/ladderService';
 
 type EventStatus = 'active' | 'completed';
 
@@ -88,12 +94,19 @@ export const Tournament: React.FC = () => {
   const [eventStatuses, setEventStatuses] = useState<Record<string, EventStatus>>({});
   const [statusLoading, setStatusLoading] = useState(true);
   const [showEventSheet, setShowEventSheet] = useState(false);
+  const [alsoConvertToChallenge, setAlsoConvertToChallenge] = useState(false);
+  const [ladder, setLadder] = useState<TennisEvent | null>(null);
+  const { profile } = useAuth();
+
+  useEffect(() => {
+    fetchEvents().then((all) => setLadder(all.filter((e) => isLadderEvent(e))[0] ?? null)).catch(() => {});
+  }, []);
 
   const {
     authLoading, loading, eventDataReady, user,
     event, matches, participants,
     allTournamentEvents,
-    isCreator, started, userParticipant, zoneMap, userMap,
+    isCreator, started, userParticipant, zoneMap, courtsMap, availabilityMap, userMap,
     currentDraw, currentMatches, displayMatches, visibleDraws,
     opponent,
     editPlayers, currentDrawAllPlayers, currentDrawSize,
@@ -119,6 +132,9 @@ export const Tournament: React.FC = () => {
     visibleUserMatch, userRRMatches, scheduleRequests,
     handleAskOrganizerSchedule, handleSetSchedule,
   } = useTournament(eventId);
+
+  // Viewer's own preferred courts — for the "Nearby" pill shown against an opponent who shares one.
+  const myCourts = useMemo(() => new Set(profile?.preferences.preferred_courts ?? []), [profile]);
 
   // Scheduling API passed to the current-match panels (Request Scheduling Assistance; scores via
   // the existing submit flow). Undefined when logged out.
@@ -222,8 +238,14 @@ export const Tournament: React.FC = () => {
   const submittable = pastMode ? undefined : submittableMatchIds;
   const isRR = currentDrawFormat === 'rr';
 
-  // Past events: hide draws that were never played (no submitted scores) — e.g. an empty Seniors
-  // or Doubles draw in a season opener. Live events keep every draw so setup stays visible.
+  // Completed tournaments stay open to any spectator (History deep-links rely on this). A live
+  // one is locked behind participation — creators and joined participants see the draw, anyone
+  // else (e.g. someone who switched the ?event= param, or joined a different tournament) gets a
+  // join prompt instead of the bracket.
+  const joinLocked = !pastMode && !isCreator && !userParticipant;
+
+  // Past events: hide draws that were never played (no submitted scores) — e.g. an empty Retired
+  // Pro or Doubles draw in a season opener. Live events keep every draw so setup stays visible.
   const drawHasCompleted = (d: { tournamentChoice: string; division: string; skillGroup: string }) =>
     matches.some((m) =>
       m.tournament_choice === d.tournamentChoice && m.division === d.division &&
@@ -308,16 +330,18 @@ export const Tournament: React.FC = () => {
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm font-bold text-fg uppercase tracking-widest">Draw Size</span>
             {[8, 16, 32].map((size) => (
-              <button
+              <motion.button
                 key={size}
                 disabled={currentMatches.length > 0}
                 onClick={() => handleSetPreviewDrawSize(currentDraw.label, size)}
+                whileTap={currentMatches.length > 0 ? undefined : tapScale.whileTap}
+                transition={tapScale.transition}
                 className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
                   currentDrawSize === size ? 'bg-clay text-white' : currentMatches.length > 0 ? 'bg-tennis-surface/30 text-fg cursor-not-allowed' : 'bg-tennis-surface/60 text-fg hover:text-fg'
                 }`}
               >
                 R{size}
-              </button>
+              </motion.button>
             ))}
           </div>
           {currentMatches.length > 0 && (
@@ -330,7 +354,7 @@ export const Tournament: React.FC = () => {
       {isRR ? (
         rrView === 'knockout'
           ? (visibleUserMatch && opponent
-              ? <OpponentCard opponent={opponent} defaultOpen currentMatch={visibleUserMatch} schedule={schedule} isCreator={isCreator} />
+              ? <OpponentCard opponent={opponent} defaultOpen currentMatch={visibleUserMatch} schedule={schedule} isCreator={isCreator} viewerUid={user?.uid} myCourts={myCourts} courtsMap={courtsMap} availabilityMap={availabilityMap} />
               : !isCreator && (
                   <div className="mb-6 rounded-2xl border border-fg/10 bg-tennis-surface/30 px-4 py-6 text-center">
                     <p className="text-sm font-semibold text-fg/50">Draw not released yet</p>
@@ -346,11 +370,14 @@ export const Tournament: React.FC = () => {
                 schedule={schedule}
                 isCreator={isCreator}
                 contactMap={userMap}
+                myCourts={myCourts}
+                courtsMap={courtsMap}
+                availabilityMap={availabilityMap}
               />
             ))
       ) : (
         currentMatches.length > 0 && opponent && (
-          <OpponentCard opponent={opponent} defaultOpen currentMatch={visibleUserMatch} schedule={schedule} isCreator={isCreator} />
+          <OpponentCard opponent={opponent} defaultOpen currentMatch={visibleUserMatch} schedule={schedule} isCreator={isCreator} viewerUid={user?.uid} myCourts={myCourts} courtsMap={courtsMap} availabilityMap={availabilityMap} />
         )
       )}
 
@@ -422,16 +449,67 @@ export const Tournament: React.FC = () => {
       )}
 
       <AnimatePresence>
-        {scoreForm && scoreFormMatch && (
-          <ScoreModal
-            match={scoreFormMatch}
-            scoreForm={scoreForm}
-            onChange={setScoreForm}
-            onClose={() => setScoreForm(null)}
-            onSubmit={handleSubmitScore}
-            isCreatorSubmit={isCreator}
-          />
-        )}
+        {scoreForm && scoreFormMatch && (() => {
+          // A converted match still needs the same round-based tournament points it always got —
+          // this only ever ADDS the flat ±3 challenge points on top once the other player and the
+          // organizer both confirm; bracket advancement is completely unaffected either way.
+          const canConvert = !!ladder && !!profile &&
+            scoreFormMatch.tournament_choice === 'Singles' &&
+            !!scoreFormMatch.player_1_user_id && !!scoreFormMatch.player_2_user_id;
+
+          const handleSubmitWithConversion = async (e: React.FormEvent<HTMLFormElement>) => {
+            // Snapshot before handleSubmitScore clears the form state on success.
+            const match = scoreFormMatch;
+            const form = scoreForm;
+            const convert = alsoConvertToChallenge;
+            await handleSubmitScore(e);
+            if (!convert || !canConvert || !match || !form?.winnerUserId || !ladder || !user) return;
+            const isP1Winner = form.winnerUserId === match.player_1_user_id;
+            const winner = isP1Winner
+              ? { id: match.player_1_user_id, name: match.player_1_name }
+              : { id: match.player_2_user_id, name: match.player_2_name };
+            const other = isP1Winner
+              ? { id: match.player_2_user_id, name: match.player_2_name }
+              : { id: match.player_1_user_id, name: match.player_1_name };
+            const proposer = user.uid === winner.id ? winner : other;
+            const scoreLine = form.sets
+              .map((s) => ({ mine: Number(s.mine || 0), opponent: Number(s.opponent || 0) }))
+              .filter((s) => s.mine > 0 || s.opponent > 0)
+              .map((s) => `${s.mine}-${s.opponent}`)
+              .join(', ');
+            await proposeConversion({
+              eventId: ladder.id,
+              division: (leagueDivision(match.division) === "Women's" ? 'womens' : 'mens') as LadderDivision,
+              source: 'tournament',
+              sourceId: match.id,
+              proposer: { id: proposer.id, name: proposer.name },
+              other: proposer.id === winner.id ? other : winner,
+              winner,
+              scoreLine,
+            }).catch(() => { /* conversion is best-effort — the tournament score itself already landed */ });
+            setAlsoConvertToChallenge(false);
+          };
+
+          return (
+            <ScoreModal
+              matchInfo={{
+                title: scoreFormMatch.round,
+                player1: { uid: scoreFormMatch.player_1_user_id, name: scoreFormMatch.player_1_name },
+                player2: { uid: scoreFormMatch.player_2_user_id, name: scoreFormMatch.player_2_name },
+              }}
+              scoreForm={scoreForm}
+              onChange={setScoreForm}
+              onClose={() => { setScoreForm(null); setAlsoConvertToChallenge(false); }}
+              onSubmit={handleSubmitWithConversion}
+              isCreatorSubmit={isCreator}
+              extraCheckbox={canConvert ? {
+                label: 'Also count as a Challenge',
+                checked: alsoConvertToChallenge,
+                onChange: setAlsoConvertToChallenge,
+              } : undefined}
+            />
+          );
+        })()}
       </AnimatePresence>
 
       <AnimatePresence>
@@ -486,10 +564,12 @@ export const Tournament: React.FC = () => {
           <Sheet onClose={() => setShowEventSheet(false)} title="Switch Event" maxWidthClassName="max-w-md">
             <div className="p-3 pt-1 space-y-1 max-h-[70vh] overflow-y-auto">
               {dropdownEvents.map((e) => (
-                <button
+                <motion.button
                   key={e.id}
                   type="button"
                   onClick={() => { selectEvent(e.id); setShowEventSheet(false); }}
+                  whileTap={tapScale.whileTap}
+                  transition={tapScale.transition}
                   className={`w-full flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors ${
                     e.id === eventId ? 'bg-clay/15 border border-clay/40' : 'bg-fg/5 border border-transparent hover:border-fg/20'
                   }`}
@@ -498,7 +578,7 @@ export const Tournament: React.FC = () => {
                   {eventStatuses[e.id] === 'completed' && (
                     <span className="shrink-0 text-[10px] font-bold text-fg/40">Completed</span>
                   )}
-                </button>
+                </motion.button>
               ))}
             </div>
           </Sheet>
@@ -510,12 +590,32 @@ export const Tournament: React.FC = () => {
           {[1, 2].map((i) => <div key={i} className="h-14 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
         </div>
       ) : dropdownEvents.length === 0 ? (
-        <div className="text-center py-16">
+        <div className="text-center py-16 space-y-4">
           <p className="text-fg/50 text-sm">You're not in any current tournaments.</p>
+          <Link to="/events" className="inline-block">
+            <span className="px-4 py-2 rounded-xl bg-clay text-white text-sm font-semibold hover:bg-clay/90 transition-colors">
+              Join an active tournament
+            </span>
+          </Link>
         </div>
       ) : !selectedLoaded ? (
         <div className="flex justify-center py-16">
           <div className="w-10 h-10 border-4 border-clay border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : joinLocked ? (
+        <div className="rounded-3xl border border-fg/10 bg-tennis-surface/30 px-6 py-14 text-center space-y-3">
+          <div className="w-12 h-12 rounded-full bg-fg/5 flex items-center justify-center mx-auto">
+            <Lock className="w-5 h-5 text-fg/50" />
+          </div>
+          <p className="text-sm font-bold text-fg">Join to view the live draw</p>
+          <p className="text-xs text-fg/50 max-w-xs mx-auto">
+            {event?.title ? `You haven't joined "${event.title}" yet.` : "You haven't joined this tournament yet."} Join to see matches and scores as they happen.
+          </p>
+          <Link to="/events" className="inline-block pt-1">
+            <span className="px-4 py-2 rounded-xl bg-clay text-white text-sm font-semibold hover:bg-clay/90 transition-colors">
+              Find this event
+            </span>
+          </Link>
         </div>
       ) : (
         drawContent

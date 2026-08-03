@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Calendar, MapPin, Star, CheckCircle2 } from 'lucide-react';
@@ -55,6 +55,9 @@ export const EventCard: React.FC<Props> = ({ event, index, isJoined, authLoading
   const isLadder = isLadderEvent(event);
   const navigate = useNavigate();
 
+  const [descExpanded, setDescExpanded] = useState(false);
+  const description = event.about || event.description;
+
   const isLate = isLateRegistration(event);
   const isHardClosed = isJoinHardClosed(event);
   // Non-tournament events have no draw slots — late registration doesn't apply.
@@ -94,8 +97,19 @@ export const EventCard: React.FC<Props> = ({ event, index, isJoined, authLoading
         )}
       </div>
 
-      {(event.about || event.description) && (
-        <p className="text-xs text-fg/50 line-clamp-2 leading-relaxed">{event.about || event.description}</p>
+      {description && (
+        <div>
+          <p className={`text-xs text-fg/50 leading-relaxed ${descExpanded ? '' : 'line-clamp-2'}`}>{description}</p>
+          {description.length > 100 && (
+            <button
+              type="button"
+              onClick={() => setDescExpanded((v) => !v)}
+              className="text-xs font-semibold text-clay hover:text-clay/80 transition-colors mt-0.5"
+            >
+              {descExpanded ? 'Less' : 'More'}
+            </button>
+          )}
+        </div>
       )}
 
       <div className="flex flex-wrap gap-1.5">
@@ -136,8 +150,8 @@ export const EventCard: React.FC<Props> = ({ event, index, isJoined, authLoading
           <Button
             variant={isJoined ? 'secondary' : 'primary'}
             size="sm"
-            onClick={() => isLoggedIn && onJoin(event)}
-            disabled={isJoined || joinClosed || !isLoggedIn || authLoading}
+            onClick={() => (isLoggedIn ? onJoin(event) : navigate('/signup?intent=join-event'))}
+            disabled={isJoined || joinClosed || authLoading}
             className="w-full"
           >
             {buttonLabel}

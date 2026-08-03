@@ -6,12 +6,13 @@ import { TennisEvent } from '../../../types';
 import { TournamentMatch } from '../../../pages/tournament/types';
 import { BYE, PLAYER_LOADING, parseDateValue } from '../../../pages/tournament/utils';
 import { isTournamentEvent, isSeasonOpener, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
+import { isSeniorsLeague } from '../../../utils/skillLevels';
 import { DisplayEvent } from '../services/eventService';
 import { INITIAL_JOIN_FORM, JoinFormState, SlotResult } from '../types';
 
 interface Params {
   user: { uid: string; email: string | null } | null;
-  profile: { user: { name: string; age_bracket?: string }; stats: { skill_level: number } } | null;
+  profile: { user: { name: string }; stats: { skill_level: number; league?: string } } | null;
   hasJoinedRegularEvent: (id: string) => boolean;
   hasJoinedTournamentChoice: (id: string, choice: 'Singles' | 'Doubles') => boolean;
   hasJoinedAnyTournament: () => boolean;
@@ -84,9 +85,9 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
 
     if (joinForm.tournamentChoice === 'Singles') {
       const skill = Number(profile?.stats.skill_level || 0);
-      // Seniors is a deliberate opt-in — no skill fallback into another draw.
+      // Retired Pro is a deliberate opt-in — no skill fallback into another draw.
       if (joinForm.seniors) {
-        const slot = findSlot('Singles', joinForm.division, 'Seniors');
+        const slot = findSlot('Singles', joinForm.division, 'Retired Pro');
         return slot ? { status: 'available', ...slot, skillOverride: skill } : { status: 'full', skillOverride: skill };
       }
       const intendedGroup = skill >= 4 ? 'Masters' : 'Challengers';
@@ -136,6 +137,15 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
       return;
     }
 
+    const trackJoin = () => analyticsPromise.then((analytics) => {
+      if (!analytics) return;
+      logEvent(analytics, 'join_event', {
+        event_id:   selectedEvent.id,
+        event_name: selectedEvent.title,
+        event_type: selectedEvent.type,
+      });
+    });
+
     if (!isTournamentEvent(selectedEvent)) {
       if (hasJoinedRegularEvent(selectedEvent.id)) { setJoinError('You are already registered for this event.'); return; }
       if (isWeekendMatchdaysEvent(selectedEvent) && !hasJoinedAnyTournament()) { setJoinError('Please join a tournament before joining matchdays.'); return; }
@@ -146,16 +156,9 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
           event_id: selectedEvent.id, event_name: selectedEvent.title,
           tournament_choice: '', doubles: '', partner_in_app: '',
           skill: Number(profile?.stats.skill_level || 0), dateselected: [],
-          createdAt: new Date().toISOString(),
+          created_at: new Date().toISOString(),
         });
-        analyticsPromise.then((analytics) => {
-          if (!analytics) return;
-          logEvent(analytics, 'join_event', {
-            event_id:   selectedEvent.id,
-            event_name: selectedEvent.title,
-            event_type: selectedEvent.type,
-          });
-        });
+        trackJoin();
         setSelectedEvent(null);
       } catch { setJoinError('Could not join the event right now. Please try again.'); }
       finally { setJoining(false); }
@@ -164,9 +167,9 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
 
     if (!joinForm.division) { setJoinError('Please select a division.'); return; }
     if (joinForm.tournamentChoice === 'Singles' && joinForm.division === 'Mixed Doubles') { setJoinError('Mixed Doubles is locked for singles.'); return; }
-    // Seniors draw is age-gated: 55+ per the profile's age bracket.
-    if (joinForm.seniors && profile?.user.age_bracket !== '55+') {
-      setJoinError('The Seniors draw is for players 55+. Set your age bracket on your profile first.');
+    // Retired Pro draw is gated on the player's League selection (Profile → League).
+    if (joinForm.seniors && !isSeniorsLeague(profile?.stats.league)) {
+      setJoinError('The Retired Pro draw is for players in the Retired Pro league. Set it on your profile first.');
       return;
     }
     if (joinForm.tournamentChoice === 'Doubles') {
@@ -194,20 +197,13 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
         user_id: user.uid, user_name: participantName,
         event_id: selectedEvent.id, event_name: selectedEvent.title,
         tournament_choice: joinForm.tournamentChoice, division: joinForm.division,
-        ...(joinForm.tournamentChoice === 'Singles' && joinForm.seniors ? { skill_group: 'Seniors' } : {}),
+        ...(joinForm.tournamentChoice === 'Singles' && joinForm.seniors ? { skill_group: 'Retired Pro' } : {}),
         doubles: joinForm.tournamentChoice === 'Doubles' ? joinForm.partnerName.trim() : '',
         partner_in_app: joinForm.tournamentChoice === 'Doubles' ? (joinForm.partnerInApp || 'no') : '',
         skill: slotStatus?.skillOverride ?? (joinForm.tournamentChoice === 'Singles' ? Number(profile?.stats.skill_level || 0) : Number(joinForm.combinedSkill || 3)),
-        dateselected, createdAt: new Date().toISOString(),
+        dateselected, created_at: new Date().toISOString(),
       });
-      analyticsPromise.then((analytics) => {
-        if (!analytics) return;
-        logEvent(analytics, 'join_event', {
-          event_id:   selectedEvent.id,
-          event_name: selectedEvent.title,
-          event_type: selectedEvent.type,
-        });
-      });
+      trackJoin();
 
       // Best-effort: seating a player into a match slot is organizer-only (Firestore
       // rules). For regular players this is skipped silently and the organizer seats

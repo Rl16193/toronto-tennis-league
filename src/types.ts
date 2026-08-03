@@ -1,10 +1,11 @@
-export const AGE_BRACKETS = ['Below 18', '18-25', '25-35', '35-45', '45-55', '55+'] as const;
-export type AgeBracket = (typeof AGE_BRACKETS)[number];
-
 // Collection: users
 export interface UserData {
   name: string;
   email: string;
+  // Set only by the account-merge admin script when two signups (different emails) turn out to
+  // be the same person — never surfaced or editable in any UI. Checked at the signup email gate
+  // so a third signup attempt with this address is caught instead of creating another duplicate.
+  secondary_email?: string;
   phone: string;
   preferred_mode_of_contact: 'email' | 'phone';
   // WhatsApp-specific number (E.164, e.g. "+14165550123") — distinct from `phone` since not
@@ -14,9 +15,8 @@ export interface UserData {
   whatsapp_same_as_phone?: boolean;
   avatar?: string;
   bio?: string;
-  // Profile-card extras. The league (gender) itself lives on stats.league; these two control
-  // the age bracket and whether league + age are shown on the public player profile card.
-  age_bracket?: AgeBracket | '';
+  // The league (gender + optional Retired Pro/Juniors suffix) lives on stats.league; this
+  // controls whether it's shown on the public player profile card.
   profile_details_visible?: boolean;
   // Up to 3 badge ids the player has chosen to show on their profile and beside their name.
   display_badges?: string[];
@@ -50,6 +50,14 @@ export interface UserPreferences {
   scheduling_preference: 'I will schedule matches on my own' | 'Tell me more about matchdays';
   event_creator: boolean;
   preferred_zone: string;
+  // Global opt-out for the Resend emails (challenge/rally received/accepted, weekly incomplete-
+  // matches digest). Missing/undefined means opted in — only an explicit `false` disables them.
+  email_notifications?: boolean;
+  // Simplified availability — any number of preset windows (see AvailabilityTag in
+  // utils/availability.ts). Replaces the old per-day AM/PM grid for new edits; `availability`/
+  // `availability_day`/`availability_time` are left in place for existing data, unread by the
+  // new UI.
+  availability_tags?: string[];
 }
 
 // Collection: task_progress — self-serve community tasks (Tasks tab). Each completed task is
@@ -125,8 +133,8 @@ export interface TennisEvent {
   round_deadlines?: Record<string, string>; // round → 'YYYY-MM-DD'
   tournament_format?: 'knockout' | 'rr';
   tournament_choice?: 'Singles' | 'Doubles';
-  // One-off per-event override: hides the Men's/Women's Seniors draw tabs on this event only —
-  // the Seniors option (drawConfigs.ts) otherwise applies to every Singles tournament.
+  // One-off per-event override: hides the Men's/Women's Retired Pro draw tabs on this event only —
+  // the Retired Pro option (drawConfigs.ts) otherwise applies to every Singles tournament.
   hide_seniors?: boolean;
 }
 
@@ -141,9 +149,9 @@ export interface EventParticipant {
   doubles?: string;
   partner_in_app?: 'yes' | 'no' | '';
   skill?: number;
-  // 'Seniors' opts the player into the age-based Seniors (55+) draw; absent means normal
+  // 'Retired Pro' opts the player into the age-based Retired Pro (55+) draw; absent means normal
   // skill-derived routing (Challengers/Masters).
-  skill_group?: 'Seniors';
+  skill_group?: 'Retired Pro';
   dateselected?: string[];
-  createdAt: string;
+  created_at: string;
 }

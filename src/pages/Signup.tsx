@@ -9,24 +9,24 @@ import { doc, setDoc } from 'firebase/firestore';
 import { auth, db, setAuthPersistence } from '../lib/firebase';
 import { track } from '../lib/analytics';
 import { useAuth } from '../context/AuthContext';
-import { SKILL_DESCRIPTIONS, SELECTABLE_SKILL_LEVELS } from '../utils/skillLevels';
+import { SKILL_LEVEL_TIERS, SELECTABLE_SKILL_LEVELS } from '../utils/skillLevels';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import {
   Trophy, MapPin, CheckCircle2, ChevronRight, ArrowRight,
-  AlertCircle, Info, Star, Calendar,
-  Eye, EyeOff, Chrome, X,
+  AlertCircle, Info, Star,
+  Eye, EyeOff, Chrome, Apple, X,
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { UserData, UserStats, UserPreferences } from '../types';
 import mailcheck from 'mailcheck';
 import { defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts, getCourtSuggestions, mergeCourtOptions } from '../features/signup/utils/courtSearch';
 import { getZoneWithBorderCheck } from '../utils/zones';
 import { formatPhone } from '../utils/formatPhone';
-import { DAY_CODES, DAY_LABELS, gridToLegacy, type AvailabilityGrid, type TimeSlot } from '../utils/availability';
 import { getSignupErrorMessage, signupEmailRegex, emailExistsForSignup } from '../features/signup/signupValidation';
 import { getAuthErrorMessage } from '../features/auth/authMessages';
 import { useGoogleSignIn } from '../features/auth/useGoogleSignIn';
+import { useAppleSignIn } from '../features/auth/useAppleSignIn';
 
 const FAVOURITE_PLAYERS = [
   "Jannik Sinner", "Carlos Alcaraz", "Rafael Nadal",
@@ -53,7 +53,7 @@ export const Signup: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
-  const [prefStep, setPrefStep] = useState<1 | 2 | 3>(1);
+  const [prefStep, setPrefStep] = useState<1 | 2>(1);
   const [emailSuggestion, setEmailSuggestion] = useState<any>(null);
   const [courtOptions, setCourtOptions] = useState<string[]>(defaultCourtOptions);
   const [courtCoordsMap, setCourtCoordsMap] = useState<Map<string, { lat: number; lng: number }>>(new Map());
@@ -65,6 +65,7 @@ export const Signup: React.FC = () => {
   const [showForgot, setShowForgot] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [pendingGoogleCredential, setPendingGoogleCredential] = useState<OAuthCredential | null>(null);
+  const [pendingAppleCredential, setPendingAppleCredential] = useState<OAuthCredential | null>(null);
   const loginPasswordRef = React.useRef<HTMLInputElement>(null);
 
   const intent = searchParams.get('intent') || '';
@@ -81,6 +82,18 @@ export const Signup: React.FC = () => {
     },
   });
 
+  const { handleAppleSignIn } = useAppleSignIn({
+    navigate,
+    setError,
+    setLoading,
+    onAccountExists: (email, credential) => {
+      setFormData((prev) => ({ ...prev, email }));
+      setPendingAppleCredential(credential);
+      setPhase('login');
+      setStatusMessage('This email already has a password. Enter it below to sign in — this will also enable Apple sign-in for next time.');
+    },
+  });
+
   // Form State
   const [formData, setFormData] = useState({
     name: '',
@@ -89,11 +102,13 @@ export const Signup: React.FC = () => {
     confirmPassword: '',
     phone: '',
     skillLevel: 2,
+    league: '' as "Men's" | "Women's" | '',
+    retiredPro: false,
+    juniors: false,
     preferredCourts: [] as string[],
     customCourtEntry: '',
     favouritePlayers: [] as string[],
     customPlayerEntry: '',
-    availabilityGrid: {} as AvailabilityGrid,
     organizer: false,
     schedulingPreference: 'I will schedule matches on my own' as any,
     preferredZone: '',
@@ -123,11 +138,11 @@ export const Signup: React.FC = () => {
     return () => clearTimeout(t);
   }, [statusMessage]);
 
-  // Google sign-in matched an existing email/password account: Google can't finish the
+  // Google/Apple sign-in matched an existing email/password account: neither can finish the
   // sign-in itself, so pull focus to the password field the user actually needs to fill in.
   useEffect(() => {
-    if (pendingGoogleCredential) loginPasswordRef.current?.focus();
-  }, [pendingGoogleCredential]);
+    if (pendingGoogleCredential || pendingAppleCredential) loginPasswordRef.current?.focus();
+  }, [pendingGoogleCredential, pendingAppleCredential]);
 
   // Auth routing state machine (no email-verification step):
   //  - signed in but profile not filled in (name empty) → open the completion form
@@ -203,13 +218,19 @@ export const Signup: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const exists = await emailExistsForSignup(trimmedEmail);
-      if (!exists) {
+      const result = await emailExistsForSignup(trimmedEmail);
+      if (result === 'secondary') {
+        // This address was merged into another account — it has no real Auth credential, so
+        // normal login won't work here. Block signup instead of creating a third duplicate.
+        setError('This email is linked to an existing account under a different address. Please sign in with the email you originally registered with.');
+        return;
+      }
+      if (result === 'none') {
         // Signup funnel: step 1 (email) complete → entering step 2 (account).
         track('signup_step', { step_number: 1, step_name: 'email', action: 'complete' });
         track('signup_step', { step_number: 2, step_name: 'account', action: 'enter' });
       }
-      setPhase(exists ? 'login' : 'account');
+      setPhase(result === 'primary' ? 'login' : 'account');
     } catch {
       // Fail open → treat as new; Firebase Auth will catch a real duplicate at creation.
       track('signup_step', { step_number: 1, step_name: 'email', action: 'complete' });
@@ -230,7 +251,7 @@ export const Signup: React.FC = () => {
     try {
       await setAuthPersistence(true);
       const credential = await signInWithEmailAndPassword(auth, formData.email.trim(), loginPassword);
-      // Direction 1 — email-first user now signing in via Google: link the pending Google credential.
+      // Direction 1 — email-first user now signing in via Google/Apple: link the pending credential.
       if (pendingGoogleCredential) {
         try {
           await linkWithCredential(credential.user, pendingGoogleCredential);
@@ -238,6 +259,14 @@ export const Signup: React.FC = () => {
           // Linking failed (already linked, etc.) — user is still signed in, so continue.
         }
         setPendingGoogleCredential(null);
+      }
+      if (pendingAppleCredential) {
+        try {
+          await linkWithCredential(credential.user, pendingAppleCredential);
+        } catch {
+          // Linking failed (already linked, etc.) — user is still signed in, so continue.
+        }
+        setPendingAppleCredential(null);
       }
       track('login', { method: 'email' });
       navigate('/profile');
@@ -307,10 +336,10 @@ export const Signup: React.FC = () => {
       const u = auth.currentUser!;
       await updateProfile(u, { displayName: formData.name });
       await setDoc(doc(db, 'users', u.uid), { name: formData.name, phone: formData.phone }, { merge: true });
-      await setDoc(doc(db, 'stats', u.uid), { name: formData.name, skill_level: formData.skillLevel }, { merge: true });
+      const ageCategory = formData.retiredPro ? ' Retired Pro' : formData.juniors ? ' Juniors' : '';
+      const leagueValue = formData.league ? `${formData.league}${ageCategory}` : '';
+      await setDoc(doc(db, 'stats', u.uid), { name: formData.name, skill_level: formData.skillLevel, ...(leagueValue ? { league: leagueValue } : {}) }, { merge: true });
       await setDoc(doc(db, 'preferences', u.uid), {
-        availability: formData.availabilityGrid,
-        ...gridToLegacy(formData.availabilityGrid),
         preferred_courts: formData.preferredCourts,
         favourite_players: formData.favouritePlayers,
         preferred_zone: formData.preferredZone,
@@ -450,8 +479,8 @@ export const Signup: React.FC = () => {
               </div>
             )}
             <div className="flex justify-between items-center mb-4">
-              {[1, 2, 3].map((i) => {
-                const stepNum = phase === 'account' ? 1 : prefStep <= 2 ? 2 : 3;
+              {[1, 2].map((i) => {
+                const stepNum = phase === 'account' ? 1 : 2;
                 return (
                   <div key={i} className="flex flex-col items-center space-y-2">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg transition-all duration-300 ${
@@ -460,7 +489,7 @@ export const Signup: React.FC = () => {
                       {stepNum > i ? <CheckCircle2 className="w-6 h-6" /> : i}
                     </div>
                     <span className={`text-xs font-bold uppercase tracking-widest ${stepNum >= i ? 'text-clay' : 'text-fg'}`}>
-                      {i === 1 ? 'Account' : i === 2 ? 'Preferences' : 'Availability'}
+                      {i === 1 ? 'Account' : 'Preferences'}
                     </span>
                   </div>
                 );
@@ -469,19 +498,21 @@ export const Signup: React.FC = () => {
             <div className="h-1.5 w-full bg-tennis-surface/50 rounded-full overflow-hidden">
               <motion.div
                 className="h-full clay-gradient"
-                initial={{ width: '33%' }}
-                animate={{ width: `${((phase === 'account' ? 1 : prefStep <= 2 ? 2 : 3) / 3) * 100}%` }}
+                initial={{ width: '50%' }}
+                animate={{ width: `${((phase === 'account' ? 1 : 2) / 2) * 100}%` }}
                 transition={{ duration: 0.5 }}
               />
             </div>
           </div>
         )}
 
+        <AnimatePresence mode="wait">
         <motion.div
           key={phase}
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.25 }}
           className="p-6 md:p-10"
         >
           {error && (
@@ -541,14 +572,14 @@ export const Signup: React.FC = () => {
                 </Button>
               </div>
 
-              {/* Google — bottom of the page */}
-              <div>
+              {/* Google / Apple — bottom of the page */}
+              <div className="space-y-2.5">
                 <div className="relative py-2">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-fg/5" />
                   </div>
                   <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-tennis-dark px-4 text-fg/40 font-bold tracking-widest">Or continue with</span>
+                    <span className="bg-tennis-dark px-4 text-fg/40 font-bold tracking-widest">Or</span>
                   </div>
                 </div>
                 <Button
@@ -560,6 +591,16 @@ export const Signup: React.FC = () => {
                 >
                   <Chrome className="mr-2 w-5 h-5" />
                   Google Account
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full border border-fg/5"
+                  onClick={handleAppleSignIn}
+                  isLoading={loading}
+                >
+                  <Apple className="mr-2 w-5 h-5" />
+                  Apple Account
                 </Button>
               </div>
             </div>
@@ -645,17 +686,14 @@ export const Signup: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Google can't complete sign-in for an email that already has a password —
-                      hide the option while linking is pending so the user isn't tempted to
-                      retry it and loop back to this same screen. */}
-                  {!showForgot && !pendingGoogleCredential && (
-                    <div>
+                  {/* Google/Apple can't complete sign-in for an email that already has a password —
+                      hide both while a linking flow is pending so the user isn't tempted to
+                      retry and loop back to this same screen. */}
+                  {!showForgot && !pendingGoogleCredential && !pendingAppleCredential && (
+                    <div className="space-y-2.5">
                       <div className="relative py-2">
                         <div className="absolute inset-0 flex items-center">
                           <div className="w-full border-t border-fg/5" />
-                        </div>
-                        <div className="relative flex justify-center text-xs uppercase">
-                          <span className="bg-tennis-dark px-4 text-fg/40 font-bold tracking-widest">Or continue with</span>
                         </div>
                       </div>
                       <Button
@@ -667,6 +705,16 @@ export const Signup: React.FC = () => {
                       >
                         <Chrome className="mr-2 w-5 h-5" />
                         Google Account
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="w-full border border-fg/5"
+                        onClick={handleAppleSignIn}
+                        isLoading={loading}
+                      >
+                        <Apple className="mr-2 w-5 h-5" />
+                        Apple Account
                       </Button>
                     </div>
                   )}
@@ -690,7 +738,7 @@ export const Signup: React.FC = () => {
 
               <div className="grid grid-cols-1 gap-6">
                 {/* Password | Confirm Password */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="w-full space-y-1.5">
                     <label className="block text-sm font-medium text-fg">
                       Password <span className="text-orange-500">*</span>
@@ -827,9 +875,11 @@ export const Signup: React.FC = () => {
                         ))}
                       </div>
                     </div>
-                    <div className="flex items-center space-x-3 p-4 rounded-2xl bg-clay/10 border border-clay/20">
+                    <div className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-clay/10 border border-clay/20 text-center">
                       <Info className="w-5 h-5 text-clay shrink-0" />
-                      <p className="text-sm font-medium text-fg italic">"{SKILL_DESCRIPTIONS[formData.skillLevel]}"</p>
+                      {SKILL_LEVEL_TIERS.map((t) => (
+                        <p key={t.label} className="text-sm font-medium text-fg">{t.range} {t.label}</p>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -941,10 +991,10 @@ export const Signup: React.FC = () => {
                                 : [...current, player],
                             });
                           }}
-                          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                          className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
                             formData.favouritePlayers.includes(player)
-                              ? 'bg-clay text-white shadow-lg shadow-clay/20'
-                              : 'bg-fg/5 text-fg hover:bg-fg/10 border border-fg/5'
+                              ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
+                              : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
                           }`}
                         >
                           {player}
@@ -967,49 +1017,58 @@ export const Signup: React.FC = () => {
                       </Button>
                     </div>
                   </div>
-                </div>
-              )}
 
-              {/* Screen 3: Availability */}
-              {prefStep === 3 && (
-                <div className="space-y-6">
                   <div className="space-y-4">
-                    <label className="block text-sm font-bold text-fg uppercase tracking-wider flex items-center">
-                      <Calendar className="w-4 h-4 mr-2 text-clay" />
-                      Availability
-                    </label>
-                    <div className="grid grid-cols-[1fr_auto_auto] gap-x-6 gap-y-1 items-center max-w-xs">
-                      <span />
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-fg/40 text-center w-10">AM</span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-fg/40 text-center w-10">PM</span>
-                      {DAY_CODES.map((d) => (
-                        <React.Fragment key={d}>
-                          <span className="text-sm text-fg/80 py-1.5">{DAY_LABELS[d]}</span>
-                          {(['AM', 'PM'] as TimeSlot[]).map((slot) => {
-                            const on = (formData.availabilityGrid[d] ?? []).includes(slot);
-                            return (
-                              <div key={slot} className="flex justify-center">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const cur = formData.availabilityGrid[d] ?? [];
-                                    const next = cur.includes(slot) ? cur.filter((s) => s !== slot) : [...cur, slot];
-                                    const grid: AvailabilityGrid = { ...formData.availabilityGrid };
-                                    if (next.length) grid[d] = next; else delete grid[d];
-                                    setFormData({ ...formData, availabilityGrid: grid });
-                                  }}
-                                  className={`w-6 h-6 rounded flex items-center justify-center border transition-colors ${
-                                    on ? 'bg-clay border-clay' : 'bg-fg/5 border-fg/15 hover:border-clay/60'
-                                  }`}
-                                >
-                                  {on && <span className="text-fg text-[11px]">✓</span>}
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </React.Fragment>
+                    <label className="block text-sm font-bold text-fg uppercase tracking-wider">League</label>
+                    <div className="flex flex-wrap gap-2">
+                      {(["Men's", "Women's"] as const).map((league) => (
+                        <button
+                          key={league}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, league })}
+                          className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+                            formData.league === league
+                              ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
+                              : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
+                          }`}
+                        >
+                          {league}
+                        </button>
                       ))}
                     </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={!formData.league}
+                        onClick={() => setFormData({ ...formData, retiredPro: !formData.retiredPro, juniors: false })}
+                        className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+                          !formData.league
+                            ? 'bg-fg/5 border-fg/5 text-fg/30 cursor-not-allowed'
+                            : formData.retiredPro
+                              ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
+                              : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
+                        }`}
+                      >
+                        Retired Pro <span className="ml-1 opacity-70 font-normal normal-case">(age: 55+)</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!formData.league}
+                        onClick={() => setFormData({ ...formData, juniors: !formData.juniors, retiredPro: false })}
+                        className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+                          !formData.league
+                            ? 'bg-fg/5 border-fg/5 text-fg/30 cursor-not-allowed'
+                            : formData.juniors
+                              ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
+                              : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
+                        }`}
+                      >
+                        Juniors
+                      </button>
+                    </div>
+                    {!formData.league && (
+                      <p className="text-[11px] text-fg/40">Choose a league above to unlock Retired Pro / Juniors.</p>
+                    )}
                   </div>
 
                   <p className="text-xs text-fg/50 text-center px-2">
@@ -1033,13 +1092,13 @@ export const Signup: React.FC = () => {
           {phase === 'preferences' && (
             <div className="flex justify-between items-center gap-3 mt-4 pt-8 border-t border-fg/5">
               {prefStep > 1 ? (
-                <Button variant="outline" onClick={() => setPrefStep((s) => (s - 1) as 1 | 2 | 3)}>
+                <Button variant="outline" onClick={() => setPrefStep((s) => (s - 1) as 1 | 2)}>
                   Back
                 </Button>
               ) : <div />}
-              {prefStep < 3 ? (
+              {prefStep < 2 ? (
                 <Button
-                  onClick={() => setPrefStep((s) => (s + 1) as 1 | 2 | 3)}
+                  onClick={() => setPrefStep((s) => (s + 1) as 1 | 2)}
                   disabled={prefStep === 1 && !isNameValid()}
                   className="group"
                 >
@@ -1055,6 +1114,7 @@ export const Signup: React.FC = () => {
             </div>
           )}
         </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

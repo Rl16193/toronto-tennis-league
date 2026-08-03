@@ -86,7 +86,6 @@ export const createEvent = async (userId: string, eventForm: EventFormState, ima
     location: eventForm.location.trim(),
     organizer: eventForm.organizer.trim(),
     about: eventForm.about.trim(),
-    description: eventForm.about.trim(),
     image: imageUrl,
     start_date: eventForm.startDate,
     end_date: eventForm.endDate,

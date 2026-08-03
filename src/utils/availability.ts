@@ -56,3 +56,50 @@ export const gridToLegacy = (grid: AvailabilityGrid) => ({
   availability_day: DAY_CODES.filter((d) => (grid[d]?.length ?? 0) > 0),
   availability_time: [...new Set(Object.values(grid).flat())] as TimeSlot[],
 });
+
+// Simplified availability — replaces the old per-day AM/PM grid for editing. A player picks any
+// number of these 7 preset windows (multi-select, e.g. "Weekday Evenings" + "Weekend Mornings"
+// is a valid combination) instead of checking individual day/slot cells.
+export type AvailabilityTag =
+  | 'weekday_mornings' | 'weekend_mornings' | 'weekend_evenings' | 'weekday_evenings'
+  | 'mornings' | 'evenings' | 'anytime';
+
+export const AVAILABILITY_TAGS: { id: AvailabilityTag; label: string }[] = [
+  { id: 'weekday_mornings', label: 'Weekday Mornings' },
+  { id: 'weekend_mornings', label: 'Weekend Mornings' },
+  { id: 'weekend_evenings', label: 'Weekend Evenings' },
+  { id: 'weekday_evenings', label: 'Weekday Evenings' },
+  { id: 'mornings', label: 'Mornings' },
+  { id: 'evenings', label: 'Evenings' },
+  { id: 'anytime', label: 'Anytime' },
+];
+
+export const availabilityTagLabel = (id: string): string =>
+  AVAILABILITY_TAGS.find((t) => t.id === id)?.label || id;
+
+// Best-effort mapping from the old day×AM/PM grid to the new preset tags — used by the one-time
+// backfill script so existing users don't appear to have "no availability" set.
+export const gridToAvailabilityTags = (grid: AvailabilityGrid): AvailabilityTag[] => {
+  const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI'] as const;
+  const weekend = ['SAT', 'SUN'] as const;
+  const has = (days: readonly string[], slot: TimeSlot) => days.some((d) => grid[d]?.includes(slot));
+  const wdAM = has(weekdays, 'AM');
+  const wdPM = has(weekdays, 'PM');
+  const weAM = has(weekend, 'AM');
+  const wePM = has(weekend, 'PM');
+
+  if (wdAM && wdPM && weAM && wePM) return ['anytime'];
+
+  const tags: AvailabilityTag[] = [];
+  if (wdAM && weAM) tags.push('mornings');
+  else {
+    if (wdAM) tags.push('weekday_mornings');
+    if (weAM) tags.push('weekend_mornings');
+  }
+  if (wdPM && wePM) tags.push('evenings');
+  else {
+    if (wdPM) tags.push('weekday_evenings');
+    if (wePM) tags.push('weekend_evenings');
+  }
+  return tags;
+};

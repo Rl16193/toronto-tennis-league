@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, Info, HelpCircle, Bell, LogOut, ChevronRight } from 'lucide-react';
+import { Menu, Info, Bell, LogOut, ChevronRight } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../features/notifications/useNotifications';
 import { Sheet } from './Sheet';
 
+const badgeLabel = (n: number) => (n > 9 ? '9+' : n);
+
 // Header hamburger menu — replaces the old separate About-Us link / bell / logout / avatar in
-// Navbar. Present on every page (rendered from Navbar, so it's global). About Us and How It
-// Works always show; Notifications, Profile, and Logout only show when signed in. The unread
-// badge appears both on the trigger icon and next to the Notifications row.
+// Navbar. Present on every page (rendered from Navbar, so it's global). About Us always shows;
+// Notifications, Profile, and Logout only show when signed in. The unread badge appears both on
+// the trigger icon and next to the Notifications row.
 export const HeaderMenu: React.FC = () => {
   const { user } = useAuth();
   const { unreadCount } = useNotifications();
@@ -38,7 +40,7 @@ export const HeaderMenu: React.FC = () => {
         <span className="flex-1 text-sm font-bold text-fg">{label}</span>
         {!!badge && (
           <span className="min-w-[1.25rem] h-5 px-1 rounded-full bg-clay text-white text-[10px] font-black flex items-center justify-center shrink-0">
-            {badge > 9 ? '9+' : badge}
+            {badgeLabel(badge)}
           </span>
         )}
         <ChevronRight className="w-4 h-4 text-fg/30 shrink-0" />
@@ -63,7 +65,7 @@ export const HeaderMenu: React.FC = () => {
         <Menu className="w-5 h-5" />
         {!!user && unreadCount > 0 && (
           <span className="absolute top-0.5 right-0.5 min-w-[1rem] h-4 px-1 rounded-full bg-clay text-white text-[10px] font-black flex items-center justify-center">
-            {unreadCount > 9 ? '9+' : unreadCount}
+            {badgeLabel(unreadCount)}
           </span>
         )}
       </button>
@@ -72,7 +74,6 @@ export const HeaderMenu: React.FC = () => {
         <Sheet onClose={close} title="Menu" maxWidthClassName="max-w-sm">
           <div className="p-6 pt-3 space-y-2.5">
             <Row to="/about" icon={<Info className="w-4 h-4" />} label="About Us" />
-            <Row to="/how-it-works" icon={<HelpCircle className="w-4 h-4" />} label="How It Works" />
             {user && (
               <>
                 <Row to="/notifications" icon={<Bell className="w-4 h-4" />} label="Notifications" badge={unreadCount} />

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
-import { ArrowLeft, Mail, MapPin, Phone, Star, Users } from 'lucide-react';
+import { ArrowLeft, Award, Mail, MapPin, Phone, Star, Users } from 'lucide-react';
+import { motion } from 'motion/react';
+import { fadeUp, staggerDelay } from '../lib/motion';
 import { db } from '../lib/firebase';
 import { Button } from '../components/Button';
 import { RacquetIcon } from '../components/RacquetIcon';
@@ -9,7 +11,7 @@ import { TennisEvent, UserData, UserPreferences, UserStats } from '../types';
 import type { TournamentMatch } from './tournament/types';
 import { BadgeRow } from '../features/tasks/BadgeRow';
 import { useCommunityStandings } from '../features/tasks/useTasks';
-import { skillTier, leagueDivision } from '../utils/skillLevels';
+import { skillTier, leagueDivision, leagueAgeCategory } from '../utils/skillLevels';
 
 // Furthest-round derivation for Best Finish / Best Result from a player's tournament matches.
 const ROUND_ORDER = ['R64', 'R32', 'R16', 'QF', 'SF', 'F'];
@@ -137,7 +139,7 @@ export const PlayerProfile: React.FC = () => {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
         <h1 className="text-3xl font-black text-fg mb-3">Player Not Found</h1>
         <p className="text-fg mb-6">This player profile is not available.</p>
-        <Button variant="outline" onClick={() => navigate('/tournament')}>Back to Tournament</Button>
+        <Button variant="outline" onClick={() => navigate('/matches?mode=tournament')}>Back to Tournament</Button>
       </div>
     );
   }
@@ -180,7 +182,6 @@ export const PlayerProfile: React.FC = () => {
             <SectionLabel label="Name" />
             <p className="text-lg font-bold text-fg mt-0.5">
               {player.name || '—'}
-              <BadgeRow ids={player.display_badges} className="ml-2 align-middle" />
             </p>
           </div>
 
@@ -201,20 +202,29 @@ export const PlayerProfile: React.FC = () => {
             {stats ? (
               <div className="mt-1 flex items-center gap-2">
                 <span className="text-lg font-bold text-fg">NTRP {stats.skill_level}</span>
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">
-                  {skillTier(stats.skill_level)}
-                </span>
               </div>
             ) : <p className="text-sm text-fg/40 mt-1">Not set.</p>}
           </div>
 
-          {/* League & Age — only when the player opted in ("Make visible to others"). */}
-          {player.profile_details_visible && (leagueDivision(stats?.league) || player.age_bracket) && (
+          <div className="py-3">
+            <SectionLabel icon={<Award className="w-3.5 h-3.5 text-clay" />} label="Badges" />
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              {stats && (
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-badge border border-amber-500/25">
+                  {skillTier(stats.skill_level)}
+                </span>
+              )}
+              <BadgeRow ids={player.display_badges} />
+            </div>
+          </div>
+
+          {/* League — only when the player opted in ("Make visible to others"). */}
+          {player.profile_details_visible && leagueDivision(stats?.league) && (
             <div className="py-3">
-              <SectionLabel icon={<Users className="w-3.5 h-3.5 text-clay" />} label="League & Age" />
+              <SectionLabel icon={<Users className="w-3.5 h-3.5 text-clay" />} label="League" />
               <div className="mt-1 flex flex-wrap gap-1.5">
-                {leagueDivision(stats?.league) && <Pill label={`${leagueDivision(stats?.league)} League`} />}
-                {player.age_bracket && <Pill label={player.age_bracket} />}
+                <Pill label={`${leagueDivision(stats?.league)} League`} />
+                {leagueAgeCategory(stats?.league) && <Pill label={leagueAgeCategory(stats?.league)} />}
               </div>
             </div>
           )}
@@ -241,11 +251,11 @@ export const PlayerProfile: React.FC = () => {
           <Star className="w-5 h-5 mr-2 text-clay" />Match Stats
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {statTiles.map((t) => (
-            <div key={t.label} className="rounded-2xl bg-white/[0.03] border border-fg/5 px-3 py-4 text-center">
+          {statTiles.map((t, i) => (
+            <motion.div key={t.label} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }} className="rounded-2xl bg-white/[0.03] border border-fg/5 px-3 py-4 text-center">
               <p className={`text-2xl font-black ${t.accent}`}>{t.value}</p>
               <p className="text-[10px] font-bold uppercase tracking-widest text-fg/40 mt-1">{t.label}</p>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>

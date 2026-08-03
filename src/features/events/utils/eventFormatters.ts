@@ -29,6 +29,11 @@ export const formatEventSchedule = (event: TennisEvent): string | null => {
   const dayLabel = days.length > 0 ? days.map((d) => DAY_LABELS[d]).join(', ') : null;
   if (isRecurringWeekly(event) && dayLabel && event.time) return `Every ${dayLabel} • ${event.time}`;
   if (isRecurringWeekly(event) && dayLabel) return `Every ${dayLabel}`;
+  const start = parseValidDate(getEventStartDate(event));
+  if (start) {
+    const dateLabel = start.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    return event.time ? `${dateLabel} • ${event.time}` : dateLabel;
+  }
   return event.time || null;
 };
 

@@ -8,14 +8,13 @@ import { storage } from '../../../lib/firebase';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { RacquetIcon } from '../../../components/RacquetIcon';
-import { SELECTABLE_SKILL_LEVELS, SKILL_DESCRIPTIONS, skillTier, leagueDivision } from '../../../utils/skillLevels';
+import { SELECTABLE_SKILL_LEVELS, SKILL_LEVEL_TIERS, skillTier, leagueDivision, leagueAgeCategory } from '../../../utils/skillLevels';
 import {
   defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts,
   getCourtSuggestions, mergeCourtOptions,
 } from '../../signup/utils/courtSearch';
 import { getZoneWithBorderCheck } from '../../../utils/zones';
 import { formatPhone } from '../../../utils/formatPhone';
-import { AGE_BRACKETS } from '../../../types';
 import { BadgePicker } from '../../tasks/BadgePicker';
 
 type Actions = {
@@ -25,10 +24,11 @@ type Actions = {
   updateBio: (bio: string) => Promise<boolean>;
   updateAvatar: (url: string) => Promise<boolean>;
   updateSkills: (skill: number, pref: string) => Promise<boolean>;
-  updateLeagueAge: (league: "Men's" | "Women's" | '', ageBracket: string, visible: boolean) => Promise<boolean>;
+  updateLeagueAgeCategory: (league: "Men's" | "Women's" | '', ageCategory: 'Retired Pro' | 'Juniors' | '', visible: boolean) => Promise<boolean>;
   updateDisplayBadges: (badgeIds: string[]) => Promise<boolean>;
   updatePreferredCourts: (courts: string[], zone: string) => Promise<boolean>;
   updateFavouritePlayers: (players: string[]) => Promise<boolean>;
+  updateEmailNotifications: (enabled: boolean) => Promise<boolean>;
   changeEmail: (email: string, password: string) => Promise<boolean | undefined>;
   refreshEmailChange: () => Promise<void>;
 };
@@ -80,7 +80,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
   const [bioDraft, setBioDraft] = useState('');
   const [skillDraft, setSkillDraft] = useState(2);
   const [leagueDraft, setLeagueDraft] = useState<"Men's" | "Women's" | ''>('');
-  const [ageDraft, setAgeDraft] = useState('');
+  const [ageCategoryDraft, setAgeCategoryDraft] = useState<'Retired Pro' | 'Juniors' | ''>('');
   const [visibleDraft, setVisibleDraft] = useState(false);
   const [courtsDraft, setCourtsDraft] = useState<string[]>([]);
   const [courtInput, setCourtInput] = useState('');
@@ -106,7 +106,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
     setBioDraft(user.bio ?? '');
     setSkillDraft(stats.skill_level);
     setLeagueDraft(leagueDivision(stats.league));
-    setAgeDraft(user.age_bracket ?? '');
+    setAgeCategoryDraft(leagueAgeCategory(stats.league));
     setVisibleDraft(!!user.profile_details_visible);
     setCourtsDraft(preferences.preferred_courts);
     setFavDraft(preferences.favourite_players);
@@ -258,84 +258,93 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
             <div className="mt-3 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-3xl font-black text-clay">{skillDraft}</span>
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">{skillTier(skillDraft)}</span>
               </div>
               <input type="range" min={0} max={SELECTABLE_SKILL_LEVELS.length - 1} step={1}
                 value={(() => { const i = SELECTABLE_SKILL_LEVELS.indexOf(skillDraft as typeof SELECTABLE_SKILL_LEVELS[number]); return i >= 0 ? i : SELECTABLE_SKILL_LEVELS.length - 1; })()}
                 onChange={(e) => setSkillDraft(SELECTABLE_SKILL_LEVELS[Number(e.target.value)])} className="w-full" />
-              <p className="text-xs text-fg/60 italic">"{SKILL_DESCRIPTIONS[skillDraft]}"</p>
+              <div className="text-xs text-fg/60 text-center space-y-0.5">
+                {SKILL_LEVEL_TIERS.map((t) => (
+                  <p key={t.label}>{t.range} {t.label}</p>
+                ))}
+              </div>
               <Button size="sm" onClick={() => save(() => actions.updateSkills(skillDraft, tournamentPref(skillDraft)))} isLoading={updateLoading}>Save</Button>
             </div>
           ) : (
             <div className="mt-1 flex items-center gap-2">
               <span className="text-lg font-bold text-fg">NTRP {stats.skill_level}</span>
-              <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/25">{skillTier(stats.skill_level)}</span>
             </div>
           )}
         </div>
 
-        {/* League & Age */}
+        {/* League */}
         <div className="py-3">
-          <SectionHeader icon={<Users className="w-3.5 h-3.5 text-clay" />} label="League & Age" editing={editing === 'league'} onEdit={() => open('league')} onCancel={() => setEditing(null)} />
+          <SectionHeader icon={<Users className="w-3.5 h-3.5 text-clay" />} label="League" editing={editing === 'league'} onEdit={() => open('league')} onCancel={() => setEditing(null)} />
           {editing === 'league' ? (
             <div className="mt-2 space-y-3">
-              <div>
-                <label className="block text-xs text-fg/50 mb-1">League you want to participate in</label>
-                <select
-                  value={leagueDraft}
-                  onChange={(e) => setLeagueDraft(e.target.value as "Men's" | "Women's" | '')}
-                  className="w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 px-4 py-3 text-fg text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
-                >
-                  <option value="">Not set</option>
-                  <option value="Men's">Men's</option>
-                  <option value="Women's">Women's</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-fg/50 mb-1">Age bracket</label>
-                <select
-                  value={ageDraft}
-                  onChange={(e) => setAgeDraft(e.target.value)}
-                  className="w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 px-4 py-3 text-fg text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
-                >
-                  <option value="">Not set</option>
-                  {AGE_BRACKETS.map((a) => <option key={a} value={a}>{a}</option>)}
-                </select>
-              </div>
-              {/* Seniors opt-in — only offered once the player selects the 55+ age group. */}
-              {ageDraft === '55+' && (
-                <div className="rounded-2xl border border-clay/30 bg-clay/5 p-3 space-y-2">
-                  <p className="text-xs text-fg/70">
-                    {user.age_bracket === '55+'
-                      ? "You're in the 55+ League — you can join the Seniors draw in singles events."
-                      : 'Play in the age-based Seniors (55+) group.'}
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="clay"
-                    onClick={() => save(() => actions.updateLeagueAge(leagueDraft, '55+', visibleDraft))}
-                    isLoading={updateLoading}
-                    disabled={user.age_bracket === '55+'}
+              <div className="flex flex-wrap gap-2">
+                {(["Men's", "Women's"] as const).map((league) => (
+                  <button
+                    key={league}
+                    type="button"
+                    onClick={() => setLeagueDraft(league)}
+                    className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+                      leagueDraft === league
+                        ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
+                        : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
+                    }`}
                   >
-                    {user.age_bracket === '55+' ? 'Joined ✓' : 'Join the 55+ League'}
-                  </Button>
-                </div>
+                    {league}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={!leagueDraft}
+                  onClick={() => setAgeCategoryDraft(ageCategoryDraft === 'Retired Pro' ? '' : 'Retired Pro')}
+                  className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+                    !leagueDraft
+                      ? 'bg-fg/5 border-fg/5 text-fg/30 cursor-not-allowed'
+                      : ageCategoryDraft === 'Retired Pro'
+                        ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
+                        : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
+                  }`}
+                >
+                  Retired Pro <span className="ml-1 opacity-70 font-normal normal-case">(age: 55+)</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={!leagueDraft}
+                  onClick={() => setAgeCategoryDraft(ageCategoryDraft === 'Juniors' ? '' : 'Juniors')}
+                  className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+                    !leagueDraft
+                      ? 'bg-fg/5 border-fg/5 text-fg/30 cursor-not-allowed'
+                      : ageCategoryDraft === 'Juniors'
+                        ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
+                        : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
+                  }`}
+                >
+                  Juniors
+                </button>
+              </div>
+              {!leagueDraft && (
+                <p className="text-[11px] text-fg/40">Choose a league above to unlock Retired Pro / Juniors.</p>
               )}
               <label className="flex items-center gap-2 cursor-pointer text-sm text-fg/70">
                 <input type="checkbox" checked={visibleDraft} onChange={(e) => setVisibleDraft(e.target.checked)} className="accent-clay" />
                 Make visible to others
               </label>
-              <Button size="sm" onClick={() => save(() => actions.updateLeagueAge(leagueDraft, ageDraft, visibleDraft))} isLoading={updateLoading}>Save</Button>
+              <Button size="sm" onClick={() => save(() => actions.updateLeagueAgeCategory(leagueDraft, ageCategoryDraft, visibleDraft))} isLoading={updateLoading}>Save</Button>
             </div>
           ) : (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {leagueDivision(stats.league) && (
                 <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70 border border-fg/10">{leagueDivision(stats.league)} League</span>
               )}
-              {user.age_bracket && (
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70 border border-fg/10">{user.age_bracket}</span>
+              {leagueAgeCategory(stats.league) && (
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70 border border-fg/10">{leagueAgeCategory(stats.league)}</span>
               )}
-              {!leagueDivision(stats.league) && !user.age_bracket
+              {!leagueDivision(stats.league)
                 ? <span className="text-sm text-fg/40">Not set.</span>
                 : <span className="text-[11px] text-fg/40 ml-1">{user.profile_details_visible ? 'Visible to others' : 'Hidden from others'}</span>}
             </div>
@@ -347,6 +356,9 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
           <span className="text-xs font-bold text-fg/50 uppercase tracking-widest flex items-center gap-1.5">
             <Award className="w-3.5 h-3.5 text-clay" />Badges
           </span>
+          <div className="mt-2">
+            <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-badge border border-amber-500/25">{skillTier(stats.skill_level)}</span>
+          </div>
           <BadgePicker
             selected={user.display_badges ?? []}
             onSave={actions.updateDisplayBadges}
@@ -415,6 +427,26 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
                 : <span className="text-sm text-fg/40">None set.</span>}
             </div>
           )}
+        </div>
+
+        {/* Email notifications — a single global switch for the Resend emails (challenge/rally
+            received/accepted, weekly incomplete-matches digest). Instant toggle, no draft/save. */}
+        <div className="py-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-widest text-fg/50">Email Notifications</p>
+            <p className="text-xs text-fg/40 mt-0.5">Challenge/rally updates and your weekly incomplete-matches reminder.</p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={preferences.email_notifications !== false}
+              disabled={updateLoading}
+              onChange={(e) => actions.updateEmailNotifications(e.target.checked)}
+            />
+            <div className="w-10 h-6 bg-fg/15 peer-checked:bg-clay rounded-full transition-colors" />
+            <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4" />
+          </label>
         </div>
       </div>
 

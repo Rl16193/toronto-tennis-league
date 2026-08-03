@@ -1,7 +1,8 @@
-import { addDoc, collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDoc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
+import { UserData } from '../../types';
 
 // Rallies — friendly-match requests, modelled on the ladder-challenge loop but with no points,
 // no standings impact, and no organizer step: the recipient simply accepts or declines.
@@ -82,5 +83,32 @@ export function useRallies() {
     return ids;
   }, [sent, received]);
 
-  return { sent, received, loading, activePartnerIds };
+  // Players you have an ACCEPTED rally with — these get a Contact button instead of "Pending"
+  // in the players list.
+  const acceptedPartnerIds = useMemo(() => {
+    const ids = new Set<string>();
+    [...sent, ...received].forEach((r) => {
+      if (r.status !== 'accepted') return;
+      ids.add(r.from_id);
+      ids.add(r.to_id);
+    });
+    ids.delete(user?.uid ?? '');
+    return ids;
+  }, [sent, received, user?.uid]);
+
+  // Contact info for accepted-rally partners (for the ContactOpponentButton).
+  const [contactMap, setContactMap] = useState<Record<string, UserData>>({});
+  useEffect(() => {
+    const missing = [...acceptedPartnerIds].filter((id) => id && !contactMap[id]);
+    if (missing.length === 0) return;
+    Promise.all(
+      missing.map((id) => getDoc(doc(db, 'users', id)).then((s) => [id, s.data() as UserData | undefined] as const)),
+    ).then((entries) => {
+      const found = entries.filter((e) => !!e[1]) as [string, UserData][];
+      if (found.length) setContactMap((prev) => ({ ...prev, ...Object.fromEntries(found) }));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acceptedPartnerIds]);
+
+  return { sent, received, loading, activePartnerIds, acceptedPartnerIds, contactMap };
 }

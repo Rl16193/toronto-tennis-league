@@ -19,7 +19,7 @@ type Props = {
 
 // Draw selector, mobile remodel (wireframe 1a): the old three stacked rows of pills
 // (division → skill → RR view) collapse into ONE horizontally scrollable chip row — one chip
-// per visible draw ("Men's Challengers", "Women's Seniors", "Mixed Doubles", …) — plus a
+// per visible draw ("Men's Challengers", "Women's Retired Pro", "Mixed Doubles", …) — plus a
 // Groups/Knockout segmented toggle for Round Robin draws.
 export const DrawTabs: React.FC<Props> = ({
   currentDraw, visibleDraws,

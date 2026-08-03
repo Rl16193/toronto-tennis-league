@@ -284,10 +284,10 @@ export const filterParticipantsForDraw = (
     if (p.division !== draw.division) return false;
     if (draw.tournamentChoice === 'Doubles') return true;
     if (draw.skillGroup === 'All') return true;
-    // Seniors is opt-in at join time (age 55+), not skill-derived: a seniors participant
-    // belongs ONLY to the Seniors draw, and never falls into Challengers/Masters.
-    if (p.skill_group === 'Seniors') return draw.skillGroup === 'Seniors';
-    if (draw.skillGroup === 'Seniors') return false;
+    // Retired Pro is opt-in at join time (age 55+), not skill-derived: a Retired Pro participant
+    // belongs ONLY to the Retired Pro draw, and never falls into Challengers/Masters.
+    if (p.skill_group === 'Retired Pro') return draw.skillGroup === 'Retired Pro';
+    if (draw.skillGroup === 'Retired Pro') return false;
     const effectiveSkill = statsMap[p.user_id]?.skill_level ?? Number(p.skill || 0);
     return (effectiveSkill >= 4 ? 'Masters' : 'Challengers') === draw.skillGroup;
   });

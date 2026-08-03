@@ -29,7 +29,7 @@ export type TaskId =
   | 'joinEvent'
   | 'ladderMatch';
 
-export const INSTAGRAM_URL = 'https://www.instagram.com/racqnstringstoronto?igsh=MTQ0eXA1bXZpbXltaQ==';
+export const INSTAGRAM_URL = 'https://www.instagram.com/racqnstringstoronto';
 export const WHATSAPP_URL = 'https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX';
 
 export type TaskDef = {
@@ -46,9 +46,9 @@ export const TASKS: TaskDef[] = [
   { id: 'profileComplete', title: 'Complete your profile', label: 'Profile', kind: 'auto', to: '/profile' },
   { id: 'followSocial', title: 'Follow us on Instagram', label: 'Follow', kind: 'trust', link: INSTAGRAM_URL },
   { id: 'tagPost', title: 'Tag us in a story or post', label: 'Tag Post', kind: 'trust', link: INSTAGRAM_URL },
-  { id: 'waitingBoard', title: 'Submit a waiting-board photo', label: 'Board Photo', kind: 'auto', to: '/tasks?photo=1' },
+  { id: 'waitingBoard', title: 'Submit a waiting-board report', label: 'Board Report', kind: 'auto', to: '/tasks?photo=1' },
   { id: 'courtVisit', title: 'Visit one public court', label: 'Court Visit', kind: 'auto', to: '/tasks?checkin=1' },
-  { id: 'queuePhoto', title: 'Submit a racquet queue photo', label: 'Queue Photo', kind: 'auto', to: '/tasks?photo=1' },
+  { id: 'queuePhoto', title: 'Submit a racquet queue report', label: 'Queue Report', kind: 'auto', to: '/tasks?photo=1' },
   { id: 'playMatch', title: 'Play 1 match', label: 'Match', kind: 'auto', to: '/tournament' },
   { id: 'courtSuggestion', title: 'Submit a court improvement', label: 'Suggestion', kind: 'auto', to: '/courts' },
   { id: 'whatsappGroup', title: 'Join the WhatsApp group', label: 'WhatsApp', kind: 'trust', link: WHATSAPP_URL },
@@ -129,28 +129,38 @@ export const bumpCounter = (uid: string, name: string, key: string, by = 1) =>
 
 type PlayedResult = { at: number; won: boolean };
 
+// Shared by both result loaders below: de-dupes docs appearing in both queries (e.g. a player
+// who is both player_1/player_2, or challenger/opponent, across different docs) by id, then maps
+// each to a PlayedResult — `toResult` returning null skips that doc (used for the tournament
+// walkover/blank-score guard, which the ladder loader doesn't need).
+const dedupePlayedResults = (
+  docs: { id: string; data: () => Record<string, any> }[],
+  toResult: (data: Record<string, any>) => PlayedResult | null,
+): PlayedResult[] => {
+  const seen = new Set<string>();
+  const out: PlayedResult[] = [];
+  docs.forEach((d) => {
+    if (seen.has(d.id)) return;
+    seen.add(d.id);
+    const result = toResult(d.data());
+    if (result) out.push(result);
+  });
+  return out;
+};
+
 // Completed matches with real set scores — walkovers and score-less completions don't count.
 const loadTournamentResults = async (uid: string): Promise<PlayedResult[]> => {
   const [p1, p2] = await Promise.all([
     getDocs(query(collection(db, 'tournament_matches'), where('player_1_user_id', '==', uid), where('status', '==', 'complete'))),
     getDocs(query(collection(db, 'tournament_matches'), where('player_2_user_id', '==', uid), where('status', '==', 'complete'))),
   ]);
-  const seen = new Set<string>();
-  const out: PlayedResult[] = [];
-  [...p1.docs, ...p2.docs].forEach((d) => {
-    if (seen.has(d.id)) return;
-    seen.add(d.id);
-    const m = d.data();
+  return dedupePlayedResults([...p1.docs, ...p2.docs], (m) => {
     // A walkover is recorded as sets of 0-0 — still non-null, so the blank check alone doesn't
     // catch it. Both conditions are needed: a real score, and not a walkover.
-    if (m.walkover === true) return;
-    if (m.set_1_player_1 == null || m.set_1_player_2 == null) return; // no real score
-    out.push({
-      at: new Date(m.completed_at || m.created_at || 0).getTime(),
-      won: m.winner_user_id === uid,
-    });
+    if (m.walkover === true) return null;
+    if (m.set_1_player_1 == null || m.set_1_player_2 == null) return null; // no real score
+    return { at: new Date(m.completed_at || m.created_at || 0).getTime(), won: m.winner_user_id === uid };
   });
-  return out;
 };
 
 const loadLadderResults = async (uid: string): Promise<PlayedResult[]> => {
@@ -158,18 +168,10 @@ const loadLadderResults = async (uid: string): Promise<PlayedResult[]> => {
     getDocs(query(collection(db, 'ladder_challenges'), where('challenger_id', '==', uid), where('status', '==', 'confirmed'))),
     getDocs(query(collection(db, 'ladder_challenges'), where('opponent_id', '==', uid), where('status', '==', 'confirmed'))),
   ]);
-  const seen = new Set<string>();
-  const out: PlayedResult[] = [];
-  [...asChallenger.docs, ...asOpponent.docs].forEach((d) => {
-    if (seen.has(d.id)) return;
-    seen.add(d.id);
-    const c = d.data();
-    out.push({
-      at: new Date(c.confirmed_at || c.created_at || 0).getTime(),
-      won: c.claimed_winner_id === uid,
-    });
-  });
-  return out;
+  return dedupePlayedResults([...asChallenger.docs, ...asOpponent.docs], (c) => ({
+    at: new Date(c.confirmed_at || c.created_at || 0).getTime(),
+    won: c.claimed_winner_id === uid,
+  }));
 };
 
 // Longest run of wins across every result, oldest first.

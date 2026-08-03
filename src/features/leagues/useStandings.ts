@@ -18,6 +18,7 @@ export type LeagueRow = {
   pointswon: number;
   totalPointsPlayed: number;
   rankTrend: 'up' | 'down' | 'flat';
+  rankMove: number; // places climbed/fallen since the last snapshot (0 for flat/baseline)
 };
 
 export type DivTab = 'mens' | 'womens' | 'doubles';
@@ -76,6 +77,7 @@ export function useStandings(): {
           pointswon: s.pointswon ?? 0,
           totalPointsPlayed: s.totalPointsPlayed ?? 0,
           rankTrend: (s.rankTrend === 'up' || s.rankTrend === 'down') ? s.rankTrend : 'flat',
+          rankMove: typeof s.rankMove === 'number' ? s.rankMove : 0,
         });
       });
       setRows(data);

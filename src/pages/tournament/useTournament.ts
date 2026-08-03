@@ -19,6 +19,23 @@ import {
 import { CONSOLIDATED_DOUBLES_DRAW, MENS_MERGED_DRAW, VISIBLE_DRAWS, WOMENS_MERGED_DRAW } from './drawConfigs';
 import { PLAYER_LOADING_SENTINEL } from './AddPlayerPanel';
 
+// Points a completed match awards/awarded — shared by updateMatchWithSubmission (apply) and
+// reverseMatchStatsInto (the exact inverse, used when a draw/match is reset).
+const computeMatchPoints = (match: TournamentMatch, isWalkover?: boolean) => {
+  const isLL = match.bracket === 'reserves';
+  const isRRGroupStage = match.format === 'rr' && match.round === 'RR';
+  const LOSER_PTS: Record<string, number> = isLL
+    ? { R32: 0.5, R16: 1, QF: 1.5, SF: 2.5, F: 5 }
+    : { R32: 1, R16: 2, QF: 3, RR: 1, SF: 5, F: 10 };
+  const loserPts = LOSER_PTS[match.round] ?? (isLL ? 0.5 : 1);
+  const winnerPts = isLL ? 10 : isRRGroupStage ? (isWalkover ? 1 : 3) : 20;
+  const isFinal = match.round === 'F';
+  // RR group-stage match winners score live per match, same as a final winner — every other
+  // round's winner only scores by later winning the final (or losing, which always scores).
+  const winnerPointsApply = isFinal || isRRGroupStage;
+  return { loserPts, winnerPts, isFinal, winnerPointsApply };
+};
+
 export const useTournament = (eventIdOverride?: string) => {
   const { user, profile, loading: authLoading } = useAuth();
 
@@ -64,6 +81,7 @@ export const useTournament = (eventIdOverride?: string) => {
   const [allUsers, setAllUsers] = useState<Record<string, UserData>>({});
   const [courtsMap, setCourtsMap] = useState<Record<string, string[]>>({});
   const [zoneMap, setZoneMap] = useState<Record<string, string>>({});
+  const [availabilityMap, setAvailabilityMap] = useState<Record<string, string[]>>({});
   // Round Robin 3rd-level view: group stage vs knockout.
   const [rrView, setRRView] = useState<'groups' | 'knockout'>('groups');
   // Server-persisted RR draft for the current draw (edited groups + withdrawn players) — lets the
@@ -99,7 +117,7 @@ export const useTournament = (eventIdOverride?: string) => {
       if (consolidateDoubles && d.tab === 'doubles') return false;
       if (eventChoice === 'Singles' && d.tournamentChoice !== 'Singles') return false;
       if (eventChoice === 'Doubles' && d.tournamentChoice !== 'Doubles') return false;
-      if (event?.hide_seniors && d.skillGroup === 'Seniors') return false;
+      if (event?.hide_seniors && d.skillGroup === 'Retired Pro') return false;
       return true;
     });
     if (mergeMensSingles) draws = [...draws, MENS_MERGED_DRAW];
@@ -303,13 +321,16 @@ export const useTournament = (eventIdOverride?: string) => {
       // doc are still recorded as "checked" and never re-queried on the next snapshot.
       const courtEntries: Record<string, string[]> = {};
       const zoneEntries: Record<string, string> = {};
-      for (const id of missingIds) { courtEntries[id] = []; zoneEntries[id] = ''; }
+      const availabilityEntries: Record<string, string[]> = {};
+      for (const id of missingIds) { courtEntries[id] = []; zoneEntries[id] = ''; availabilityEntries[id] = []; }
       snaps.forEach((snap) => snap.forEach((d) => {
         courtEntries[d.id] = (d.data().preferred_courts ?? []) as string[];
         zoneEntries[d.id] = (d.data().preferred_zone ?? '') as string;
+        availabilityEntries[d.id] = (d.data().availability_tags ?? []) as string[];
       }));
       setCourtsMap((prev) => ({ ...prev, ...courtEntries }));
       setZoneMap((prev) => ({ ...prev, ...zoneEntries }));
+      setAvailabilityMap((prev) => ({ ...prev, ...availabilityEntries }));
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [participants, user]);
@@ -370,6 +391,13 @@ export const useTournament = (eventIdOverride?: string) => {
     return effectiveDraws.find((d) => d.tab === activeTab && d.skillGroup === activeSkill)
       ?? effectiveDraws.find((d) => d.tab === activeTab);
   }, [activeDoubles, activeSkill, activeTab, effectiveDraws]);
+
+  // Draw key for currentDraw — recomputed only when currentDraw actually changes, instead of at
+  // every one of its many call sites below.
+  const currentDrawKey = useMemo(
+    () => currentDraw ? getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup) : '',
+    [currentDraw],
+  );
 
   const currentMatches = useMemo(() => {
     if (!currentDraw) return [];
@@ -511,7 +539,7 @@ export const useTournament = (eventIdOverride?: string) => {
   // Live-subscribe to the current draw's RR draft doc (edited pre-generation groups + withdrawals).
   useEffect(() => {
     if (!event || currentDrawFormat !== 'rr' || !currentDraw) { setRRDraft(null); return; }
-    const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
+    const drawKey = currentDrawKey;
     const unsub = onSnapshot(
       doc(db, 'rr_drafts', `${event.id}_${drawKey}`),
       (snap) => {
@@ -533,6 +561,15 @@ export const useTournament = (eventIdOverride?: string) => {
 
   // Players the creator withdrew from this draw (persisted) — never auto-placed back.
   const rrWithdrawn = useMemo(() => new Set(rrDraft?.withdrawn ?? []), [rrDraft]);
+
+  // Shared band/zone auto-label computation — used by both the pre-generation preview labels
+  // (previewRRLabels) and the post-generation group labels (buildRRLabelsFrom).
+  const autoLabelFor = useCallback((idx: number, players: TournamentPlayer[]): string => {
+    const zoneOf = (p: TournamentPlayer) => (zoneMap[p.user_id] || '').trim();
+    const skillOf = (p: TournamentPlayer) => effectiveStatsMap[p.user_id]?.skill_level ?? p.skillLevel ?? 0;
+    const bandOf = (p: TournamentPlayer) => skillBand(skillOf(p));
+    return autoLabel(idx, sharedBand(players, bandOf), sharedZone(players, zoneOf));
+  }, [zoneMap, effectiveStatsMap]);
 
   // Preview groups shown before any RR matches are generated. When the creator has saved a draft
   // arrangement, that (server-persisted) grouping is used; otherwise the SAME skill-first grouping
@@ -557,11 +594,8 @@ export const useTournament = (eventIdOverride?: string) => {
   const previewRRLabels = useMemo<string[]>(() =>
     previewRRGroups.map((players, i) => {
       if (rrDraft?.custom[i]) return rrDraft.customLabels[i] || `Group ${String.fromCharCode(65 + i)}`;
-      const zoneOf = (p: TournamentPlayer) => (zoneMap[p.user_id] || '').trim();
-      const skillOf = (p: TournamentPlayer) => effectiveStatsMap[p.user_id]?.skill_level ?? p.skillLevel ?? 0;
-      const bandOf = (p: TournamentPlayer) => skillBand(skillOf(p));
-      return autoLabel(i, sharedBand(players, bandOf), sharedZone(players, zoneOf));
-    }), [previewRRGroups, rrDraft, zoneMap, effectiveStatsMap]);
+      return autoLabelFor(i, players);
+    }), [previewRRGroups, rrDraft, autoLabelFor]);
 
 
   const rrGroupMatches = useMemo(
@@ -625,11 +659,8 @@ export const useTournament = (eventIdOverride?: string) => {
       const letter = String.fromCharCode(65 + idx);
       if (first?.rr_label_custom) return first.rr_group_label || `Group ${letter}`;
       const players = buildRRGroupsFrom(groupMatches, [gi])[0] ?? [];
-      const zoneOf = (p: TournamentPlayer) => (zoneMap[p.user_id] || '').trim();
-      const skillOf = (p: TournamentPlayer) => effectiveStatsMap[p.user_id]?.skill_level ?? p.skillLevel ?? 0;
-      const bandOf = (p: TournamentPlayer) => skillBand(skillOf(p));
-      return autoLabel(idx, sharedBand(players, bandOf), sharedZone(players, zoneOf));
-    }), [buildRRGroupsFrom, zoneMap, effectiveStatsMap]);
+      return autoLabelFor(idx, players);
+    }), [buildRRGroupsFrom, autoLabelFor]);
 
   const rrGroups = useMemo<TournamentPlayer[][]>(
     () => (rrGroupMatches.length === 0 ? [] : buildRRGroupsFrom(rrGroupMatches, rrGroupIndices)),
@@ -679,7 +710,7 @@ export const useTournament = (eventIdOverride?: string) => {
 
     const run = async () => {
       try {
-        const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
+        const drawKey = currentDrawKey;
         const advCount = rrConfig?.advancementCount ?? 1;
         const makePairings = (n: number): [number, number][] => n >= 2 ? generateGroupPairings(n) : [[0, 1]];
 
@@ -847,7 +878,7 @@ export const useTournament = (eventIdOverride?: string) => {
     deduplicatingRef.current = true;
     const run = async () => {
       try {
-        const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
+        const drawKey = currentDrawKey;
         const advCount = rrConfig?.advancementCount ?? 1;
         const makePairings = (n: number): [number, number][] => n >= 2 ? generateGroupPairings(n) : [[0, 1]];
         const batch = writeBatch(db);
@@ -983,21 +1014,25 @@ export const useTournament = (eventIdOverride?: string) => {
       set_2_player_1: submission.set_2_player_1, set_2_player_2: submission.set_2_player_2,
       set_3_player_1: submission.set_3_player_1, set_3_player_2: submission.set_3_player_2,
       status: 'complete',
-      completed_at: new Date().toISOString(),
+      // completed_at must stay pinned to when the match was ACTUALLY played (first scoring) —
+      // re-entering/editing an already-complete match's score used to overwrite it with "now",
+      // which corrupted anything sorted by it (streaks, months active, best finish). A later
+      // edit instead stamps score_edited_at and leaves completed_at untouched.
+      ...(match.status !== 'complete'
+        ? { completed_at: new Date().toISOString() }
+        : { score_edited_at: new Date().toISOString() }),
       ...(isWalkover ? { walkover: true } : {}),
+      ...(submission.court ? { court: submission.court } : {}),
+      // Marks this match as scored under the "RR winners score live" formula — lets the
+      // one-off scripts/backfill-rr-points.mjs correction pass skip matches the live app has
+      // already scored correctly, so a later backfill run can never double-award points.
+      ...(match.format === 'rr' && match.round === 'RR' ? { rr_winner_pts_v2: true } : {}),
     });
 
     // Update player stats + league points
     // LL Draw (reserves) earns halved points; main draw earns full points
     {
-      const isLL = match.bracket === 'reserves';
-      const isRRGroupStage = match.format === 'rr' && match.round === 'RR';
-      const LOSER_PTS: Record<string, number> = isLL
-        ? { R32: 0.5, R16: 1, QF: 1.5, SF: 2.5, F: 5 }
-        : { R32: 1, R16: 2, QF: 3, RR: 1, SF: 5, F: 10 };
-      const loserPts = LOSER_PTS[match.round] ?? (isLL ? 0.5 : 1);
-      const winnerPts = isLL ? 10 : isRRGroupStage ? (isWalkover ? 1 : 2) : 20;
-      const isFinal = match.round === 'F';
+      const { loserPts, winnerPts, isFinal, winnerPointsApply } = computeMatchPoints(match, isWalkover);
       const matchLeague = match.tournament_choice === 'Doubles' ? 'Doubles' : match.division;
       const winnerUid = submission.claimed_winner_user_id;
       const loserUid = winnerUid === match.player_1_user_id ? match.player_2_user_id : match.player_1_user_id;
@@ -1017,7 +1052,8 @@ export const useTournament = (eventIdOverride?: string) => {
             league: matchLeague,
             pointswon: increment(winnerIsP1 ? newP1G : newP2G),
             totalPointsPlayed: increment(newTotal),
-            ...(isFinal ? { leaguePoints26: increment(winnerPts), tournamentsPlayed: increment(1) } : {}),
+            ...(winnerPointsApply ? { leaguePoints26: increment(winnerPts) } : {}),
+            ...(isFinal ? { tournamentsPlayed: increment(1) } : {}),
           }, { merge: true });
         }
         if (loserUid) {
@@ -1050,8 +1086,8 @@ export const useTournament = (eventIdOverride?: string) => {
             delta.wins = increment(isWinner ? 1 : -1);
             delta.loses = increment(isWinner ? -1 : 1);
           }
-          const oldPts = wasWinner ? (isFinal ? winnerPts : 0) : loserPts;
-          const newPts = isWinner ? (isFinal ? winnerPts : 0) : loserPts;
+          const oldPts = wasWinner ? (winnerPointsApply ? winnerPts : 0) : loserPts;
+          const newPts = isWinner ? (winnerPointsApply ? winnerPts : 0) : loserPts;
           if (newPts !== oldPts) delta.leaguePoints26 = increment(newPts - oldPts);
 
           // tournamentsPlayed credit: losers always get +1; final winner also gets +1
@@ -1076,7 +1112,7 @@ export const useTournament = (eventIdOverride?: string) => {
     await batch.commit();
 
     // RR group bonus: when confirming the last match in a group, award +5 leaguePoints26
-    // to 1st place and +3 to 2nd place. Only runs on first confirmation (match was pending).
+    // to every player in the group. Only runs on first confirmation (match was pending).
     const isRRGroupStage = match.format === 'rr' && match.round === 'RR';
     if (isRRGroupStage && match.status !== 'complete') {
       const groupMatches = matches.filter((m) =>
@@ -1097,12 +1133,14 @@ export const useTournament = (eventIdOverride?: string) => {
         );
         const standings = computeGroupStandings(updatedGroup);
         const bonusBatch = writeBatch(db);
-        if (standings[0]?.userId) {
-          bonusBatch.set(doc(db, 'stats', standings[0].userId), { leaguePoints26: increment(5) }, { merge: true });
-        }
-        if (standings[1]?.userId) {
-          bonusBatch.set(doc(db, 'stats', standings[1].userId), { leaguePoints26: increment(3) }, { merge: true });
-        }
+        standings.forEach((row) => {
+          if (row.userId) bonusBatch.set(doc(db, 'stats', row.userId), { leaguePoints26: increment(5) }, { merge: true });
+        });
+        // Same idempotency stamp as above, on every match in the now-complete group — lets the
+        // backfill script skip a group the live app already paid the bonus for.
+        groupMatches.forEach((m) => {
+          bonusBatch.set(doc(db, 'tournament_matches', m.id), { rr_group_bonus_v2: true }, { merge: true });
+        });
         await bonusBatch.commit();
       }
     }
@@ -1197,14 +1235,7 @@ export const useTournament = (eventIdOverride?: string) => {
   // (RR group-completion bonuses are reversed separately by `reverseRRBonusesInto`.)
   const reverseMatchStatsInto = (batch: ReturnType<typeof writeBatch>, m: TournamentMatch) => {
     if (m.status !== 'complete' || !m.winner_user_id) return;
-    const isLL = m.bracket === 'reserves';
-    const isRRGroupStage = m.format === 'rr' && m.round === 'RR';
-    const LOSER_PTS: Record<string, number> = isLL
-      ? { R32: 0.5, R16: 1, QF: 1.5, SF: 2.5, F: 5 }
-      : { R32: 1, R16: 2, QF: 3, RR: 1, SF: 5, F: 10 };
-    const loserPts = LOSER_PTS[m.round] ?? (isLL ? 0.5 : 1);
-    const winnerPts = isLL ? 10 : isRRGroupStage ? (m.walkover ? 1 : 2) : 20;
-    const isFinal = m.round === 'F';
+    const { loserPts, winnerPts, isFinal, winnerPointsApply } = computeMatchPoints(m, m.walkover);
     const winnerUid = m.winner_user_id;
     const loserUid = winnerUid === m.player_1_user_id ? m.player_2_user_id : m.player_1_user_id;
     const p1G = (m.set_1_player_1 ?? 0) + (m.set_2_player_1 ?? 0) + (m.set_3_player_1 ?? 0);
@@ -1217,7 +1248,8 @@ export const useTournament = (eventIdOverride?: string) => {
         wins: increment(-1),
         pointswon: increment(-(winnerIsP1 ? p1G : p2G)),
         totalPointsPlayed: increment(-total),
-        ...(isFinal ? { leaguePoints26: increment(-winnerPts), tournamentsPlayed: increment(-1) } : {}),
+        ...(winnerPointsApply ? { leaguePoints26: increment(-winnerPts) } : {}),
+        ...(isFinal ? { tournamentsPlayed: increment(-1) } : {}),
       }, { merge: true });
     }
     if (loserUid) {
@@ -1232,15 +1264,16 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  // Reverse the +5 / +3 leaguePoints26 group-completion bonus for every RR group that was fully
+  // Reverse the +5 leaguePoints26 group-completion bonus for every RR group that was fully
   // played (the bonus is only awarded once all of a group's matches complete).
   const reverseRRBonusesInto = (batch: ReturnType<typeof writeBatch>, groupMatches: TournamentMatch[]) => {
     for (const gi of [...new Set(groupMatches.map((m) => m.rr_group ?? 0))]) {
       const ms = groupMatches.filter((m) => (m.rr_group ?? 0) === gi);
       if (ms.length === 0 || !ms.every((m) => m.status === 'complete')) continue;
       const standings = computeGroupStandings(ms);
-      if (standings[0]?.userId) batch.set(doc(db, 'stats', standings[0].userId), { leaguePoints26: increment(-5) }, { merge: true });
-      if (standings[1]?.userId) batch.set(doc(db, 'stats', standings[1].userId), { leaguePoints26: increment(-3) }, { merge: true });
+      standings.forEach((row) => {
+        if (row.userId) batch.set(doc(db, 'stats', row.userId), { leaguePoints26: increment(-5) }, { merge: true });
+      });
     }
   };
 
@@ -1311,7 +1344,7 @@ export const useTournament = (eventIdOverride?: string) => {
           tournament_choice: currentDraw.tournamentChoice,
           division: currentDraw.division !== 'All' ? currentDraw.division : "Men's",
           skill: skillLevel,
-          createdAt: new Date().toISOString(),
+          created_at: new Date().toISOString(),
         });
       }
 
@@ -1359,6 +1392,7 @@ export const useTournament = (eventIdOverride?: string) => {
       set_1_player_1: p1Scores[0], set_1_player_2: p2Scores[0],
       set_2_player_1: p1Scores[1], set_2_player_2: p2Scores[1],
       set_3_player_1: p1Scores[2], set_3_player_2: p2Scores[2],
+      ...(scoreForm.court.trim() ? { court: scoreForm.court.trim() } : {}),
     };
 
     const isWalkover = parsedSets.every((s) => s.mine === 0 && s.opponent === 0);
@@ -1419,6 +1453,7 @@ export const useTournament = (eventIdOverride?: string) => {
       set_1_player_1: sub.set_1_player_1, set_1_player_2: sub.set_1_player_2,
       set_2_player_1: sub.set_2_player_1, set_2_player_2: sub.set_2_player_2,
       set_3_player_1: sub.set_3_player_1, set_3_player_2: sub.set_3_player_2,
+      ...(sub.court ? { court: sub.court } : {}),
     };
     try {
       const { needsManual } = await updateMatchWithSubmission(match, submission, sub.is_walkover);
@@ -1458,7 +1493,7 @@ export const useTournament = (eventIdOverride?: string) => {
           tournament_choice: currentDraw.tournamentChoice,
           division,
           skill: 0,
-          createdAt: new Date().toISOString(),
+          created_at: new Date().toISOString(),
         });
         setMessage({ type: 'success', text: 'Player Loading placeholder added.' });
       } catch (err) {
@@ -1484,7 +1519,7 @@ export const useTournament = (eventIdOverride?: string) => {
         division,
         skill: skillLevel,
         ...(partnerName ? { doubles: partnerName, partner_in_app: 'no' } : {}),
-        createdAt: new Date().toISOString(),
+        created_at: new Date().toISOString(),
       });
       // Re-adding a player clears any prior withdrawal so they can be grouped again.
       if (currentDrawFormat === 'rr') { manuallyUnplacedIdsRef.current.delete(userId); await setRRWithdrawnMembership([], [userId]); }
@@ -1506,13 +1541,14 @@ export const useTournament = (eventIdOverride?: string) => {
       matchDocId: match.id,
       winnerUserId: match.player_1_user_id,
       sets: [{ mine: '', opponent: '' }, { mine: '', opponent: '' }, { mine: '', opponent: '' }],
+      court: match.court ?? '',
     });
   };
 
   // ── Round Robin action handlers ───────────────────────────────────────────
 
   const rrDraftKey = () => currentDraw
-    ? getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup) : '';
+    ? currentDrawKey : '';
 
   // Persist an edited pre-generation grouping to the draft doc (no matches written). Empty groups
   // are dropped so groups/labels/custom stay aligned; players placed back into a group are removed
@@ -1550,7 +1586,7 @@ export const useTournament = (eventIdOverride?: string) => {
     setGeneratingRR(true);
     setMessage(null);
     try {
-      const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
+      const drawKey = currentDrawKey;
       // Generate from what the creator sees (the draft arrangement if they edited one, else the
       // computed preview), so the confirmed groups + names match the preview exactly.
       const groups = previewRRGroups;
@@ -1588,7 +1624,7 @@ export const useTournament = (eventIdOverride?: string) => {
   // translates via rrGroupIndices so non-contiguous group indices resolve correctly.
   const handleSaveGroupEdit = async (rrGroup: number, newPlayers: TournamentPlayer[]) => {
     if (!isCreator || !event || !currentDraw) return;
-    const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
+    const drawKey = currentDrawKey;
     const advCount = rrConfig?.advancementCount ?? 1;
 
     // Draft state (no matches yet): apply the edit to the preview arrangement and persist it as a
@@ -1764,7 +1800,7 @@ export const useTournament = (eventIdOverride?: string) => {
   // joiners). ≥2 → round-robin; exactly 1 → lone-player placeholder. Optional custom label.
   const handleCreateRRGroup = async (newPlayers: TournamentPlayer[], label?: string) => {
     if (!isCreator || !event || !currentDraw) return;
-    const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
+    const drawKey = currentDrawKey;
     const nextIndex = (rrGroupIndices.length ? Math.max(...rrGroupIndices) : -1) + 1;
     const advCount = rrConfig?.advancementCount ?? 1;
     const trimmed = (label ?? '').trim();
@@ -1911,7 +1947,7 @@ export const useTournament = (eventIdOverride?: string) => {
     setGeneratingRR(true);
     setMessage(null);
     try {
-      const drawKey = getDrawKey(currentDraw.tournamentChoice, currentDraw.division, currentDraw.skillGroup);
+      const drawKey = currentDrawKey;
       const winners = selectGroupWinners(rrGroups, rrStandingsByGroup);
       const docs = buildRRKnockoutDocs({
         eventId: event.id, drawKey, draw: currentDraw, advancingPlayers: winners, started,
@@ -1944,6 +1980,8 @@ export const useTournament = (eventIdOverride?: string) => {
     started,
     userParticipant,
     zoneMap,
+    courtsMap,
+    availabilityMap,
     userMap,
     currentDraw,
     currentMatches,

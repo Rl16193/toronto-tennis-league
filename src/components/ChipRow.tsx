@@ -1,4 +1,6 @@
 import React from 'react';
+import { motion } from 'motion/react';
+import { tapScale } from '../lib/motion';
 
 // One horizontally scrollable row of selectable chips — replaces stacked rows of tab pills.
 // The negative margin lets the row bleed to the screen edge so half-visible chips signal
@@ -19,12 +21,14 @@ export function ChipRow<T extends string>({ options, value, onChange, className 
       {options.map((o) => {
         const active = o.value === value;
         return (
-          <button
+          <motion.button
             key={o.value}
             type="button"
             role="tab"
             aria-selected={active}
             onClick={() => onChange(o.value)}
+            whileTap={tapScale.whileTap}
+            transition={tapScale.transition}
             className={`shrink-0 whitespace-nowrap px-3.5 py-2 rounded-full text-xs font-bold border transition-colors ${
               active
                 ? 'bg-clay border-clay text-white'
@@ -32,7 +36,7 @@ export function ChipRow<T extends string>({ options, value, onChange, className 
             }`}
           >
             {o.label}
-          </button>
+          </motion.button>
         );
       })}
     </div>

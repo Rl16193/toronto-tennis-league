@@ -119,7 +119,7 @@ service cloud.firestore {
           isCreatorOfEvent(request.resource.data.event_id)
         ) &&
         request.resource.data.event_id is string &&
-        request.resource.data.createdAt is string;
+        request.resource.data.created_at is string;
 
       allow update: if isAuthenticated() &&
         resource.data.user_id == request.auth.uid;
@@ -184,14 +184,23 @@ service cloud.firestore {
         request.resource.data.event_id is string &&
         request.resource.data.opponent_id is string;
 
-      // Either participant may report the result (status -> 'reported', no points move yet);
-      // only the event organizer may confirm/reject. Points land via the organizer's stats write.
+      // Opponent accepts/declines an open challenge (status -> 'accepted'/'rejected'). Either
+      // participant may report the result once accepted (status -> 'reported', no points move
+      // yet); only the event organizer may confirm/reject. Points land via the organizer's stats
+      // write.
       allow update: if isAuthenticated() && (
         (
+          request.auth.uid == resource.data.opponent_id &&
+          resource.data.status == 'open' &&
+          request.resource.data.status in ['accepted', 'rejected'] &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'responded_at'])
+        ) ||
+        (
           (request.auth.uid == resource.data.challenger_id || request.auth.uid == resource.data.opponent_id) &&
+          resource.data.status == 'accepted' &&
           request.resource.data.status == 'reported' &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['status', 'claimed_winner_id', 'claimed_winner_name', 'score_line', 'reported_at'])
+            .hasOnly(['status', 'claimed_winner_id', 'claimed_winner_name', 'score_line', 'court', 'reported_by', 'reported_at'])
         ) ||
         isCreatorOfEvent(resource.data.event_id)
       );
@@ -270,7 +279,7 @@ service cloud.firestore {
       allow read: if isAuthenticated() && resource.data.recipient_id == request.auth.uid;
       allow update: if isAuthenticated() &&
         resource.data.recipient_id == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'read_at']);
       allow delete: if isAuthenticated() && resource.data.recipient_id == request.auth.uid;
     }
 
@@ -286,7 +295,7 @@ service cloud.firestore {
         id.matches(request.auth.uid + '_.*') &&
         request.resource.data.court_key is string &&
         request.resource.data.dist_m is number &&
-        request.resource.data.dist_m <= 300 &&
+        request.resource.data.dist_m <= 400 &&
         request.resource.data.created_at is string;
       allow update, delete: if false;
     }
@@ -304,7 +313,7 @@ service cloud.firestore {
         id.matches(request.auth.uid + '_.*') &&
         request.resource.data.court_key is string &&
         request.resource.data.dist_m is number &&
-        request.resource.data.dist_m <= 300 &&
+        request.resource.data.dist_m <= 400 &&
         request.resource.data.created_at is string;
       allow delete: if false;
     }
@@ -334,7 +343,8 @@ service cloud.firestore {
         request.resource.data.type in ['condition', 'waitingBoard', 'queue'] &&
         request.resource.data.court_key is string &&
         request.resource.data.photo_paths is list &&
-        request.resource.data.photo_paths.size() > 0 &&
+        request.resource.data.note is string &&
+        request.resource.data.note.size() > 0 &&
         request.resource.data.status == 'approved' &&
         (
           (isAuthenticated() && request.resource.data.user_id == request.auth.uid) ||
@@ -380,26 +390,6 @@ service cloud.firestore {
     //   allow create: if isAuthenticated() && request.resource.data.reporter_uid == request.auth.uid;
     //   allow read, update, delete: if isGlobalEventCreator();
     // }
-
-    // ===============================================================
-    // Reserves Participants
-    // ===============================================================
-    match /reserves_participants/{docId} {
-      allow read: if isAuthenticated();
-
-      allow create: if isAuthenticated() &&
-        request.resource.data.user_id == request.auth.uid &&
-        request.resource.data.event_id is string &&
-        request.resource.data.createdAt is string;
-
-      allow update: if isCreatorOfEvent(resource.data.event_id);
-
-      allow delete: if isAuthenticated() &&
-        (
-          resource.data.user_id == request.auth.uid ||
-          isCreatorOfEvent(resource.data.event_id)
-        );
-    }
 
   }
 }

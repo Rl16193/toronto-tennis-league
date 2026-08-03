@@ -1,7 +1,7 @@
 export type DrawTab = 'mens' | 'womens' | 'doubles';
-// 'Seniors' is age-based (55+, chosen at join time via participant.skill_group), not derived
+// 'Retired Pro' is age-based (55+, chosen at join time via participant.skill_group), not derived
 // from skill_level like Challengers/Masters.
-export type SkillGroup = 'Challengers' | 'Masters' | 'Seniors' | 'All';
+export type SkillGroup = 'Challengers' | 'Masters' | 'Retired Pro' | 'All';
 export type MatchStatus = 'pending' | 'complete';
 
 export type TemplateMatch = {
@@ -56,6 +56,7 @@ export type TournamentMatch = {
   started: boolean;
   created_at?: string;
   completed_at?: string;
+  score_edited_at?: string;
   format?: TournamentFormat;
   rr_group?: number;
   rr_round?: number;
@@ -63,6 +64,7 @@ export type TournamentMatch = {
   rr_group_label?: string;
   rr_label_custom?: boolean;
   walkover?: boolean;
+  court?: string;
   // Scheduling — players may edit only these fields (Firestore rules carve-out); scores stay
   // organizer-only. Absent schedule_status is treated as 'unscheduled'.
   schedule_status?: 'unscheduled' | 'scheduled';
@@ -80,12 +82,14 @@ export type ScoreSubmission = {
   set_2_player_2: number;
   set_3_player_1: number;
   set_3_player_2: number;
+  court?: string;
 };
 
 export type ScoreForm = {
   matchDocId: string;
   winnerUserId: string;
   sets: Array<{ mine: string; opponent: string }>;
+  court: string;
 };
 
 // A player-submitted score awaiting the creator's confirmation (collection: score_submissions).

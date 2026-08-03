@@ -1,5 +1,7 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
+import { motion } from 'motion/react';
+import { tapScale } from '../../lib/motion';
 import type { NearestCourt, CourtWithCount } from './courtMapUtils';
 import { Badge, PickleballBadges } from './courtMapComponents';
 import { formatDist, hasPublicHours } from './courtMapUtils';
@@ -28,9 +30,11 @@ export const CourtResultsList: React.FC<Props> = ({ courts, loading, userCoords,
       ) : (
         <div className="divide-y divide-white/5">
           {courts.map((c) => (
-            <button
+            <motion.button
               key={`${c.dropdown}-${c.lat}`}
               onClick={() => onSelectCourt(c)}
+              whileTap={tapScale.whileTap}
+              transition={tapScale.transition}
               className="w-full text-left px-4 py-3 hover:bg-white/[0.04] transition-colors"
             >
               <div className="flex items-start justify-between gap-2 mb-1">
@@ -48,7 +52,7 @@ export const CourtResultsList: React.FC<Props> = ({ courts, loading, userCoords,
                 <PickleballBadges entries={c.pickleballEntries} />
               </div>
               {c.clubInfo && <p className="text-fg/80 text-xs mt-1 leading-snug">{c.clubInfo}</p>}
-            </button>
+            </motion.button>
           ))}
         </div>
       )}

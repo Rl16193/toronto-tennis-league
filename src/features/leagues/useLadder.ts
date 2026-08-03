@@ -23,17 +23,31 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
     });
   }, [eventId]);
 
-  // My open/reported challenges (as challenger) and incoming ones (as opponent).
+  // Open (awaiting accept/decline) challenges only — same as Friendlies rallies, once accepted
+  // a challenge drops out of this "needs a response" panel; the players list below shows a
+  // Contact button for it instead.
   const myChallenges = useMemo(
-    () => challenges.filter((c) => c.challenger_id === uid && (c.status === 'open' || c.status === 'reported')),
+    () => challenges.filter((c) => c.challenger_id === uid && c.status === 'open'),
     [challenges, uid],
   );
   const incoming = useMemo(
-    () => challenges.filter((c) => c.opponent_id === uid && (c.status === 'open' || c.status === 'reported')),
+    () => challenges.filter((c) => c.opponent_id === uid && c.status === 'open'),
     [challenges, uid],
   );
   // Reported results awaiting organizer confirmation (creator queue).
   const reported = useMemo(() => challenges.filter((c) => c.status === 'reported'), [challenges]);
+
+  // Players I have an ACCEPTED (or further along) challenge with — these get a Contact button
+  // instead of "Pending" in the players list.
+  const acceptedPartnerIds = useMemo(() => {
+    const ids = new Set<string>();
+    challenges.forEach((c) => {
+      if (c.status !== 'accepted' && c.status !== 'reported') return;
+      if (c.challenger_id === uid) ids.add(c.opponent_id);
+      else if (c.opponent_id === uid) ids.add(c.challenger_id);
+    });
+    return ids;
+  }, [challenges, uid]);
 
   // Weekly allowance: challenges I opened since Monday 00:00. Cancelled challenges are deleted,
   // so they refund the slot automatically; rejected/confirmed ones still count (they were used).
@@ -48,14 +62,9 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
   }, [challenges, uid]);
   const weeklyChallengesLeft = Math.max(0, LADDER_CHALLENGES_PER_WEEK - weeklyChallengesUsed);
 
-  // Fetch contact info for the counterparts of my active challenges.
+  // Fetch contact info for the counterparts of my accepted challenges.
   useEffect(() => {
-    if (!uid) return;
-    const ids = new Set<string>();
-    [...myChallenges, ...incoming].forEach((c) => {
-      ids.add(c.challenger_id === uid ? c.opponent_id : c.challenger_id);
-    });
-    const missing = [...ids].filter((id) => id && !contactMap[id]);
+    const missing = [...acceptedPartnerIds].filter((id) => id && !contactMap[id]);
     if (missing.length === 0) return;
     Promise.all(
       missing.map((id) => getDoc(doc(db, 'users', id)).then((s) => [id, s.data() as UserData | undefined] as const)),
@@ -63,7 +72,8 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
       const found = entries.filter((e) => !!e[1]) as [string, UserData][];
       if (found.length) setContactMap((prev) => ({ ...prev, ...Object.fromEntries(found) }));
     });
-  }, [myChallenges, incoming, uid]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [acceptedPartnerIds]);
 
   // Challenge state vs a given opponent: an active challenge blocks; a recent confirmed one
   // enforces the cooldown; otherwise available.
@@ -75,7 +85,7 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
           (c.challenger_id === uid && c.opponent_id === opponentId) ||
           (c.opponent_id === uid && c.challenger_id === opponentId),
       );
-      if (between.some((c) => c.status === 'open' || c.status === 'reported')) return 'pending';
+      if (between.some((c) => c.status === 'open' || c.status === 'accepted' || c.status === 'reported')) return 'pending';
       if (
         between.some(
           (c) => c.status === 'confirmed' && c.confirmed_at && new Date(c.confirmed_at).getTime() > cutoff,
@@ -86,5 +96,5 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
     };
   }, [challenges, uid]);
 
-  return { challenges, challengesReady, myChallenges, incoming, reported, contactMap, stateWith, weeklyChallengesLeft };
+  return { challenges, challengesReady, myChallenges, incoming, reported, contactMap, stateWith, acceptedPartnerIds, weeklyChallengesLeft };
 }

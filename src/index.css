@@ -19,6 +19,13 @@
      text. Using --color-tennis-dark there would break in light mode, since that token IS the
      page background and flips to a light color. */
   --color-ink: #143D34;
+  /* Badge/skill-tier pill text — amber-300 reads fine on the dark surface but is nearly
+     invisible on light theme's near-white surface, so it flips to a darker amber there. */
+  --color-badge: #fcd34d;
+  /* Win/Loss pill text — same contrast problem as --color-badge above: green-300/red-300 read
+     fine on the dark surface but wash out on light theme's near-white surface. */
+  --color-badge-win: #86efac;
+  --color-badge-loss: #fca5a5;
 }
 
 /* Light theme overrides — these are the SAME CSS variables the @theme block above registers,
@@ -29,7 +36,10 @@
   --color-tennis-dark: #EDEDE7;
   --color-tennis-surface: #FFFFFF;
   --color-tennis-deep: #DEDED5;
-  --color-fg: #16261F;
+  --color-fg: #143D34;
+  --color-badge: #92400e;
+  --color-badge-win: #15803d;
+  --color-badge-loss: #b91c1c;
   color-scheme: light;
 }
 

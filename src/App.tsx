@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { logEvent } from 'firebase/analytics';
+import { MotionConfig } from 'motion/react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { analyticsPromise } from './lib/firebase';
@@ -12,7 +13,6 @@ const Home = lazy(() => import('./pages/Home').then((m) => ({ default: m.Home })
 const Signup = lazy(() => import('./pages/Signup').then((m) => ({ default: m.Signup })));
 const Events = lazy(() => import('./pages/Events').then((m) => ({ default: m.Events })));
 const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })));
-const Tournament = lazy(() => import('./pages/Tournament').then((m) => ({ default: m.Tournament })));
 const PlayerProfile = lazy(() => import('./pages/PlayerProfile').then((m) => ({ default: m.PlayerProfile })));
 const Leagues = lazy(() => import('./pages/Leagues').then((m) => ({ default: m.Leagues })));
 const Tasks = lazy(() => import('./pages/Tasks').then((m) => ({ default: m.Tasks })));
@@ -60,6 +60,15 @@ const ScrollToTop: React.FC = () => {
   return null;
 };
 
+// The Tournament tab merged into Matches (?mode=tournament) — old /tournament?event=X links
+// (History, bookmarks) still need to land on the right event, so forward the `event` param too.
+const TournamentRedirect: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const eventId = searchParams.get('event');
+  const to = eventId ? `/matches?mode=tournament&event=${eventId}` : '/matches?mode=tournament';
+  return <Navigate to={to} replace />;
+};
+
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
 
@@ -76,6 +85,7 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
 export default function App() {
   return (
+    <MotionConfig reducedMotion="user">
     <ThemeProvider>
       <AuthProvider>
         <Router>
@@ -87,7 +97,7 @@ export default function App() {
                 <Route path="/login" element={<Signup />} />
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/events" element={<Events />} />
-                <Route path="/tournament" element={<PrivateRoute><Tournament /></PrivateRoute>} />
+                <Route path="/tournament" element={<PrivateRoute><TournamentRedirect /></PrivateRoute>} />
                 <Route path="/leagues" element={<Leagues />} />
                 <Route path="/tasks" element={<PrivateRoute><Tasks /></PrivateRoute>} />
                 <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
@@ -110,5 +120,6 @@ export default function App() {
         </Router>
       </AuthProvider>
     </ThemeProvider>
+    </MotionConfig>
   );
 }

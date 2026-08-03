@@ -5,6 +5,7 @@ import {
   browserSessionPersistence,
   getAuth,
   GoogleAuthProvider,
+  OAuthProvider,
   setPersistence,
 } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
@@ -31,6 +32,7 @@ export const setAuthPersistence = (stayLoggedIn: boolean) =>
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
+export const appleProvider = new OAuthProvider('apple.com');
 
 export const analyticsPromise = isSupported().then((supported) =>
   supported

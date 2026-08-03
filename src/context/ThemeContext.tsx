@@ -11,7 +11,7 @@ const readInitialTheme = (): Theme => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === 'light' || stored === 'dark') return stored;
   } catch { /* localStorage unavailable (private mode, etc.) */ }
-  return 'dark'; // default for first-time visitors
+  return 'light'; // default for first-time visitors
 };
 
 // Site-wide light/dark toggle. Sets `data-theme` on <html>, which every themed CSS variable in

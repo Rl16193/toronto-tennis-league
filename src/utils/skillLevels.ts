@@ -1,19 +1,14 @@
 export const SKILL_LEVELS = [2, 2.5, 3, 3.5, 4, 4.5, 5] as const;
 
-// Levels a player may self-select. "Master" (4.0+) is intentionally NOT here — it is earned as a
-// badge, not self-declared. The full SKILL_LEVELS range is still used for existing data, the
-// tournament skill bands, and descriptions.
-export const SELECTABLE_SKILL_LEVELS = [2, 2.5, 3, 3.5] as const;
+// Levels a player may self-select — the full range, matching SKILL_LEVELS.
+export const SELECTABLE_SKILL_LEVELS = [2, 2.5, 3, 3.5, 4, 4.5, 5] as const;
 
-export const SKILL_DESCRIPTIONS: Record<number, string> = {
-  2: 'I know how to hit the ball over the net',
-  2.5: 'I know basic footwork and can sustain short rallies',
-  3: 'I have good ground strokes (Forehand/Backhand)',
-  3.5: 'I know how to serve',
-  4: 'I can play points and have long rallies',
-  4.5: 'Advanced strokes (Net-Play, trickshots) and strong serve',
-  5: 'Expert / professional level',
-};
+// Plain-language bands shown next to the skill slider, one per line.
+export const SKILL_LEVEL_TIERS = [
+  { range: '2–2.5', label: 'Beginner' },
+  { range: '3–3.5', label: 'Intermediate' },
+  { range: '4+', label: 'Skilled' },
+] as const;
 
 export const TOURNAMENT_OPTIONS = [
   { name: 'Beginners', range: '2.0-2.5' },
@@ -29,5 +24,16 @@ export const leagueDivision = (league?: string): "Men's" | "Women's" | '' => {
   const l = (league || '').toLowerCase();
   if (l.includes('wom') || l.includes('female')) return "Women's";
   if (l.includes('men') || l.includes('male')) return "Men's";
+  return '';
+};
+
+// Age category is an optional suffix on stats.league (e.g. "Men's Retired Pro", "Women's
+// Juniors") — set from Signup or Profile's League chips. Mutually exclusive by construction
+// (only one suffix is ever appended), so these checks double as the "which one" question.
+export const isSeniorsLeague = (league?: string) => (league || '').toLowerCase().includes('retired pro');
+export const isJuniorsLeague = (league?: string) => (league || '').toLowerCase().includes('junior');
+export const leagueAgeCategory = (league?: string): 'Retired Pro' | 'Juniors' | '' => {
+  if (isSeniorsLeague(league)) return 'Retired Pro';
+  if (isJuniorsLeague(league)) return 'Juniors';
   return '';
 };

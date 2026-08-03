@@ -2,22 +2,25 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { ArrowUp, ArrowDown, Minus, ChevronDown } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { LeagueRow, inDivision, toTitleCase, useStandings } from '../features/leagues/useStandings';
+import { isSeniorsLeague } from '../utils/skillLevels';
 import { useUserMatches } from '../features/matches/useUserMatches';
 import { AreaChart } from './home/AreaChart';
 import { TOTAL_MILESTONES, TOTAL_TASKS, useCommunityStandings } from '../features/tasks/useTasks';
 import { BadgeRow } from '../features/tasks/BadgeRow';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { ChipRow } from '../components/ChipRow';
+import { fadeUp, staggerDelay } from '../lib/motion';
 
 // Two boards on the Leaderboard: Tournament (playing points, per division) and Community
 // (the "Community Member Starter" — completing it awards SETUP_POINTS).
 type Board = 'tournament' | 'community';
 
 // Leaderboard-only grouping — Singles (Men's + Women's combined, no gender split), Doubles,
-// and Seniors (added ahead of that league actually starting). This is separate from the
+// and Retired Pro (added ahead of that league actually starting). This is separate from the
 // gender-based divisions `useStandings`' inDivision() still serves elsewhere (ladder challenge
 // routing, Matches.tsx) — those stay gender-scoped for match-making; only how standings are
 // displayed here changes.
@@ -25,9 +28,8 @@ type LBTab = 'singles' | 'doubles' | 'seniors';
 const LB_TABS: { id: LBTab; label: string }[] = [
   { id: 'singles', label: 'Singles' },
   { id: 'doubles', label: 'Doubles' },
-  { id: 'seniors', label: 'Seniors' },
+  { id: 'seniors', label: 'Retired Pro' },
 ];
-const isSeniorsLeague = (league: string) => (league || '').toLowerCase().includes('senior');
 const inLBTab = (league: string, tab: LBTab): boolean => {
   if (tab === 'doubles') return inDivision(league, 'doubles');
   if (tab === 'seniors') return isSeniorsLeague(league);
@@ -37,10 +39,18 @@ const inLBTab = (league: string, tab: LBTab): boolean => {
 const pgWinPct = (r: LeagueRow) =>
   r.totalPointsPlayed > 0 ? `${Math.round((r.pointswon / r.totalPointsPlayed) * 100)}%` : '—';
 
-const Trend: React.FC<{ t: 'up' | 'down' | 'flat' }> = ({ t }) =>
-  t === 'up' ? <ArrowUp className="w-4 h-4 text-green-400 inline" aria-label="rising" />
-    : t === 'down' ? <ArrowDown className="w-4 h-4 text-red-400 inline" aria-label="falling" />
-      : <Minus className="w-4 h-4 text-fg/30 inline" aria-label="no change" />;
+const Trend: React.FC<{ t: 'up' | 'down' | 'flat'; move?: number }> = ({ t, move }) =>
+  t === 'up' ? (
+    <span className="inline-flex items-center gap-0.5 text-green-400" aria-label={`rising${move ? ` ${move}` : ''}`}>
+      <ArrowUp className="w-4 h-4" />{!!move && <span className="text-[11px] font-bold">{move}</span>}
+    </span>
+  ) : t === 'down' ? (
+    <span className="inline-flex items-center gap-0.5 text-red-400" aria-label={`falling${move ? ` ${move}` : ''}`}>
+      <ArrowDown className="w-4 h-4" />{!!move && <span className="text-[11px] font-bold">{move}</span>}
+    </span>
+  ) : (
+    <Minus className="w-4 h-4 text-fg/30 inline" aria-label="no change" />
+  );
 
 export const Leagues: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
@@ -192,30 +202,40 @@ export const Leagues: React.FC = () => {
             <h2 className="text-lg font-bold text-fg">Progress</h2>
             <span className="text-xs font-bold text-fg/40">{progressOpen ? 'hide ▴' : 'show ▾'}</span>
           </button>
-          {progressOpen && (
-            <div className="mt-4">
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                {[
-                  { label: 'Rank', value: userRankIdx >= 0 ? `#${userRankIdx + 1}` : '—' },
-                  { label: 'Matches', value: `${userStats.matchesPlayed ?? 0}` },
-                  { label: 'P/G Win %', value: (userStats.totalPointsPlayed ?? 0) > 0
-                      ? `${Math.round(((userStats.pointswon ?? 0) / (userStats.totalPointsPlayed ?? 1)) * 100)}%` : '—' },
-                ].map((t) => (
-                  <div key={t.label} className="rounded-2xl bg-fg/[0.03] border border-fg/5 px-3 py-3 text-center">
-                    <p className="text-2xl font-black text-fg">{t.value}</p>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-fg/40 mt-1">{t.label}</p>
+          <AnimatePresence initial={false}>
+            {progressOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                <div className="mt-4">
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    {[
+                      { label: 'Rank', value: userRankIdx >= 0 ? `#${userRankIdx + 1}` : '—' },
+                      { label: 'Matches', value: `${userStats.matchesPlayed ?? 0}` },
+                      { label: 'P/G Win %', value: (userStats.totalPointsPlayed ?? 0) > 0
+                          ? `${Math.round(((userStats.pointswon ?? 0) / (userStats.totalPointsPlayed ?? 1)) * 100)}%` : '—' },
+                    ].map((t) => (
+                      <div key={t.label} className="rounded-2xl bg-fg/[0.03] border border-fg/5 px-3 py-3 text-center">
+                        <p className="text-2xl font-black text-fg">{t.value}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-fg/40 mt-1">{t.label}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <AreaChart
-                series={[
-                  { label: 'P/G Won %', color: '#3b82f6', data: pgWonSeries },
-                  { label: 'Win %', color: '#FF6B35', data: winPctSeries },
-                ]}
-                className="w-full h-24"
-              />
-            </div>
-          )}
+                  <AreaChart
+                    series={[
+                      { label: 'P/G Won %', color: '#3b82f6', data: pgWonSeries },
+                      { label: 'Win %', color: '#FF6B35', data: winPctSeries },
+                    ]}
+                    className="w-full h-24"
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
 
@@ -235,7 +255,12 @@ export const Leagues: React.FC = () => {
             const active = stillActiveUids.has(row.user_id);
             const isOpen = expanded.has(row.user_id);
             return (
-              <div key={row.user_id} className={`rounded-2xl border ${isUser ? 'bg-clay/10 border-clay/20' : 'bg-tennis-surface/30 border-fg/5'}`}>
+              <motion.div
+                key={row.user_id}
+                {...fadeUp}
+                transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}
+                className={`rounded-2xl border ${isUser ? 'bg-clay/10 border-clay/20' : 'bg-tennis-surface/30 border-fg/5'}`}
+              >
                 <button type="button" onClick={() => toggle(row.user_id)} className="w-full flex items-center gap-3 px-3 py-2.5 text-left">
                   <span className="text-fg/40 font-mono text-xs w-6 shrink-0">{i + 1}</span>
                   <div className="min-w-0 flex-1">
@@ -247,25 +272,35 @@ export const Leagues: React.FC = () => {
                     <p className="text-fg/40 text-[11px]">Skill {row.skill_level}</p>
                   </div>
                   <span className="font-black text-fg text-base shrink-0">{row.leaguePoints26}</span>
-                  <span className="shrink-0"><Trend t={row.rankTrend} /></span>
+                  <span className="shrink-0"><Trend t={row.rankTrend} move={row.rankMove} /></span>
                   <ChevronDown className={`w-4 h-4 text-fg/30 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                 </button>
-                {isOpen && (
-                  <div className="grid grid-cols-2 gap-2 px-3 pb-3 pt-1 border-t border-fg/5">
-                    {[
-                      { label: 'P/G Win %', value: pgWinPct(row) },
-                      { label: 'P/G Played', value: `${row.totalPointsPlayed}` },
-                      { label: 'Matches Played', value: `${row.matchesPlayed}${active ? '*' : ''}` },
-                      { label: 'Matches Won', value: `${row.wins}` },
-                    ].map((s) => (
-                      <div key={s.label} className="rounded-xl bg-fg/[0.03] px-2 py-2 text-center">
-                        <p className="text-fg font-bold text-sm">{s.value}</p>
-                        <p className="text-fg/40 text-[9px] uppercase tracking-wide mt-0.5">{s.label}</p>
+                <AnimatePresence initial={false}>
+                  {isOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.25, ease: 'easeInOut' }}
+                      className="overflow-hidden"
+                    >
+                      <div className="grid grid-cols-2 gap-2 px-3 pb-3 pt-1 border-t border-fg/5">
+                        {[
+                          { label: 'P/G Win %', value: pgWinPct(row) },
+                          { label: 'P/G Played', value: `${row.totalPointsPlayed}` },
+                          { label: 'Matches Played', value: `${row.matchesPlayed}${active ? '*' : ''}` },
+                          { label: 'Matches Won', value: `${row.wins}` },
+                        ].map((s) => (
+                          <div key={s.label} className="rounded-xl bg-fg/[0.03] px-2 py-2 text-center">
+                            <p className="text-fg font-bold text-sm">{s.value}</p>
+                            <p className="text-fg/40 text-[9px] uppercase tracking-wide mt-0.5">{s.label}</p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
             );
           })}
         </div>
@@ -303,7 +338,12 @@ export const Leagues: React.FC = () => {
               const isUser = user?.uid === row.user_id;
               const isOpen = expanded.has(row.user_id);
               return (
-                <div key={row.user_id} className={`rounded-2xl border ${isUser ? 'bg-clay/10 border-clay/20' : 'bg-tennis-surface/30 border-fg/5'}`}>
+                <motion.div
+                  key={row.user_id}
+                  {...fadeUp}
+                  transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}
+                  className={`rounded-2xl border ${isUser ? 'bg-clay/10 border-clay/20' : 'bg-tennis-surface/30 border-fg/5'}`}
+                >
                   <button type="button" onClick={() => toggle(row.user_id)} className="w-full flex items-center gap-3 px-3 py-2.5 text-left">
                     <span className="text-fg/40 font-mono text-xs w-6 shrink-0">{i + 1}</span>
                     <div className="min-w-0 flex-1">
@@ -317,20 +357,30 @@ export const Leagues: React.FC = () => {
                     <span className="font-black text-fg text-base shrink-0">{row.points}</span>
                     <ChevronDown className={`w-4 h-4 text-fg/30 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                   </button>
-                  {isOpen && (
-                    <div className="grid grid-cols-2 gap-2 px-3 pb-3 pt-1 border-t border-fg/5">
-                      {[
-                        { label: 'Tasks Completed', value: `${row.tasksCompleted}/${TOTAL_TASKS}` },
-                        { label: 'Milestones', value: `${row.milestones}/${TOTAL_MILESTONES}` },
-                      ].map((s) => (
-                        <div key={s.label} className="rounded-xl bg-fg/[0.03] px-2 py-2 text-center">
-                          <p className="text-fg font-bold text-sm">{s.value}</p>
-                          <p className="text-fg/40 text-[9px] uppercase tracking-wide mt-0.5">{s.label}</p>
+                  <AnimatePresence initial={false}>
+                    {isOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.25, ease: 'easeInOut' }}
+                        className="overflow-hidden"
+                      >
+                        <div className="grid grid-cols-2 gap-2 px-3 pb-3 pt-1 border-t border-fg/5">
+                          {[
+                            { label: 'Tasks Completed', value: `${row.tasksCompleted}/${TOTAL_TASKS}` },
+                            { label: 'Milestones', value: `${row.milestones}/${TOTAL_MILESTONES}` },
+                          ].map((s) => (
+                            <div key={s.label} className="rounded-xl bg-fg/[0.03] px-2 py-2 text-center">
+                              <p className="text-fg font-bold text-sm">{s.value}</p>
+                              <p className="text-fg/40 text-[9px] uppercase tracking-wide mt-0.5">{s.label}</p>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
               );
             })}
           </div>

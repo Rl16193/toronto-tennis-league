@@ -8,7 +8,7 @@ import type { CsvCourt } from '../../pages/courtmap/courtMapUtils';
 // Court check-in ("passport"): the player must be physically near a court to stamp it. Location
 // is only ever requested when this flow is actively used (never on page load).
 
-export const CHECKIN_RADIUS_M = 120; // accepted as "here"
+export const CHECKIN_RADIUS_M = 400; // accepted as "here"
 export const CHECKIN_NEARBY_M = 500; // shown as "nearby, but too far to check in"
 
 export type NearbyCourt = CsvCourt & { distM: number };
@@ -24,6 +24,20 @@ export function torontoDayKey(d: Date = new Date()): string {
   return `${parts.year}${parts.month}${parts.day}`;
 }
 
+// Shared by logAttendance/checkIn below — both stamp a player's presence at a court, just to
+// different collections/id-schemes with one extra field each.
+const baseVisitDoc = (uid: string, name: string, court: CsvCourt, coords: { lat: number; lng: number; distM: number }) => ({
+  user_id: uid,
+  user_name: name,
+  court_key: courtKey(court.dropdown),
+  court_name: court.dropdown,
+  zone: court.zone,
+  lat: coords.lat,
+  lng: coords.lng,
+  dist_m: Math.round(coords.distM),
+  created_at: new Date().toISOString(),
+});
+
 // Append-only daily attendance (distinct from the once-forever passport). Deterministic id
 // `{uid}_{courtKey}_{day}` so a second check-in the same day at the same court just overwrites —
 // Matchday counts distinct players, so one entry per player per court per day is what we want.
@@ -37,17 +51,9 @@ export async function logAttendance(
   const day = torontoDayKey();
   const id = `${uid}_${courtKey(court.dropdown)}_${day}`;
   await setDoc(doc(db, 'court_attendance', id), {
-    user_id: uid,
-    user_name: name,
-    court_key: courtKey(court.dropdown),
-    court_name: court.dropdown,
-    zone: court.zone,
+    ...baseVisitDoc(uid, name, court, coords),
     day,
     match_type: visitType,
-    lat: coords.lat,
-    lng: coords.lng,
-    dist_m: Math.round(coords.distM),
-    created_at: new Date().toISOString(),
   });
 }
 
@@ -116,16 +122,8 @@ export async function checkIn(
 ): Promise<void> {
   const id = `${uid}_${courtKey(court.dropdown)}`;
   await setDoc(doc(db, 'court_visits', id), {
-    user_id: uid,
-    user_name: name,
-    court_key: courtKey(court.dropdown),
-    court_name: court.dropdown,
-    zone: court.zone,
+    ...baseVisitDoc(uid, name, court, coords),
     visit_type: visitType,
-    lat: coords.lat,
-    lng: coords.lng,
-    dist_m: Math.round(coords.distM),
-    created_at: new Date().toISOString(),
   });
 }
 

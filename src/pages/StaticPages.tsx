@@ -1,16 +1,16 @@
 ﻿import React from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import {
-  Shield, FileText, Mail, MessageSquare, Users, HelpCircle,
+  Shield, FileText, Mail, MessageSquare,
   UserPlus, CalendarPlus, MessageCircle, Handshake, ArrowLeft, Instagram,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const WHATSAPP_URL = 'https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX';
-const INSTAGRAM_URL = 'https://www.instagram.com/racqnstringstoronto?igsh=MTQ0eXA1bXZpbXltaQ==';
+const INSTAGRAM_URL = 'https://www.instagram.com/racqnstringstoronto';
 
-const PageWrapper: React.FC<{ title: string; icon: any; children: React.ReactNode }> = ({ title, icon: Icon, children }) => {
+const PageWrapper: React.FC<{ title?: string; icon?: any; children: React.ReactNode }> = ({ title, icon: Icon, children }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   return (
@@ -28,13 +28,17 @@ const PageWrapper: React.FC<{ title: string; icon: any; children: React.ReactNod
           <ArrowLeft className="w-4 h-4" />Back
         </button>
 
-        <div className="text-center space-y-6">
-          <div className="w-20 h-20 clay-gradient rounded-3xl mx-auto flex items-center justify-center shadow-2xl">
-            <Icon className="w-10 h-10 text-white" />
+        {title && (
+          <div className="text-center space-y-6">
+            {Icon && (
+              <div className="w-20 h-20 clay-gradient rounded-3xl mx-auto flex items-center justify-center shadow-2xl">
+                <Icon className="w-10 h-10 text-white" />
+              </div>
+            )}
+            <h1 className="text-5xl md:text-6xl font-display font-black text-fg tracking-tight">{title}</h1>
+            <div className="h-1.5 w-24 clay-gradient mx-auto rounded-full" />
           </div>
-          <h1 className="text-5xl md:text-6xl font-display font-black text-fg tracking-tight">{title}</h1>
-          <div className="h-1.5 w-24 clay-gradient mx-auto rounded-full" />
-        </div>
+        )}
         <div className="bg-tennis-surface/30 border border-fg/5 p-10 md:p-16 rounded-[3rem] shadow-2xl prose prose-invert prose-clay max-w-none">
           {children}
         </div>
@@ -58,51 +62,106 @@ const HOW_IT_WORKS: { icon: React.ComponentType<{ className?: string }>; title: 
   { icon: Handshake, title: 'Connect & schedule', desc: 'Meet other members and arrange your matches.' },
 ];
 
-// Moved off the Home page into its own static page — linked from the header hamburger and Profile.
-export const HowItWorks: React.FC = () => {
-  const { user } = useAuth();
-  React.useEffect(() => { document.title = 'How It Works — Racquets & Strings'; }, []);
-  return (
-    <PageWrapper title="How It Works" icon={HelpCircle}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 not-prose">
-        {HOW_IT_WORKS.map((step, i) => {
-          const inner = (
-            <>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-clay/15 border border-clay/30 flex items-center justify-center shrink-0">
-                  <step.icon className="w-5 h-5 text-clay" />
-                </div>
-                <span className="text-fg/30 font-black text-lg">{i + 1}</span>
-              </div>
-              <h3 className="text-fg font-bold mb-1.5">{step.title}</h3>
-              <p className="text-fg/60 text-sm leading-relaxed">{step.desc}</p>
-            </>
-          );
-          const cls = 'p-5 rounded-2xl bg-fg/5 border border-fg/10 h-full block';
-          // Members-only links (e.g. WhatsApp community) render as a plain, non-clickable
-          // card for logged-out visitors — no link is exposed until they're signed in.
-          return step.href && user ? (
-            <a key={i} href={step.href} target="_blank" rel="noopener noreferrer" className={`${cls} hover:border-clay/30 transition-colors`}>
-              {inner}
-            </a>
-          ) : (
-            <div key={i} className={cls}>{inner}</div>
-          );
-        })}
-      </div>
-    </PageWrapper>
-  );
-};
+const ABOUT_TABS = [
+  {
+    id: 'intro',
+    label: 'About Us',
+    image: null as string | null,
+    body: 'A one stop shop for everything tennis, from tournaments, socials, and winter court bookings to a '
+      + 'marketplace for used equipment, equipment rentals, information on coaches, and a local newsletter.',
+  },
+  {
+    id: 'vision',
+    label: 'Vision',
+    image: 'https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/Gallery%2F10.png?alt=media',
+    body: 'To democratize the world’s healthiest sport by building a global network of connected players that '
+      + 'transforms underutilized public courts into inclusive hubs and use community driven data to advocate for '
+      + 'first class public recreational infrastructure, starting with Toronto as our pilot.',
+  },
+  {
+    id: 'mission',
+    label: 'Mission',
+    image: 'https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/Gallery%2F11.png?alt=media',
+    body: 'Our mission is to break down the financial and social barriers of tennis by bringing club level '
+      + 'experience, organized events, socials, and competitive play directly to public courts. By mobilizing our '
+      + 'community, we foster social inclusion and physical well being while equipping players with the tools to '
+      + 'document court conditions, translating collective player data into actionable advocacy for park revitalization.',
+  },
+];
 
-// Placeholder — full About content lands later. Kept minimal so the route + header link exist now.
+// Retired as a standalone page; its content now lives on About Us. Kept as a redirect so
+// existing links and bookmarks to /how-it-works still land somewhere useful.
+export const HowItWorks: React.FC = () => <Navigate to="/about" replace />;
+
 export const About: React.FC = () => {
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = React.useState(ABOUT_TABS[0].id);
   React.useEffect(() => { document.title = 'About Us — Racquets & Strings'; }, []);
+  const tab = ABOUT_TABS.find((t) => t.id === activeTab)!;
   return (
-    <PageWrapper title="About Us" icon={Users}>
-      <p className="text-fg leading-relaxed text-lg">
-        Racquets &amp; Strings is Toronto&apos;s community tennis league — events, ladders, and a shared court map,
-        run by players for players. A fuller story of who we are and what we&apos;re building is coming soon.
-      </p>
+    <PageWrapper>
+      <div className="space-y-10">
+        <div className="not-prose">
+          <div className="flex flex-col gap-2 mb-4">
+            {ABOUT_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setActiveTab(t.id)}
+                className={`w-full text-left px-4 py-3 rounded-xl font-bold text-sm transition-colors ${
+                  t.id === activeTab ? 'bg-clay text-white' : 'bg-fg/5 text-fg hover:bg-fg/10'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="p-5 rounded-2xl bg-fg/5 border border-fg/10">
+            {tab.id === 'intro' ? (
+              <div className="mb-4 text-center">
+                <span className="text-lg font-black font-display tracking-tight">
+                  <span className="text-fg">RACQUETS</span><span className="text-clay"> &amp; </span><span className="text-fg">STRINGS</span>
+                </span>
+                <p className="text-clay font-bold text-[10px] tracking-widest uppercase mt-1">L&apos;&OElig;UF FOR THE GAME</p>
+              </div>
+            ) : (
+              <img src={tab.image!} alt={tab.label} className="w-full h-40 object-cover rounded-xl mb-4" />
+            )}
+            <p className="text-fg/80 text-sm leading-relaxed text-justify">{tab.body}</p>
+          </div>
+        </div>
+
+        <section className="space-y-4">
+          <h2 className="text-2xl font-bold text-fg">Get Started</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 not-prose">
+            {HOW_IT_WORKS.map((step, i) => {
+              const inner = (
+                <>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-clay/15 border border-clay/30 flex items-center justify-center shrink-0">
+                      <step.icon className="w-5 h-5 text-clay" />
+                    </div>
+                    <span className="text-fg/30 font-black text-lg">{i + 1}</span>
+                  </div>
+                  <h3 className="text-fg font-bold mb-1.5">{step.title}</h3>
+                  <p className="text-fg/60 text-sm leading-relaxed">{step.desc}</p>
+                </>
+              );
+              const cls = 'p-5 rounded-2xl bg-fg/5 border border-fg/10 h-full block';
+              // Members-only links (e.g. WhatsApp community) render as a plain, non-clickable
+              // card for logged-out visitors — no link is exposed until they're signed in.
+              return step.href && user ? (
+                <a key={i} href={step.href} target="_blank" rel="noopener noreferrer" className={`${cls} hover:border-clay/30 transition-colors`}>
+                  {inner}
+                </a>
+              ) : (
+                <div key={i} className={cls}>{inner}</div>
+              );
+            })}
+          </div>
+        </section>
+      </div>
     </PageWrapper>
   );
 };

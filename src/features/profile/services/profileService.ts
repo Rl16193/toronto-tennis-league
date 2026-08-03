@@ -5,10 +5,7 @@ import { gridToLegacy, type AvailabilityGrid } from '../../../utils/availability
 
 // Sync the display name onto stats/preferences and every event_participants doc.
 const syncName = async (userId: string, name: string) => {
-  await Promise.all([
-    updateDoc(doc(db, 'stats', userId), { name, user_id: userId }),
-    updateDoc(doc(db, 'preferences', userId), { name, user_id: userId }),
-  ]);
+  await updateDoc(doc(db, 'stats', userId), { name });
   const snap = await getDocs(query(collection(db, 'event_participants'), where('user_id', '==', userId)));
   if (!snap.empty) {
     const batch = writeBatch(db);
@@ -64,20 +61,22 @@ export const updateSkills = async (userId: string, skillLevel: number, tournamen
   }
 };
 
-// League (gender division) lives on stats.league — the same field the Leagues page and League
-// Ladder split on. Age bracket + the "visible to others" flag live on the users doc.
-export const updateLeagueAndAge = async (
+// League (gender + optional Retired Pro/Juniors age category) lives on stats.league as one
+// string, e.g. "Men's Retired Pro" — the same field the Leagues page and League Ladder split on
+// (see leagueDivision/leagueAgeCategory in utils/skillLevels.ts). The "visible to others" flag
+// lives on the users doc.
+export const updateLeagueAndAgeCategory = async (
   userId: string,
   league: "Men's" | "Women's" | '',
-  ageBracket: string,
+  ageCategory: 'Retired Pro' | 'Juniors' | '',
   visible: boolean,
 ) => {
-  await updateDoc(doc(db, 'users', userId), {
-    age_bracket: ageBracket,
-    profile_details_visible: visible,
-  });
+  await updateDoc(doc(db, 'users', userId), { profile_details_visible: visible });
   // Only write the league when one is chosen — never clobber an existing value with ''.
-  if (league) await updateDoc(doc(db, 'stats', userId), { league });
+  if (league) {
+    const leagueValue = ageCategory ? `${league} ${ageCategory}` : league;
+    await updateDoc(doc(db, 'stats', userId), { league: leagueValue });
+  }
 };
 
 // The up-to-three badges a player chose to display.
@@ -91,6 +90,14 @@ export const updatePreferredCourts = async (userId: string, courts: string[], zo
 
 export const updateFavouritePlayers = async (userId: string, players: string[]) => {
   await updateDoc(doc(db, 'preferences', userId), { favourite_players: players });
+};
+
+export const updateEmailNotifications = async (userId: string, enabled: boolean) => {
+  await updateDoc(doc(db, 'preferences', userId), { email_notifications: enabled });
+};
+
+export const updateAvailabilityTags = async (userId: string, tags: string[]) => {
+  await updateDoc(doc(db, 'preferences', userId), { availability_tags: tags });
 };
 
 export const updateAvailabilityGrid = async (userId: string, grid: AvailabilityGrid) => {

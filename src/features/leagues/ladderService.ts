@@ -18,7 +18,7 @@ import { db } from '../../lib/firebase';
 export const LADDER_COL = 'ladder_challenges';
 
 export type LadderDivision = 'mens' | 'womens';
-export type LadderChallengeStatus = 'open' | 'reported' | 'confirmed' | 'rejected';
+export type LadderChallengeStatus = 'open' | 'accepted' | 'reported' | 'confirmed' | 'rejected';
 
 export interface LadderChallenge {
   id: string;
@@ -32,10 +32,17 @@ export interface LadderChallenge {
   claimed_winner_id?: string;
   claimed_winner_name?: string;
   score_line?: string;
+  court?: string;
+  reported_by?: string;
   created_at: string;
+  responded_at?: string;
   reported_at?: string;
   confirmed_at?: string;
   applied?: boolean;
+  // Set only when this challenge was converted from an already-played Friendly or Tournament
+  // match (see proposeConversion) — absent/undefined for a normal, from-scratch challenge.
+  source?: 'friendly' | 'tournament';
+  source_id?: string;
 }
 
 // Points swing per confirmed challenge.
@@ -64,17 +71,88 @@ export async function createChallenge(args: {
   });
 }
 
+// Opponent accepts or declines an open challenge — same accept/decline gate as Friendlies
+// rallies. Only once accepted does the pair get each other's contact info.
+export async function respondChallenge(id: string, accept: boolean): Promise<void> {
+  await updateDoc(doc(db, LADDER_COL, id), {
+    status: accept ? 'accepted' : 'rejected',
+    responded_at: new Date().toISOString(),
+  });
+}
+
+// Convert an already-played Friendly or Tournament match into a Challenge: one player proposes
+// (with the winner/score already known — for a Tournament match it's the real submitted result;
+// for a Friendly it's whatever the two players agree happened), the other player confirms via
+// confirmConversion, and it then waits for organizer confirmation like any other challenge.
+export async function proposeConversion(args: {
+  eventId: string;
+  division: LadderDivision;
+  source: 'friendly' | 'tournament';
+  sourceId: string;
+  proposer: { id: string; name: string };
+  other: { id: string; name: string };
+  winner: { id: string; name: string };
+  scoreLine: string;
+  court?: string;
+}): Promise<string> {
+  const ref = await addDoc(collection(db, LADDER_COL), {
+    event_id: args.eventId,
+    division: args.division,
+    challenger_id: args.proposer.id,
+    challenger_name: args.proposer.name,
+    opponent_id: args.other.id,
+    opponent_name: args.other.name,
+    status: 'open',
+    source: args.source,
+    source_id: args.sourceId,
+    claimed_winner_id: args.winner.id,
+    claimed_winner_name: args.winner.name,
+    score_line: args.scoreLine,
+    ...(args.court ? { court: args.court } : {}),
+    created_at: new Date().toISOString(),
+  });
+  return ref.id;
+}
+
+// The other player's single "Confirm" action — accepts the proposed conversion and immediately
+// re-reports the same score, landing it in 'reported' so it shows up in the organizer's normal
+// confirm queue. Two sequential writes, each already allowed by the existing challenge rules
+// (accept while 'open', report while 'accepted') — no rules changes needed.
+export async function confirmConversion(
+  id: string,
+  confirmer: { id: string; name: string },
+  winner: { id: string; name: string },
+  scoreLine: string,
+  court?: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await updateDoc(doc(db, LADDER_COL, id), { status: 'accepted', responded_at: now });
+  await updateDoc(doc(db, LADDER_COL, id), {
+    status: 'reported',
+    claimed_winner_id: winner.id,
+    claimed_winner_name: winner.name,
+    score_line: scoreLine,
+    reported_by: confirmer.id,
+    ...(court ? { court } : {}),
+    reported_at: now,
+  });
+}
+
 // Either participant reports the result once played; it then waits for organizer confirmation.
 export async function reportChallenge(
   id: string,
   winner: { id: string; name: string },
   scoreLine: string,
+  reportedBy: string,
+  court?: string,
 ): Promise<void> {
   await updateDoc(doc(db, LADDER_COL, id), {
     status: 'reported',
     claimed_winner_id: winner.id,
     claimed_winner_name: winner.name,
     score_line: scoreLine,
+    reported_by: reportedBy,
+    ...(court ? { court } : {}),
     reported_at: new Date().toISOString(),
   });
 }
@@ -90,10 +168,14 @@ export async function cancelChallenge(id: string): Promise<void> {
 
 // Organizer confirm: apply ±3 to leaguePoints26 (loser floored at 0) and tick match counters.
 // leaguePoints26 is organizer-gated in firestore.rules, so this must run as the event creator.
+// A Tournament-sourced conversion (source: 'tournament') already had matchesPlayed/wins/loses
+// counted when the tournament match itself was scored — counting them again here would count the
+// same match twice, so that case only adds the ±3 league points, nothing else.
 export async function confirmChallenge(ch: LadderChallenge): Promise<void> {
   if (!ch.claimed_winner_id) throw new Error('No winner reported');
   const winnerId = ch.claimed_winner_id;
   const loserId = winnerId === ch.challenger_id ? ch.opponent_id : ch.challenger_id;
+  const countAsNewMatch = ch.source !== 'tournament';
 
   const loserRef = doc(db, 'stats', loserId);
   const loserSnap = await getDoc(loserRef);
@@ -103,13 +185,11 @@ export async function confirmChallenge(ch: LadderChallenge): Promise<void> {
   const batch = writeBatch(db);
   batch.update(doc(db, 'stats', winnerId), {
     leaguePoints26: increment(LADDER_POINTS),
-    matchesPlayed: increment(1),
-    wins: increment(1),
+    ...(countAsNewMatch ? { matchesPlayed: increment(1), wins: increment(1) } : {}),
   });
   batch.update(loserRef, {
     leaguePoints26: newLoserPts,
-    matchesPlayed: increment(1),
-    loses: increment(1),
+    ...(countAsNewMatch ? { matchesPlayed: increment(1), loses: increment(1) } : {}),
   });
   batch.update(doc(db, LADDER_COL, ch.id), {
     status: 'confirmed',

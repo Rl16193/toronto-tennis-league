@@ -199,7 +199,6 @@ export function buildRRGroupMatchFields(params: {
       docId,
       fields: {
         event_id: eventId,
-        template_id: '',
         tournament_choice: draw.tournamentChoice,
         division: draw.division,
         skill_group: draw.skillGroup,
@@ -301,8 +300,8 @@ export function computeGroupStandings(
       if (w) { w.matchWins++; w.gamesWon += winnerGames; w.gamesLost += loserGames; w.points += 1; }
       if (l) { l.matchLosses++; l.gamesWon += loserGames; l.gamesLost += winnerGames; l.points += 1; }
     } else {
-      // Regular win: 2 pts to winner, 0 to loser
-      if (w) { w.matchWins++; w.gamesWon += winnerGames; w.gamesLost += loserGames; w.points += 2; }
+      // Regular win: 3 pts to winner, 0 to loser
+      if (w) { w.matchWins++; w.gamesWon += winnerGames; w.gamesLost += loserGames; w.points += 3; }
       if (l) { l.matchLosses++; l.gamesWon += loserGames; l.gamesLost += winnerGames; }
     }
   }
@@ -314,11 +313,11 @@ export function computeGroupStandings(
   rows.sort((a, b) => b.points - a.points || b.gamesWon - a.gamesWon);
   rows.forEach((r, i) => { r.rank = i + 1; });
 
-  // After all group matches complete, award end-of-group bonus (does not affect rank order)
+  // After all group matches complete, award end-of-group bonus to everyone (does not affect
+  // rank order — rank is already fixed above).
   const allComplete = groupMatches.length > 0 && groupMatches.every((m) => m.status === 'complete');
   if (allComplete) {
-    if (rows[0]) rows[0].points += 5;
-    if (rows[1]) rows[1].points += 3;
+    rows.forEach((r) => { r.points += 5; });
   }
 
   return rows;
@@ -471,7 +470,6 @@ export function buildRRKnockoutDocs(params: {
       docId: `${eventId}_${drawKey}_rr_ko_${tm.match_id}`,
       fields: {
         event_id: eventId,
-        template_id: '',
         tournament_choice: draw.tournamentChoice,
         division: draw.division,
         skill_group: draw.skillGroup,

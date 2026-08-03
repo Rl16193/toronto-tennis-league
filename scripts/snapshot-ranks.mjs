@@ -58,7 +58,7 @@ async function main() {
   });
 
   const date = new Date().toISOString();
-  const ops = []; // { uid, position, trend, historyDir | null }
+  const ops = []; // { uid, position, trend, move, historyDir | null }
 
   for (const tab of DIV_TABS) {
     const ranked = players
@@ -69,23 +69,23 @@ async function main() {
       const old = p.rankPosition;
       if (old === position) return; // no change
       const trend = old === null ? 'flat' : position < old ? 'up' : 'down';
-      ops.push({ uid: p.uid, position, trend, historyDir: old === null ? null : trend });
+      const move = old === null ? 0 : Math.abs(old - position); // places climbed/fallen
+      ops.push({ uid: p.uid, position, trend, move, historyDir: old === null ? null : trend });
     });
   }
 
   console.log(`${ops.length} rank change(s) of ${players.length} ranked players`);
   for (const op of ops.slice(0, 20)) {
-    console.log(`  ${op.uid.slice(0, 8)} → #${op.position} (${op.trend})${op.historyDir ? '' : ' [baseline]'}`);
+    console.log(`  ${op.uid.slice(0, 8)} → #${op.position} (${op.trend} ${op.move})${op.historyDir ? '' : ' [baseline]'}`);
   }
   if (ops.length > 20) console.log(`  … +${ops.length - 20} more`);
 
   // ── Public homepage counters (site_stats/summary) ──────────────────────────
-  // Active Players = distinct users who joined an event OR played a match. Matches Organized =
-  // completed matches + 70 (last year's total). event_participants / tournament_matches
-  // aren't world-readable, so these are precomputed here for the public landing to read.
+  // Players = distinct user_id in event_participants (registered for an event). Matches =
+  // completed tournament_matches + 70 (last year's total). Neither collection is world-readable,
+  // so both are precomputed here for the public landing to read.
   const active = new Set();
   (await db.collection('event_participants').get()).forEach((d) => { const u = d.data().user_id; if (u) active.add(u); });
-  snap.forEach((d) => { if ((d.data().matchesPlayed ?? 0) > 0) active.add(d.id); });
   const completed = await db.collection('tournament_matches').where('status', '==', 'complete').count().get();
   const siteStats = { activePlayers: active.size, matchesOrganized: completed.data().count + 70, updatedAt: date };
   console.log(`site_stats → activePlayers=${siteStats.activePlayers}, matchesOrganized=${siteStats.matchesOrganized}`);
@@ -95,7 +95,7 @@ async function main() {
   for (let i = 0; i < ops.length; i += 400) {
     const batch = db.batch();
     for (const op of ops.slice(i, i + 400)) {
-      batch.set(db.collection('stats').doc(op.uid), { rankPosition: op.position, rankTrend: op.trend, rankUpdatedAt: date }, { merge: true });
+      batch.set(db.collection('stats').doc(op.uid), { rankPosition: op.position, rankTrend: op.trend, rankMove: op.move, rankUpdatedAt: date }, { merge: true });
       if (op.historyDir) {
         batch.set(db.collection('ranking_history').doc(op.uid).collection('entries').doc(), { date, position: op.position, direction: op.historyDir });
       }

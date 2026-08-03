@@ -1,25 +1,51 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
 import { Stepper } from '../../components/Stepper';
-import { ScoreForm, TournamentMatch } from './types';
+import { loadCourtList } from '../../features/tasks/courtList';
+import { ScoreForm } from './types';
+
+// A player, and a title, is all ScoreModal needs to know about the thing being scored — it
+// doesn't care whether that's a tournament_matches doc or a ladder_challenges doc, so both
+// Tournament.tsx (bracket matches) and Matches.tsx (accepted challenges) can reuse it as-is.
+export type ScoreMatchInfo = {
+  title: string;
+  player1: { uid: string; name: string };
+  player2: { uid: string; name: string };
+};
 
 type Props = {
-  match: TournamentMatch;
+  matchInfo: ScoreMatchInfo;
   scoreForm: ScoreForm;
   onChange: (form: ScoreForm) => void;
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => Promise<void> | void;
   isCreatorSubmit?: boolean;
+  // Optional single checkbox rendered above the submit button — e.g. Tournament's "Also count as
+  // a Challenge" option. Generic so any caller can attach one extra choice without a new modal.
+  extraCheckbox?: { label: string; checked: boolean; onChange: (checked: boolean) => void };
 };
 
 // Mobile-first score entry (wireframe 1d): winner picked with two large tap-cards instead of a
 // native dropdown, games entered with +/− steppers instead of the number keyboard. Set values
 // stay strings in ScoreForm ('' means untouched → 0 downstream), so submit semantics — including
 // the all-0-0 walkover convention — are unchanged.
-export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClose, onSubmit, isCreatorSubmit }) => {
+export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, onClose, onSubmit, isCreatorSubmit, extraCheckbox }) => {
   const [submitting, setSubmitting] = useState(false);
+  const [courts, setCourts] = useState<string[]>([]);
+  const [courtSearch, setCourtSearch] = useState('');
+  const [showCourtDropdown, setShowCourtDropdown] = useState(false);
+
+  useEffect(() => {
+    loadCourtList().then((list) => setCourts([...new Set(list.map((c) => c.dropdown))].sort((a, b) => a.localeCompare(b))));
+  }, []);
+
+  const courtMatches = useMemo(() => {
+    const q = courtSearch.trim().toLowerCase();
+    if (!q) return courts.slice(0, 8);
+    return courts.filter((c) => c.toLowerCase().includes(q)).slice(0, 8);
+  }, [courts, courtSearch]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,20 +64,17 @@ export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClos
     onChange({ ...scoreForm, sets });
   };
 
-  const winnerOptions = [
-    { uid: match.player_1_user_id, name: match.player_1_name },
-    { uid: match.player_2_user_id, name: match.player_2_name },
-  ];
+  const winnerOptions = [matchInfo.player1, matchInfo.player2];
 
-  const mineLabel = isCreatorSubmit ? match.player_1_name : 'My score';
-  const oppLabel = isCreatorSubmit ? match.player_2_name : 'Opponent';
+  const mineLabel = isCreatorSubmit ? matchInfo.player1.name : 'My score';
+  const oppLabel = isCreatorSubmit ? matchInfo.player2.name : 'Opponent';
 
   return (
     <Sheet onClose={onClose} maxWidthClassName="max-w-xl">
       <form onSubmit={handleSubmit} className="p-6">
         <div className="text-center mb-4 pr-10">
           <p className="text-xs uppercase tracking-widest text-clay font-black mb-2">Submit Score</p>
-          <h2 className="text-2xl font-black text-fg">{match.round}</h2>
+          <h2 className="text-2xl font-black text-fg">{matchInfo.title}</h2>
         </div>
 
         <div className="flex items-center gap-2 mb-5 px-3 py-2.5 text-sm text-orange-500">
@@ -90,6 +113,34 @@ export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClos
           })}
         </div>
 
+        {/* Select Court — same search dropdown as the rest of the site (PhotoSubmitModal, Signup). */}
+        <div className="space-y-1.5 relative mb-6">
+          <p className="text-xs font-bold uppercase tracking-widest text-fg/50">Court</p>
+          <input
+            type="text"
+            placeholder="Search courts…"
+            value={scoreForm.court || courtSearch}
+            onChange={(e) => { onChange({ ...scoreForm, court: '' }); setCourtSearch(e.target.value); setShowCourtDropdown(true); }}
+            onFocus={() => setShowCourtDropdown(true)}
+            onBlur={() => setTimeout(() => setShowCourtDropdown(false), 150)}
+            className="w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 px-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+          />
+          {showCourtDropdown && courtMatches.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-1 z-10 max-h-48 overflow-y-auto rounded-2xl border border-fg/10 bg-tennis-dark/95 p-1 shadow-2xl">
+              {courtMatches.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onMouseDown={() => { onChange({ ...scoreForm, court: c }); setCourtSearch(''); setShowCourtDropdown(false); }}
+                  className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Sets — +/− steppers, no number keyboard */}
         <div className="space-y-4">
           {scoreForm.sets.map((set, index) => (
@@ -118,6 +169,18 @@ export const ScoreModal: React.FC<Props> = ({ match, scoreForm, onChange, onClos
             </div>
           ))}
         </div>
+
+        {extraCheckbox && (
+          <label className="flex items-center gap-2.5 mt-5 px-1 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={extraCheckbox.checked}
+              onChange={(e) => extraCheckbox.onChange(e.target.checked)}
+              className="accent-clay w-4 h-4"
+            />
+            <span className="text-sm font-semibold text-fg">{extraCheckbox.label}</span>
+          </label>
+        )}
 
         <Button type="submit" className="w-full mt-6" isLoading={submitting} disabled={submitting}>
           {isCreatorSubmit ? 'Record Score' : 'Submit Score'}

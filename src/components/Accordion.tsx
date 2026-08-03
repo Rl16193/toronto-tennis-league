@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChevronDown } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 
 // Collapsible card section — extracted from the Tasks page's inline `Section` so brackets,
 // RR groups, and profile sections share one pattern. Controlled: the parent owns open state,
@@ -12,8 +13,10 @@ export const Accordion: React.FC<{
   onToggle: (id: string) => void;
   locked?: boolean;
   highlight?: boolean; // clay border — "this is the live/current section"
+  titleClassName?: string;
+  bodyClassName?: string;
   children: React.ReactNode;
-}> = ({ id, title, right, open, onToggle, locked, highlight, children }) => (
+}> = ({ id, title, right, open, onToggle, locked, highlight, titleClassName = 'font-bold text-sm', bodyClassName = 'mt-2', children }) => (
   <div
     className={`rounded-3xl border p-5 ${
       locked
@@ -29,12 +32,24 @@ export const Accordion: React.FC<{
       className="w-full flex items-center justify-between gap-3 text-left"
       aria-expanded={open}
     >
-      <h2 className={`font-bold text-sm ${locked ? 'text-fg/40' : 'text-fg'}`}>{title}</h2>
+      <h2 className={`${titleClassName} ${locked ? 'text-fg/40' : 'text-fg'}`}>{title}</h2>
       <span className="flex items-center gap-2 shrink-0">
         {right}
         <ChevronDown className={`w-4 h-4 text-fg/40 transition-transform ${open ? 'rotate-180' : ''}`} />
       </span>
     </button>
-    {open && <div className="mt-2">{children}</div>}
+    <AnimatePresence initial={false}>
+      {open && (
+        <motion.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: 0.25, ease: 'easeInOut' }}
+          className="overflow-hidden"
+        >
+          <div className={bodyClassName}>{children}</div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   </div>
 );

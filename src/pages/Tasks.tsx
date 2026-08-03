@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Camera, ChevronDown, ChevronRight, ExternalLink, Instagram, ListChecks, Mail, MapPin, MessageCircle, Sparkles } from 'lucide-react';
+import { Camera, ChevronRight, ExternalLink, Instagram, ListChecks, Mail, MapPin, MessageCircle, Sparkles } from 'lucide-react';
+import { motion } from 'motion/react';
+import { fadeUp, staggerDelay } from '../lib/motion';
 import { Button } from '../components/Button';
+import { Accordion } from '../components/Accordion';
 import { useAuth } from '../context/AuthContext';
 import {
   CATEGORIES, COMMUNITY_GROUP_TASKS, DAILY_GROUP_TASKS, INSTAGRAM_URL, SETUP_POINTS, TASKS,
@@ -66,37 +69,24 @@ export const Tasks: React.FC = () => {
 
   const toggleSection = (id: string) => setOpenSection((cur) => (cur === id ? null : id));
 
-  const Section: React.FC<{
-    id: string; title: string; right: React.ReactNode; locked?: boolean; children: React.ReactNode;
-  }> = ({ id, title, right, locked, children }) => {
-    const open = openSection === id;
-    return (
-      <div className={`rounded-3xl border p-5 ${locked ? 'bg-tennis-surface/15 border-fg/5' : 'bg-tennis-surface/30 border-fg/5'}`}>
-        <button
-          type="button"
-          onClick={() => toggleSection(id)}
-          className="w-full flex items-center justify-between gap-3 text-left"
-          aria-expanded={open}
-        >
-          <h2 className={`font-bold ${locked ? 'text-fg/40' : 'text-fg'}`}>{title}</h2>
-          <span className="flex items-center gap-2 shrink-0">
-            {right}
-            <ChevronDown className={`w-4 h-4 text-fg/40 transition-transform ${open ? 'rotate-180' : ''}`} />
-          </span>
-        </button>
-        {open && <div className="divide-y divide-white/5 mt-2">{children}</div>}
-      </div>
-    );
-  };
+  // Matches the local `Section` this page used before it was merged into the shared Accordion
+  // component — same rounded-card/checklist look, just via the shared implementation now.
+  const sectionProps = (id: string) => ({
+    open: openSection === id,
+    onToggle: toggleSection,
+    titleClassName: 'font-bold',
+    bodyClassName: 'divide-y divide-white/5 mt-2',
+  });
 
   const CategorySection: React.FC<{ c: CategoryDef }> = ({ c }) => {
     const earned = c.tiers.filter((t) => rec[t.id]).length;
     const earnedPoints = c.tiers.reduce((n, t) => n + (rec[t.id] ? t.points : 0), 0);
     return (
-      <Section
+      <Accordion
         id={c.id}
         title={c.title}
         locked={c.locked}
+        {...sectionProps(c.id)}
         right={
           c.locked ? (
             <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-fg/30 border border-fg/10">Soon</span>
@@ -134,16 +124,17 @@ export const Tasks: React.FC = () => {
             </div>
           );
         })}
-      </Section>
+      </Accordion>
     );
   };
 
   // Group / community bonuses — descriptive cards (name + wrapped trigger + points). Unlike the
   // tiers, these unlock from collective activity and are paid server-side into bonusPoints.
   const GroupSection: React.FC<{ id: string; title: string; tasks: GroupTaskDef[] }> = ({ id, title, tasks }) => (
-    <Section
+    <Accordion
       id={id}
       title={title}
+      {...sectionProps(id)}
       right={<span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-clay/70 border border-clay/25">Bonus</span>}
     >
       {tasks.map((g) => (
@@ -155,7 +146,7 @@ export const Tasks: React.FC = () => {
           <p className="text-xs text-fg/50 mt-1 leading-relaxed">{g.trigger}</p>
         </div>
       ))}
-    </Section>
+    </Accordion>
   );
 
   return (
@@ -182,7 +173,7 @@ export const Tasks: React.FC = () => {
       </div>
 
       {/* Points summary */}
-      <div className="rounded-3xl bg-tennis-surface/30 border border-fg/5 p-5 mb-6 flex items-center justify-between gap-4 flex-wrap">
+      <motion.div {...fadeUp} className="rounded-3xl bg-tennis-surface/30 border border-fg/5 p-5 mb-6 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-clay/15 border border-clay/30 flex items-center justify-center">
             <Sparkles className="w-5 h-5 text-clay" />
@@ -199,19 +190,20 @@ export const Tasks: React.FC = () => {
             <Button variant="outline" size="sm"><MapPin className="w-4 h-4 mr-1.5" />Check In</Button>
           </Link>
           <Link to="/tasks?photo=1">
-            <Button variant="clay" size="sm"><Camera className="w-4 h-4 mr-1.5" />Submit a Photo</Button>
+            <Button variant="clay" size="sm"><Camera className="w-4 h-4 mr-1.5" />Submit a Report</Button>
           </Link>
         </div>
-      </div>
+      </motion.div>
 
       <div className="space-y-3">
         <GroupSection id="dailyGroup" title="Daily Group Tasks" tasks={DAILY_GROUP_TASKS} />
         <GroupSection id="communityGroup" title="Community Tasks" tasks={COMMUNITY_GROUP_TASKS} />
 
         {/* Community Member Initiation — flat award for the whole checklist */}
-        <Section
+        <Accordion
           id="initiation"
           title="Community Member Initiation"
+          {...sectionProps('initiation')}
           right={initiationComplete ? (
             <span className="px-2 py-0.5 rounded-lg text-[11px] font-black bg-clay/15 text-clay border border-clay/25">
               +{SETUP_POINTS} pts
@@ -253,9 +245,13 @@ export const Tasks: React.FC = () => {
               </div>
             );
           })}
-        </Section>
+        </Accordion>
 
-        {CATEGORIES.map((c) => <CategorySection key={c.id} c={c} />)}
+        {CATEGORIES.map((c, i) => (
+          <motion.div key={c.id} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}>
+            <CategorySection c={c} />
+          </motion.div>
+        ))}
       </div>
 
       {/* Socials, WhatsApp and contact links. */}

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion, animate } from 'motion/react';
-import { MapPin, Camera, Medal, Trophy } from 'lucide-react';
+import { motion } from 'motion/react';
+import { MapPin, Camera } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 
 import { db } from '../lib/firebase';
@@ -11,6 +11,7 @@ import { CheckInModal } from '../features/tasks/CheckInModal';
 import { PhotoSubmitModal } from '../features/tasks/PhotoSubmitModal';
 import { resolveStorageUrl } from '../features/events/services/eventService';
 import { useCourtData } from './courtmap/useCourtData';
+import { fadeUp } from '../lib/motion';
 
 // Landing-page hero slideshow (Firebase Storage). Resolved to download URLs at runtime.
 const SLIDESHOW_PATHS = [
@@ -24,19 +25,29 @@ const MotionLink = motion.create(Link);
 
 // Animates a stat number up to its target whenever the target changes, carrying over the
 // last displayed value (via ref) so a later Firestore update counts up from there instead of
-// resetting to 0.
-function useCountUp(target: number) {
+// resetting to 0. Plain requestAnimationFrame — motion/react's imperative `animate()` doesn't
+// drive plain number-to-number tweens (it expects a DOM/element subject), so this is hand-rolled.
+function useCountUp(target: number, duration = 800) {
   const [display, setDisplay] = useState(0);
-  const lastRef = useRef(0);
+  const fromRef = useRef(0);
   useEffect(() => {
-    console.log('useCountUp effect', { from: lastRef.current, target });
-    const controls = animate(lastRef.current, target, {
-      duration: 0.8,
-      ease: 'easeOut',
-      onUpdate: (v) => { lastRef.current = v; setDisplay(v); console.log('onUpdate', v); },
-    });
-    return () => controls.stop();
-  }, [target]);
+    const from = fromRef.current;
+    const start = performance.now();
+    let frame: number;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const value = from + (target - from) * eased;
+      setDisplay(value);
+      if (t < 1) {
+        frame = requestAnimationFrame(tick);
+      } else {
+        fromRef.current = target;
+      }
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [target, duration]);
   return Math.round(display);
 }
 
@@ -55,9 +66,9 @@ const readCachedSlides = (): string[] => {
 };
 
 // Live figures come from the public site_stats/summary doc; these seed the strip so it never
-// flashes 0 and stays populated if the doc/rule isn't deployed. Courts comes from the court
-// list itself (useCourtData), not site_stats — it's always the live unique-court count.
-const COMMUNITY_BASELINE = { activePlayers: 100, matchesOrganized: 170 };
+// flashes 0 and stays populated if the doc/rule isn't deployed. Courts matches the Court Map's
+// "Members Only" filter exactly — courts with a live count > 0 (via useCourtData).
+const COMMUNITY_BASELINE = { activePlayers: 100, matchesOrganized: 170, courts: 42 };
 
 // Landing page: the hero photo is its OWN contained card (not a page-wide background) with
 // Check-In / Submit a Photo / Join-or-Log-In overlaid on the image itself. The card is
@@ -122,7 +133,8 @@ export const Home: React.FC = () => {
   // target rather than just appearing.
   const activePlayersDisplay = useCountUp(activePlayers);
   const matchesOrganizedDisplay = useCountUp(matchesOrganized);
-  const courtsCoveredDisplay = useCountUp(courts.length);
+  const courtsWithMembers = courts.filter((c) => c.count > 0).length;
+  const courtsCoveredDisplay = useCountUp(courtsWithMembers || COMMUNITY_BASELINE.courts);
   const stats = [
     { value: `${activePlayersDisplay}`, label: 'Players', to: '/leagues'},
     { value: `${matchesOrganizedDisplay}`, label: 'Matches', to: '/events'},
@@ -135,9 +147,7 @@ export const Home: React.FC = () => {
           padding only), starting below the header rather than behind it. ~70% viewport height,
           tagline + description overlaid near the bottom. ── */}
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0 }}
+        {...fadeUp}
         className="relative -mx-4 sm:-mx-6 h-[70vh] overflow-hidden"
       >
         <div className="absolute inset-0 dark-gradient" />
@@ -169,34 +179,35 @@ export const Home: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* ── Buttons — below the hero, alternating clay/white, all the same size regardless of
-          label length. Join or Log In only when logged out; Check-In/Submit a Photo keep the
-          same alternation whichever slot they land in. ── */}
+      {/* ── Buttons — below the hero. Logged-out visitors see only Join or Log In (Check-In /
+          Submit a Report would be confusing before they have an account); signed-in users get
+          both, alternating clay/white. ── */}
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.1 }}
-        className={`grid gap-2.5 mt-5 mb-5 ${!user ? 'grid-cols-3' : 'grid-cols-2'}`}
+        {...fadeUp}
+        transition={{ ...fadeUp.transition, delay: 0.1 }}
+        className={`grid gap-2.5 mt-5 mb-5 ${!user ? 'grid-cols-1' : 'grid-cols-2'}`}
       >
-        {!user && (
+        {!user ? (
           <Link to="/login" className="block">
             <Button size="md" variant="clay" className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2">Join or Log In</Button>
           </Link>
+        ) : (
+          <>
+            <Button size="md" variant="clay" className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2" onClick={onCheckIn}>
+              <MapPin className="w-3.5 h-3.5 mr-1 shrink-0" />Check-In
+            </Button>
+            <Button size="md" variant="white" className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2" onClick={onReport}>
+              <Camera className="w-3.5 h-3.5 mr-1 shrink-0" />Submit a Report
+            </Button>
+          </>
         )}
-        <Button size="md" variant={!user ? 'white' : 'clay'} className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2" onClick={onCheckIn}>
-          <MapPin className="w-3.5 h-3.5 mr-1 shrink-0" />Check-In
-        </Button>
-        <Button size="md" variant={!user ? 'clay' : 'white'} className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2" onClick={onReport}>
-          <Camera className="w-3.5 h-3.5 mr-1 shrink-0" />Submit a Photo
-        </Button>
       </motion.div>
 
       {/* ── Stats strip — plain icon/number/label groups blended into the page (no card
           background/border); hover/tap gives a slight zoom as the only interactive cue. ── */}
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.2 }}
+        {...fadeUp}
+        transition={{ ...fadeUp.transition, delay: 0.2 }}
         className="grid grid-cols-3 gap-2.5"
       >
         {stats.map((s) => (

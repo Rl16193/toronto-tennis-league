@@ -14,12 +14,13 @@
  * That lives in courts.json — GENERATED FROM public/Tennis Courts Facilities - 4326.csv, mapping
  * courtKey -> zone (same courtKey()/getZone() as src/utils). Regenerate it if the CSV changes.
  *
- * Awards are SILENT (no notification) — same policy as taskPoints.js.
+ * Each newly-paid recipient gets a `group_award_received` notification (see payGroupAward).
  * Deploy with: firebase deploy --only functions
  */
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
+const { notify } = require('./lib/notify');
 const ROSTER = require('./courts.json'); // { [courtKey]: zoneName }
 
 const REGION = 'us-central1';
@@ -66,17 +67,27 @@ function torontoParts(iso) {
 // awards (Matchday) may pay again on the SAME award id, but only ever to recipients who
 // haven't received it yet — so a player finishing a late match still collects, and nobody
 // is ever paid twice.
+// Friendly label per award type, used only for the notification copy below.
+const AWARD_LABELS = {
+  matchday: 'Matchday',
+  hourly_coverage: 'Hourly Coverage',
+  pioneer: 'Court Pioneer',
+  board_new: 'Board Freshness',
+  board_zone: 'Board Freshness',
+  zone_sweep: 'Full Zone Sweep',
+};
+
 async function payGroupAward(awardId, { type, key, pointsEach, recipients, allowTopUp = false }) {
   const clean = recipients.filter((r) => r && r.uid);
   if (clean.length === 0) return false;
   const awardRef = db().doc(`group_awards/${awardId}`);
-  return db().runTransaction(async (tx) => {
+  const newOnes = await db().runTransaction(async (tx) => {
     const snap = await tx.get(awardRef);
-    if (snap.exists && !allowTopUp) return false;
+    if (snap.exists && !allowTopUp) return [];
     const already = new Set(snap.exists ? (snap.data().recipient_ids || []) : []);
-    const newOnes = clean.filter((r) => !already.has(r.uid));
-    if (newOnes.length === 0) return false;
-    const allIds = [...already, ...newOnes.map((r) => r.uid)];
+    const fresh = clean.filter((r) => !already.has(r.uid));
+    if (fresh.length === 0) return [];
+    const allIds = [...already, ...fresh.map((r) => r.uid)];
     tx.set(awardRef, {
       type,
       key: key || null,
@@ -85,7 +96,7 @@ async function payGroupAward(awardId, { type, key, pointsEach, recipients, allow
       recipient_count: allIds.length,
       ...(snap.exists ? { updated_at: new Date().toISOString() } : { created_at: new Date().toISOString() }),
     }, { merge: true });
-    for (const r of newOnes) {
+    for (const r of fresh) {
       tx.set(db().doc(`task_progress/${r.uid}`), {
         user_id: r.uid,
         ...(r.name ? { name: r.name } : {}),
@@ -94,8 +105,16 @@ async function payGroupAward(awardId, { type, key, pointsEach, recipients, allow
         updatedAt: new Date().toISOString(),
       }, { merge: true });
     }
-    return true;
+    return fresh;
   });
+  if (newOnes.length === 0) return false;
+  await notify(newOnes.map((r) => r.uid), {
+    type: 'group_award_received',
+    title: `You earned a ${AWARD_LABELS[type] || 'group'} bonus — +${pointsEach} points`,
+    body: '',
+    link: '/tasks',
+  });
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════

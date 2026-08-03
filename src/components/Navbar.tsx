@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { ArrowLeft, Moon, Sun, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { Button } from './Button';
 import { HeaderMenu } from './HeaderMenu';
 
 // Slim top bar: brand (→ Home) + the header hamburger (About Us / How It Works always;
@@ -54,7 +53,7 @@ export const Navbar: React.FC = () => {
             </Link>
           )}
 
-          {/* Theme toggle, hamburger (About Us / How It Works / Notifications / Profile / Logout), plus Join or Log In when logged out */}
+          {/* Theme toggle + hamburger (About Us / How It Works / Notifications / Profile / Logout) */}
           {!isAuthPage && (
             <div className="flex items-center gap-2 shrink-0">
               <button
@@ -79,11 +78,6 @@ export const Navbar: React.FC = () => {
                 </Link>
               )}
               <HeaderMenu />
-              {!user && (
-                <Link to="/login">
-                  <Button size="sm">Join or Log In</Button>
-                </Link>
-              )}
             </div>
           )}
 

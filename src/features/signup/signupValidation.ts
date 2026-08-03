@@ -1,26 +1,35 @@
 import { fetchSignInMethodsForEmail } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
-import { emailExistsInProfiles } from '../../lib/accountService';
+import { emailExistsInProfiles, secondaryEmailExistsInProfiles } from '../../lib/accountService';
 
 export const signupEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export const emailExistsForSignup = async (emailToCheck: string) => {
+// 'primary' → a real account signs in with this email (normal login flow).
+// 'secondary' → this email was merged into another account (see types.ts secondary_email) —
+// it's not a real Auth credential, so login won't work; the caller must block signup instead.
+// 'none' → no account at all, proceed to create one.
+export const emailExistsForSignup = async (emailToCheck: string): Promise<'primary' | 'secondary' | 'none'> => {
   const normalizedEmail = emailToCheck.trim();
-  if (!normalizedEmail || !signupEmailRegex.test(normalizedEmail)) return false;
+  if (!normalizedEmail || !signupEmailRegex.test(normalizedEmail)) return 'none';
 
   try {
-    if (await emailExistsInProfiles(normalizedEmail)) return true;
+    const [isPrimary, isSecondary] = await Promise.all([
+      emailExistsInProfiles(normalizedEmail),
+      secondaryEmailExistsInProfiles(normalizedEmail),
+    ]);
+    if (isPrimary) return 'primary';
+    if (isSecondary) return 'secondary';
   } catch {
     // Firestore query fails for unauthenticated users — fail open, let Firebase
     // Auth catch duplicates at account creation
-    return false;
+    return 'none';
   }
 
   try {
     const methods = await fetchSignInMethodsForEmail(auth, normalizedEmail);
-    return methods.length > 0;
+    return methods.length > 0 ? 'primary' : 'none';
   } catch {
-    return false;
+    return 'none';
   }
 };
 

@@ -17,9 +17,12 @@ import { CreatorEventModal } from '../features/events/components/CreatorEventMod
 import { JoinEventSheet } from '../features/events/components/JoinEventSheet';
 import { track } from '../lib/analytics';
 import { getEventDate } from './tournament/utils';
+import { isSeniorsLeague } from '../utils/skillLevels';
+import { isTournamentCategoryEvent, isTournamentCategoryType } from '../utils/eventTypes';
 
 type EventsTab = 'upcoming' | 'completed';
-type CompletedEvent = { id: string; title: string; when: Date | null };
+type EventCategory = 'socials' | 'tournaments';
+type CompletedEvent = { id: string; title: string; type: string; when: Date | null };
 
 export const Events: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
@@ -28,6 +31,7 @@ export const Events: React.FC = () => {
   const { events, setEvents, loading, visibleEvents, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament, isFullyJoinedEvent } = useEvents();
   const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed, handleSubmitJoin } = useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament });
 
+  const [category, setCategory] = useState<EventCategory>('tournaments');
   const [tab, setTab] = useState<EventsTab>('upcoming');
   const [completedEvents, setCompletedEvents] = useState<CompletedEvent[]>([]);
   const [completedLoading, setCompletedLoading] = useState(false);
@@ -63,6 +67,7 @@ export const Events: React.FC = () => {
             .map((d) => ({
               id: d.id,
               title: (d.data().title as string) || 'Tournament',
+              type: (d.data().type as string) || '',
               when: getEventDate(d.data() as Record<string, unknown>),
             }))
             .sort((a, b) => (b.when?.getTime() ?? 0) - (a.when?.getTime() ?? 0)),
@@ -71,6 +76,11 @@ export const Events: React.FC = () => {
       .catch(() => {})
       .finally(() => setCompletedLoading(false));
   }, [tab, completedEvents.length]);
+
+  const categoryEvents = visibleEvents.filter((e) =>
+    category === 'tournaments' ? isTournamentCategoryEvent(e) : !isTournamentCategoryEvent(e));
+  const categoryCompletedEvents = completedEvents.filter((e) =>
+    category === 'tournaments' ? isTournamentCategoryType(e.type) : !isTournamentCategoryType(e.type));
 
   const handleJoin = (event: DisplayEvent) => {
     setSelectedEvent(event);
@@ -99,6 +109,12 @@ export const Events: React.FC = () => {
 
   return (
     <div className="max-w-xl mx-auto px-4 pb-20 pt-4">
+      <SegmentedControl<EventCategory>
+        options={[{ value: 'socials', label: 'Socials' }, { value: 'tournaments', label: 'Tournaments' }]}
+        value={category}
+        onChange={setCategory}
+        className="mb-3 max-w-xs"
+      />
       <SegmentedControl<EventsTab>
         options={[{ value: 'upcoming', label: 'Upcoming' }, { value: 'completed', label: 'Completed' }]}
         value={tab}
@@ -117,16 +133,16 @@ export const Events: React.FC = () => {
           <div className="space-y-2 max-w-xl">
             {[1, 2].map((i) => <div key={i} className="h-14 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
           </div>
-        ) : completedEvents.length === 0 ? (
+        ) : categoryCompletedEvents.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-fg/50 text-sm">No completed events yet.</p>
           </div>
         ) : (
           <div className="rounded-3xl bg-tennis-surface/30 border border-fg/5 overflow-hidden divide-y divide-white/5 max-w-xl">
-            {completedEvents.map((e) => (
+            {categoryCompletedEvents.map((e) => (
               <Link
                 key={e.id}
-                to={`/tournament?event=${e.id}`}
+                to={`/matches?mode=tournament&event=${e.id}`}
                 className="flex items-center gap-3 px-4 py-3.5 hover:bg-fg/[0.04] transition-colors"
               >
                 <span className="w-8 h-8 shrink-0 rounded-xl bg-clay/15 border border-clay/25 flex items-center justify-center">
@@ -149,9 +165,9 @@ export const Events: React.FC = () => {
         <div className="space-y-4">
           {[1, 2, 3].map((i) => <div key={i} className="h-48 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
         </div>
-      ) : visibleEvents.length > 0 ? (
+      ) : categoryEvents.length > 0 ? (
         <div className="space-y-4">
-          {visibleEvents.map((event, i) => (
+          {categoryEvents.map((event, i) => (
             <EventCard
               key={event.id}
               event={event}
@@ -190,7 +206,7 @@ export const Events: React.FC = () => {
           <JoinEventSheet
             event={selectedEvent}
             isLate={isLateRegistration(selectedEvent)}
-            seniorsEligible={profile?.user.age_bracket === '55+'}
+            seniorsEligible={isSeniorsLeague(profile?.stats.league)}
             joinForm={joinForm}
             setJoinForm={setJoinForm}
             joinError={joinError}

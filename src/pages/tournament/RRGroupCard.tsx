@@ -201,15 +201,19 @@ export const RRGroupCard: React.FC<Props> = ({
                       </div>
                     </div>
 
-                    {isCreator && !editMode && !!onSubmitScore && (
-                      <button
-                        onClick={() => onSubmitScore(m)}
-                        className="shrink-0 px-3 py-1.5 rounded-lg bg-clay/20 text-clay text-xs font-bold hover:bg-clay/30 transition-colors whitespace-nowrap"
-                      >
-                        {isDone ? 'Edit Score' : 'Enter Score'}
-                      </button>
-                    )}
-                    {!isCreator && !isDone && !editMode && !!submittableMatchIds?.has(m.id) && (
+                    <div className="shrink-0 flex items-center gap-2">
+                      {isDone && (
+                        <span className="shrink-0 text-[10px] font-bold text-green-500 uppercase tracking-wider">Done</span>
+                      )}
+                      {isCreator && !editMode && !!onSubmitScore && (
+                        <button
+                          onClick={() => onSubmitScore(m)}
+                          className="shrink-0 px-3 py-1.5 rounded-lg bg-clay/20 text-clay text-xs font-bold hover:bg-clay/30 transition-colors whitespace-nowrap"
+                        >
+                          Score
+                        </button>
+                      )}
+                      {!isCreator && !isDone && !editMode && !!submittableMatchIds?.has(m.id) && (
                         pendingMatchIds?.has(m.id) ? (
                           <span className="shrink-0 text-[10px] font-bold text-green-500 uppercase tracking-wider">Submitted ✓</span>
                         ) : (
@@ -221,9 +225,7 @@ export const RRGroupCard: React.FC<Props> = ({
                           </button>
                         )
                       )}
-                    {isDone && (
-                      <span className="shrink-0 text-[10px] font-bold text-green-500 uppercase tracking-wider">Done</span>
-                    )}
+                    </div>
                   </div>
                 );
               })}

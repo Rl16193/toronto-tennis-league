@@ -542,7 +542,7 @@ export const CourtMap: React.FC = () => {
         {/* Search + Filters float OVER the map (wireframe 1j) ── */}
         <div className="absolute top-3 left-3 right-3 z-10 flex items-start gap-2">
           <div className="flex-1 min-w-0">
-            <div className={`flex items-center gap-2 px-3 py-2.5 bg-tennis-dark/95 backdrop-blur border border-fg/10 shadow-xl transition-colors focus-within:border-clay/50 ${suggestions.length > 0 ? 'rounded-t-2xl' : 'rounded-2xl'}`}>
+            <div className={`h-10 flex items-center gap-2 px-3 bg-tennis-dark/95 backdrop-blur border border-fg/10 shadow-xl transition-colors focus-within:border-clay/50 ${suggestions.length > 0 ? 'rounded-t-2xl' : 'rounded-2xl'}`}>
               <Search className="w-3.5 h-3.5 text-fg/40 shrink-0 pointer-events-none" />
               <input
                 type="text"
@@ -580,7 +580,7 @@ export const CourtMap: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowAllCourts((v) => !v)}
-            className={`shrink-0 px-3.5 py-2.5 rounded-2xl backdrop-blur border shadow-xl text-xs font-bold transition-colors ${
+            className={`h-10 shrink-0 px-3.5 rounded-2xl backdrop-blur border shadow-xl text-xs font-bold transition-colors ${
               showAllCourts
                 ? 'bg-clay/15 border-clay/40 text-clay'
                 : 'bg-tennis-dark/95 border-fg/10 text-fg hover:border-clay/50'
@@ -591,11 +591,22 @@ export const CourtMap: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowFiltersSheet(true)}
-            className="shrink-0 px-3.5 py-2.5 rounded-2xl bg-tennis-dark/95 backdrop-blur border border-fg/10 shadow-xl text-xs font-bold text-fg hover:border-clay/50 transition-colors"
+            className="h-10 shrink-0 px-3.5 rounded-2xl bg-tennis-dark/95 backdrop-blur border border-fg/10 shadow-xl text-xs font-bold text-fg hover:border-clay/50 transition-colors"
           >
             Filters
           </button>
         </div>
+
+        {/* Join CTA — floats just above the pull-up handle for logged-out visitors; goes away
+            once the results list is opened so it never blocks the list itself. */}
+        {!user && !mobileResultsOpen && (
+          <Link
+            to="/signup"
+            className="absolute bottom-14 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full bg-clay text-white text-xs font-bold shadow-lg shadow-clay/30 hover:bg-clay-dark transition-colors"
+          >
+            Join
+          </Link>
+        )}
 
         {/* Pull-up results panel (Maps/Uber model) ── */}
         <div className="absolute bottom-0 left-0 right-0 z-10 bg-tennis-dark rounded-t-3xl border-t border-fg/10 shadow-[0_-8px_24px_rgba(0,0,0,0.4)]">
@@ -625,7 +636,7 @@ export const CourtMap: React.FC = () => {
                   onClick={() => setShowSuggestModal(true)}
                   className="shrink-0 px-3 py-1.5 rounded-xl border border-clay/40 text-clay text-[11px] font-semibold hover:bg-clay/10 transition-colors"
                 >
-                  Submit a Photo
+                  Submit a Report
                 </button>
               </div>
             </>

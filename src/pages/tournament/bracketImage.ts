@@ -160,18 +160,6 @@ const buildRRGroupSvg = (
       return first.length <= last.length ? first : last;
     }).join(' / ');
 
-  // Build per-group win-loss map from groupMatches.
-  const wl: Record<string, { w: number; l: number }> = {};
-  groupMatches.forEach((m) => {
-    if (m.status !== 'complete') return;
-    [m.player_1_user_id, m.player_2_user_id].forEach((uid) => { if (uid) wl[uid] = wl[uid] ?? { w: 0, l: 0 }; });
-    if (m.winner_user_id) {
-      const loserId = m.player_1_user_id === m.winner_user_id ? m.player_2_user_id : m.player_1_user_id;
-      wl[m.winner_user_id] = { ...(wl[m.winner_user_id] ?? { w: 0, l: 0 }), w: (wl[m.winner_user_id]?.w ?? 0) + 1 };
-      if (loserId) wl[loserId] = { ...(wl[loserId] ?? { w: 0, l: 0 }), l: (wl[loserId]?.l ?? 0) + 1 };
-    }
-  });
-
   // Phone first, email only when no phone, then the match-snapshot contact as a last resort.
   const contactOf = (p: TournamentPlayer): string => {
     const c = contacts[p.user_id];
@@ -211,18 +199,13 @@ const buildRRGroupSvg = (
       const contactX = x + cardPad + 165;
       let playerY = y + cardPad + 30;
       players.forEach((p) => {
-        const stat = wl[p.user_id];
-        const statStr = stat ? `${stat.w}W ${stat.l}L` : '';
-        const contact = truncate(contactOf(p), statStr ? 12 : 18);
+        const contact = truncate(contactOf(p), 18);
         const name = p.name.includes(' / ')
           ? truncate(doublesShortNames(p.name), 20)
           : truncate(formatPlayerName(p.name), 20);
         cards += `<text x="${x + cardPad}" y="${playerY + 18}" font-size="13" font-weight="600" fill="${C.text}" font-family="Montserrat,Arial,sans-serif">${escapeSvg(name)}</text>`;
         if (contact) {
           cards += `<text x="${contactX}" y="${playerY + 18}" font-size="11" fill="${C.textMuted}" font-family="Montserrat,Arial,sans-serif">${escapeSvg(contact)}</text>`;
-        }
-        if (statStr) {
-          cards += `<text x="${x + cardW - cardPad}" y="${playerY + 18}" text-anchor="end" font-size="11" fill="${C.textMuted}" font-family="Montserrat,Arial,sans-serif">${escapeSvg(statStr)}</text>`;
         }
         playerY += rowH;
       });

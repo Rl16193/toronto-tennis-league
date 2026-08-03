@@ -69,11 +69,13 @@ export async function submitPhotoReport(args: {
   type: ReportType;
   courtName: string;
   files: File[];
-  note?: string;
+  note: string;
+  racquetsInQueue?: number;
+  waitingBoards?: number;
   onProgress?: (pct: number) => void;
 }): Promise<void> {
-  const { uid, userName, type, courtName, files, note, onProgress } = args;
-  if (files.length === 0) throw new Error('Please add at least one photo.');
+  const { uid, userName, type, courtName, files, note, racquetsInQueue, waitingBoards, onProgress } = args;
+  if (!note.trim()) throw new Error('Please add a note.');
   if (files.find((f) => !f.type.startsWith('image/'))) throw new Error('Please choose image files only.');
   if (files.find((f) => f.size > MAX_IMAGE_BYTES)) throw new Error('Each image must be under 5 MB.');
 
@@ -105,7 +107,9 @@ export async function submitPhotoReport(args: {
     photos_meta: photosMeta,
     user_id: uid ?? null,
     user_name: userName,
-    ...(note?.trim() ? { note: note.trim() } : {}),
+    note: note.trim(),
+    ...(type === 'queue' && racquetsInQueue != null ? { racquets_in_queue: racquetsInQueue } : {}),
+    ...(type === 'waitingBoard' && waitingBoards != null ? { waiting_boards: waitingBoards } : {}),
     status: 'approved',
     created_at: new Date().toISOString(),
   });

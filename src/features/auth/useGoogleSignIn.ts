@@ -37,6 +37,8 @@ export function useGoogleSignIn({
     getRedirectResult(auth)
       .then(async (result) => {
         if (!result) return;
+        // Only handle results from Google — Apple's own hook has its own getRedirectResult effect.
+        if (getAdditionalUserInfo(result)?.providerId !== 'google.com') return;
         setLoading(true);
         try {
           const isNewGoogleUser = getAdditionalUserInfo(result)?.isNewUser === true;

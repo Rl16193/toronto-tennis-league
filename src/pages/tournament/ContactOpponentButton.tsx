@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, Mail, MessageCircle, MessageSquare, Phone } from 'lucide-react';
+import { ChevronDown, Mail, MessageCircle, MessageSquare } from 'lucide-react';
 
 // North-America phone (the regular Phone field's format) → E.164 for tel:/sms:/wa.me links.
 // Only used for Text/Call, and as the WhatsApp fallback when no dedicated whatsapp_contact is set.
@@ -102,7 +102,6 @@ export const ContactOpponentButton: React.FC<{
   if (waNumber) channels.push({ key: 'whatsapp', label: 'WhatsApp', href: `https://wa.me/${waNumber.replace('+', '')}`, icon: MessageCircle });
   if (phoneE164) {
     channels.push({ key: 'text', label: 'Text (SMS)', href: `sms:${phoneE164}`, icon: MessageSquare });
-    channels.push({ key: 'call', label: 'Call', href: `tel:${phoneE164}`, icon: Phone });
   }
   if (email) channels.push({ key: 'email', label: 'Email', href: `mailto:${email}`, icon: Mail });
 

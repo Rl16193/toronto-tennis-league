@@ -4,14 +4,14 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; message: string }> {
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   constructor(props: { children: ReactNode }) {
     super(props);
-    this.state = { hasError: false, message: '' };
+    this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error: unknown) {
-    return { hasError: true, message: error instanceof Error ? error.message : 'An unexpected error occurred.' };
+  static getDerivedStateFromError() {
+    return { hasError: true };
   }
 
   componentDidCatch(error: unknown, info: ErrorInfo) {
@@ -25,10 +25,10 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
       return (
         <div className="min-h-screen flex items-center justify-center bg-tennis-dark px-4 text-center">
           <div className="space-y-4">
-            <h1 className="text-2xl font-black text-white">Something went wrong</h1>
-            <p className="text-sm text-orange-500">{this.state.message}</p>
+            <h1 className="text-2xl font-black text-white">Unable to load</h1>
+            <p className="text-sm text-orange-500">Kindly refresh the page.</p>
             <button
-              onClick={() => this.setState({ hasError: false, message: '' })}
+              onClick={() => this.setState({ hasError: false })}
               className="px-6 py-3 bg-clay text-white font-bold rounded-2xl"
             >
               Try again

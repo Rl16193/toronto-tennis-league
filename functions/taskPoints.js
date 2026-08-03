@@ -18,9 +18,47 @@ const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const { notify, organizerUids } = require('./lib/notify');
+const ROSTER = require('./courts.json'); // { [courtKey]: zoneName } — see groupAwards.js header
 
 const REGION = 'us-central1';
+const TZ = 'America/Toronto';
 const db = () => admin.firestore();
+
+// Same normalization as src/utils/courtKey.ts — keep in sync.
+const courtKeySlug = (name) =>
+  String(name).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+// Same YYYYMMDD format as src/features/tasks/checkinService.ts's torontoDayKey().
+function torontoDay(iso) {
+  const d = iso ? new Date(iso) : new Date();
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' })
+      .formatToParts(d).map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}${parts.month}${parts.day}`;
+}
+
+// A tournament match with a court selected is itself proof of presence — no GPS check needed.
+// Stamps both the once-forever passport (court_visits) and the daily attendance log
+// (court_attendance), same collections/shapes as a real GPS check-in (dist_m: 0 marks it as
+// match-derived rather than geolocated). Admin SDK bypasses the self-write-only client rules —
+// this is the one place either player can be checked in by whoever recorded the score.
+async function checkInFromMatch(uid, name, courtName, whenISO) {
+  if (!uid || !courtName) return;
+  const courtKey = courtKeySlug(courtName);
+  if (!courtKey) return;
+  const zone = ROSTER[courtKey] || '';
+  const now = whenISO || new Date().toISOString();
+  const base = { user_id: uid, user_name: name || '', court_key: courtKey, court_name: courtName, zone, dist_m: 0 };
+
+  await db().doc(`court_visits/${uid}_${courtKey}`).create({
+    ...base, visit_type: 'Tournament', lat: 0, lng: 0, created_at: now,
+  }).catch(() => { /* already checked in at this court — fine, one-per-player-per-court */ });
+
+  await db().doc(`court_attendance/${uid}_${courtKey}_${torontoDay(now)}`).set({
+    ...base, match_type: 'Tournament', lat: 0, lng: 0, day: torontoDay(now), created_at: now,
+  });
+}
 
 // ─── Tier catalogue (mirrors taskCatalog.ts CATEGORIES → ALL_TIERS) ─────────────────────────
 const ALL_TIERS = [
@@ -58,10 +96,10 @@ const ALL_TIERS = [
   { id: 'visit10', title: 'Visit 10 courts', points: 25, counter: 'courtsVisited', need: 10 },
   { id: 'visit20', title: 'Visit 20 courts', points: 40, counter: 'courtsVisited', need: 20 },
 
-  { id: 'board1', title: 'Submit 1 waiting board photo', points: 5, counter: 'boardPhotos', need: 1 },
-  { id: 'board5', title: 'Submit 5 waiting board photos', points: 15, counter: 'boardPhotos', need: 5 },
-  { id: 'board10', title: 'Submit 10 waiting board photos', points: 25, counter: 'boardPhotos', need: 10 },
-  { id: 'board20', title: 'Submit 20 waiting board photos', points: 40, counter: 'boardPhotos', need: 20 },
+  { id: 'board1', title: 'Submit 1 waiting board report', points: 5, counter: 'boardPhotos', need: 1 },
+  { id: 'board5', title: 'Submit 5 waiting board reports', points: 15, counter: 'boardPhotos', need: 5 },
+  { id: 'board10', title: 'Submit 10 waiting board reports', points: 25, counter: 'boardPhotos', need: 10 },
+  { id: 'board20', title: 'Submit 20 waiting board reports', points: 40, counter: 'boardPhotos', need: 20 },
 
   { id: 'queue10', title: 'Submit 10 queue updates', points: 10, counter: 'queueUpdates', need: 10 },
   { id: 'queue25', title: 'Submit 25 queue updates', points: 20, counter: 'queueUpdates', need: 25 },
@@ -189,6 +227,21 @@ async function notifyOrganizersOfQueue(link) {
 // Triggers
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Shared by both result triggers below: records the play result for both participants, then
+// (if a court was recorded) checks them both in — same two-pass order both triggers used.
+async function awardPairPoints(after, { source, uidA, nameA, uidB, nameB, wonUid, whenISO }) {
+  const pairs = [[uidA, nameA], [uidB, nameB]].filter(([uid]) => uid);
+  for (const [uid, name] of pairs) {
+    await recordPlayResult(uid, name || '', { source, won: wonUid === uid, whenISO });
+  }
+  // A court picked when scoring/reporting the match doubles as a check-in for both players.
+  if (after.court) {
+    for (const [uid, name] of pairs) {
+      await checkInFromMatch(uid, name || '', after.court, whenISO);
+    }
+  }
+}
+
 // Tournament match completed with a real score (walkovers don't count — matches the client gate).
 exports.onMatchCompletedAwardPoints = onDocumentUpdated(
   { document: 'tournament_matches/{matchId}', region: REGION },
@@ -199,14 +252,13 @@ exports.onMatchCompletedAwardPoints = onDocumentUpdated(
     // A walkover is recorded as sets of 0-0 — still non-null, so it must be excluded explicitly.
     if (after.walkover === true) return;
     if (after.set_1_player_1 == null || after.set_1_player_2 == null) return;
-    const whenISO = after.completed_at || new Date().toISOString();
-    const pairs = [
-      [after.player_1_user_id, after.player_1_name],
-      [after.player_2_user_id, after.player_2_name],
-    ].filter(([uid]) => uid);
-    for (const [uid, name] of pairs) {
-      await recordPlayResult(uid, name || '', { source: 'tournament', won: after.winner_user_id === uid, whenISO });
-    }
+    await awardPairPoints(after, {
+      source: 'tournament',
+      uidA: after.player_1_user_id, nameA: after.player_1_name,
+      uidB: after.player_2_user_id, nameB: after.player_2_name,
+      wonUid: after.winner_user_id,
+      whenISO: after.completed_at || new Date().toISOString(),
+    });
   },
 );
 
@@ -217,14 +269,13 @@ exports.onLadderConfirmedAwardPoints = onDocumentUpdated(
     const before = event.data?.before.data() || {};
     const after = event.data?.after.data() || {};
     if (before.status === 'confirmed' || after.status !== 'confirmed') return;
-    const whenISO = after.confirmed_at || new Date().toISOString();
-    const pairs = [
-      [after.challenger_id, after.challenger_name],
-      [after.opponent_id, after.opponent_name],
-    ].filter(([uid]) => uid);
-    for (const [uid, name] of pairs) {
-      await recordPlayResult(uid, name || '', { source: 'ladder', won: after.claimed_winner_id === uid, whenISO });
-    }
+    await awardPairPoints(after, {
+      source: 'ladder',
+      uidA: after.challenger_id, nameA: after.challenger_name,
+      uidB: after.opponent_id, nameB: after.opponent_name,
+      wonUid: after.claimed_winner_id,
+      whenISO: after.confirmed_at || new Date().toISOString(),
+    });
   },
 );
 
@@ -270,24 +321,6 @@ exports.onPhotoReportAwardPoints = onDocumentCreated(
       // the legacy text-only suggestion flow used.
       await bumpCounterAndAward(r.user_id, r.user_name || '', 'suggestions', 1, 'courtSuggestion');
     }
-  },
-);
-
-// Automated image moderation (functions/index.js) can still flip an already-approved report to
-// 'rejected' after the fact if the photo is unsafe — let the submitter know. (Points already
-// awarded at creation are not reversed here — a deliberate simplification for this rare edge case.)
-exports.onPhotoReportRejected = onDocumentUpdated(
-  { document: 'court_reports/{id}', region: REGION },
-  async (event) => {
-    const before = event.data?.before.data() || {};
-    const after = event.data?.after.data() || {};
-    if (before.status !== 'approved' || after.status !== 'rejected' || !after.user_id) return;
-    await notify(after.user_id, {
-      type: 'photo_rejected',
-      title: 'Your photo was removed',
-      body: after.reviewer_note || '',
-      link: '/tasks',
-    });
   },
 );
 

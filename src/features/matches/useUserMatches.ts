@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { TournamentMatch } from '../../pages/tournament/types';
+import { RALLY_COL } from '../friendlies/rallyService';
+import { LADDER_COL } from '../leagues/ladderService';
 
 // A user's completed matches, newest first, from their perspective (their games first).
 // Shared by the Profile "Recent Matches" block and the Home "Your Progress" chart.
@@ -20,13 +22,18 @@ export type UserMatch = {
   scoreLine: string; // e.g. "6-4, 6-3" (user's games first)
 };
 
-// A match the user is in that hasn't been played/scored yet (status !== 'complete').
+// A match the user is in that hasn't been played/scored yet (status !== 'complete'). Also covers
+// accepted Friendlies rallies and accepted League Ladder challenges — neither has a real match
+// doc until it's played, but both represent an "upcoming" game the same way a generated-but-
+// unplayed tournament match does. `source` distinguishes them for display; `eventId` is only
+// ever set for tournament matches.
 export type UpcomingMatch = {
   id: string;
   opponentId: string;
   opponentName: string;
   opponentContact: string;
   eventId: string;
+  source: 'tournament' | 'rally' | 'challenge';
 };
 
 const num = (v: unknown) => (typeof v === 'number' ? v : 0);
@@ -48,9 +55,13 @@ export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: 
 
     (async () => {
       try {
-        const [s1, s2] = await Promise.all([
+        const [s1, s2, r1, r2, c1, c2] = await Promise.all([
           getDocs(query(collection(db, 'tournament_matches'), where('player_1_user_id', '==', uid))),
           getDocs(query(collection(db, 'tournament_matches'), where('player_2_user_id', '==', uid))),
+          getDocs(query(collection(db, RALLY_COL), where('from_id', '==', uid))),
+          getDocs(query(collection(db, RALLY_COL), where('to_id', '==', uid))),
+          getDocs(query(collection(db, LADDER_COL), where('challenger_id', '==', uid))),
+          getDocs(query(collection(db, LADDER_COL), where('opponent_id', '==', uid))),
         ]);
 
         const byId = new Map<string, TournamentMatch>();
@@ -70,6 +81,7 @@ export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: 
                 opponentName: oppName,
                 opponentContact: (iAmP1First ? m.player_2_contact : m.player_1_contact) || '',
                 eventId: m.event_id || '',
+                source: 'tournament',
               });
             }
             continue;
@@ -98,6 +110,36 @@ export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: 
             scoreLine: parts.map(([a, b]) => `${a}-${b}`).join(', '),
           });
         }
+
+        // Accepted rallies — same "upcoming, no score yet" bucket. Open/declined ones don't count.
+        [...r1.docs, ...r2.docs].forEach((d) => {
+          const r = d.data();
+          if (r.status !== 'accepted') return;
+          const iAmFrom = r.from_id === uid;
+          pending.push({
+            id: d.id,
+            opponentId: (iAmFrom ? r.to_id : r.from_id) || '',
+            opponentName: (iAmFrom ? r.to_name : r.from_name) || 'Opponent',
+            opponentContact: '',
+            eventId: '',
+            source: 'rally',
+          });
+        });
+
+        // Accepted League Ladder challenges — same bucket, before a score has been reported.
+        [...c1.docs, ...c2.docs].forEach((d) => {
+          const c = d.data();
+          if (c.status !== 'accepted') return;
+          const iAmChallenger = c.challenger_id === uid;
+          pending.push({
+            id: d.id,
+            opponentId: (iAmChallenger ? c.opponent_id : c.challenger_id) || '',
+            opponentName: (iAmChallenger ? c.opponent_name : c.challenger_name) || 'Opponent',
+            opponentContact: '',
+            eventId: '',
+            source: 'challenge',
+          });
+        });
 
         list.sort((a, b) => b.completedAt - a.completedAt);
         if (!cancelled) { setMatches(list); setUpcoming(pending); setLoading(false); }

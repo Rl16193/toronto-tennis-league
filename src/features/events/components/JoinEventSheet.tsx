@@ -92,7 +92,7 @@ export const JoinEventSheet: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* Seniors 55+ opt-in — singles only, shown only to eligible players */}
+            {/* Retired Pro 55+ opt-in — singles only, shown only to eligible players */}
             {displayChoice === 'Singles' && seniorsEligible && (
               <button
                 type="button"
@@ -103,8 +103,8 @@ export const JoinEventSheet: React.FC<Props> = ({
                 aria-pressed={joinForm.seniors}
               >
                 <span>
-                  <span className="block text-sm font-bold text-fg">Join the Seniors draw (55+)</span>
-                  <span className="block text-xs text-fg/50 mt-0.5">Play in the age-based Seniors group instead of skill routing.</span>
+                  <span className="block text-sm font-bold text-fg">Join the Retired Pro draw (55+)</span>
+                  <span className="block text-xs text-fg/50 mt-0.5">Play in the age-based Retired Pro group instead of skill routing.</span>
                 </span>
                 <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${
                   joinForm.seniors ? 'bg-clay border-clay text-white text-xs' : 'border-fg/20'

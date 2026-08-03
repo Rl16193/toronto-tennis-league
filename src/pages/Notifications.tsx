@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Bell } from 'lucide-react';
+import { motion } from 'motion/react';
+import { fadeUp, staggerDelay, tapScale } from '../lib/motion';
 import { AppNotification, timeAgo, useNotifications } from '../features/notifications/useNotifications';
 
 // Full-screen notifications feed (replaces the old bell dropdown). Opening the page marks
@@ -46,11 +48,15 @@ export const Notifications: React.FC = () => {
         </div>
       ) : (
         <div className="rounded-3xl bg-tennis-surface/30 border border-fg/5 overflow-hidden divide-y divide-fg/5">
-          {items.map((n) => (
-            <button
+          {items.map((n, i) => (
+            <motion.button
               key={n.id}
               type="button"
               onClick={() => openItem(n)}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}
+              whileTap={tapScale.whileTap}
               className={`w-full text-left px-4 py-3.5 hover:bg-white/[0.04] transition-colors ${n.read ? '' : 'bg-clay/[0.07]'}`}
             >
               <div className="flex items-start gap-2">
@@ -61,7 +67,7 @@ export const Notifications: React.FC = () => {
                   <p className="text-[10px] text-fg/30 mt-1">{timeAgo(n.created_at)}</p>
                 </div>
               </div>
-            </button>
+            </motion.button>
           ))}
         </div>
       )}

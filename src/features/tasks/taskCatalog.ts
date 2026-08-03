@@ -128,10 +128,10 @@ export const CATEGORIES: CategoryDef[] = [
     title: 'Court Information',
     to: '/tasks?photo=1',
     tiers: [
-      { id: 'board1', title: 'Submit 1 waiting board photo', points: 5, counter: 'boardPhotos', need: 1 },
-      { id: 'board5', title: 'Submit 5 waiting board photos', points: 15, counter: 'boardPhotos', need: 5 },
-      { id: 'board10', title: 'Submit 10 waiting board photos', points: 25, counter: 'boardPhotos', need: 10 },
-      { id: 'board20', title: 'Submit 20 waiting board photos', points: 40, counter: 'boardPhotos', need: 20 },
+      { id: 'board1', title: 'Submit 1 waiting board report', points: 5, counter: 'boardPhotos', need: 1 },
+      { id: 'board5', title: 'Submit 5 waiting board reports', points: 15, counter: 'boardPhotos', need: 5 },
+      { id: 'board10', title: 'Submit 10 waiting board reports', points: 25, counter: 'boardPhotos', need: 10 },
+      { id: 'board20', title: 'Submit 20 waiting board reports', points: 40, counter: 'boardPhotos', need: 20 },
     ],
   },
   {
@@ -202,8 +202,8 @@ export const DAILY_GROUP_TASKS: GroupTaskDef[] = [
   {
     id: 'hourlyCoverage',
     name: 'Hourly Coverage',
-    trigger: 'When a court has at least one live racquet-queue photo for every hour from 8 AM to '
-      + '10 PM on the same day, everyone who posted a queue photo there that day unlocks the bonus.',
+    trigger: 'When a court has at least one live racquet-queue report for every hour from 8 AM to '
+      + '10 PM on the same day, everyone who posted a queue report there that day unlocks the bonus.',
     points: '+10 each',
   },
 ];
@@ -219,17 +219,15 @@ export const COMMUNITY_GROUP_TASKS: GroupTaskDef[] = [
   {
     id: 'boardFreshness',
     name: 'Board Freshness',
-    trigger: 'Submit the first approved waiting-board photo for a court that has never had one — '
-      + '+5 to you. And once every court in a zone has an approved waiting-board photo, everyone '
-      + 'who contributed one in that zone unlocks +10.',
+    trigger: 'Submit the first approved waiting-board report for a court. +5. Every court in a '
+      + 'zone has a waiting-board report, everyone who contributed in that zone gets +10.',
     points: '+5 / +10',
   },
   {
     id: 'zoneSweep',
     name: 'Full Zone Sweep',
-    trigger: 'When members collectively check in at every court in a zone, everyone who '
-      + 'contributed a check-in that cycle unlocks the bonus. The sweep then resets to zero and '
-      + 'starts again — a running baseline for how long full coverage takes.',
+    trigger: 'Every member with a check for a court in that a zone, unlocks the bonus. The sweep '
+      + 'then resets to zero and starts again.',
     points: '+10 each',
   },
 ];

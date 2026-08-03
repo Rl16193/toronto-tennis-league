@@ -21,6 +21,13 @@ export const parseValidDate = (value?: FirestoreDateLike) => {
     }
     return null;
   }
+  // Plain "YYYY-MM-DD" (from <input type="date">) parses as UTC midnight, which rolls back a
+  // day once formatted in a timezone behind UTC (e.g. Toronto) — parse those as local instead.
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (dateOnly) {
+    const parsed = new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };

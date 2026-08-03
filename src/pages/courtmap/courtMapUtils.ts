@@ -519,47 +519,41 @@ export function hasPublicHours(court: CourtWithCount): boolean {
     && !court.clubInfo.toLowerCase().includes('private');
 }
 
+// Half-and-half circle (two markers at once, e.g. active players + a program).
+const splitMarkerSvg = (s: number, colorA: string, colorB: string, label: string, fs: number): string => {
+  const r = s / 2;
+  return `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
+      <path d="M${r},0 A${r},${r} 0 0,0 ${r},${s} Z" fill="${colorA}" opacity="0.95"/>
+      <path d="M${r},0 A${r},${r} 0 0,1 ${r},${s} Z" fill="${colorB}" opacity="0.95"/>
+      <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>
+    </svg>`;
+};
+
+// Single-color circle, with an optional centered count label.
+const soloMarkerSvg = (s: number, color: string, opacity: number, label?: string, fs?: number): string => {
+  const r = s / 2;
+  const text = label != null
+    ? `\n      <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>`
+    : '';
+  return `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${r}" cy="${r}" r="${r}" fill="${color}" opacity="${opacity}"/>${text}
+    </svg>`;
+};
+
 export function courtMarkerHtml(court: CourtWithCount): string {
   const hasPlayers = court.count > 0;
   const bigCount = court.count >= 10;
   const s = !hasPlayers ? 12 : bigCount ? 30 : 20;
-  const r = s / 2;
   const label = String(court.count);
   const fs = bigCount ? 8 : 10;
 
-  if (hasPlayers && court.hasPrograms) {
-    return `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
-      <path d="M${r},0 A${r},${r} 0 0,0 ${r},${s} Z" fill="#15803d" opacity="0.95"/>
-      <path d="M${r},0 A${r},${r} 0 0,1 ${r},${s} Z" fill="#eab308" opacity="0.95"/>
-      <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>
-    </svg>`;
-  }
-  if (hasPlayers && hasPublicHours(court)) {
-    return `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
-      <path d="M${r},0 A${r},${r} 0 0,0 ${r},${s} Z" fill="#15803d" opacity="0.95"/>
-      <path d="M${r},0 A${r},${r} 0 0,1 ${r},${s} Z" fill="#3b82f6" opacity="0.95"/>
-      <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>
-    </svg>`;
-  }
-  if (hasPlayers) {
-    return `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${r}" cy="${r}" r="${r}" fill="#15803d" opacity="0.95"/>
-      <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>
-    </svg>`;
-  }
-  if (court.hasPrograms) {
-    return `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${r}" cy="${r}" r="${r}" fill="#eab308" opacity="0.82"/>
-    </svg>`;
-  }
-  if (hasPublicHours(court)) {
-    return `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="${r}" cy="${r}" r="${r}" fill="#3b82f6" opacity="0.82"/>
-    </svg>`;
-  }
-  return `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="${r}" cy="${r}" r="${r}" fill="#94a3b8" opacity="0.75"/>
-  </svg>`;
+  if (hasPlayers && court.hasPrograms) return splitMarkerSvg(s, '#15803d', '#eab308', label, fs);
+  if (hasPlayers && hasPublicHours(court)) return splitMarkerSvg(s, '#15803d', '#3b82f6', label, fs);
+  if (hasPlayers) return soloMarkerSvg(s, '#15803d', 0.95, label, fs);
+  if (court.hasPrograms) return soloMarkerSvg(s, '#eab308', 0.82);
+  if (hasPublicHours(court)) return soloMarkerSvg(s, '#3b82f6', 0.82);
+  if (court.courtType.toLowerCase() === 'club') return soloMarkerSvg(s, '#f97316', 0.75);
+  return soloMarkerSvg(s, '#94a3b8', 0.75);
 }
 
 export function pickleballMarkerHtml(): string {

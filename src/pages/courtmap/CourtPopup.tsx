@@ -97,7 +97,7 @@ export const CourtPopup: React.FC<{
           onClick={onSuggest}
           style={{ padding: '5px 12px', background: '#ea580c', color: '#fff', borderRadius: 6, fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer' }}
         >
-          Submit a Photo
+          Submit a Report
         </button>
       </div>
     )}
