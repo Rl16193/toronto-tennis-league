@@ -9,10 +9,9 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 
-// Collection backing the League Ladder challenge loop. A challenge is a lightweight,
-// organizer-confirmed head-to-head: on confirm the winner gains +3 leaguePoints26 and the
-// loser loses 3 (floored at 0) — the same league standings shown on the Leagues page.
-// Challenges live in the shared `matches` collection, tagged with category: 'challenge'.
+// League Ladder challenge loop: an organizer-confirmed head-to-head. On confirm the winner gains
+// +3 leaguePoints26 and the loser loses 3 (floored at 0). Challenges live in the shared `matches`
+// collection, tagged category: 'challenge'.
 export const MATCHES_COL = 'matches';
 
 export type LadderDivision = 'mens' | 'womens';
@@ -47,9 +46,8 @@ export interface LadderChallenge {
 export const LADDER_POINTS = 3;
 // Days a pair must wait before re-challenging each other.
 export const LADDER_COOLDOWN_DAYS = 7;
-// A player may have at most this many of their own SENT challenges sitting in 'open' or
-// 'accepted' status at once — no time-based reset. A challenge stops counting once it's reported
-// (score submitted, awaiting confirm), confirmed, rejected, or cancelled (cancelling deletes the
+// Max own SENT challenges sitting in 'open' or 'accepted' at once — no time-based reset.
+// A challenge stops counting once reported, confirmed, rejected, or cancelled (cancel deletes the
 // doc outright).
 export const LADDER_ACTIVE_CHALLENGE_CAP = 3;
 
@@ -81,10 +79,9 @@ export async function respondChallenge(id: string, accept: boolean): Promise<voi
   });
 }
 
-// Convert an already-played Friendly or Tournament match into a Challenge: one player proposes
-// (with the winner/score already known — for a Tournament match it's the real submitted result;
-// for a Friendly it's whatever the two players agree happened), the other player confirms via
-// confirmConversion, and it then waits for organizer confirmation like any other challenge.
+// Convert an already-played Friendly or Tournament match into a Challenge: one player proposes with
+// the winner/score already known, the other confirms via confirmConversion, then it waits for
+// organizer confirmation like any other challenge.
 export async function proposeConversion(args: {
   eventId: string;
   division: LadderDivision;
@@ -116,10 +113,9 @@ export async function proposeConversion(args: {
   return ref.id;
 }
 
-// The other player's single "Confirm" action — accepts the proposed conversion and immediately
-// re-reports the same score, landing it in 'reported' so it shows up in the organizer's normal
-// confirm queue. Two sequential writes, each already allowed by the existing challenge rules
-// (accept while 'open', report while 'accepted') — no rules changes needed.
+// The other player's single "Confirm": accepts the conversion and immediately re-reports the same
+// score, landing it in 'reported' for the organizer's normal queue. Two sequential writes, each
+// already allowed by existing rules (accept while 'open', report while 'accepted').
 export async function confirmConversion(
   id: string,
   confirmer: { id: string; name: string },
@@ -168,11 +164,10 @@ export async function cancelChallenge(id: string): Promise<void> {
   await deleteDoc(doc(db, MATCHES_COL, id));
 }
 
-// Organizer confirm: apply ±3 to leaguePoints26 (loser floored at 0) and tick match counters.
+// Organizer confirm: ±3 leaguePoints26 (loser floored at 0) and tick match counters.
 // leaguePoints26 is organizer-gated in firestore.rules, so this must run as the event creator.
-// A Tournament-sourced conversion (source: 'tournament') already had matchesPlayed/wins/loses
-// counted when the tournament match itself was scored — counting them again here would count the
-// same match twice, so that case only adds the ±3 league points, nothing else.
+// A tournament-sourced conversion already counted matchesPlayed/wins/loses when the tournament
+// match was scored, so that case adds only the ±3 — counting again would double the same match.
 export async function confirmChallenge(ch: LadderChallenge): Promise<void> {
   if (!ch.claimed_winner_uid) throw new Error('No winner reported');
   const winnerId = ch.claimed_winner_uid;
@@ -181,20 +176,17 @@ export async function confirmChallenge(ch: LadderChallenge): Promise<void> {
 
   const loserRef = doc(db, 'stats', loserId);
 
-  // A transaction, not a batch: the loser's points are floored at 0, which needs a read before
-  // the write, and a plain read-then-batch lets two concurrent confirms both read the same
-  // starting value and each write the same result — silently dropping one deduction. The
-  // transaction re-runs on contention so the second confirm sees the first one's result.
-  // Writes are set(merge) rather than update() so a player with no stats doc yet (or a deleted
-  // account) can't reject the whole thing and strand the challenge in 'reported'.
+  // A transaction, not a batch: the loser's floor-at-0 needs a read before the write, and a
+  // read-then-batch lets two concurrent confirms read the same value and silently drop one
+  // deduction. Writes are set(merge), not update(), so a player with no stats doc can't reject the
+  // whole thing and strand the challenge in 'reported'.
   const challengeRef = doc(db, MATCHES_COL, ch.id);
 
   await runTransaction(db, async (tx) => {
-    // Read the challenge INSIDE the transaction and bail if it's already been applied. Without
-    // this, two confirms fired close together (a double-tap on mobile) each read a pre-confirm
-    // world and both apply ±3 — the winner ends up +6, the loser -6, and those phantom points
-    // are spendable on Services. `applied` was already being written here; it just wasn't
-    // being read. Reads must precede writes in a transaction, so this goes first.
+    // Read the challenge INSIDE the transaction and bail if already applied. Without this, two
+    // confirms fired close together (a mobile double-tap) each read a pre-confirm world and both
+    // apply ±3 — winner +6, loser -6, and those phantom points are spendable on Services.
+    // Reads must precede writes in a transaction, so this goes first.
     const chSnap = await tx.get(challengeRef);
     const chData = chSnap.data();
     if (chData?.applied === true || chData?.status === 'confirmed') return;

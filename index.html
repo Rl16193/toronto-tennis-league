@@ -45,7 +45,9 @@
     <meta name="twitter:description" content="Join events, play competitive matches, track results and connect with other players in Toronto." />
     <meta name="twitter:image" content="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FScreenshot%202026-06-01%20130844.png?alt=media" />
 
-    <!-- Structured data -->
+    <!-- Structured data. The contact email and Instagram URL below MIRROR
+         src/components/FooterElements.tsx — this file is outside the Vite module graph so it
+         can't import them. Change them in both places or search results go stale. -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -67,11 +69,11 @@
         "addressRegion": "ON",
         "addressCountry": "CA"
       },
-      "sameAs": ["https://www.instagram.com/racqnstringstoronto?igsh=MTQ0eXA1bXZpbXltaQ=="],
+      "sameAs": ["https://www.instagram.com/racqnstringstoronto"],
       "contactPoint": {
         "@type": "ContactPoint",
         "contactType": "customer support",
-        "email": "tenniscommunity.tbtc@gmail.com",
+        "email": "events@racquetsandstrings.ca",
         "url": "https://www.racquetsandstrings.ca/contact"
       }
     }

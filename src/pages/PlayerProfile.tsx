@@ -12,7 +12,7 @@ import type { TournamentMatch } from './tournament/types';
 import { BadgeRow } from '../features/tasks/BadgeRow';
 import { useCommunityStandings } from '../features/tasks/useTasks';
 import { skillTier, leagueDivision, leagueAgeCategory } from '../utils/skillLevels';
-import { contactChannels, pillButtonCls } from './tournament/ContactOpponentButton';
+import { contactChannels, pillButtonCls } from '../components/ContactOpponentButton';
 
 // Furthest-round derivation for Best Finish / Best Result from a player's tournament matches.
 const ROUND_ORDER = ['R64', 'R32', 'R16', 'QF', 'SF', 'F'];

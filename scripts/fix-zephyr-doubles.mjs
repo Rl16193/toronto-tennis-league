@@ -1,17 +1,12 @@
 /**
- * One-off repair for "Zephyr Open 2026 Doubles".
+ * One-off repair for "Zephyr Open 2026 Doubles". Four registrations were saved with
+ * `tournament_choice: 'Singles'` for a Doubles-only event; the participant filter matches format
+ * by exact string equality, so all four matched no draw and the event showed 0 players.
  *
- * Four players registered for this Doubles-only event, but their registrations were saved with
- * `tournament_choice: 'Singles'` (see the comment in JoinEventSheet.tsx for how that happened).
- * A Doubles event hides every Singles draw and the participant filter matches the format with
- * exact string equality, so all four matched no draw at all and the tournament showed 0 players.
+ * Flips them to 'Doubles' (division, skill, created_at untouched). They then appear unpaired and
+ * can finish pairing from "Add your teammate".
  *
- * This flips them to 'Doubles', keeping division, skill and created_at untouched. They then
- * appear in the draw unpaired, and each can finish the pairing from the "Add your teammate"
- * panel on the Tournament page.
- *
- * HARD-SCOPED to one event id. It will not read or write any other event — the two similarly
- * affected registrations in "The Summer Gauntlet - Doubles" are deliberately left alone.
+ * HARD-SCOPED to one event id — the similar rows in "The Summer Gauntlet - Doubles" are left alone.
  *
  * Usage:
  *   node scripts/fix-zephyr-doubles.mjs --key serviceAccount.json --dry-run

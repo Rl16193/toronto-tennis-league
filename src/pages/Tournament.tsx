@@ -14,21 +14,16 @@ import { downloadDrawAsPng, getRoundLabels, downloadRRGroupsAsPng } from './tour
 import { TournamentMatch } from './tournament/types';
 import { BracketView } from './tournament/BracketView';
 import { BracketAccordion } from './tournament/BracketAccordion';
-import { BracketErrorBoundary } from './tournament/BracketErrorBoundary';
-import { TournamentHeader } from './tournament/TournamentHeader';
-import { ZoneDrawConfigPanel } from './tournament/ZoneDrawConfigPanel';
+import {
+  BracketErrorBoundary, ChangeZoneModal, DrawTabs, PendingScoresPanel, RRConfigModal,
+  RequestZoneChangeButton, ScheduleRequestsPanel, TournamentHeader, ZoneChangeRequestsPanel,
+  ZoneDrawConfigPanel,
+} from './tournament/TournamentElements';
 import { OpponentCard } from './tournament/OpponentPanels';
-import { DrawTabs } from './tournament/DrawTabs';
 import { ScoreModal } from './tournament/ScoreModal';
-import { PendingScoresPanel } from './tournament/PendingScoresPanel';
-import { ScheduleRequestsPanel } from './tournament/ScheduleRequestsPanel';
-import { ZoneChangeRequestsPanel } from './tournament/ZoneChangeRequestsPanel';
-import { RequestZoneChangeButton } from './tournament/RequestZoneChangeButton';
-import { ChangeZoneModal } from './tournament/ChangeZoneModal';
 import { AddPlayerPanel } from './tournament/AddPlayerPanel';
 import { AddTeammatePanel } from './tournament/AddTeammatePanel';
 import { RoundRobinView } from './tournament/RoundRobinView';
-import { RRConfigModal } from './tournament/RRConfigModal';
 import { AlertMessage } from '../components/AlertMessage';
 import { LoadingBar } from '../components/LoadingBar';
 import { TennisEvent } from '../types';

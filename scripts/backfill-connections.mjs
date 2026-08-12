@@ -1,18 +1,13 @@
 /**
- * Backfills the `connections` collection from every relationship that already exists, and
- * (with --strip) removes contact PII from the world-readable `users` collection.
+ * Backfills `connections` from existing relationships, and (with --strip) removes contact PII from
+ * the world-readable `users` collection.
  *
- * WHY BOTH LIVE HERE: gating `contacts` is pointless on its own. `users` is `allow read: if true`
- * and still carries email / phone / whatsapp_contact for most members, so anyone — signed out,
- * any script — can read them straight from the REST API. The strip is what makes the new
- * contacts rule mean anything.
+ * Gating `contacts` is pointless without the strip: `users` is `allow read: if true` and still
+ * carries email / phone / whatsapp_contact, readable by anyone via the REST API. The strip refuses
+ * any user with no contacts doc, so it only ever removes duplicated fields.
  *
- * The `contacts` collection is already populated (the earlier --copy step ran), so the strip only
- * ever removes fields that exist elsewhere. It refuses to strip a user who has no contacts doc.
- *
- * ORDER MATTERS. Deploy the trigger first so new relationships are recorded while you work, then
- * backfill the existing ones, and only THEN deploy the rules — otherwise the gate goes live
- * before the connections exist and every contact read fails for everyone:
+ * ORDER MATTERS — deploy the rules LAST, or the gate goes live before the connections exist and
+ * every contact read fails for everyone:
  *
  *   1. firebase deploy --only functions:onMatchConnection,functions:onListingContact
  *   2. node scripts/backfill-connections.mjs --key serviceAccount.json --dry-run

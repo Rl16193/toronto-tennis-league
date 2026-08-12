@@ -1,13 +1,10 @@
 /**
  * Restores 2025-season records for returning players.
  *
- * These two played in 2025, before the current season's data existed. Their 2025 league points go
- * into a new `leaguePoints25` field (the live leaderboard reads `leaguePoints26`, which is left
- * untouched), and their 2025 match counters are added to the lifetime totals — `matchesPlayed`,
- * `wins`, `loses`, `pointswon`, `totalPointsPlayed` and `tournamentsPlayed` are not season-scoped.
+ * 2025 league points go into `leaguePoints25` (the live leaderboard reads `leaguePoints26`, left
+ * untouched); 2025 match counters are added to the lifetime totals, which aren't season-scoped.
  *
- * Idempotent: anyone who already has a `leaguePoints25` value is skipped, so a re-run can't
- * double-count the lifetime totals.
+ * Idempotent: anyone who already has `leaguePoints25` is skipped, so a re-run can't double-count.
  *
  * Usage:
  *   node scripts/restore-2025-season.mjs --key serviceAccount.json --dry-run

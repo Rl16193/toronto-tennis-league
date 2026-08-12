@@ -1,12 +1,9 @@
 /**
  * Collection: contacts — one doc per user, id = uid.
  *
- * Split out of `users` because that collection is world-readable (names and badges appear on
- * public leaderboards and player cards), which meant a single unauthenticated getDocs returned
- * every member's phone number and email address. `contacts` requires a signed-in caller.
- *
- * Field names deliberately match the old `users` shape so every consumer only had to change
- * which collection it reads from.
+ * Split out of `users`, which is world-readable, so one unauthenticated getDocs returned every
+ * member's phone and email. `contacts` requires a signed-in caller. Field names deliberately
+ * match the old `users` shape, so consumers only changed which collection they read.
  */
 export interface ContactData {
   email: string;
@@ -22,10 +19,9 @@ export interface ContactData {
   whatsapp_contact?: string;
   whatsapp_same_as_phone?: boolean;
   /**
-   * The member gave a working messaging number and is happy to be contacted on it — set when
-   * they tick "Same As WhatsApp Number" (their phone doubles as WhatsApp) or type a separate
-   * WhatsApp number. This is a CONSENT signal, not a visibility control: it decides whether the
-   * app offers a Contact button, not who is allowed to read this document.
+   * CONSENT signal, not a visibility control: set when the member ticks "Same As WhatsApp Number"
+   * or types a separate one. Decides whether the app offers a Contact button, not who may read
+   * this document.
    */
   contactable?: boolean;
   updated_at?: string;
@@ -80,10 +76,9 @@ export interface UserPreferences {
   // Global opt-out for the Resend emails (challenge/rally received/accepted, weekly incomplete-
   // matches digest). Missing/undefined means opted in — only an explicit `false` disables them.
   email_notifications?: boolean;
-  // Simplified availability — any number of preset windows (see AvailabilityTag in
-  // utils/availability.ts). Replaces the old per-day AM/PM grid for new edits; `availability`/
-  // `availability_day`/`availability_time` are left in place for existing data, unread by the
-  // new UI.
+  // Any number of preset windows (see AvailabilityTag in utils/availability.ts). Replaces the old
+  // per-day AM/PM grid for new edits; `availability`/`availability_day`/`availability_time` remain
+  // for existing data and are unread by the new UI.
   availability_tags?: string[];
   // Rewards: a stringer is an ordinary account flagged here, with `stringer_id` naming the
   // rewards-catalog entry they own. Same role-flag shape as `event_creator`. It only unlocks
@@ -136,11 +131,9 @@ export interface TaskProgress {
 /**
  * A member's public profile merged with their contact details, keyed by uid.
  *
- * The two live in separate collections (`users` is public, `contacts` needs a sign-in), but most
- * screens want a name AND a way to reach someone in the same breath — the tournament draw, the
- * opponent panels, the marketplace. Fetch both and merge into this rather than threading two
- * parallel maps through every component. Contact fields are optional: a signed-out viewer, or a
- * member whose contacts doc hasn't been backfilled, simply has none.
+ * `users` is public and `contacts` needs a sign-in, but most screens want a name AND a way to
+ * reach someone at once. Merge here rather than threading two parallel maps through every
+ * component. Contact fields are optional — a signed-out viewer simply has none.
  */
 export type MemberInfo = UserData & Partial<ContactData>;
 
@@ -231,10 +224,9 @@ export interface EventParticipant {
   // preferred courts. Set when honouring a zone-change request, or to balance a full bracket.
   // Because it's stored here rather than derived, changing preferred courts later can't move them.
   zone_override?: string;
-  // Stamped when this player's zone was merged into another for the event. The routing itself is
-  // driven by the event's zone config (so late joiners are merged automatically); these are the
-  // per-player audit trail, and are cleared on unmerge. Kept separate from `new_zone`, which is
-  // the zone the PLAYER requested — a merge must not overwrite a pending request.
+  // Audit trail stamped when this player's zone was merged; routing itself comes from the event's
+  // zone config, so late joiners merge automatically. Cleared on unmerge. Separate from
+  // `new_zone` (what the PLAYER requested) — a merge must not overwrite a pending request.
   merged_zone?: boolean;
   merged_into?: string;
 }

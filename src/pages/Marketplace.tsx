@@ -9,9 +9,8 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { Fab } from '../components/Fab';
 import { fadeUp } from '../lib/motion';
 import { ContactData } from '../types';
-import { ServicesTab } from './services/ServicesTab';
-import { ListingsTab } from './marketplace/ListingsTab';
-import { ListingForm } from './marketplace/ListingForm';
+import { ServicesTab } from './services/ServicesElements';
+import { ListingForm, ListingsTab } from './marketplace/MarketplaceElements';
 import { Listing, ListingKind, useListings } from '../features/marketplace/listingService';
 
 // Marketplace hub: Services (curated, admin-seeded) plus two member-posted boards.

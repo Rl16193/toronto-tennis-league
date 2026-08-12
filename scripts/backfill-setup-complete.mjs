@@ -1,15 +1,12 @@
 /**
- * Awards `setupComplete` to anyone who has finished every Community Member Initiation task.
+ * Awards `setupComplete` to anyone who has finished every Initiation task.
  *
- * Needed because setupComplete is only evaluated inside the Cloud Function triggers
- * (functions/taskPoints.js) — it fires when a match/event/photo lands, never on its own. So
- * after the checklist itself changes (e.g. 'ladderMatch' was removed from INITIATION_TASK_IDS),
- * players who already qualify stay unmarked until they happen to trigger something.
+ * setupComplete is only evaluated inside the taskPoints.js triggers, which fire on a
+ * match/event/photo — never on their own. So after the checklist changes, players who already
+ * qualify stay unmarked until they happen to trigger something. Worth SETUP_POINTS (25) and
+ * unlocks the "Member" badge, derived live from the flag.
  *
- * setupComplete is worth SETUP_POINTS (25) and unlocks the "Member" badge, which is derived
- * live from the flag — no separate badge write is needed.
- *
- * Idempotent: skips anyone already marked. Admin SDK, so it bypasses the owner-write rules.
+ * Idempotent: skips anyone already marked. Admin SDK, so it bypasses owner-write rules.
  *
  * Usage:
  *   node scripts/backfill-setup-complete.mjs --key serviceAccount.json --dry-run

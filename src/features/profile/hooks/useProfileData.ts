@@ -4,7 +4,8 @@ import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent, EventParticipant } from '../../../types';
 import { resolveStorageUrl } from '../../events/services/eventService';
-import { JoinedEventCard } from '../types';
+
+export type JoinedEventCard = TennisEvent & { participantId: string; dateselected?: string[] };
 
 const FIRESTORE_IN_QUERY_LIMIT = 10;
 

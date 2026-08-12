@@ -140,15 +140,10 @@ export const isTournamentStarted = (event: { startDate?: unknown; start_date?: u
 };
 
 /**
- * A draw or match with NO zone belongs to the default zone.
- *
- * Zones went live mid-event, so every group generated before that carries no `zone` at all. Those
- * are not a fourth, zone-less category — they are Downtown-Midtown draws that predate the field.
- * Treating them as a separate draw is what put the running groups outside the zone list and made
- * "N signed up" count everyone twice (once in the zone-less draw, once in their zone's).
- *
- * Everything that identifies or compares a draw goes through this, so "missing" and "default"
- * are the same thing everywhere.
+ * A draw or match with NO zone belongs to the default zone. Zones went live mid-event, so groups
+ * generated before that carry no `zone` — they are Downtown-Midtown draws, not a fourth category.
+ * Treating them separately put running groups outside the zone list and counted "N signed up"
+ * twice. Everything that identifies or compares a draw goes through this.
  */
 export const effectiveZone = (zone?: string | null): string => zone || zoneBucketId(DEFAULT_ZONE);
 
@@ -161,14 +156,12 @@ export const isDefaultZone = (zone?: string | null): boolean => effectiveZone(zo
 export const getDrawKey = (tournamentChoice: string, division: string, skillGroup: SkillGroup, zone?: string) =>
   `${tournamentChoice}_${division}_${skillGroup}${zone && !isDefaultZone(zone) ? `_${zone}` : ''}`.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
 
-// Cross-products a division's skill draws with each zone bucket, so zone becomes a real,
-// selectable draw dimension (e.g. "Men's Beginners — Downtown") instead of just a within-group
-// heuristic. Singles only — doubles is untouched.
+// Cross-products a division's skill draws with each zone bucket, making zone a selectable draw
+// dimension (e.g. "Men's Beginners — Downtown"). Singles only.
 //
 // DRAW HIERARCHY: gender → zone → skill → courts.
-// Zone is applied here, BEFORE skill merges, because a merge belongs to one (division, zone).
-// `courts` is the planned fourth level — splitting a zone's draw by specific court once a zone
-// grows too big for one bracket. Not implemented; nothing below should assume it exists.
+// Zone is applied BEFORE skill merges, because a merge belongs to one (division, zone).
+// `courts` is planned, not implemented — nothing below should assume it exists.
 export const buildZoneAwareDrawConfigs = (draws: DrawConfig[], zoneConfig: ZoneDrawConfig | undefined): DrawConfig[] => {
   if (!zoneConfig?.enabled || zoneConfig.buckets.length === 0) return draws;
   const merges = zoneConfig.merges ?? {};
@@ -197,10 +190,7 @@ export const DEFAULT_ZONE_BUCKETS: ZoneBucket[] = ZONE_NAMES.map((z) => ({
   zones: [z],
 }));
 
-/**
- * Follow a zone through any merges to the zone it actually plays in. Chains resolve (A→B, B→C
- * gives C) and a cycle bails out rather than looping forever.
- */
+/** Follow a zone through merges to the one it plays in. Chains resolve; a cycle bails out. */
 export const resolveMergedZone = (bucketId: string, merges: Record<string, string> = {}): string => {
   let current = bucketId;
   const seen = new Set<string>([current]);
@@ -214,15 +204,12 @@ export const resolveMergedZone = (bucketId: string, merges: Record<string, strin
 };
 
 /**
- * The zone config actually in force.
+ * The zone config actually in force. Zone draws default to ON — an event that never configured
+ * zones still gets the standard seven; an explicit `false` from Manage Draw is honoured.
  *
- * Zone draws default to ON — an event that never configured zones still gets the standard seven,
- * rather than needing the creator to opt in. A creator can still switch them off for a tournament
- * from Manage Draw, and that explicit `false` is honoured.
- *
- * Every bucket is kept, including merged-away sources: a player whose own zone was merged still
- * has to match a bucket before `zoneBucketFor` can redirect them to the target. Sources are
- * dropped later, in `buildZoneAwareDrawConfigs`, which is what makes them produce no draws.
+ * Every bucket is kept, including merged-away sources: a player whose zone was merged still has
+ * to match a bucket before `zoneBucketFor` can redirect them. Sources are dropped later, in
+ * `buildZoneAwareDrawConfigs`, which is what makes them produce no draws.
  */
 export const resolveZoneConfig = (cfg: ZoneDrawConfig | undefined): ZoneDrawConfig => ({
   ...(cfg ?? { includeUnassigned: false }),
@@ -355,9 +342,8 @@ const normalizeForMatch = (name?: string) =>
   (name || '').trim().toLowerCase().replace(/\s+/g, ' ');
 
 /**
- * For doubles draws: collapses mutual partner pairs into a single representative
- * entry and normalises the `doubles` field to the partner's actual registered name.
- * Participants whose partner has not registered (external partners) are kept as-is.
+ * Doubles: collapses mutual partner pairs into one entry and normalises `doubles` to the
+ * partner's registered name. Participants with an unregistered (external) partner are kept as-is.
  */
 export const deduplicateDoublesTeams = (participants: EventParticipant[]): EventParticipant[] => {
   const processed = new Set<string>();
@@ -407,10 +393,9 @@ export const filterParticipantsForDraw = (
     if (draw.tournamentChoice === 'Doubles' && draw.division === 'All') return true;
     if (p.division !== draw.division) return false;
     if (draw.tournamentChoice === 'Doubles') return true;
-    // Zone membership is ANDed with everything else below — a draw with no `zone` set (event
-    // never enabled zones, or a doubles draw) skips this check entirely.
-    // An organizer-set zone_override wins over the zone derived from preferred courts, so a
-    // player moved between zones stays put even if they later change their court preferences.
+    // ANDed with everything else below — a draw with no `zone` (zones never enabled, or doubles)
+    // skips this check. An organizer-set zone_override beats the zone derived from preferred
+    // courts, so a moved player stays put even if they later change court preferences.
     if (draw.zone && (p.zone_override ?? zoneBucketFor(zoneMap[p.uid], zoneConfig)) !== draw.zone) return false;
     // Retired Pro is opt-in at join time (age 55+), not skill-derived: a Retired Pro participant
     // belongs ONLY to the Retired Pro draw, and never falls into Beginners/Challengers/Masters.

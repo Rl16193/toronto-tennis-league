@@ -19,4 +19,13 @@ const EMAIL_FROM = 'Racquets & Strings <notifications@racquetsandstrings.ca>';
 // branded From with a free consumer Reply-To — a pattern filters associate with spoofing.
 const EMAIL_REPLY_TO = 'events@racquetsandstrings.ca';
 
-module.exports = { TZ, REGION, EMAIL_FROM, EMAIL_REPLY_TO };
+// Public site + social links. These MIRROR src/components/FooterElements.tsx — functions/ is a
+// separate package and can't import from src/, so both copies have to be changed together. They
+// previously lived inline in emailTemplates.js and had already drifted (a trailing slash on the
+// Instagram URL) from the frontend's copy.
+const SITE = 'https://www.racquetsandstrings.ca';
+const INSTAGRAM = 'https://www.instagram.com/racqnstringstoronto';
+const WHATSAPP = 'https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX';
+const FAQ = 'https://docs.google.com/document/d/17lyP5f62iuXRIiwDtrcn4EZo6vnx0jbr87kxdkEIzYY/edit?tab=t.0';
+
+module.exports = { TZ, REGION, EMAIL_FROM, EMAIL_REPLY_TO, SITE, INSTAGRAM, WHATSAPP, FAQ };

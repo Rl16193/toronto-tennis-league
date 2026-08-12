@@ -1,14 +1,8 @@
-// Build step: slim `public/Registered Programs.csv` down to just the rows the app actually uses.
+// Build step: slim `data/Registered Programs.csv` (the City's full ~9 MB export) down to the
+// tennis rows the app actually fetches, as public/programs-tennis.csv.
 //
-// The source is the City of Toronto's full registered-programs export (~9 MB, every activity in
-// the city). `parsePrograms` in src/pages/courtmap/courtMapUtils.ts throws away every row whose
-// Section isn't tennis — but only AFTER the browser has downloaded and parsed all 9 MB, on every
-// visit (the file is too big for the sessionStorage cache, so it never gets reused).
-//
-// This filters the same rows at build time instead. Rows are copied VERBATIM and the header is
-// untouched, so the runtime parser needs no changes and can't disagree with this script about
-// CSV quoting. Keep the source CSV checked in — it stays the source of truth, and re-running
-// this regenerates the slim file.
+// Rows are copied VERBATIM and the header is untouched, so the runtime parser needs no changes and
+// can't disagree with this script about CSV quoting. Keep the source CSV checked in.
 //
 // Wired into `npm run build`. Run standalone with: node scripts/build-programs-csv.mjs
 

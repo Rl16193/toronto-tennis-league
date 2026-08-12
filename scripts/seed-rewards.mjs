@@ -1,17 +1,13 @@
 /**
  * Seeds the Services offer catalog — `tasks` docs with `type: 'offer'` — from
- * analysis/RS - Services.xlsx.
+ * analysis/RS - Services.xlsx. Idempotent: stable doc ids, so re-running updates in place.
  *
- * Idempotent: each offer has a stable doc id, so re-running updates in place rather than
- * creating duplicates. Safe to re-run after editing a price here.
- *
- * Doc ids are the bare `{providerKey}-{slug(offer)}` form and must stay stable: issued coupons
+ * Doc ids are the bare `{providerKey}-{slug(offer)}` form and MUST stay stable: issued coupons
  * reference them via `redemptions.reward_id`, and functions/rewards.js resolves `tasks/{rewardId}`
  * directly. Never prefix them.
  *
  * After seeding, link each provider to an account so they can confirm their own coupons:
  *   node scripts/set-stringer.mjs --key serviceAccount.json --uid <uid> --id <provider id>
- * Until then their coupons still work — an organizer confirms them from the Tasks review queue.
  *
  * Usage:
  *   node scripts/seed-rewards.mjs --key serviceAccount.json --dry-run
@@ -37,10 +33,9 @@ const db = admin.firestore();
 const STRINGING_COST = 15;
 const COACHING_COST = 30;
 
-// `name` is the TRADE name shown in the catalog, which is not the same thing as the member's
-// own name on their profile and the leaderboard — Karan's shop is TIVORYX, he is Karan Tiwari.
-// `uid` links the shop to its owner's account so the Services rows can show their profile photo;
-// it must match preferences.stringer_id / coach_id on that same account.
+// `name` is the TRADE name shown in the catalog, not the member's own profile name — Karan's shop
+// is TIVORYX, he is Karan Tiwari. `uid` links the shop to its owner's account for the profile
+// photo; it must match preferences.stringer_id / coach_id on that account.
 const PROVIDERS = {
   karan: { name: 'TIVORYX', phone: '4169539281', area: 'Midtown Toronto', uid: 'FYjN50oiPQVseJt0UzD3G9oP6WG3' },
   fortyforty: { name: 'Forty-Forty Tennis', phone: '6479675228', area: 'Downtown Toronto', uid: 'yT3GrDq3bwMGdqHVnGMGjUDXrXx2' },

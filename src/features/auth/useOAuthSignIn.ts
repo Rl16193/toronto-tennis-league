@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { NavigateFunction } from 'react-router-dom';
 import {
+  GoogleAuthProvider, OAuthProvider,
   getAdditionalUserInfo, getRedirectResult, signInWithPopup, signInWithRedirect,
   type AuthProvider, type OAuthCredential,
 } from 'firebase/auth';
-import { auth, setAuthPersistence } from '../../lib/firebase';
+import { appleProvider, auth, googleProvider, setAuthPersistence } from '../../lib/firebase';
 import { track } from '../../lib/analytics';
 import { ensureUserProfileDocuments } from '../../lib/profileBootstrap';
 import { getOAuthSignInErrorMessage } from './authMessages';
@@ -109,4 +110,35 @@ export function useOAuthSignIn({
   };
 
   return { handleSignIn };
+}
+
+/**
+ * Provider bindings. Google and Apple were two byte-identical 16-line files differing only in the
+ * provider, the providerId string, and which class exposes credentialFromError. Both keep their
+ * original return names so Signup.tsx is unchanged. Add a provider by adding a binding here.
+ */
+type ProviderBoundOptions = Omit<
+  UseOAuthSignInOptions, 'provider' | 'providerId' | 'credentialFromError'
+>;
+
+/** Google Sign-In. All behaviour lives in useOAuthSignIn — this only binds the provider. */
+export function useGoogleSignIn(options: ProviderBoundOptions) {
+  const { handleSignIn } = useOAuthSignIn({
+    ...options,
+    provider: googleProvider,
+    providerId: 'google.com',
+    credentialFromError: (err) => GoogleAuthProvider.credentialFromError(err as any),
+  });
+  return { handleGoogleSignIn: handleSignIn };
+}
+
+/** Apple Sign-In. All behaviour lives in useOAuthSignIn — this only binds the provider. */
+export function useAppleSignIn(options: ProviderBoundOptions) {
+  const { handleSignIn } = useOAuthSignIn({
+    ...options,
+    provider: appleProvider,
+    providerId: 'apple.com',
+    credentialFromError: (err) => OAuthProvider.credentialFromError(err as any),
+  });
+  return { handleAppleSignIn: handleSignIn };
 }

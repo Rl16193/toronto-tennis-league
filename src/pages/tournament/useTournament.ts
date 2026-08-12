@@ -23,13 +23,9 @@ import { PLAYER_LOADING_SENTINEL } from './AddPlayerPanel';
 // normal state, but the merge below shouldn't drop the contact details over it.
 const EMPTY_MEMBER: UserData = { name: '', created_at: '' };
 
-// Points a completed match awards/awarded — shared by updateMatchWithSubmission (apply) and
-// reverseMatchStatsInto (the exact inverse, used when a draw/match is reset).
-//
-// A walkover no longer scores differently: an RR group-stage win is 3 points however it was won,
-// and the loser takes their usual 1. Deliberate — the old `isWalkover ? 1 : 3` penalised the
-// player who showed up for their opponent's no-show. Keep this in step with computeGroupStandings
-// in rrGeneration.ts, which is the display-side twin.
+// Shared by updateMatchWithSubmission (apply) and reverseMatchStatsInto (its exact inverse).
+// An RR group win is 3 points however it was won — never re-add a walkover penalty.
+// Keep in step with computeGroupStandings in rrGeneration.ts, the display-side twin.
 const computeMatchPoints = (match: TournamentMatch) => {
   const isRRGroupStage = match.format === 'rr' && match.round === 'RR';
   const LOSER_PTS: Record<string, number> = { R32: 1, R16: 2, QF: 3, RR: 1, SF: 5, F: 10 };
@@ -49,10 +45,8 @@ export const useTournament = (eventIdOverride?: string) => {
   const [event, setEvent] = useState<TennisEvent | null>(null);
   const [participants, setParticipants] = useState<EventParticipant[]>([]);
   const [matches, setMatches] = useState<TournamentMatch[]>([]);
-  // Tracks whether the CURRENT event's participants+matches have each delivered at least one
-  // onSnapshot payload since `event` last changed — reset on every event switch, so the UI can
-  // show a loading state instead of a flash of the previous event's data (or an empty/broken
-  // render before the first event's data has arrived at all).
+  // Has each onSnapshot delivered once since `event` changed? Reset per event switch, so the UI
+  // shows a loading state instead of flashing the previous event's data.
   const [participantsReady, setParticipantsReady] = useState(false);
   const [matchesReady, setMatchesReady] = useState(false);
   const eventDataReady = participantsReady && matchesReady;
@@ -80,11 +74,9 @@ export const useTournament = (eventIdOverride?: string) => {
   const [resettingDraw, setResettingDraw] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [previewSlotOverrides, setPreviewSlotOverrides] = useState<Record<string, Record<number, TournamentPlayer | null>>>({});
-  // Which adjacent skill pair (if any) is merged into one draw, per division. A single nullable
-  // field instead of two booleans — makes "no all-three merge" and "no non-adjacent merge"
-  // structurally unrepresentable rather than something to validate.
-  // Skill merges are per (division, zone) — "every zone will have a merge under them". Keyed
-  // rather than two flat slots so Downtown Men's can merge while North York Men's stays split.
+  // Which adjacent skill pair is merged, keyed per (division, zone) so Downtown Men's can merge
+  // while North York Men's stays split. One nullable field, not two booleans — a non-adjacent
+  // merge is then unrepresentable rather than something to validate.
   const [skillMerges, setSkillMerges] = useState<Record<string, SkillMergePair | null>>({});
   const skillMergeKey = (division: string, zone?: string) => `${division}|${zone ?? ''}`;
   const [consolidateDoubles, setConsolidateDoubles] = useState(false);
@@ -143,16 +135,10 @@ export const useTournament = (eventIdOverride?: string) => {
     });
     if (consolidateDoubles) draws = [...draws, CONSOLIDATED_DOUBLES_DRAW];
 
-    // Hierarchy is gender → zone → skill, so the zone split happens BEFORE merging: a merge now
-    // belongs to one (division, zone) pair, letting a thin field in one zone merge its bands
-    // while the same division in another zone stays split.
-    //
-    // Pre-zone draws are NO LONGER kept alongside the zoned ones. They used to be, so that matches
-    // generated before zones went live (no `zone` field) wouldn't disappear — but that left the
-    // running groups in a category outside the zone list, and made every participant match two
-    // draws at once, which is what doubled the "N signed up" count.
-    // `effectiveZone` now maps a missing zone onto the default one, so those matches bind to the
-    // Downtown-Midtown draw and the duplicate is unnecessary.
+    // Gender → zone → skill, so the zone split happens BEFORE merging.
+    // Don't re-add pre-zone draws alongside the zoned ones: it put running groups outside the
+    // zone list and matched every participant to two draws, doubling the "N signed up" count.
+    // `effectiveZone` maps a missing zone onto the default instead.
     draws = buildZoneAwareDrawConfigs(draws, zoneConfig);
 
     // Apply each (division, zone) merge: drop the individual band draws it swallows, add one
@@ -240,16 +226,10 @@ export const useTournament = (eventIdOverride?: string) => {
     );
   }, [event]);
 
-  // Auto-enable merge/consolidate toggles if that draw data already exists in Firestore. Which
-  // PAIR was merged isn't stored on the match doc itself, so infer it from the actual players in
-  // those matches; falls back to Challengers+Masters (the only pair that existed before
-  // Beginners) if the bands can't be determined.
-  //
-  // Deliberately its own effect rather than part of the matches snapshot callback: it needs
-  // statsMap, which loads asynchronously. Inside the callback (deps [event]) statsMap was a
-  // stale closure — usually still {} on first delivery — so every band lookup returned 0 and the
-  // inference silently fell through to Challengers+Masters. Keying on [matches, statsMap] also
-  // stops this scan from re-running on every score entry.
+  // Auto-enable merge toggles from existing draw data. The merged PAIR isn't stored on the match
+  // doc, so infer it from the players; falls back to Challengers+Masters.
+  // Must stay its own effect keyed on [matches, statsMap] — inside the matches callback statsMap
+  // is a stale {} closure, so every band lookup returns 0 and the inference silently falls back.
   useEffect(() => {
     // Merged matches are now inferred per (division, zone) — a merged draw exists in one zone
     // without implying anything about the same division in another.
@@ -442,17 +422,10 @@ export const useTournament = (eventIdOverride?: string) => {
   const userDraw = useMemo<DrawConfig | undefined>(() => {
     if (!userParticipant) return undefined;
 
-    // Resolve from the participant's ACTUAL placement: if they appear in a generated match, show
-    // that draw. This covers players the creator moved across skill groups (e.g.
-    // Challengers → Masters) whose event_participants skill was never changed — otherwise
-    // their visibility would stay on the skill-derived draw and they couldn't see the one
-    // they're really in.
-    //
-    // There is deliberately NO skill-derived fallback: before any draw is generated a
-    // participant has no placement, so this returns undefined and visibleDraws shows them
-    // every draw (see below). That's intended — pre-generation there's nothing to hide, and
-    // guessing a draw from skill_level would send players the creator later moves to the
-    // wrong tab. Don't "restore" a fallback here.
+    // Resolve from the participant's ACTUAL placement, so a creator moving someone across skill
+    // groups doesn't hide the draw they're really in.
+    // Deliberately NO skill-derived fallback: pre-generation there's no placement, so this is
+    // undefined and visibleDraws shows every draw. Don't "restore" a fallback here.
     const placement = matches.find(
       (m) => m.player_1_uid === userParticipant.uid || m.player_2_uid === userParticipant.uid,
     );
@@ -481,17 +454,13 @@ export const useTournament = (eventIdOverride?: string) => {
     return undefined;
   }, [userParticipant, matches, zoneConfig]);
 
-  // Creators see every draw. A participant sees both skill draws in their own division
-  // (Challengers + Masters for their gender), across every zone — zone is about travel
-  // practicality, not fairness, so there's no reason to hide other zones' versions of the same
-  // skill draw. For doubles they see only their own division draw. Non-creators can't edit
-  // (controls gate on isCreator).
+  // Creators see every draw. A participant sees both skill draws in their own division, across
+  // every zone (zone is travel practicality, not fairness); doubles see only their own division.
+  // Non-creators can't edit — controls gate on isCreator.
   const visibleDraws = useMemo(() => {
-    // Zones cross-product every skill draw, so a 4-zone event turns 3 skill draws into 12 tabs —
-    // most of them empty. Hide a zone draw until somebody is actually in it. A zone draw that
-    // already has matches always stays visible, even if its participants later moved away.
-    // Keyed on the EFFECTIVE zone, so a pre-zone match (no `zone` field) keeps the default zone's
-    // draw visible rather than needing a zone-less draw of its own.
+    // Zones cross-product skill draws (4 zones × 3 skills = 12 tabs, mostly empty), so hide a
+    // zone draw until someone is in it. One that already has matches always stays visible. Keyed
+    // on the EFFECTIVE zone so a pre-zone match keeps the default zone's draw visible.
     const zonesWithMatches = new Set(
       matches.map((m) => `${m.tournament_choice}|${m.division}|${m.skill_group}|${effectiveZone(m.zone)}`),
     );
@@ -537,12 +506,10 @@ export const useTournament = (eventIdOverride?: string) => {
     [currentDraw],
   );
 
-  // `zone` is part of the draw's identity (getDrawKey above includes it), so it MUST be part of
-  // this filter. Without it, two zone draws in the same division/skill are indistinguishable:
-  // the bracket renders both interleaved, and — much worse — every destructive path below
-  // (reset, cancel, regenerate) iterates `currentMatches`, so resetting one zone deleted the
-  // other zone's matches and reversed their players' league points. `?? null` keeps events that
-  // never enabled zones behaving exactly as before.
+  // `zone` is part of the draw's identity (getDrawKey includes it) and MUST be in this filter.
+  // Without it two zone draws in the same division/skill are indistinguishable: every destructive
+  // path below iterates `currentMatches`, so resetting one zone deleted the other's matches and
+  // reversed their players' points. `?? null` keeps pre-zone events behaving as before.
   const currentMatches = useMemo(() => {
     if (!currentDraw) return [];
     return matches
@@ -618,10 +585,8 @@ export const useTournament = (eventIdOverride?: string) => {
   }, [currentDraw, currentDrawAllPlayers, currentMatches, event?.id, previewDrawSize, previewSlotOverrides, started]);
 
 
-  // Excludes round-robin group-stage docs (round === 'RR') — a no-op for plain bracket draws
-  // (never that literal round) and, for RR draws, makes this resolve only to a real knockout-round
-  // match. Without it, viewing the Knockout tab before the bracket is generated could still
-  // resolve to the player's (possibly completed) group-stage match instead of nothing.
+  // Excludes RR group-stage docs (round === 'RR'); without it the Knockout tab could resolve to
+  // the player's completed group-stage match instead of nothing.
   const visibleUserMatch = useMemo(() => {
     if (!user) return null;
     const pool = displayMatches.filter(
@@ -811,12 +776,9 @@ export const useTournament = (eventIdOverride?: string) => {
     });
   }, [userMap]);
 
-  // Positional labels: the letter follows the sorted display position (always A, B, C…). A
-  // creator-edited (custom) label is shown verbatim; otherwise the stored "band · zone"
-  // suffix is kept and re-prefixed with the positional letter.
-  // Group label recomputed from the group's CURRENT players (positional letter + shared band/zone)
-  // so it stays correct after any edit/move/remove — never resets to a bare "Group X". A group the
-  // creator renamed (rr_label_custom) is shown verbatim.
+  // Positional letter (always A, B, C… by display order) re-prefixed onto the stored
+  // "band · zone" suffix, recomputed from the group's CURRENT players so it survives any edit.
+  // A creator-renamed label (rr_label_custom) is shown verbatim.
   const buildRRLabelsFrom = useCallback((groupMatches: TournamentMatch[], indices: number[]): string[] =>
     indices.map((gi, idx) => {
       const first = groupMatches.find((m) => (m.rr_group ?? 0) === gi);
@@ -846,12 +808,10 @@ export const useTournament = (eventIdOverride?: string) => {
     [rrGroupMatches, rrGroupIndices, buildRRLabelsFrom],
   );
 
-  // Players registered for this draw but not yet in any group (late joiners) — the pool the
-  // creator's "Add Group" form draws from. "Placed" is taken from the authoritative match docs
-  // (any uid seated in ANY of the event's rr groups — current draw or a sibling skill draw),
-  // not the reconstructed `rrGroups`, so a player already in a group is never treated as unplaced.
-  // This is what stops a skill-level edit from re-routing an already-placed player back into the
-  // late-joiner pool and duplicating them across groups.
+  // Registered for this draw but not yet in any group — the "Add Group" pool. "Placed" comes from
+  // the authoritative match docs (any uid seated in ANY of the event's rr groups), not the
+  // reconstructed `rrGroups`. This is what stops a skill-level edit from re-routing an
+  // already-placed player back into the late-joiner pool and duplicating them.
   const rrUnplacedPlayers = useMemo<TournamentPlayer[]>(() => {
     if (rrGroupMatches.length === 0) return [];
     const placedAnywhere = new Set(
@@ -878,10 +838,8 @@ export const useTournament = (eventIdOverride?: string) => {
         const advCount = rrConfig?.advancementCount ?? 1;
         const makePairings = (n: number): [number, number][] => n >= 2 ? generateGroupPairings(n) : [[0, 1]];
 
-        // Read the authoritative placement snapshot RIGHT BEFORE writing. Deciding "who is
-        // unplaced" from a stale in-memory derivation is exactly what let a skill-level edit
-        // re-fire this effect and duplicate already-placed players into new groups. A fresh read
-        // guarantees the decision matches what is actually in Firestore.
+        // Read the authoritative placement RIGHT BEFORE writing — deciding "who is unplaced"
+        // from a stale in-memory derivation duplicated already-placed players into new groups.
         const freshSnap = await getDocs(
           query(collection(db, 'matches'), where('event_id', '==', event.id)),
         );
@@ -1016,15 +974,11 @@ export const useTournament = (eventIdOverride?: string) => {
     [rrSiblingDraws, currentDraw, matches],
   );
 
-  // Cross-draw deduplication: if a player appears in both this draw's groups and the sibling
-  // draw's groups, remove them from this draw. Skips groups with played matches.
+  // Cross-draw dedup: remove a player found in both this draw's and the sibling draw's groups.
   //
-  // DISABLED. This was the one path that could take a seated player out of a draw with nobody
-  // acting — and if their slot was then filled by someone else, they lost their place with no
-  // record of why. Removal is now always deliberate: the creator's delete button
-  // (`handleRemovePlayer`), or a zone change the organizer approves. Kept rather than deleted
-  // because the duplicate it guarded against is real; if duplicates reappear, the fix is to stop
-  // creating them, not to silently delete a player mid-event.
+  // DISABLED. It was the one path that could unseat a player with nobody acting — and if their
+  // slot was refilled they lost their place with no record why. Removal is now always deliberate.
+  // Kept because the duplicate it guarded is real: fix the cause, don't silently delete a player.
   const AUTO_DEDUPE_ENABLED = false;
   const deduplicatingRef = useRef(false);
   useEffect(() => {
@@ -1196,10 +1150,8 @@ export const useTournament = (eventIdOverride?: string) => {
       set_2_player_1: submission.set_2_player_1, set_2_player_2: submission.set_2_player_2,
       set_3_player_1: submission.set_3_player_1, set_3_player_2: submission.set_3_player_2,
       status: 'complete',
-      // completed_at must stay pinned to when the match was ACTUALLY played (first scoring) —
-      // re-entering/editing an already-complete match's score used to overwrite it with "now",
-      // which corrupted anything sorted by it (streaks, months active, best finish). A later
-      // edit instead stamps score_edited_at and leaves completed_at untouched.
+      // completed_at stays pinned to first scoring — re-editing a complete match used to
+      // overwrite it with "now", corrupting anything sorted by it. Edits stamp score_edited_at.
       ...(match.status !== 'complete'
         ? { completed_at: new Date().toISOString() }
         : { score_edited_at: new Date().toISOString() }),
@@ -1358,10 +1310,9 @@ export const useTournament = (eventIdOverride?: string) => {
       );
       const allComplete = groupMatches.length > 0 &&
         groupMatches.every((m) => m.id === match.id || m.status === 'complete');
-      // Already paid? `match.status !== 'complete'` only means THIS match hadn't been scored —
-      // a corrected match sent back to pending and re-confirmed would re-trigger the payout and
-      // hand everyone a second +5. A later draw reset then removes only 5, leaving a permanent
-      // surplus. This is the same stamp `reverseRRBonusesInto` checks before deducting.
+      // Already paid? `status !== 'complete'` only means THIS match was unscored — a corrected
+      // match re-confirmed would pay a second +5, and a later reset removes only 5, leaving a
+      // permanent surplus. Same stamp `reverseRRBonusesInto` checks before deducting.
       const alreadyPaid = groupMatches.some((m) => m.rr_group_bonus_v2);
       if (allComplete && !alreadyPaid) {
         const updatedGroup = groupMatches.map((m) =>
@@ -1383,19 +1334,15 @@ export const useTournament = (eventIdOverride?: string) => {
       }
     }
 
-    // Advance the winner into the next match as a best-effort follow-up, AFTER the
-    // result is committed — so a missing/mismatched next-match document can never roll
-    // back the recorded winner, scores, or stats. Resolve the next match from loaded
-    // state (use its real doc id) rather than reconstructing the id from the draw key,
-    // which breaks for merged/regenerated draws whose next round lives under a
-    // different key.
-    // Returns whether the winner still needs manual placement (advancement couldn't complete).
+    // Best-effort, AFTER the result is committed, so a missing next-match doc can never roll back
+    // the recorded winner, scores, or stats. Resolve the next match from loaded state (real doc
+    // id) rather than reconstructing it from the draw key, which breaks for merged/regenerated
+    // draws. Returns whether the winner still needs manual placement.
     if (!match.next_match_id) return { needsManual: false };
 
-    // Normalize bracket and zone so undefined and null compare equal (legacy/regenerated docs).
-    // `zone` is essential: template match ids (M1, M5, …) are identical across zone draws, so
-    // without it `matches.find` below could return the OTHER zone's next match and write this
-    // winner over a real player's slot there — silently, and reported as a success.
+    // Normalize bracket and zone so undefined and null compare equal (legacy docs).
+    // `zone` is essential: template ids (M1, M5…) repeat across zone draws, so without it
+    // `matches.find` could overwrite a real player's slot in the OTHER zone, silently.
     const sameDraw = (m: TournamentMatch) =>
       (m.bracket ?? null) === (match.bracket ?? null) &&
       m.tournament_choice === match.tournament_choice &&
@@ -1526,10 +1473,9 @@ export const useTournament = (eventIdOverride?: string) => {
     for (const gi of [...new Set(groupMatches.map((m) => m.rr_group ?? 0))]) {
       const ms = groupMatches.filter((m) => (m.rr_group ?? 0) === gi);
       if (ms.length === 0 || !ms.every((m) => m.status === 'complete')) continue;
-      // "Complete" is not proof the bonus was paid: it's awarded in a separate best-effort
-      // commit that can fail (rules/offline) while the scores still land. Reversing on
-      // completeness alone deducted 5 points players never received. The stamp is written in
-      // the same batch as the payment, so it's the only reliable signal.
+      // "Complete" is not proof the bonus was paid — it's a separate best-effort commit that can
+      // fail while the scores land, and reversing on completeness deducted 5 points players never
+      // got. The stamp is written in the payment's own batch, so it's the only reliable signal.
       if (!ms.some((m) => m.rr_group_bonus_v2)) continue;
       const standings = computeGroupStandings(ms);
       standings.forEach((row) => {
@@ -1589,13 +1535,10 @@ export const useTournament = (eventIdOverride?: string) => {
       return;
     }
     try {
-      // Invariant: any player placed into a real (persisted) bracket slot MUST have a
-      // matching event_participants entry for this event. Otherwise they appear in the
-      // draw but are invisible to engagement reports — flagged as "inactive" or a Slam
-      // "no-show" despite clearly being in the tournament. Self-heal here so the entry
-      // always exists, regardless of how the player became selectable. No-op when the
-      // player is already a participant, so the normal Add Player → Move Players flow
-      // is unaffected.
+      // Invariant: any player in a persisted bracket slot MUST have an event_participants entry,
+      // or they show in the draw but read as "inactive"/"no-show" in engagement reports.
+      // Self-heal here regardless of how they became selectable. No-op when already a
+      // participant, so the normal Add Player → Move Players flow is unaffected.
       if (player?.uid && event && currentDraw &&
           !participants.some((p) => p.uid === player.uid)) {
         let skillLevel = statsMap[player.uid]?.skill_level ?? 0;
@@ -1637,10 +1580,9 @@ export const useTournament = (eventIdOverride?: string) => {
     const isPlayerInMatch = user.uid === match.player_1_uid || user.uid === match.player_2_uid;
     if (!isCreator && !isPlayerInMatch) return;
 
-    // Without this the match completes with winner_uid: '', which then displays player 2 as
-    // the winner, credits player 1 with a loss (the loser is derived as "whoever isn't the
-    // winner", and '' isn't player 1), awards nobody a win, and writes an empty uid into the
-    // next round's slot. The ladder and friendly paths already guard this.
+    // Without this the match completes with winner_uid: '', which displays player 2 as winner,
+    // credits player 1 with a loss, awards nobody a win, and writes an empty uid into the next
+    // round. The ladder and friendly paths already guard this.
     if (!scoreForm.winnerUserId) {
       setMessage({ type: 'error', text: 'Please choose who won the match.' });
       return;
@@ -1817,10 +1759,9 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   /**
-   * Organizer removes a player from a draw. Soft delete: the `event_participants` row survives
-   * with `removal: true` so we still know who backed out, and their completed matches and earned
-   * stats are left exactly as they are. Their slot becomes Player Loading — visible in a knockout
-   * so there's somewhere to drop a replacement, hidden in RR groups where an empty row is noise.
+   * Soft delete: the `event_participants` row survives with `removal: true`, and completed
+   * matches and earned stats are left as they are. Their slot becomes Player Loading — shown in a
+   * knockout so there's somewhere to drop a replacement, hidden in RR groups where it's noise.
    */
   const handleRemovePlayer = async (uid: string) => {
     if (!isCreator || !event || !uid) return;
@@ -1979,11 +1920,9 @@ export const useTournament = (eventIdOverride?: string) => {
       };
 
       {
-        // Generated state: rewrite the target group and atomically update any source groups
-        // for players moved in from elsewhere. Moving a player to another group still protects
-        // one who has already played here (below) — but removing them outright (replaced with
-        // Player Loading / dropped from the roster) is a deliberate purge: it always proceeds,
-        // even if they've played, because a departed player can't sensibly "keep" a match here.
+        // Rewrite the target group and atomically update source groups for players moved in.
+        // A move protects someone who has already played here (below), but an outright removal
+        // always proceeds — a departed player can't sensibly keep a match here.
         const oldMatches = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === rrGroup);
         const groupLabel = oldMatches[0]?.rr_group_label ?? `Group ${String.fromCharCode(65 + rrGroup)}`;
         const labelCustom = oldMatches[0]?.rr_label_custom ?? false;
@@ -2051,12 +1990,10 @@ export const useTournament = (eventIdOverride?: string) => {
         }
       }
 
-      // A removed player is purged everywhere in the event, not just this group — any match doc
-      // (a different RR group, a sibling skill draw, the knockout bracket) that still lists them
-      // as player_1/player_2 is deleted too, played or not. Without this, one leftover doc
-      // elsewhere keeps reconstructing their name on the group card, and the late-joiner
-      // auto-placement effect re-seats them into a brand-new match the moment they next look
-      // "unplaced but still registered" — which is exactly why this has kept resurfacing.
+      // Purge the player from the WHOLE event, not just this group — any match doc still listing
+      // them (another RR group, a sibling skill draw, the knockout) is deleted, played or not.
+      // One leftover doc keeps reconstructing their name on the group card and lets the
+      // late-joiner effect re-seat them the moment they look "unplaced but registered".
       if (removedUids.length) {
         const removedSet = new Set(removedUids);
         matches.forEach((m) => {
@@ -2073,13 +2010,10 @@ export const useTournament = (eventIdOverride?: string) => {
         });
       }
 
-      // Deregister the removed player from the event entirely — this is what actually stops
-      // the late-joiner auto-placement effect from ever finding them again. Withdrawing them
-      // only in the draw(s) where we found a leftover match doc isn't enough: `event_participants`
-      // is what routes a player into a draw by skill level in the first place, so as long as
-      // that doc exists, they can still get auto-placed into a DIFFERENT draw (e.g. Challengers)
-      // they were never seated in and so never showed up as "withdrawn" there. Re-adding them
-      // later goes through Add Player, which re-creates this doc.
+      // Deregister from the event entirely — this is what stops the late-joiner effect finding
+      // them again. Withdrawing only in the draws with a leftover match doc isn't enough:
+      // `event_participants` is what routes a player into a draw by skill, so while it exists
+      // they can be auto-placed into a DIFFERENT draw. Re-adding goes through Add Player.
       if (removedUids.length) {
         const removedSet = new Set(removedUids);
         participants.forEach((p) => {
@@ -2087,12 +2021,10 @@ export const useTournament = (eventIdOverride?: string) => {
         });
       }
 
-      // Fold the withdrawn-list update into the SAME batch as the match-doc changes so both
-      // commit atomically. Writing this separately (a second, sequential setDoc after the match
-      // batch) left a race window: the matches change reaches the client's onSnapshot listener
-      // (and can trigger the late-joiner auto-placement effect) before the withdrawn list's own
-      // round trip completes, so the just-removed player could get silently re-seated into a
-      // group before the withdrawal was ever visible — persisting even across a page reload.
+      // Same batch as the match-doc changes, so both commit atomically. Written separately, the
+      // matches change reaches onSnapshot (and the late-joiner effect) before the withdrawn
+      // list's round trip finishes, so the just-removed player could be re-seated before the
+      // withdrawal was ever visible — persisting across a reload.
       if (removedUids.length) {
         const nextWithdrawn = [...new Set([...(rrDraft?.withdrawn ?? []), ...removedUids])];
         batch.set(doc(db, 'events', event.id, 'rr_drafts', rrDraftKey()), {
@@ -2227,11 +2159,9 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   /**
-   * A doubles participant fills in the partner their registration is missing.
-   *
-   * Writes exactly the fields the join flow writes (`doubles`, `partner_in_app`, and the combined
-   * `skill` when the partner isn't an app member), so `deduplicateDoublesTeams` pairs them up the
-   * same way it does for a normal signup — no new data model.
+   * A doubles participant fills in the partner their registration is missing. Writes exactly the
+   * fields the join flow writes (`doubles`, `partner_in_app`, and the combined `skill` when the
+   * partner isn't an app member), so `deduplicateDoublesTeams` pairs them up the same way.
    */
   const [savingTeammate, setSavingTeammate] = useState(false);
   const handleAddTeammate = async (
@@ -2277,9 +2207,8 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   /**
-   * Same move, addressed by uid rather than participant doc id — the group cards know a player by
-   * uid, not by their `event_participants` row. Lets an organizer move anyone from the draw they
-   * are looking at, instead of only the players who happened to file a zone-change request.
+   * Same move, addressed by uid rather than participant doc id — group cards know a player by uid.
+   * Lets an organizer move anyone in the draw they're viewing, not only those who filed a request.
    */
   const handleMoveZoneByUid = async (uid: string, bucketId: string) => {
     const participant = participants.find((p) => p.uid === uid);
@@ -2291,13 +2220,11 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   /**
-   * Organizer moves a player to a different zone. Zones are how a full draw gains capacity, so
-   * this is the release valve when a bracket fills up — and the way a zone-change request is
-   * actually honoured. Pins `zone_override` on the participant, which beats their derived zone
-   * from then on, and clears any outstanding request in the same write.
+   * Pins `zone_override` on the participant (beating their derived zone) and clears any
+   * outstanding request in the same write. Zones are how a full draw gains capacity, so this is
+   * the release valve when a bracket fills up.
    *
-   * Their existing matches are left alone: this changes which draw they're routed to next, not
-   * where they already are. Move them out of a generated draw with the normal edit tools.
+   * Existing matches are left alone — this changes where they route next, not where they are.
    */
   const handleMovePlayerZone = async (participantId: string, bucketId: string) => {
     if (!isCreator) return;
@@ -2342,12 +2269,10 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   /**
-   * Merge one zone into another for this tournament. The source stops producing draws and its
-   * players are routed into the target's.
+   * Merge one zone into another. The source stops producing draws; its players route to the target.
    *
-   * Recorded in TWO places on purpose: on the event's zone config, so anyone who signs up after
-   * the merge is routed automatically; and stamped on each affected participant, so there's a
-   * per-player record of who moved. Unmerge reads the event config and clears the stamps.
+   * Recorded in two places on purpose: on the event's zone config, so later signups route
+   * automatically; and stamped per participant, for a record of who moved. Unmerge clears both.
    */
   const handleMergeZone = async (sourceId: string, targetId: string) => {
     if (!isCreator || !event || sourceId === targetId) return;
@@ -2376,9 +2301,8 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   /**
-   * Switch zone draws on or off for this tournament (Manage Draw → Zone Draws). Off collapses the
-   * zone dimension entirely: draws stop being split by zone and everyone plays one draw per skill.
-   * Merges and player zones are left recorded, so switching back on restores the previous setup.
+   * Manage Draw → Zone Draws. Off collapses the zone dimension: one draw per skill.
+   * Merges and player zones stay recorded, so switching back on restores the setup.
    */
   const handleSetZoneDrawsEnabled = async (enabled: boolean) => {
     if (!isCreator || !event) return;
@@ -2453,10 +2377,9 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  // Build (or rebuild) the RR knockout at a creator-chosen size (R4/R8/R16). Group winners are
-  // auto-seeded; the remaining slots are left empty (PLAYER_LOADING) for manual placement via the
-  // draw editor. Available anytime after the group stage is generated. Re-selecting a size rebuilds
-  // — refused if any knockout match has already been played.
+  // Build/rebuild the RR knockout at a creator-chosen size (R4/R8/R16). Group winners are
+  // auto-seeded; remaining slots are PLAYER_LOADING for manual placement. Re-selecting rebuilds —
+  // refused once any knockout match has been played.
   const handleGenerateRRKnockout = async (size?: number) => {
     if (!isCreator || !event || !currentDraw || rrGroupMatches.length === 0) return;
     if (rrKnockoutMatches.some((m) => m.status === 'complete')) {

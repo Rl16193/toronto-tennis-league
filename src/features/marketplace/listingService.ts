@@ -4,11 +4,51 @@ import {
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { useEffect, useState } from 'react';
 import { db, storage } from '../../lib/firebase';
-import {
-  Listing, ListingKind, ListingStatus, MAX_LISTING_IMAGE_BYTES, MAX_LISTING_PHOTOS,
-} from './types';
+// Member-posted equipment listings — the Rent and Buy/Sell tabs of the Marketplace.
+// Distinct from `rewards` (Services), which is a curated catalog only an admin can edit.
+export type ListingKind = 'rent' | 'sell';
 
-export * from './types';
+export type ListingCondition = 'New' | 'Like new' | 'Good' | 'Fair';
+export const CONDITIONS: ListingCondition[] = ['New', 'Like new', 'Good', 'Fair'];
+
+/** Available until the poster marks it gone. Sold/rented listings drop to the bottom, greyed. */
+export type ListingStatus = 'available' | 'sold' | 'rented';
+
+export const STATUS_LABEL: Record<ListingStatus, string> = {
+  available: 'Available',
+  sold: 'Sold',
+  rented: 'Rented out',
+};
+
+// Collection: listings
+export interface Listing {
+  id: string;
+  kind: ListingKind;
+  title: string;
+  description: string;
+  condition: ListingCondition;
+  price: number;
+  /** Where the buyer collects it. Free text — "Enter Location" in the form. */
+  pickup: string;
+  /** Rent only: how long the price covers, e.g. "2 weeks". The poster sets the terms. */
+  duration?: string;
+  /** Storage paths; resolved to download URLs for display. Up to MAX_LISTING_PHOTOS. */
+  photo_paths: string[];
+  status: ListingStatus;
+  uid: string;
+  user_name: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export const MAX_LISTING_PHOTOS = 3;
+export const MAX_LISTING_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** "$40 for 2 weeks" for rentals, plain "$40" for sales. */
+export const formatListingPrice = (l: Pick<Listing, 'kind' | 'price' | 'duration'>): string => {
+  const amount = `$${l.price % 1 === 0 ? l.price : l.price.toFixed(2)}`;
+  return l.kind === 'rent' && l.duration?.trim() ? `${amount} for ${l.duration.trim()}` : amount;
+};
 
 export interface ListingDraft {
   kind: ListingKind;
@@ -33,11 +73,9 @@ export const emptyDraft = (kind: ListingKind): ListingDraft => ({
 });
 
 /**
- * Creates a listing, uploading its photos first.
- *
- * Photos land under `listings/{uid}/` — the SafeSearch Cloud Function watches that prefix and
- * deletes anything unsafe (see functions/index.js), same as court photos and avatars.
- * Returns an error message, or null on success.
+ * Creates a listing, uploading its photos first. Photos land under `listings/{uid}/` — the
+ * SafeSearch function watches that prefix and deletes anything unsafe, same as court photos and
+ * avatars. Returns an error message, or null on success.
  */
 export async function createListing(
   uid: string, userName: string, draft: ListingDraft,
@@ -99,9 +137,8 @@ export const setListingStatus = (id: string, status: ListingStatus) =>
   updateDoc(doc(db, 'listings', id), { status, updated_at: new Date().toISOString() });
 
 /**
- * Poster edits their own listing — same validation as creating one. `keepPhotoPaths` are
- * existing Storage paths to retain (already-uploaded photos the poster didn't remove);
- * `draft.files` are new photos to upload alongside them. `kind`, `status`, `uid` and
+ * Poster edits their own listing — same validation as creating. `keepPhotoPaths` are existing
+ * Storage paths to retain; `draft.files` are new uploads. `kind`, `status`, `uid` and
  * `created_at` are never touched here.
  */
 export async function updateListing(
@@ -158,11 +195,9 @@ export async function updateListing(
 export const deleteListing = (id: string) => deleteDoc(doc(db, 'listings', id));
 
 /**
- * Live listings for one tab, available first then newest.
- *
- * `enabled` defers the listener until the board is actually wanted — the Services tab is the
- * default landing tab, and both boards used to open a listener the moment Marketplace mounted.
- * Once switched on it stays on, so flipping between tabs doesn't tear the listener down.
+ * Live listings for one tab, available first then newest. `enabled` defers the listener until the
+ * board is wanted (Services is the default tab). Once on it stays on, so flipping between tabs
+ * doesn't tear the listener down.
  */
 export function useListings(kind: ListingKind, enabled = true) {
   const [listings, setListings] = useState<Listing[]>([]);

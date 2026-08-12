@@ -9,10 +9,9 @@ export type ZoneTierGroup = {
 };
 
 /**
- * Split a bucket of `n` players into balanced groups of 3–5.
- * g = ceil(n/5) groups, sizes differ by at most 1, larger groups first.
- *   5→[5] · 6→[3,3] · 7→[4,3] · 8→[4,4] · 9→[5,4] · 10→[5,5] · 11→[4,4,3] · 12→[4,4,4].
- * (n<3 returns a single group of n — a size-2 pair is playable, size-1 is a placeholder.)
+ * Split `n` players into balanced groups of 3–5: g = ceil(n/5), sizes differ by at most 1,
+ * larger first. 5→[5] · 6→[3,3] · 7→[4,3] · 8→[4,4] · 9→[5,4] · 10→[5,5] · 11→[4,4,3] · 12→[4,4,4].
+ * n<3 returns one group of n.
  */
 export function splitEvenly(n: number): number[] {
   if (n <= 0) return [];
@@ -42,16 +41,11 @@ export const autoLabel = (index: number, band: string, zone: string): string =>
   ['Group ' + String.fromCharCode(65 + index), band, zone].filter(Boolean).join(' · ');
 
 /**
- * Groups players by skill band first, then preferred-court zone, honoring the size algorithm.
- *
- * - ≤5 total players → one group (zone/band ignored — a small field plays together).
- * - Otherwise bucket by (band, zone) and size each bucket with `splitEvenly`.
- * - A lone player in a distinct zone becomes their own placeholder group ONLY when the draw
- *   already has more than 3 zone-clustered groups; in smaller draws the band's players are
- *   pooled (ordered by zone so clusters stay together) and split, folding singletons in.
- *
- * Labels carry the band and, when the whole group shares one zone, that zone. Unassigned or
- * mixed zones produce no zone suffix. The letter is positional here and recomputed at render.
+ * Buckets by skill band, then preferred-court zone, sized by `splitEvenly`.
+ * - ≤5 total players → one group, band/zone ignored.
+ * - A lone player in a distinct zone gets their own placeholder group ONLY when the draw already
+ *   has >3 zone-clustered groups; otherwise the band is pooled (ordered by zone) and split.
+ * Labels carry the band, plus the zone when the whole group shares one. Letter is positional.
  */
 export function buildZoneTierGroups(
   players: TournamentPlayer[],
@@ -143,11 +137,7 @@ export function buildZoneTierGroups(
   }));
 }
 
-/**
- * Circle-method round-robin scheduling.
- * Returns all unique [i, j] pairings (i < j) for n players.
- * n=4 → 6 pairs; n=5 → 10 pairs.
- */
+/** Circle-method round-robin: all unique [i, j] pairings (i < j). n=4 → 6 pairs; n=5 → 10. */
 export function generateGroupPairings(n: number): [number, number][] {
   if (n < 2) return [];
   const pairs: [number, number][] = [];
@@ -234,10 +224,9 @@ export function buildRRGroupMatchFields(params: {
 }
 
 /**
- * Rebuild one group's matches after its roster changes, without ever touching an
- * already-played match. Only the not-yet-played pairings are deleted and regenerated for the
- * new roster — a player who has personally played in this group is always kept in
- * `newPlayers` by the caller, so their match is naturally preserved.
+ * Rebuild one group's matches after a roster change without touching an already-played match:
+ * only not-yet-played pairings are deleted and regenerated. The caller always keeps a player who
+ * has personally played in `newPlayers`, so their match is preserved.
  */
 export function buildSafeGroupRewrite(params: {
   eventId: string;
@@ -268,11 +257,9 @@ export function buildSafeGroupRewrite(params: {
 }
 
 /**
- * Compute standings for one group from its completed matches.
- * Scoring: 3 pts to the winner, 1 pt to the loser — a walkover scores exactly the same as a
- * played match, so nobody is penalised for their opponent not turning up.
- * After all group matches complete: +5 to everyone in the group.
- * Sort: points DESC → gamesWon DESC. Bonus applied after ranking is locked.
+ * Standings for one group: 3 pts to the winner, 1 to the loser — a walkover scores the same as a
+ * played match. +5 to everyone once all group matches complete, applied after ranking is locked.
+ * Sort: points DESC → gamesWon DESC.
  *
  * Display-side twin of computeMatchPoints in useTournament.ts — keep the two in step.
  */
@@ -327,8 +314,8 @@ export function computeGroupStandings(
 const nextPow2 = (x: number) => { let s = 2; while (s < x) s *= 2; return Math.min(s, 32); };
 
 /**
- * The #1 finisher of each group, ordered strongest-first (points → gamesWon) so the top seed
- * lands in slot 1. Used to auto-seed the knockout; the creator fills the remaining slots.
+ * Each group's #1, strongest-first (points → gamesWon) so the top seed lands in slot 1.
+ * Auto-seeds the knockout; the creator fills the rest.
  */
 export function selectGroupWinners(
   allGroups: TournamentPlayer[][],
@@ -351,12 +338,10 @@ export function selectGroupWinners(
 }
 
 /**
- * Build Firestore write objects for the RR knockout stage (SF + F or just F).
- * Reuses the existing fallbackTemplate infrastructure.
- *
- * `drawsize` forces a specific bracket size (R4/R8/R16); otherwise it's the next power of two.
- * `manualFill` leaves unseeded numeric slots as PLAYER_LOADING (for the creator to place) instead
- * of BYE, and skips first-round bye auto-advancement.
+ * Firestore write objects for the RR knockout (SF + F, or just F), reusing fallbackTemplate.
+ * `drawsize` forces R4/R8/R16; otherwise the next power of two.
+ * `manualFill` leaves unseeded numeric slots as PLAYER_LOADING instead of BYE and skips
+ * first-round bye auto-advancement.
  */
 export function buildRRKnockoutDocs(params: {
   eventId: string;
@@ -376,9 +361,8 @@ export function buildRRKnockoutDocs(params: {
   const slotMap = new Map<number, TournamentPlayer>();
   advancingPlayers.forEach((p, i) => slotMap.set(i + 1, p));
 
-  // Pre-compute first-round BYE advancements: when a first-round match has one seeded
-  // player and an empty numeric partner, the real player advances straight into the next
-  // round. Bake those seatings into the next-round docs so byes resolve at generation.
+  // When a first-round match has one seeded player and an empty numeric partner, bake the
+  // advancement into the next-round doc so byes resolve at generation.
   // Skipped in manual-fill mode — empty slots are for the creator to place, not byes.
   const advanceSeat = new Map<string, TournamentPlayer>();
   if (!manualFill) {
@@ -452,10 +436,7 @@ export function buildRRKnockoutDocs(params: {
   });
 }
 
-/**
- * Derive the RRConfig from an existing set of RR matches.
- * Returns null if the matches aren't RR format.
- */
+/** Derive the RRConfig from existing RR matches; null if they aren't RR format. */
 export function deriveRRConfig(rrMatches: TournamentMatch[]): RRConfig | null {
   const groupStage = rrMatches.filter((m) => m.round === 'RR');
   if (groupStage.length === 0) return null;

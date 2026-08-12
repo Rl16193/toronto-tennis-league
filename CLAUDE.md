@@ -42,6 +42,37 @@ React 19 + TypeScript + Vite 6. Tailwind CSS v4 (via `@tailwindcss/vite` plugin 
 ### Feature folders vs. pages
 `src/features/` contains self-contained modules (`events/`, `profile/`, `auth/`) each with `components/`, `hooks/`, `services/`, and `types.ts`. `src/pages/` holds top-level route components that wire features together. The tournament system is large enough to live entirely under `src/pages/tournament/`.
 
+### `*Elements.tsx` — one presentational module per page
+An earlier pass split the codebase into many tiny single-consumer files; editing one page meant
+opening six. Each page's **small presentational parts** now live in one `Elements` file:
+
+| File | Holds |
+|---|---|
+| `src/components/FooterElements.tsx` | Every site-wide link + contact constant, and the `InstagramLink` / `WhatsAppLink` / `ContactLink` components |
+| `src/pages/tournament/TournamentElements.tsx` | Error boundary, request panels, zone modals, draw selector, Manage Draw sheet |
+| `src/pages/courtmap/CourtMapElements.tsx` | Filter controls, badges, map popup, both result lists |
+| `src/pages/marketplace/MarketplaceElements.tsx` | Listing board + post/edit form |
+| `src/pages/services/ServicesElements.tsx` | Services tab, offer form, group-lesson card |
+| `src/features/events/EventsElements.tsx` | Event card, creator form, join sheet, schedule formatters |
+
+Rules for these files:
+- **Presentation only.** Props in, callbacks out. Firestore access stays in the page's hook or
+  service (`useTournament.ts`, `useCourtData.ts`, `listingService.ts`, `eventService.ts`, …).
+- **Large views stay separate.** `MatchCard`, `BracketView`, `BracketAccordion`, `OpponentPanels`,
+  `RRGroupCard`, `RoundRobinView` are not folded in.
+- **`types.ts` stays out of them.** `features/events/types.ts` and `features/services/types.ts` are
+  imported by hooks and API modules too — moving them into a component file would point a service
+  at a component. Only `features/marketplace/types.ts` was folded in (into `listingService.ts`,
+  its sole consumer).
+- **`ContactOpponentButton` is in `src/components/`**, not `pages/tournament/` — it has six
+  consumers outside the tournament.
+
+### Comment style
+Comments say **what the code does and what not to change**, in as few lines as possible. They are
+not the place for the full history of a defect — that belongs in this file, under the relevant
+section. Prefer one to four lines; if a rationale needs a paragraph, write the paragraph here and
+leave a one-line pointer in the code.
+
 ### Tournament draw engine (`src/pages/tournament/`)
 The core is `useTournament.ts` (~2000 lines), a single hook consumed only by `Tournament.tsx`. It manages:
 - Live Firestore subscriptions (`onSnapshot`) for `event_participants` and `matches`
@@ -212,6 +243,73 @@ foreground or surfaces. White text is invisible on a light card. Use `text-fg` a
 Fading text toward the card background is what made disabled controls vanish in light theme.
 
 Check every change in **both** themes.
+
+### Defect notes (detail compressed out of code comments)
+Each of these was a real bug. The code carries a one-to-four line warning; the reasoning is here.
+
+**Zones**
+- **`effectiveZone` maps a missing `zone` onto the default zone.** Zones went live mid-event, so
+  groups generated before that carry no `zone`. They were briefly kept as a separate zone-less
+  draw — which put the running groups outside the zone list and matched every participant to two
+  draws, doubling every "N signed up" count. They are Downtown-Midtown draws, not a fourth category.
+- **`currentMatches` MUST filter on `zone`.** Every destructive path (reset, cancel, regenerate)
+  iterates it. Without the zone term, two zone draws in the same division/skill are
+  indistinguishable, and resetting one zone deleted the other zone's matches and reversed those
+  players' league points.
+- **Winner advancement must normalize `zone` too.** Template match ids (M1, M5, …) are identical
+  across zone draws, so without it `matches.find` can write the winner over a real player's slot
+  in the *other* zone — silently, and reported as success.
+- **Cross-draw dedupe is disabled (`AUTO_DEDUPE_ENABLED = false`).** It was the one path that
+  could unseat a player with nobody acting; if the slot was then refilled they lost their place
+  with no record why. The duplicate it guarded against is real — fix the cause, don't silently
+  delete a player mid-event.
+- **`zones.ts` geometry:** the DVP and Hwy 404 are spliced into one polyline (as two, they left a
+  wedge that North York and its neighbours both claimed — the visible overlap). The east-edge road
+  chain is re-binned at ~300m to drop intersection loops. Hwy 407 isn't in the Centreline dataset,
+  so Steeles Ave stands in.
+
+**Removing a player**
+- Removal purges them from the **whole event**, not just one group: any match doc still listing
+  them keeps reconstructing their name on the group card, and lets the late-joiner effect re-seat
+  them the moment they look "unplaced but registered".
+- It also **deregisters them from `event_participants`** — that doc is what routes a player into a
+  draw by skill, so while it exists they can be auto-placed into a *different* draw.
+- The withdrawn-list update goes in the **same batch** as the match-doc changes. Written
+  separately, the matches change reaches `onSnapshot` before the withdrawal's round trip finishes,
+  and the just-removed player is re-seated — persisting across a reload.
+
+**Scoring**
+- **`completed_at` is pinned to first scoring.** Re-editing a complete match used to overwrite it
+  with "now", corrupting anything sorted by it (streaks, months active, best finish). Edits stamp
+  `score_edited_at` instead.
+- **The RR +5 bonus checks its own stamp before paying and before reversing.** `status !==
+  'complete'` only means *this* match was unscored — a corrected match re-confirmed would pay a
+  second +5, and a later reset removes only 5, leaving a permanent surplus.
+- **A blank `winner_uid` must be rejected.** It completes the match displaying player 2 as winner,
+  credits player 1 with a loss, awards nobody a win, and writes an empty uid into the next round.
+- **`confirmChallenge` reads the `applied` flag inside the transaction.** Two confirms fired close
+  together (a mobile double-tap) each read a pre-confirm world and both apply ±3 — winner +6,
+  loser −6, and those phantom points are spendable on Services.
+
+**Effects and writes**
+- **The merge-inference effect must key on `[matches, statsMap]`.** Inside the matches snapshot
+  callback, `statsMap` is a stale `{}` closure, so every band lookup returns 0 and the inference
+  silently falls back to Challengers+Masters.
+- **Late-joiner placement re-reads the authoritative placement immediately before writing.**
+  Deciding "who is unplaced" from a stale in-memory derivation duplicated already-placed players.
+- **`useTasks` never retries a failed task write.** Clearing `written` in `.catch()` turned a
+  rules-rejected write into an endless render→write→reject spin — the Profile page flicker.
+- **`groupAwards` Matchday query is bounded to a ±36h ISO window.** It used to read every completed
+  match in the league on every completion — quadratic, and the first query here to time out.
+- **Board Freshness is `onDocumentCreated`, not `onDocumentUpdated`.** Reports auto-approve and
+  `firestore.rules` forbids updates, so the old trigger waited for a transition that can never
+  happen; those bonuses were never once paid.
+
+**Matches page**
+- The three exclusive filters allocate in order of how constrained each pool is, **not** display
+  order: Nearby has the smallest candidate set, so it picks first or ends up empty while its people
+  sit in Most matches. Each filter claims a block wider than the 10 it shows, so the weekly refresh
+  and the dice have spares to draw from and the visible sets still can't overlap.
 
 ### Change discipline
 Fix exactly what is asked. Do not bundle adjacent cleanup, refactors, or new files into a stated request. If you notice something else broken, mention it in one sentence at the end and wait to be asked.

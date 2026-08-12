@@ -1,18 +1,15 @@
 /**
  * Redeemable points and rewards.
  *
- * Balance model: redeemable = leaguePoints26 (stats/{uid}) + earned RS points (tasks/{uid})
- * − points spent (offers/{uid}.pointsSpent). Redeeming NEVER touches the two earning
- * counters, so leaderboards and match history are unaffected — only `pointsSpent` moves.
+ * redeemable = leaguePoints26 (stats/{uid}) + earned RS points (tasks/{uid}) − offers/{uid}.pointsSpent.
+ * Redeeming NEVER touches the earning counters, so leaderboards and match history are unaffected.
  *
- * Everything that moves points runs here, never on the client: the client cannot write
- * `offers/*` or `redemptions/*` at all (see firestore.rules). Each callable does its
- * read-modify-write inside a Firestore transaction so a double-tap can't redeem twice.
+ * Everything that moves points runs here — the client cannot write `offers/*` or `redemptions/*`
+ * at all. Each callable does its read-modify-write in a transaction so a double-tap can't redeem
+ * twice. Coupon codes ARE the redemption doc id, so uniqueness comes from create-if-absent
+ * semantics rather than a query — no race window.
  *
- * Coupon codes ARE the redemption doc id, so uniqueness is enforced by Firestore's
- * create-if-absent semantics rather than by a query — no race window.
- *
- * Deploy with: firebase deploy --only functions
+ * Deploy: firebase deploy --only functions
  */
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { logger } = require('firebase-functions');
@@ -76,9 +73,9 @@ async function readBalance(tx, uid) {
 // ─── Redeem ─────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Spend points on a catalog offer. Returns { code, redemption }.
- * Rejects if the offer is inactive, the balance is short, or the player already holds an
- * active coupon for the same offer (one open coupon per offer keeps the stringer's list sane).
+ * Spend points on a catalog offer. Returns { code, redemption }. Rejects if the offer is inactive,
+ * the balance is short, or the player already holds an active coupon for the same offer (one open
+ * coupon per offer keeps the stringer's list sane).
  */
 exports.redeemReward = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
@@ -160,10 +157,7 @@ exports.redeemReward = onCall({ region: REGION }, async (request) => {
 
 // ─── Mark used (stringer or organizer) ──────────────────────────────────────────────────────
 
-/**
- * Burns a coupon. The stringer who owns the offer can call this, and so can an organizer.
- * Transactional so a coupon can never be marked used twice.
- */
+/** Burns a coupon — the offer's stringer or an organizer. Transactional, so never used twice. */
 exports.markCouponUsed = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
   const code = request.data && request.data.code;
@@ -275,8 +269,8 @@ exports.requestCancellation = onCall({ region: REGION }, async (request) => {
 });
 
 /**
- * Organizer decides a cancellation (or resolves a flag). Approving refunds the points by
- * decrementing pointsSpent — the earning counters were never touched, so nothing else moves.
+ * Organizer decides a cancellation (or resolves a flag). Approving refunds by decrementing
+ * pointsSpent — the earning counters were never touched, so nothing else moves.
  */
 exports.reviewRedemption = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
@@ -354,8 +348,8 @@ function monthKey() {
 const GROUP_LESSON_CAPACITY = 4;
 
 /**
- * Take a spot in this month's free group lesson. Transactional so two people tapping Join at
- * the same moment can't both claim the last seat. Costs no points.
+ * Take a spot in this month's free group lesson. Transactional, so two simultaneous Joins can't
+ * both claim the last seat. Costs no points.
  */
 exports.joinGroupLesson = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
@@ -382,10 +376,9 @@ exports.joinGroupLesson = onCall({ region: REGION }, async (request) => {
       throw new HttpsError('failed-precondition', 'This month’s group lesson is full.');
     }
 
-    // Name and uid only. Phone/email used to be snapshotted here for the coach's convenience,
-    // but `group_lessons` is world-readable (firestore.rules) so that handed every player's
-    // contact details to anyone, signed out, via one getDoc. The coach resolves them from
-    // `contacts/{uid}` instead, which requires a sign-in.
+    // Name and uid only. `group_lessons` is world-readable, so snapshotting phone/email here
+    // handed every player's contact details to anyone, signed out, via one getDoc. The coach
+    // resolves them from `contacts/{uid}` instead, which requires a sign-in.
     const next = players.concat([{
       uid: uid,
       name: u.name || '',

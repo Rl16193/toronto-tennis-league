@@ -31,16 +31,11 @@ export const SourceLetter: React.FC<{ source: 'tournament' | 'challenge' | 'rall
 );
 
 // One compact, expandable player row shared by the leaderboards, challenges, rallies and
-// tournament groups. Each of those surfaces had grown its own copy of the same collapsed-row +
-// animated-drawer markup, which is why the boards drifted apart visually; this is the single
-// implementation they all render.
+// tournament groups — each had grown its own copy, which is why the boards drifted apart.
 //
-// Deliberately presentational: it owns no open state and fetches nothing. The parent keeps its
-// existing `Set<string>` of open ids and passes `open`/`onToggle`, so migrating a surface never
-// changes how that surface loads or tracks data.
-//
-// Row identity is normalised here too — the tournament board keys rows by `user_id` and the
-// community board by `uid`. Callers pass whichever they have as `id`.
+// Presentational: owns no open state and fetches nothing. The parent keeps its `Set<string>` of
+// open ids and passes `open`/`onToggle`, so migrating a surface never changes how it loads data.
+// Row identity is normalised here — callers pass `user_id` or `uid` as `id`.
 
 export type PlayerCardStat = {
   label: string;
@@ -52,10 +47,7 @@ export type PlayerCardProps = {
   name: string;
   /** Secondary line under the name, e.g. "Skill 3.5". */
   subtitle?: React.ReactNode;
-  /**
-   * Makes the name a link. Surfaces gate this on a relationship existing (an accepted challenge
-   * or rally), so a name is only clickable once you're actually connected to that player.
-   */
+  /** Makes the name a link. Surfaces gate this on an accepted challenge or rally existing. */
   nameHref?: string;
   /** Leading position number. Omit on non-ranked surfaces. */
   rank?: number;
@@ -66,9 +58,9 @@ export type PlayerCardProps = {
   /** Slot after `primary`, e.g. a rank-trend arrow. */
   trailing?: React.ReactNode;
   /**
-   * Small marker rendered on the name line itself, before the name — used for the single-letter
-   * source tag (T/C/R). Kept out of `pills` on purpose: a full-width pill row under the name made
-   * every row two lines tall just to say which kind of match it was.
+   * Small marker on the name line, before the name — the single-letter source tag (T/C/R).
+   * Kept out of `pills`: a full-width pill row made every row two lines tall just to say which
+   * kind of match it was.
    */
   nameBadge?: React.ReactNode;
   /** Pills shown on the collapsed row (availability, nearby, …). */
@@ -78,13 +70,13 @@ export type PlayerCardProps = {
   /** Stat tiles in the drawer. */
   stats?: PlayerCardStat[];
   /**
-   * Fixed-width action slot on the collapsed row. Space is reserved even when nothing renders,
-   * so names stay in one vertical line down the list.
+   * Fixed-width action slot on the collapsed row. Space is reserved even when empty, so names stay
+   * in one vertical line down the list.
    */
   action?: React.ReactNode;
   /**
-   * Width of that slot. Defaults to the leaderboards' single-button column; surfaces with a
-   * multi-control stack (randomize / reset / score) pass their own so the row doesn't squash.
+   * Width of that slot. Defaults to the leaderboards' single-button column; a multi-control stack
+   * (randomize / reset / score) passes its own so the row doesn't squash.
    */
   actionClassName?: string;
   /** Extra drawer content below the stats grid. */

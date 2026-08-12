@@ -7,7 +7,7 @@ import { RRGroupCard } from './RRGroupCard';
 import { useStandings } from '../../features/leagues/useStandings';
 import { useContacts } from '../../features/contacts/useContacts';
 import { BracketView } from './BracketView';
-import { BracketErrorBoundary } from './BracketErrorBoundary';
+import { BracketErrorBoundary } from './TournamentElements';
 
 type Props = {
   groups: TournamentPlayer[][];

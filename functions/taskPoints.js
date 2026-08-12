@@ -1,18 +1,13 @@
 /**
- * Server-side points: the same milestone catalogue as src/features/tasks/taskCatalog.ts,
- * mirrored here so tiers and the Community Member Initiation get awarded whether or not the
- * player ever opens the Tasks tab. KEEP THIS CATALOGUE IN SYNC WITH taskCatalog.ts BY HAND —
- * same duplication pattern as scripts/regroup-rr.js mirroring rrGeneration.ts.
+ * Server-side points: mirrors the milestone catalogue in src/features/tasks/taskCatalog.ts so tiers
+ * and the Initiation are awarded whether or not the player opens the Tasks tab.
+ * KEEP THE CATALOGUE IN SYNC WITH taskCatalog.ts BY HAND.
  *
- * Two award primitives do all the work:
- *   - recordPlayResult   — tournament/ladder results (matchesPlayed, challenges, streaks, months)
- *   - bumpCounterAndAward — every other counter (court visits, photos, volunteering, …)
- * Both run inside a Firestore transaction (read-modify-write on tasks/{uid}) so two
- * near-simultaneous results for the same player never race each other. Points/tiers/badges are
- * awarded silently — by design, players are not notified when they earn them (only submission
- * approvals/rejections send a notification; see onPhotoReportReviewed / onClaimReviewed below).
+ * Two primitives: recordPlayResult (match results) and bumpCounterAndAward (every other counter).
+ * Both run in a transaction on tasks/{uid} so simultaneous results can't race. Points/tiers/badges
+ * are awarded silently — only submission approvals/rejections notify.
  *
- * Deploy with: firebase deploy --only functions
+ * Deploy: firebase deploy --only functions
  */
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
@@ -37,12 +32,10 @@ function torontoDay(iso) {
   return `${parts.year}${parts.month}${parts.day}`;
 }
 
-// A tournament match with a court selected is itself proof of presence — no GPS check needed.
-// Stamps both the once-forever passport and the daily attendance log as docs of the consolidated
-// `courts` collection (types 'check-in' / 'attendance'), same id-schemes as a real GPS check-in
-// (dist_m: 0 marks it as match-derived rather than geolocated). Admin SDK bypasses the
-// self-write-only client rules — this is the one place either player can be checked in by whoever
-// recorded the score.
+// A tournament match with a court selected is proof of presence — no GPS check needed. Stamps the
+// once-forever passport and the daily attendance log in `courts` (types 'check-in'/'attendance'),
+// same id-schemes as a real check-in (dist_m: 0 marks it match-derived). Admin SDK bypasses the
+// self-write-only client rules — the one place either player can be checked in by the scorer.
 async function checkInFromMatch(uid, name, courtName, whenISO) {
   if (!uid || !courtName) return;
   const courtKey = courtKeySlug(courtName);
@@ -232,13 +225,9 @@ exports.onEventJoinedAwardPoints = onDocumentCreated(
 /**
  * "Visit every court in your zone" (the `visitZone` tier, 30 pts).
  *
- * Was previously computed in the browser right after a check-in and written straight to
- * tasks. That write carries points, so the owner-field allowlist in firestore.rules
- * rejects it — and it was swallowed by a bare catch, leaving the tier permanently unreachable.
- * It belongs here with every other award.
- *
- * ROSTER (courts.json) is the authoritative courtKey → zoneName map, the same one groupAwards.js
- * uses for zone sweeps.
+ * Belongs here, not the browser: the write carries points, so the owner-field allowlist in
+ * firestore.rules rejects it client-side — and a bare catch swallowed that, leaving the tier
+ * permanently unreachable. ROSTER (courts.json) is the authoritative courtKey → zoneName map.
  */
 async function awardZoneCompleteIfDone(uid, name, visitedCourtKey) {
   const progressRef = db().collection('tasks').doc(uid);
@@ -281,10 +270,9 @@ exports.onCourtVisitAwardPoints = onDocumentCreated(
   },
 );
 
-// "Submit a Photo" reports auto-approve at creation (no organizer review step) — award points
-// immediately. Anonymous reports (uid: 'no_account') earn nothing, since there's no account to
-// credit. The trigger lives on the consolidated `courts` collection, so non-report docs
-// (check-in / attendance) are filtered out by the type gate.
+// "Submit a Photo" reports auto-approve at creation, so award immediately. Anonymous reports
+// (uid: 'no_account') earn nothing. The trigger is on the consolidated `courts` collection, so
+// non-report docs (check-in / attendance) are filtered out by the type gate.
 exports.onPhotoReportAwardPoints = onDocumentCreated(
   { document: 'courts/{id}', region: REGION },
   async (event) => {
@@ -366,11 +354,8 @@ exports.onTaskClaimCreated = onDocumentCreated(
 );
 
 /**
- * NOTE on the "everyone gets 50 when every Toronto court is visited" community award: this
- * requires knowing the total number of distinct courts, which lives in a CSV served from
- * hosting (public/Tennis Courts Facilities - 4326.csv) rather than anywhere Cloud Functions can
- * cheaply read. `site_stats/court_coverage.visited_keys` (written above) tracks progress, but
- * the 50-point award to every member is NOT auto-granted yet — award it manually (a small
- * one-off admin script, same shape as scripts/snapshot-ranks.mjs) once court_coverage looks
- * complete on the map.
+ * TODO: the "everyone gets 50 when every Toronto court is visited" award is NOT auto-granted.
+ * It needs the total distinct court count, which lives in a CSV served from hosting rather than
+ * anywhere Cloud Functions can cheaply read. `site_stats/court_coverage.visited_keys` tracks
+ * progress — award the 50 manually via a one-off script once coverage looks complete.
  */

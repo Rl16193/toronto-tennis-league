@@ -1,21 +1,15 @@
 /**
- * RR Late-Joiner Regroup Script (EOD automation)
+ * RR Late-Joiner Regroup (EOD automation)
  *
- * For every active Round Robin tournament event, places players who registered after the
- * draw was generated. Placement rule (band + zone aware):
- *   1. Top up an existing group ONLY if it has ≤3 players and no played match — groups with
- *      4–5 players are full and locked. A joiner needs a matching skill band; a matching zone
- *      is preferred, then the most incomplete group.
- *   2. Otherwise the overflow forms new groups: bucketed by (band, zone) and sized with
- *      splitEvenly (balanced groups of 3–5), labelled "Group X · Band · Zone" (zone dropped
- *      when unassigned/mixed).
- * Existing placements are never reshuffled; groups that already have a completed match are
- * left untouched. The script is idempotent — a run with no new joiners writes nothing.
+ * Places players who registered after the draw was generated, band + zone aware:
+ *   1. Top up an existing group ONLY if it has ≤3 players and no played match — 4–5 is full and
+ *      locked. Needs a matching band; matching zone preferred, then the most incomplete group.
+ *   2. Otherwise the overflow forms new groups, bucketed by (band, zone) and sized with
+ *      splitEvenly, labelled "Group X · Band · Zone" (zone dropped when unassigned/mixed).
+ * Existing placements are never reshuffled; groups with a completed match are untouched.
+ * Idempotent — a run with no new joiners writes nothing. Singles only.
  *
- * Scope: Singles RR draws. Doubles RR draws are skipped (team placement is out of scope).
- *
- * Pure logic mirrors src/pages/tournament/rrGeneration.ts and utils.ts (duplicated here
- * because scripts are plain JS). Keep the two in sync if the grouping rules change.
+ * Pure logic mirrors src/pages/tournament/rrGeneration.ts and utils.ts — keep the two in sync.
  *
  * Usage:
  *   node scripts/regroup-rr.js --key serviceAccount.json
@@ -216,9 +210,8 @@ async function main() {
     const participants = partSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
     // A user seated in ANY of this event's rr draws is already placed and must never be re-added.
-    // A creator can move a player across skill draws (Challengers ↔ Masters) without changing their
-    // skill; without this guard the player would look "unplaced" in their skill-routed draw and get
-    // duplicated. Mirrors the client guard in useTournament.ts (rrUnplacedPlayers / auto-place).
+    // A creator can move a player across skill draws without changing their skill; without this
+    // they'd look "unplaced" in their skill-routed draw and be duplicated. Mirrors useTournament.ts.
     const placedEventWide = new Set(
       rrMatches.flatMap((m) => [m.player_1_uid, m.player_2_uid]).filter(Boolean),
     );

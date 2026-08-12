@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Camera, ChevronRight, ExternalLink, Gift, Mail, MapPin, MessageCircle } from 'lucide-react';
-import { InstagramLink } from '../components/InstagramLink';
+import { ContactLink, InstagramLink, WhatsAppLink } from '../components/FooterElements';
 import { motion } from 'motion/react';
 import { fadeUp, staggerDelay } from '../lib/motion';
 import { MIN_REWARD_COST, useRedeemablePoints } from '../features/services/useServices';
@@ -9,8 +9,8 @@ import { Button } from '../components/Button';
 import { Accordion } from '../components/Accordion';
 import { useAuth } from '../context/AuthContext';
 import {
-  CATEGORIES, COMMUNITY_GROUP_TASKS, DAILY_GROUP_TASKS, INSTAGRAM_URL, SETUP_POINTS, TASKS,
-  UNLOCKED_TASK_IDS, WHATSAPP_URL,
+  CATEGORIES, COMMUNITY_GROUP_TASKS, DAILY_GROUP_TASKS, SETUP_POINTS, TASKS,
+  UNLOCKED_TASK_IDS,
   categoryTotal, type CategoryDef, type GroupTaskDef, type TaskId, setTaskDone, useTasks,
 } from '../features/tasks/useTasks';
 import { CheckInModal } from '../features/tasks/CheckInModal';
@@ -260,12 +260,8 @@ export const Tasks: React.FC = () => {
       <div className="pt-6 mt-2">
         <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-fg/70">
           <InstagramLink />
-          <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-clay transition-colors">
-            <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
-          </a>
-          <a href="mailto:events.racquetsandstrings@gmail.com" className="inline-flex items-center gap-1 hover:text-clay transition-colors">
-            <Mail className="w-3.5 h-3.5" /> Contact
-          </a>
+          <WhatsAppLink />
+          <ContactLink />
         </div>
       </div>
 

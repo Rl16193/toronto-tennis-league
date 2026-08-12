@@ -70,10 +70,8 @@ export function useServicesCatalog() {
 }
 
 /**
- * Profile photos for providers who have a member account, keyed by uid.
- *
- * One `users/{uid}` read per linked provider — there are a handful of them, and the docs are
- * publicly readable. Cached for the session so switching Marketplace tabs doesn't re-fetch.
+ * Provider profile photos, keyed by uid. One `users/{uid}` read per linked provider (a handful,
+ * publicly readable), cached for the session so switching Marketplace tabs doesn't re-fetch.
  */
 const avatarCache = new Map<string, string>();
 
@@ -100,12 +98,10 @@ export function useProviderAvatars(uids: (string | undefined)[]): Record<string,
 }
 
 /**
- * The signed-in player's offers balance.
- *
- * earned = league points + RS points (the same numbers on the Leaderboard and Tasks page);
- * spent comes from offers/{uid}, which only the Cloud Functions write. Redeeming moves
- * `spent` and nothing else, so the earning counters — and every leaderboard built on them —
- * are untouched. Mirrors readBalance() in functions/rewards.js; change one, change both.
+ * The signed-in player's offers balance. earned = league + RS points; spent comes from
+ * offers/{uid}, written only by Cloud Functions. Redeeming moves `spent` and nothing else, so the
+ * earning counters and every leaderboard on them are untouched.
+ * Mirrors readBalance() in functions/rewards.js — change one, change both.
  */
 export function useRedeemablePoints() {
   const { user, profile } = useAuth();
@@ -171,9 +167,8 @@ export function useMyRedemptions() {
 }
 
 /**
- * The provider id the signed-in account owns, if any. A stringer or coach is an ordinary
- * account with `stringer`/`coach` true and the matching id on their preferences doc — the same
- * role-flag shape as `event_creator`.
+ * The provider id this account owns, if any. A stringer or coach is an ordinary account with
+ * `stringer`/`coach` true and the matching id on preferences — same shape as `event_creator`.
  */
 export function useProviderRole() {
   const { profile } = useAuth();
@@ -233,9 +228,8 @@ export function usePendingRedemptionReviews(enabled: boolean) {
 }
 
 /**
- * This month's free group lesson. One doc per month (`group_lessons/{YYYY-MM}`), so spots
- * reset on the 1st without a scheduled job — a new month is simply a doc that doesn't exist
- * yet, which reads as zero players joined.
+ * This month's free group lesson. One doc per month (`group_lessons/{YYYY-MM}`), so spots reset on
+ * the 1st with no scheduled job — a new month is simply a doc that doesn't exist yet.
  */
 export function useGroupLesson() {
   const { user } = useAuth();

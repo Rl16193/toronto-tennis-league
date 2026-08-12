@@ -27,8 +27,7 @@ import { getZoneWithBorderCheck, zoneFromCourts } from '../utils/zones';
 import { formatPhone } from '../utils/formatPhone';
 import { getSignupErrorMessage, signupEmailRegex, emailExistsForSignup } from '../features/signup/signupValidation';
 import { getAuthErrorMessage } from '../features/auth/authMessages';
-import { useGoogleSignIn } from '../features/auth/useGoogleSignIn';
-import { useAppleSignIn } from '../features/auth/useAppleSignIn';
+import { useAppleSignIn, useGoogleSignIn } from '../features/auth/useOAuthSignIn';
 
 type AuthPhase = 'email' | 'login' | 'account' | 'preferences' | 'done';
 

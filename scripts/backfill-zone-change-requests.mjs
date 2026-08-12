@@ -1,18 +1,13 @@
 /**
- * Zone Change Request Backfill
+ * Flags players in the live event whose profile zone isn't Downtown - Midtown, so the organizer
+ * sees them in the Zone Change Requests panel. Zones didn't exist when they registered, so their
+ * draw doesn't match their recorded zone.
  *
- * The live tournament runs in the Downtown - Midtown zone, but zones didn't exist when players
- * registered — so anyone whose profile zone is something else is playing in a draw that doesn't
- * match their recorded zone. This flags those players so the organizer sees them in the Zone
- * Change Requests panel and can reconcile them.
- *
- * For every participant who appears in the event's matches and whose zone is NOT
- * Downtown - Midtown, sets:
+ * For every participant in the event's matches whose zone is NOT Downtown - Midtown, sets:
  *   req_zone_change: true
  *   new_zone: 'Downtown - Midtown'
  *
  * Nothing else is touched — no match is moved, no draw is regenerated.
- *
  * Requires Node >=22.6 (native TypeScript stripping for the zones.ts import).
  *
  * Usage:

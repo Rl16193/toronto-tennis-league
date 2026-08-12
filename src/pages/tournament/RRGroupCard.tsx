@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
 import { PLAYER_LOADING, formatPlayerName, formatSetScores } from './utils';
 import { PLAYER_LOADING_SENTINEL } from './AddPlayerPanel';
-import { ContactOpponentButton, pillButtonCls } from './ContactOpponentButton';
+import { ContactOpponentButton, pillButtonCls } from '../../components/ContactOpponentButton';
 import { pgWinPct } from '../../features/leagues/useStandings';
 import type { ContactData } from '../../types';
 

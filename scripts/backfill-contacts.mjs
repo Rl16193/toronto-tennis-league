@@ -1,21 +1,15 @@
 /**
  * Moves contact PII off the world-readable `users` collection into `contacts/{uid}`.
  *
- * Why: `users` is `allow read: if true` (names and badges appear on public leaderboards and
- * player cards), which meant a single unauthenticated getDocs returned every member's phone
- * number, email and WhatsApp. Those fields now live in `contacts`, which requires a sign-in.
+ * `users` is `allow read: if true`, so one unauthenticated getDocs returned every member's phone,
+ * email and WhatsApp. Those fields now live in `contacts`, which requires a sign-in.
  *
- * TWO PHASES, deliberately. Run them either side of the client deploy so nothing breaks in the
- * gap — during the window both copies exist and either version of the app works:
+ * TWO PHASES, run either side of the client deploy so nothing breaks in the gap:
+ *   1. --copy    Write contacts/{uid} from users/{uid}. Repeatable. Run BEFORE deploying.
+ *   2. --strip   Delete the PII from users/{uid}. Irreversible. Run AFTER the client is live.
  *
- *   1. --copy    Write contacts/{uid} from users/{uid}. Safe to run repeatedly.
- *                Run BEFORE deploying the new client.
- *   2. --strip   Delete the PII fields from users/{uid}. Irreversible.
- *                Run only AFTER the new client is live and verified.
- *
- * `contactable` (consent to be messaged) is set true for anyone who has a phone number on file,
- * matching how the app behaved before the checkbox existed — their details were already public
- * and Contact buttons already worked. Members with no phone get false.
+ * `contactable` is set true for anyone with a phone on file, matching how the app behaved before
+ * the checkbox existed. Members with no phone get false.
  *
  * Usage:
  *   node scripts/backfill-contacts.mjs --key serviceAccount.json --copy --dry-run

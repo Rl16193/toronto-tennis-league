@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Camera, ChevronDown, ChevronRight, ChevronUp, HistoryIcon, Mail, MapPin, Medal, Sparkles } from 'lucide-react';
-import { InstagramLink } from '../components/InstagramLink';
+import { ContactLink, InstagramLink } from '../components/FooterElements';
 import { motion } from 'motion/react';
 import { fadeUp, staggerDelay, tapScale } from '../lib/motion';
 import { RacquetIcon } from '../components/RacquetIcon';
@@ -10,7 +10,7 @@ import { pgWinPct, useStandings } from '../features/leagues/useStandings';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { ContactData } from '../types';
-import { INSTAGRAM_URL, TASKS, useTasks } from '../features/tasks/useTasks';
+import { TASKS, useTasks } from '../features/tasks/useTasks';
 import { useAuth } from '../context/AuthContext';
 import { useProfileData } from '../features/profile/hooks/useProfileData';
 import { useProfileActions } from '../features/profile/hooks/useProfileActions';
@@ -20,7 +20,7 @@ import { CheckInModal } from '../features/tasks/CheckInModal';
 import { PhotoSubmitModal } from '../features/tasks/PhotoSubmitModal';
 import { Button } from '../components/Button';
 import { formatPlayerName, skillBand } from './tournament/utils';
-import { ContactOpponentButton, pillButtonCls } from './tournament/ContactOpponentButton';
+import { ContactOpponentButton, pillButtonCls } from '../components/ContactOpponentButton';
 import { sharesCourt } from '../utils/courtOverlap';
 import { NearbyPill } from '../components/NearbyPill';
 import { AvailabilityPills } from '../components/AvailabilityPills';
@@ -538,9 +538,7 @@ export const Profile: React.FC = () => {
           <Link to="/about" className="hover:text-clay transition-colors">About Us</Link>
           <Link to="/terms" className="hover:text-clay transition-colors">Terms of Service</Link>
           <Link to="/privacy" className="hover:text-clay transition-colors">Privacy Policy</Link>
-          <a href="mailto:events.racquetsandstrings@gmail.com" className="inline-flex items-center gap-1 hover:text-clay transition-colors">
-            <Mail className="w-3.5 h-3.5" /> Contact
-          </a>
+          <ContactLink />
           <InstagramLink />
         </div>
       </div>

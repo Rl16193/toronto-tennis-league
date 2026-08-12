@@ -17,12 +17,12 @@ import {
   GENERIC_OSM_TYPES,
   locationGeoCache,
 } from './courtmap/courtMapUtils';
-import { FilterSelect, DaysDropdown, Badge, PickleballBadges } from './courtmap/courtMapComponents';
-import { CourtPopup } from './courtmap/CourtPopup';
+import {
+  Badge, CourtPopup, CourtResultsList, DaysDropdown, FilterSelect, PickleballBadges,
+  ProgramResultsList,
+} from './courtmap/CourtMapElements';
 import { useCourtData } from './courtmap/useCourtData';
-import { CourtResultsList } from './courtmap/CourtResultsList';
 import { useAuth } from '../context/AuthContext';
-import { ProgramResultsList } from './courtmap/ProgramResultsList';
 import { track } from '../lib/analytics';
 import { LoadingBar } from '../components/LoadingBar';
 import { Sheet } from '../components/Sheet';

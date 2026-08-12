@@ -1,21 +1,15 @@
 /**
- * Group / community bonuses — points that unlock from COLLECTIVE activity, not one player's
- * counter. Unlike taskPoints.js (per-player tiers), these read across many players' documents,
- * then pay a whole group at once. One idea makes that safe:
+ * Group / community bonuses — points unlocked by COLLECTIVE activity, not one player's counter.
+ * Unlike taskPoints.js (per-player tiers), these read across many players' docs and pay a group at
+ * once. Two rules make that safe:
+ *   1. A deterministic award id per event (`matchday_20260722`, `sweep_north-york_0`), with a
+ *      per-recipient ledger doc `tasks/{awardId}_{uid}` CREATED inside the payout transaction.
+ *      An existing doc means "skip" — so a bonus is paid exactly once under concurrent writes.
+ *   2. Payouts land as `bonusPoints` + a `bonusAwards` list on tasks/{uid}.
  *
- *   1. A deterministic award id per event (e.g. `matchday_20260722`, `sweep_north-york_0`). Each
- *      recipient gets their own per-recipient ledger doc `tasks/{awardId}_{uid}`, CREATED inside
- *      the payout transaction. If that doc already exists the recipient is skipped — so a bonus
- *      is paid exactly once even if two near-simultaneous writes both cross the threshold.
- *   2. Payouts land as `bonusPoints` (a running total) + a `bonusAwards` list on tasks/{uid}.
- *      taskPoints() on the client adds bonusPoints to the player's total.
- *
- * Zone-based bonuses need the full court roster server-side (to know when a zone is "complete").
- * That lives in courts.json — GENERATED FROM public/Tennis Courts Facilities - 4326.csv, mapping
- * courtKey -> zone (same courtKey()/getZone() as src/utils). Regenerate it if the CSV changes.
- *
- * Each newly-paid recipient gets a `group_award_received` notification (see payGroupAward).
- * Deploy with: firebase deploy --only functions
+ * courts.json is the server-side courtKey → zone roster, GENERATED FROM
+ * public/Tennis Courts Facilities - 4326.csv. Regenerate it if the CSV changes.
+ * Deploy: firebase deploy --only functions
  */
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
@@ -61,11 +55,9 @@ function torontoParts(iso) {
 }
 
 // ─── Payout primitive ───────────────────────────────────────────────────────────────────────
-// recipients: [{ uid, name }]. Returns true if anyone got paid.
-// One-shot awards (the default) pay exactly once — a second call is a no-op. `allowTopUp`
-// awards (Matchday) may pay again on the SAME award id, but only ever to recipients who
-// haven't received it yet — so a player finishing a late match still collects, and nobody
-// is ever paid twice.
+// recipients: [{ uid, name }]. Returns true if anyone got paid. One-shot awards (the default) pay
+// exactly once; `allowTopUp` awards (Matchday) may pay again on the SAME id but only to recipients
+// who haven't received it, so a late finisher still collects and nobody is paid twice.
 // Friendly label per award type, used only for the notification copy below.
 const AWARD_LABELS = {
   matchday: 'Matchday',
@@ -154,11 +146,9 @@ exports.onMatchCompletedMatchdayBonus = onDocumentUpdated(
     const { day } = torontoParts(after.completed_at);
 
     // Bounded to a ±36h ISO window around the match, then narrowed to the exact Toronto day in
-    // memory. This used to read EVERY completed match in the league on every single match
-    // completion — quadratic in total matches, and the first query here that would time out.
-    // `completed_at` is an ISO-8601 UTC string, so a lexicographic range works and needs only
-    // the automatic single-field index (the project ships no firestore.indexes.json). 36h
-    // comfortably covers the UTC/Toronto offset at either end of the day.
+    // memory. This used to read EVERY completed match in the league on every completion —
+    // quadratic, and the first query here that would time out. `completed_at` is an ISO-8601 UTC
+    // string, so a lexicographic range needs only the automatic single-field index.
     const pivot = after.completed_at ? new Date(after.completed_at) : new Date();
     const WINDOW_MS = 36 * 60 * 60 * 1000;
     const lowIso = new Date(pivot.getTime() - WINDOW_MS).toISOString();
@@ -236,12 +226,10 @@ exports.onCourtVisitPioneer = onDocumentCreated(
   },
 );
 
-// Board Freshness: first approved waiting-board photo for a court → 5 to the submitter; and once
-// EVERY court in the zone has an approved board photo → 10 to everyone who contributed one.
-// onDocumentCreated, not onDocumentUpdated: reports auto-approve now — firestore.rules requires
-// `status == 'approved'` at create and forbids updates entirely, so the old trigger was waiting
-// for a transition into 'approved' that can never happen and these bonuses were never once paid.
-// Same conversion onPhotoReportAwardPoints already got; this sibling was missed.
+// Board Freshness: first approved waiting-board photo for a court → 5 to the submitter; once EVERY
+// court in the zone has one → 10 to each contributor.
+// onDocumentCreated, NOT onDocumentUpdated: reports auto-approve, and firestore.rules forbids
+// updates entirely, so the old update trigger waited for a transition that can never happen.
 exports.onBoardApprovedGroupBonus = onDocumentCreated(
   { document: 'courts/{id}', region: REGION },
   async (event) => {
@@ -278,10 +266,9 @@ exports.onBoardApprovedGroupBonus = onDocumentCreated(
   },
 );
 
-// Full Zone Sweep: the community checks in at every court in a zone. On completion, pay every
-// contributor 10, record how long the cycle took (the baseline metric), then RESET to 0 so the
-// next cycle starts fresh. Driven by attendance (repeatable) — passport visits are once-forever
-// and so could never seed a second sweep.
+// Full Zone Sweep: the community checks in at every court in a zone. Pay each contributor 10,
+// record the cycle duration, then RESET to 0 so the next cycle starts fresh. Driven by attendance
+// (repeatable) — passport visits are once-forever and could never seed a second sweep.
 async function zoneSweepCheck(a) {
   const zone = ROSTER[a.court_key] || a.zone;
   if (!zone || !ZONE_COURTS[zone]) return;

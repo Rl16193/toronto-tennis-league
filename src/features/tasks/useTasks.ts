@@ -7,14 +7,13 @@ import {
   ALL_TIERS, CATEGORIES, Counters, EMPTY_COUNTERS, SETUP_POINTS, TIER_POINTS,
 } from './taskCatalog';
 import { fetchCompletedTournamentMatches } from './matchHistory';
+import { INSTAGRAM_URL, WHATSAPP_URL } from '../../components/FooterElements';
 
 export * from './taskCatalog';
 
-// Community tasks. Every single item — the Initiation checklist items AND every category's
-// items — is a "task". A "milestone" is completing EVERY task within one category. Completed
-// tasks are written to the player's tasks doc so the Community leaderboard can total
-// anyone's points, tasks and milestones from one read. (The Initiation still pays a flat award
-// for finishing its checklist; category items pay their own points.)
+// Every item — Initiation checklist and category items alike — is a "task"; a "milestone" is
+// completing every task in one category. Completed tasks are written to the player's tasks doc so
+// the Community leaderboard totals points, tasks and milestones from one read.
 
 export type TaskId =
   | 'profileComplete'
@@ -29,9 +28,6 @@ export type TaskId =
   | 'profilePhoto'
   | 'joinEvent'
   | 'ladderMatch';
-
-export const INSTAGRAM_URL = 'https://www.instagram.com/racqnstringstoronto';
-export const WHATSAPP_URL = 'https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX';
 
 export type TaskDef = {
   id: TaskId;
@@ -55,10 +51,8 @@ export const TASKS: TaskDef[] = [
   { id: 'whatsappGroup', title: 'Join the WhatsApp group', label: 'WhatsApp', kind: 'trust', link: WHATSAPP_URL },
   { id: 'profilePhoto', title: 'Add a profile photo', label: 'Photo', kind: 'auto', to: '/profile' },
   { id: 'joinEvent', title: 'Join your first event', label: 'Event', kind: 'auto', to: '/events' },
-  // 'ladderMatch' ("Play a League Ladder Match") was removed from the Initiation checklist —
-  // it gated the Member badge behind the ladder, which most new players never reach. The
-  // TaskId and the task_progress field are kept so existing docs that already have the flag
-  // stay valid; it simply no longer counts toward setupComplete.
+  // 'ladderMatch' was removed from the Initiation — it gated the Member badge behind the ladder,
+  // which most new players never reach. The TaskId and field are kept so existing docs stay valid.
   // KEEP IN SYNC with INITIATION_TASK_IDS in functions/lib/points.js.
 ];
 
@@ -134,10 +128,9 @@ export const bumpCounter = (uid: string, name: string, key: string, by = 1) =>
 
 type PlayedResult = { at: number; won: boolean };
 
-// Shared by both result loaders below: de-dupes docs appearing in both queries (e.g. a player
-// who is both player_1/player_2, or challenger/opponent, across different docs) by id, then maps
-// each to a PlayedResult — `toResult` returning null skips that doc (used for the tournament
-// walkover/blank-score guard, which the ladder loader doesn't need).
+// Shared by both result loaders: de-dupes docs appearing in both queries by id, then maps each to
+// a PlayedResult. `toResult` returning null skips that doc (the tournament walkover/blank-score
+// guard, which the ladder loader doesn't need).
 const dedupePlayedResults = (
   docs: { id: string; data: () => Record<string, any> }[],
   toResult: (data: Record<string, any>) => PlayedResult | null,
@@ -251,18 +244,15 @@ export function useTasks() {
 
   const missing = profileMissingFields(profile);
 
-  // Award the two Initiation tasks that are derived purely from the player's own profile.
+  // Only the two Initiation tasks derived purely from the player's own profile.
   //
-  // Everything else the client used to write here — playMatch, joinEvent, ladderMatch, every
-  // tier, and the sticky setupComplete award — is now written server-side by
-  // functions/taskPoints.js via the Admin SDK. Those fields carry points, and points are
-  // spendable on Services, so firestore.rules deliberately rejects a client write to them; the
-  // client attempting them anyway produced a permission-denied write on every render.
+  // Everything else — playMatch, joinEvent, ladderMatch, every tier, setupComplete — is written
+  // server-side by functions/taskPoints.js. Those fields carry points, which are spendable, so
+  // firestore.rules rejects a client write; attempting it produced a permission-denied on every
+  // render.
   //
-  // NOTE: a failed write is NOT retried. `written` used to be cleared in .catch(), which turned
-  // a rejected write into an endless render→write→reject→render spin (this is what made the
-  // Profile page flicker). One attempt per id per session is enough — the server is the real
-  // source of truth for anything that matters.
+  // A failed write is NOT retried. Clearing `written` in .catch() turned a rejected write into an
+  // endless render→write→reject spin — the cause of the Profile page flicker.
   useEffect(() => {
     if (!user || !profile || !progressLoaded) return;
     const name = profile.user.name || '';

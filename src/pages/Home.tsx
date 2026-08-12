@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { MapPin, Camera } from 'lucide-react';
-import { InstagramLink } from '../components/InstagramLink';
+import { InstagramLink } from '../components/FooterElements';
 import { doc, getDoc } from 'firebase/firestore';
 
 import { db } from '../lib/firebase';

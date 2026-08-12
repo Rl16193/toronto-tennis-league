@@ -12,9 +12,9 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { createEvent, updateEvent, formFromEvent, DisplayEvent, EventFormState, INITIAL_EVENT_FORM, validateEventForm } from '../features/events/services/eventService';
 import { useEvents } from '../features/events/hooks/useEvents';
 import { useJoin } from '../features/events/hooks/useJoin';
-import { EventCard, isLateRegistration } from '../features/events/components/EventCard';
-import { CreatorEventModal } from '../features/events/components/CreatorEventModal';
-import { JoinEventSheet } from '../features/events/components/JoinEventSheet';
+import {
+  CreatorEventModal, EventCard, JoinEventSheet, isLateRegistration,
+} from '../features/events/EventsElements';
 import { track } from '../lib/analytics';
 import { getEventDate } from './tournament/utils';
 import { isSeniorsLeague } from '../utils/skillLevels';

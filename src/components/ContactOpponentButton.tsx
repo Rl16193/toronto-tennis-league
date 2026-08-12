@@ -33,10 +33,9 @@ export const pillButtonCls = (size: 'sm' | 'md', variant: 'outline' | 'white' | 
 };
 
 /**
- * The contact channels available for one person, in the order they're offered everywhere.
- *
- * The app carries no messaging of its own — it hands over a real phone number or address — so
- * this is the single place that decides which channels exist and how each link is built.
+ * The contact channels for one person, in the order they're offered everywhere. The app carries no
+ * messaging of its own, so this is the single place deciding which channels exist and how each
+ * link is built.
  */
 export const contactChannels = (c: {
   phone?: string; email?: string; whatsappContact?: string;
@@ -53,17 +52,12 @@ export const contactChannels = (c: {
 /**
  * Every way to reach one person, as separate icon buttons — Email, SMS, WhatsApp.
  *
- * This used to be a single "Contact" button opening a portalled dropdown, which meant a tap to
- * find out whether the person could even be reached, plus ~80 lines of positioning, scroll
- * tracking and cross-instance close events. The channels are now just visible.
- *
  * Icon-only, deliberately and everywhere: three labelled pills don't fit a stat tile or a compact
- * player row, and having the same control render two different widths on two screens is what made
- * the app's rows drift apart before. Each link keeps a title and aria-label, so the channel is
- * still announced to screen readers and on hover.
+ * player row, and one control rendering two different widths is what made rows drift apart before.
+ * Each link keeps a title and aria-label, so the channel is still announced.
  *
- * Renders nothing at all when there are no channels — a missing or permission-denied `contacts`
- * read is the normal case for someone you aren't connected to, not an error.
+ * Renders nothing when there are no channels — a missing or permission-denied `contacts` read is
+ * the normal case for someone you aren't connected to, not an error.
  */
 export const ContactOpponentButton: React.FC<{
   name: string;

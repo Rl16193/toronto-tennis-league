@@ -26,12 +26,9 @@ export interface NewOfferInput {
 }
 
 /**
- * Creates a new Services offer (`tasks/{id}` with `type: 'offer'`), same doc shape as
- * scripts/seed-rewards.mjs. Optionally links the provider to a member account so they can see
- * their own coupons in "Your shop" — same effect as scripts/set-stringer.mjs.
- *
- * Both writes require the super-admin (see firestore.rules isSuperAdmin()) — the "+" button
- * that calls this is gated the same way client-side.
+ * Creates a Services offer (`tasks/{id}` with `type: 'offer'`), same doc shape as
+ * scripts/seed-rewards.mjs. Optionally links the provider to a member account so they see their
+ * own coupons in "Your shop". Both writes require the super-admin (firestore.rules isSuperAdmin()).
  */
 export async function createOffer(input: NewOfferInput): Promise<string> {
   const providerId = input.providerId || slug(input.providerName);
@@ -71,10 +68,9 @@ export async function createOffer(input: NewOfferInput): Promise<string> {
 }
 
 /**
- * Edits an existing offer in place — same doc id, so any issued coupons (which reference it via
- * redemptions.reward_id) keep pointing at the right thing. The provider identity itself
- * (`providerId`) doesn't change here — that would move the offer under a different provider row
- * — only the offer's own fields and the provider's contact/certified details.
+ * Edits an offer in place — same doc id, so issued coupons (redemptions.reward_id) keep pointing
+ * at the right thing. `providerId` doesn't change here; that would move the offer under a
+ * different provider row.
  */
 export async function updateOffer(
   id: string, providerId: string, input: Omit<NewOfferInput, 'providerId'>,
@@ -109,10 +105,9 @@ export async function updateOffer(
 }
 
 /**
- * Soft-delete: `tasks/{id}` denies hard deletes unconditionally (firestore.rules), same rule the
- * seed script respects by deactivating stale rows instead of removing them. Deactivated offers
- * drop out of the catalog (useServicesCatalog filters `active !== false`) but the doc — and any
- * redemptions.reward_id pointing at it — stay intact.
+ * Soft-delete: `tasks/{id}` denies hard deletes unconditionally (firestore.rules). Deactivated
+ * offers drop out of the catalog (useServicesCatalog filters `active !== false`) but the doc — and
+ * any redemptions.reward_id pointing at it — stay intact.
  */
 export async function deactivateOffer(id: string): Promise<void> {
   await updateDoc(doc(db, 'tasks', id), { active: false });

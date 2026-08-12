@@ -11,7 +11,7 @@ import { Button } from '../components/Button';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { useUserMatches } from '../features/matches/useUserMatches';
 import { RacquetIcon } from '../components/RacquetIcon';
-import { ContactOpponentButton, pillButtonCls } from './tournament/ContactOpponentButton';
+import { ContactOpponentButton, pillButtonCls } from '../components/ContactOpponentButton';
 import { PlayerCard, RankMove } from '../components/PlayerCard';
 import { ScoreModal } from './tournament/ScoreModal';
 import { ScoreForm } from './tournament/types';
@@ -40,10 +40,9 @@ type Mode = 'tournament' | 'friendlies' | 'challenges';
 // `isReadyForMatches` now lives in features/leagues/useChallengeRules so the Leaderboard's
 // Challenge button gates on exactly the same rule (see the import above).
 
-// ── Per-slot randomizer (shared by both tabs): 12 category slots, each with its own dice. A weekly
-// budget of 2 slots may be put into "randomized" mode; re-rolls are then free. Originals are kept.
-// Also the boundary the pool "refresh" below rolls over on — both reset every Thursday 8:00am
-// local time, not a calendar week.
+// ── Per-slot randomizer (both tabs): 12 category slots, each with its own dice. A weekly budget of
+// 2 slots may go "randomized"; re-rolls are then free, originals kept. Same boundary the pool
+// refresh rolls over on — both reset Thursday 8:00am local, not on a calendar week.
 const RAND_SLOTS_PER_WEEK = 2;
 const CYCLE_ANCHOR = new Date(2024, 0, 4, 8, 0, 0, 0).getTime(); // a Thursday, 8:00am local
 const CYCLE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -60,11 +59,9 @@ const saveRandState = (uid: string, mode: Mode, s: RandState) => {
 };
 
 // ── Weekly pool refresh: anyone shown last cycle who never got a Challenge/Rally from the viewer
-// is dropped for this cycle (someone further down the tiered list fills their slot instead), so
-// the same untouched names don't sit there forever. Nothing here is permanent — once a cycle
-// passes without them being re-shown, they're eligible again. `skipUids` is decided once per
-// cycle (from the PRIOR cycle's shown list) and then persisted so it stays stable for reloads
-// within the same cycle, instead of being silently recomputed away.
+// is dropped this cycle, so the same untouched names don't sit there forever. Not permanent — one
+// quiet cycle makes them eligible again. `skipUids` is decided once per cycle (from the PRIOR
+// cycle's shown list) and persisted, so it stays stable across reloads within the cycle.
 // How many players each filter shows.
 const POOL_SIZE = 10;
 
@@ -101,15 +98,11 @@ const seededRand = (seed: string): number => {
   return (h >>> 0) / 4294967296;
 };
 
-// One "Matches" hub with Friendlies (non-competitive) and Challenges (competitive) tabs.
+// One "Matches" hub: Friendlies (non-competitive) and Challenges (competitive) tabs.
 //
-// Who gets suggested is chosen by the player, not by us. This used to be an automatic 3-tier
-// waterfall (nearby → same skill band → activity) that silently decided the mix; it's now four
-// explicit filters, because "why is this person on my list?" had no answer the player could see.
-//
-// The BASE POOL still differs per tab: Challenges is locked to the viewer's own league (points
-// only make sense within one division); Friendlies is cross-league, since a casual hit doesn't
-// care. The chosen filter then orders that pool, and POOL_SIZE caps what's shown.
+// Four explicit filters, not an automatic tier waterfall — "why is this person on my list?" needs
+// an answer the player can see. The BASE POOL differs per tab: Challenges is locked to the
+// viewer's league (points only mean something within a division); Friendlies is cross-league.
 type PlayerFilter = 'nearby' | 'new' | 'played' | 'rematch';
 const PLAYER_FILTERS: { value: PlayerFilter; label: string }[] = [
   { value: 'new', label: 'New' },
@@ -118,14 +111,11 @@ const PLAYER_FILTERS: { value: PlayerFilter; label: string }[] = [
   { value: 'rematch', label: 'Re-Match' },
 ];
 
-// Each person is claimed by exactly ONE of the first three filters, so a player browsing all
-// three sees up to 30 different names instead of the same faces three times. Re-Match is exempt —
-// it's "people you've already played", which is a fact about them, not a bucket.
-//
-// Allocation order is by how constrained each pool is, NOT the order the tabs are displayed in:
-// Nearby has the smallest candidate set even after widening it to same-zone players, so it picks
-// first or it ends up empty while its people sit in Most matches. Most matches picks last from
-// the widest pool, so it can always fill.
+// Each person is claimed by exactly ONE of the first three filters, so browsing all three shows up
+// to 30 different names instead of the same faces. Re-Match is exempt — it's a fact about them,
+// not a bucket.
+// Allocation order is by how constrained each pool is, NOT display order: Nearby has the smallest
+// candidate set, so it picks first or ends up empty; Most matches picks last and can always fill.
 const ALLOCATION_ORDER: Exclude<PlayerFilter, 'rematch'>[] = ['nearby', 'new', 'played'];
 
 // RallyRow was removed with the separate open-requests list — a rally's state now lives in
@@ -267,11 +257,9 @@ export const Matches: React.FC = () => {
   }, [joinedAtByUid, byActivity]);
 
   /**
-   * Hands each person to exactly one of the three exclusive filters, then returns the slice for
-   * whichever tab is showing. Walks ALLOCATION_ORDER so the most constrained pool claims first.
-   *
-   * Re-Match is deliberately outside this: it's the one filter where seeing a familiar name
-   * again is the point, so it draws from the whole pool.
+   * Hands each person to exactly one of the three exclusive filters, then returns the slice for the
+   * showing tab. Walks ALLOCATION_ORDER so the most constrained pool claims first.
+   * Re-Match is outside this — seeing a familiar name again is its point, so it draws from all.
    */
   const applyFilter = useCallback((pool: LeagueRow[]): LeagueRow[] => {
     if (playerFilter === 'rematch') {
@@ -280,10 +268,8 @@ export const Matches: React.FC = () => {
         .sort((a, b) => (lastPlayedByUid.get(b.user_id) ?? 0) - (lastPlayedByUid.get(a.user_id) ?? 0));
     }
 
-    // Each filter claims a BLOCK, not just the 10 it shows. The extra names are spares: the
-    // weekly refresh drops people you ignored last cycle, and the dice swap one slot for another,
-    // and both need candidates to draw from. Because the blocks themselves don't overlap, the
-    // visible 10s can't either — even after a re-roll.
+    // Each filter claims a BLOCK, not just the 10 it shows. The spares feed the weekly refresh and
+    // the dice. Because blocks don't overlap, the visible 10s can't either — even after a re-roll.
     const BLOCK = POOL_SIZE * 3;
     const claimed = new Set<string>();
     let mine: LeagueRow[] = [];
@@ -655,13 +641,10 @@ export const Matches: React.FC = () => {
                 // P/G Played and Matches Won were volume figures that belong on the leaderboard.
                 stats={[
                   {
-                    // One cell that walks the whole lifecycle of a request, so the same spot
-                    // always answers "what's happening with this person":
-                    //   nothing sent  → Rally / Challenge
-                    //   sent          → Waiting to reply (+ Cancel)
-                    //   accepted      → Contact (+ Cancel)
-                    //   they asked us → Accept / Decline
-                    // No label — the contents say what it is.
+                    // One cell for the whole request lifecycle, so the same spot always answers
+                    // "what's happening with this person":
+                    //   nothing sent → Rally / Challenge  ·  sent → Waiting to reply (+ Cancel)
+                    //   accepted → Contact (+ Cancel)     ·  they asked us → Accept / Decline
                     label: '',
                     value: (
                       <div className="flex flex-col items-center gap-1">

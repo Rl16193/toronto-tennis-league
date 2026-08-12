@@ -7,6 +7,8 @@
  * isn't UTF-8 clean.
  */
 
+const { SITE, INSTAGRAM, WHATSAPP, FAQ } = require('./constants');
+
 const COLORS = {
   pageBg: '#f5f5f2',
   card: '#FAFAF8',
@@ -190,7 +192,6 @@ function step(n, title, body, marginBottom = '12px') {
 
 // Deep links. The app reads the tab from `?mode=` (see Matches.tsx) — `/friendlies` and
 // `/challenges` are bare redirects that drop the query string, so they must not be used here.
-const SITE = 'https://www.racquetsandstrings.ca';
 const LINK = {
   friendlies: `${SITE}/matches?mode=friendlies`,
   challenges: `${SITE}/matches?mode=challenges`,
@@ -281,10 +282,6 @@ function buildIncompleteMatchesEmail(totalCount, firstName) {
 }
 
 function buildWelcomeEmail(firstName) {
-  const FAQ = 'https://docs.google.com/document/d/17lyP5f62iuXRIiwDtrcn4EZo6vnx0jbr87kxdkEIzYY/edit?tab=t.0';
-  const WHATSAPP = 'https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX';
-  const INSTAGRAM = 'https://www.instagram.com/racqnstringstoronto/';
-
   return wrapEmail({
     preheader: 'Get ready to play with these quick next steps.',
     title: 'Get ready to play with these quick next steps.',

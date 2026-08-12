@@ -6,8 +6,7 @@ import {
   UserPlus, CalendarPlus, MessageCircle, Handshake, ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { InstagramLink } from '../components/InstagramLink';
-import { WHATSAPP_URL } from '../features/tasks/useTasks';
+import { CONTACT_EMAIL, InstagramLink, WHATSAPP_URL } from '../components/FooterElements';
 
 
 const PageWrapper: React.FC<{ title?: string; icon?: any; boxed?: boolean; children: React.ReactNode }> = ({ title, icon: Icon, boxed = true, children }) => {
@@ -302,8 +301,8 @@ export const Contact: React.FC = () => (
       <section className="grid grid-cols-1 gap-4">
         <div className="rounded-[2rem] bg-fg/5 p-6">
           <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-2">Email</p>
-          <a href="mailto:events.racquetsandstrings@gmail.com" className="text-clay font-bold hover:underline break-all">
-            events.racquetsandstrings@gmail.com
+          <a href={`mailto:${CONTACT_EMAIL}`} className="text-clay font-bold hover:underline break-all">
+            {CONTACT_EMAIL}
           </a>
         </div>
         <div className="rounded-[2rem] bg-fg/5 p-6">

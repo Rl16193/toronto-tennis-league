@@ -1,23 +1,16 @@
 /**
- * Opponent connections — the server-side record of "these two people may see each other's
- * contact details".
+ * Opponent connections — the server-side record of "these two may see each other's contacts".
  *
- * Contact details (phone / email / WhatsApp) live in `contacts/{uid}` and used to be readable by
- * any signed-in member. They are now readable only by the owner, or by someone holding a
- * connection to them — and a connection is only ever created here, never by a client.
+ * `contacts/{uid}` is readable only by the owner or by someone holding a connection, and a
+ * connection is only ever created here, never by a client. Earned by an accepted rally or
+ * challenge (either direction), or by being drawn against each other in a tournament match.
  *
- * A connection is earned by:
- *   - an accepted rally or challenge (either direction), or
- *   - being drawn against each other in a tournament match.
+ * Doc id is the two uids sorted and joined with `__`, so a pair yields exactly one doc.
+ * firestore.rules recomputes the same id with its own pairId() — the two MUST stay in sync or
+ * every contact read starts failing.
  *
- * Doc id is the two uids sorted and joined with `__`, so the pair is order-independent and one
- * pair can only ever produce one document. `firestore.rules` recomputes the same id with its own
- * pairId() helper — the two MUST stay in sync or every contact read starts failing.
- *
- * Connections are deliberately permanent. Once you have played someone you keep the ability to
- * reach them; revoking on match completion would strand people mid-arrangement.
- *
- * Deploy with: firebase deploy --only functions:onMatchConnection
+ * Connections are permanent: revoking on match completion would strand people mid-arrangement.
+ * Deploy: firebase deploy --only functions:onMatchConnection
  */
 const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
@@ -29,10 +22,7 @@ const db = () => admin.firestore();
 /** Order-independent pair id. Must match pairId() in firestore.rules exactly. */
 const pairId = (a, b) => (a < b ? `${a}__${b}` : `${b}__${a}`);
 
-/**
- * Records a connection between two players. Idempotent — `create` on an existing doc throws
- * ALREADY_EXISTS, which is the cheap way to avoid a read on every single match write.
- */
+/** Idempotent — `create` on an existing doc throws ALREADY_EXISTS, avoiding a read per match write. */
 async function linkPlayers(a, b, reason) {
   if (!a || !b || a === b) return false;
   try {
@@ -54,12 +44,9 @@ exports.pairId = pairId;
 
 /**
  * Marketplace sellers are a separate consent case: posting a listing IS an invitation to be
- * contacted by a stranger, and that was already how the board worked. Rules can't ask "does this
- * user have a listing", so this marker doc answers it for them — one doc per seller, present only
- * while they have at least one listing.
- *
- * Without it, locking `contacts` to opponents would silently remove the Contact button from every
- * listing on the board.
+ * contacted by a stranger. Rules can't ask "does this user have a listing", so this marker doc
+ * answers it — one per seller, present only while they have a listing. Without it, locking
+ * `contacts` to opponents removes the Contact button from every listing on the board.
  */
 exports.onListingContact = onDocumentWritten(
   { document: 'listings/{id}', region: REGION },
@@ -80,9 +67,8 @@ exports.onListingContact = onDocumentWritten(
 );
 
 /**
- * Watches every match doc. `onDocumentWritten` rather than created/updated separately because a
- * tournament match arrives already populated (create) while a rally or challenge only earns its
- * connection later, when the recipient accepts (update).
+ * `onDocumentWritten`, not created/updated separately: a tournament match arrives already
+ * populated (create) while a rally or challenge earns its connection later, on accept (update).
  */
 exports.onMatchConnection = onDocumentWritten(
   { document: 'matches/{id}', region: REGION },
