@@ -1,7 +1,8 @@
 ﻿import React, { useMemo } from 'react';
 import { TournamentMatch, TournamentPlayer } from './types';
-import { BYE, PLAYER_LOADING, formatPlayerName, getMatchDisplayFlags } from './utils';
+import { PLAYER_LOADING, formatDeadline } from './utils';
 import { getRoundLabels } from './bracketImage';
+import { MatchCard } from './MatchCard';
 
 const getRoundTone = (round: string) => {
   if (round === 'SF' || round === 'F') return 'bg-clay/10 border-clay/20';
@@ -23,57 +24,9 @@ export const getRoundState = (roundMatches: TournamentMatch[]): 'preview' | 'loa
     (m) => m.player_1_name !== PLAYER_LOADING && m.player_2_name !== PLAYER_LOADING,
   );
   if (!anyReady) return 'preview';
-  if (real.every((m) => !!m.winner_user_id)) return 'finished';
+  if (real.every((m) => !!m.winner_uid)) return 'finished';
   return 'started';
 };
-
-export const formatDeadline = (iso: string): string => {
-  const [, m, d] = iso.split('-').map(Number);
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${months[m - 1]} ${d}`;
-};
-
-const BracketPlayer: React.FC<{ name: string; winner: boolean }> = ({ name, winner }) => (
-  <div className={`h-8 border-b border-fg/10 flex items-center px-2 text-sm font-semibold ${winner ? 'text-clay' : 'text-fg/90'}`}>
-    <span className="truncate">{formatPlayerName(name) || ' '}</span>
-  </div>
-);
-
-type PlayerSelectProps = {
-  matchId: string;
-  slot: 'player_1' | 'player_2';
-  currentUserId: string;
-  currentName: string;
-  players: TournamentPlayer[];
-  onSelect: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
-};
-
-export const PlayerSelect: React.FC<PlayerSelectProps> = ({ matchId, slot, currentUserId, currentName, players, onSelect }) => {
-  const selectValue = currentName === PLAYER_LOADING ? PLAYER_LOADING : (currentUserId || '');
-  return (
-    <div className="h-8 border-b border-fg/10 flex items-center px-1 bg-clay/10">
-      <select
-        value={selectValue}
-        onChange={(e) => {
-          if (e.target.value === PLAYER_LOADING) {
-            onSelect(matchId, slot, { user_id: '', name: PLAYER_LOADING, contact: '', preferredContact: 'email', participantId: '' });
-          } else {
-            const p = e.target.value ? players.find((p) => p.user_id === e.target.value) ?? null : null;
-            onSelect(matchId, slot, p);
-          }
-        }}
-        className="w-full text-xs bg-transparent border-none outline-none cursor-pointer text-fg [&>option]:text-black"
-      >
-        <option value="">{BYE}</option>
-        <option value={PLAYER_LOADING}>{PLAYER_LOADING}</option>
-        {players.map((p) => (
-          <option key={p.user_id} value={p.user_id}>{p.name}</option>
-        ))}
-      </select>
-    </div>
-  );
-};
-
 
 type Props = {
   matches: TournamentMatch[];
@@ -81,6 +34,7 @@ type Props = {
   editMode?: boolean;
   editPlayers?: TournamentPlayer[];
   onEditPlayer?: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
+  onRemovePlayer?: (uid: string) => void;
   isCreator?: boolean;
   onSubmitScore?: (match: TournamentMatch) => void;
   submittableMatchIds?: Set<string>;
@@ -90,7 +44,7 @@ type Props = {
 };
 
 export const BracketView: React.FC<Props> = ({
-  matches, drawTitle, editMode, editPlayers = [], onEditPlayer,
+  matches, drawTitle, editMode, editPlayers = [], onEditPlayer, onRemovePlayer,
   isCreator, onSubmitScore, submittableMatchIds, pendingMatchIds,
   roundDeadlines = {}, onUpdateDeadline,
 }) => {
@@ -106,7 +60,7 @@ export const BracketView: React.FC<Props> = ({
   );
 
   return (
-    <section className="overflow-x-auto rounded-[2rem] bg-tennis-surface/20 text-fg border border-fg/10 p-4 md:p-6">
+    <section className="overflow-x-auto rounded-[2rem] bg-tennis-surface/20 text-fg p-4 md:p-6">
       {editMode && (
         <p className="text-center text-xs text-amber-300 font-semibold mb-4">
           Edit mode — use dropdowns to reassign players
@@ -126,7 +80,7 @@ export const BracketView: React.FC<Props> = ({
               {(() => {
                 const rs = getRoundState(round.matches);
                 return (
-                  <p className={`text-center text-xs uppercase tracking-widest font-black ${rs === 'finished' ? 'text-clay' : rs === 'loading' ? 'text-fg/40' : 'text-fg'}`}>
+                  <p className={`text-center text-xs uppercase tracking-widest font-black ${rs === 'finished' ? 'text-clay' : rs === 'loading' ? 'text-fg/70' : 'text-fg'}`}>
                     {round.round} — {rs === 'preview' ? 'Live Preview' : rs === 'loading' ? 'Loading' : rs === 'started' ? 'Started' : 'Finished'}
                   </p>
                 );
@@ -140,7 +94,7 @@ export const BracketView: React.FC<Props> = ({
                   title={`Set deadline for ${round.round}`}
                 />
               ) : roundDeadlines[round.round] ? (
-                <p className="text-center text-[10px] text-fg/60 mt-0.5">
+                <p className="text-center text-[10px] text-fg/70 mt-0.5">
                   Till {formatDeadline(roundDeadlines[round.round])}
                 </p>
               ) : null}
@@ -148,13 +102,6 @@ export const BracketView: React.FC<Props> = ({
             {round.matches.map((match, matchIndex) => {
               const rowSpan = 2 ** (roundIndex + 1);
               const gridRowStart = matchIndex * 2 ** roundIndex * 2 + 2;
-              const {
-                isEditable, scoreText, showDot, showCreatorSubmit, showPlayerSubmit, alreadySubmitted,
-              } = getMatchDisplayFlags(match, {
-                editMode, hasEditHandler: !!onEditPlayer, isCreator, hasSubmitHandler: !!onSubmitScore,
-                submittableMatchIds, pendingMatchIds,
-              });
-              const dotClass = match.status === 'complete' ? 'bg-green-400' : 'bg-orange-400';
 
               return (
                 <div
@@ -162,86 +109,19 @@ export const BracketView: React.FC<Props> = ({
                   className="grid grid-cols-[minmax(0,1fr)_24px] items-center"
                   style={{ gridRow: `${gridRowStart} / span ${rowSpan}` }}
                 >
-                  <div className="relative rounded-sm bg-tennis-dark/60 border border-fg/10 shadow-sm">
-                    {/* Status dot */}
-                    {showDot && (
-                      <span
-                        className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${dotClass} z-10`}
-                        title={
-                          match.status === 'complete'
-                            ? 'Score recorded'
-                            : 'Pending'
-                        }
-                      />
-                    )}
-
-                    {isEditable ? (
-                      <PlayerSelect
-                        matchId={match.id}
-                        slot="player_1"
-                        currentUserId={match.player_1_user_id}
-                        currentName={match.player_1_name}
-                        players={editPlayers}
-                        onSelect={onEditPlayer!}
-                      />
-                    ) : (
-                      <BracketPlayer name={match.player_1_name} winner={match.winner_user_id === match.player_1_user_id} />
-                    )}
-                    {isEditable ? (
-                      <PlayerSelect
-                        matchId={match.id}
-                        slot="player_2"
-                        currentUserId={match.player_2_user_id}
-                        currentName={match.player_2_name}
-                        players={editPlayers}
-                        onSelect={onEditPlayer!}
-                      />
-                    ) : (
-                      <BracketPlayer name={match.player_2_name} winner={match.winner_user_id === match.player_2_user_id} />
-                    )}
-
-                    {/* Score display */}
-                    {scoreText && (
-                      <div className="border-t border-fg/10 px-2 py-0.5 text-[10px] text-fg/60 font-mono tracking-wide">
-                        {scoreText}
-                      </div>
-                    )}
-
-                    {/* Final winner banner */}
-                    {round.round === 'F' && match.winner_name ? (
-                      <div className="border-t border-fg/10 px-2 py-1 text-xs font-black text-clay">
-                        Winner: {formatPlayerName(match.winner_name)}
-                      </div>
-                    ) : null}
-
-                    {/* Creator enter-score button */}
-                    {showCreatorSubmit && (
-                      <button
-                        type="button"
-                        onClick={() => onSubmitScore(match)}
-                        className="w-full border-t border-fg/10 px-2 py-1 text-[10px] text-fg/70 hover:text-clay transition-colors text-center leading-tight"
-                      >
-                        {match.status === 'complete' ? 'Edit score' : 'Enter score'}
-                      </button>
-                    )}
-
-                    {/* Player submit-score button (queues for organizer confirmation) */}
-                    {showPlayerSubmit && (
-                      alreadySubmitted ? (
-                        <div className="w-full border-t border-fg/10 px-2 py-1 text-[10px] text-green-400 text-center leading-tight">
-                          Submitted ✓ awaiting confirmation
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => onSubmitScore!(match)}
-                          className="w-full border-t border-fg/10 px-2 py-1 text-[10px] text-fg/70 hover:text-clay transition-colors text-center leading-tight"
-                        >
-                          Submit score
-                        </button>
-                      )
-                    )}
-                  </div>
+                  <MatchCard
+                    match={match}
+                    variant="grid"
+                    isFinal={round.round === 'F'}
+                    editMode={editMode}
+                    editPlayers={editPlayers}
+                    onEditPlayer={onEditPlayer}
+                    onRemovePlayer={onRemovePlayer}
+                    isCreator={isCreator}
+                    onSubmitScore={onSubmitScore}
+                    submittableMatchIds={submittableMatchIds}
+                    pendingMatchIds={pendingMatchIds}
+                  />
                   {roundIndex < rounds.length - 1 ? (
                     <div className="grid h-full grid-cols-[1fr_1px] items-center">
                       <div className="border-t border-fg/20" />

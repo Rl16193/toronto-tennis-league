@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { setAnalyticsUser, clearAnalyticsUser } from '../lib/analytics';
-import { ensureUserProfileDocuments } from '../lib/profileBootstrap';
-import { UserProfile, UserData, UserStats, UserPreferences } from '../types';
+import { emptyContacts, ensureUserProfileDocuments } from '../lib/profileBootstrap';
+import { ContactData, UserProfile, UserData, UserStats, UserPreferences } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -46,10 +46,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProfileError(null);
       await ensureUserProfileDocuments(activeUser);
 
-      const [userDataDoc, statsDoc, preferencesDoc] = await Promise.all([
+      const [userDataDoc, statsDoc, preferencesDoc, contactsDoc] = await Promise.all([
         getDoc(doc(db, 'users', activeUser.uid)),
         getDoc(doc(db, 'stats', activeUser.uid)),
         getDoc(doc(db, 'preferences', activeUser.uid)),
+        getDoc(doc(db, 'contacts', activeUser.uid)),
       ]);
 
       if (!userDataDoc.exists()) {
@@ -63,11 +64,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setProfileError('Your preferences document is missing from Firestore.');
       } else {
         const userData = userDataDoc.data() as UserData;
-        if (activeUser.email && userData.email !== activeUser.email) {
-          await updateDoc(doc(db, 'users', activeUser.uid), {
-            email: activeUser.email,
-          });
-          userData.email = activeUser.email;
+        // Deliberately NOT part of the existence checks above: legacy accounts have no contacts
+        // doc until the backfill runs, and treating that as fatal would lock them out entirely.
+        const contacts: ContactData = contactsDoc.exists()
+          ? { ...emptyContacts(), ...(contactsDoc.data() as ContactData) }
+          : emptyContacts();
+
+        // Keep the stored email in step with the auth record. Lives on contacts now, not users.
+        if (activeUser.email && contacts.email !== activeUser.email) {
+          await setDoc(
+            doc(db, 'contacts', activeUser.uid),
+            { email: activeUser.email, updated_at: new Date().toISOString() },
+            { merge: true },
+          ).catch(() => { /* non-fatal; the next sign-in retries */ });
+          contacts.email = activeUser.email;
         }
 
         const stats = statsDoc.data() as UserStats;
@@ -77,6 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           user: userData,
           stats,
           preferences,
+          contacts,
         });
         // GA4 non-PII user properties for segmentation (User-ID set in onAuthStateChanged).
         setAnalyticsUser(activeUser.uid, {

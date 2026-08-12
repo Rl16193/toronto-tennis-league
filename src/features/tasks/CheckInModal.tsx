@@ -5,9 +5,8 @@ import { Button } from '../../components/Button';
 import { useAuth } from '../../context/AuthContext';
 import {
   CHECKIN_RADIUS_M, NearbyCourt, TopCheckIn, VISIT_TYPES, VisitType,
-  checkIn, checkZoneComplete, findNearbyCourts, getCurrentPosition, getTopCheckIns, hasCheckedIn, logAttendance,
+  checkIn, findNearbyCourts, getCurrentPosition, getTopCheckIns, logAttendance,
 } from './checkinService';
-import { bumpCounter, setTaskDone } from './useTasks';
 
 type Step = 'start' | 'locating' | 'pick' | 'success' | 'error';
 
@@ -22,7 +21,6 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   const [busy, setBusy] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [checkedInto, setCheckedInto] = useState<NearbyCourt | null>(null);
-  const [wasNewStamp, setWasNewStamp] = useState(false);
   const [visitType, setVisitType] = useState<VisitType>('Practice');
   const [topCheckIns, setTopCheckIns] = useState<TopCheckIn[]>([]);
 
@@ -53,19 +51,17 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
     try {
       const name = profile?.user.name || '';
       const full = { ...coords, distM: court.distM };
-      const firstVisit = !(await hasCheckedIn(user.uid, court));
-      setWasNewStamp(firstVisit);
 
       // Always log daily attendance — the repeatable signal (feeds Matchday + zone sweeps).
       await logAttendance(user.uid, name, court, full, visitType);
 
-      if (firstVisit) {
+      {
+        // Writing the `courts` check-in doc is all the client does. `courtVisit`, `courtsVisited`
+        // and `zoneComplete` are all awarded by onCourtVisitAwardPoints, which this write triggers.
+        // The client used to set them directly, but those fields carry spendable points, so the
+        // rules allowlist (correctly) rejects owner writes to them — the calls were failing
+        // silently behind a bare catch, which is what made the 30-point zone tier unreachable.
         await checkIn(user.uid, name, court, full, visitType);
-        setTaskDone(user.uid, name, 'courtVisit', true).catch(() => {});
-        const zone = profile?.preferences.preferred_zone || court.zone;
-        checkZoneComplete(user.uid, zone)
-          .then((done) => { if (done) bumpCounter(user.uid, name, 'zoneComplete', 1).catch(() => {}); })
-          .catch(() => {});
       }
       setCheckedInto(court);
       setStep('success');
@@ -83,7 +79,7 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
           <div className="space-y-5">
             {/* Activity type */}
             <div className="space-y-2">
-              <p className="text-xs font-bold text-fg/50 uppercase tracking-widest">What are you here for?</p>
+              <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">What are you here for?</p>
               <div className="grid grid-cols-2 gap-2">
                 {VISIT_TYPES.map((t) => (
                   <button
@@ -102,16 +98,16 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 
             {/* Top check-ins */}
             <div className="space-y-2">
-              <p className="text-xs font-bold text-fg/50 uppercase tracking-widest">Top check-ins</p>
+              <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Top check-ins</p>
               {topCheckIns.length === 0 ? (
-                <p className="text-fg/40 text-sm">No check-ins yet — be the first.</p>
+                <p className="text-fg/70 text-sm">No check-ins yet. Be the first.</p>
               ) : (
-                <div className="rounded-2xl border border-fg/10 bg-tennis-surface/40 divide-y divide-white/5">
+                <div className="rounded-2xl bg-tennis-surface/40 divide-y divide-white/5">
                   {topCheckIns.map((c, i) => (
                     <div key={c.court} className="flex items-center gap-3 px-4 py-2.5">
-                      <span className="text-fg/30 font-black text-sm w-4 shrink-0">{i + 1}</span>
+                      <span className="text-fg/70 font-black text-sm w-4 shrink-0">{i + 1}</span>
                       <p className="text-fg font-semibold text-sm truncate flex-1 min-w-0">{c.court}</p>
-                      <span className="text-[11px] text-fg/40 shrink-0">{c.count} check-ins</span>
+                      <span className="text-[11px] text-fg/70 shrink-0">{c.count} check-ins</span>
                     </div>
                   ))}
                 </div>
@@ -127,7 +123,7 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         {step === 'locating' && (
           <div className="text-center py-10">
             <Loader2 className="w-8 h-8 text-clay animate-spin mx-auto mb-3" />
-            <p className="text-fg/60 text-sm">Finding your location…</p>
+            <p className="text-fg/70 text-sm">Finding your location…</p>
           </div>
         )}
 
@@ -142,20 +138,20 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
           <div className="space-y-2">
             {error && <p className="text-red-400 text-xs text-center">{error}</p>}
             {nearby.length === 0 ? (
-              <p className="text-fg/50 text-sm text-center py-8">No courts nearby.</p>
+              <p className="text-fg/70 text-sm text-center py-8">No courts nearby.</p>
             ) : (
               nearby.slice(0, 6).map((c) => {
                 const here = c.distM <= CHECKIN_RADIUS_M;
                 return (
-                  <div key={c.dropdown} className="rounded-2xl border border-fg/10 bg-tennis-surface/40 px-4 py-3 flex items-center justify-between gap-3">
+                  <div key={c.dropdown} className="rounded-2xl bg-tennis-surface/40 px-4 py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-fg font-semibold text-sm truncate">{c.dropdown}</p>
-                      <p className="text-fg/40 text-xs">{Math.round(c.distM)} m away</p>
+                      <p className="text-fg/70 text-xs">{Math.round(c.distM)} m away</p>
                     </div>
                     {here ? (
-                      <Button size="sm" onClick={() => doCheckIn(c)} isLoading={busy}>Check in</Button>
+                      <Button size="sm" onClick={() => doCheckIn(c)} isLoading={busy}>Court</Button>
                     ) : (
-                      <span className="text-[11px] text-fg/30 shrink-0">Get closer</span>
+                      <span className="text-[11px] text-fg/70 shrink-0">Get closer</span>
                     )}
                   </div>
                 );
@@ -169,14 +165,7 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
             <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8 text-green-500" />
             </div>
-            <div className="space-y-1">
-              <h3 className="text-lg font-bold text-fg">Checked in!</h3>
-              <p className="text-fg/60 text-sm">
-                {wasNewStamp
-                  ? `${checkedInto.dropdown} added to your courts.`
-                  : `You’re checked in at ${checkedInto.dropdown}.`}
-              </p>
-            </div>
+            <h3 className="text-lg font-bold text-fg">Completed.</h3>
             <Button variant="outline" className="w-full" onClick={onClose}>Done</Button>
           </div>
         )}

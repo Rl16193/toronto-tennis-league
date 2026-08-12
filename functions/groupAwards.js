@@ -1,13 +1,13 @@
 /**
  * Group / community bonuses — points that unlock from COLLECTIVE activity, not one player's
  * counter. Unlike taskPoints.js (per-player tiers), these read across many players' documents,
- * then pay a whole group at once. Two ideas make that safe:
+ * then pay a whole group at once. One idea makes that safe:
  *
- *   1. A deterministic award id per event (e.g. `matchday_20260722`, `sweep_north-york_0`)
- *      whose group_awards/{awardId} doc is CREATED inside the payout transaction. If the doc
- *      already exists the payout is skipped — so a bonus is paid exactly once even if two
- *      near-simultaneous writes both cross the threshold.
- *   2. Payouts land as `bonusPoints` (a running total) + a `bonusAwards` list on task_progress.
+ *   1. A deterministic award id per event (e.g. `matchday_20260722`, `sweep_north-york_0`). Each
+ *      recipient gets their own per-recipient ledger doc `tasks/{awardId}_{uid}`, CREATED inside
+ *      the payout transaction. If that doc already exists the recipient is skipped — so a bonus
+ *      is paid exactly once even if two near-simultaneous writes both cross the threshold.
+ *   2. Payouts land as `bonusPoints` (a running total) + a `bonusAwards` list on tasks/{uid}.
  *      taskPoints() on the client adds bonusPoints to the player's total.
  *
  * Zone-based bonuses need the full court roster server-side (to know when a zone is "complete").
@@ -23,8 +23,7 @@ const admin = require('firebase-admin');
 const { notify } = require('./lib/notify');
 const ROSTER = require('./courts.json'); // { [courtKey]: zoneName }
 
-const REGION = 'us-central1';
-const TZ = 'America/Toronto';
+const { TZ, REGION } = require('./lib/constants');
 const db = () => admin.firestore();
 
 // ─── Tunable thresholds (all easily adjusted here) ──────────────────────────────────────────
@@ -80,30 +79,37 @@ const AWARD_LABELS = {
 async function payGroupAward(awardId, { type, key, pointsEach, recipients, allowTopUp = false }) {
   const clean = recipients.filter((r) => r && r.uid);
   if (clean.length === 0) return false;
-  const awardRef = db().doc(`group_awards/${awardId}`);
+  const nowISO = new Date().toISOString();
   const newOnes = await db().runTransaction(async (tx) => {
-    const snap = await tx.get(awardRef);
-    if (snap.exists && !allowTopUp) return [];
-    const already = new Set(snap.exists ? (snap.data().recipient_ids || []) : []);
-    const fresh = clean.filter((r) => !already.has(r.uid));
-    if (fresh.length === 0) return [];
-    const allIds = [...already, ...fresh.map((r) => r.uid)];
-    tx.set(awardRef, {
-      type,
-      key: key || null,
-      points_each: pointsEach,
-      recipient_ids: allIds,
-      recipient_count: allIds.length,
-      ...(snap.exists ? { updated_at: new Date().toISOString() } : { created_at: new Date().toISOString() }),
-    }, { merge: true });
-    for (const r of fresh) {
-      tx.set(db().doc(`task_progress/${r.uid}`), {
-        user_id: r.uid,
+    const fresh = [];
+    for (const r of clean) {
+      const entryRef = db().doc(`tasks/${awardId}_${r.uid}`);
+      const entrySnap = await tx.get(entryRef);
+      // One-shot: skip recipients already paid for this award id.
+      // allowTopUp (Matchday) has the same per-recipient check — new recipients to a
+      // still-active award day get paid, but nobody is ever paid twice.
+      if (entrySnap.exists && !allowTopUp) continue;
+      if (entrySnap.exists && allowTopUp) continue;
+      // Write the per-recipient ledger entry
+      tx.set(entryRef, {
+        uid: r.uid,
+        type: 'group',
+        category: 'group',
+        sub_category: type,
+        award_name: AWARD_LABELS[type] || '',
+        points_each: pointsEach,
+        created_at: nowISO,
+      });
+      // Still write bonusPoints into the per-user progress doc
+      tx.set(db().doc(`tasks/${r.uid}`), {
+        uid: r.uid,
+        category: 'progress',
         ...(r.name ? { name: r.name } : {}),
         bonusPoints: admin.firestore.FieldValue.increment(pointsEach),
         bonusAwards: admin.firestore.FieldValue.arrayUnion(awardId),
-        updatedAt: new Date().toISOString(),
+        updatedAt: nowISO,
       }, { merge: true });
+      fresh.push(r);
     }
     return fresh;
   });
@@ -121,12 +127,13 @@ async function payGroupAward(awardId, { type, key, pointsEach, recipients, allow
 // Daily Group Tasks (reset every day — the day is baked into the award id)
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 
-// Full Zone Sweep reads off the append-only attendance log.
+// Full Zone Sweep reads off the append-only attendance log. The `courts` collection also holds
+// check-ins and photo reports, so gate on the 'attendance' type.
 exports.onCourtAttendanceGroupBonus = onDocumentCreated(
-  { document: 'court_attendance/{id}', region: REGION },
+  { document: 'courts/{id}', region: REGION },
   async (event) => {
     const a = event.data?.data();
-    if (!a?.user_id || !a.court_key) return;
+    if (!a?.uid || a.type !== 'attendance' || !a.court_key) return;
     await zoneSweepCheck(a);
   },
 );
@@ -135,29 +142,44 @@ exports.onCourtAttendanceGroupBonus = onDocumentCreated(
 // league-wide on one Toronto day → 10 to every player who played that day. Top-up award: players
 // whose match lands later the same day still collect, exactly once.
 exports.onMatchCompletedMatchdayBonus = onDocumentUpdated(
-  { document: 'tournament_matches/{matchId}', region: REGION },
+  { document: 'matches/{matchId}', region: REGION },
   async (event) => {
     const before = event.data?.before.data() || {};
     const after = event.data?.after.data() || {};
+    if (after.category !== 'singles' && after.category !== 'doubles') return;
     if (before.status === 'complete' || after.status !== 'complete') return;
     if (after.walkover === true) return;
     if (after.set_1_player_1 == null || after.set_1_player_2 == null) return;
 
     const { day } = torontoParts(after.completed_at);
 
-    // League scale is a few hundred matches — a status filter plus in-memory day filter beats
-    // maintaining a UTC-shifted range index on completed_at.
-    const snap = await db().collection('tournament_matches').where('status', '==', 'complete').get();
+    // Bounded to a ±36h ISO window around the match, then narrowed to the exact Toronto day in
+    // memory. This used to read EVERY completed match in the league on every single match
+    // completion — quadratic in total matches, and the first query here that would time out.
+    // `completed_at` is an ISO-8601 UTC string, so a lexicographic range works and needs only
+    // the automatic single-field index (the project ships no firestore.indexes.json). 36h
+    // comfortably covers the UTC/Toronto offset at either end of the day.
+    const pivot = after.completed_at ? new Date(after.completed_at) : new Date();
+    const WINDOW_MS = 36 * 60 * 60 * 1000;
+    const lowIso = new Date(pivot.getTime() - WINDOW_MS).toISOString();
+    const highIso = new Date(pivot.getTime() + WINDOW_MS).toISOString();
+
+    const snap = await db().collection('matches')
+      .where('category', 'in', ['singles', 'doubles'])
+      .where('completed_at', '>=', lowIso)
+      .where('completed_at', '<=', highIso)
+      .get();
     let dayMatches = 0;
     const byUid = new Map();
     snap.forEach((d) => {
       const m = d.data();
+      if (m.status !== 'complete') return;
       if (m.walkover === true) return;
       if (m.set_1_player_1 == null || m.set_1_player_2 == null) return;
       if (torontoParts(m.completed_at).day !== day) return;
       dayMatches += 1;
-      if (m.player_1_user_id && !byUid.has(m.player_1_user_id)) byUid.set(m.player_1_user_id, m.player_1_name || '');
-      if (m.player_2_user_id && !byUid.has(m.player_2_user_id)) byUid.set(m.player_2_user_id, m.player_2_name || '');
+      if (m.player_1_uid && !byUid.has(m.player_1_uid)) byUid.set(m.player_1_uid, m.player_1_name || '');
+      if (m.player_2_uid && !byUid.has(m.player_2_uid)) byUid.set(m.player_2_uid, m.player_2_name || '');
     });
     if (dayMatches < MATCHDAY_MIN_MATCHES) return;
     const recipients = [...byUid].map(([uid, name]) => ({ uid, name }));
@@ -170,12 +192,12 @@ exports.onMatchCompletedMatchdayBonus = onDocumentUpdated(
 // Every hour in the [OPEN, CLOSE) window has ≥1 queue photo at this court today → 10 to each
 // player who posted a queue photo there today.
 exports.onQueueReportHourlyBonus = onDocumentCreated(
-  { document: 'court_reports/{id}', region: REGION },
+  { document: 'courts/{id}', region: REGION },
   async (event) => {
     const r = event.data?.data();
     if (!r || r.type !== 'queue' || !r.court_key) return;
     const { day } = torontoParts(r.created_at);
-    const snap = await db().collection('court_reports').where('court_key', '==', r.court_key).get();
+    const snap = await db().collection('courts').where('court_key', '==', r.court_key).get();
     const hours = new Set();
     const byUid = new Map();
     snap.forEach((d) => {
@@ -184,7 +206,7 @@ exports.onQueueReportHourlyBonus = onDocumentCreated(
       const p = torontoParts(x.created_at);
       if (p.day !== day) return;
       hours.add(p.hour);
-      if (x.user_id && !byUid.has(x.user_id)) byUid.set(x.user_id, x.user_name || '');
+      if (x.uid && !byUid.has(x.uid)) byUid.set(x.uid, x.user_name || '');
     });
     for (let h = HOURLY_OPEN_HOUR; h < HOURLY_CLOSE_HOUR; h += 1) {
       if (!hours.has(h)) return; // a slot is still empty — not covered yet
@@ -200,31 +222,34 @@ exports.onQueueReportHourlyBonus = onDocumentCreated(
 // Community Tasks (accumulate over time)
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 
-// First-ever check-in at a court → 5 to that pioneer. court_visits are one-per-(player,court) and
-// append-only, so the very first doc for a court is that court's first-ever visit.
+// First-ever check-in at a court → 5 to that pioneer. Check-ins are one-per-(player,court) and
+// append-only, so the very first 'check-in' doc for a court is that court's first-ever visit.
 exports.onCourtVisitPioneer = onDocumentCreated(
-  { document: 'court_visits/{id}', region: REGION },
+  { document: 'courts/{id}', region: REGION },
   async (event) => {
     const v = event.data?.data();
-    if (!v?.user_id || !v.court_key) return;
+    if (!v?.uid || v.type !== 'check-in' || !v.court_key) return;
     await payGroupAward(`pioneer_${v.court_key}`, {
       type: 'pioneer', key: v.court_key, pointsEach: PIONEER_POINTS,
-      recipients: [{ uid: v.user_id, name: v.user_name || '' }],
+      recipients: [{ uid: v.uid, name: v.user_name || '' }],
     });
   },
 );
 
 // Board Freshness: first approved waiting-board photo for a court → 5 to the submitter; and once
 // EVERY court in the zone has an approved board photo → 10 to everyone who contributed one.
-exports.onBoardApprovedGroupBonus = onDocumentUpdated(
-  { document: 'court_reports/{id}', region: REGION },
+// onDocumentCreated, not onDocumentUpdated: reports auto-approve now — firestore.rules requires
+// `status == 'approved'` at create and forbids updates entirely, so the old trigger was waiting
+// for a transition into 'approved' that can never happen and these bonuses were never once paid.
+// Same conversion onPhotoReportAwardPoints already got; this sibling was missed.
+exports.onBoardApprovedGroupBonus = onDocumentCreated(
+  { document: 'courts/{id}', region: REGION },
   async (event) => {
-    const before = event.data?.before.data() || {};
-    const after = event.data?.after.data() || {};
-    if (before.status === 'approved' || after.status !== 'approved') return;
-    if (after.type !== 'waitingBoard' || !after.court_key || !after.user_id) return;
+    const after = event.data?.data() || {};
+    if (after.status !== 'approved') return;
+    if (after.type !== 'waiting_board' || !after.court_key || !after.uid || after.uid === 'no_account') return;
 
-    const submitter = { uid: after.user_id, name: after.user_name || '' };
+    const submitter = { uid: after.uid, name: after.user_name || '' };
     await payGroupAward(`board_new_${after.court_key}`, {
       type: 'board_new', key: after.court_key, pointsEach: BOARD_NEW_POINTS, recipients: [submitter],
     });
@@ -239,9 +264,9 @@ exports.onBoardApprovedGroupBonus = onDocumentUpdated(
       const covered = new Set(data.covered_keys || []);
       covered.add(after.court_key);
       const contributors = new Set(data.contributors || []);
-      contributors.add(after.user_id);
+      contributors.add(after.uid);
       const names = { ...(data.names || {}) };
-      names[after.user_id] = after.user_name || names[after.user_id] || '';
+      names[after.uid] = after.user_name || names[after.uid] || '';
       tx.set(ref, { zone, covered_keys: [...covered], contributors: [...contributors], names }, { merge: true });
       return { covered: [...covered], contributors: [...contributors], names };
     });
@@ -270,9 +295,9 @@ async function zoneSweepCheck(a) {
     const covered = new Set(data.covered_keys || []);
     covered.add(a.court_key);
     const contributors = new Set(data.contributors || []);
-    if (a.user_id) contributors.add(a.user_id);
+    if (a.uid) contributors.add(a.uid);
     const names = { ...(data.names || {}) };
-    if (a.user_id) names[a.user_id] = a.user_name || names[a.user_id] || '';
+    if (a.uid) names[a.uid] = a.user_name || names[a.uid] || '';
     const sweepIndex = data.sweep_index || 0;
     const startedAt = data.started_at || nowISO;
 
@@ -292,11 +317,15 @@ async function zoneSweepCheck(a) {
   });
   if (paid) {
     const days = Math.max(0, Math.round((Date.parse(nowISO) - Date.parse(result.startedAt)) / 86400000));
-    await db().doc(`zone_sweeps/${slug(zone)}_${result.sweepIndex}`).set({
+    await db().doc(`tasks/zone_sweep_${slug(zone)}_${result.sweepIndex}`).set({
+      type: 'group',
+      sub_category: 'zone_sweep',
+      award_name: 'Full Zone Sweep',
       zone,
       sweep_index: result.sweepIndex,
       started_at: result.startedAt,
       completed_at: nowISO,
+      created_at: nowISO,
       days_taken: days,
       court_count: rosterKeys.length,
       contributor_count: recipients.length,

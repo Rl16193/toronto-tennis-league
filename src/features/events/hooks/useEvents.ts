@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent } from '../../../types';
 import { isLadderEvent, isTopspinMeetupEvent, isTournamentEvent, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
-import { sortEventsByStartDate } from '../../../utils/eventDates';
+import { parseEndInstant, parseValidDate, sortEventsByStartDate } from '../../../utils/eventDates';
+import type { FirestoreDateLike } from '../../../utils/eventDates';
 import { DisplayEvent, fetchEvents, resolveStorageUrl } from '../services/eventService';
 import type { JoinedRegistration } from '../types';
 
@@ -21,29 +22,44 @@ export function useEvents() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Resolve Storage image paths to download URLs, once each.
+  //
+  // Deliberately keyed on the *list of unresolved paths*, not on `events`. This effect writes to
+  // `events`, so depending on the array meant every single resolution re-ran the effect, whose
+  // cleanup cancelled the other in-flight fetches and immediately re-issued them — roughly n²/2
+  // Storage round-trips for n images. `resolvingRef` then keeps a path from being requested twice
+  // even as the key legitimately changes, and makes a path that resolves to nothing stay done
+  // instead of being retried on every later pass.
+  const resolvingRef = useRef(new Set<string>());
+  const unresolvedKey = events.filter((e) => e.imagePath && !e.image).map((e) => e.imagePath).join('|');
+
   useEffect(() => {
-    const unresolved = events.filter((e) => e.imagePath && !e.image);
-    if (unresolved.length === 0) return;
+    const paths = unresolvedKey ? unresolvedKey.split('|') : [];
+    const todo = paths.filter((p) => !resolvingRef.current.has(p));
+    if (todo.length === 0) return;
+    todo.forEach((path) => resolvingRef.current.add(path));
+
     let cancelled = false;
-    unresolved.forEach((event) => {
-      resolveStorageUrl(event.imagePath!).then((url) => {
+    todo.forEach((path) => {
+      resolveStorageUrl(path).then((url) => {
         if (cancelled || !url) return;
-        setEvents((prev) => prev.map((e) => e.id === event.id ? { ...e, image: url, imagePath: undefined } : e));
-      }).catch(() => {});
+        setEvents((prev) => prev.map((e) => e.imagePath === path ? { ...e, image: url, imagePath: undefined } : e));
+      }).catch(() => { /* image stays unset; the card renders its placeholder */ });
     });
     return () => { cancelled = true; };
-  }, [events]);
+  }, [unresolvedKey]);
 
   useEffect(() => {
     if (!user) return;
-    const q = query(collection(db, 'event_participants'), where('user_id', '==', user.uid));
+    const q = query(collection(db, 'event_participants'), where('uid', '==', user.uid));
     return onSnapshot(q, (snap) => {
       setJoinedRegistrations(snap.docs.map((d) => {
         const data = d.data();
         return { eventId: data.event_id, tournamentChoice: (data.tournament_choice || '') as JoinedRegistration['tournamentChoice'] };
       }));
     });
-  }, [user]);
+    // `user?.uid`: a new User object arrives on every token refresh, needlessly re-subscribing.
+  }, [user?.uid]);
 
   const allDisplayableEvents = useMemo(
     () => events.filter((e) => !isTopspinMeetupEvent(e) && !isWeekendMatchdaysEvent(e)),
@@ -52,29 +68,21 @@ export function useEvents() {
 
   const visibleEvents = useMemo(() => {
     const now = Date.now();
+    // These used to hand-roll their own date parsing with `new Date(str)`, which reads a plain
+    // "YYYY-MM-DD" as UTC midnight — in Toronto that's 8pm the previous evening, so an event
+    // disappeared from this page most of a day before it ended. parseValidDate/parseEndInstant
+    // handle the date-only case as local time, and treat an end date as end-of-day.
     return allDisplayableEvents.filter((e) => {
       const raw = e as unknown as Record<string, unknown>;
-      const rawEnd = raw.endDate ?? raw.end_date;
+      const rawEnd = (raw.endDate ?? raw.end_date) as FirestoreDateLike;
       if (rawEnd) {
-        let endMs: number | null = null;
-        if (typeof rawEnd === 'string') endMs = new Date(rawEnd).getTime();
-        else if (typeof rawEnd === 'object' && rawEnd !== null) {
-          const obj = rawEnd as Record<string, unknown>;
-          if (typeof obj['toDate'] === 'function') endMs = (obj['toDate'] as () => Date)().getTime();
-          else if (typeof obj['seconds'] === 'number') endMs = (obj['seconds'] as number) * 1000;
-        }
+        const endMs = parseEndInstant(rawEnd)?.getTime() ?? null;
         if (endMs !== null && endMs < now) return false;
       }
       if (!isTournamentEvent(e) && !isLadderEvent(e)) {
-        const rawStart = raw.startDate ?? raw.start_date ?? raw.date;
+        const rawStart = (raw.startDate ?? raw.start_date ?? raw.date) as FirestoreDateLike;
         if (rawStart) {
-          let startMs: number | null = null;
-          if (typeof rawStart === 'string') startMs = new Date(rawStart).getTime();
-          else if (typeof rawStart === 'object' && rawStart !== null) {
-            const obj = rawStart as Record<string, unknown>;
-            if (typeof obj['toDate'] === 'function') startMs = (obj['toDate'] as () => Date)().getTime();
-            else if (typeof obj['seconds'] === 'number') startMs = (obj['seconds'] as number) * 1000;
-          }
+          const startMs = parseValidDate(rawStart)?.getTime() ?? null;
           if (startMs !== null && startMs < now) return false;
         }
       }

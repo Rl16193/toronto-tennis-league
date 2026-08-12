@@ -7,7 +7,7 @@ import { loadCourtList } from '../../features/tasks/courtList';
 import { ScoreForm } from './types';
 
 // A player, and a title, is all ScoreModal needs to know about the thing being scored — it
-// doesn't care whether that's a tournament_matches doc or a ladder_challenges doc, so both
+// doesn't care whether that's a tournament `matches` doc or a ladder challenge doc, so both
 // Tournament.tsx (bracket matches) and Matches.tsx (accepted challenges) can reuse it as-is.
 export type ScoreMatchInfo = {
   title: string;
@@ -81,11 +81,11 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
           <AlertTriangle className="w-4 h-4 shrink-0" />
           {isCreatorSubmit
             ? 'Entering score as event organizer. This will be accepted immediately.'
-            : 'Pick the winner, enter the games, and submit — the organizer will confirm it.'}
+            : 'Pick the winner, enter the games, and submit. The organizer will confirm it.'}
         </div>
 
         {/* Winner — two large tap-cards */}
-        <p className="text-xs font-bold uppercase tracking-widest text-fg/50 mb-2">Winner</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-2">Winner</p>
         <div className="flex gap-2.5 mb-6" role="radiogroup" aria-label="Winner">
           {winnerOptions.map((p) => {
             const selected = scoreForm.winnerUserId === p.uid;
@@ -115,7 +115,7 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
 
         {/* Select Court — same search dropdown as the rest of the site (PhotoSubmitModal, Signup). */}
         <div className="space-y-1.5 relative mb-6">
-          <p className="text-xs font-bold uppercase tracking-widest text-fg/50">Court</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-fg/70">Court</p>
           <input
             type="text"
             placeholder="Search courts…"
@@ -123,10 +123,10 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
             onChange={(e) => { onChange({ ...scoreForm, court: '' }); setCourtSearch(e.target.value); setShowCourtDropdown(true); }}
             onFocus={() => setShowCourtDropdown(true)}
             onBlur={() => setTimeout(() => setShowCourtDropdown(false), 150)}
-            className="w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 px-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+            className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
           />
           {showCourtDropdown && courtMatches.length > 0 && (
-            <div className="absolute left-0 right-0 top-full mt-1 z-10 max-h-48 overflow-y-auto rounded-2xl border border-fg/10 bg-tennis-dark/95 p-1 shadow-2xl">
+            <div className="absolute left-0 right-0 top-full mt-1 z-10 max-h-48 overflow-y-auto rounded-2xl bg-tennis-dark/95 p-1 shadow-2xl">
               {courtMatches.map((c) => (
                 <button
                   key={c}
@@ -148,7 +148,7 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
               <p className="text-fg font-bold text-sm mb-2">Set {index + 1}</p>
               <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2.5">
                 <div>
-                  <span className="block truncate text-xs text-fg/50 font-semibold mb-1">{mineLabel}</span>
+                  <span className="block truncate text-xs text-fg/70 font-semibold mb-1">{mineLabel}</span>
                   <Stepper
                     value={Number(set.mine || 0)}
                     onChange={(v) => setSetValue(index, 'mine', v)}
@@ -157,7 +157,7 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
                   />
                 </div>
                 <div>
-                  <span className="block truncate text-xs text-fg/50 font-semibold mb-1">{oppLabel}</span>
+                  <span className="block truncate text-xs text-fg/70 font-semibold mb-1">{oppLabel}</span>
                   <Stepper
                     value={Number(set.opponent || 0)}
                     onChange={(v) => setSetValue(index, 'opponent', v)}

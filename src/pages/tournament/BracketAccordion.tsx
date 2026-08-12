@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Accordion } from '../../components/Accordion';
 import { TournamentMatch, TournamentPlayer } from './types';
-import { formatPlayerName, getMatchDisplayFlags } from './utils';
+import { formatDeadline } from './utils';
 import { getRoundLabels } from './bracketImage';
-import { PlayerSelect, formatDeadline, getRoundState } from './BracketView';
+import { getRoundState } from './BracketView';
+import { MatchCard } from './MatchCard';
 
 // Mobile bracket (wireframe 1b): instead of panning a 900px grid sideways, each round is a
 // vertical accordion section — one open at a time — with round chips (R16 ✓ / QF / SF / F) that
@@ -15,6 +16,7 @@ type Props = {
   editMode?: boolean;
   editPlayers?: TournamentPlayer[];
   onEditPlayer?: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
+  onRemovePlayer?: (uid: string) => void;
   isCreator?: boolean;
   onSubmitScore?: (match: TournamentMatch) => void;
   submittableMatchIds?: Set<string>;
@@ -26,7 +28,7 @@ type Props = {
 const STATE_LABEL = { preview: 'Live Preview', loading: 'Loading', started: 'Started', finished: 'Finished' } as const;
 
 export const BracketAccordion: React.FC<Props> = ({
-  matches, editMode, editPlayers = [], onEditPlayer,
+  matches, editMode, editPlayers = [], onEditPlayer, onRemovePlayer,
   isCreator, onSubmitScore, submittableMatchIds, pendingMatchIds,
   roundDeadlines = {}, onUpdateDeadline,
 }) => {
@@ -52,7 +54,7 @@ export const BracketAccordion: React.FC<Props> = ({
   useEffect(() => { setOpenRound(defaultOpen); }, [defaultOpen]);
 
   return (
-    <section className="rounded-[2rem] bg-tennis-surface/20 border border-fg/10 p-4">
+    <section className="rounded-[2rem] bg-tennis-surface/20 p-4">
       {editMode && (
         <p className="text-center text-xs text-amber-300 font-semibold mb-3">
           Edit mode — use dropdowns to reassign players
@@ -82,7 +84,7 @@ export const BracketAccordion: React.FC<Props> = ({
           <Accordion
             key={r.round}
             id={r.round}
-            title={`${r.round} — ${STATE_LABEL[r.state]}`}
+            title={`${r.round}: ${STATE_LABEL[r.state]}`}
             open={openRound === r.round}
             onToggle={(id) => setOpenRound((cur) => (cur === id ? null : id))}
             highlight={r.state === 'started'}
@@ -93,98 +95,31 @@ export const BracketAccordion: React.FC<Props> = ({
                   value={roundDeadlines[r.round] ?? ''}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => onUpdateDeadline(r.round, e.target.value)}
-                  className="text-[10px] text-fg/60 bg-transparent border-none outline-none cursor-pointer hover:text-fg [color-scheme:dark]"
+                  className="text-[10px] text-fg/70 bg-transparent border-none outline-none cursor-pointer hover:text-fg [color-scheme:dark]"
                   title={`Set deadline for ${r.round}`}
                 />
               ) : roundDeadlines[r.round] ? (
-                <span className="text-[10px] text-fg/50">Till {formatDeadline(roundDeadlines[r.round])}</span>
+                <span className="text-[10px] text-fg/70">Till {formatDeadline(roundDeadlines[r.round])}</span>
               ) : undefined
             }
           >
             <div className="space-y-2.5 pt-1">
-              {r.matches.map((match) => {
-                const {
-                  isEditable, scoreText, showDot, showCreatorSubmit, showPlayerSubmit, alreadySubmitted,
-                } = getMatchDisplayFlags(match, {
-                  editMode, hasEditHandler: !!onEditPlayer, isCreator, hasSubmitHandler: !!onSubmitScore,
-                  submittableMatchIds, pendingMatchIds,
-                });
-
-                return (
-                  <div key={match.id} className="relative rounded-xl bg-tennis-dark/60 border border-fg/10 overflow-hidden">
-                    {showDot && (
-                      <span
-                        className={`absolute top-2 right-2 w-2 h-2 rounded-full z-10 ${match.status === 'complete' ? 'bg-green-400' : 'bg-orange-400'}`}
-                        title={match.status === 'complete' ? 'Score recorded' : 'Pending'}
-                      />
-                    )}
-
-                    {(['player_1', 'player_2'] as const).map((slot) => {
-                      const name = slot === 'player_1' ? match.player_1_name : match.player_2_name;
-                      const uid = slot === 'player_1' ? match.player_1_user_id : match.player_2_user_id;
-                      return isEditable ? (
-                        <PlayerSelect
-                          key={slot}
-                          matchId={match.id}
-                          slot={slot}
-                          currentUserId={uid}
-                          currentName={name}
-                          players={editPlayers}
-                          onSelect={onEditPlayer!}
-                        />
-                      ) : (
-                        <div
-                          key={slot}
-                          className={`min-h-[44px] flex items-center px-3 text-sm font-semibold ${
-                            slot === 'player_1' ? 'border-b border-fg/10' : ''
-                          } ${match.winner_user_id && match.winner_user_id === uid ? 'text-clay' : 'text-fg/90'}`}
-                        >
-                          <span className="truncate">{formatPlayerName(name) || ' '}</span>
-                          {match.winner_user_id && match.winner_user_id === uid && <span className="ml-auto text-xs">✓</span>}
-                        </div>
-                      );
-                    })}
-
-                    {scoreText && (
-                      <div className="border-t border-fg/10 px-3 py-1 text-[11px] text-fg/60 font-mono tracking-wide">
-                        {scoreText}
-                      </div>
-                    )}
-
-                    {r.round === 'F' && match.winner_name ? (
-                      <div className="border-t border-fg/10 px-3 py-1.5 text-xs font-black text-clay">
-                        Winner: {formatPlayerName(match.winner_name)}
-                      </div>
-                    ) : null}
-
-                    {showCreatorSubmit && (
-                      <button
-                        type="button"
-                        onClick={() => onSubmitScore!(match)}
-                        className="w-full border-t border-fg/10 px-3 py-2 text-xs font-bold text-fg/70 hover:text-clay transition-colors text-center bg-fg/[0.03]"
-                      >
-                        {match.status === 'complete' ? 'Edit score' : 'Enter score'}
-                      </button>
-                    )}
-
-                    {showPlayerSubmit && (
-                      alreadySubmitted ? (
-                        <div className="w-full border-t border-fg/10 px-3 py-2 text-xs text-green-400 text-center">
-                          Submitted ✓ awaiting confirmation
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => onSubmitScore!(match)}
-                          className="w-full border-t border-fg/10 px-3 py-2 text-xs font-bold text-clay transition-colors text-center bg-clay/10"
-                        >
-                          Submit score
-                        </button>
-                      )
-                    )}
-                  </div>
-                );
-              })}
+              {r.matches.map((match) => (
+                <MatchCard
+                  key={match.id}
+                  match={match}
+                  variant="stack"
+                  isFinal={r.round === 'F'}
+                  editMode={editMode}
+                  editPlayers={editPlayers}
+                  onEditPlayer={onEditPlayer}
+                  onRemovePlayer={onRemovePlayer}
+                  isCreator={isCreator}
+                  onSubmitScore={onSubmitScore}
+                  submittableMatchIds={submittableMatchIds}
+                  pendingMatchIds={pendingMatchIds}
+                />
+              ))}
             </div>
           </Accordion>
         ))}

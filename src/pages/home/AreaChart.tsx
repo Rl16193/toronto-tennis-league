@@ -6,7 +6,7 @@ export type TrendSeries = { label: string; color: string; data: number[] };
 export const AreaChart: React.FC<{ series: TrendSeries[]; className?: string }> = ({ series, className }) => {
   const longest = Math.max(0, ...series.map((s) => s.data.length));
   if (longest < 2) {
-    return <div className={`flex items-center justify-center text-fg/30 text-xs ${className ?? ''}`}>Not enough matches yet</div>;
+    return <div className={`flex items-center justify-center text-fg/70 text-xs ${className ?? ''}`}>Not enough matches yet</div>;
   }
 
   const W = 300, H = 80, PAD = 6;
@@ -33,7 +33,7 @@ export const AreaChart: React.FC<{ series: TrendSeries[]; className?: string }> 
       </svg>
       <div className="flex items-center justify-center gap-4 pt-1.5 shrink-0">
         {series.map((s) => (
-          <span key={s.label} className="flex items-center gap-1.5 text-[10px] text-fg/50">
+          <span key={s.label} className="flex items-center gap-1.5 text-[10px] text-fg/70">
             <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: s.color }} />
             {s.label}
           </span>

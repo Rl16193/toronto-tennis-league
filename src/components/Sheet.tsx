@@ -7,6 +7,11 @@ type Props = {
   onClose: () => void;
   /** Optional left-aligned title rendered in a sticky header. Modals with their own header can omit it. */
   title?: string;
+  /**
+   * Accessible name for the dialog when no visible `title` is drawn. Without one, a titleless
+   * sheet reaches screen readers as an unnamed dialog.
+   */
+  ariaLabel?: string;
   maxWidthClassName?: string;
   children: React.ReactNode;
 };
@@ -17,7 +22,7 @@ type Props = {
  *
  * Enter/exit animation is driven by wrapping the usage in <AnimatePresence> at the call site.
  */
-export const Sheet: React.FC<Props> = ({ onClose, title, maxWidthClassName = 'max-w-lg', children }) => {
+export const Sheet: React.FC<Props> = ({ onClose, title, ariaLabel, maxWidthClassName = 'max-w-lg', children }) => {
   const [isMobile, setIsMobile] = useState(
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches,
   );
@@ -50,7 +55,7 @@ export const Sheet: React.FC<Props> = ({ onClose, title, maxWidthClassName = 'ma
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={title}
+      aria-label={ariaLabel ?? title}
       className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:px-4"
     >
       {/* Backdrop */}

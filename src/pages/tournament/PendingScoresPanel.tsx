@@ -19,21 +19,21 @@ export const PendingScoresPanel: React.FC<Props> = ({ submissions, onConfirm, on
       </div>
       <div className="divide-y divide-white/5">
         {submissions.map((s) => {
-          const winnerIsP1 = s.claimed_winner_user_id && s.claimed_winner_name === s.player_1_name;
+          const winnerIsP1 = s.claimed_winner_uid && s.claimed_winner_name === s.player_1_name;
           const scoreStr = s.is_walkover ? 'Walkover' : formatSetScores(s);
           return (
             <div key={s.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
               <div className="min-w-0">
-                <p className="text-sm text-fg/90 truncate">
-                  <span className="text-fg/40 text-xs mr-2">{s.match_round}{s.draw_label ? ` · ${s.draw_label}` : ''}</span>
+                <p className="text-sm text-fg truncate">
+                  <span className="text-fg/70 text-xs mr-2">{s.match_round}{s.draw_label ? ` · ${s.draw_label}` : ''}</span>
                   <span className={winnerIsP1 ? 'font-bold text-fg' : ''}>{formatPlayerName(s.player_1_name)}</span>
-                  <span className="text-fg/30 mx-1.5">vs</span>
+                  <span className="text-fg/70 mx-1.5">vs</span>
                   <span className={!winnerIsP1 ? 'font-bold text-fg' : ''}>{formatPlayerName(s.player_2_name)}</span>
                 </p>
-                <p className="text-xs text-fg/50 mt-0.5">
+                <p className="text-xs text-fg/70 mt-0.5">
                   {scoreStr && <span className="font-mono mr-2">{scoreStr}</span>}
                   Winner: <span className="text-fg/70">{formatPlayerName(s.claimed_winner_name)}</span>
-                  <span className="text-fg/30"> · submitted by {formatPlayerName(s.submitted_by_name)}</span>
+                  <span className="text-fg/70"> · submitted by {formatPlayerName(s.submitted_by_name)}</span>
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -45,7 +45,7 @@ export const PendingScoresPanel: React.FC<Props> = ({ submissions, onConfirm, on
                 </button>
                 <button
                   onClick={() => onReject(s)}
-                  className="px-3 py-1.5 rounded-lg border border-fg/15 text-fg/60 text-xs font-bold hover:text-fg hover:border-fg/30 transition-colors"
+                  className="px-3 py-1.5 rounded-lg border border-fg/15 text-fg/70 text-xs font-bold hover:text-fg hover:border-fg/30 transition-colors"
                 >
                   Reject
                 </button>

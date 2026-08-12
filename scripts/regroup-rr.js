@@ -44,8 +44,12 @@ const PLAYER_LOADING = 'Player Loading';
 
 // ── Pure helpers (mirror rrGeneration.ts / utils.ts) ──────────────────────────
 
-function getDrawKey(tournamentChoice, division, skillGroup) {
-  return `${tournamentChoice}_${division}_${skillGroup}`.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+// `zone` is optional and only appended when present, exactly as in utils.ts — an event that
+// never enabled zone draws produces the same key it always has. Omitting it here collapsed two
+// zone draws of the same division/skill into one bucket, so this script would mix their groups.
+function getDrawKey(tournamentChoice, division, skillGroup, zone) {
+  return `${tournamentChoice}_${division}_${skillGroup}${zone ? `_${zone}` : ''}`
+    .replace(/[^a-z0-9]+/gi, '_').toLowerCase();
 }
 
 // Circle-method round-robin: all unique [i, j] pairings (i < j). n=4 → 6, n=5 → 10.
@@ -93,7 +97,7 @@ function autoLabel(index, band, zone) {
 }
 
 // Build Firestore match docs for one group (mirrors buildRRGroupMatchFields).
-function buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup, groupIndex, groupLabel, labelCustom, groupPlayers, advancementCount, started }) {
+function buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup, drawZone, groupIndex, groupLabel, labelCustom, groupPlayers, advancementCount, started }) {
   // A size-1 group keeps a placeholder match (player vs Player Loading) so the lone player
   // stays visible/movable rather than being dropped.
   const pairings = groupPlayers.length === 1 ? [[0, 1]] : generateGroupPairings(groupPlayers.length);
@@ -109,6 +113,8 @@ function buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup,
         tournament_choice: choice,
         division,
         skill_group: skillGroup,
+        // Only written when the draw actually has a zone, matching buildMatchFields in utils.ts.
+        ...(drawZone ? { zone: drawZone } : {}),
         drawsize: groupPlayers.length,
         match_id: `rr_g${groupIndex}_m${idx + 1}`,
         round: 'RR',
@@ -116,17 +122,17 @@ function buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup,
         player_1_slot: i1 + 1,
         player_2_slot: i2 + 1,
         player_1_name: p1?.name ?? PLAYER_LOADING,
-        player_1_user_id: p1?.user_id ?? '',
-        player_1_contact: p1?.contact ?? '',
+        player_1_uid: p1?.user_id ?? '',
         player_2_name: p2?.name ?? PLAYER_LOADING,
-        player_2_user_id: p2?.user_id ?? '',
-        player_2_contact: p2?.contact ?? '',
+        player_2_uid: p2?.user_id ?? '',
+        ...(p1?.user_id && p2?.user_id ? { participant_uids: [p1.user_id, p2.user_id] } : {}),
         next_match_id: '',
         next_slot: '',
         status: 'pending',
         bracket: null,
         started,
         format: 'rr',
+        category: 'singles',
         rr_group: groupIndex,
         rr_round: idx + 1,
         rr_advancement_count: advancementCount,
@@ -199,7 +205,7 @@ async function main() {
 
     const [partSnap, matchSnap] = await Promise.all([
       db.collection('event_participants').where('event_id', '==', eventId).get(),
-      db.collection('tournament_matches').where('event_id', '==', eventId).get(),
+      db.collection('matches').where('event_id', '==', eventId).get(),
     ]);
 
     const rrMatches = matchSnap.docs
@@ -214,31 +220,34 @@ async function main() {
     // skill; without this guard the player would look "unplaced" in their skill-routed draw and get
     // duplicated. Mirrors the client guard in useTournament.ts (rrUnplacedPlayers / auto-place).
     const placedEventWide = new Set(
-      rrMatches.flatMap((m) => [m.player_1_user_id, m.player_2_user_id]).filter(Boolean),
+      rrMatches.flatMap((m) => [m.player_1_uid, m.player_2_uid]).filter(Boolean),
     );
 
     // Skills + zones for everyone who could be involved in this event.
     const allUserIds = [
       ...participants.map((p) => p.user_id),
-      ...rrMatches.flatMap((m) => [m.player_1_user_id, m.player_2_user_id]),
+      ...rrMatches.flatMap((m) => [m.player_1_uid, m.player_2_uid]),
     ].filter((id) => id && !String(id).startsWith('__loading_'));
-    const [statsMap, prefsMap, usersMap] = await Promise.all([
+    const [statsMap, prefsMap, usersMap, contactsMap] = await Promise.all([
       getMany('stats', allUserIds),
       getMany('preferences', allUserIds),
       getMany('users', allUserIds),
+      // Phone/email moved off `users` into `contacts` — without this the contact stamped onto a
+      // late joiner's match docs would be blank. Admin SDK, so the sign-in gate doesn't apply.
+      getMany('contacts', allUserIds),
     ]);
     const skillOf = (uid, fallback = 0) => Number(statsMap.get(uid)?.skill_level ?? fallback);
     const zoneOf = (uid) => prefsMap.get(uid)?.preferred_zone || 'Unassigned';
     const contactOf = (uid) => {
-      const u = usersMap.get(uid);
-      if (!u) return '';
-      return (u.preferred_mode_of_contact === 'phone' ? u.phone : u.email) || '';
+      const c = contactsMap.get(uid);
+      if (!c) return '';
+      return (c.preferred_mode_of_contact === 'phone' ? c.phone : c.email) || '';
     };
 
     // Group RR matches by drawKey.
     const byDraw = new Map();
     for (const m of rrMatches) {
-      const key = getDrawKey(m.tournament_choice, m.division, m.skill_group);
+      const key = getDrawKey(m.tournament_choice, m.division, m.skill_group, m.zone);
       if (!byDraw.has(key)) byDraw.set(key, []);
       byDraw.get(key).push(m);
     }
@@ -251,6 +260,10 @@ async function main() {
       const choice = drawMatches[0].tournament_choice;
       const division = drawMatches[0].division;
       const skillGroup = drawMatches[0].skill_group;
+      // The draw's zone bucket (distinct from the per-group label zone derived from player
+      // preferences below). Must be stamped onto new match docs or the app's zone-scoped filters
+      // won't see the late joiner's matches at all.
+      const drawZone = drawMatches[0].zone ?? null;
       const advancementCount = drawMatches[0].rr_advancement_count ?? 1;
       if (choice === 'Doubles') { console.log(`  · ${eventId} ${drawKey}: doubles RR skipped`); continue; }
 
@@ -261,8 +274,8 @@ async function main() {
         const seen = new Set();
         const players = [];
         for (const m of ms) {
-          if (m.player_1_user_id && !seen.has(m.player_1_user_id)) { seen.add(m.player_1_user_id); players.push({ user_id: m.player_1_user_id, name: m.player_1_name, contact: m.player_1_contact }); }
-          if (m.player_2_user_id && !seen.has(m.player_2_user_id)) { seen.add(m.player_2_user_id); players.push({ user_id: m.player_2_user_id, name: m.player_2_name, contact: m.player_2_contact }); }
+          if (m.player_1_uid && !seen.has(m.player_1_uid)) { seen.add(m.player_1_uid); players.push({ user_id: m.player_1_uid, name: m.player_1_name }); }
+          if (m.player_2_uid && !seen.has(m.player_2_uid)) { seen.add(m.player_2_uid); players.push({ user_id: m.player_2_uid, name: m.player_2_name }); }
         }
         const labelDoc = ms.find((m) => m.rr_group_label);
         const avgSkill = players.length ? players.reduce((s, p) => s + skillOf(p.user_id), 0) / players.length : 0;
@@ -284,7 +297,10 @@ async function main() {
         if (division !== 'All' && p.division !== division) return false;
         if (String(p.user_id || '').startsWith('__loading_') || p.user_name === PLAYER_LOADING) return false;
         if (skillGroup !== 'All') {
-          const sg = skillOf(p.user_id, Number(p.skill || 0)) >= 4 ? 'Masters' : 'Challengers';
+          // Must use skillBand (three-way), not a >= 4 Masters/Challengers split. The two-way
+          // version classified everyone as Challengers or Masters, so a draw whose skill_group
+          // is 'Beginners' matched zero participants and silently never took a late joiner.
+          const sg = skillBand(skillOf(p.user_id, Number(p.skill || 0)));
           if (sg !== skillGroup) return false;
         }
         return true;
@@ -347,15 +363,15 @@ async function main() {
       // Emit writes: rebuild dirty existing groups, write new groups.
       for (const g of groups.filter((x) => x.dirty)) {
         const label = g.custom ? g.storedLabel : autoLabel(g.gi, g.band, g.zone);
-        g.matchDocs.forEach((m) => ops.push({ type: 'delete', ref: db.collection('tournament_matches').doc(m.id) }));
-        buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup, groupIndex: g.gi, groupLabel: label, labelCustom: g.custom, groupPlayers: g.players, advancementCount, started })
-          .forEach(({ docId, fields }) => ops.push({ type: 'set', ref: db.collection('tournament_matches').doc(docId), fields }));
+        g.matchDocs.forEach((m) => ops.push({ type: 'delete', ref: db.collection('matches').doc(m.id) }));
+        buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup, drawZone, groupIndex: g.gi, groupLabel: label, labelCustom: g.custom, groupPlayers: g.players, advancementCount, started })
+          .forEach(({ docId, fields }) => ops.push({ type: 'set', ref: db.collection('matches').doc(docId), fields }));
       }
       for (const g of newGroups) {
         const band = skillBand(g.players.reduce((s, p) => s + p.skill, 0) / g.players.length);
         const label = autoLabel(g.gi, band, sharedZone(g.players.map((p) => p.zone)));
-        buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup, groupIndex: g.gi, groupLabel: label, labelCustom: false, groupPlayers: g.players, advancementCount, started })
-          .forEach(({ docId, fields }) => ops.push({ type: 'set', ref: db.collection('tournament_matches').doc(docId), fields }));
+        buildRRGroupMatchDocs({ eventId, drawKey, choice, division, skillGroup, drawZone, groupIndex: g.gi, groupLabel: label, labelCustom: false, groupPlayers: g.players, advancementCount, started })
+          .forEach(({ docId, fields }) => ops.push({ type: 'set', ref: db.collection('matches').doc(docId), fields }));
         eventNewGroups++;
       }
     }

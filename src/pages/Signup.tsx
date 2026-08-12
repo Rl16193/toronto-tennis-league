@@ -9,29 +9,26 @@ import { doc, setDoc } from 'firebase/firestore';
 import { auth, db, setAuthPersistence } from '../lib/firebase';
 import { track } from '../lib/analytics';
 import { useAuth } from '../context/AuthContext';
-import { SKILL_LEVEL_TIERS, SELECTABLE_SKILL_LEVELS } from '../utils/skillLevels';
+import { SELECTABLE_SKILL_LEVELS } from '../utils/skillLevels';
+import { skillBand } from './tournament/utils';
+import { Accordion } from '../components/Accordion';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import {
-  Trophy, MapPin, CheckCircle2, ChevronRight, ArrowRight,
-  AlertCircle, Info, Star,
+  MapPin, CheckCircle2, ChevronRight, ChevronDown, ArrowRight,
+  AlertCircle,
   Eye, EyeOff, Chrome, Apple, X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserData, UserStats, UserPreferences } from '../types';
 import mailcheck from 'mailcheck';
 import { defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts, getCourtSuggestions, mergeCourtOptions } from '../features/signup/utils/courtSearch';
-import { getZoneWithBorderCheck } from '../utils/zones';
+import { getZoneWithBorderCheck, zoneFromCourts } from '../utils/zones';
 import { formatPhone } from '../utils/formatPhone';
 import { getSignupErrorMessage, signupEmailRegex, emailExistsForSignup } from '../features/signup/signupValidation';
 import { getAuthErrorMessage } from '../features/auth/authMessages';
 import { useGoogleSignIn } from '../features/auth/useGoogleSignIn';
 import { useAppleSignIn } from '../features/auth/useAppleSignIn';
-
-const FAVOURITE_PLAYERS = [
-  "Jannik Sinner", "Carlos Alcaraz", "Rafael Nadal",
-  "Roger Federer", "Novak Djokovic"
-];
 
 type AuthPhase = 'email' | 'login' | 'account' | 'preferences' | 'done';
 
@@ -45,15 +42,31 @@ const BrandMark: React.FC = () => (
   </div>
 );
 
+// What a collapsed preferences card shows in its header: whatever's been chosen or typed inside
+// it, so folding a card away doesn't hide the answer. Capped in width and truncated — a long
+// courts list can't be allowed to push the card title around.
+const CardSummary: React.FC<{ text: string }> = ({ text }) =>
+  text.trim() ? (
+    <span className="max-w-[9rem] sm:max-w-[14rem] truncate text-xs font-bold text-clay">{text}</span>
+  ) : null;
+
 export const Signup: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, profile, loading: authLoading, refreshProfile } = useAuth();
   const [phase, setPhase] = useState<AuthPhase>('email');
+  // Preferences is one screen now; these are the expandable cards on it, all open on arrival.
+  const [openCards, setOpenCards] = useState<Set<string>>(
+    () => new Set(['about', 'skill', 'courts', 'league']),
+  );
+  const toggleCard = (id: string) => setOpenCards((cur) => {
+    const next = new Set(cur);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
-  const [prefStep, setPrefStep] = useState<1 | 2>(1);
   const [emailSuggestion, setEmailSuggestion] = useState<any>(null);
   const [courtOptions, setCourtOptions] = useState<string[]>(defaultCourtOptions);
   const [courtCoordsMap, setCourtCoordsMap] = useState<Map<string, { lat: number; lng: number }>>(new Map());
@@ -107,19 +120,15 @@ export const Signup: React.FC = () => {
     juniors: false,
     preferredCourts: [] as string[],
     customCourtEntry: '',
-    favouritePlayers: [] as string[],
-    customPlayerEntry: '',
     organizer: false,
     schedulingPreference: 'I will schedule matches on my own' as any,
     preferredZone: '',
     pendingZoneChoice: null as { primary: string; adjacent: string } | null,
   });
-  const selectedSkillIdxRaw = SELECTABLE_SKILL_LEVELS.indexOf(formData.skillLevel as typeof SELECTABLE_SKILL_LEVELS[number]);
-  const selectedSkillIndex = selectedSkillIdxRaw >= 0 ? selectedSkillIdxRaw : SELECTABLE_SKILL_LEVELS.length - 1;
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => { document.title = 'Sign In — Racquets & Strings'; }, []);
+  useEffect(() => { document.title = 'Sign In · Racquets & Strings'; }, []);
 
   // Funnel: entering step 1 (email gate) on first load.
   useEffect(() => {
@@ -152,7 +161,7 @@ export const Signup: React.FC = () => {
     if (authLoading || !user) return;
     if (phase === 'account' || phase === 'preferences' || phase === 'done') return;
     const incomplete = !profile || profile.user.name.trim() === '';
-    if (incomplete) { setPhase('preferences'); setPrefStep(1); return; }
+    if (incomplete) { setPhase('preferences'); return; }
     navigate('/profile');
   }, [authLoading, user, profile, phase, navigate]);
 
@@ -321,7 +330,6 @@ export const Signup: React.FC = () => {
       track('sign_up', { method: 'email' });
 
       setPhase('preferences');
-      setPrefStep(1);
     } catch (err: any) {
       setError(getSignupErrorMessage(err));
     } finally {
@@ -335,13 +343,24 @@ export const Signup: React.FC = () => {
     try {
       const u = auth.currentUser!;
       await updateProfile(u, { displayName: formData.name });
-      await setDoc(doc(db, 'users', u.uid), { name: formData.name, phone: formData.phone }, { merge: true });
+      await setDoc(doc(db, 'users', u.uid), { name: formData.name }, { merge: true });
+      // Contact details go to `contacts`, never `users` — that collection is world-readable.
+      await setDoc(doc(db, 'contacts', u.uid), {
+        email: u.email || formData.email || '',
+        phone: formData.phone,
+        // WhatsApp is no longer asked at signup — it's on the Profile page, where the
+        // "Same as phone number" control already lives. Giving a phone number here IS the
+        // consent to be contacted; members refine the channel later.
+        contactable: !!formData.phone,
+        updated_at: new Date().toISOString(),
+      }, { merge: true });
       const ageCategory = formData.retiredPro ? ' Retired Pro' : formData.juniors ? ' Juniors' : '';
       const leagueValue = formData.league ? `${formData.league}${ageCategory}` : '';
       await setDoc(doc(db, 'stats', u.uid), { name: formData.name, skill_level: formData.skillLevel, ...(leagueValue ? { league: leagueValue } : {}) }, { merge: true });
       await setDoc(doc(db, 'preferences', u.uid), {
         preferred_courts: formData.preferredCourts,
-        favourite_players: formData.favouritePlayers,
+        // Favourite players moved to the Profile page — signup no longer asks. profileBootstrap
+        // already defaults this to [], so it isn't written here at all.
         preferred_zone: formData.preferredZone,
         scheduling_preference: formData.schedulingPreference,
       }, { merge: true });
@@ -372,7 +391,6 @@ export const Signup: React.FC = () => {
     setPendingGoogleCredential(null);
   };
 
-  const nameOnlyRegex = /^[A-Za-z ]+$/;
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newEmail = e.target.value;
@@ -399,27 +417,21 @@ export const Signup: React.FC = () => {
     setErrors({ ...errors, customCourtEntry: '' });
   };
 
-  const addCustomPlayer = () => {
-    const player = formData.customPlayerEntry.trim();
-    if (!player) return;
-    if (!nameOnlyRegex.test(player)) {
-      setErrors({ ...errors, customPlayerEntry: 'Favourite player names can only contain letters and spaces.' });
+  // Recompute zone whenever preferred courts change. With more than one court, majority vote
+  // across all of them (zoneFromCourts) already disambiguates, so the near-border prompt only
+  // applies to the single-court case.
+  useEffect(() => {
+    if (!courtCoordsMap.size) {
+      setFormData((prev) => ({ ...prev, preferredZone: '', pendingZoneChoice: null }));
       return;
     }
-    setFormData({
-      ...formData,
-      favouritePlayers: formData.favouritePlayers.includes(player)
-        ? formData.favouritePlayers
-        : [...formData.favouritePlayers, player],
-      customPlayerEntry: '',
-    });
-    setErrors({ ...errors, customPlayerEntry: '' });
-  };
-
-  // Recompute zone whenever the first preferred court changes
-  useEffect(() => {
+    if (formData.preferredCourts.length > 1) {
+      const zone = zoneFromCourts(formData.preferredCourts, courtCoordsMap);
+      setFormData((prev) => ({ ...prev, preferredZone: zone, pendingZoneChoice: null }));
+      return;
+    }
     const firstCourt = formData.preferredCourts[0];
-    if (!firstCourt || !courtCoordsMap.size) {
+    if (!firstCourt) {
       setFormData((prev) => ({ ...prev, preferredZone: '', pendingZoneChoice: null }));
       return;
     }
@@ -484,7 +496,7 @@ export const Signup: React.FC = () => {
                 return (
                   <div key={i} className="flex flex-col items-center space-y-2">
                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg transition-all duration-300 ${
-                      stepNum >= i ? 'clay-gradient text-white shadow-lg shadow-clay/20' : 'bg-tennis-surface/50 text-fg border border-fg/5'
+                      stepNum >= i ? 'clay-gradient text-white shadow-lg shadow-clay/20' : 'bg-tennis-surface/50 text-fg'
                     }`}>
                       {stepNum > i ? <CheckCircle2 className="w-6 h-6" /> : i}
                     </div>
@@ -579,13 +591,13 @@ export const Signup: React.FC = () => {
                     <div className="w-full border-t border-fg/5" />
                   </div>
                   <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-tennis-dark px-4 text-fg/40 font-bold tracking-widest">Or</span>
+                    <span className="bg-tennis-dark px-4 text-fg/70 font-bold tracking-widest">Or</span>
                   </div>
                 </div>
                 <Button
                   type="button"
                   variant="secondary"
-                  className="w-full border border-fg/5"
+                  className="w-full"
                   onClick={handleGoogleSignIn}
                   isLoading={loading}
                 >
@@ -595,7 +607,7 @@ export const Signup: React.FC = () => {
                 <Button
                   type="button"
                   variant="secondary"
-                  className="w-full border border-fg/5"
+                  className="w-full"
                   onClick={handleAppleSignIn}
                   isLoading={loading}
                 >
@@ -617,7 +629,7 @@ export const Signup: React.FC = () => {
                   <div className="space-y-2">
                     <h3 className="text-xl font-bold text-fg">Reset Link Sent</h3>
                     <p className="text-fg/70">If the email is linked with an account, you will receive a reset link.</p>
-                    <p className="text-fg/50 text-sm">Check your spam folder too.</p>
+                    <p className="text-fg/70 text-sm">Check your spam folder too.</p>
                   </div>
                   <Button variant="outline" className="w-full" onClick={() => { setResetSent(false); setShowForgot(false); }}>
                     Back to Sign In
@@ -628,7 +640,7 @@ export const Signup: React.FC = () => {
                   <div className="text-center space-y-2">
                     <BrandMark />
                     {showForgot && <h1 className="text-3xl font-black text-fg">Reset Password</h1>}
-                    <p className="text-fg/60 text-sm">
+                    <p className="text-fg/70 text-sm">
                       {formData.email}{' '}
                       <button type="button" onClick={goToEmailPhase} className="text-clay hover:underline font-semibold">
                         (change)
@@ -648,7 +660,7 @@ export const Signup: React.FC = () => {
                           onChange={(e) => setLoginPassword(e.target.value)}
                           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleLogin(); } }}
                           autoFocus
-                          className="w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 px-4 py-3 pr-10 text-fg placeholder-fg/40 transition-all duration-200 focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
+                          className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 pr-10 text-fg placeholder-fg/40 transition-all duration-200 focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
                         />
                         <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-fg transition-colors" tabIndex={-1}>
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -699,7 +711,7 @@ export const Signup: React.FC = () => {
                       <Button
                         type="button"
                         variant="secondary"
-                        className="w-full border border-fg/5"
+                        className="w-full"
                         onClick={handleGoogleSignIn}
                         isLoading={loading}
                       >
@@ -709,7 +721,7 @@ export const Signup: React.FC = () => {
                       <Button
                         type="button"
                         variant="secondary"
-                        className="w-full border border-fg/5"
+                        className="w-full"
                         onClick={handleAppleSignIn}
                         isLoading={loading}
                       >
@@ -728,7 +740,7 @@ export const Signup: React.FC = () => {
             <div className="space-y-8">
               <div className="text-center space-y-2">
                 <BrandMark />
-                <p className="text-fg/60 text-sm">
+                <p className="text-fg/70 text-sm">
                   {formData.email}{' '}
                   <button type="button" onClick={goToEmailPhase} className="text-clay hover:underline font-semibold">
                     (change)
@@ -798,7 +810,7 @@ export const Signup: React.FC = () => {
                 type="button"
                 onClick={() => navigate('/profile')}
                 aria-label="Close and continue to the app"
-                className="absolute top-4 right-4 text-fg/40 hover:text-fg transition-colors"
+                className="absolute top-4 right-4 text-fg/70 hover:text-fg transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -818,27 +830,35 @@ export const Signup: React.FC = () => {
             </div>
           )}
 
-          {/* PHASE: PREFERENCES — 3 screens */}
+          {/* PHASE: PREFERENCES — one screen. Everything here used to be split across two
+              sub-steps with a Back/Next shuttle; courts and league sat on screen 2 even though
+              they're the two things matching actually depends on. Now it's four expandable
+              cards, all open on arrival, so the whole thing is visible and editable in place. */}
           {phase === 'preferences' && (
-            <div className="space-y-8">
+            <div className="space-y-3">
 
-              {/* Screen 1: Name + Phone + Skill */}
-              {prefStep === 1 && (
-                <div className="space-y-8">
-                  <div className="grid grid-cols-1 gap-6">
-                    <div>
-                      <Input
-                        label="Full Name"
-                        placeholder="Roger Federer"
-                        value={formData.name}
-                        onChange={(e) => { setFormData({ ...formData, name: e.target.value }); setErrors({ ...errors, name: '' }); }}
-                        error={errors.name}
-                        required
-                      />
-                      {formData.name && !isNameValid() && !errors.name && (
-                        <p className="text-xs text-red-500 mt-1 ml-1">Name must be 3–80 letters, no numbers.</p>
-                      )}
-                    </div>
+              <Accordion
+                id="about"
+                title="About you"
+                right={!openCards.has('about') && <CardSummary text={[formData.name, formData.phone].filter(Boolean).join(' · ')} />}
+                open={openCards.has('about')}
+                onToggle={toggleCard}
+              >
+                <div className="grid grid-cols-1 gap-6 pt-1">
+                  <div>
+                    <Input
+                      label="Full Name"
+                      placeholder="Roger Federer"
+                      value={formData.name}
+                      onChange={(e) => { setFormData({ ...formData, name: e.target.value }); setErrors({ ...errors, name: '' }); }}
+                      error={errors.name}
+                      required
+                    />
+                    {formData.name && !isNameValid() && !errors.name && (
+                      <p className="text-xs text-red-500 mt-1 ml-1">Name must be 3–80 letters, no numbers.</p>
+                    )}
+                  </div>
+                  <div>
                     <Input
                       label="Phone Number"
                       placeholder="(416)-555-0123"
@@ -846,271 +866,230 @@ export const Signup: React.FC = () => {
                       onChange={(e) => setFormData({ ...formData, phone: formatPhone(e.target.value) })}
                       error={errors.phone}
                     />
-                  </div>
-
-                  <div className="space-y-6">
-                    <div className="flex justify-between items-end">
-                      <h3 className="text-xl font-bold text-fg flex items-center">
-                        <Trophy className="w-5 h-5 mr-2 text-clay" />
-                        NTRP Skill Level
-                      </h3>
-                      <div className="text-4xl font-black text-clay">{formData.skillLevel}</div>
-                    </div>
-                    <div className="relative pt-6">
-                      <input
-                        type="range"
-                        min="0" max={SELECTABLE_SKILL_LEVELS.length - 1} step="1"
-                        value={selectedSkillIndex}
-                        onChange={(e) => setFormData({ ...formData, skillLevel: SELECTABLE_SKILL_LEVELS[Number(e.target.value)] })}
-                        className="w-full h-3 rounded-full"
-                      />
-                      <div className="mt-4 flex items-start justify-between gap-2 text-center">
-                        {SELECTABLE_SKILL_LEVELS.map((level) => (
-                          <div key={level} className="flex flex-col items-center gap-2">
-                            <span className={`w-2.5 h-2.5 rounded-full ${formData.skillLevel === level ? 'bg-clay' : 'bg-fg/20'}`} />
-                            <span className={`text-[10px] font-black tracking-widest ${formData.skillLevel === level ? 'text-clay' : 'text-fg'}`}>
-                              {level.toFixed(1)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-clay/10 border border-clay/20 text-center">
-                      <Info className="w-5 h-5 text-clay shrink-0" />
-                      {SKILL_LEVEL_TIERS.map((t) => (
-                        <p key={t.label} className="text-sm font-medium text-fg">{t.range} {t.label}</p>
-                      ))}
-                    </div>
+                    {/* Signup collects one number now (the separate WhatsApp field was removed),
+                        and this is the number every Contact button hands to an opponent — so say
+                        which number to give rather than letting someone enter a landline. */}
+                    <p className="text-xs text-fg/70 mt-1.5">
+                      Tip: Number for your preferred messaging service: <span className="text-clay font-semibold">SMS/WhatsApp</span>
+                    </p>
                   </div>
                 </div>
-              )}
+              </Accordion>
 
-              {/* Screen 2: Courts + Players */}
-              {prefStep === 2 && (
-                <div className="space-y-8">
-                  <div className="space-y-4">
-                    <label className="block text-sm font-bold text-fg uppercase tracking-wider">Preferred Courts</label>
-                    <p className="text-xs text-fg/50">Tip: select <span className="text-clay font-semibold">Stanley Park South - Toronto</span> for the downtown area.</p>
+              {/* Tappable boxes rather than a range slider — the slider was hard to land on an
+                  exact half-step on a phone, and the chosen value only became clear on release.
+                  The band name below says what the number actually means. */}
+              <Accordion
+                id="skill"
+                title="Skill"
+                right={openCards.has('skill')
+                  ? <span className="text-sm font-black text-clay">{formData.skillLevel.toFixed(1)}</span>
+                  : <CardSummary text={`${formData.skillLevel.toFixed(1)} · ${skillBand(formData.skillLevel)}`} />}
+                open={openCards.has('skill')}
+                onToggle={toggleCard}
+              >
+                <div className="pt-1 space-y-3">
+                  {/* One column per level so the row fills the card at any width. The selected
+                      state is an INSET border, not a ring: a ring paints outside the box, so the
+                      first and last boxes had theirs clipped by the card edge. */}
+                  <div className="grid grid-cols-7 gap-1.5">
+                    {SELECTABLE_SKILL_LEVELS.map((level) => {
+                      const active = formData.skillLevel === level;
+                      return (
+                        <button
+                          key={level}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, skillLevel: level })}
+                          className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
+                            active ? 'bg-clay/10 text-clay border-clay' : 'bg-fg/5 text-fg border-transparent hover:bg-fg/10'
+                          }`}
+                        >
+                          {level.toFixed(1)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* skillBand is the same function the draw engine groups on, so this label and
+                      the group a player actually lands in can never disagree. */}
+                  <p className="text-sm font-bold text-clay text-center">{skillBand(formData.skillLevel)}</p>
+                </div>
+              </Accordion>
 
-                    {formData.preferredCourts.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {formData.preferredCourts.map((court) => (
+              <Accordion
+                id="courts"
+                title="Courts"
+                right={!openCards.has('courts') && <CardSummary text={formData.preferredCourts.join(' · ')} />}
+                open={openCards.has('courts')}
+                onToggle={toggleCard}
+              >
+                <div className="space-y-4 pt-1">
+                  <p className="text-xs text-fg/70">Tip: select <span className="text-clay font-semibold">Stanley Park South - Toronto</span> for the downtown area.</p>
+
+                  {formData.preferredCourts.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {formData.preferredCourts.map((court) => (
+                        <button
+                          key={court}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, preferredCourts: formData.preferredCourts.filter((c) => c !== court) })}
+                          className="px-3 py-1 rounded-xl text-xs font-bold bg-clay text-white flex items-center gap-1.5"
+                        >
+                          {court} <span className="opacity-70">✕</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="relative">
+                    <div className="flex gap-3">
+                      <Input
+                        placeholder="Search courts by name..."
+                        value={formData.customCourtEntry}
+                        error={errors.customCourtEntry}
+                        onChange={(e) => {
+                          setFormData({ ...formData, customCourtEntry: e.target.value });
+                          if (errors.customCourtEntry) setErrors({ ...errors, customCourtEntry: '' });
+                        }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomCourt(); } }}
+                      />
+                      <Button type="button" variant="clay" size="sm" className="px-3 shrink-0" onClick={addCustomCourt} disabled={!formData.customCourtEntry.trim()}>
+                        Add
+                      </Button>
+                    </div>
+                    {courtSuggestions.length > 0 && (
+                      <div className="mt-3 max-h-48 overflow-y-auto rounded-2xl bg-tennis-dark/95 p-2 shadow-2xl">
+                        {courtSuggestions.map((court) => (
                           <button
                             key={court}
                             type="button"
-                            onClick={() => setFormData({ ...formData, preferredCourts: formData.preferredCourts.filter((c) => c !== court) })}
-                            className="px-3 py-1 rounded-xl text-xs font-bold bg-clay text-white flex items-center gap-1.5 shadow-lg shadow-clay/20"
+                            onClick={() => selectCourt(court)}
+                            className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-fg transition-colors hover:bg-clay/20 hover:text-fg"
                           >
-                            {court} <span className="opacity-70">✕</span>
+                            {court}
                           </button>
                         ))}
                       </div>
                     )}
-
-                    <div className="relative">
-                      <div className="flex gap-3">
-                        <Input
-                          placeholder="Search courts by name..."
-                          value={formData.customCourtEntry}
-                          error={errors.customCourtEntry}
-                          onChange={(e) => {
-                            setFormData({ ...formData, customCourtEntry: e.target.value });
-                            if (errors.customCourtEntry) setErrors({ ...errors, customCourtEntry: '' });
-                          }}
-                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomCourt(); } }}
-                        />
-                        <Button type="button" variant="clay" size="sm" className="px-3 shrink-0" onClick={addCustomCourt} disabled={!formData.customCourtEntry.trim()}>
-                          Add
-                        </Button>
-                      </div>
-                      {courtSuggestions.length > 0 && (
-                        <div className="mt-3 max-h-48 overflow-y-auto rounded-2xl border border-fg/10 bg-tennis-dark/95 p-2 shadow-2xl">
-                          {courtSuggestions.map((court) => (
-                            <button
-                              key={court}
-                              type="button"
-                              onClick={() => selectCourt(court)}
-                              className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-fg transition-colors hover:bg-clay/20 hover:text-fg"
-                            >
-                              {court}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {formData.pendingZoneChoice ? (
-                      <div className="mt-3 p-4 rounded-2xl bg-clay/10 border border-clay/20 space-y-3">
-                        <p className="text-xs font-bold text-fg uppercase tracking-wider flex items-center gap-2">
-                          <MapPin className="w-3.5 h-3.5 text-clay" />
-                          Your court is near a zone boundary — choose your zone
-                        </p>
-                        <div className="flex gap-2">
-                          {[formData.pendingZoneChoice.primary, formData.pendingZoneChoice.adjacent].map((zone) => (
-                            <button
-                              key={zone}
-                              type="button"
-                              onClick={() => setFormData({ ...formData, preferredZone: zone, pendingZoneChoice: null })}
-                              className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
-                                formData.preferredZone === zone
-                                  ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
-                                  : 'bg-fg/5 border-fg/10 text-fg hover:bg-fg/10'
-                              }`}
-                            >
-                              {zone}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : formData.preferredZone ? (
-                      <div className="mt-3 flex items-center gap-2">
-                        <MapPin className="w-3.5 h-3.5 text-clay shrink-0" />
-                        <span className="text-xs text-fg/70">Zone auto-assigned:</span>
-                        <span className="px-2.5 py-1 rounded-lg bg-clay/20 border border-clay/30 text-clay text-xs font-bold">
-                          {formData.preferredZone}
-                        </span>
-                      </div>
-                    ) : null}
                   </div>
 
-                  <div className="space-y-4">
-                    <label className="block text-sm font-bold text-fg uppercase tracking-wider flex items-center">
-                      <Star className="w-4 h-4 mr-2 text-clay" />
-                      Favourite Players
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {[...new Set([...FAVOURITE_PLAYERS, ...formData.favouritePlayers])].map((player) => (
-                        <button
-                          key={player}
-                          onClick={() => {
-                            const current = formData.favouritePlayers;
-                            setFormData({
-                              ...formData,
-                              favouritePlayers: current.includes(player)
-                                ? current.filter((p) => p !== player)
-                                : [...current, player],
-                            });
-                          }}
-                          className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
-                            formData.favouritePlayers.includes(player)
-                              ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
-                              : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
-                          }`}
-                        >
-                          {player}
-                        </button>
-                      ))}
+                  {formData.pendingZoneChoice ? (
+                    <div className="mt-3 p-4 rounded-2xl bg-clay/10 space-y-3">
+                      <p className="text-xs font-bold text-fg uppercase tracking-wider flex items-center gap-2">
+                        <MapPin className="w-3.5 h-3.5 text-clay" />
+                        Your court is near a zone boundary — choose your zone
+                      </p>
+                      <div className="flex gap-2">
+                        {[formData.pendingZoneChoice.primary, formData.pendingZoneChoice.adjacent].map((zone) => (
+                          <button
+                            key={zone}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, preferredZone: zone, pendingZoneChoice: null })}
+                            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+                              formData.preferredZone === zone
+                                ? 'bg-clay text-white'
+                                : 'bg-fg/5 text-fg hover:bg-fg/10'
+                            }`}
+                          >
+                            {zone}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex gap-3">
-                      <Input
-                        placeholder="Add your own player..."
-                        value={formData.customPlayerEntry}
-                        error={errors.customPlayerEntry}
-                        onChange={(e) => {
-                          setFormData({ ...formData, customPlayerEntry: e.target.value });
-                          if (errors.customPlayerEntry) setErrors({ ...errors, customPlayerEntry: '' });
-                        }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomPlayer(); } }}
-                      />
-                      <Button type="button" variant="clay" size="sm" onClick={addCustomPlayer} disabled={!formData.customPlayerEntry.trim()}>
-                        Add
-                      </Button>
+                  ) : formData.preferredZone ? (
+                    <div className="mt-3 flex items-center gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-clay shrink-0" />
+                      <span className="text-xs text-fg/70">Zone auto-assigned:</span>
+                      <span className="px-2.5 py-1 rounded-lg bg-clay/20 text-clay text-xs font-bold">
+                        {formData.preferredZone}
+                      </span>
                     </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <label className="block text-sm font-bold text-fg uppercase tracking-wider">League</label>
-                    <div className="flex flex-wrap gap-2">
-                      {(["Men's", "Women's"] as const).map((league) => (
-                        <button
-                          key={league}
-                          type="button"
-                          onClick={() => setFormData({ ...formData, league })}
-                          className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
-                            formData.league === league
-                              ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
-                              : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
-                          }`}
-                        >
-                          {league}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={!formData.league}
-                        onClick={() => setFormData({ ...formData, retiredPro: !formData.retiredPro, juniors: false })}
-                        className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
-                          !formData.league
-                            ? 'bg-fg/5 border-fg/5 text-fg/30 cursor-not-allowed'
-                            : formData.retiredPro
-                              ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
-                              : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
-                        }`}
-                      >
-                        Retired Pro <span className="ml-1 opacity-70 font-normal normal-case">(age: 55+)</span>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!formData.league}
-                        onClick={() => setFormData({ ...formData, juniors: !formData.juniors, retiredPro: false })}
-                        className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
-                          !formData.league
-                            ? 'bg-fg/5 border-fg/5 text-fg/30 cursor-not-allowed'
-                            : formData.juniors
-                              ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
-                              : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
-                        }`}
-                      >
-                        Juniors
-                      </button>
-                    </div>
-                    {!formData.league && (
-                      <p className="text-[11px] text-fg/40">Choose a league above to unlock Retired Pro / Juniors.</p>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-fg/50 text-center px-2">
-                    By joining you agree to our{' '}
-                    <Link to="/terms" className="text-clay hover:underline">terms of service</Link>.
-                  </p>
+                  ) : null}
                 </div>
-              )}
+              </Accordion>
+
+              <Accordion
+                id="league"
+                title="League"
+                right={!openCards.has('league') && <CardSummary text={[formData.league, formData.retiredPro ? 'Retired Pro' : formData.juniors ? 'Juniors' : ''].filter(Boolean).join(' · ')} />}
+                open={openCards.has('league')}
+                onToggle={toggleCard}
+              >
+                <div className="space-y-4 pt-1">
+                  <div className="flex flex-wrap gap-2">
+                    {(["Men's", "Women's"] as const).map((league) => (
+                      <button
+                        key={league}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, league })}
+                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                          formData.league === league
+                            ? 'bg-clay text-white'
+                            : 'bg-fg/5 text-fg hover:bg-fg/10'
+                        }`}
+                      >
+                        {league}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={!formData.league}
+                      onClick={() => setFormData({ ...formData, retiredPro: !formData.retiredPro, juniors: false })}
+                      className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                        !formData.league
+                          ? 'bg-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
+                          : formData.retiredPro
+                            ? 'bg-clay text-white'
+                            : 'bg-fg/5 text-fg hover:bg-fg/10'
+                      }`}
+                    >
+                      Retired Pro <span className="ml-1 opacity-70 font-normal normal-case">(age: 55+)</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!formData.league}
+                      onClick={() => setFormData({ ...formData, juniors: !formData.juniors, retiredPro: false })}
+                      className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                        !formData.league
+                          ? 'bg-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
+                          : formData.juniors
+                            ? 'bg-clay text-white'
+                            : 'bg-fg/5 text-fg hover:bg-fg/10'
+                      }`}
+                    >
+                      Juniors
+                    </button>
+                  </div>
+                  {!formData.league && (
+                    <p className="text-[11px] text-fg/70">Choose a league above to unlock Retired Pro / Juniors.</p>
+                  )}
+                </div>
+              </Accordion>
+
+              <p className="text-xs text-fg/70 text-center px-2 pt-2">
+                By joining you agree to our{' '}
+                <Link to="/terms" className="text-clay hover:underline">terms of service</Link>.
+              </p>
             </div>
           )}
 
           {/* Navigation — signup phases only */}
           {phase === 'account' && (
-            <div className="flex justify-end items-center gap-3 mt-4 pt-8 border-t border-fg/5">
+            <div className="flex justify-center items-center gap-3 mt-4 pt-8 border-t border-fg/5">
               <Button onClick={handleAccountContinue} className="group" isLoading={loading}>
                 Continue
                 <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </div>
           )}
+          {/* One screen now, so no Back/Next shuttle — just the single finishing action. */}
           {phase === 'preferences' && (
-            <div className="flex justify-between items-center gap-3 mt-4 pt-8 border-t border-fg/5">
-              {prefStep > 1 ? (
-                <Button variant="outline" onClick={() => setPrefStep((s) => (s - 1) as 1 | 2)}>
-                  Back
-                </Button>
-              ) : <div />}
-              {prefStep < 2 ? (
-                <Button
-                  onClick={() => setPrefStep((s) => (s + 1) as 1 | 2)}
-                  disabled={prefStep === 1 && !isNameValid()}
-                  className="group"
-                >
-                  Next
-                  <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                </Button>
-              ) : (
-                <Button onClick={handleCompleteProfile} isLoading={loading}>
-                  Complete Profile
-                  <CheckCircle2 className="ml-2 w-5 h-5" />
-                </Button>
-              )}
+            <div className="flex justify-center items-center mt-4 pt-8 border-t border-fg/5">
+              <Button onClick={handleCompleteProfile} isLoading={loading} disabled={!isNameValid()}>
+                Complete Profile
+                <CheckCircle2 className="ml-2 w-5 h-5" />
+              </Button>
             </div>
           )}
         </motion.div>

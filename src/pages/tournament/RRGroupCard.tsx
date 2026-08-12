@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
 import { PLAYER_LOADING, formatPlayerName, formatSetScores } from './utils';
 import { PLAYER_LOADING_SENTINEL } from './AddPlayerPanel';
+import { ContactOpponentButton, pillButtonCls } from './ContactOpponentButton';
+import { pgWinPct } from '../../features/leagues/useStandings';
+import type { ContactData } from '../../types';
 
 type Props = {
   groupIndex: number;
@@ -25,6 +28,22 @@ type Props = {
   pendingMatchIds?: Set<string>;
   onSaveGroupEdit: (groupIndex: number, newPlayers: TournamentPlayer[]) => void;
   onRenameGroup?: (label: string) => void;
+  /**
+   * uid → career standings row. These tiles are lifetime figures, NOT this group’s: matches
+   * played used to be summed from the group standings, which is why it disagreed with the
+   * leaderboard. Supplied by RoundRobinView; a missing entry renders as an em-dash.
+   */
+  statsByUid?: Map<string, { pointswon: number; totalPointsPlayed: number; matchesPlayed: number }>;
+  /** uid -> contact details, resolved once by RoundRobinView. Absent = no Contact button. */
+  contactsByUid?: Record<string, ContactData>;
+  /** Organizer removes a player from the draw (soft delete — see handleRemovePlayer). */
+  onRemovePlayer?: (uid: string) => void;
+  /** Organizer moves a player to another zone's draw. Addressed by uid, not participant id. */
+  onMovePlayerZone?: (uid: string, bucketId: string) => void;
+  /** Zone buckets offered in that picker. Empty hides the control entirely. */
+  zoneBuckets?: { id: string; label: string }[];
+  /** Participant asks the organizer to schedule an unplayed match. */
+  onAskSchedule?: (match: TournamentMatch) => void;
 };
 
 
@@ -32,11 +51,13 @@ export const RRGroupCard: React.FC<Props> = ({
   groupIndex, groupLabel, players, matches, standings, advancementCount,
   isCreator, isParticipant, currentUserId, isPastEvent, editMode, editPlayers, allGroupPlayers,
   onEditPlayer, onSubmitScore, submittableMatchIds, pendingMatchIds, onSaveGroupEdit, onRenameGroup,
+  statsByUid, contactsByUid, onRemovePlayer, onMovePlayerZone, zoneBuckets = [], onAskSchedule,
 }) => {
-  const [matchesOpen, setMatchesOpen] = useState(false);
   // Which standings row is expanded to show the full stat line (wireframe 1c: Pts is the one
   // primary number; MP/MW/GW/GL are a tap away — same disclosure the Leaderboard uses).
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  // Creator-only pairings list at the foot of the card.
+  const [matchesOpen, setMatchesOpen] = useState(false);
   // Local edit state: copy of players in this group for reassignment
   const [localPlayers, setLocalPlayers] = useState<TournamentPlayer[]>(players);
   // Local draft of the group name (creator rename).
@@ -47,7 +68,7 @@ export const RRGroupCard: React.FC<Props> = ({
   // unrelated Firestore write anywhere else in the event (another group's score, etc.) produces
   // a new reference on every render; resyncing on reference alone silently discarded an
   // in-progress "Reassign Players" edit before the creator could click Save.
-  const playersKey = players.map((p) => p.user_id).sort().join(',');
+  const playersKey = players.map((p) => p.uid).sort().join(',');
   const lastPlayersKeyRef = React.useRef(playersKey);
   React.useEffect(() => {
     if (playersKey !== lastPlayersKeyRef.current) {
@@ -58,16 +79,9 @@ export const RRGroupCard: React.FC<Props> = ({
   }, [playersKey]);
   React.useEffect(() => { setLabelDraft(groupLabel); }, [groupLabel]);
 
-  const sortedMatches = matches.slice().sort((a, b) => a.position - b.position);
-  // The creator sees every match in the group; a participant only sees their own match(es) here
-  // (one row per opponent they actually play), not the whole group's pairings.
-  const visibleMatches = isCreator
-    ? sortedMatches
-    : sortedMatches.filter((m) => m.player_1_user_id === currentUserId || m.player_2_user_id === currentUserId);
-  const canSeeMatches = isCreator || isParticipant;
 
   return (
-    <div className="rounded-2xl border border-fg/10 bg-tennis-surface/30 overflow-hidden">
+    <div className="rounded-2xl bg-tennis-surface/30 overflow-hidden">
       {/* Group header */}
       <div className="px-4 py-3 border-b border-fg/10 bg-fg/[0.03]">
         <h3 className="text-sm font-bold text-fg">{groupLabel}</h3>
@@ -77,18 +91,22 @@ export const RRGroupCard: React.FC<Props> = ({
       <div>
         {standings.length > 0 ? (
           <>
-            {standings.map((row, i) => {
+            {/* Removed players leave a Player Loading placeholder behind. In a group that's just
+                an empty row nobody can act on, so it's hidden here (a knockout keeps its empty
+                slot visible, because that's where a replacement gets dropped). */}
+            {standings.filter((row) => row.userId && row.name !== PLAYER_LOADING).map((row, i) => {
               const isAdvancing = i < advancementCount;
               const expanded = expandedRow === row.userId;
               return (
                 <div key={row.userId} className="border-b border-fg/[0.04] last:border-0">
+                  <div className="flex items-center">
                   <button
                     type="button"
                     onClick={() => setExpandedRow((cur) => (cur === row.userId ? null : row.userId))}
                     aria-expanded={expanded}
-                    className="w-full min-h-[44px] flex items-center gap-2.5 pl-4 pr-4 py-2.5 text-left hover:bg-fg/[0.03] transition-colors"
+                    className="flex-1 min-w-0 min-h-[44px] flex items-center gap-2.5 pl-4 pr-2 py-2.5 text-left hover:bg-fg/[0.03] transition-colors"
                   >
-                    <span className="text-fg/40 text-xs font-bold w-4 shrink-0">{row.rank}</span>
+                    <span className="text-fg/70 text-xs font-bold w-4 shrink-0">{row.rank}</span>
                     <span className="text-fg font-semibold text-sm truncate flex-1 min-w-0">
                       {formatPlayerName(row.name)}
                     </span>
@@ -99,131 +117,186 @@ export const RRGroupCard: React.FC<Props> = ({
                     )}
                     <span className="text-clay font-black text-sm tabular-nums shrink-0">{row.points} pts</span>
                   </button>
-                  {expanded && (
-                    <div className="grid grid-cols-4 gap-2 px-4 pb-3 text-center">
-                      {[
-                        { label: 'MP', value: row.matchWins + row.matchLosses },
-                        { label: 'MW', value: row.matchWins },
-                        { label: 'GW', value: row.gamesWon },
-                        { label: 'GL', value: row.gamesLost },
-                      ].map((s) => (
-                        <div key={s.label} className="rounded-xl bg-fg/[0.04] py-2">
-                          <p className="text-sm font-black text-fg tabular-nums">{s.value}</p>
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-fg/40">{s.label}</p>
-                        </div>
+                  {/* Move this player to another zone. Same organizer action the zone-change
+                      queue offers, but reachable for ANYONE in the draw rather than only players
+                      who filed a request. Refused server-side if they've already played — their
+                      result belongs to this zone's draw. */}
+                  {isCreator && editMode && onMovePlayerZone && zoneBuckets.length > 0 && (
+                    <select
+                      value=""
+                      onChange={(e) => { if (e.target.value) onMovePlayerZone(row.userId, e.target.value); }}
+                      aria-label={`Move ${formatPlayerName(row.name)} to another zone`}
+                      title="Move to another zone"
+                      className="shrink-0 mr-2 text-[11px] bg-tennis-surface rounded-lg px-2 py-1 text-fg cursor-pointer"
+                    >
+                      <option value="">Zone…</option>
+                      {zoneBuckets.map((b) => (
+                        <option key={b.id} value={b.id}>{b.label}</option>
                       ))}
-                    </div>
+                    </select>
                   )}
+                  {isCreator && editMode && onRemovePlayer && (
+                    <button
+                      type="button"
+                      aria-label={`Remove ${formatPlayerName(row.name)} from the draw`}
+                      title="Remove from draw"
+                      onClick={() => {
+                        if (window.confirm(`Remove ${formatPlayerName(row.name)} from this draw?\n\nThey stay registered for the event and keep any matches they've already played.`)) {
+                          onRemovePlayer(row.userId);
+                        }
+                      }}
+                      className="shrink-0 mr-2 p-1.5 rounded-lg text-fg/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  </div>
+                  {expanded && (() => {
+                    // Career numbers, not this group's — every other player row in the app shows
+                    // lifetime stats, and MP used to count only matches inside this one group.
+                    const st = statsByUid?.get(row.userId);
+                    const isSelf = !!currentUserId && row.userId === currentUserId;
+
+                    // The match this tile acts on is YOUR match against this player, whenever one
+                    // exists — being the creator as well as a player must not change that. Keying
+                    // off `isCreator` first picked an arbitrary match of theirs (against someone
+                    // else entirely), so the tile reported the wrong result and the wrong state.
+                    const theirMatches = matches.filter(
+                      (m) => m.player_1_uid === row.userId || m.player_2_uid === row.userId);
+                    const mine = currentUserId
+                      ? theirMatches.find((m) => m.player_1_uid === currentUserId || m.player_2_uid === currentUserId)
+                      : undefined;
+                    // Only YOUR match gets an action. An organizer looking at someone else's row
+                    // gets a read-only played/pending count for that player in this group instead
+                    // — scoring anyone's match belongs in the Matches list at the foot of the card,
+                    // not scattered across every player row.
+                    const relevant = isSelf ? undefined : mine;
+                    const played = relevant?.status === 'complete';
+                    const theirPlayed = theirMatches.filter((m) => m.status === 'complete').length;
+                    const theirPending = theirMatches.length - theirPlayed;
+                    const showOverview = !isSelf && !mine && theirMatches.length > 0;
+                    // Always read from the VIEWER's side, matching every other W/L in the app.
+                    // Reading it from the row player's side meant your own defeat showed a green W.
+                    const wonIt = played && !!currentUserId && relevant?.winner_uid === currentUserId;
+
+                    const contactTile = isSelf || !contactsByUid?.[row.userId] ? <span className="text-fg/70">—</span> : (
+                      <ContactOpponentButton
+                        name={row.name}
+                        phone={contactsByUid[row.userId]?.phone}
+                        email={contactsByUid[row.userId]?.email}
+                        whatsappContact={contactsByUid[row.userId]?.whatsapp_contact}
+                        whatsappSameAsPhone={contactsByUid[row.userId]?.whatsapp_same_as_phone}
+                        size="sm"
+                        variant="white"
+                      />
+                    );
+
+                    // Played → the score, with a W/L pill only when it's YOUR match, since only
+                    // then does a win or loss have an owner the viewer can read it as.
+                    const actionTile = showOverview ? (
+                      <span className="text-[11px] font-bold leading-tight">
+                        {theirPlayed} played
+                        <br />
+                        <span className="text-fg/70">{theirPending} pending</span>
+                      </span>
+                    ) : !relevant ? <span className="text-fg/70">—</span>
+                      : played ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          {!!mine && (
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${wonIt ? 'bg-green-500/15 text-green-500' : 'bg-red-500/15 text-red-400'}`}>
+                              {wonIt ? 'W' : 'L'}
+                            </span>
+                          )}
+                          <span className="text-xs font-bold text-fg">{formatSetScores(relevant) || 'Recorded'}</span>
+                        </span>
+                      ) : isCreator ? (
+                        <button type="button" onClick={() => onSubmitScore?.(relevant)} className={pillButtonCls('sm', 'clay')}>Score</button>
+                      ) : pendingMatchIds?.has(relevant.id) ? (
+                        <span className="text-[10px] font-bold text-green-500 uppercase tracking-wider">Submitted ✓</span>
+                      ) : submittableMatchIds?.has(relevant.id) ? (
+                        <button type="button" onClick={() => onSubmitScore?.(relevant)} className={pillButtonCls('sm', 'clay')}>Score</button>
+                      ) : onAskSchedule ? (
+                        <button type="button" onClick={() => onAskSchedule(relevant)} className={pillButtonCls('sm', 'clay')}>Schedule</button>
+                      ) : <span className="text-fg/70">—</span>;
+
+                    return (
+                      <div className="grid grid-cols-4 gap-2 px-4 pb-3 text-center">
+                        {[
+                          { label: 'MP', value: st ? st.matchesPlayed : '—' },
+                          { label: 'P/G Won', value: st ? pgWinPct(st) : '—' },
+                          { label: 'Contact', value: contactTile },
+                          { label: showOverview ? 'In Group' : played ? 'Score' : 'Match', value: actionTile },
+                        ].map((s) => (
+                          <div key={s.label} className="rounded-xl bg-fg/[0.04] py-2 flex flex-col items-center justify-center">
+                            <div className="text-sm font-black text-fg tabular-nums flex-1 flex items-center justify-center">{s.value}</div>
+                            <p className="text-[9px] font-bold uppercase tracking-widest text-fg/70 mt-0.5">{s.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
-            <p className="px-4 py-1.5 text-center text-[10px] text-fg/30">tap a player for MP · MW · GW · GL</p>
+            <p className="px-4 py-1.5 text-center text-[10px] text-fg/70">tap a player to contact them or handle your match</p>
           </>
         ) : (
           players.map((p) => (
-            <div key={p.user_id} className="border-b border-fg/[0.04] last:border-0 flex items-center gap-2.5 pl-4 pr-4 py-2.5">
-              <span className="text-fg/40 text-xs w-4 shrink-0">—</span>
+            <div key={p.uid} className="border-b border-fg/[0.04] last:border-0 flex items-center gap-2.5 pl-4 pr-4 py-2.5">
+              <span className="text-fg/70 text-xs w-4 shrink-0">—</span>
               <span className="text-fg/70 text-sm truncate">{formatPlayerName(p.name)}</span>
             </div>
           ))
         )}
       </div>
 
-      {/* Match results — collapsible, visible to participants + creator */}
-      {canSeeMatches && visibleMatches.length > 0 && (
+      {/* Every pairing in the group — CREATOR ONLY. A participant's own match is fully handled in
+          their player row above (contact, result, score/schedule), so the list would just repeat
+          it; an organizer still needs one place to see and score every pairing at once. */}
+      {isCreator && !editMode && matches.length > 0 && (
         <div className="border-t border-fg/10">
           <button
             type="button"
             onClick={() => setMatchesOpen((v) => !v)}
+            aria-expanded={matchesOpen}
             className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-fg/[0.03] transition-colors"
           >
-            <span className="text-[10px] font-bold uppercase tracking-widest text-fg/40">
-              {isCreator ? 'Match List' : 'Match Results'}
+            <span className="text-[10px] font-bold uppercase tracking-widest text-fg/70">
+              Matches ({matches.length})
             </span>
             {matchesOpen
-              ? <ChevronUp className="w-3.5 h-3.5 text-fg/30" />
-              : <ChevronDown className="w-3.5 h-3.5 text-fg/30" />}
+              ? <ChevronUp className="w-3.5 h-3.5 text-fg/70" />
+              : <ChevronDown className="w-3.5 h-3.5 text-fg/70" />}
           </button>
 
           {matchesOpen && (
             <div>
-              {visibleMatches.map((m) => {
+              {matches.slice().sort((a, b) => a.position - b.position).map((m) => {
                 const isDone = m.status === 'complete';
-                const scoreStr = isDone ? formatSetScores(m) : '';
-
+                const scoreStr = formatSetScores(m);
                 return (
-                  <div
-                    key={m.id}
-                    className="px-4 py-2.5 border-t border-fg/[0.04] flex items-center justify-between gap-3"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isDone ? 'bg-green-500' : 'bg-fg/20'}`} />
-                      <div className="min-w-0">
-                        {isCreator && editMode ? (
-                          <div className="flex items-center gap-1 text-xs flex-wrap">
-                            <select
-                              value={m.player_1_user_id}
-                              onChange={(e) => {
-                                const p = e.target.value ? editPlayers.find((pl) => pl.user_id === e.target.value) ?? null : null;
-                                onEditPlayer(m.id, 'player_1', p);
-                              }}
-                              className="bg-tennis-surface border border-fg/10 rounded px-1 py-0.5 text-fg text-xs max-w-[100px]"
-                            >
-                              <option value="" className="bg-tennis-surface text-fg">—</option>
-                              {editPlayers.map((p) => <option key={p.user_id} value={p.user_id} className="bg-tennis-surface text-fg">{p.name}</option>)}
-                            </select>
-                            <span className="text-fg/30">vs</span>
-                            <select
-                              value={m.player_2_user_id}
-                              onChange={(e) => {
-                                const p = e.target.value ? editPlayers.find((pl) => pl.user_id === e.target.value) ?? null : null;
-                                onEditPlayer(m.id, 'player_2', p);
-                              }}
-                              className="bg-tennis-surface border border-fg/10 rounded px-1 py-0.5 text-fg text-xs max-w-[100px]"
-                            >
-                              <option value="" className="bg-tennis-surface text-fg">—</option>
-                              {editPlayers.map((p) => <option key={p.user_id} value={p.user_id} className="bg-tennis-surface text-fg">{p.name}</option>)}
-                            </select>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-fg/80 truncate">
-                            <span className={isDone && m.winner_user_id === m.player_1_user_id ? 'font-bold text-fg' : ''}>
-                              {formatPlayerName(m.player_1_name)}
-                            </span>
-                            <span className="text-fg/30 mx-1.5">vs</span>
-                            <span className={isDone && m.winner_user_id === m.player_2_user_id ? 'font-bold text-fg' : ''}>
-                              {formatPlayerName(m.player_2_name)}
-                            </span>
-                          </p>
-                        )}
-                        {isDone && scoreStr && <p className="text-xs text-fg/40 mt-0.5">{scoreStr}</p>}
-                        {m.walkover && <p className="text-[10px] text-amber-400/70 mt-0.5">Walkover</p>}
-                      </div>
+                  <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 border-t border-fg/[0.04]">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-fg truncate">
+                        <span className={isDone && m.winner_uid === m.player_1_uid ? 'font-bold text-fg' : ''}>
+                          {formatPlayerName(m.player_1_name)}
+                        </span>
+                        <span className="text-fg/70 mx-1.5">vs</span>
+                        <span className={isDone && m.winner_uid === m.player_2_uid ? 'font-bold text-fg' : ''}>
+                          {formatPlayerName(m.player_2_name)}
+                        </span>
+                      </p>
+                      {isDone && scoreStr && <p className="text-xs text-fg/70 mt-0.5">{scoreStr}</p>}
+                      {m.walkover && <p className="text-[10px] text-amber-400/70 mt-0.5">Walkover</p>}
                     </div>
-
                     <div className="shrink-0 flex items-center gap-2">
                       {isDone && (
-                        <span className="shrink-0 text-[10px] font-bold text-green-500 uppercase tracking-wider">Done</span>
+                        <span className="text-[10px] font-bold text-green-500 uppercase tracking-wider">Done</span>
                       )}
-                      {isCreator && !editMode && !!onSubmitScore && (
-                        <button
-                          onClick={() => onSubmitScore(m)}
-                          className="shrink-0 px-3 py-1.5 rounded-lg bg-clay/20 text-clay text-xs font-bold hover:bg-clay/30 transition-colors whitespace-nowrap"
-                        >
+                      {!!onSubmitScore && (
+                        <button type="button" onClick={() => onSubmitScore(m)} className={pillButtonCls('sm', 'clay')}>
                           Score
                         </button>
-                      )}
-                      {!isCreator && !isDone && !editMode && !!submittableMatchIds?.has(m.id) && (
-                        pendingMatchIds?.has(m.id) ? (
-                          <span className="shrink-0 text-[10px] font-bold text-green-500 uppercase tracking-wider">Submitted ✓</span>
-                        ) : (
-                          <button
-                            onClick={() => onSubmitScore(m)}
-                            className="shrink-0 px-3 py-1.5 rounded-lg bg-clay/20 text-clay text-xs font-bold hover:bg-clay/30 transition-colors whitespace-nowrap"
-                          >
-                            Submit Score
-                          </button>
-                        )
                       )}
                     </div>
                   </div>
@@ -239,12 +312,12 @@ export const RRGroupCard: React.FC<Props> = ({
         <div className="border-t border-fg/10 px-4 py-4 space-y-3">
           {onRenameGroup && (
             <div className="space-y-1.5">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-fg/40">Group Name</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70">Group Name</p>
               <div className="flex items-center gap-2">
                 <input
                   value={labelDraft}
                   onChange={(e) => setLabelDraft(e.target.value)}
-                  className="flex-1 bg-tennis-surface border border-fg/10 rounded px-2 py-1 text-fg text-xs"
+                  className="border border-fg/25 flex-1 bg-tennis-surface rounded px-2 py-1 text-fg text-xs"
                 />
                 <button
                   onClick={() => onRenameGroup(labelDraft)}
@@ -256,30 +329,30 @@ export const RRGroupCard: React.FC<Props> = ({
               </div>
             </div>
           )}
-          <p className="text-[10px] font-bold uppercase tracking-widest text-fg/40">Reassign Players</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70">Reassign Players</p>
           {localPlayers.map((p, idx) => {
             const hasPlayedMatch = matches.some((m) => m.status === 'complete');
             return (
-              <div key={p.user_id} className="flex items-center gap-2">
-                <span className="text-fg/50 text-xs w-4">{idx + 1}.</span>
+              <div key={p.uid} className="flex items-center gap-2">
+                <span className="text-fg/70 text-xs w-4">{idx + 1}.</span>
                 <select
-                  value={p.user_id === PLAYER_LOADING_SENTINEL ? PLAYER_LOADING_SENTINEL : p.user_id}
+                  value={p.uid === PLAYER_LOADING_SENTINEL ? PLAYER_LOADING_SENTINEL : p.uid}
                   onChange={(e) => {
                     if (e.target.value === PLAYER_LOADING_SENTINEL) {
                       setLocalPlayers((prev) => prev.map((pp, i) => i === idx
-                        ? { user_id: PLAYER_LOADING_SENTINEL, name: PLAYER_LOADING, contact: '', preferredContact: 'email' as const, participantId: '' }
+                        ? { uid: PLAYER_LOADING_SENTINEL, name: PLAYER_LOADING, contact: '', preferredContact: 'email' as const, participantId: '' }
                         : pp));
                       return;
                     }
-                    const chosen = allGroupPlayers.find((pl) => pl.user_id === e.target.value);
+                    const chosen = allGroupPlayers.find((pl) => pl.uid === e.target.value);
                     if (!chosen) return;
                     setLocalPlayers((prev) => prev.map((pp, i) => i === idx ? chosen : pp));
                   }}
-                  className="flex-1 bg-tennis-surface border border-fg/10 rounded px-2 py-1 text-fg text-xs"
+                  className="flex-1 bg-tennis-surface rounded px-2 py-1 text-fg text-xs"
                 >
-                  <option value={PLAYER_LOADING_SENTINEL} className="bg-tennis-surface text-fg/40">— Player Loading —</option>
+                  <option value={PLAYER_LOADING_SENTINEL} className="bg-tennis-surface text-fg/70">(Player Loading)</option>
                   {allGroupPlayers.map((pl) => (
-                    <option key={pl.user_id} value={pl.user_id} className="bg-tennis-surface text-fg">{formatPlayerName(pl.name)}</option>
+                    <option key={pl.uid} value={pl.uid} className="bg-tennis-surface text-fg">{formatPlayerName(pl.name)}</option>
                   ))}
                 </select>
               </div>
@@ -287,23 +360,23 @@ export const RRGroupCard: React.FC<Props> = ({
           })}
           {/* Add a player from another group or the unplaced pool */}
           {(() => {
-            const takenIds = new Set(localPlayers.map((p) => p.user_id));
-            const available = allGroupPlayers.filter((p) => !takenIds.has(p.user_id));
+            const takenIds = new Set(localPlayers.map((p) => p.uid));
+            const available = allGroupPlayers.filter((p) => !takenIds.has(p.uid));
             if (!available.length) return null;
             return (
               <div className="flex items-center gap-2">
-                <span className="text-fg/50 text-xs w-4">+</span>
+                <span className="text-fg/70 text-xs w-4">+</span>
                 <select
                   value=""
                   onChange={(e) => {
-                    const chosen = allGroupPlayers.find((pl) => pl.user_id === e.target.value);
+                    const chosen = allGroupPlayers.find((pl) => pl.uid === e.target.value);
                     if (chosen) setLocalPlayers((prev) => [...prev, chosen]);
                   }}
-                  className="flex-1 bg-tennis-surface border border-fg/10 rounded px-2 py-1 text-fg text-xs"
+                  className="flex-1 bg-tennis-surface rounded px-2 py-1 text-fg text-xs"
                 >
                   <option value="">Add player…</option>
                   {available.map((pl) => (
-                    <option key={pl.user_id} value={pl.user_id} className="bg-tennis-surface text-fg">{formatPlayerName(pl.name)}</option>
+                    <option key={pl.uid} value={pl.uid} className="bg-tennis-surface text-fg">{formatPlayerName(pl.name)}</option>
                   ))}
                 </select>
               </div>

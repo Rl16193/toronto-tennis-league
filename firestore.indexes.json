@@ -1,0 +1,23 @@
+{
+  "indexes": [
+    {
+      "//": "onMatchCompletedMatchdayBonus (functions/groupAwards.js) — counts the day's real matches inside a +/- window. Without this the query throws FAILED_PRECONDITION on every score submission and the Matchday bonus never pays.",
+      "collectionGroup": "matches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "completed_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "weeklyReminders (functions/notifications.js) — finds challenges opened in the last 7 days for the ladder-allowance reset. Without this the scheduled job throws after sending the digest, so ladder_challenges_reset never fires.",
+      "collectionGroup": "matches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

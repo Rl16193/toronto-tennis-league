@@ -75,7 +75,39 @@ export const AVAILABILITY_TAGS: { id: AvailabilityTag; label: string }[] = [
 ];
 
 export const availabilityTagLabel = (id: string): string =>
-  AVAILABILITY_TAGS.find((t) => t.id === id)?.label || id;
+  AVAILABILITY_TAGS.find((t) => t.id === id)?.label || COLLAPSED_LABELS[id] || id;
+
+const COLLAPSED_LABELS: Record<string, string> = {
+  weekdays: 'Weekdays',
+  weekends: 'Weekends',
+};
+
+/**
+ * Display-only shortening: someone available both weekday mornings AND weekday evenings is just
+ * "available weekdays", and the same for weekends. Four pills on a row is noise; two says the
+ * same thing.
+ *
+ * Purely a render-time transform — the stored tags keep their full detail, so nothing downstream
+ * (matching, filtering) loses precision.
+ */
+export const collapseAvailabilityTags = (tags: string[]): string[] => {
+  const has = (t: string) => tags.includes(t);
+  const out: string[] = [];
+
+  if (has('weekday_mornings') && has('weekday_evenings')) out.push('weekdays');
+  else {
+    if (has('weekday_mornings')) out.push('weekday_mornings');
+    if (has('weekday_evenings')) out.push('weekday_evenings');
+  }
+
+  if (has('weekend_mornings') && has('weekend_evenings')) out.push('weekends');
+  else {
+    if (has('weekend_mornings')) out.push('weekend_mornings');
+    if (has('weekend_evenings')) out.push('weekend_evenings');
+  }
+
+  return out;
+};
 
 // Best-effort mapping from the old day×AM/PM grid to the new preset tags — used by the one-time
 // backfill script so existing users don't appear to have "no availability" set.

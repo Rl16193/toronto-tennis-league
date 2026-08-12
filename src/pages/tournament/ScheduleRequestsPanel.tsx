@@ -8,12 +8,12 @@ const RequestRow: React.FC<{ match: TournamentMatch; onSet: (m: TournamentMatch,
   const [slot, setSlot] = useState<'AM' | 'PM'>(match.proposed_slot ?? 'AM');
   return (
     <div className="flex flex-wrap items-center gap-2 py-2 border-b border-fg/5 last:border-0">
-      <span className="text-sm text-fg/80 flex-1 min-w-[140px]">
+      <span className="text-sm text-fg flex-1 min-w-[140px]">
         {formatPlayerName(match.player_1_name)} vs {formatPlayerName(match.player_2_name)}
       </span>
       <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-        className="rounded-lg bg-tennis-surface border border-fg/10 px-2 py-1.5 text-fg text-xs" />
-      <div className="flex rounded-lg overflow-hidden border border-fg/10">
+        className="border border-fg/25 rounded-lg bg-tennis-surface px-2 py-1.5 text-fg text-xs" />
+      <div className="flex rounded-lg overflow-hidden">
         {(['AM', 'PM'] as const).map((s) => (
           <button key={s} type="button" onClick={() => setSlot(s)}
             className={`px-3 py-1.5 text-xs font-bold ${slot === s ? 'bg-clay text-white' : 'bg-white text-ink'}`}>{s}</button>

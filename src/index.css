@@ -1,6 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
+/* Court Map: clear the collapsed pull-up results handle (~48px) at the bottom of the map so the
+   zoom +/- controls (moved to bottom-right to stop the top Search/Filters bar covering them)
+   don't sit half-behind it. */
+.maplibregl-ctrl-bottom-right {
+  bottom: 52px;
+}
+
 @theme {
   --font-sans: "Montserrat", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Montserrat", ui-sans-serif, system-ui, sans-serif;
@@ -10,6 +17,9 @@
   --color-tennis-dark: #143D34;
   --color-tennis-surface: #143D34;
   --color-tennis-deep: #0B3027;
+  /* Bottom tab bar fill — the page background in both themes, so the bar reads as part of the
+     page rather than a separate white/dark surface. */
+  --color-nav: #143D34;
   /* Primary text/icon color — white in dark mode, brand-dark-green in light. Every
      `text-white`/`border-white` in the app is being migrated to `text-fg`/`border-fg` so it
      follows the toggle; see ThemeContext.tsx for how `data-theme` gets set on <html>. */
@@ -36,6 +46,7 @@
   --color-tennis-dark: #EDEDE7;
   --color-tennis-surface: #FFFFFF;
   --color-tennis-deep: #DEDED5;
+  --color-nav: #EDEDE7;
   --color-fg: #143D34;
   --color-badge: #92400e;
   --color-badge-win: #15803d;
@@ -53,6 +64,9 @@
 }
 
 @layer base {
+  html, body {
+    @apply overflow-x-hidden;
+  }
   body {
     @apply bg-tennis-dark text-fg font-sans antialiased;
   }

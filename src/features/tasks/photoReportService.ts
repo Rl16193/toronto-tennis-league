@@ -9,7 +9,13 @@ import { courtKey } from '../../utils/courtKey';
 // Automated Vision SafeSearch moderation (functions/index.js) still runs on upload and can flip a
 // report to 'rejected' after the fact if the image is unsafe.
 
-export type ReportType = 'condition' | 'waitingBoard' | 'queue';
+// Report categories inside the consolidated `courts` collection. `type` is the discriminator that
+// separates these from `check-in` / `attendance` docs; anonymous submitters use uid: 'no_account'.
+export type ReportType = 'condition' | 'waiting_board' | 'queue';
+
+// Sentinel uid for logged-out (anonymous) court reports. A real auth uid never starts with `no_`,
+// so cloud functions and rules can gate on it to skip award/ownership logic for anonymous writers.
+export const NO_ACCOUNT_UID = 'no_account';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_PHOTOS = 3;
@@ -99,17 +105,17 @@ export async function submitPhotoReport(args: {
   }
   onProgress?.(100);
 
-  await addDoc(collection(db, 'court_reports'), {
+  await addDoc(collection(db, 'courts'), {
     type,
     court_key: courtKey(courtName),
     court_name: courtName,
     photo_paths: photoPaths,
     photos_meta: photosMeta,
-    user_id: uid ?? null,
+    uid: uid ?? NO_ACCOUNT_UID,
     user_name: userName,
     note: note.trim(),
     ...(type === 'queue' && racquetsInQueue != null ? { racquets_in_queue: racquetsInQueue } : {}),
-    ...(type === 'waitingBoard' && waitingBoards != null ? { waiting_boards: waitingBoards } : {}),
+    ...(type === 'waiting_board' && waitingBoards != null ? { waiting_boards: waitingBoards } : {}),
     status: 'approved',
     created_at: new Date().toISOString(),
   });

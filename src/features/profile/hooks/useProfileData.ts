@@ -28,12 +28,22 @@ export const useProfileData = () => {
       return;
     }
 
-    const q = query(collection(db, 'event_participants'), where('user_id', '==', user.uid));
+    const q = query(collection(db, 'event_participants'), where('uid', '==', user.uid));
+
+    // This callback is async with two awaits in it, so two snapshots can be in flight at once
+    // with no ordering guarantee — leave an event and join another quickly and the slower, older
+    // callback used to land last and restore the event you just left. `generation` makes only the
+    // newest callback allowed to write, and `cancelled` stops writes after unmount.
+    let cancelled = false;
+    let generation = 0;
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
+      const mine = ++generation;
+      const isStale = () => cancelled || mine !== generation;
       const participantData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventParticipant));
 
       if (participantData.length === 0) {
+        if (isStale()) return;
         setJoinedEvents([]);
         setLoading(false);
         return;
@@ -71,17 +81,21 @@ export const useProfileData = () => {
           })
         );
 
+        if (isStale()) return;
         setJoinedEvents(joined.filter(Boolean) as JoinedEventCard[]);
       } catch (error) {
+        if (isStale()) return;
         console.error("Error fetching joined events:", error);
         setJoinedEvents([]);
       } finally {
-        setLoading(false);
+        if (!isStale()) setLoading(false);
       }
     });
 
-    return () => unsubscribe();
-  }, [user]);
+    return () => { cancelled = true; unsubscribe(); };
+    // `user?.uid`, not `user`: AuthContext hands out a new User object on every token refresh,
+    // which tore this listener down and re-opened it roughly hourly for no reason.
+  }, [user?.uid]);
 
   return { joinedEvents, loading };
 };

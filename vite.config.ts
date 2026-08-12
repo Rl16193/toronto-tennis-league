@@ -24,6 +24,10 @@ export default defineConfig(({mode}) => {
             if (!id.includes('node_modules')) return;
             if (id.includes('/firebase/') || id.includes('/@firebase/')) return 'firebase-vendor';
             if (id.includes('/motion/') || id.includes('/framer-motion/')) return 'motion-vendor';
+            // The map engine is the single largest dependency. It only loads inside the lazy
+            // /courts route, but without its own chunk it was bundled with app code and
+            // re-downloaded on every deploy.
+            if (id.includes('maplibre') || id.includes('react-map-gl')) return 'map-vendor';
             if (
               id.includes('/react-router') ||
               id.includes('/react-dom/') ||

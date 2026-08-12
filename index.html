@@ -81,16 +81,14 @@
     <link rel="preconnect" href="https://firestore.googleapis.com" />
     <link rel="preconnect" href="https://firebasestorage.googleapis.com" />
 
-    <!-- Apply the stored light/dark choice before first paint, so returning dark-mode users
-         never see a flash of the light splash screen. Defaults to light (matches ThemeContext.tsx). -->
+    <!-- Apply the stored light/dark choice before first paint, so returning light-mode users
+         never see a flash of the dark splash screen. Defaults to dark (matches ThemeContext.tsx). -->
     <script>
       (function () {
         try {
           var t = localStorage.getItem('rs-theme');
-          if (t !== 'dark') document.documentElement.setAttribute('data-theme', 'light');
-        } catch (e) {
-          document.documentElement.setAttribute('data-theme', 'light');
-        }
+          if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+        } catch (e) { /* default (dark) applies */ }
       })();
     </script>
 

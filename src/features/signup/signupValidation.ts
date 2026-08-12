@@ -1,8 +1,9 @@
 import { fetchSignInMethodsForEmail } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { emailExistsInProfiles, secondaryEmailExistsInProfiles } from '../../lib/accountService';
+import { EMAIL_REGEX as signupEmailRegex } from '../../utils/emailRegex';
 
-export const signupEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export { signupEmailRegex };
 
 // 'primary' → a real account signs in with this email (normal login flow).
 // 'secondary' → this email was merged into another account (see types.ts secondary_email) —

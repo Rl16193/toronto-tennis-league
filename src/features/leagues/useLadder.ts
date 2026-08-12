@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { UserData } from '../../types';
-import { LADDER_COL, LADDER_COOLDOWN_DAYS, LADDER_CHALLENGES_PER_WEEK, LadderChallenge } from './ladderService';
+import { ContactData } from '../../types';
+import { MATCHES_COL, LADDER_COOLDOWN_DAYS, LADDER_ACTIVE_CHALLENGE_CAP, LadderChallenge } from './ladderService';
 
 export type ChallengeState = 'available' | 'pending' | 'cooldown';
 
@@ -11,13 +11,14 @@ export type ChallengeState = 'available' | 'pending' | 'cooldown';
 export function useLadder(eventId: string | undefined, uid: string | undefined) {
   const [challenges, setChallenges] = useState<LadderChallenge[]>([]);
   const [challengesReady, setChallengesReady] = useState(false);
-  const [contactMap, setContactMap] = useState<Record<string, UserData>>({});
+  // Phone/email/WhatsApp live in `contacts`, not `users` — see the ContactData doc comment.
+  const [contactMap, setContactMap] = useState<Record<string, ContactData>>({});
 
   useEffect(() => {
     setChallenges([]);
     setChallengesReady(false);
     if (!eventId) return;
-    return onSnapshot(query(collection(db, LADDER_COL), where('event_id', '==', eventId)), (snap) => {
+    return onSnapshot(query(collection(db, MATCHES_COL), where('category', '==', 'challenge'), where('event_id', '==', eventId)), (snap) => {
       setChallenges(snap.docs.map((d) => ({ id: d.id, ...d.data() } as LadderChallenge)));
       setChallengesReady(true);
     });
@@ -27,11 +28,11 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
   // a challenge drops out of this "needs a response" panel; the players list below shows a
   // Contact button for it instead.
   const myChallenges = useMemo(
-    () => challenges.filter((c) => c.challenger_id === uid && c.status === 'open'),
+    () => challenges.filter((c) => c.player_1_uid === uid && c.status === 'open'),
     [challenges, uid],
   );
   const incoming = useMemo(
-    () => challenges.filter((c) => c.opponent_id === uid && c.status === 'open'),
+    () => challenges.filter((c) => c.player_2_uid === uid && c.status === 'open'),
     [challenges, uid],
   );
   // Reported results awaiting organizer confirmation (creator queue).
@@ -43,33 +44,37 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
     const ids = new Set<string>();
     challenges.forEach((c) => {
       if (c.status !== 'accepted' && c.status !== 'reported') return;
-      if (c.challenger_id === uid) ids.add(c.opponent_id);
-      else if (c.opponent_id === uid) ids.add(c.challenger_id);
+      if (c.player_1_uid === uid) ids.add(c.player_2_uid);
+      else if (c.player_2_uid === uid) ids.add(c.player_1_uid);
     });
     return ids;
   }, [challenges, uid]);
 
-  // Weekly allowance: challenges I opened since Monday 00:00. Cancelled challenges are deleted,
-  // so they refund the slot automatically; rejected/confirmed ones still count (they were used).
-  const weeklyChallengesUsed = useMemo(() => {
-    const now = new Date();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // Mon=0 … Sun=6
-    monday.setHours(0, 0, 0, 0);
-    return challenges.filter(
-      (c) => c.challenger_id === uid && new Date(c.created_at).getTime() >= monday.getTime(),
-    ).length;
-  }, [challenges, uid]);
-  const weeklyChallengesLeft = Math.max(0, LADDER_CHALLENGES_PER_WEEK - weeklyChallengesUsed);
+  // Concurrent allowance: challenges I SENT that are still 'open' or 'accepted' (not yet reported/
+  // confirmed/rejected). No time-based reset — a slot frees up only once that challenge moves past
+  // accepted (scored, confirmed, rejected) or is cancelled (cancelling deletes the doc).
+  const activeChallengesUsed = useMemo(
+    () => challenges.filter(
+      (c) => c.player_1_uid === uid && (c.status === 'open' || c.status === 'accepted'),
+    ).length,
+    [challenges, uid],
+  );
+  const activeChallengesLeft = Math.max(0, LADDER_ACTIVE_CHALLENGE_CAP - activeChallengesUsed);
 
   // Fetch contact info for the counterparts of my accepted challenges.
   useEffect(() => {
     const missing = [...acceptedPartnerIds].filter((id) => id && !contactMap[id]);
     if (missing.length === 0) return;
+    // Per-read catch, not one around the batch: `contacts` is readable only by an opponent, and
+    // the connection doc that proves it is written by a trigger a moment AFTER the challenge is
+    // accepted. Without this, one denied read rejects the whole Promise.all and nobody's contact
+    // resolves.
     Promise.all(
-      missing.map((id) => getDoc(doc(db, 'users', id)).then((s) => [id, s.data() as UserData | undefined] as const)),
+      missing.map((id) => getDoc(doc(db, 'contacts', id))
+        .then((s) => [id, s.data() as ContactData | undefined] as const)
+        .catch(() => [id, undefined] as const)),
     ).then((entries) => {
-      const found = entries.filter((e) => !!e[1]) as [string, UserData][];
+      const found = entries.filter((e) => !!e[1]) as [string, ContactData][];
       if (found.length) setContactMap((prev) => ({ ...prev, ...Object.fromEntries(found) }));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -82,8 +87,8 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
     return (opponentId: string): ChallengeState => {
       const between = challenges.filter(
         (c) =>
-          (c.challenger_id === uid && c.opponent_id === opponentId) ||
-          (c.opponent_id === uid && c.challenger_id === opponentId),
+          (c.player_1_uid === uid && c.player_2_uid === opponentId) ||
+          (c.player_2_uid === uid && c.player_1_uid === opponentId),
       );
       if (between.some((c) => c.status === 'open' || c.status === 'accepted' || c.status === 'reported')) return 'pending';
       if (
@@ -96,5 +101,5 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
     };
   }, [challenges, uid]);
 
-  return { challenges, challengesReady, myChallenges, incoming, reported, contactMap, stateWith, acceptedPartnerIds, weeklyChallengesLeft };
+  return { challenges, challengesReady, myChallenges, incoming, reported, contactMap, stateWith, acceptedPartnerIds, activeChallengesLeft };
 }

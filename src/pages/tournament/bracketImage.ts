@@ -1,5 +1,5 @@
 import { TournamentMatch, TournamentPlayer } from './types';
-import { formatPlayerName } from './utils';
+import { formatDeadline, formatPlayerName } from './utils';
 
 export const getRoundLabels = (drawSize: number): string[] => {
   if (drawSize === 8) return ['QF', 'SF', 'F'];
@@ -16,14 +16,6 @@ const truncate = (value: string, max = 20) =>
   value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
 // Format a stored 'YYYY-MM-DD' round deadline like the on-screen bracket ("Till May 23").
-const formatDeadline = (iso?: string): string => {
-  if (!iso) return '';
-  const [, m, d] = iso.split('-').map(Number);
-  if (!m || !d) return '';
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `Till ${months[m - 1]} ${d}`;
-};
-
 const formatSvgScore = (match: TournamentMatch): string => {
   const pairs: [number, number][] = [
     [match.set_1_player_1 ?? 0, match.set_1_player_2 ?? 0],
@@ -77,7 +69,8 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?:
 
     const col = `<rect x="${x - 12}" y="${colStart}" width="${colWidth - 24}" height="${colH}" rx="14" fill="${colColor}" stroke="${C.colStroke}" />`;
 
-    const deadline = formatDeadline(roundDeadlines[round.round]);
+    const formatted = formatDeadline(roundDeadlines[round.round]);
+    const deadline = formatted ? `Till ${formatted}` : '';
     const label = `<text x="${colCenterX}" y="${colStart + 22}" text-anchor="middle" font-size="13" font-weight="800" fill="${C.text}">${round.round}</text>${
       deadline ? `<text x="${colCenterX}" y="${colStart + 36}" text-anchor="middle" font-size="9" fill="${C.textMuted}">${deadline}</text>` : ''
     }`;
@@ -100,9 +93,9 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?:
 
       return `<g>
         <rect x="${x}" y="${y}" width="${colWidth - 58}" height="72" rx="4" fill="${C.cardFill}" stroke="${C.cardStroke}" />
-        <text x="${x + 10}" y="${p1Y}" font-size="13" font-weight="700" fill="${match.winner_user_id === match.player_1_user_id ? C.winner : C.text}">${escapeSvg(p1)}</text>
+        <text x="${x + 10}" y="${p1Y}" font-size="13" font-weight="700" fill="${match.winner_uid === match.player_1_uid ? C.winner : C.text}">${escapeSvg(p1)}</text>
         <line x1="${x}" y1="${divY}" x2="${x + colWidth - 58}" y2="${divY}" stroke="${C.divider}" />
-        <text x="${x + 10}" y="${p2Y}" font-size="13" font-weight="700" fill="${match.winner_user_id === match.player_2_user_id ? C.winner : C.text}">${escapeSvg(p2)}</text>
+        <text x="${x + 10}" y="${p2Y}" font-size="13" font-weight="700" fill="${match.winner_uid === match.player_2_uid ? C.winner : C.text}">${escapeSvg(p2)}</text>
         ${scoreText ? `<line x1="${x}" y1="${y + 56}" x2="${x + colWidth - 58}" y2="${y + 56}" stroke="${C.divider}" /><text x="${x + 10}" y="${y + 67}" font-size="10" fill="${C.score}" font-family="monospace">${escapeSvg(scoreText)}</text>` : ''}
         ${connector}
       </g>`;
@@ -162,7 +155,7 @@ const buildRRGroupSvg = (
 
   // Phone first, email only when no phone, then the match-snapshot contact as a last resort.
   const contactOf = (p: TournamentPlayer): string => {
-    const c = contacts[p.user_id];
+    const c = contacts[p.uid];
     return c?.phone || c?.email || p.contact || '';
   };
 

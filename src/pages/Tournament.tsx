@@ -7,19 +7,26 @@ import { Lock, Menu } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { Sheet } from '../components/Sheet';
 import { useTournament } from './tournament/useTournament';
-import { getEventDate } from './tournament/utils';
+import { getEventDate, zoneBucketFor } from './tournament/utils';
+import { parseValidDate } from '../utils/eventDates';
+import type { FirestoreDateLike } from '../utils/eventDates';
 import { downloadDrawAsPng, getRoundLabels, downloadRRGroupsAsPng } from './tournament/bracketImage';
 import { TournamentMatch } from './tournament/types';
 import { BracketView } from './tournament/BracketView';
 import { BracketAccordion } from './tournament/BracketAccordion';
 import { BracketErrorBoundary } from './tournament/BracketErrorBoundary';
 import { TournamentHeader } from './tournament/TournamentHeader';
-import { OpponentCard, RROpponentPanel } from './tournament/OpponentPanels';
+import { ZoneDrawConfigPanel } from './tournament/ZoneDrawConfigPanel';
+import { OpponentCard } from './tournament/OpponentPanels';
 import { DrawTabs } from './tournament/DrawTabs';
 import { ScoreModal } from './tournament/ScoreModal';
 import { PendingScoresPanel } from './tournament/PendingScoresPanel';
 import { ScheduleRequestsPanel } from './tournament/ScheduleRequestsPanel';
+import { ZoneChangeRequestsPanel } from './tournament/ZoneChangeRequestsPanel';
+import { RequestZoneChangeButton } from './tournament/RequestZoneChangeButton';
+import { ChangeZoneModal } from './tournament/ChangeZoneModal';
 import { AddPlayerPanel } from './tournament/AddPlayerPanel';
+import { AddTeammatePanel } from './tournament/AddTeammatePanel';
 import { RoundRobinView } from './tournament/RoundRobinView';
 import { RRConfigModal } from './tournament/RRConfigModal';
 import { AlertMessage } from '../components/AlertMessage';
@@ -41,8 +48,8 @@ const getDrawState = (matches: TournamentMatch[]): string => {
     const knockout = real.filter((m) => m.format === 'rr' && m.round !== 'RR');
     if (knockout.length > 0) {
       const finals = knockout.filter((m) => m.round === 'F');
-      if (finals.length > 0 && finals.every((m) => m.winner_user_id)) return 'Tournament Complete';
-      return knockout.some((m) => m.winner_user_id) ? 'Knockout Started' : 'Knockout Stage';
+      if (finals.length > 0 && finals.every((m) => m.winner_uid)) return 'Tournament Complete';
+      return knockout.some((m) => m.winner_uid) ? 'Knockout Started' : 'Knockout Stage';
     }
     if (groupStage.every((m) => m.status === 'complete')) return 'Group Stage Complete';
     if (groupStage.some((m) => m.status === 'complete')) return 'Group Stage Started';
@@ -51,12 +58,12 @@ const getDrawState = (matches: TournamentMatch[]): string => {
   const drawSize = real[0]?.drawsize || 8;
   const roundLabels = getRoundLabels(drawSize);
   const finals = real.filter((m) => m.round === 'F');
-  if (finals.length > 0 && finals.every((m) => m.winner_user_id)) return 'Tournament Complete';
+  if (finals.length > 0 && finals.every((m) => m.winner_uid)) return 'Tournament Complete';
   for (let i = roundLabels.length - 1; i >= 0; i--) {
     const round = roundLabels[i];
     const roundMatches = real.filter((m) => m.round === round);
-    if (roundMatches.length === 0 || roundMatches.every((m) => !m.winner_user_id)) continue;
-    const allComplete = roundMatches.every((m) => !!m.winner_user_id);
+    if (roundMatches.length === 0 || roundMatches.every((m) => !m.winner_uid)) continue;
+    const allComplete = roundMatches.every((m) => !!m.winner_uid);
     return allComplete ? `${round} Complete` : `${round} Started`;
   }
   return 'Matches Generated';
@@ -64,16 +71,12 @@ const getDrawState = (matches: TournamentMatch[]): string => {
 
 const formatEventRange = (e: TennisEvent): string => {
   const start = getEventDate(e);
-  const rawEnd = (e as unknown as Record<string, unknown>).endDate || (e as unknown as Record<string, unknown>).end_date;
-  let end: Date | null = null;
-  if (rawEnd) {
-    if (typeof rawEnd === 'string') end = new Date(rawEnd);
-    else if (typeof rawEnd === 'object' && rawEnd !== null) {
-      const obj = rawEnd as Record<string, unknown>;
-      if (typeof obj['toDate'] === 'function') end = (obj['toDate'] as () => Date)();
-      else if (typeof obj['seconds'] === 'number') end = new Date((obj['seconds'] as number) * 1000);
-    }
-  }
+  // Parsed with the same helper as the start date above (getEventDate → parseDateValue, which is
+  // local-time). Hand-rolling `new Date(str)` here read a date-only end as UTC midnight while the
+  // start stayed local, so a single-day event rendered as "Aug 10–9".
+  const rawEnd = ((e as unknown as Record<string, unknown>).endDate
+    || (e as unknown as Record<string, unknown>).end_date) as FirestoreDateLike;
+  const end: Date | null = parseValidDate(rawEnd);
   if (!start) return '';
   const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
   const s = start.toLocaleDateString('en-CA', opts);
@@ -94,6 +97,8 @@ export const Tournament: React.FC = () => {
   const [eventStatuses, setEventStatuses] = useState<Record<string, EventStatus>>({});
   const [statusLoading, setStatusLoading] = useState(true);
   const [showEventSheet, setShowEventSheet] = useState(false);
+  const [showZoneConfig, setShowZoneConfig] = useState(false);
+  const [showChangeZone, setShowChangeZone] = useState(false);
   const [alsoConvertToChallenge, setAlsoConvertToChallenge] = useState(false);
   const [ladder, setLadder] = useState<TennisEvent | null>(null);
   const { profile } = useAuth();
@@ -107,17 +112,18 @@ export const Tournament: React.FC = () => {
     event, matches, participants,
     allTournamentEvents,
     isCreator, started, userParticipant, zoneMap, courtsMap, availabilityMap, userMap,
-    currentDraw, currentMatches, displayMatches, visibleDraws,
+    currentDraw, currentMatches, displayMatches, visibleDraws, drawCounts,
     opponent,
     editPlayers, currentDrawAllPlayers, currentDrawSize,
     message, scoreForm, scoreFormMatch, setScoreForm,
     generating, resettingDraw, editMode, setEditMode,
-    mergeMensSingles, setMergeMensSingles,
-    mergeWomensSingles, setMergeWomensSingles,
+    mensSkillMerge, setMensSkillMerge,
+    womensSkillMerge, setWomensSkillMerge,
     consolidateDoubles, setConsolidateDoubles,
-    activeTab, setActiveTab, activeSkill, setActiveSkill, activeDoubles, setActiveDoubles,
+    activeTab, setActiveTab, activeSkill, setActiveSkill, activeDoubles, setActiveDoubles, setActiveZone,
     availableUsers,
-    handleUpdateRoundDeadline, handleSetPreviewDrawSize, handleAddPlayer,
+
+    handleUpdateRoundDeadline, handleSetPreviewDrawSize, handleAddPlayer, handleRemovePlayer,
     handleGenerateAll, handleResetDraw,
     handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
     pendingSubmissions, pendingMatchIds, submittableMatchIds, handleConfirmSubmission, handleRejectSubmission,
@@ -131,6 +137,9 @@ export const Tournament: React.FC = () => {
     handleCreateRRGroup, handleRenameGroup,
     visibleUserMatch, userRRMatches, scheduleRequests,
     handleAskOrganizerSchedule, handleSetSchedule,
+    zoneChangeRequests, handleRequestZoneChange, handleClearZoneChangeRequest, handleMovePlayerZone, handleMoveZoneByUid,
+    handleMergeZone, handleUnmergeZone, handleSetZoneDrawsEnabled, zoneConfig,
+    handleAddTeammate, savingTeammate,
   } = useTournament(eventId);
 
   // Viewer's own preferred courts — for the "Nearby" pill shown against an opponent who shares one.
@@ -148,15 +157,15 @@ export const Tournament: React.FC = () => {
 
   useEffect(() => {
     document.title = event?.title
-      ? `${event.title} — Racquets & Strings`
-      : 'Matches — Racquets & Strings';
+      ? `${event.title} · Racquets & Strings`
+      : 'Matches · Racquets & Strings';
   }, [event?.title]);
 
   // Which tournaments the signed-in user has joined (event_participants) — combined with the
   // ones they created, this is the set the Matches tab lists.
   useEffect(() => {
     if (!user) { setMyEventIds(new Set()); return; }
-    getDocs(query(collection(db, 'event_participants'), where('user_id', '==', user.uid)))
+    getDocs(query(collection(db, 'event_participants'), where('uid', '==', user.uid)))
       .then((snap) => setMyEventIds(new Set(snap.docs.map((d) => (d.data().event_id as string)).filter(Boolean))))
       .catch(() => {});
   }, [user?.uid]);
@@ -166,14 +175,14 @@ export const Tournament: React.FC = () => {
     if (allTournamentEvents.length === 0) return;
     const ids = allTournamentEvents.map((e) => e.id).slice(0, 30);
     setStatusLoading(true);
-    getDocs(query(collection(db, 'tournament_matches'), where('event_id', 'in', ids)))
+    getDocs(query(collection(db, 'matches'), where('event_id', 'in', ids)))
       .then((snap) => {
         const statuses: Record<string, EventStatus> = {};
         snap.docs.forEach((d) => {
           const m = d.data();
           const eid = m.event_id as string;
           if (!statuses[eid]) statuses[eid] = 'active';
-          if (m.round === 'F' && m.status === 'complete' && m.winner_user_id) statuses[eid] = 'completed';
+          if (m.round === 'F' && m.status === 'complete' && m.winner_uid) statuses[eid] = 'completed';
         });
         setEventStatuses(statuses);
       })
@@ -213,6 +222,24 @@ export const Tournament: React.FC = () => {
   // (participants + matches) actually arriving — otherwise switching tournaments (or the gap
   // between the event list loading and the specific event being selected) briefly renders a
   // flash of empty/wrong content instead of a loading state.
+  // Zones that already have generated matches can't be merged away — their draws would vanish.
+  // Declared ABOVE the loading early-return below: a hook after a conditional return runs on some
+  // renders and not others, which is what "Rendered more hooks than during the previous render"
+  // means. Every hook in this component has to sit above that return.
+  const zonesWithMatches = useMemo(
+    () => new Set(matches.map((m) => m.zone).filter((z): z is string => !!z)),
+    [matches],
+  );
+
+  // The zone bucket this player actually sits in, by its display name. Reads the RESOLVED config
+  // so it honours zones being on by default and follows any merge to the target zone.
+  const userZoneLabel = useMemo(() => {
+    if (!zoneConfig.enabled || !userParticipant) return '';
+    // An organizer's move wins over the zone derived from preferred courts.
+    const bucketId = userParticipant.zone_override ?? zoneBucketFor(zoneMap[userParticipant.uid], zoneConfig);
+    return zoneConfig.buckets.find((b) => b.id === bucketId)?.label ?? 'Unassigned';
+  }, [zoneConfig, userParticipant, zoneMap]);
+
   const initialLoading = authLoading || (loading && allTournamentEvents.length === 0);
   const eventSwitching = !initialLoading && allTournamentEvents.length > 0 && !eventDataReady;
   if (initialLoading || eventSwitching) {
@@ -230,6 +257,7 @@ export const Tournament: React.FC = () => {
   // Read-only mode is per-event now: a completed tournament opened from History renders
   // exactly like the old Past mode did.
   const pastMode = !!event && eventStatuses[event.id] === 'completed';
+
   const canEdit = isCreator && !pastMode;
   const effEditMode = editMode && canEdit;
   const schedule = pastMode ? undefined : scheduleApi;
@@ -249,9 +277,36 @@ export const Tournament: React.FC = () => {
   const drawHasCompleted = (d: { tournamentChoice: string; division: string; skillGroup: string }) =>
     matches.some((m) =>
       m.tournament_choice === d.tournamentChoice && m.division === d.division &&
-      m.skill_group === d.skillGroup && m.bracket !== 'reserves' && m.status === 'complete');
+      m.skill_group === d.skillGroup && m.status === 'complete');
   const playedDraws = pastMode ? visibleDraws.filter(drawHasCompleted) : visibleDraws;
   const shownDraws = playedDraws.length > 0 ? playedDraws : visibleDraws;
+
+  // Draw size sits inside the selected draw's row in the tree, so it's attached to the draw it
+  // resizes. Creator-only, knockout-only, and locked once matches exist.
+  const drawSizeControl = !isRR && effEditMode && currentDraw ? (
+    <div className="rounded-xl bg-fg/[0.03] px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-bold text-fg/70 uppercase tracking-widest">Draw size</span>
+        {[8, 16, 32].map((size) => (
+          <motion.button
+            key={size}
+            disabled={currentMatches.length > 0}
+            onClick={() => handleSetPreviewDrawSize(currentDraw.label, size)}
+            whileTap={currentMatches.length > 0 ? undefined : tapScale.whileTap}
+            transition={tapScale.transition}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
+              currentDrawSize === size ? 'bg-clay text-white' : currentMatches.length > 0 ? 'bg-tennis-surface/30 text-fg/70 opacity-50 cursor-not-allowed' : 'bg-tennis-surface/60 text-fg'
+            }`}
+          >
+            R{size}
+          </motion.button>
+        ))}
+      </div>
+      {currentMatches.length > 0 && (
+        <p className="text-[11px] text-amber-400/80 mt-1.5">Matches already created. Reset this draw first to change the size.</p>
+      )}
+    </div>
+  ) : undefined;
 
   const drawSelector = (
     <DrawTabs
@@ -260,11 +315,14 @@ export const Tournament: React.FC = () => {
       activeDoubles={activeDoubles}
       currentDraw={currentDraw}
       visibleDraws={shownDraws}
+      drawCounts={drawCounts}
       onTabChange={setActiveTab}
       onSkillChange={setActiveSkill}
       onDoublesChange={setActiveDoubles}
+      onZoneChange={setActiveZone}
       rrView={isRR && rrGroupMatches.length > 0 ? rrView : undefined}
       onRRViewChange={isRR && rrGroupMatches.length > 0 ? setRRView : undefined}
+      drawSizeControl={drawSizeControl}
     />
   );
 
@@ -289,6 +347,10 @@ export const Tournament: React.FC = () => {
       pendingMatchIds={pendingMatchIds}
       onSaveGroupEdit={handleSaveGroupEdit}
       onRenameGroup={handleRenameGroup}
+      onRemovePlayer={handleRemovePlayer}
+      onMovePlayerZone={handleMoveZoneByUid}
+      onAskSchedule={handleAskOrganizerSchedule}
+      zoneBuckets={zoneConfig.buckets}
       onCreateGroup={handleCreateRRGroup}
       unplacedPlayers={rrUnplacedPlayers}
       rrKnockoutReady={rrKnockoutReady}
@@ -317,6 +379,58 @@ export const Tournament: React.FC = () => {
       )}
 
       {!pastMode && isCreator && <ScheduleRequestsPanel requests={scheduleRequests} onSetSchedule={handleSetSchedule} />}
+      {!pastMode && isCreator && (
+        <ZoneChangeRequestsPanel
+          requests={zoneChangeRequests}
+          buckets={zoneConfig.buckets}
+          onMoveZone={handleMovePlayerZone}
+          // The request stores a zone NAME (what the player picked); the move takes a bucket id.
+          onApprove={(id, zoneName) => {
+            const bucket = zoneConfig.buckets.find((b) => b.label === zoneName || b.zones.includes(zoneName));
+            if (bucket) handleMovePlayerZone(id, bucket.id);
+          }}
+          onClear={handleClearZoneChangeRequest}
+        />
+      )}
+
+      {/* Zone is worth stating outright: it decides which draw you're in, and changing your
+          preferred courts deliberately does NOT move you — the request button is the only way.
+          Gated on the RESOLVED config, not `event.zone_draw_config`. No event has ever stored that
+          field, while `resolveZoneConfig` defaults `enabled` to true — so reading the raw field
+          made this whole row (and the only way a player can ask to move) permanently invisible. */}
+      {!pastMode && !isCreator && zoneConfig.enabled && userParticipant && (
+        <div className="mb-6 flex items-center justify-end gap-3 flex-wrap">
+          <span className="text-xs text-fg/70">
+            Your zone: <span className="font-bold text-fg">{userZoneLabel}</span>
+          </span>
+          <RequestZoneChangeButton
+            requested={!!(userParticipant.req_zone_change || userParticipant.zone_change_requested)}
+            onRequest={() => setShowChangeZone(true)}
+          />
+        </div>
+      )}
+
+      <AnimatePresence>
+        {showChangeZone && userParticipant && (
+          <ChangeZoneModal
+            currentZone={userZoneLabel}
+            onClose={() => setShowChangeZone(false)}
+            onSubmit={(zone) => handleRequestZoneChange(userParticipant.id, zone)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* A doubles registration with no partner recorded can't be placed in a draw — let the
+          player finish the pairing themselves rather than re-register. */}
+      {!pastMode && userParticipant
+        && userParticipant.tournament_choice === 'Doubles'
+        && !userParticipant.doubles?.trim() && (
+        <AddTeammatePanel
+          currentUserId={userParticipant.uid}
+          saving={savingTeammate}
+          onSave={(name, inApp, skill) => handleAddTeammate(userParticipant.id, name, inApp, skill)}
+        />
+      )}
 
       {/* Draw tabs: division → skill → (RR) Groups / Knockout */}
       {drawSelector}
@@ -325,30 +439,7 @@ export const Tournament: React.FC = () => {
       {effEditMode && (
         <AddPlayerPanel availableUsers={availableUsers} currentDraw={currentDraw} onAdd={handleAddPlayer} />
       )}
-      {!isRR && effEditMode && currentDraw && (
-        <div className="mb-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm font-bold text-fg uppercase tracking-widest">Draw Size</span>
-            {[8, 16, 32].map((size) => (
-              <motion.button
-                key={size}
-                disabled={currentMatches.length > 0}
-                onClick={() => handleSetPreviewDrawSize(currentDraw.label, size)}
-                whileTap={currentMatches.length > 0 ? undefined : tapScale.whileTap}
-                transition={tapScale.transition}
-                className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
-                  currentDrawSize === size ? 'bg-clay text-white' : currentMatches.length > 0 ? 'bg-tennis-surface/30 text-fg cursor-not-allowed' : 'bg-tennis-surface/60 text-fg hover:text-fg'
-                }`}
-              >
-                R{size}
-              </motion.button>
-            ))}
-          </div>
-          {currentMatches.length > 0 && (
-            <p className="text-xs text-amber-400/80 mt-2">Matches already created — reset this draw first to change the size.</p>
-          )}
-        </div>
-      )}
+      {/* Draw Size moved into the division tree above — see `drawSizeControl`. */}
 
       {/* Your group / your match — under all the tabs. Groups view → your group; Knockout view → your match. */}
       {isRR ? (
@@ -356,25 +447,14 @@ export const Tournament: React.FC = () => {
           ? (visibleUserMatch && opponent
               ? <OpponentCard opponent={opponent} defaultOpen currentMatch={visibleUserMatch} schedule={schedule} isCreator={isCreator} viewerUid={user?.uid} myCourts={myCourts} courtsMap={courtsMap} availabilityMap={availabilityMap} />
               : !isCreator && (
-                  <div className="mb-6 rounded-2xl border border-fg/10 bg-tennis-surface/30 px-4 py-6 text-center">
-                    <p className="text-sm font-semibold text-fg/50">Draw not released yet</p>
+                  <div className="mb-6 rounded-2xl bg-tennis-surface/30 px-4 py-6 text-center">
+                    <p className="text-sm font-semibold text-fg/70">Draw not released yet</p>
                   </div>
                 ))
-          : (userRRGroup && user && (
-              <RROpponentPanel
-                group={userRRGroup}
-                userId={user.uid}
-                isDoubles={rrGroupMatches[0]?.tournament_choice === 'Doubles'}
-                defaultOpen
-                pairingMatches={userRRMatches}
-                schedule={schedule}
-                isCreator={isCreator}
-                contactMap={userMap}
-                myCourts={myCourts}
-                courtsMap={courtsMap}
-                availabilityMap={availabilityMap}
-              />
-            ))
+          // "Your Group" used to repeat the whole group here. Every part of it — contact, your
+          // result, and the score/schedule action for your match — now lives in the player row
+          // inside the group card itself, so this panel was saying the same thing twice.
+          : null
       ) : (
         currentMatches.length > 0 && opponent && (
           <OpponentCard opponent={opponent} defaultOpen currentMatch={visibleUserMatch} schedule={schedule} isCreator={isCreator} viewerUid={user?.uid} myCourts={myCourts} courtsMap={courtsMap} availabilityMap={availabilityMap} />
@@ -395,6 +475,7 @@ export const Tournament: React.FC = () => {
                 editMode={effEditMode}
                 editPlayers={editPlayers}
                 onEditPlayer={handleEditPlayer}
+                onRemovePlayer={handleRemovePlayer}
                 isCreator={isCreator}
                 onSubmitScore={submitScore}
                 submittableMatchIds={submittable}
@@ -410,6 +491,7 @@ export const Tournament: React.FC = () => {
                 editMode={effEditMode}
                 editPlayers={editPlayers}
                 onEditPlayer={handleEditPlayer}
+                onRemovePlayer={handleRemovePlayer}
                 isCreator={isCreator}
                 onSubmitScore={submitScore}
                 submittableMatchIds={submittable}
@@ -431,8 +513,8 @@ export const Tournament: React.FC = () => {
             isProcessing={generating || resettingDraw || generatingRR}
             editMode={effEditMode}
             started={currentMatches.some((m) => m.status === 'complete')}
-            mergeMensSingles={mergeMensSingles}
-            mergeWomensSingles={mergeWomensSingles}
+            mensSkillMerge={mensSkillMerge}
+            womensSkillMerge={womensSkillMerge}
             consolidateDoubles={consolidateDoubles}
             currentDrawFormat={currentDrawFormat}
             onDownload={() => isRR && rrKnockoutMatches.length === 0
@@ -441,10 +523,24 @@ export const Tournament: React.FC = () => {
             onGenerateMatches={drawFormat === 'rr' ? () => setShowRRConfig(true) : handleGenerateAll}
             onCancelMatches={currentDrawFormat === 'rr' ? handleResetRR : handleResetDraw}
             onToggleEdit={() => setEditMode((v) => !v)}
-            onToggleMergeMens={() => setMergeMensSingles((v) => !v)}
-            onToggleMergeWomens={() => setMergeWomensSingles((v) => !v)}
+            onSetMensSkillMerge={setMensSkillMerge}
+            onSetWomensSkillMerge={setWomensSkillMerge}
             onToggleConsolidateDoubles={() => setConsolidateDoubles((v) => !v)}
+            zoneDrawsEnabled={zoneConfig.enabled}
+            onOpenZoneConfig={() => setShowZoneConfig(true)}
           />
+          {showZoneConfig && (
+            <ZoneDrawConfigPanel
+              config={zoneConfig}
+              participants={participants}
+              zoneMap={zoneMap}
+              zonesWithMatches={zonesWithMatches}
+              onMerge={handleMergeZone}
+              onUnmerge={handleUnmergeZone}
+              onSetEnabled={handleSetZoneDrawsEnabled}
+              onClose={() => setShowZoneConfig(false)}
+            />
+          )}
         </div>
       )}
 
@@ -455,7 +551,7 @@ export const Tournament: React.FC = () => {
           // organizer both confirm; bracket advancement is completely unaffected either way.
           const canConvert = !!ladder && !!profile &&
             scoreFormMatch.tournament_choice === 'Singles' &&
-            !!scoreFormMatch.player_1_user_id && !!scoreFormMatch.player_2_user_id;
+            !!scoreFormMatch.player_1_uid && !!scoreFormMatch.player_2_uid;
 
           const handleSubmitWithConversion = async (e: React.FormEvent<HTMLFormElement>) => {
             // Snapshot before handleSubmitScore clears the form state on success.
@@ -464,13 +560,13 @@ export const Tournament: React.FC = () => {
             const convert = alsoConvertToChallenge;
             await handleSubmitScore(e);
             if (!convert || !canConvert || !match || !form?.winnerUserId || !ladder || !user) return;
-            const isP1Winner = form.winnerUserId === match.player_1_user_id;
+            const isP1Winner = form.winnerUserId === match.player_1_uid;
             const winner = isP1Winner
-              ? { id: match.player_1_user_id, name: match.player_1_name }
-              : { id: match.player_2_user_id, name: match.player_2_name };
+              ? { id: match.player_1_uid, name: match.player_1_name }
+              : { id: match.player_2_uid, name: match.player_2_name };
             const other = isP1Winner
-              ? { id: match.player_2_user_id, name: match.player_2_name }
-              : { id: match.player_1_user_id, name: match.player_1_name };
+              ? { id: match.player_2_uid, name: match.player_2_name }
+              : { id: match.player_1_uid, name: match.player_1_name };
             const proposer = user.uid === winner.id ? winner : other;
             const scoreLine = form.sets
               .map((s) => ({ mine: Number(s.mine || 0), opponent: Number(s.opponent || 0) }))
@@ -494,8 +590,8 @@ export const Tournament: React.FC = () => {
             <ScoreModal
               matchInfo={{
                 title: scoreFormMatch.round,
-                player1: { uid: scoreFormMatch.player_1_user_id, name: scoreFormMatch.player_1_name },
-                player2: { uid: scoreFormMatch.player_2_user_id, name: scoreFormMatch.player_2_name },
+                player1: { uid: scoreFormMatch.player_1_uid, name: scoreFormMatch.player_1_name },
+                player2: { uid: scoreFormMatch.player_2_uid, name: scoreFormMatch.player_2_name },
               }}
               scoreForm={scoreForm}
               onChange={setScoreForm}
@@ -534,10 +630,10 @@ export const Tournament: React.FC = () => {
     : tabEvents;
 
   return (
-    <div className="max-w-xl mx-auto px-4 pb-20 pt-6">
+    <div>
       {/* Event picker — hamburger opens a sheet listing events, instead of an inline dropdown */}
       {dropdownEvents.length > 0 && (
-        <div className="mb-4 rounded-2xl border border-fg/10 bg-tennis-surface/40 px-4 py-2.5 flex items-center gap-3 max-w-xl">
+        <div className="mb-4 rounded-2xl bg-tennis-surface/40 px-4 py-2.5 flex items-center gap-3 max-w-xl">
           <button
             type="button"
             onClick={() => setShowEventSheet(true)}
@@ -551,7 +647,7 @@ export const Tournament: React.FC = () => {
           </div>
           {selectedMeta && (
             <span className={`shrink-0 text-[10px] font-bold rounded-full border px-2.5 py-1 whitespace-nowrap ${
-              pastMode ? 'text-fg/50 border-fg/20' : 'text-clay border-clay/50'
+              pastMode ? 'text-fg/70 border-fg/20' : 'text-clay border-clay/50'
             }`}>
               {pastMode ? 'Completed' : formatEventRange(selectedMeta) || 'Live'}
             </span>
@@ -576,7 +672,7 @@ export const Tournament: React.FC = () => {
                 >
                   <span className="text-sm font-semibold text-fg truncate">{e.title}</span>
                   {eventStatuses[e.id] === 'completed' && (
-                    <span className="shrink-0 text-[10px] font-bold text-fg/40">Completed</span>
+                    <span className="shrink-0 text-[10px] font-bold text-fg/70">Completed</span>
                   )}
                 </motion.button>
               ))}
@@ -591,7 +687,7 @@ export const Tournament: React.FC = () => {
         </div>
       ) : dropdownEvents.length === 0 ? (
         <div className="text-center py-16 space-y-4">
-          <p className="text-fg/50 text-sm">You're not in any current tournaments.</p>
+          <p className="text-fg/70 text-sm">You're not in any current tournaments.</p>
           <Link to="/events" className="inline-block">
             <span className="px-4 py-2 rounded-xl bg-clay text-white text-sm font-semibold hover:bg-clay/90 transition-colors">
               Join an active tournament
@@ -603,12 +699,12 @@ export const Tournament: React.FC = () => {
           <div className="w-10 h-10 border-4 border-clay border-t-transparent rounded-full animate-spin" />
         </div>
       ) : joinLocked ? (
-        <div className="rounded-3xl border border-fg/10 bg-tennis-surface/30 px-6 py-14 text-center space-y-3">
+        <div className="rounded-3xl bg-tennis-surface/30 px-6 py-14 text-center space-y-3">
           <div className="w-12 h-12 rounded-full bg-fg/5 flex items-center justify-center mx-auto">
-            <Lock className="w-5 h-5 text-fg/50" />
+            <Lock className="w-5 h-5 text-fg/70" />
           </div>
           <p className="text-sm font-bold text-fg">Join to view the live draw</p>
-          <p className="text-xs text-fg/50 max-w-xs mx-auto">
+          <p className="text-xs text-fg/70 max-w-xs mx-auto">
             {event?.title ? `You haven't joined "${event.title}" yet.` : "You haven't joined this tournament yet."} Join to see matches and scores as they happen.
           </p>
           <Link to="/events" className="inline-block pt-1">

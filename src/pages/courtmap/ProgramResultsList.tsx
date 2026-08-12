@@ -11,7 +11,8 @@ interface Props {
   userCoords: { lat: number; lng: number } | null;
 }
 
-export const ProgramResultsList: React.FC<Props> = ({ programs, totalPrograms, loading, userCoords }) => {
+// Memoized for the same reason as CourtResultsList — CourtMap re-renders on every keystroke.
+export const ProgramResultsList: React.FC<Props> = React.memo(({ programs, totalPrograms, loading, userCoords }) => {
   const today = useMemo(() => new Date(), []);
 
   if (loading) {
@@ -25,12 +26,12 @@ export const ProgramResultsList: React.FC<Props> = ({ programs, totalPrograms, l
   return (
     <>
       <div className="px-4 py-1.5 border-b border-fg/5">
-        <span className="text-fg/40 text-[11px]">
+        <span className="text-fg/70 text-[11px]">
           Showing {programs.length} of {totalPrograms} programs
         </span>
       </div>
       {programs.length === 0 ? (
-        <p className="text-fg/40 text-sm text-center py-8">No programs match the current filters.</p>
+        <p className="text-fg/70 text-sm text-center py-8">No programs match the current filters.</p>
       ) : (
         <div className="divide-y divide-white/5">
           {programs.map((p) => {
@@ -43,7 +44,7 @@ export const ProgramResultsList: React.FC<Props> = ({ programs, totalPrograms, l
                     <span className="text-clay font-medium text-xs shrink-0">{formatDist(p.distKm)}</span>
                   )}
                 </div>
-                <p className="text-fg/80 text-xs mb-1.5">{formatDateRange(p.dateRange)}</p>
+                <p className="text-fg text-xs mb-1.5">{formatDateRange(p.dateRange)}</p>
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     {status === 'ongoing'  && <Badge bg="#14532d" color="#86efac">ONGOING</Badge>}
@@ -65,4 +66,4 @@ export const ProgramResultsList: React.FC<Props> = ({ programs, totalPrograms, l
       )}
     </>
   );
-};
+});

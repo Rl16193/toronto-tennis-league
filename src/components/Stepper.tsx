@@ -20,7 +20,7 @@ export const Stepper: React.FC<{
       aria-label={`Decrease ${label}`}
       whileTap={value <= min ? undefined : tapScale.whileTap}
       transition={tapScale.transition}
-      className="w-10 h-10 flex items-center justify-center rounded-lg text-fg/60 hover:text-fg hover:bg-fg/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+      className="w-10 h-10 flex items-center justify-center rounded-lg text-fg/70 hover:text-fg hover:bg-fg/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
     >
       <Minus className="w-4 h-4" />
     </motion.button>
@@ -34,7 +34,7 @@ export const Stepper: React.FC<{
       aria-label={`Increase ${label}`}
       whileTap={value >= max ? undefined : tapScale.whileTap}
       transition={tapScale.transition}
-      className="w-10 h-10 flex items-center justify-center rounded-lg text-fg/60 hover:text-fg hover:bg-fg/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+      className="w-10 h-10 flex items-center justify-center rounded-lg text-fg/70 hover:text-fg hover:bg-fg/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
     >
       <Plus className="w-4 h-4" />
     </motion.button>

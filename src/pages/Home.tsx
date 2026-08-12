@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { MapPin, Camera } from 'lucide-react';
+import { InstagramLink } from '../components/InstagramLink';
 import { doc, getDoc } from 'firebase/firestore';
 
 import { db } from '../lib/firebase';
@@ -18,7 +19,7 @@ const SLIDESHOW_PATHS = [
   'gs://toronto-tennis-league.firebasestorage.app/LandingPage/1.png',
   'gs://toronto-tennis-league.firebasestorage.app/LandingPage/2.png',
   'gs://toronto-tennis-league.firebasestorage.app/LandingPage/3.png',
-  'gs://toronto-tennis-league.firebasestorage.app/LandingPage/4.png',
+  'gs://toronto-tennis-league.firebasestorage.app/LandingPage/26.png',
 ];
 
 const MotionLink = motion.create(Link);
@@ -31,6 +32,13 @@ function useCountUp(target: number, duration = 800) {
   const [display, setDisplay] = useState(0);
   const fromRef = useRef(0);
   useEffect(() => {
+    // Browsers pause rAF in a hidden tab, so animating there would leave the number stuck at 0
+    // until the tab is focused. Nothing is on screen to animate anyway — just land on the value.
+    if (document.hidden) {
+      fromRef.current = target;
+      setDisplay(target);
+      return;
+    }
     const from = fromRef.current;
     const start = performance.now();
     let frame: number;
@@ -38,12 +46,10 @@ function useCountUp(target: number, duration = 800) {
       const t = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
       const value = from + (target - from) * eased;
+      fromRef.current = value;
       setDisplay(value);
-      if (t < 1) {
-        frame = requestAnimationFrame(tick);
-      } else {
-        fromRef.current = target;
-      }
+      if (t < 1) frame = requestAnimationFrame(tick);
+      else fromRef.current = target;
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
@@ -53,7 +59,7 @@ function useCountUp(target: number, duration = 800) {
 
 // Cache resolved slideshow download URLs so repeat visits/refreshes skip the Storage round-trip
 // entirely and never show the /Logo.png fallback — only a first-ever visit pays that latency.
-const SLIDESHOW_CACHE_KEY = 'rs-home-slides-v1';
+const SLIDESHOW_CACHE_KEY = 'rs-home-slides-v2';
 const SLIDESHOW_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const readCachedSlides = (): string[] => {
   try {
@@ -112,15 +118,24 @@ export const Home: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    // A transient failure (cold connection, brief network blip on first load) used to leave the
+    // hardcoded COMMUNITY_BASELINE seed stuck on screen forever with no retry — visitors would
+    // see stale placeholder numbers until they happened to reload at the right moment. Retry with
+    // backoff instead of giving up after one attempt.
+    const load = async (attempt = 0) => {
       try {
         const summary = await getDoc(doc(db, 'site_stats', 'summary'));
-        if (cancelled || !summary.exists()) return;
+        if (cancelled) return;
+        if (!summary.exists()) return; // doc genuinely doesn't exist — not a transient failure
         const d = summary.data();
         if (typeof d.activePlayers === 'number') setActivePlayers(d.activePlayers);
         if (typeof d.matchesOrganized === 'number') setMatchesOrganized(d.matchesOrganized);
-      } catch { /* site_stats rule/doc not deployed yet — the baseline seed stays shown */ }
-    })();
+      } catch {
+        if (cancelled || attempt >= 4) return; // site_stats rule/doc not deployed — give up quietly
+        setTimeout(() => { if (!cancelled) load(attempt + 1); }, 1000 * 2 ** attempt);
+      }
+    };
+    load();
     return () => { cancelled = true; };
   }, []);
 
@@ -143,28 +158,24 @@ export const Home: React.FC = () => {
 
   return (
     <div className="max-w-xl mx-auto px-4 sm:px-6 pb-8">
-      {/* ── Hero — full-bleed within the page's own column (breaks out of the horizontal
-          padding only), starting below the header rather than behind it. ~70% viewport height,
-          tagline + description overlaid near the bottom. ── */}
+      {/* ── Hero — full-bleed to the viewport width (not just the page's own max-w-xl column),
+          so it has no side gaps in landscape/wide viewports, starting below the header rather
+          than behind it. ~70% viewport height, tagline + description overlaid near the bottom. ── */}
       <motion.div
         {...fadeUp}
-        className="relative -mx-4 sm:-mx-6 h-[70vh] overflow-hidden"
+        className="relative left-1/2 -ml-[50vw] w-screen h-[70vh] overflow-hidden"
       >
         <div className="absolute inset-0 dark-gradient" />
-        {slides.length > 0 ? (
-          slides.map((url, i) => (
-            <img
-              key={url}
-              src={url}
-              alt=""
-              className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-1000 ${
-                i === slideIndex ? 'opacity-100' : 'opacity-0'
-              }`}
-            />
-          ))
-        ) : (
-          <img src="/Logo.png" alt="" className="absolute inset-0 w-full h-full object-contain object-center p-10 opacity-25" />
-        )}
+        {slides.map((url, i) => (
+          <img
+            key={url}
+            src={url}
+            alt=""
+            className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-1000 ${
+              i === slideIndex ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+        ))}
         {/* Bottom-weighted gradient — keeps the overlaid tagline/description legible against any photo. */}
         <div className="absolute inset-0 bg-gradient-to-t from-tennis-dark/90 via-tennis-dark/20 to-transparent" />
 
@@ -173,15 +184,15 @@ export const Home: React.FC = () => {
             theme-aware fg token (white in dark, dark green in light). */}
         <div className="absolute inset-x-0 bottom-0 px-4 sm:px-6 pb-6 text-center">
           <h1 className="text-2xl sm:text-3xl font-black text-clay tracking-tight">L&apos;ŒUF FOR THE GAME</h1>
-          <p className="mt-2 text-sm text-fg/80 max-w-md mx-auto">
+          <p className="mt-2 text-sm text-fg max-w-md mx-auto">
             Toronto&apos;s home for free tennis events, public court and wait time insights. Join our movement to make tennis more accessible.
           </p>
         </div>
       </motion.div>
 
-      {/* ── Buttons — below the hero. Logged-out visitors see only Join or Log In (Check-In /
-          Submit a Report would be confusing before they have an account); signed-in users get
-          both, alternating clay/white. ── */}
+      {/* ── Buttons — below the hero. Logged-out visitors see only Join or Log In (Court / Report
+          would be confusing before they have an account); signed-in users get both, alternating
+          clay/white. ── */}
       <motion.div
         {...fadeUp}
         transition={{ ...fadeUp.transition, delay: 0.1 }}
@@ -194,10 +205,10 @@ export const Home: React.FC = () => {
         ) : (
           <>
             <Button size="md" variant="clay" className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2" onClick={onCheckIn}>
-              <MapPin className="w-3.5 h-3.5 mr-1 shrink-0" />Check-In
+              <MapPin className="w-3.5 h-3.5 mr-1 shrink-0" />Court
             </Button>
             <Button size="md" variant="white" className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2" onClick={onReport}>
-              <Camera className="w-3.5 h-3.5 mr-1 shrink-0" />Submit a Report
+              <Camera className="w-3.5 h-3.5 mr-1 shrink-0" />Report
             </Button>
           </>
         )}
@@ -220,10 +231,14 @@ export const Home: React.FC = () => {
             className="p-3 flex flex-col items-center text-center gap-1"
           >
             <span className="text-2xl font-black text-fg leading-none">{s.value}</span>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-fg/50">{s.label}</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-fg/70">{s.label}</span>
           </MotionLink>
         ))}
       </motion.div>
+
+      <div className="flex justify-center mt-5">
+        <InstagramLink className="text-xs font-bold text-fg/70" />
+      </div>
 
       {/* ── Check-In / Report modals ── */}
       {checkinStep === 'regular' && <CheckInModal onClose={() => setCheckinStep(null)} />}

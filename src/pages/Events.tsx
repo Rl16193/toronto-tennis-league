@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
 import { Fab } from '../components/Fab';
 import { SegmentedControl } from '../components/SegmentedControl';
-import { createEvent, DisplayEvent, EventFormState, INITIAL_EVENT_FORM, validateEventForm } from '../features/events/services/eventService';
+import { createEvent, updateEvent, formFromEvent, DisplayEvent, EventFormState, INITIAL_EVENT_FORM, validateEventForm } from '../features/events/services/eventService';
 import { useEvents } from '../features/events/hooks/useEvents';
 import { useJoin } from '../features/events/hooks/useJoin';
 import { EventCard, isLateRegistration } from '../features/events/components/EventCard';
@@ -36,11 +36,12 @@ export const Events: React.FC = () => {
   const [completedEvents, setCompletedEvents] = useState<CompletedEvent[]>([]);
   const [completedLoading, setCompletedLoading] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventForm, setEventForm] = useState<EventFormState>(INITIAL_EVENT_FORM);
   const [eventFormMessage, setEventFormMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [creatingEvent, setCreatingEvent] = useState(false);
 
-  useEffect(() => { document.title = 'Events — Racquets & Strings'; }, []);
+  useEffect(() => { document.title = 'Events · Racquets & Strings'; }, []);
 
   useEffect(() => {
     if (!eventFormMessage) return;
@@ -55,11 +56,11 @@ export const Events: React.FC = () => {
     setCompletedLoading(true);
     Promise.all([
       getDocs(collection(db, 'events')),
-      getDocs(query(collection(db, 'tournament_matches'), where('round', '==', 'F'), where('status', '==', 'complete'))),
+      getDocs(query(collection(db, 'matches'), where('round', '==', 'F'), where('status', '==', 'complete'))),
     ])
       .then(([eventsSnap, finalsSnap]) => {
         const completedIds = new Set(
-          finalsSnap.docs.filter((d) => d.data().winner_user_id).map((d) => d.data().event_id as string),
+          finalsSnap.docs.filter((d) => d.data().winner_uid).map((d) => d.data().event_id as string),
         );
         setCompletedEvents(
           eventsSnap.docs
@@ -95,16 +96,30 @@ export const Events: React.FC = () => {
     setCreatingEvent(true);
     setEventFormMessage(null);
     try {
-      const created = await createEvent(user.uid, eventForm, '');
-      setEvents((prev) => [...prev, created]);
+      if (editingEventId) {
+        const patch = await updateEvent(editingEventId, eventForm);
+        setEvents((prev) => prev.map((ev) => (ev.id === editingEventId ? { ...ev, ...patch } : ev)));
+        setEventFormMessage({ type: 'success', text: 'Event updated successfully.' });
+      } else {
+        const created = await createEvent(user.uid, eventForm, '');
+        setEvents((prev) => [...prev, created]);
+        setEventFormMessage({ type: 'success', text: 'Event added successfully.' });
+      }
       setEventForm(INITIAL_EVENT_FORM);
-      setEventFormMessage({ type: 'success', text: 'Event added successfully.' });
+      setEditingEventId(null);
       setShowEventForm(false);
     } catch {
-      setEventFormMessage({ type: 'error', text: 'Could not add the event. Please check creator permissions and try again.' });
+      setEventFormMessage({ type: 'error', text: `Could not ${editingEventId ? 'save' : 'add'} the event. Please check creator permissions and try again.` });
     } finally {
       setCreatingEvent(false);
     }
+  };
+
+  const handleEditEvent = (event: DisplayEvent) => {
+    setEventFormMessage(null);
+    setEventForm(formFromEvent(event));
+    setEditingEventId(event.id);
+    setShowEventForm(true);
   };
 
   return (
@@ -135,10 +150,10 @@ export const Events: React.FC = () => {
           </div>
         ) : categoryCompletedEvents.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-fg/50 text-sm">No completed events yet.</p>
+            <p className="text-fg/70 text-sm">No completed events yet.</p>
           </div>
         ) : (
-          <div className="rounded-3xl bg-tennis-surface/30 border border-fg/5 overflow-hidden divide-y divide-white/5 max-w-xl">
+          <div className="rounded-3xl bg-tennis-surface/30 overflow-hidden divide-y divide-white/5 max-w-xl">
             {categoryCompletedEvents.map((e) => (
               <Link
                 key={e.id}
@@ -151,12 +166,12 @@ export const Events: React.FC = () => {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-fg truncate">{e.title}</p>
                   {e.when && (
-                    <p className="text-[11px] text-fg/40">
+                    <p className="text-[11px] text-fg/70">
                       {e.when.toLocaleDateString('en-CA', { month: 'short', year: 'numeric' })}
                     </p>
                   )}
                 </div>
-                <ChevronRight className="w-4 h-4 text-fg/30 shrink-0" />
+                <ChevronRight className="w-4 h-4 text-fg/70 shrink-0" />
               </Link>
             ))}
           </div>
@@ -176,13 +191,14 @@ export const Events: React.FC = () => {
               authLoading={authLoading}
               isLoggedIn={!!user}
               onJoin={handleJoin}
+              onEdit={!!user && event.creator_id === user.uid ? handleEditEvent : undefined}
             />
           ))}
         </div>
       ) : (
         <div className="text-center py-16">
           <h3 className="text-xl font-bold text-fg">No upcoming events</h3>
-          <p className="text-fg/60 mt-1">Events will appear here when available.</p>
+          <p className="text-fg/70 mt-1">Events will appear here when available.</p>
         </div>
       )}
 
@@ -192,7 +208,8 @@ export const Events: React.FC = () => {
           ariaLabel="Add an event"
           onClick={() => {
             setEventFormMessage(null);
-            setEventForm((f) => ({ ...f, organizer: f.organizer || profile?.user.name || '' }));
+            setEditingEventId(null);
+            setEventForm(() => INITIAL_EVENT_FORM);
             setShowEventForm(true);
           }}
         >
@@ -229,8 +246,9 @@ export const Events: React.FC = () => {
             eventFormMessage={eventFormMessage}
             creatingEvent={creatingEvent}
             organizerPlaceholder={profile?.user.name || 'Organizer name'}
+            isEditing={!!editingEventId}
             onSubmit={handleCreateEvent}
-            onClose={() => setShowEventForm(false)}
+            onClose={() => { setShowEventForm(false); setEditingEventId(null); }}
           />
         )}
       </AnimatePresence>

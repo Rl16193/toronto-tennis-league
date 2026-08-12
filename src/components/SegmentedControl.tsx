@@ -11,7 +11,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, c
 }) {
   const layoutId = useId();
   return (
-    <div className={`flex bg-fg/5 border border-fg/10 rounded-xl p-1 ${className}`} role="tablist">
+    <div className={`flex bg-fg/5 rounded-xl p-1 ${className}`} role="tablist">
       {options.map((o) => {
         const active = o.value === value;
         return (

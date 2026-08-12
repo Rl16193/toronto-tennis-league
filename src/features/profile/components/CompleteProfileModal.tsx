@@ -38,7 +38,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
   return (
     <Sheet onClose={onClose} title="Complete Your Profile" maxWidthClassName="max-w-md">
       <div className="p-6 pt-2 space-y-6">
-        <p className="text-sm text-fg/60">
+        <p className="text-sm text-fg/70">
           Finish these 3 things so we can match you with the right players.
         </p>
 
@@ -46,7 +46,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
 
         <div className="space-y-3">
           <div className="flex justify-between items-end">
-            <p className="text-xs font-bold text-fg/50 uppercase tracking-widest">Skill Level</p>
+            <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Skill Level</p>
             <span className="text-2xl font-black text-clay">{skillLevel}</span>
           </div>
           <input
@@ -56,13 +56,13 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
             onChange={(e) => setSkillLevel(SELECTABLE_SKILL_LEVELS[Number(e.target.value)])}
             className="w-full h-3 rounded-full"
           />
-          <div className="flex justify-between text-[10px] text-fg/40">
+          <div className="flex justify-between text-[10px] text-fg/70">
             {SKILL_LEVEL_TIERS.map((t) => <span key={t.label}>{t.range} · {t.label}</span>)}
           </div>
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs font-bold text-fg/50 uppercase tracking-widest">League</p>
+          <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">League</p>
           <div className="flex gap-2">
             {(["Men's", "Women's"] as const).map((l) => (
               <button
@@ -84,7 +84,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
               onClick={() => setAgeCategory(ageCategory === 'Retired Pro' ? '' : 'Retired Pro')}
               className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
                 !league
-                  ? 'bg-fg/5 border-fg/5 text-fg/30 cursor-not-allowed'
+                  ? 'bg-fg/5 border-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
                   : ageCategory === 'Retired Pro'
                     ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
                     : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
@@ -98,7 +98,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
               onClick={() => setAgeCategory(ageCategory === 'Juniors' ? '' : 'Juniors')}
               className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
                 !league
-                  ? 'bg-fg/5 border-fg/5 text-fg/30 cursor-not-allowed'
+                  ? 'bg-fg/5 border-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
                   : ageCategory === 'Juniors'
                     ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
                     : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
@@ -108,12 +108,12 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
             </button>
           </div>
           {!league && (
-            <p className="text-[11px] text-fg/40">Choose a league above to unlock Retired Pro / Juniors.</p>
+            <p className="text-[11px] text-fg/70">Choose a league above to unlock Retired Pro / Juniors.</p>
           )}
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs font-bold text-fg/50 uppercase tracking-widest">Preferred Courts</p>
+          <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Preferred Courts</p>
           {courts.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {courts.map((c) => (
@@ -134,7 +134,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
             onChange={(e) => setCourtQuery(e.target.value)}
           />
           {suggestions.length > 0 && (
-            <div className="max-h-40 overflow-y-auto rounded-2xl border border-fg/10 bg-tennis-dark/95 p-2 shadow-2xl">
+            <div className="max-h-40 overflow-y-auto rounded-2xl bg-tennis-dark/95 p-2 shadow-2xl">
               {suggestions.map((court) => (
                 <button
                   key={court}

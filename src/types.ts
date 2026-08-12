@@ -1,6 +1,14 @@
-// Collection: users
-export interface UserData {
-  name: string;
+/**
+ * Collection: contacts — one doc per user, id = uid.
+ *
+ * Split out of `users` because that collection is world-readable (names and badges appear on
+ * public leaderboards and player cards), which meant a single unauthenticated getDocs returned
+ * every member's phone number and email address. `contacts` requires a signed-in caller.
+ *
+ * Field names deliberately match the old `users` shape so every consumer only had to change
+ * which collection it reads from.
+ */
+export interface ContactData {
   email: string;
   // Set only by the account-merge admin script when two signups (different emails) turn out to
   // be the same person — never surfaced or editable in any UI. Checked at the signup email gate
@@ -13,6 +21,19 @@ export interface UserData {
   // is true, or when the player hasn't set one (falls back to `phone`).
   whatsapp_contact?: string;
   whatsapp_same_as_phone?: boolean;
+  /**
+   * The member gave a working messaging number and is happy to be contacted on it — set when
+   * they tick "Same As WhatsApp Number" (their phone doubles as WhatsApp) or type a separate
+   * WhatsApp number. This is a CONSENT signal, not a visibility control: it decides whether the
+   * app offers a Contact button, not who is allowed to read this document.
+   */
+  contactable?: boolean;
+  updated_at?: string;
+}
+
+// Collection: users — publicly readable. Contact details live in `contacts`, never here.
+export interface UserData {
+  name: string;
   avatar?: string;
   bio?: string;
   // The league (gender + optional Retired Pro/Juniors suffix) lives on stats.league; this
@@ -36,6 +57,12 @@ export interface UserStats {
   league: string;
   pointswon: number;
   totalPointsPlayed: number;
+  // Denormalised onto stats by functions/rankSnapshot.js (weeklyRankSnapshot) so the profile and
+  // leaderboard can show a rank move without reading ranking_history. Optional: a player who has
+  // never been in a snapshot has none of them.
+  rankPosition?: number;
+  rankTrend?: 'up' | 'down' | 'same';
+  rankMove?: number;
 }
 
 // Collection: preferences
@@ -58,12 +85,17 @@ export interface UserPreferences {
   // `availability_day`/`availability_time` are left in place for existing data, unread by the
   // new UI.
   availability_tags?: string[];
+  // Rewards: a stringer is an ordinary account flagged here, with `stringer_id` naming the
+  // rewards-catalog entry they own. Same role-flag shape as `event_creator`. It only unlocks
+  // the "your shop" coupon list (mark used / flag) — never anything points-related.
+  stringer?: boolean;
+  stringer_id?: string;
 }
 
-// Collection: task_progress — self-serve community tasks (Tasks tab). Each completed task is
+// Collection: tasks — self-serve community tasks (Tasks tab). Each completed task is
 // worth a fixed number of points; the organizer may un-mark (revoke) a falsely-claimed task.
 export interface TaskProgress {
-  user_id: string;
+  uid: string;
   name: string;
   profileComplete?: boolean;
   followSocial?: boolean;
@@ -83,7 +115,6 @@ export interface TaskProgress {
   // Milestone tiers from the task catalogue are stored as `true` under their tier id
   // (play5, chal10, streak5, …) — see taskCatalog.ts. Stored counters for the things the app
   // can't derive from other collections live alongside them.
-  climbSpots?: number;
   suggestions?: number;
   courtsVisited?: number;
   zoneComplete?: number;
@@ -102,11 +133,25 @@ export interface TaskProgress {
 }
 
 // Combined for convenience in app
+/**
+ * A member's public profile merged with their contact details, keyed by uid.
+ *
+ * The two live in separate collections (`users` is public, `contacts` needs a sign-in), but most
+ * screens want a name AND a way to reach someone in the same breath — the tournament draw, the
+ * opponent panels, the marketplace. Fetch both and merge into this rather than threading two
+ * parallel maps through every component. Contact fields are optional: a signed-out viewer, or a
+ * member whose contacts doc hasn't been backfilled, simply has none.
+ */
+export type MemberInfo = UserData & Partial<ContactData>;
+
 export interface UserProfile {
   id: string;
   user: UserData;
   stats: UserStats;
   preferences: UserPreferences;
+  // Own contact details. Falls back to an empty record for legacy accounts whose contacts doc
+  // hasn't been backfilled yet — a missing contacts doc must never lock a member out.
+  contacts: ContactData;
 }
 
 export interface TennisEvent {
@@ -136,11 +181,24 @@ export interface TennisEvent {
   // One-off per-event override: hides the Men's/Women's Retired Pro draw tabs on this event only —
   // the Retired Pro option (drawConfigs.ts) otherwise applies to every Singles tournament.
   hide_seniors?: boolean;
+  // Same one-off per-event override, for the Men's/Women's Beginners draw tabs.
+  hide_beginners?: boolean;
+  // Splits Singles draws by zone (see src/utils/zones.ts's ZONE_NAMES), skill nesting inside each
+  // zone. Zones are ALWAYS on now — `enabled` is legacy and ignored by `resolveZoneConfig`, and an
+  // absent config just means "the standard seven zones, nothing merged".
+  zone_draw_config?: {
+    enabled: boolean;
+    buckets: { id: string; label: string; zones: string[] }[];
+    includeUnassigned: boolean;
+    reallocatedAt?: string;
+    /** sourceBucketId → targetBucketId. A merged source produces no draws of its own. */
+    merges?: Record<string, string>;
+  };
 }
 
 export interface EventParticipant {
   id: string;
-  user_id: string;
+  uid: string;
   user_name?: string;
   event_id: string;
   event_name?: string;
@@ -148,10 +206,35 @@ export interface EventParticipant {
   division?: "Men's" | "Women's" | 'Mixed Doubles';
   doubles?: string;
   partner_in_app?: 'yes' | 'no' | '';
+  partner_uid?: string;
   skill?: number;
   // 'Retired Pro' opts the player into the age-based Retired Pro (55+) draw; absent means normal
   // skill-derived routing (Challengers/Masters).
   skill_group?: 'Retired Pro';
   dateselected?: string[];
   created_at: string;
+  // Player asked to move zone. `req_zone_change` is the flag, `new_zone` the zone they picked —
+  // the request now carries a target instead of just "something's wrong".
+  req_zone_change?: boolean;
+  new_zone?: string;
+  // Legacy flag. Still written alongside `req_zone_change` because the DEPLOYED Cloud Function
+  // (functions/notifications.js) triggers the organizer notification off this field. Drop it once
+  // that function is redeployed to watch `req_zone_change`.
+  zone_change_requested?: boolean;
+  zone_change_requested_at?: string;
+  // Soft delete. The organizer removed this player from the draw, but the row stays so we can
+  // still see who backed out. Absent/false means active. Removed players are skipped when
+  // building draws; their already-played matches and earned stats are untouched.
+  removal?: boolean;
+  removal_at?: string;
+  // Organizer pinned this player to a specific zone bucket, overriding the one derived from their
+  // preferred courts. Set when honouring a zone-change request, or to balance a full bracket.
+  // Because it's stored here rather than derived, changing preferred courts later can't move them.
+  zone_override?: string;
+  // Stamped when this player's zone was merged into another for the event. The routing itself is
+  // driven by the event's zone config (so late joiners are merged automatically); these are the
+  // per-player audit trail, and are cleared on unmerge. Kept separate from `new_zone`, which is
+  // the zone the PLAYER requested — a merge must not overwrite a pending request.
+  merged_zone?: boolean;
+  merged_into?: string;
 }

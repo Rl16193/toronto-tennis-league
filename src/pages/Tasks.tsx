@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Camera, ChevronRight, ExternalLink, Instagram, ListChecks, Mail, MapPin, MessageCircle, Sparkles } from 'lucide-react';
+import { Camera, ChevronRight, ExternalLink, Gift, Mail, MapPin, MessageCircle } from 'lucide-react';
+import { InstagramLink } from '../components/InstagramLink';
 import { motion } from 'motion/react';
 import { fadeUp, staggerDelay } from '../lib/motion';
+import { MIN_REWARD_COST, useRedeemablePoints } from '../features/services/useServices';
 import { Button } from '../components/Button';
 import { Accordion } from '../components/Accordion';
 import { useAuth } from '../context/AuthContext';
 import {
   CATEGORIES, COMMUNITY_GROUP_TASKS, DAILY_GROUP_TASKS, INSTAGRAM_URL, SETUP_POINTS, TASKS,
-  TOTAL_AVAILABLE, UNLOCKED_TASK_IDS, WHATSAPP_URL,
+  UNLOCKED_TASK_IDS, WHATSAPP_URL,
   categoryTotal, type CategoryDef, type GroupTaskDef, type TaskId, setTaskDone, useTasks,
 } from '../features/tasks/useTasks';
 import { CheckInModal } from '../features/tasks/CheckInModal';
@@ -16,6 +18,8 @@ import { PhotoSubmitModal } from '../features/tasks/PhotoSubmitModal';
 import { ClaimModal } from '../features/tasks/ClaimModal';
 import { ReviewQueue } from '../features/tasks/ReviewQueue';
 import type { ClaimType } from '../features/tasks/claimService';
+import { Toast } from '../components/Toast';
+import { useBadgeToast } from '../features/tasks/useBadgeToast';
 
 // Tasks tab — the Community Member Initiation checklist plus every task category.
 // Each section is a dropdown; tasks award themselves as the underlying counters grow.
@@ -26,9 +30,16 @@ export const Tasks: React.FC = () => {
   const [saving, setSaving] = useState<TaskId | null>(null);
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  // Called before the early returns below — hooks can't sit behind a conditional.
+  const { balance: redeemable } = useRedeemablePoints();
+  const { toast: badgeToast, dismissToast } = useBadgeToast(progress, counters, progressLoaded);
 
-  useEffect(() => { document.title = 'Tasks — Racquets & Strings'; }, []);
+  useEffect(() => { document.title = 'Tasks · Racquets & Strings'; }, []);
 
+  const claimableRewards = Math.floor(Math.max(0, redeemable) / MIN_REWARD_COST);
+  // Tournament points live on the stats doc as leaguePoints26 — the same field the Leaderboard
+  // ranks on (see features/leagues/useStandings.ts), so the two surfaces can't disagree.
+  const tournamentPoints = profile?.stats?.leaguePoints26 ?? 0;
   const isOrganizer = profile?.preferences.event_creator === true;
   const clearParams = () => setSearchParams({}, { replace: true });
 
@@ -43,10 +54,7 @@ export const Tasks: React.FC = () => {
   if (!progressLoaded) {
     return (
       <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
-        <div className="flex items-center gap-2 mb-5">
-          <ListChecks className="w-6 h-6 text-clay" />
-          <h1 className="text-2xl md:text-3xl font-display font-bold text-fg">Tasks</h1>
-        </div>
+        <h1 className="sr-only">Tasks</h1>
         <div className="h-24 bg-tennis-surface/30 rounded-3xl animate-pulse mb-6" />
         <div className="h-64 bg-tennis-surface/30 rounded-3xl animate-pulse" />
       </div>
@@ -89,10 +97,10 @@ export const Tasks: React.FC = () => {
         {...sectionProps(c.id)}
         right={
           c.locked ? (
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-fg/30 border border-fg/10">Soon</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-fg/70">Soon</span>
           ) : (
-            <span className="text-xs font-bold text-fg/40">
-              {earnedPoints}<span className="text-fg/25">/{categoryTotal(c)} pts</span>
+            <span className="text-xs font-bold text-fg/70">
+              {earnedPoints}<span className="text-fg/70">/{categoryTotal(c)} pts</span>
             </span>
           )
         }
@@ -109,15 +117,15 @@ export const Tasks: React.FC = () => {
                 className={`w-4 h-4 shrink-0 accent-clay ${c.locked ? 'opacity-25' : done ? '' : 'opacity-60'}`}
                 aria-label={t.title}
               />
-              <span className={`text-sm flex-1 min-w-0 ${c.locked ? 'text-fg/30' : done ? 'text-fg/50' : 'text-fg'}`}>
+              <span className={`text-sm flex-1 min-w-0 ${c.locked ? 'text-fg/70' : done ? 'text-fg/70' : 'text-fg'}`}>
                 {t.title}
               </span>
               {!done && !c.locked && have > 0 && (
-                <span className="text-[11px] text-fg/40 shrink-0">{have}/{t.need}</span>
+                <span className="text-[11px] text-fg/70 shrink-0">{have}/{t.need}</span>
               )}
-              <span className={`text-xs font-bold shrink-0 ${done ? 'text-clay' : 'text-fg/30'}`}>{t.points}</span>
+              <span className={`text-xs font-bold shrink-0 ${done ? 'text-clay' : 'text-fg/70'}`}>{t.points}</span>
               {!done && !c.locked && c.to && (
-                <Link to={c.to} className="text-fg/30 hover:text-clay transition-colors shrink-0" aria-label={`Go to ${t.title}`}>
+                <Link to={c.to} className="text-fg/70 hover:text-clay transition-colors shrink-0" aria-label={`Go to ${t.title}`}>
                   <ChevronRight className="w-4 h-4" />
                 </Link>
               )}
@@ -143,7 +151,7 @@ export const Tasks: React.FC = () => {
             <span className="text-sm font-bold text-fg">{g.name}</span>
             <span className="text-xs font-bold text-clay shrink-0">{g.points}</span>
           </div>
-          <p className="text-xs text-fg/50 mt-1 leading-relaxed">{g.trigger}</p>
+          <p className="text-xs text-fg/70 mt-1 leading-relaxed">{g.trigger}</p>
         </div>
       ))}
     </Accordion>
@@ -151,46 +159,40 @@ export const Tasks: React.FC = () => {
 
   return (
     <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
-      <div className="flex items-center gap-2 mb-5">
-        <ListChecks className="w-6 h-6 text-clay" />
-        <h1 className="text-2xl md:text-3xl font-display font-bold text-fg">Tasks</h1>
-      </div>
+      <h1 className="sr-only">Tasks</h1>
 
       {isOrganizer && <ReviewQueue defaultOpen={reviewOpen} />}
 
-      {/* Completion bar — at-a-glance progress (wireframe 1k) */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between text-[11px] font-bold text-fg/40 mb-1.5">
-          <span>{points} / {TOTAL_AVAILABLE} pts</span>
-          <span>{Math.round((points / TOTAL_AVAILABLE) * 100)}%</span>
-        </div>
-        <div className="h-1.5 rounded-full bg-fg/10 overflow-hidden">
-          <div
-            className="h-full rounded-full bg-clay transition-all duration-500"
-            style={{ width: `${Math.min(100, (points / TOTAL_AVAILABLE) * 100)}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Points summary */}
-      <motion.div {...fadeUp} className="rounded-3xl bg-tennis-surface/30 border border-fg/5 p-5 mb-6 flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-clay/15 border border-clay/30 flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-clay" />
-          </div>
-          <div>
+      {/* Points summary — three headline metrics replacing the old progress bar. The bar tracked
+          one number toward a moving threshold; these state where you actually stand. Buttons are
+          unconditional now, since the "Rewards Available" count already conveys whether there's
+          anything to redeem. */}
+      <motion.div {...fadeUp} className="rounded-3xl bg-tennis-surface/30 p-5 mb-6">
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          <div className="text-center">
             <p className="text-2xl font-black text-clay leading-none">
-              {points}<span className="text-sm text-fg/30 font-bold"> / {TOTAL_AVAILABLE}</span>
+              {points}
             </p>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-fg/40 mt-1">RS Points</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mt-1">RS Points</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-black text-fg leading-none">{tournamentPoints}</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mt-1">League Points</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-black text-fg leading-none">{claimableRewards}</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mt-1">Rewards</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center justify-center gap-2 flex-wrap">
           <Link to="/tasks?checkin=1">
-            <Button variant="outline" size="sm"><MapPin className="w-4 h-4 mr-1.5" />Check In</Button>
+            <Button variant="outline" size="sm"><MapPin className="w-4 h-4 mr-1.5" />Court</Button>
+          </Link>
+          <Link to="/marketplace">
+            <Button variant="clay" size="sm"><Gift className="w-4 h-4 mr-1.5" />Redeem</Button>
           </Link>
           <Link to="/tasks?photo=1">
-            <Button variant="clay" size="sm"><Camera className="w-4 h-4 mr-1.5" />Submit a Report</Button>
+            <Button variant="white" size="sm"><Camera className="w-4 h-4 mr-1.5" />Report</Button>
           </Link>
         </div>
       </motion.div>
@@ -209,7 +211,7 @@ export const Tasks: React.FC = () => {
               +{SETUP_POINTS} pts
             </span>
           ) : (
-            <span className="text-xs font-bold text-fg/40">{doneUnlocked}/{UNLOCKED_TASK_IDS.length}</span>
+            <span className="text-xs font-bold text-fg/70">{doneUnlocked}/{UNLOCKED_TASK_IDS.length}</span>
           )}
         >
           {TASKS.map((t) => {
@@ -225,11 +227,11 @@ export const Tasks: React.FC = () => {
                   className={`w-4 h-4 shrink-0 accent-clay ${trust ? 'cursor-pointer' : ''} ${t.locked ? 'opacity-25' : done ? '' : 'opacity-60'}`}
                   aria-label={t.title}
                 />
-                <span className={`text-sm flex-1 min-w-0 ${t.locked ? 'text-fg/30' : done ? 'text-fg/50' : 'text-fg'}`}>
+                <span className={`text-sm flex-1 min-w-0 ${t.locked ? 'text-fg/70' : done ? 'text-fg/70' : 'text-fg'}`}>
                   {t.title}
                 </span>
                 {t.locked ? (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-fg/30 border border-fg/10 shrink-0">
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-fg/70 shrink-0">
                     Soon
                   </span>
                 ) : t.link ? (
@@ -238,7 +240,7 @@ export const Tasks: React.FC = () => {
                     <ExternalLink className="w-4 h-4" />
                   </a>
                 ) : t.to && !done ? (
-                  <Link to={t.to} className="text-fg/30 hover:text-clay transition-colors shrink-0" aria-label={`Go to ${t.title}`}>
+                  <Link to={t.to} className="text-fg/70 hover:text-clay transition-colors shrink-0" aria-label={`Go to ${t.title}`}>
                     <ChevronRight className="w-4 h-4" />
                   </Link>
                 ) : null}
@@ -256,10 +258,8 @@ export const Tasks: React.FC = () => {
 
       {/* Socials, WhatsApp and contact links. */}
       <div className="pt-6 mt-2">
-        <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-fg/50">
-          <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-clay transition-colors">
-            <Instagram className="w-3.5 h-3.5" /> Instagram
-          </a>
+        <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-fg/70">
+          <InstagramLink />
           <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:text-clay transition-colors">
             <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
           </a>
@@ -272,6 +272,8 @@ export const Tasks: React.FC = () => {
       {checkinOpen && <CheckInModal onClose={clearParams} />}
       {photoOpen && <PhotoSubmitModal onClose={clearParams} />}
       {claimType && <ClaimModal type={claimType} onClose={clearParams} />}
+
+      <Toast message={badgeToast} onDismiss={dismissToast} />
     </div>
   );
 };

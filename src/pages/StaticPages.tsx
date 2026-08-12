@@ -3,14 +3,14 @@ import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import {
   Shield, FileText, Mail, MessageSquare,
-  UserPlus, CalendarPlus, MessageCircle, Handshake, ArrowLeft, Instagram,
+  UserPlus, CalendarPlus, MessageCircle, Handshake, ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { InstagramLink } from '../components/InstagramLink';
+import { WHATSAPP_URL } from '../features/tasks/useTasks';
 
-const WHATSAPP_URL = 'https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX';
-const INSTAGRAM_URL = 'https://www.instagram.com/racqnstringstoronto';
 
-const PageWrapper: React.FC<{ title?: string; icon?: any; children: React.ReactNode }> = ({ title, icon: Icon, children }) => {
+const PageWrapper: React.FC<{ title?: string; icon?: any; boxed?: boolean; children: React.ReactNode }> = ({ title, icon: Icon, boxed = true, children }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   return (
@@ -23,7 +23,7 @@ const PageWrapper: React.FC<{ title?: string; icon?: any; children: React.ReactN
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-fg/60 hover:text-fg transition-colors"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-fg/70 hover:text-fg transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />Back
         </button>
@@ -39,16 +39,18 @@ const PageWrapper: React.FC<{ title?: string; icon?: any; children: React.ReactN
             <div className="h-1.5 w-24 clay-gradient mx-auto rounded-full" />
           </div>
         )}
-        <div className="bg-tennis-surface/30 border border-fg/5 p-10 md:p-16 rounded-[3rem] shadow-2xl prose prose-invert prose-clay max-w-none">
-          {children}
-        </div>
+        {boxed ? (
+          <div className="bg-tennis-surface/30 p-10 md:p-16 rounded-[3rem] shadow-2xl prose prose-invert prose-clay max-w-none">
+            {children}
+          </div>
+        ) : (
+          <div className="prose prose-invert prose-clay max-w-none">{children}</div>
+        )}
 
         <div className="flex items-center justify-center gap-6 text-sm font-semibold">
-          <Link to={user ? '/profile' : '/login'} className="text-fg/60 hover:text-clay transition-colors">Profile</Link>
-          <span className="text-fg/20">·</span>
-          <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-fg/60 hover:text-clay transition-colors">
-            <Instagram className="w-4 h-4" />@racqnstringstoronto
-          </a>
+          <Link to={user ? '/profile' : '/login'} className="text-fg/70 hover:text-clay transition-colors">Profile</Link>
+          <span className="text-fg/70">·</span>
+          <InstagramLink className="text-fg/70" />
         </div>
       </motion.div>
     </div>
@@ -96,10 +98,10 @@ export const HowItWorks: React.FC = () => <Navigate to="/about" replace />;
 export const About: React.FC = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = React.useState(ABOUT_TABS[0].id);
-  React.useEffect(() => { document.title = 'About Us — Racquets & Strings'; }, []);
+  React.useEffect(() => { document.title = 'About Us · Racquets & Strings'; }, []);
   const tab = ABOUT_TABS.find((t) => t.id === activeTab)!;
   return (
-    <PageWrapper>
+    <PageWrapper boxed={false}>
       <div className="space-y-10">
         <div className="not-prose">
           <div className="flex flex-col gap-2 mb-4">
@@ -117,7 +119,7 @@ export const About: React.FC = () => {
             ))}
           </div>
 
-          <div className="p-5 rounded-2xl bg-fg/5 border border-fg/10">
+          <div className="p-5 rounded-2xl bg-fg/5">
             {tab.id === 'intro' ? (
               <div className="mb-4 text-center">
                 <span className="text-lg font-black font-display tracking-tight">
@@ -128,7 +130,7 @@ export const About: React.FC = () => {
             ) : (
               <img src={tab.image!} alt={tab.label} className="w-full h-40 object-cover rounded-xl mb-4" />
             )}
-            <p className="text-fg/80 text-sm leading-relaxed text-justify">{tab.body}</p>
+            <p className="text-fg text-sm leading-relaxed text-justify">{tab.body}</p>
           </div>
         </div>
 
@@ -142,13 +144,13 @@ export const About: React.FC = () => {
                     <div className="w-10 h-10 rounded-xl bg-clay/15 border border-clay/30 flex items-center justify-center shrink-0">
                       <step.icon className="w-5 h-5 text-clay" />
                     </div>
-                    <span className="text-fg/30 font-black text-lg">{i + 1}</span>
+                    <span className="text-fg/70 font-black text-lg">{i + 1}</span>
                   </div>
                   <h3 className="text-fg font-bold mb-1.5">{step.title}</h3>
-                  <p className="text-fg/60 text-sm leading-relaxed">{step.desc}</p>
+                  <p className="text-fg/70 text-sm leading-relaxed">{step.desc}</p>
                 </>
               );
-              const cls = 'p-5 rounded-2xl bg-fg/5 border border-fg/10 h-full block';
+              const cls = 'p-5 rounded-2xl bg-fg/5 h-full block';
               // Members-only links (e.g. WhatsApp community) render as a plain, non-clickable
               // card for logged-out visitors — no link is exposed until they're signed in.
               return step.href && user ? (
@@ -298,17 +300,15 @@ export const Contact: React.FC = () => (
         </p>
       </section>
       <section className="grid grid-cols-1 gap-4">
-        <div className="rounded-[2rem] border border-fg/5 bg-fg/5 p-6">
-          <p className="text-xs font-bold uppercase tracking-widest text-fg/50 mb-2">Email</p>
+        <div className="rounded-[2rem] bg-fg/5 p-6">
+          <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-2">Email</p>
           <a href="mailto:events.racquetsandstrings@gmail.com" className="text-clay font-bold hover:underline break-all">
             events.racquetsandstrings@gmail.com
           </a>
         </div>
-        <div className="rounded-[2rem] border border-fg/5 bg-fg/5 p-6">
-          <p className="text-xs font-bold uppercase tracking-widest text-fg/50 mb-2">Instagram</p>
-          <a href="https://www.instagram.com/racqnstringstoronto?igsh=MTQ0eXA1bXZpbXltaQ==" target="_blank" rel="noopener noreferrer" className="text-clay font-bold hover:underline">
-            @racqnstringstoronto
-          </a>
+        <div className="rounded-[2rem] bg-fg/5 p-6">
+          <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-2">Instagram</p>
+          <InstagramLink className="text-clay font-bold" />
         </div>
       </section>
     </div>

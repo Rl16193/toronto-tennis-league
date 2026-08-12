@@ -1,12 +1,14 @@
-import React, { useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '../../../components/Button';
 import { Sheet } from '../../../components/Sheet';
+import { MemberSearchInput, type MemberPick } from '../../members/MemberSearchInput';
+import { useAuth } from '../../../context/AuthContext';
 import { DisplayEvent } from '../services/eventService';
 import { isTournamentEvent } from '../../../utils/eventTypes';
 import { JoinFormState, SlotResult } from '../types';
+import { DOUBLES_DIVISIONS } from '../../../pages/tournament/types';
 
 const SINGLES_DIVISIONS = ["Men's", "Women's"] as const;
-const DOUBLES_DIVISIONS = ["Men's", "Women's", 'Mixed Doubles'] as const;
 
 type Props = {
   event: DisplayEvent;
@@ -37,29 +39,38 @@ export const JoinEventSheet: React.FC<Props> = ({
   slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed,
   joining, onSubmitJoin, onClose,
 }) => {
+  const { user } = useAuth();
+  const currentUserId = user?.uid;
   const isTournament = isTournamentEvent(event);
   const fixedChoice = event.tournament_choice; // set on new events; undefined on old events
-  const displayChoice = fixedChoice ?? joinForm.tournamentChoice;
+
+  // ONE source of truth. This used to be `fixedChoice ?? joinForm.tournamentChoice` for display
+  // while validation and the Firestore write both read `joinForm.tournamentChoice`, reconciled
+  // only by an effect that wrote back a stale copy of the form — and the parent resets that same
+  // form to Singles on every event change. When the two drifted apart a player filled in a
+  // Doubles-looking form and Singles was saved, with the partner-name check (keyed on the other
+  // value) never firing. That's how four Zephyr Open Doubles signups ended up invisible.
+  // `useJoin` now seeds the form from the event, and the submit path re-derives it from the
+  // event too, so a locked event cannot save the wrong format.
+  const displayChoice = joinForm.tournamentChoice;
   const divisions = displayChoice === 'Doubles' ? DOUBLES_DIVISIONS : SINGLES_DIVISIONS;
 
-  // Events with a locked format must submit under it — the form state resets to Singles when
-  // the sheet opens, so sync it to the event's fixed choice.
-  useEffect(() => {
-    if (fixedChoice && joinForm.tournamentChoice !== fixedChoice) {
-      setJoinForm({ ...joinForm, tournamentChoice: fixedChoice, division: '', seniors: false });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fixedChoice, joinForm.tournamentChoice]);
+  // The picked partner. Only the name and "is a member" reach Firestore (`doubles` /
+  // `partner_in_app`), so the member id is transient and lives here rather than in joinForm.
+  // The sheet remounts per event alongside the form reset, so the two can't drift.
+  const [partnerPick, setPartnerPick] = useState<MemberPick | null>(null);
 
+  // No visible title — the event name already reads on the card behind this sheet. ariaLabel keeps
+  // the dialog named for screen readers now that no heading is drawn.
   return (
-    <Sheet onClose={onClose} title={`Join — ${event.title}`} maxWidthClassName="max-w-md">
+    <Sheet onClose={onClose} ariaLabel={`Join ${event.title}`} maxWidthClassName="max-w-md">
       <div className="p-6 pt-3 space-y-4">
         {isTournament ? (
           <>
             {/* Format — only for old events without a locked tournament_choice */}
             {!fixedChoice && (
               <div>
-                <p className="text-xs font-bold text-fg/50 uppercase tracking-widest mb-2">Format</p>
+                <p className="text-xs font-bold text-fg/70 uppercase tracking-widest mb-2">Format</p>
                 <div className="flex gap-2">
                   {(['Singles', 'Doubles'] as const).map((choice) => (
                     <button
@@ -77,7 +88,7 @@ export const JoinEventSheet: React.FC<Props> = ({
 
             {/* Division */}
             <div>
-              <p className="text-xs font-bold text-fg/50 uppercase tracking-widest mb-2">Division</p>
+              <p className="text-xs font-bold text-fg/70 uppercase tracking-widest mb-2">Division</p>
               <div className="flex flex-wrap gap-2">
                 {divisions.map((div) => (
                   <button
@@ -104,7 +115,7 @@ export const JoinEventSheet: React.FC<Props> = ({
               >
                 <span>
                   <span className="block text-sm font-bold text-fg">Join the Retired Pro draw (55+)</span>
-                  <span className="block text-xs text-fg/50 mt-0.5">Play in the age-based Retired Pro group instead of skill routing.</span>
+                  <span className="block text-xs text-fg/70 mt-0.5">Play in the age-based Retired Pro group instead of skill routing.</span>
                 </span>
                 <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${
                   joinForm.seniors ? 'bg-clay border-clay text-white text-xs' : 'border-fg/20'
@@ -117,39 +128,36 @@ export const JoinEventSheet: React.FC<Props> = ({
             {/* Doubles-only fields */}
             {displayChoice === 'Doubles' && (
               <>
+                {/* Autosearch instead of free text. A doubles team is only recognised when both
+                    partners name each other exactly (deduplicateDoublesTeams), so a typo here
+                    silently leaves two half-teams. Picking from the roster also answers "is your
+                    partner in the app?" by itself, so that manual Yes/No question is gone. */}
+                <MemberSearchInput
+                  label="Partner"
+                  value={partnerPick}
+                  onChange={(pick) => {
+                    setPartnerPick(pick);
+                    setJoinForm({
+                      ...joinForm,
+                      partnerName: pick?.name ?? '',
+                      partnerInApp: pick && pick.memberId ? 'yes' : 'no',
+                      partnerUid: pick?.memberId ?? '',
+                    });
+                  }}
+                  excludeId={currentUserId}
+                  allowGuest
+                  placeholder="Search for your partner…"
+                  hint="Not on the app yet? Type their full name and pick “not on the app”."
+                />
                 <div>
-                  <p className="text-xs font-bold text-fg/50 uppercase tracking-widest mb-2">Partner Name</p>
-                  <input
-                    value={joinForm.partnerName}
-                    onChange={(e) => setJoinForm({ ...joinForm, partnerName: e.target.value })}
-                    placeholder="Full name"
-                    className="w-full rounded-xl bg-tennis-dark/70 border border-fg/10 px-3 py-2.5 text-sm text-fg outline-none focus:border-clay"
-                  />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-fg/50 uppercase tracking-widest mb-2">Partner in app?</p>
-                  <div className="flex gap-2">
-                    {(['yes', 'no'] as const).map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        onClick={() => setJoinForm({ ...joinForm, partnerInApp: v })}
-                        className={`flex-1 ${chip(joinForm.partnerInApp === v)}`}
-                      >
-                        {v === 'yes' ? 'Yes' : 'No'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-fg/50 uppercase tracking-widest mb-2">Combined Skill (1–5)</p>
+                  <p className="text-xs font-bold text-fg/70 uppercase tracking-widest mb-2">Combined Skill (1–5)</p>
                   <input
                     type="number"
                     min={1} max={5} step={0.5}
                     value={joinForm.combinedSkill}
                     onChange={(e) => setJoinForm({ ...joinForm, combinedSkill: e.target.value })}
                     placeholder="e.g. 3.5"
-                    className="w-full rounded-xl bg-tennis-dark/70 border border-fg/10 px-3 py-2.5 text-sm text-fg outline-none focus:border-clay"
+                    className="border border-fg/25 w-full rounded-xl bg-tennis-dark/70 px-3 py-2.5 text-sm text-fg outline-none focus:border-clay"
                   />
                 </div>
               </>
@@ -157,7 +165,7 @@ export const JoinEventSheet: React.FC<Props> = ({
 
             {isLate && (
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300">
-                <p className="font-semibold">Late registration — limited spots remaining.</p>
+                <p className="font-semibold">Late registration. Limited spots remaining.</p>
                 <p className="mt-0.5 text-amber-300/70">You'll be placed directly into an open draw slot.</p>
               </div>
             )}

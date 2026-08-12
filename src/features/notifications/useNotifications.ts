@@ -31,7 +31,7 @@ export type NotificationType =
 
 export interface AppNotification {
   id: string;
-  recipient_id: string;
+  uid: string;
   type: NotificationType | string;
   title: string;
   body?: string;
@@ -85,7 +85,7 @@ export function useNotifications() {
     // Single-field filter + ordering on created_at needs a composite index; the feed is small,
     // so we sort client-side instead and keep the query index-free.
     return onSnapshot(
-      query(collection(db, 'notifications'), where('recipient_id', '==', user.uid), limit(100)),
+      query(collection(db, 'notifications'), where('uid', '==', user.uid), limit(100)),
       (snap) => {
         const all = snap.docs.map((d) => normalize({ id: d.id, ...d.data() } as AppNotification));
 

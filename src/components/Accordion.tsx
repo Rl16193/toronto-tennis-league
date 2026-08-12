@@ -32,10 +32,10 @@ export const Accordion: React.FC<{
       className="w-full flex items-center justify-between gap-3 text-left"
       aria-expanded={open}
     >
-      <h2 className={`${titleClassName} ${locked ? 'text-fg/40' : 'text-fg'}`}>{title}</h2>
+      <h2 className={`${titleClassName} ${locked ? 'text-fg/70' : 'text-fg'}`}>{title}</h2>
       <span className="flex items-center gap-2 shrink-0">
         {right}
-        <ChevronDown className={`w-4 h-4 text-fg/40 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 text-fg/70 transition-transform ${open ? 'rotate-180' : ''}`} />
       </span>
     </button>
     <AnimatePresence initial={false}>

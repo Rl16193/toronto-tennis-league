@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { logEvent } from 'firebase/analytics';
 import { MotionConfig } from 'motion/react';
@@ -6,31 +6,28 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { analyticsPromise } from './lib/firebase';
 import { Layout } from './components/Layout';
+import { lazyWithRetry } from './lib/lazyWithRetry';
 
 // Route-level code splitting: each page loads as its own chunk on demand,
 // so the initial bundle stays small (faster first paint, esp. in-app browsers).
-const Home = lazy(() => import('./pages/Home').then((m) => ({ default: m.Home })));
-const Signup = lazy(() => import('./pages/Signup').then((m) => ({ default: m.Signup })));
-const Events = lazy(() => import('./pages/Events').then((m) => ({ default: m.Events })));
-const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })));
-const PlayerProfile = lazy(() => import('./pages/PlayerProfile').then((m) => ({ default: m.PlayerProfile })));
-const Leagues = lazy(() => import('./pages/Leagues').then((m) => ({ default: m.Leagues })));
-const Tasks = lazy(() => import('./pages/Tasks').then((m) => ({ default: m.Tasks })));
-const CourtMap = lazy(() => import('./pages/CourtMap').then((m) => ({ default: m.CourtMap })));
-const History = lazy(() => import('./pages/History').then((m) => ({ default: m.History })));
-const Matches = lazy(() => import('./pages/Matches').then((m) => ({ default: m.Matches })));
-const Notifications = lazy(() => import('./pages/Notifications').then((m) => ({ default: m.Notifications })));
-const About = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.About })));
-const HowItWorks = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.HowItWorks })));
-const Terms = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Terms })));
-const Privacy = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Privacy })));
-const Contact = lazy(() => import('./pages/StaticPages').then((m) => ({ default: m.Contact })));
+const Home = lazyWithRetry(() => import('./pages/Home').then((m) => ({ default: m.Home })), 'Home');
+const Signup = lazyWithRetry(() => import('./pages/Signup').then((m) => ({ default: m.Signup })), 'Signup');
+const Events = lazyWithRetry(() => import('./pages/Events').then((m) => ({ default: m.Events })), 'Events');
+const Profile = lazyWithRetry(() => import('./pages/Profile').then((m) => ({ default: m.Profile })), 'Profile');
+const PlayerProfile = lazyWithRetry(() => import('./pages/PlayerProfile').then((m) => ({ default: m.PlayerProfile })), 'PlayerProfile');
+const Leagues = lazyWithRetry(() => import('./pages/Leagues').then((m) => ({ default: m.Leagues })), 'Leagues');
+const Tasks = lazyWithRetry(() => import('./pages/Tasks').then((m) => ({ default: m.Tasks })), 'Tasks');
+const CourtMap = lazyWithRetry(() => import('./pages/CourtMap').then((m) => ({ default: m.CourtMap })), 'CourtMap');
+const History = lazyWithRetry(() => import('./pages/History').then((m) => ({ default: m.History })), 'History');
+const Matches = lazyWithRetry(() => import('./pages/Matches').then((m) => ({ default: m.Matches })), 'Matches');
+const Notifications = lazyWithRetry(() => import('./pages/Notifications').then((m) => ({ default: m.Notifications })), 'Notifications');
+const Marketplace = lazyWithRetry(() => import('./pages/Marketplace').then((m) => ({ default: m.Marketplace })), 'Marketplace');
+const About = lazyWithRetry(() => import('./pages/StaticPages').then((m) => ({ default: m.About })), 'About');
+const HowItWorks = lazyWithRetry(() => import('./pages/StaticPages').then((m) => ({ default: m.HowItWorks })), 'HowItWorks');
+const Terms = lazyWithRetry(() => import('./pages/StaticPages').then((m) => ({ default: m.Terms })), 'Terms');
+const Privacy = lazyWithRetry(() => import('./pages/StaticPages').then((m) => ({ default: m.Privacy })), 'Privacy');
+const Contact = lazyWithRetry(() => import('./pages/StaticPages').then((m) => ({ default: m.Contact })), 'Contact');
 
-const RouteFallback: React.FC = () => (
-  <div className="min-h-[60vh] flex items-center justify-center">
-    <div className="w-14 h-14 border-4 border-clay border-t-transparent rounded-full animate-spin" />
-  </div>
-);
 
 const ScrollToTop: React.FC = () => {
   const location = useLocation();
@@ -90,8 +87,9 @@ export default function App() {
       <AuthProvider>
         <Router>
           <ScrollToTop />
+          {/* Suspense now lives inside Layout, outside the route-keyed <main> — see the comment
+              there. Keeping it here meant it remounted on every navigation. */}
           <Layout>
-            <Suspense fallback={<RouteFallback />}>
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Signup />} />
@@ -106,6 +104,9 @@ export default function App() {
                 <Route path="/friendlies" element={<Navigate to="/matches" replace />} />
                 <Route path="/challenges" element={<Navigate to="/matches" replace />} />
                 <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
+                {/* Open to logged-out visitors so the offers are browsable before signing up —
+                    their offers balance reads 0, so nothing can actually be redeemed. */}
+                <Route path="/marketplace" element={<Marketplace />} />
                 <Route path="/players/:userId" element={<PrivateRoute><PlayerProfile /></PrivateRoute>} />
                 <Route path="/courts" element={<CourtMap />} />
                 <Route path="/about" element={<About />} />
@@ -115,7 +116,6 @@ export default function App() {
                 <Route path="/contact" element={<Contact />} />
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
-            </Suspense>
           </Layout>
         </Router>
       </AuthProvider>

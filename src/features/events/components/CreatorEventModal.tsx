@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { Button } from '../../../components/Button';
 import { Sheet } from '../../../components/Sheet';
 import {
@@ -15,9 +15,45 @@ type Props = {
   eventFormMessage: FormMessage;
   creatingEvent: boolean;
   organizerPlaceholder: string;
+  isEditing?: boolean;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
 };
+
+// Compact field chrome: smaller labels, tighter inputs, and short fields paired two-across so
+// the whole form fits in roughly one phone screen instead of eleven stacked full-width rows.
+const fieldCls =
+  'w-full rounded-xl bg-tennis-dark/70 px-3.5 py-2.5 text-sm text-fg ' +
+  'placeholder-fg/30 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
+const labelCls = 'block text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-1.5';
+const req = <span className="text-clay">*</span>;
+
+const Toggle: React.FC<{
+  label: string;
+  options: readonly { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}> = ({ label, options, value, onChange }) => (
+  <div>
+    <span className={labelCls}>{label}</span>
+    <div className="flex gap-2">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-colors ${
+            value === o.value
+              ? 'bg-clay text-white border-clay'
+              : 'bg-tennis-dark/70 text-fg/70 border-fg/10 hover:border-fg/30'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  </div>
+);
 
 export const CreatorEventModal: React.FC<Props> = ({
   eventForm,
@@ -25,185 +61,112 @@ export const CreatorEventModal: React.FC<Props> = ({
   eventFormMessage,
   creatingEvent,
   organizerPlaceholder,
+  isEditing,
   onSubmit,
   onClose,
-}) => (
-  <Sheet maxWidthClassName="max-w-4xl" onClose={onClose}>
-    <form onSubmit={onSubmit} className="p-6 md:p-8">
-      <div className="mb-6 pr-12">
-        <h2 className="text-3xl font-display font-black text-fg">Add an Event</h2>
-      </div>
+}) => {
+  const set = (patch: Partial<EventFormState>) => setEventForm({ ...eventForm, ...patch });
+  const isTournament = eventForm.type === 'Tournament';
 
-      {eventFormMessage && (
-        <div className={`mb-5 rounded-2xl border p-4 text-sm font-semibold ${
-          eventFormMessage.type === 'success'
-            ? 'border-green-500/20 bg-green-500/10 text-green-300'
-            : 'border-red-500/20 bg-red-500/10 text-red-300'
-        }`}>
-          {eventFormMessage.text}
+  return (
+    <Sheet maxWidthClassName="max-w-md" onClose={onClose} title={isEditing ? 'Edit Event' : 'Add an Event'}>
+      <form onSubmit={onSubmit} className="p-5 pt-2 space-y-3.5">
+        {eventFormMessage && (
+          <div className={`rounded-xl border px-4 py-2.5 text-sm font-semibold ${
+            eventFormMessage.type === 'success'
+              ? 'border-green-500/20 bg-green-500/10 text-green-300'
+              : 'border-red-500/20 bg-red-500/10 text-red-300'
+          }`}>
+            {eventFormMessage.text}
+          </div>
+        )}
+
+        <div>
+          <label className={labelCls} htmlFor="ev-title">Title {req}</label>
+          <input id="ev-title" value={eventForm.title} onChange={(e) => set({ title: e.target.value })}
+            className={fieldCls} placeholder="Spring Ladder Tournament" />
         </div>
-      )}
 
-      <div className="grid grid-cols-1 gap-5">
-        <label className="space-y-2">
-          <span className="block text-sm font-medium text-fg">Title <span className="text-orange-500">*</span></span>
-          <input
-            value={eventForm.title}
-            onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
-            placeholder="Spring Ladder Tournament"
-          />
-        </label>
+        {/* Type and Skill are both short selects — pairing them saves a row. */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls} htmlFor="ev-type">Type {req}</label>
+            <select id="ev-type" value={eventForm.type} onChange={(e) => set({ type: e.target.value })} className={fieldCls}>
+              {EVENT_TYPE_OPTIONS.map((type) => <option key={type} value={type}>{type}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="ev-skill">Skill level</label>
+            <select id="ev-skill" value={eventForm.skillLevel} onChange={(e) => set({ skillLevel: e.target.value })} className={fieldCls}>
+              {EVENT_SKILL_OPTIONS.map((skill) => <option key={skill} value={skill}>{skill}</option>)}
+            </select>
+          </div>
+        </div>
 
-        <label className="space-y-2">
-          <span className="block text-sm font-medium text-fg">Type <span className="text-orange-500">*</span></span>
-          <select
-            value={eventForm.type}
-            onChange={(e) => setEventForm({ ...eventForm, type: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
-          >
-            {EVENT_TYPE_OPTIONS.map((type) => (
-              <option key={type} value={type}>{type}</option>
-            ))}
-          </select>
-        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls} htmlFor="ev-loc">Location</label>
+            <input id="ev-loc" value={eventForm.location} onChange={(e) => set({ location: e.target.value })}
+              className={fieldCls} placeholder="High Park" />
+          </div>
+        </div>
 
-        <label className="space-y-2">
-          <span className="block text-sm font-medium text-fg">Location</span>
-          <input
-            value={eventForm.location}
-            onChange={(e) => setEventForm({ ...eventForm, location: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
-            placeholder="High Park"
-          />
-        </label>
+        {/* The three dates sit together — a native date input is narrow enough to pair. */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls} htmlFor="ev-start">Start date {req}</label>
+            <input id="ev-start" type="date" value={eventForm.startDate}
+              onChange={(e) => set({ startDate: e.target.value })} className={fieldCls} />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="ev-end">End date {req}</label>
+            <input id="ev-end" type="date" value={eventForm.endDate}
+              onChange={(e) => set({ endDate: e.target.value })} className={fieldCls} />
+          </div>
+        </div>
 
-        <label className="space-y-2">
-          <span className="block text-sm font-medium text-fg">Organizer <span className="text-orange-500">*</span></span>
-          <input
-            value={eventForm.organizer}
-            onChange={(e) => setEventForm({ ...eventForm, organizer: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
-            placeholder={organizerPlaceholder}
-          />
-        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls} htmlFor="ev-join">Join by</label>
+            <input id="ev-join" type="date" value={eventForm.joinLastDate}
+              onChange={(e) => set({ joinLastDate: e.target.value })} className={fieldCls} />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="ev-time">Time</label>
+            <input id="ev-time" value={eventForm.time} onChange={(e) => set({ time: e.target.value })}
+              className={fieldCls} placeholder="10:00 AM - 2:00 PM" />
+          </div>
+        </div>
 
-        <label className="space-y-2">
-          <span className="block text-sm font-medium text-fg">Start Date <span className="text-orange-500">*</span></span>
-          <input
-            type="date"
-            value={eventForm.startDate}
-            onChange={(e) => setEventForm({ ...eventForm, startDate: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
-          />
-        </label>
-
-        <label className="space-y-2">
-          <span className="block text-sm font-medium text-fg">End Date <span className="text-orange-500">*</span></span>
-          <input
-            type="date"
-            value={eventForm.endDate}
-            onChange={(e) => setEventForm({ ...eventForm, endDate: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
-          />
-        </label>
-
-        <label className="space-y-2">
-          <span className="block text-sm font-medium text-fg">Join Last Date <span className="text-fg/50 font-normal">(Optional)</span></span>
-          <input
-            type="date"
-            value={eventForm.joinLastDate}
-            onChange={(e) => setEventForm({ ...eventForm, joinLastDate: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
-          />
-        </label>
-
-        <label className="space-y-2">
-          <span className="block text-sm font-medium text-fg">Time</span>
-          <input
-            value={eventForm.time}
-            onChange={(e) => setEventForm({ ...eventForm, time: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
-            placeholder="10:00 AM - 2:00 PM"
-          />
-        </label>
-
-        <label className="space-y-2">
-          <span className="block text-sm font-medium text-fg">Skill Level</span>
-          <select
-            value={eventForm.skillLevel}
-            onChange={(e) => setEventForm({ ...eventForm, skillLevel: e.target.value })}
-            className="w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
-          >
-            {EVENT_SKILL_OPTIONS.map((skill) => (
-              <option key={skill} value={skill}>{skill}</option>
-            ))}
-          </select>
-        </label>
-
-        {eventForm.type === 'Tournament' && (
-          <div className="space-y-2">
-            <span className="block text-sm font-medium text-fg">Format</span>
-            <div className="flex gap-2">
-              {(['knockout', 'rr'] as const).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setEventForm({ ...eventForm, tournamentFormat: f })}
-                  className={`flex-1 py-3 rounded-2xl text-sm font-semibold border transition-colors ${
-                    eventForm.tournamentFormat === f
-                      ? 'bg-clay text-white border-clay'
-                      : 'bg-tennis-dark/70 text-fg/60 border-fg/10 hover:border-fg/30'
-                  }`}
-                >
-                  {f === 'knockout' ? 'Knockout' : 'Round Robin'}
-                </button>
-              ))}
-            </div>
+        {isTournament && (
+          <div className="grid grid-cols-2 gap-3">
+            <Toggle
+              label="Format"
+              options={[{ value: 'knockout', label: 'Knockout' }, { value: 'rr', label: 'Round Robin' }]}
+              value={eventForm.tournamentFormat}
+              onChange={(v) => set({ tournamentFormat: v as EventFormState['tournamentFormat'] })}
+            />
+            <Toggle
+              label="Participants"
+              options={[{ value: 'Singles', label: 'Singles' }, { value: 'Doubles', label: 'Doubles' }]}
+              value={eventForm.tournamentChoice}
+              onChange={(v) => set({ tournamentChoice: v as EventFormState['tournamentChoice'] })}
+            />
           </div>
         )}
 
-        {eventForm.type === 'Tournament' && (
-          <div className="space-y-2">
-            <span className="block text-sm font-medium text-fg">Participant Type</span>
-            <div className="flex gap-2">
-              {(['Singles', 'Doubles'] as const).map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setEventForm({ ...eventForm, tournamentChoice: c })}
-                  className={`flex-1 py-3 rounded-2xl text-sm font-semibold border transition-colors ${
-                    eventForm.tournamentChoice === c
-                      ? 'bg-clay text-white border-clay'
-                      : 'bg-tennis-dark/70 text-fg/60 border-fg/10 hover:border-fg/30'
-                  }`}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        <div>
+          <label className={labelCls} htmlFor="ev-about">About {req}</label>
+          <textarea id="ev-about" value={eventForm.about} onChange={(e) => set({ about: e.target.value })}
+            rows={3} className={fieldCls}
+            placeholder="Format, expectations, and anything players should know." />
+        </div>
 
-        <label className="space-y-2 md:col-span-2">
-          <span className="block text-sm font-medium text-fg">About <span className="text-orange-500">*</span></span>
-          <textarea
-            value={eventForm.about}
-            onChange={(e) => setEventForm({ ...eventForm, about: e.target.value })}
-            className="min-h-32 w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-4 py-3 text-fg outline-none focus:border-clay"
-            placeholder="Describe the event format, expectations, and anything players should know."
-          />
-        </label>
-      </div>
-
-      <div className="mt-6 flex flex-col sm:flex-row sm:justify-end gap-3">
-        <Button type="button" variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button type="submit" isLoading={creatingEvent}>
-          Add Event
-        </Button>
-      </div>
-    </form>
-  </Sheet>
-);
+        <div className="flex gap-3 pt-1">
+          <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+          <Button type="submit" variant="clay" isLoading={creatingEvent} className="flex-1">{isEditing ? 'Save' : 'Add Event'}</Button>
+        </div>
+      </form>
+    </Sheet>
+  );
+};

@@ -49,14 +49,14 @@ export const RRConfigModal: React.FC<Props> = ({
         )}
 
         {/* Player count */}
-        <p className="text-sm text-fg/60">
+        <p className="text-sm text-fg/70">
           <span className="font-bold text-fg">{playerCount}</span> players registered
         </p>
 
         {/* How groups + knockout are formed (sizes are automatic — see the preview on the page) */}
         {playerCount >= 3 ? (
-          <div className="rounded-xl border border-fg/10 bg-fg/5 p-3 space-y-1.5 text-sm">
-            <p className="text-fg/50 text-xs font-bold uppercase tracking-widest mb-1">How it works</p>
+          <div className="rounded-xl bg-fg/5 p-3 space-y-1.5 text-sm">
+            <p className="text-fg/70 text-xs font-bold uppercase tracking-widest mb-1">How it works</p>
             <p className="text-fg/70">
               Groups are formed automatically by <span className="text-fg">skill band</span> and{' '}
               <span className="text-fg">preferred-court zone</span>, in balanced groups of 3–5.
@@ -65,7 +65,7 @@ export const RRConfigModal: React.FC<Props> = ({
               Every group winner advances to the knockout, then the best runners-up fill up to the next
               4 / 8 / 16-player bracket.
             </p>
-            <p className="text-fg/40 text-xs pt-1">The exact groups are shown in the preview on the page.</p>
+            <p className="text-fg/70 text-xs pt-1">The exact groups are shown in the preview on the page.</p>
           </div>
         ) : (
           <p className="text-sm text-red-400">Need at least 3 registered players to generate a group draw.</p>

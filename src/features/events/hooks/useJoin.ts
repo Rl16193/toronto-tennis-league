@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addDoc, collection, getDocs, query, updateDoc, doc, where } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, getDocs, query, updateDoc, doc, where } from 'firebase/firestore';
 import { db, analyticsPromise } from '../../../lib/firebase';
 import { logEvent } from 'firebase/analytics';
 import { TennisEvent } from '../../../types';
 import { TournamentMatch } from '../../../pages/tournament/types';
-import { BYE, PLAYER_LOADING, parseDateValue } from '../../../pages/tournament/utils';
+import { BYE, PLAYER_LOADING, parseDateValue, zoneBucketFor } from '../../../pages/tournament/utils';
 import { isTournamentEvent, isSeasonOpener, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
 import { isSeniorsLeague } from '../../../utils/skillLevels';
 import { DisplayEvent } from '../services/eventService';
@@ -12,7 +12,13 @@ import { INITIAL_JOIN_FORM, JoinFormState, SlotResult } from '../types';
 
 interface Params {
   user: { uid: string; email: string | null } | null;
-  profile: { user: { name: string }; stats: { skill_level: number; league?: string } } | null;
+  // `preferences.preferred_zone` decides which zone's bracket a late joiner may be seated into
+  // once an event has zones enabled.
+  profile: {
+    user: { name: string };
+    stats: { skill_level: number; league?: string };
+    preferences?: { preferred_zone?: string };
+  } | null;
   hasJoinedRegularEvent: (id: string) => boolean;
   hasJoinedTournamentChoice: (id: string, choice: 'Singles' | 'Doubles') => boolean;
   hasJoinedAnyTournament: () => boolean;
@@ -35,7 +41,14 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
   // only when selectedEvent becomes null) prevents the previous event's division/matches from
   // ever being used to compute slotStatus or get submitted against the newly selected event.
   useEffect(() => {
-    setJoinForm(INITIAL_JOIN_FORM);
+    // Seed the format from the event rather than always starting at Singles. An event with a
+    // locked `tournament_choice` has exactly one valid format, and the sheet no longer offers a
+    // choice for those — starting at Singles and correcting it later from inside the sheet is
+    // what let a Doubles registration get saved as Singles.
+    setJoinForm({
+      ...INITIAL_JOIN_FORM,
+      tournamentChoice: selectedEvent?.tournament_choice ?? INITIAL_JOIN_FORM.tournamentChoice,
+    });
     setJoinError('');
     setTournamentMatches([]);
 
@@ -43,7 +56,7 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
 
     let cancelled = false;
     setLoadingMatches(true);
-    getDocs(query(collection(db, 'tournament_matches'), where('event_id', '==', selectedEvent.id)))
+    getDocs(query(collection(db, 'matches'), where('event_id', '==', selectedEvent.id), where('category', 'in', ['singles', 'doubles'])))
       .then((snap) => {
         if (cancelled) return;
         setTournamentMatches(snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentMatch)));
@@ -70,6 +83,13 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
 
     const isOpenSlot = (name: string) => name === PLAYER_LOADING || name === BYE;
 
+    // With zones on, a late joiner may only take a slot in THEIR zone's bracket — the whole point
+    // of splitting by zone is that you don't get sent across the city. Zones off: no restriction.
+    const zoneCfg = selectedEvent.zone_draw_config;
+    const myZone = zoneCfg?.enabled
+      ? zoneBucketFor(profile?.preferences?.preferred_zone, zoneCfg)
+      : undefined;
+
     // Match a draw slot — `div` is what the user selected; also accept 'All' in Firestore
     // (consolidated/merged draws store division as 'All' rather than the specific gender).
     const findSlot = (tc: string, div: string, group: string) => {
@@ -77,6 +97,7 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
         if (m.tournament_choice !== tc) continue;
         if (m.division !== div && m.division !== 'All') continue;
         if (m.skill_group !== group) continue;
+        if (myZone && (m.zone ?? undefined) !== myZone) continue;
         if (isOpenSlot(m.player_1_name)) return { match: m, slot: 'player_1' as const };
         if (isOpenSlot(m.player_2_name)) return { match: m, slot: 'player_2' as const };
       }
@@ -132,8 +153,12 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
     // tournament event's slotStatus/matches before they've actually loaded for THIS event.
     if (isTournamentEvent(selectedEvent) && loadingMatches) return;
 
-    if (hasJoinedTournamentChoice(selectedEvent.id, joinForm.tournamentChoice)) {
-      setJoinError(`You are already registered for ${joinForm.tournamentChoice.toLowerCase()} in this event.`);
+    // The event's locked format always wins over whatever is in form state. Only an event with
+    // no `tournament_choice` (older events) lets the player pick, and only those show the chips.
+    const choice = selectedEvent.tournament_choice ?? joinForm.tournamentChoice;
+
+    if (hasJoinedTournamentChoice(selectedEvent.id, choice)) {
+      setJoinError(`You are already registered for ${choice.toLowerCase()} in this event.`);
       return;
     }
 
@@ -152,7 +177,7 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
       setJoining(true);
       try {
         await addDoc(collection(db, 'event_participants'), {
-          user_id: user.uid, user_name: participantName,
+          uid: user.uid, user_name: participantName,
           event_id: selectedEvent.id, event_name: selectedEvent.title,
           tournament_choice: '', doubles: '', partner_in_app: '',
           skill: Number(profile?.stats.skill_level || 0), dateselected: [],
@@ -166,18 +191,21 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
     }
 
     if (!joinForm.division) { setJoinError('Please select a division.'); return; }
-    if (joinForm.tournamentChoice === 'Singles' && joinForm.division === 'Mixed Doubles') { setJoinError('Mixed Doubles is locked for singles.'); return; }
+    if (choice === 'Singles' && joinForm.division === 'Mixed Doubles') { setJoinError('Mixed Doubles is locked for singles.'); return; }
     // Retired Pro draw is gated on the player's League selection (Profile → League).
     if (joinForm.seniors && !isSeniorsLeague(profile?.stats.league)) {
       setJoinError('The Retired Pro draw is for players in the Retired Pro league. Set it on your profile first.');
       return;
     }
-    if (joinForm.tournamentChoice === 'Doubles') {
+    // Keyed on `choice`, not form state — this check silently never ran for the registrations
+    // that were saved as Singles despite the player filling in a Doubles form, which is why they
+    // all have an empty partner field.
+    if (choice === 'Doubles') {
       if (!joinForm.partnerName.trim()) { setJoinError('Please enter your partner name for doubles.'); return; }
       if (joinForm.partnerName.trim().length < 3 || joinForm.partnerName.length > 80) { setJoinError('Partner name must be 3–80 characters.'); return; }
       if (/\d/.test(joinForm.partnerName)) { setJoinError('Partner name cannot contain numbers.'); return; }
     }
-    if (slotStatus?.status === 'full') { setJoinError(`The ${joinForm.tournamentChoice === 'Doubles' ? 'Doubles' : `${joinForm.division} Singles`} draw is full.`); return; }
+    if (slotStatus?.status === 'full') { setJoinError('No empty spots left.'); return; }
     if (slotStatus?.status === 'fallback' && !slotFallbackConfirmed) { setJoinError('Please confirm the draw assignment above.'); return; }
 
     setJoining(true);
@@ -194,13 +222,14 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
       })();
 
       await addDoc(collection(db, 'event_participants'), {
-        user_id: user.uid, user_name: participantName,
+        uid: user.uid, user_name: participantName,
         event_id: selectedEvent.id, event_name: selectedEvent.title,
-        tournament_choice: joinForm.tournamentChoice, division: joinForm.division,
-        ...(joinForm.tournamentChoice === 'Singles' && joinForm.seniors ? { skill_group: 'Retired Pro' } : {}),
-        doubles: joinForm.tournamentChoice === 'Doubles' ? joinForm.partnerName.trim() : '',
-        partner_in_app: joinForm.tournamentChoice === 'Doubles' ? (joinForm.partnerInApp || 'no') : '',
-        skill: slotStatus?.skillOverride ?? (joinForm.tournamentChoice === 'Singles' ? Number(profile?.stats.skill_level || 0) : Number(joinForm.combinedSkill || 3)),
+        tournament_choice: choice, division: joinForm.division,
+        ...(choice === 'Singles' && joinForm.seniors ? { skill_group: 'Retired Pro' } : {}),
+        doubles: choice === 'Doubles' ? joinForm.partnerName.trim() : '',
+        partner_in_app: choice === 'Doubles' ? (joinForm.partnerInApp || 'no') : '',
+        partner_uid: choice === 'Doubles' ? joinForm.partnerUid : '',
+        skill: slotStatus?.skillOverride ?? (choice === 'Singles' ? Number(profile?.stats.skill_level || 0) : Number(joinForm.combinedSkill || 3)),
         dateselected, created_at: new Date().toISOString(),
       });
       trackJoin();
@@ -210,13 +239,16 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
       // them via the draw — the registration above has already succeeded.
       if (slotStatus?.match && slotStatus.slot) {
         try {
-          await updateDoc(doc(db, 'tournament_matches', slotStatus.match.id), {
+          await updateDoc(doc(db, 'matches', slotStatus.match.id), {
             [`${slotStatus.slot}_name`]: participantName,
-            [`${slotStatus.slot}_user_id`]: user.uid,
-            [`${slotStatus.slot}_contact`]: user.email || '',
+            [`${slotStatus.slot}_uid`]: user.uid,
           });
-        } catch {
-          /* player not permitted to seat themselves; organizer will place them */
+        } catch (err) {
+          // Expected for ordinary players (organizer-only by rules) — but it also fires when an
+          // ORGANIZER joins their own event and the write genuinely fails, in which case they'd
+          // be told they joined while their slot stayed empty. Log it so that case is
+          // diagnosable rather than invisible; the registration itself already succeeded.
+          console.warn('Could not seat player into draw slot; organizer will place them.', err);
         }
       }
       setSelectedEvent(null);

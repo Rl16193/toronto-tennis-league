@@ -10,13 +10,12 @@
 export const SETUP_POINTS = 25;
 
 // Counters are computed from real data (matches, challenges) or stored on the player's
-// task_progress doc (things the app can't derive yet, like courts visited).
+// tasks doc (things the app can't derive yet, like courts visited).
 export type CounterKey =
   | 'matchesPlayed'      // completed matches with real set scores (walkovers excluded)
   | 'challengesPlayed'   // confirmed ladder challenges, either side
   | 'challengesWon'      // confirmed ladder challenges won
   | 'bestStreak'         // longest run of wins ever
-  | 'climbSpots'         // places climbed via ladder challenges this season
   | 'monthsActive'       // distinct months with a completed match
   | 'suggestions'        // court improvement suggestions submitted
   | 'courtsVisited'      // passport stamps
@@ -30,7 +29,7 @@ export type CounterKey =
 export type Counters = Record<CounterKey, number>;
 
 export const EMPTY_COUNTERS: Counters = {
-  matchesPlayed: 0, challengesPlayed: 0, challengesWon: 0, bestStreak: 0, climbSpots: 0,
+  matchesPlayed: 0, challengesPlayed: 0, challengesWon: 0, bestStreak: 0,
   monthsActive: 0, suggestions: 0, courtsVisited: 0, zoneComplete: 0, boardPhotos: 0,
   queueUpdates: 0, volunteerEvents: 0, invites: 0, meetups: 0,
 };
@@ -76,9 +75,6 @@ export const CATEGORIES: CategoryDef[] = [
       { id: 'win5', title: 'Win 5 challenges', points: 15, counter: 'challengesWon', need: 5 },
       { id: 'win10', title: 'Win 10 challenges', points: 25, counter: 'challengesWon', need: 10 },
       { id: 'win20', title: 'Win 20 challenges', points: 40, counter: 'challengesWon', need: 20 },
-      { id: 'climb10', title: 'Climb 10 spots', points: 10, counter: 'climbSpots', need: 10 },
-      { id: 'climb20', title: 'Climb 20 spots', points: 20, counter: 'climbSpots', need: 20 },
-      { id: 'climb50', title: 'Climb 50 spots', points: 50, counter: 'climbSpots', need: 50 },
     ],
   },
   {
@@ -112,8 +108,8 @@ export const CATEGORIES: CategoryDef[] = [
     ],
   },
   {
-    id: 'traveller',
-    title: 'Traveller',
+    id: 'traveler',
+    title: 'Traveler',
     to: '/tasks?checkin=1',
     tiers: [
       { id: 'visit1', title: 'Visit 1 court', points: 5, counter: 'courtsVisited', need: 1 },
@@ -236,7 +232,8 @@ export const ALL_TIERS: TierDef[] = CATEGORIES.flatMap((c) => c.tiers);
 export const TIER_POINTS: Record<string, number> = Object.fromEntries(ALL_TIERS.map((t) => [t.id, t.points]));
 
 export const categoryTotal = (c: CategoryDef): number => c.tiers.reduce((n, t) => n + t.points, 0);
-// 1,050 = every tier + the Initiation's flat award.
+// 970 = every tier + the Initiation's flat award. (Was 1,050 before the three "Climb N spots"
+// tiers were removed — nothing ever flipped their flags, so those 80 points were unreachable.)
 export const TOTAL_AVAILABLE = CATEGORIES.reduce((n, c) => n + categoryTotal(c), 0) + SETUP_POINTS;
 
 // Badge grouping: "playing tasks" spans the three match-based categories.

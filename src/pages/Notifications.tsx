@@ -1,17 +1,20 @@
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bell } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Bell, ChevronRight, Gift } from 'lucide-react';
 import { motion } from 'motion/react';
 import { fadeUp, staggerDelay, tapScale } from '../lib/motion';
 import { AppNotification, timeAgo, useNotifications } from '../features/notifications/useNotifications';
+import { MIN_REWARD_COST, useRedeemablePoints } from '../features/services/useServices';
 
 // Full-screen notifications feed (replaces the old bell dropdown). Opening the page marks
 // everything read, matching the dropdown's old behavior; tapping an item deep-links to it.
 export const Notifications: React.FC = () => {
   const { items, unreadCount, loading, markRead, markAllRead } = useNotifications();
+  const { balance: redeemable } = useRedeemablePoints();
+  const claimableRewards = Math.floor(Math.max(0, redeemable) / MIN_REWARD_COST);
   const navigate = useNavigate();
 
-  useEffect(() => { document.title = 'Notifications — Racquets & Strings'; }, []);
+  useEffect(() => { document.title = 'Notifications · Racquets & Strings'; }, []);
 
   useEffect(() => {
     if (!loading && unreadCount > 0) markAllRead();
@@ -34,20 +37,38 @@ export const Notifications: React.FC = () => {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <Bell className="w-5 h-5 text-clay" />
-        <h1 className="text-2xl md:text-3xl font-display font-bold text-fg">Notifications</h1>
+        <h1 className="sr-only">Notifications</h1>
       </div>
+
+      {/* Pinned, not a stored notification. It's derived from the current balance, so it can't
+          go stale, can't fire again on every point earned, and needs no Cloud Function writing
+          a doc per member. Only shown once there's enough to actually spend. */}
+      {claimableRewards > 0 && (
+        <motion.div {...fadeUp} className="mb-3">
+          <Link
+            to="/marketplace"
+            className="flex items-center gap-3 rounded-2xl bg-clay/[0.08] px-4 py-3 hover:bg-clay/[0.12] transition-colors"
+          >
+            <Gift className="w-5 h-5 text-clay shrink-0" />
+            <p className="min-w-0 flex-1 text-sm font-bold text-fg">
+              You have collected {redeemable} Points. {claimableRewards} Reward{claimableRewards === 1 ? '' : 's'} available.
+            </p>
+            <ChevronRight className="w-4 h-4 text-clay shrink-0" />
+          </Link>
+        </motion.div>
+      )}
 
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
         </div>
-      ) : items.length === 0 ? (
-        <div className="rounded-3xl bg-tennis-surface/30 border border-fg/5 py-16 text-center">
-          <Bell className="w-8 h-8 text-fg/20 mx-auto mb-3" />
-          <p className="text-sm text-fg/40">Nothing yet — match updates and task news land here.</p>
+      ) : items.length === 0 && claimableRewards === 0 ? (
+        <div className="rounded-3xl bg-tennis-surface/30 py-16 text-center">
+          <Bell className="w-8 h-8 text-fg/70 mx-auto mb-3" />
+          <p className="text-sm text-fg/70">Nothing yet. Match updates and task news land here.</p>
         </div>
       ) : (
-        <div className="rounded-3xl bg-tennis-surface/30 border border-fg/5 overflow-hidden divide-y divide-fg/5">
+        <div className="rounded-3xl bg-tennis-surface/30 overflow-hidden divide-y divide-fg/5">
           {items.map((n, i) => (
             <motion.button
               key={n.id}
@@ -63,8 +84,8 @@ export const Notifications: React.FC = () => {
                 {!n.read && <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-clay shrink-0" />}
                 <div className={`min-w-0 flex-1 ${n.read ? 'pl-3.5' : ''}`}>
                   <p className="text-sm font-semibold text-fg leading-snug">{n.title}</p>
-                  {n.body && <p className="text-xs text-fg/60 mt-0.5 leading-snug">{n.body}</p>}
-                  <p className="text-[10px] text-fg/30 mt-1">{timeAgo(n.created_at)}</p>
+                  {n.body && <p className="text-xs text-fg/70 mt-0.5 leading-snug">{n.body}</p>}
+                  <p className="text-[10px] text-fg/70 mt-1">{timeAgo(n.created_at)}</p>
                 </div>
               </div>
             </motion.button>

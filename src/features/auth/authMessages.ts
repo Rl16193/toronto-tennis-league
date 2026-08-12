@@ -1,7 +1,6 @@
 import { fetchSignInMethodsForEmail } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
-
-export const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { EMAIL_REGEX as emailRegex } from '../../utils/emailRegex';
 
 export const getAuthErrorMessage = (error: any, context: 'login' | 'reset' | 'google' = 'login') => {
   const code = (error?.code || error?.message || '').toString().toLowerCase();
@@ -26,10 +25,17 @@ export const getAuthErrorMessage = (error: any, context: 'login' | 'reset' | 'go
   return 'Unable to sign in. Please try again.';
 };
 
-export const getGoogleSignInErrorMessage = async (error: any, email: string) => {
+// One implementation for every OAuth provider — the Google and Apple versions were byte-identical
+// apart from the provider id and the words in three strings.
+export const getOAuthSignInErrorMessage = async (
+  error: any,
+  email: string,
+  providerId: 'google.com' | 'apple.com',
+) => {
+  const label = providerId === 'google.com' ? 'Google' : 'Apple';
   const code = (error?.code || error?.message || '').toString().toLowerCase();
   if (code.includes('popup-closed-by-user')) {
-    return 'Google sign-in was cancelled.';
+    return `${label} sign-in was cancelled.`;
   }
   if (code.includes('account-exists-with-different-credential')) {
     const emailFromError = error?.customData?.email || email;
@@ -39,8 +45,8 @@ export const getGoogleSignInErrorMessage = async (error: any, email: string) => 
         if (methods.includes('password')) {
           return 'An account already exists for this email. Sign in with your password.';
         }
-        if (methods.includes('google.com')) {
-          return 'This Google account is already linked. Please sign in with Google.';
+        if (methods.includes(providerId)) {
+          return `This ${label} account is already linked. Please sign in with ${label}.`;
         }
       } catch (fetchError) {
         console.error('Error checking sign-in methods:', fetchError);
@@ -51,27 +57,8 @@ export const getGoogleSignInErrorMessage = async (error: any, email: string) => 
   return getAuthErrorMessage(error, 'google');
 };
 
-export const getAppleSignInErrorMessage = async (error: any, email: string) => {
-  const code = (error?.code || error?.message || '').toString().toLowerCase();
-  if (code.includes('popup-closed-by-user')) {
-    return 'Apple sign-in was cancelled.';
-  }
-  if (code.includes('account-exists-with-different-credential')) {
-    const emailFromError = error?.customData?.email || email;
-    if (emailFromError && emailRegex.test(emailFromError)) {
-      try {
-        const methods = await fetchSignInMethodsForEmail(auth, emailFromError);
-        if (methods.includes('password')) {
-          return 'An account already exists for this email. Sign in with your password.';
-        }
-        if (methods.includes('apple.com')) {
-          return 'This Apple account is already linked. Please sign in with Apple.';
-        }
-      } catch (fetchError) {
-        console.error('Error checking sign-in methods:', fetchError);
-      }
-    }
-    return 'An account already exists with this email. Sign in with your password.';
-  }
-  return getAuthErrorMessage(error, 'google');
-};
+export const getGoogleSignInErrorMessage = (error: any, email: string) =>
+  getOAuthSignInErrorMessage(error, email, 'google.com');
+
+export const getAppleSignInErrorMessage = (error: any, email: string) =>
+  getOAuthSignInErrorMessage(error, email, 'apple.com');

@@ -6,15 +6,14 @@
  * Per division (Men's / Women's / Doubles) ranks players by `leaguePoints26`, updates
  * `rankPosition`/`rankTrend` on `stats` and appends `ranking_history` on a change. Also
  * refreshes the public `site_stats/summary` counters (Players = distinct event_participants
- * user_id, Matches = completed tournament_matches + 70) — neither source collection is
+ * user_id, Matches = completed tournament matches + 70) — neither source collection is
  * world-readable, so this precomputes them for the public landing page to read.
  */
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 
-const REGION = 'us-central1';
-const TZ = 'America/Toronto';
+const { TZ, REGION } = require('./lib/constants');
 const db = () => admin.firestore();
 
 // Mirror of inDivision() in src/features/leagues/useStandings.ts — keep in sync.
@@ -62,8 +61,8 @@ exports.weeklyRankSnapshot = onSchedule(
     }
 
     const active = new Set();
-    (await db().collection('event_participants').get()).forEach((d) => { const u = d.data().user_id; if (u) active.add(u); });
-    const completed = await db().collection('tournament_matches').where('status', '==', 'complete').count().get();
+    (await db().collection('event_participants').get()).forEach((d) => { const u = d.data().uid; if (u) active.add(u); });
+    const completed = await db().collection('matches').where('category', 'in', ['singles', 'doubles']).where('status', '==', 'complete').count().get();
     const siteStats = { activePlayers: active.size, matchesOrganized: completed.data().count + 70, updatedAt: date };
 
     for (let i = 0; i < ops.length; i += 400) {

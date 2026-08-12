@@ -8,6 +8,9 @@ const { logger } = require('firebase-functions');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
 const { Resend } = require('resend');
+const { htmlToText } = require('./htmlToText');
+const { LINK } = require('./emailTemplates');
+const { EMAIL_FROM, EMAIL_REPLY_TO } = require('./constants');
 
 const db = () => admin.firestore();
 const resendApiKey = defineSecret('RESEND_API_KEY');
@@ -21,7 +24,7 @@ async function notify(recipients, payload) {
   const created_at = new Date().toISOString();
   ids.forEach((recipient_id) => {
     batch.set(db().collection('notifications').doc(), {
-      recipient_id,
+      uid: recipient_id,
       read: false,
       created_at,
       ...payload,
@@ -44,37 +47,42 @@ async function organizerUids() {
 // notification it accompanies.
 async function sendEmail(uid, subject, html) {
   try {
-    const [userDoc, prefsDoc] = await Promise.all([
+    // The address lives on `contacts` now (split out of the world-readable `users`); the name
+    // still comes from `users` for the greeting. Admin SDK, so rules don't apply either way.
+    const [userDoc, prefsDoc, contactsDoc] = await Promise.all([
       db().doc(`users/${uid}`).get(),
       db().doc(`preferences/${uid}`).get(),
+      db().doc(`contacts/${uid}`).get(),
     ]);
-    const email = userDoc.data()?.email;
+    const user = { ...(userDoc.data() || {}), ...(contactsDoc.data() || {}) };
+    const email = user.email;
     if (!email) return;
     if (prefsDoc.data()?.email_notifications === false) return;
+    // `html` may be a function of the recipient's user doc — lets a template greet by name
+    // without the caller doing its own `users/{uid}` read (we already have it here).
+    const body = typeof html === 'function' ? html(user) : html;
     const resend = new Resend(resendApiKey.value());
     await resend.emails.send({
-      from: 'Racquets & Strings <noreply@racquetsandstrings.ca>',
+      from: EMAIL_FROM,
       to: email,
-      replyTo: 'events.racquetsandstrings@gmail.com',
+      replyTo: EMAIL_REPLY_TO,
       subject,
-      html,
+      html: body,
+      // HTML with no text/plain part is a long-standing spam signal.
+      text: htmlToText(body),
+      // Surfaces the existing preferences.email_notifications toggle to mail providers — Gmail
+      // renders it as an Unsubscribe button. Without it, someone who wants out reports spam
+      // instead, which is the single most damaging reputation signal there is.
+      headers: { 'List-Unsubscribe': `<${LINK.profile}>` },
     });
   } catch (e) {
     logger.error('sendEmail failed', e);
   }
 }
 
-// Idempotent wrapper around sendEmail — Firestore triggers are at-least-once delivery, so the
-// same event can fire twice on retry. `dedupeKey` must uniquely identify the event (e.g.
-// "challenge-accepted:{challengeId}", or "incomplete-matches:{uid}:{weekKey}" for the scheduled
-// digest, which has no source document). The email_log doc's atomic `.create()` (fails if the
-// doc already exists) is the guard — no transaction needed, one Firestore write settles it.
+// Idempotent wrapper — the email_log dedupe guard was removed; this now simply forwards
+// to sendEmail. The signature is preserved so callers don't need updating.
 async function sendEmailOnce(uid, dedupeKey, subject, html) {
-  try {
-    await db().collection('email_log').doc(dedupeKey).create({ uid, sent_at: new Date().toISOString() });
-  } catch (e) {
-    return; // already sent (or already attempted) for this exact event — skip silently
-  }
   await sendEmail(uid, subject, html);
 }
 

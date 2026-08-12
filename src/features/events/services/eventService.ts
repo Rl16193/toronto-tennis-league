@@ -1,4 +1,4 @@
-import { addDoc, collection, getDocs } from 'firebase/firestore';
+import { addDoc, collection, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref } from 'firebase/storage';
 import { db, storage } from '../../../lib/firebase';
 import { TennisEvent } from '../../../types';
@@ -12,7 +12,6 @@ export type EventFormState = {
   title: string;
   type: string;
   location: string;
-  organizer: string;
   about: string;
   startDate: string;
   endDate: string;
@@ -27,7 +26,6 @@ export const INITIAL_EVENT_FORM: EventFormState = {
   title: '',
   type: 'Tournament',
   location: 'Anywhere',
-  organizer: '',
   about: '',
   startDate: '',
   endDate: '',
@@ -69,7 +67,6 @@ export const validateEventForm = (eventForm: EventFormState) => {
   if (!eventForm.title.trim()) return 'Please enter an event title.';
   if (!eventForm.type.trim()) return 'Please select an event type.';
   if (!eventForm.location.trim()) return 'Please enter a location.';
-  if (!eventForm.organizer.trim()) return 'Please enter the organizer name.';
   if (!eventForm.about.trim()) return 'Please describe the event.';
   if (!eventForm.startDate) return 'Please choose a start date.';
   if (!eventForm.endDate) return 'Please choose an end date.';
@@ -84,7 +81,6 @@ export const createEvent = async (userId: string, eventForm: EventFormState, ima
     title: eventForm.title.trim(),
     type: eventForm.type.trim(),
     location: eventForm.location.trim(),
-    organizer: eventForm.organizer.trim(),
     about: eventForm.about.trim(),
     image: imageUrl,
     start_date: eventForm.startDate,
@@ -103,3 +99,44 @@ export const createEvent = async (userId: string, eventForm: EventFormState, ima
   const created = await addDoc(collection(db, 'events'), newEvent);
   return { id: created.id, ...newEvent } as DisplayEvent;
 };
+
+/** Creator edits their own event's details. Never touches creator_id or created_at. */
+export const updateEvent = async (eventId: string, eventForm: EventFormState) => {
+  const patch = {
+    title: eventForm.title.trim(),
+    type: eventForm.type.trim(),
+    location: eventForm.location.trim(),
+    about: eventForm.about.trim(),
+    description: eventForm.about.trim(),
+    start_date: eventForm.startDate,
+    end_date: eventForm.endDate,
+    join_last_date: eventForm.joinLastDate,
+    time: eventForm.time.trim(),
+    skill_level: eventForm.skillLevel,
+    ...(eventForm.type.trim() === 'Tournament' && {
+      tournament_format: eventForm.tournamentFormat,
+      tournament_choice: eventForm.tournamentChoice,
+    }),
+  };
+  await updateDoc(doc(db, 'events', eventId), patch);
+  return patch;
+};
+
+// Plain "YYYY-MM-DD"/"" only — a Firestore Timestamp on a legacy/admin-imported event doc isn't
+// editable through this date-input-backed form, so it's dropped rather than guessed at.
+const asDateInputValue = (v: TennisEvent['start_date']) => (typeof v === 'string' ? v : '');
+
+/** Prefills the edit form from an existing event. */
+export const formFromEvent = (event: DisplayEvent): EventFormState => ({
+  title: event.title || '',
+  type: event.type || 'Tournament',
+  location: event.location || '',
+  about: event.about || event.description || '',
+  startDate: asDateInputValue(event.start_date ?? event.startDate),
+  endDate: asDateInputValue(event.end_date ?? event.endDate),
+  joinLastDate: asDateInputValue(event.join_last_date),
+  time: event.time || '',
+  skillLevel: event.skill_level || 'All',
+  tournamentFormat: event.tournament_format || 'knockout',
+  tournamentChoice: event.tournament_choice || 'Singles',
+});

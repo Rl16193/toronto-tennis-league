@@ -18,6 +18,6 @@ export const LoadingBar: React.FC<{
         style={{ width: `${progress}%` }}
       />
     </div>
-    <p className="text-fg/40 text-xs">{progress}%</p>
+    <p className="text-fg/70 text-xs">{progress}%</p>
   </div>
 );

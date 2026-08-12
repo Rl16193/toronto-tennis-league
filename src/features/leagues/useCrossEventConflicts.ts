@@ -3,7 +3,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 
 // Anti double-farming: returns the set of opponent uids the current user already has a GENERATED
-// head-to-head with in another, still-active event (a round-robin or knockout `tournament_matches`
+// head-to-head with in another, still-active event (a round-robin or knockout `matches`
 // fixture in an event whose Final hasn't been played). Ladder challenges against these players are
 // blocked so the same physical match can't be reported for points twice (once in the tournament,
 // once on the ladder). The block lifts automatically once that other event finishes.
@@ -15,21 +15,23 @@ export function useCrossEventConflicts(uid: string | undefined, ladderEventId: s
     let alive = true;
 
     (async () => {
-      // My tournament matches (either slot). Single-field equality — no composite index needed.
-      const [p1, p2] = await Promise.all([
-        getDocs(query(collection(db, 'tournament_matches'), where('player_1_user_id', '==', uid))),
-        getDocs(query(collection(db, 'tournament_matches'), where('player_2_user_id', '==', uid))),
+      // My tournament matches (either slot). Two separate equality queries on the shared
+      // matches collection, merged client-side and filtered by category.
+      const [s1, s2] = await Promise.all([
+        getDocs(query(collection(db, 'matches'), where('player_1_uid', '==', uid))),
+        getDocs(query(collection(db, 'matches'), where('player_2_uid', '==', uid))),
       ]);
+      const snap = { docs: [...s1.docs, ...s2.docs].filter((d) => {
+        const cat = d.data().category;
+        return cat === 'singles' || cat === 'doubles';
+      }) };
 
       // event_id → opponent uids I share a match with in that event.
       const perEvent = new Map<string, Set<string>>();
-      const seen = new Set<string>();
-      [...p1.docs, ...p2.docs].forEach((d) => {
-        if (seen.has(d.id)) return;
-        seen.add(d.id);
+      snap.docs.forEach((d) => {
         const m = d.data();
         if (!m.event_id || m.event_id === ladderEventId) return; // different event only
-        const opp = m.player_1_user_id === uid ? m.player_2_user_id : m.player_1_user_id;
+        const opp = m.player_1_uid === uid ? m.player_2_uid : m.player_1_uid;
         if (!opp) return; // BYE / unfilled slot
         if (!perEvent.has(m.event_id)) perEvent.set(m.event_id, new Set());
         perEvent.get(m.event_id)!.add(opp);
@@ -42,10 +44,10 @@ export function useCrossEventConflicts(uid: string | undefined, ladderEventId: s
       const completed = new Set<string>();
       for (let i = 0; i < eids.length; i += 10) {
         const chunk = eids.slice(i, i + 10);
-        const snap = await getDocs(query(collection(db, 'tournament_matches'), where('event_id', 'in', chunk)));
-        snap.docs.forEach((d) => {
+        const finalSnap = await getDocs(query(collection(db, 'matches'), where('event_id', 'in', chunk), where('round', '==', 'F'), where('status', '==', 'complete')));
+        finalSnap.docs.forEach((d) => {
           const m = d.data();
-          if (m.round === 'F' && m.status === 'complete' && m.winner_user_id) completed.add(m.event_id as string);
+          if (m.winner_uid) completed.add(m.event_id as string);
         });
       }
 

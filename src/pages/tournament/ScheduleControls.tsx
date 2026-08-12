@@ -36,24 +36,24 @@ export const ScheduleControls: React.FC<{
   const isComplete = match.status === 'complete';
 
   const badge = isComplete
-    ? (viewerUid && match.winner_user_id
-      ? (match.winner_user_id === viewerUid
+    ? (viewerUid && match.winner_uid
+      ? (match.winner_uid === viewerUid
         ? { text: 'Win', cls: 'bg-green-500/15 text-badge-win border-green-500/25' }
         : { text: 'Loss', cls: 'bg-red-500/15 text-badge-loss border-red-500/25' })
       : { text: 'Completed', cls: 'bg-green-500/15 text-badge-win border-green-500/25' })
     : s.status === 'scheduled'
       ? { text: `Scheduled on ${formatScheduledDate(s.date, s.slot ?? '')}`, cls: 'bg-green-500/15 text-badge-win border-green-500/25' }
-      : { text: 'Unscheduled', cls: 'bg-fg/5 text-fg/60 border-fg/10' };
+      : { text: 'Unscheduled', cls: 'bg-fg/5 text-fg/70 border-fg/10' };
 
   const showSubmit = !!api.onSubmitScore && !!api.submittableMatchIds?.has(match.id) && !isComplete && !hideSubmitButton;
   const showAsk = !isComplete && !hideAskButton && !s.requested;
 
   return (
-    <div className={className ?? 'mt-3 rounded-2xl border border-fg/10 bg-tennis-dark/40 p-3 space-y-2.5'}>
+    <div className={className ?? 'mt-3 rounded-2xl bg-tennis-dark/40 p-3 space-y-2.5'}>
       {!hideBadge && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${badge.cls}`}>{badge.text}</span>
-          {!isComplete && s.requested && <span className="text-[11px] text-fg/40">Organizer asked to schedule</span>}
+          {!isComplete && s.requested && <span className="text-[11px] text-fg/70">Organizer asked to schedule</span>}
         </div>
       )}
 
@@ -68,7 +68,7 @@ export const ScheduleControls: React.FC<{
         </div>
       )}
       {!hideRule && !isComplete && (
-        <p className="text-[11px] text-fg/40 leading-snug">
+        <p className="text-[11px] text-fg/70 leading-snug">
           Matchdays. Schedule prepared by organizer based on your availability.
         </p>
       )}

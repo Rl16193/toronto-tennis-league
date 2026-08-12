@@ -81,13 +81,21 @@ async function main() {
   if (ops.length > 20) console.log(`  … +${ops.length - 20} more`);
 
   // ── Public homepage counters (site_stats/summary) ──────────────────────────
-  // Players = distinct user_id in event_participants (registered for an event). Matches =
-  // completed tournament_matches + 70 (last year's total). Neither collection is world-readable,
+  // Players = distinct uid in event_participants (registered for an event). Matches =
+  // completed tournament matches + 70 (last year's total). Neither collection is world-readable,
   // so both are precomputed here for the public landing to read.
   const active = new Set();
-  (await db.collection('event_participants').get()).forEach((d) => { const u = d.data().user_id; if (u) active.add(u); });
-  const completed = await db.collection('tournament_matches').where('status', '==', 'complete').count().get();
-  const siteStats = { activePlayers: active.size, matchesOrganized: completed.data().count + 70, updatedAt: date };
+  (await db.collection('event_participants').get()).forEach((d) => {
+    const data = d.data();
+    const u = data.uid || data.user_id;
+    if (u) active.add(u);
+  });
+  const completedSnap = await db.collection('matches').where('status', '==', 'complete').get();
+  const completedCount = completedSnap.docs.filter((d) => {
+    const category = d.data().category;
+    return category === 'singles' || category === 'doubles';
+  }).length;
+  const siteStats = { activePlayers: active.size, matchesOrganized: completedCount + 70, updatedAt: date };
   console.log(`site_stats → activePlayers=${siteStats.activePlayers}, matchesOrganized=${siteStats.matchesOrganized}`);
 
   if (dryRun) { console.log('\n(dry run — no writes)'); process.exit(0); }

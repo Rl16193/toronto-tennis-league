@@ -6,12 +6,13 @@ import type { TaskProgress, UserProfile } from '../../types';
 import {
   ALL_TIERS, CATEGORIES, Counters, EMPTY_COUNTERS, SETUP_POINTS, TIER_POINTS,
 } from './taskCatalog';
+import { fetchCompletedTournamentMatches } from './matchHistory';
 
 export * from './taskCatalog';
 
 // Community tasks. Every single item — the Initiation checklist items AND every category's
 // items — is a "task". A "milestone" is completing EVERY task within one category. Completed
-// tasks are written to the player's task_progress doc so the Community leaderboard can total
+// tasks are written to the player's tasks doc so the Community leaderboard can total
 // anyone's points, tasks and milestones from one read. (The Initiation still pays a flat award
 // for finishing its checklist; category items pay their own points.)
 
@@ -54,7 +55,11 @@ export const TASKS: TaskDef[] = [
   { id: 'whatsappGroup', title: 'Join the WhatsApp group', label: 'WhatsApp', kind: 'trust', link: WHATSAPP_URL },
   { id: 'profilePhoto', title: 'Add a profile photo', label: 'Photo', kind: 'auto', to: '/profile' },
   { id: 'joinEvent', title: 'Join your first event', label: 'Event', kind: 'auto', to: '/events' },
-  { id: 'ladderMatch', title: 'Play a League Ladder Match', label: 'Ladder', kind: 'auto', to: '/tournament' },
+  // 'ladderMatch' ("Play a League Ladder Match") was removed from the Initiation checklist —
+  // it gated the Member badge behind the ladder, which most new players never reach. The
+  // TaskId and the task_progress field are kept so existing docs that already have the flag
+  // stay valid; it simply no longer counts toward setupComplete.
+  // KEEP IN SYNC with INITIATION_TASK_IDS in functions/lib/points.js.
 ];
 
 export const UNLOCKED_TASK_IDS: TaskId[] = TASKS.filter((t) => !t.locked).map((t) => t.id);
@@ -97,8 +102,8 @@ export const profileMissingFields = (p: UserProfile | null): string[] => {
   if (!p) return ['Profile'];
   const missing: string[] = [];
   if (!p.user.name?.trim()) missing.push('Name');
-  if (!p.user.phone?.trim()) missing.push('Phone');
-  if (!(p.user.whatsapp_contact?.trim() || p.user.whatsapp_same_as_phone)) missing.push('WhatsApp contact');
+  if (!p.contacts.phone?.trim()) missing.push('Phone');
+  if (!(p.contacts.whatsapp_contact?.trim() || p.contacts.whatsapp_same_as_phone)) missing.push('WhatsApp contact');
   if (!p.user.bio?.trim()) missing.push('Bio');
   if (!p.preferences.preferred_courts?.length) missing.push('Preferred courts');
   const grid = p.preferences.availability;
@@ -112,16 +117,16 @@ export const profileMissingFields = (p: UserProfile | null): string[] => {
 // Owner marks their own task; the organizer calls this with done=false to revoke someone else's.
 export const setTaskDone = (uid: string, name: string, id: string, done: boolean) =>
   setDoc(
-    doc(db, 'task_progress', uid),
-    { user_id: uid, name, [id]: done, updatedAt: new Date().toISOString() },
+    doc(db, 'tasks', uid),
+    { uid, name, category: 'progress', [id]: done, updatedAt: new Date().toISOString() },
     { merge: true },
   );
 
 // Bump a stored counter (used for things the app can't derive from other collections).
 export const bumpCounter = (uid: string, name: string, key: string, by = 1) =>
   setDoc(
-    doc(db, 'task_progress', uid),
-    { user_id: uid, name, [key]: increment(by), updatedAt: new Date().toISOString() },
+    doc(db, 'tasks', uid),
+    { uid, name, category: 'progress', [key]: increment(by), updatedAt: new Date().toISOString() },
     { merge: true },
   );
 
@@ -150,27 +155,21 @@ const dedupePlayedResults = (
 
 // Completed matches with real set scores — walkovers and score-less completions don't count.
 const loadTournamentResults = async (uid: string): Promise<PlayedResult[]> => {
-  const [p1, p2] = await Promise.all([
-    getDocs(query(collection(db, 'tournament_matches'), where('player_1_user_id', '==', uid), where('status', '==', 'complete'))),
-    getDocs(query(collection(db, 'tournament_matches'), where('player_2_user_id', '==', uid), where('status', '==', 'complete'))),
-  ]);
-  return dedupePlayedResults([...p1.docs, ...p2.docs], (m) => {
-    // A walkover is recorded as sets of 0-0 — still non-null, so the blank check alone doesn't
-    // catch it. Both conditions are needed: a real score, and not a walkover.
-    if (m.walkover === true) return null;
-    if (m.set_1_player_1 == null || m.set_1_player_2 == null) return null; // no real score
-    return { at: new Date(m.completed_at || m.created_at || 0).getTime(), won: m.winner_user_id === uid };
-  });
+  const docs = await fetchCompletedTournamentMatches(uid);
+  return dedupePlayedResults(docs, (m) => ({
+    at: new Date(m.completed_at || m.created_at || 0).getTime(),
+    won: m.winner_uid === uid,
+  }));
 };
 
 const loadLadderResults = async (uid: string): Promise<PlayedResult[]> => {
   const [asChallenger, asOpponent] = await Promise.all([
-    getDocs(query(collection(db, 'ladder_challenges'), where('challenger_id', '==', uid), where('status', '==', 'confirmed'))),
-    getDocs(query(collection(db, 'ladder_challenges'), where('opponent_id', '==', uid), where('status', '==', 'confirmed'))),
+    getDocs(query(collection(db, 'matches'), where('category', '==', 'challenge'), where('player_1_uid', '==', uid), where('status', '==', 'confirmed'))),
+    getDocs(query(collection(db, 'matches'), where('category', '==', 'challenge'), where('player_2_uid', '==', uid), where('status', '==', 'confirmed'))),
   ]);
   return dedupePlayedResults([...asChallenger.docs, ...asOpponent.docs], (c) => ({
     at: new Date(c.confirmed_at || c.created_at || 0).getTime(),
-    won: c.claimed_winner_id === uid,
+    won: c.claimed_winner_uid === uid,
   }));
 };
 
@@ -195,14 +194,13 @@ export function useTasks() {
   const [progress, setProgress] = useState<TaskProgress | null>(null);
   const [progressLoaded, setProgressLoaded] = useState(false);
   const [derived, setDerived] = useState<Partial<Counters>>({});
-  const [joinedEvent, setJoinedEvent] = useState(false);
   const written = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setProgressLoaded(false);
     written.current.clear();
     if (!user) { setProgress(null); return; }
-    return onSnapshot(doc(db, 'task_progress', user.uid), (s) => {
+    return onSnapshot(doc(db, 'tasks', user.uid), (s) => {
       setProgress(s.exists() ? (s.data() as TaskProgress) : null);
       setProgressLoaded(true);
     });
@@ -213,11 +211,13 @@ export function useTasks() {
     if (!user) return;
     let alive = true;
     const safe = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
+    // The `joinEvent` task used to be awarded from here off an event_participants lookup.
+    // functions/taskPoints.js (onEventJoinedAwardPoints) now does it server-side, so that
+    // query was dropped along with the client write it fed.
     Promise.all([
       safe(loadTournamentResults(user.uid), [] as PlayedResult[]),
       safe(loadLadderResults(user.uid), [] as PlayedResult[]),
-      safe(getDocs(query(collection(db, 'event_participants'), where('user_id', '==', user.uid), limit(1))).then((s) => !s.empty), false),
-    ]).then(([tournament, ladder, joinedEvent]) => {
+    ]).then(([tournament, ladder]) => {
       if (!alive) return;
       const all = [...tournament, ...ladder];
       setDerived({
@@ -227,7 +227,6 @@ export function useTasks() {
         bestStreak: longestWinStreak(all),
         monthsActive: distinctMonths(all),
       });
-      setJoinedEvent(joinedEvent);
     });
     return () => { alive = false; };
   }, [user?.uid]);
@@ -238,7 +237,6 @@ export function useTasks() {
     const num = (k: string) => (typeof rec[k] === 'number' ? (rec[k] as number) : 0);
     return {
       ...EMPTY_COUNTERS,
-      climbSpots: num('climbSpots'),
       suggestions: num('suggestions'),
       courtsVisited: num('courtsVisited'),
       zoneComplete: num('zoneComplete'),
@@ -253,42 +251,34 @@ export function useTasks() {
 
   const missing = profileMissingFields(profile);
 
-  // Award anything newly qualified: Initiation auto-tasks, then every tier whose counter is met,
-  // then the sticky Initiation award. Each write happens once per session.
+  // Award the two Initiation tasks that are derived purely from the player's own profile.
+  //
+  // Everything else the client used to write here — playMatch, joinEvent, ladderMatch, every
+  // tier, and the sticky setupComplete award — is now written server-side by
+  // functions/taskPoints.js via the Admin SDK. Those fields carry points, and points are
+  // spendable on Services, so firestore.rules deliberately rejects a client write to them; the
+  // client attempting them anyway produced a permission-denied write on every render.
+  //
+  // NOTE: a failed write is NOT retried. `written` used to be cleared in .catch(), which turned
+  // a rejected write into an endless render→write→reject→render spin (this is what made the
+  // Profile page flicker). One attempt per id per session is enough — the server is the real
+  // source of truth for anything that matters.
   useEffect(() => {
     if (!user || !profile || !progressLoaded) return;
     const name = profile.user.name || '';
     const rec = asRecord(progress);
 
-    const initiation: Partial<Record<TaskId, boolean>> = {
+    const selfEvident: Partial<Record<TaskId, boolean>> = {
       profileComplete: missing.length === 0,
       profilePhoto: !!profile.user.avatar,
-      playMatch: (counters.matchesPlayed ?? 0) > 0,
-      joinEvent: joinedEvent,
-      ladderMatch: (counters.challengesPlayed ?? 0) > 0,
     };
-    (Object.keys(initiation) as TaskId[]).forEach((id) => {
-      if (initiation[id] && !rec[id] && !written.current.has(id)) {
+    (Object.keys(selfEvident) as TaskId[]).forEach((id) => {
+      if (selfEvident[id] && !rec[id] && !written.current.has(id)) {
         written.current.add(id);
-        setTaskDone(user.uid, name, id, true).catch(() => written.current.delete(id));
+        setTaskDone(user.uid, name, id, true).catch(() => { /* stays marked — see note above */ });
       }
     });
-
-    ALL_TIERS.forEach((tier) => {
-      if (rec[tier.id] || written.current.has(tier.id)) return;
-      if ((counters[tier.counter] ?? 0) < tier.need) return;
-      written.current.add(tier.id);
-      setTaskDone(user.uid, name, tier.id, true).catch(() => written.current.delete(tier.id));
-    });
-
-    if (
-      progress && !progress.setupComplete && !written.current.has('setupComplete') &&
-      UNLOCKED_TASK_IDS.every((id) => rec[id])
-    ) {
-      written.current.add('setupComplete');
-      setTaskDone(user.uid, name, 'setupComplete', true).catch(() => written.current.delete('setupComplete'));
-    }
-  }, [user?.uid, profile, progress, progressLoaded, counters, joinedEvent, missing.length]);
+  }, [user?.uid, profile, progress, progressLoaded, missing.length]);
 
   return {
     user,
@@ -315,18 +305,22 @@ export function useCommunityStandings() {
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    getDocs(collection(db, 'task_progress'))
+    getDocs(collection(db, 'tasks'))
       .then((snap) => {
         const data = snap.docs
           .map((d) => {
             const t = d.data() as TaskProgress;
             return {
               ...t,
-              user_id: d.id,
+              uid: d.id,
               points: taskPoints(t),
               tasksCompleted: tasksCompletedCount(t),
               milestones: milestoneCount(t),
             };
+          })
+          .filter((r) => {
+            const type = (r as Record<string, unknown>).type;
+            return !type || (type !== 'offer' && type !== 'group');
           })
           .filter((r) => r.points > 0 || r.tasksCompleted > 0)
           .sort((a, b) =>

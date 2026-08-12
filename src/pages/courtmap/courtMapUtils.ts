@@ -540,12 +540,33 @@ const soloMarkerSvg = (s: number, color: string, opacity: number, label?: string
     </svg>`;
 };
 
-export function courtMarkerHtml(court: CourtWithCount): string {
+/**
+ * Marker size bands, scaled off the busiest court so they stay meaningful as the league grows.
+ *
+ * `unit` is a fifth of the busiest count, rounded to the nearest 10 (floor of 10). The smallest
+ * and largest bands each take one unit at either end; the two middle bands split the remaining
+ * three units evenly. With a busiest court of 100 that gives 1-20 / 21-50 / 51-80 / 81+.
+ *
+ * Hardcoded bands would have put every court in the top tier once the league doubled.
+ */
+export const markerSizeBands = (busiestCount: number) => {
+  const unit = Math.max(10, Math.round(busiestCount / 5 / 10) * 10);
+  return { small: unit, medium: unit * 2.5, large: unit * 4 };
+};
+
+const MARKER_SIZES = [16, 22, 28, 34];
+
+export function courtMarkerHtml(court: CourtWithCount, busiestCount = 0): string {
   const hasPlayers = court.count > 0;
-  const bigCount = court.count >= 10;
-  const s = !hasPlayers ? 12 : bigCount ? 30 : 20;
+  const bands = markerSizeBands(busiestCount);
+  const tier = court.count <= bands.small ? 0
+    : court.count <= bands.medium ? 1
+    : court.count <= bands.large ? 2
+    : 3;
+  const s = !hasPlayers ? 12 : MARKER_SIZES[tier];
   const label = String(court.count);
-  const fs = bigCount ? 8 : 10;
+  // Three-digit counts need to shrink to stay inside the circle.
+  const fs = label.length >= 3 ? 8 : label.length === 2 ? 10 : 11;
 
   if (hasPlayers && court.hasPrograms) return splitMarkerSvg(s, '#15803d', '#eab308', label, fs);
   if (hasPlayers && hasPublicHours(court)) return splitMarkerSvg(s, '#15803d', '#3b82f6', label, fs);
@@ -557,7 +578,5 @@ export function courtMarkerHtml(court: CourtWithCount): string {
 }
 
 export function pickleballMarkerHtml(): string {
-  return `<svg width="12" height="12" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="6" cy="6" r="6" fill="#94a3b8" opacity="0.75"/>
-  </svg>`;
+  return soloMarkerSvg(12, '#94a3b8', 0.75);
 }

@@ -32,6 +32,20 @@ export const parseValidDate = (value?: FirestoreDateLike) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+/**
+ * The instant an event actually stops being current.
+ *
+ * A date-only "YYYY-MM-DD" end names a whole day, so parsing it to midnight retires the event a
+ * full day early — an event ending today vanished at 00:00 today. Stretch it to end-of-day.
+ */
+export const parseEndInstant = (value?: FirestoreDateLike) => {
+  const parsed = parseValidDate(value);
+  if (parsed && typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    parsed.setHours(23, 59, 59, 999);
+  }
+  return parsed;
+};
+
 export const sortEventsByStartDate = <T extends TennisEvent>(events: T[]) => {
   const now = Date.now();
   return [...events].sort((a, b) => {

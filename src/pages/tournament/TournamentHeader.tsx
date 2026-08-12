@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Download, Pencil, Play, Settings2, X, XCircle } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
-import { TournamentFormat } from './types';
+import { SkillMergePair, TournamentFormat } from './types';
 
 type Props = {
   isCreator: boolean;
@@ -10,17 +10,19 @@ type Props = {
   isProcessing: boolean;
   editMode: boolean;
   started: boolean;
-  mergeMensSingles: boolean;
-  mergeWomensSingles: boolean;
+  mensSkillMerge: SkillMergePair | null;
+  womensSkillMerge: SkillMergePair | null;
   consolidateDoubles: boolean;
   currentDrawFormat: TournamentFormat;
   onDownload: () => void;
   onGenerateMatches: () => void;
   onCancelMatches: () => void;
   onToggleEdit: () => void;
-  onToggleMergeMens: () => void;
-  onToggleMergeWomens: () => void;
+  onSetMensSkillMerge: (pair: SkillMergePair | null) => void;
+  onSetWomensSkillMerge: (pair: SkillMergePair | null) => void;
   onToggleConsolidateDoubles: () => void;
+  zoneDrawsEnabled: boolean;
+  onOpenZoneConfig: () => void;
 };
 
 // Organizer controls, mobile remodel (wireframe 1a): the old Download / Generate / Edit / Merge
@@ -28,20 +30,29 @@ type Props = {
 // action. Non-creators never render this (gated at the call site).
 export const TournamentHeader: React.FC<Props> = ({
   isCreator, hasMatches, isProcessing, editMode, started,
-  mergeMensSingles, mergeWomensSingles, consolidateDoubles,
+  mensSkillMerge, womensSkillMerge, consolidateDoubles,
   currentDrawFormat,
   onDownload, onGenerateMatches, onCancelMatches, onToggleEdit,
-  onToggleMergeMens, onToggleMergeWomens, onToggleConsolidateDoubles,
+  onSetMensSkillMerge, onSetWomensSkillMerge, onToggleConsolidateDoubles,
+  zoneDrawsEnabled, onOpenZoneConfig,
 }) => {
   const [open, setOpen] = useState(false);
+  // Which division's merge sub-options are expanded — collapsed by default so "Manage Draw" stays
+  // compact instead of listing every pair for both divisions up front.
+  const [expandedMerge, setExpandedMerge] = useState<'mens' | 'womens' | null>(null);
 
   if (!isCreator) return null;
 
   const canMerge = !started && (currentDrawFormat === 'bracket' || currentDrawFormat === 'rr');
-  const mergeItems = [
-    { label: "Merge Men's Singles", active: mergeMensSingles, onToggle: onToggleMergeMens },
-    { label: "Merge Women's Singles", active: mergeWomensSingles, onToggle: onToggleMergeWomens },
-    { label: 'Merge Doubles', active: consolidateDoubles, onToggle: onToggleConsolidateDoubles },
+  // Beginners+Masters (skipping Challengers) is never offered — only adjacent pairs, or all three.
+  const MERGE_PAIR_OPTIONS: { label: string; pair: SkillMergePair }[] = [
+    { label: 'All (Beginners + Challengers + Masters)', pair: 'Beginners+Challengers+Masters' },
+    { label: 'Beginners + Challengers', pair: 'Beginners+Challengers' },
+    { label: 'Challengers + Masters', pair: 'Challengers+Masters' },
+  ];
+  const mergeSections = [
+    { key: 'mens' as const, label: "Merge Men's Singles", current: mensSkillMerge, onSet: onSetMensSkillMerge },
+    { key: 'womens' as const, label: "Merge Women's Singles", current: womensSkillMerge, onSet: onSetWomensSkillMerge },
   ];
 
   const Row: React.FC<{
@@ -67,7 +78,7 @@ export const TournamentHeader: React.FC<Props> = ({
       </span>
       <span className="min-w-0 flex-1">
         <span className={`block text-sm font-bold ${danger ? 'text-red-400' : 'text-fg'}`}>{label}</span>
-        {hint && <span className="block text-xs text-fg/40 mt-0.5">{hint}</span>}
+        {hint && <span className="block text-xs text-fg/70 mt-0.5">{hint}</span>}
       </span>
       {active && <span className="text-[10px] font-black uppercase tracking-wide text-clay shrink-0">On</span>}
     </button>
@@ -114,18 +125,55 @@ export const TournamentHeader: React.FC<Props> = ({
               onClick={() => { onToggleEdit(); setOpen(false); }}
             />
             {canMerge && (
+              <Row
+                icon={<Settings2 className="w-4 h-4" />}
+                label="Zone Draws"
+                hint={zoneDrawsEnabled ? 'Split by zone — tap to edit' : 'Split this draw by geographic zone'}
+                active={zoneDrawsEnabled}
+                onClick={() => { onOpenZoneConfig(); setOpen(false); }}
+              />
+            )}
+            {canMerge && (
               <>
-                <p className="text-[11px] font-bold uppercase tracking-widest text-fg/40 pt-2">Merge Draws</p>
-                {mergeItems.map((m) => (
-                  <Row
-                    key={m.label}
-                    icon={<Settings2 className="w-4 h-4" />}
-                    label={m.label}
-                    hint={m.active ? 'Tap to unmerge' : undefined}
-                    active={m.active}
-                    onClick={() => { m.onToggle(); setOpen(false); }}
-                  />
-                ))}
+                <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 pt-2">Merge Draws</p>
+                {mergeSections.map((section) => {
+                  const isExpanded = expandedMerge === section.key;
+                  return (
+                    <React.Fragment key={section.key}>
+                      <Row
+                        icon={<Settings2 className="w-4 h-4" />}
+                        label={section.label}
+                        hint={section.current ? section.current.split('+').join(' + ') : 'Tap to choose which levels to merge'}
+                        active={!!section.current}
+                        onClick={() => setExpandedMerge(isExpanded ? null : section.key)}
+                      />
+                      {isExpanded && (
+                        <div className="ml-4 pl-3 border-l-2 border-fg/10 space-y-2">
+                          {MERGE_PAIR_OPTIONS.map((opt) => {
+                            const active = section.current === opt.pair;
+                            return (
+                              <Row
+                                key={opt.pair}
+                                icon={<Settings2 className="w-3.5 h-3.5" />}
+                                label={opt.label}
+                                hint={active ? 'Tap to unmerge' : undefined}
+                                active={active}
+                                onClick={() => { section.onSet(active ? null : opt.pair); setOpen(false); setExpandedMerge(null); }}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+                <Row
+                  icon={<Settings2 className="w-4 h-4" />}
+                  label="Merge Doubles"
+                  hint={consolidateDoubles ? 'Tap to unmerge' : undefined}
+                  active={consolidateDoubles}
+                  onClick={() => { onToggleConsolidateDoubles(); setOpen(false); }}
+                />
               </>
             )}
           </div>

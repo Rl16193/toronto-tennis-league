@@ -25,9 +25,11 @@ export function torontoDayKey(d: Date = new Date()): string {
 }
 
 // Shared by logAttendance/checkIn below — both stamp a player's presence at a court, just to
-// different collections/id-schemes with one extra field each.
+// different id-schemes (deterministic {uid}_{courtKey} vs {uid}_{courtKey}_{day}) with one extra
+// field each. `type` discriminates the doc's kind inside the consolidated `courts` collection.
 const baseVisitDoc = (uid: string, name: string, court: CsvCourt, coords: { lat: number; lng: number; distM: number }) => ({
-  user_id: uid,
+  uid,
+  type: 'attendance' as const,
   user_name: name,
   court_key: courtKey(court.dropdown),
   court_name: court.dropdown,
@@ -50,7 +52,7 @@ export async function logAttendance(
 ): Promise<void> {
   const day = torontoDayKey();
   const id = `${uid}_${courtKey(court.dropdown)}_${day}`;
-  await setDoc(doc(db, 'court_attendance', id), {
+  await setDoc(doc(db, 'courts', id), {
     ...baseVisitDoc(uid, name, court, coords),
     day,
     match_type: visitType,
@@ -65,10 +67,14 @@ export type VisitType = (typeof VISIT_TYPES)[number];
 // Best-effort "what's busy lately" list for the check-in start screen — not an all-time tally.
 export type TopCheckIn = { court: string; zone: string; count: number };
 export async function getTopCheckIns(max = 5): Promise<TopCheckIn[]> {
-  const snap = await getDocs(query(collection(db, 'court_attendance'), orderBy('created_at', 'desc'), limit(300)));
+  // Newest 300 docs in `courts`, then narrowed to attendance in memory. `courts` now also holds
+  // check-ins and photo reports; the single-field `created_at` index keeps this query free of a
+  // composite index, and filtering 300 rows in JS is cheap for a best-effort "what's busy" list.
+  const snap = await getDocs(query(collection(db, 'courts'), orderBy('created_at', 'desc'), limit(300)));
   const counts = new Map<string, TopCheckIn>();
   snap.docs.forEach((d) => {
     const data = d.data();
+    if (data.type !== 'attendance') return;
     const court = (data.court_name as string) || '';
     if (!court) return;
     const cur = counts.get(court) ?? { court, zone: (data.zone as string) || '', count: 0 };
@@ -107,7 +113,7 @@ export async function findNearbyCourts(lat: number, lng: number): Promise<Nearby
 
 // Has this player already checked in at this court?
 export async function hasCheckedIn(uid: string, court: CsvCourt): Promise<boolean> {
-  const snap = await getDoc(doc(db, 'court_visits', `${uid}_${courtKey(court.dropdown)}`));
+  const snap = await getDoc(doc(db, 'courts', `${uid}_${courtKey(court.dropdown)}`));
   return snap.exists();
 }
 
@@ -121,21 +127,14 @@ export async function checkIn(
   visitType: VisitType,
 ): Promise<void> {
   const id = `${uid}_${courtKey(court.dropdown)}`;
-  await setDoc(doc(db, 'court_visits', id), {
+  await setDoc(doc(db, 'courts', id), {
     ...baseVisitDoc(uid, name, court, coords),
+    type: 'check-in',
     visit_type: visitType,
   });
 }
 
-// "Visit every court in your zone" — checked client-side right after a successful check-in
-// (the courts CSV + zone data are already loaded here). Best-effort, not authoritative.
-export async function checkZoneComplete(uid: string, zone: string): Promise<boolean> {
-  if (!zone) return false;
-  const courts = await loadCourtList();
-  const zoneCourtKeys = new Set(courts.filter((c) => c.zone === zone).map((c) => courtKey(c.dropdown)));
-  if (zoneCourtKeys.size === 0) return false;
-  const checks = await Promise.all(
-    [...zoneCourtKeys].map((key) => getDoc(doc(db, 'court_visits', `${uid}_${key}`)).then((s) => s.exists())),
-  );
-  return checks.every(Boolean);
-}
+// "Visit every court in your zone" is now decided server-side in functions/taskPoints.js
+// (awardZoneCompleteIfDone), triggered by the courts check-in write above. It used to be computed
+// here and written straight to task_progress, but that field carries points and the rules
+// allowlist rejects owner writes to it, so the award never actually landed.

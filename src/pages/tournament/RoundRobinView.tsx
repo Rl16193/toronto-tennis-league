@@ -4,6 +4,8 @@ import { Button } from '../../components/Button';
 import { RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
 import { formatPlayerName } from './utils';
 import { RRGroupCard } from './RRGroupCard';
+import { useStandings } from '../../features/leagues/useStandings';
+import { useContacts } from '../../features/contacts/useContacts';
 import { BracketView } from './BracketView';
 import { BracketErrorBoundary } from './BracketErrorBoundary';
 
@@ -28,6 +30,12 @@ type Props = {
   pendingMatchIds?: Set<string>;
   onSaveGroupEdit: (rrGroup: number, newPlayers: TournamentPlayer[]) => void;
   onRenameGroup?: (rrGroup: number, label: string) => void;
+  onRemovePlayer?: (uid: string) => void;
+  /** Organizer moves a player into another zone’s draw (see handleMoveZoneByUid). */
+  onMovePlayerZone?: (uid: string, bucketId: string) => void;
+  /** Participant asks the organizer to schedule one of their unplayed matches. */
+  onAskSchedule?: (match: TournamentMatch) => void;
+  zoneBuckets?: { id: string; label: string }[];
   onCreateGroup?: (players: TournamentPlayer[], label?: string) => void;
   unplacedPlayers?: TournamentPlayer[];
   rrKnockoutReady: boolean;
@@ -58,7 +66,6 @@ const KnockoutSizeBar: React.FC<{
         R{size}
       </button>
     ))}
-    <span className="text-xs text-fg/50">Group winners are seeded automatically — place the rest with Edit Draw.</span>
   </div>
 );
 
@@ -79,7 +86,7 @@ const AddGroupForm: React.FC<{
     });
 
   const submit = () => {
-    const chosen = unplacedPlayers.filter((p) => selected.has(p.user_id));
+    const chosen = unplacedPlayers.filter((p) => selected.has(p.uid));
     onCreateGroup(chosen, name.trim() || undefined);
     setOpen(false);
     setName('');
@@ -98,25 +105,25 @@ const AddGroupForm: React.FC<{
   }
 
   return (
-    <div className="mt-4 rounded-2xl border border-fg/10 bg-tennis-surface/30 p-4 space-y-3">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-fg/40">New Group</p>
+    <div className="mt-4 rounded-2xl bg-tennis-surface/30 p-4 space-y-3">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70">New Group</p>
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="Group name (optional)"
-        className="w-full bg-tennis-surface border border-fg/10 rounded px-2 py-1.5 text-fg text-xs"
+        placeholder="Group name"
+        className="border border-fg/25 w-full bg-tennis-surface rounded px-2 py-1.5 text-fg text-xs"
       />
       {unplacedPlayers.length > 0 ? (
         <div className="max-h-48 overflow-y-auto space-y-1">
           {unplacedPlayers.map((p) => (
-            <label key={p.user_id} className="flex items-center gap-2 text-fg/80 text-xs cursor-pointer">
-              <input type="checkbox" checked={selected.has(p.user_id)} onChange={() => toggle(p.user_id)} className="accent-clay" />
+            <label key={p.uid} className="flex items-center gap-2 text-fg text-xs cursor-pointer">
+              <input type="checkbox" checked={selected.has(p.uid)} onChange={() => toggle(p.uid)} className="accent-clay" />
               {formatPlayerName(p.name)}
             </label>
           ))}
         </div>
       ) : (
-        <p className="text-xs text-fg/40">
+        <p className="text-xs text-fg/70">
           No unplaced players. You can still create an empty group and use &quot;Add player...&quot; inside a group card to move players in.
         </p>
       )}
@@ -136,10 +143,27 @@ export const RoundRobinView: React.FC<Props> = ({
   groups, groupLabels, groupIndices, standingsByGroup, groupMatches, knockoutMatches,
   advancementCount, isCreator, isParticipant, currentUserId, isPastEvent, editMode, editPlayers,
   onEditPlayer, onSubmitScore, submittableMatchIds, pendingMatchIds, onSaveGroupEdit,
-  onRenameGroup, onCreateGroup, unplacedPlayers,
+  onRenameGroup, onRemovePlayer, onMovePlayerZone, zoneBuckets, onAskSchedule, onCreateGroup, unplacedPlayers,
   rrKnockoutReady, generatingKnockout, onGenerateKnockout, rrView,
   roundDeadlines, onUpdateDeadline,
 }) => {
+  // HOOKS FIRST — every hook below has to run on every render. These used to sit further down,
+  // after `groups.length === 0` and the knockout branch returned early, which changes the hook
+  // count between renders the moment data arrives or the view is switched.
+  //
+  // One standings read and one contacts read for every group card on the page, so the expanded
+  // tiles show career numbers and a Contact button without each card fetching its own.
+  const { rows: standingsRows } = useStandings();
+  const statsByUid = React.useMemo(
+    () => new Map(standingsRows.map((r) => [r.user_id, r])),
+    [standingsRows],
+  );
+  const contactUids = React.useMemo(
+    () => [...new Set(groups.flat().map((p) => p.uid).filter(Boolean))],
+    [groups],
+  );
+  const contactsByUid = useContacts(contactUids);
+
   if (groups.length === 0) return null;
 
   // All players across all groups + unplaced pool (for reassignment / Add Player dropdowns).
@@ -169,6 +193,7 @@ export const RoundRobinView: React.FC<Props> = ({
               editMode={editMode}
               editPlayers={editMode ? editPlayers : []}
               onEditPlayer={onEditPlayer}
+              onRemovePlayer={onRemovePlayer}
               isCreator={isCreator}
               onSubmitScore={onSubmitScore}
               submittableMatchIds={submittableMatchIds}
@@ -178,8 +203,8 @@ export const RoundRobinView: React.FC<Props> = ({
             />
           </BracketErrorBoundary>
         ) : (
-          <div className="rounded-2xl border border-fg/10 bg-tennis-surface/20 p-8 text-center">
-            <p className="text-sm text-fg/60">
+          <div className="rounded-2xl bg-tennis-surface/20 p-8 text-center">
+            <p className="text-sm text-fg/70">
               {isCreator ? 'Pick a round size above to build the knockout bracket.' : 'The knockout bracket has not been set up yet.'}
             </p>
           </div>
@@ -192,7 +217,7 @@ export const RoundRobinView: React.FC<Props> = ({
     <div className="space-y-8">
       {/* Group stage */}
       <div>
-        <p className="text-xs uppercase tracking-widest text-fg/40 font-bold mb-4">Group Stage</p>
+        <p className="text-xs uppercase tracking-widest text-fg/70 font-bold mb-4">Group Stage</p>
         <div className="grid gap-4">
           {groups.map((players, gi) => (
             <RRGroupCard
@@ -201,10 +226,11 @@ export const RoundRobinView: React.FC<Props> = ({
               groupLabel={groupLabels[gi] ?? `Group ${String.fromCharCode(65 + gi)}`}
               players={players}
               matches={groupMatches.filter((m) => {
-                const ids = new Set(players.map((p) => p.user_id));
-                return ids.has(m.player_1_user_id) || ids.has(m.player_2_user_id);
+                const ids = new Set(players.map((p) => p.uid));
+                return ids.has(m.player_1_uid) || ids.has(m.player_2_uid);
               })}
               standings={standingsByGroup[gi] ?? []}
+              statsByUid={statsByUid}
               advancementCount={advancementCount}
               isCreator={isCreator}
               isParticipant={isParticipant}
@@ -221,6 +247,11 @@ export const RoundRobinView: React.FC<Props> = ({
               // saves/renames target the correct group even when indices are non-contiguous.
               onSaveGroupEdit={(_, newPlayers) => onSaveGroupEdit(groupIndices?.[gi] ?? gi, newPlayers)}
               onRenameGroup={onRenameGroup ? (label) => onRenameGroup(groupIndices?.[gi] ?? gi, label) : undefined}
+              onRemovePlayer={onRemovePlayer}
+              onMovePlayerZone={onMovePlayerZone}
+              zoneBuckets={zoneBuckets}
+              onAskSchedule={onAskSchedule}
+              contactsByUid={contactsByUid}
             />
           ))}
         </div>

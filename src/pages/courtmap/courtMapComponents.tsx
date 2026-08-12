@@ -27,14 +27,17 @@ export function FilterSelect({
   const selStyle = { background: SEL_BG, color: 'var(--color-fg)' } as const;
   return (
     <div className={`flex flex-col gap-0.5 ${disabled ? 'opacity-35 pointer-events-none' : ''}`}>
-      <span className="text-fg/50 text-[10px] uppercase tracking-wide">{label}</span>
+      <span className="text-fg/70 text-[10px] uppercase tracking-wide">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         style={{ background: SEL_BG }}
-        className="w-full text-xs text-fg rounded-md px-2 py-1.5 border border-fg/20
-                   focus:outline-none focus:border-fg/40 appearance-none cursor-pointer"
+        // Borderless to match the flat chrome elsewhere. The filled background (SEL_BG) and the
+        // focus ring carry the affordance the outline used to, so the control is still obviously
+        // a control without drawing a box around every filter.
+        className="w-full text-xs text-fg rounded-md px-2 py-1.5
+                   focus:outline-none focus:ring-2 focus:ring-clay/40 appearance-none cursor-pointer"
       >
         <option value="" style={selStyle}>All</option>
         {options.map((o) => (
@@ -57,7 +60,7 @@ export function DaysDropdown({
 
   return (
     <div className="flex flex-col gap-0.5 relative">
-      <span className="text-fg/50 text-[10px] uppercase tracking-wide">Days</span>
+      <span className="text-fg/70 text-[10px] uppercase tracking-wide">Days</span>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -66,7 +69,7 @@ export function DaysDropdown({
         style={{ background: SEL_BG }}
       >
         <span className="truncate">{label}</span>
-        <span className="text-fg/40 ml-1 text-[9px]">{open ? '▲' : '▼'}</span>
+        <span className="text-fg/70 ml-1 text-[9px]">{open ? '▲' : '▼'}</span>
       </button>
       <AnimatePresence>
         {open && (

@@ -3,11 +3,11 @@ export const SKILL_LEVELS = [2, 2.5, 3, 3.5, 4, 4.5, 5] as const;
 // Levels a player may self-select — the full range, matching SKILL_LEVELS.
 export const SELECTABLE_SKILL_LEVELS = [2, 2.5, 3, 3.5, 4, 4.5, 5] as const;
 
-// Plain-language bands shown next to the skill slider, one per line.
+// Plain-language bands shown below the selected skill box.
 export const SKILL_LEVEL_TIERS = [
   { range: '2–2.5', label: 'Beginner' },
-  { range: '3–3.5', label: 'Intermediate' },
-  { range: '4+', label: 'Skilled' },
+  { range: '3–3.5', label: 'Challengers' },
+  { range: '4–5', label: 'Masters' },
 ] as const;
 
 export const TOURNAMENT_OPTIONS = [

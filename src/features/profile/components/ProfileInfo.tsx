@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Pencil, X, Check, MapPin, Star, Loader2, Users, Award } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import IntlTelInput from '@intl-tel-input/react/with-utils';
@@ -8,14 +8,19 @@ import { storage } from '../../../lib/firebase';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { RacquetIcon } from '../../../components/RacquetIcon';
-import { SELECTABLE_SKILL_LEVELS, SKILL_LEVEL_TIERS, skillTier, leagueDivision, leagueAgeCategory } from '../../../utils/skillLevels';
+import { SELECTABLE_SKILL_LEVELS, skillTier, leagueDivision, leagueAgeCategory } from '../../../utils/skillLevels';
 import {
   defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts,
   getCourtSuggestions, mergeCourtOptions,
 } from '../../signup/utils/courtSearch';
-import { getZoneWithBorderCheck } from '../../../utils/zones';
+import { zoneFromCourts } from '../../../utils/zones';
 import { formatPhone } from '../../../utils/formatPhone';
+import { skillBand } from '../../../pages/tournament/utils';
+import { getFavouritePlayerSuggestions, useFavouritePlayerOptions } from '../favouritePlayers';
 import { BadgePicker } from '../../tasks/BadgePicker';
+import { BADGE_PILL_CLASS } from '../../tasks/badges';
+import { Counters } from '../../tasks/useTasks';
+import { TaskProgress } from '../../../types';
 
 type Actions = {
   updateName: (name: string) => Promise<boolean>;
@@ -37,25 +42,23 @@ interface Props {
   actions: Actions;
   updateLoading: boolean;
   message?: { text: string; type: 'success' | 'error' } | null;
+  progress: TaskProgress | null;
+  counters: Counters;
 }
-
-const FAVOURITE_PLAYERS = ['Jannik Sinner', 'Carlos Alcaraz', 'Rafael Nadal', 'Roger Federer', 'Novak Djokovic'];
-
-const tournamentPref = (skill: number) => (skill < 3 ? 'Beginners' : skill < 4 ? 'Challengers' : 'Masters');
 
 
 type Row = 'name' | 'phone' | 'whatsapp' | 'bio' | 'skill' | 'league' | 'courts' | 'favourites' | 'email' | null;
 
 const SectionHeader: React.FC<{ icon: React.ReactNode; label: string; editing: boolean; onEdit: () => void; onCancel: () => void }> = ({ icon, label, editing, onEdit, onCancel }) => (
   <div className="flex items-center justify-between gap-3">
-    <span className="text-xs font-bold text-fg/50 uppercase tracking-widest flex items-center gap-1.5">{icon}{label}</span>
-    <button type="button" onClick={editing ? onCancel : onEdit} className="text-fg/40 hover:text-fg transition-colors" aria-label={editing ? 'Cancel' : `Edit ${label}`}>
+    <span className="text-xs font-bold text-fg/70 uppercase tracking-widest flex items-center gap-1.5">{icon}{label}</span>
+    <button type="button" onClick={editing ? onCancel : onEdit} className="text-fg/70 hover:text-fg transition-colors" aria-label={editing ? 'Cancel' : `Edit ${label}`}>
       {editing ? <X className="w-4 h-4" /> : <Pencil className="w-3.5 h-3.5" />}
     </button>
   </div>
 );
 
-export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }) => {
+export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, progress, counters }) => {
   const { profile } = useAuth();
   const [editing, setEditing] = useState<Row>(null);
 
@@ -86,6 +89,22 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
   const [courtInput, setCourtInput] = useState('');
   const [favDraft, setFavDraft] = useState<string[]>([]);
   const [favInput, setFavInput] = useState('');
+  // Only read once the editor is open — it's a full pass over `preferences`.
+  const favOptions = useFavouritePlayerOptions(editing === 'favourites');
+  const favSuggestions = getFavouritePlayerSuggestions(favOptions.all, favDraft, favInput);
+  // Quick picks: the three names most chosen by men's-league members and the three most chosen
+  // by women's-league members. Deduped against each other and against what's already picked, so
+  // a name popular in both leagues doesn't take two of the six slots.
+  const favQuickPicks = useMemo(
+    () => [...new Set([...favOptions.mens, ...favOptions.womens])].filter((p) => !favDraft.includes(p)),
+    [favOptions, favDraft],
+  );
+  const addFavourite = (raw: string) => {
+    const name = raw.trim();
+    if (!name || favDraft.includes(name)) return;
+    setFavDraft([...favDraft, name]);
+    setFavInput('');
+  };
   const [emailDraft, setEmailDraft] = useState('');
   const [emailPassword, setEmailPassword] = useState('');
   const [emailSent, setEmailSent] = useState(false);
@@ -95,13 +114,13 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
   const [avatarUploading, setAvatarUploading] = useState(false);
 
   if (!profile) return null;
-  const { user, stats, preferences } = profile;
+  const { user, stats, preferences, contacts } = profile;
 
   const open = (row: Row) => {
     setNameDraft(user.name);
-    setPhoneDraft(user.phone);
-    setWaDraft(user.whatsapp_contact ?? '');
-    setWaSameAsPhone(!!user.whatsapp_same_as_phone);
+    setPhoneDraft(contacts.phone);
+    setWaDraft(contacts.whatsapp_contact ?? '');
+    setWaSameAsPhone(!!contacts.whatsapp_same_as_phone);
     setWaValid(true);
     setBioDraft(user.bio ?? '');
     setSkillDraft(stats.skill_level);
@@ -116,11 +135,12 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
   const save = async (fn: () => Promise<boolean>) => { if (await fn()) setEditing(null); };
 
   const computeZone = (courts: string[]): string => {
-    const first = courts[0];
-    if (!first) return '';
-    const c = courtCoords.get(first.trim().toLowerCase());
-    if (!c) return preferences.preferred_zone || '';
-    return getZoneWithBorderCheck(c.lat, c.lng).primary;
+    if (courts.length === 0) return '';
+    // Majority vote across ALL preferred courts (not just the first one) — a player who splits
+    // time across zones should land in whichever zone most of their courts are actually in,
+    // with Downtown as the tiebreaker (see zoneFromCourts).
+    const zone = zoneFromCourts(courts, courtCoords);
+    return zone || preferences.preferred_zone || '';
   };
 
   const courtSuggestions = getCourtSuggestions(courtOptions, courtsDraft, courtInput);
@@ -146,19 +166,19 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
     }
   };
 
-  const initial = (user.name || user.email || '?').trim().charAt(0).toUpperCase();
+  const initial = (user.name || contacts.email || '?').trim().charAt(0).toUpperCase();
 
   return (
-    <div className="rounded-[2.5rem] border border-fg/5 bg-tennis-surface/30 shadow-xl p-5 sm:p-7">
+    <div className="rounded-[2.5rem] bg-tennis-surface/30 shadow-xl p-5 sm:p-7">
       <h2 className="text-xl font-bold text-fg mb-5">Profile Card</h2>
 
       {/* Avatar + name/phone/bio, vertical */}
       <div className="flex flex-col items-center gap-4 pb-5 border-b border-fg/5">
         <div className="relative">
-          <div className="w-24 h-24 rounded-full bg-tennis-surface flex items-center justify-center overflow-hidden border border-fg/10">
+          <div className="w-24 h-24 rounded-full bg-tennis-surface flex items-center justify-center overflow-hidden">
             {user.avatar
               ? <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              : <span className="text-4xl font-black text-fg/80">{initial}</span>}
+              : <span className="text-4xl font-black text-fg">{initial}</span>}
           </div>
           <button
             type="button"
@@ -192,7 +212,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
               <Input value={phoneDraft} onChange={(e) => setPhoneDraft(formatPhone(e.target.value))} placeholder="(416)-555-0123" />
               <Button size="sm" onClick={() => save(() => actions.updatePhone(phoneDraft))} isLoading={updateLoading}><Check className="w-4 h-4" /></Button>
             </div>
-          ) : <p className="text-lg font-bold text-fg mt-0.5">{user.phone || '—'}</p>}
+          ) : <p className="text-lg font-bold text-fg mt-0.5">{contacts.phone || '—'}</p>}
         </div>
 
         {/* WhatsApp Contact */}
@@ -218,7 +238,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
                   separateDialCode
                   inputProps={{
                     placeholder: 'WhatsApp number',
-                    className: 'w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 px-4 py-3 text-fg placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none',
+                    className: 'w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none',
                   }}
                 />
               )}
@@ -233,7 +253,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
             </div>
           ) : (
             <p className="text-lg font-bold text-fg mt-0.5">
-              {user.whatsapp_same_as_phone ? 'Same as phone number' : (user.whatsapp_contact || '—')}
+              {contacts.whatsapp_same_as_phone ? 'Same as phone number' : (contacts.whatsapp_contact || '—')}
             </p>
           )}
         </div>
@@ -244,11 +264,11 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
           {editing === 'bio' ? (
             <div className="mt-2 space-y-2">
               <textarea value={bioDraft} onChange={(e) => setBioDraft(e.target.value)} rows={3} maxLength={300}
-                placeholder="Your tennis vibe — play times, rally or games, and any other details?"
-                className="w-full rounded-2xl bg-tennis-surface/50 border border-fg/10 px-4 py-3 text-fg placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none" />
+                placeholder="Your tennis vibe: play times, rally or games, and any other details?"
+                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none" />
               <Button size="sm" onClick={() => save(() => actions.updateBio(bioDraft))} isLoading={updateLoading}>Save</Button>
             </div>
-          ) : <p className="text-sm text-fg/70 mt-0.5">{user.bio?.trim() || <span className="text-fg/40">No bio yet.</span>}</p>}
+          ) : <p className="text-sm text-fg/70 mt-0.5">{user.bio?.trim() || <span className="text-fg/70">No bio yet.</span>}</p>}
         </div>
 
         {/* Skill */}
@@ -256,18 +276,31 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
           <SectionHeader icon={<RacquetIcon className="w-3.5 h-3.5 text-clay" />} label="Skill Level" editing={editing === 'skill'} onEdit={() => open('skill')} onCancel={() => setEditing(null)} />
           {editing === 'skill' ? (
             <div className="mt-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-3xl font-black text-clay">{skillDraft}</span>
+              {/* Same control as signup: one column per level filling the width, an INSET border
+                  for the selected state (a ring paints outside the box and gets clipped by the
+                  card edge), and the band name centred underneath. The range slider this replaced
+                  was hard to land on an exact half-step on a phone. */}
+              <div className="grid grid-cols-7 gap-1.5">
+                {SELECTABLE_SKILL_LEVELS.map((level) => {
+                  const active = skillDraft === level;
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setSkillDraft(level)}
+                      className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
+                        active ? 'bg-clay/10 text-clay border-clay' : 'bg-fg/5 text-fg border-transparent hover:bg-fg/10'
+                      }`}
+                    >
+                      {level.toFixed(1)}
+                    </button>
+                  );
+                })}
               </div>
-              <input type="range" min={0} max={SELECTABLE_SKILL_LEVELS.length - 1} step={1}
-                value={(() => { const i = SELECTABLE_SKILL_LEVELS.indexOf(skillDraft as typeof SELECTABLE_SKILL_LEVELS[number]); return i >= 0 ? i : SELECTABLE_SKILL_LEVELS.length - 1; })()}
-                onChange={(e) => setSkillDraft(SELECTABLE_SKILL_LEVELS[Number(e.target.value)])} className="w-full" />
-              <div className="text-xs text-fg/60 text-center space-y-0.5">
-                {SKILL_LEVEL_TIERS.map((t) => (
-                  <p key={t.label}>{t.range} {t.label}</p>
-                ))}
-              </div>
-              <Button size="sm" onClick={() => save(() => actions.updateSkills(skillDraft, tournamentPref(skillDraft)))} isLoading={updateLoading}>Save</Button>
+              {/* skillBand is the same function the draw engine groups on, so this label and the
+                  group a player actually lands in can never disagree. */}
+              <p className="text-sm font-bold text-clay text-center">{skillBand(skillDraft)}</p>
+              <Button size="sm" onClick={() => save(() => actions.updateSkills(skillDraft, skillBand(skillDraft)))} isLoading={updateLoading}>Save</Button>
             </div>
           ) : (
             <div className="mt-1 flex items-center gap-2">
@@ -304,7 +337,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
                   onClick={() => setAgeCategoryDraft(ageCategoryDraft === 'Retired Pro' ? '' : 'Retired Pro')}
                   className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
                     !leagueDraft
-                      ? 'bg-fg/5 border-fg/5 text-fg/30 cursor-not-allowed'
+                      ? 'bg-fg/5 border-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
                       : ageCategoryDraft === 'Retired Pro'
                         ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
                         : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
@@ -318,7 +351,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
                   onClick={() => setAgeCategoryDraft(ageCategoryDraft === 'Juniors' ? '' : 'Juniors')}
                   className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
                     !leagueDraft
-                      ? 'bg-fg/5 border-fg/5 text-fg/30 cursor-not-allowed'
+                      ? 'bg-fg/5 border-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
                       : ageCategoryDraft === 'Juniors'
                         ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
                         : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
@@ -328,7 +361,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
                 </button>
               </div>
               {!leagueDraft && (
-                <p className="text-[11px] text-fg/40">Choose a league above to unlock Retired Pro / Juniors.</p>
+                <p className="text-[11px] text-fg/70">Choose a league above to unlock Retired Pro / Juniors.</p>
               )}
               <label className="flex items-center gap-2 cursor-pointer text-sm text-fg/70">
                 <input type="checkbox" checked={visibleDraft} onChange={(e) => setVisibleDraft(e.target.checked)} className="accent-clay" />
@@ -339,36 +372,40 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
           ) : (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {leagueDivision(stats.league) && (
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70 border border-fg/10">{leagueDivision(stats.league)} League</span>
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{leagueDivision(stats.league)} League</span>
               )}
               {leagueAgeCategory(stats.league) && (
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70 border border-fg/10">{leagueAgeCategory(stats.league)}</span>
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{leagueAgeCategory(stats.league)}</span>
               )}
               {!leagueDivision(stats.league)
-                ? <span className="text-sm text-fg/40">Not set.</span>
-                : <span className="text-[11px] text-fg/40 ml-1">{user.profile_details_visible ? 'Visible to others' : 'Hidden from others'}</span>}
+                ? <span className="text-sm text-fg/70">Not set.</span>
+                : <span className="text-[11px] text-fg/70 ml-1">{user.profile_details_visible ? 'Visible to others' : 'Hidden from others'}</span>}
             </div>
           )}
         </div>
 
         {/* Badges */}
         <div className="py-3">
-          <span className="text-xs font-bold text-fg/50 uppercase tracking-widest flex items-center gap-1.5">
+          <span className="text-xs font-bold text-fg/70 uppercase tracking-widest flex items-center gap-1.5">
             <Award className="w-3.5 h-3.5 text-clay" />Badges
           </span>
-          <div className="mt-2">
-            <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-badge border border-amber-500/25">{skillTier(stats.skill_level)}</span>
+          {/* Skill tag and badges share one row — badges use the same pill so the whole line
+              reads as one set of labels. */}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className={BADGE_PILL_CLASS}>{skillTier(stats.skill_level)}</span>
+            <BadgePicker
+              selected={user.display_badges ?? []}
+              onSave={actions.updateDisplayBadges}
+              saving={updateLoading}
+              progress={progress}
+              counters={counters}
+            />
           </div>
-          <BadgePicker
-            selected={user.display_badges ?? []}
-            onSave={actions.updateDisplayBadges}
-            saving={updateLoading}
-          />
         </div>
 
-        {/* Preferred Courts */}
+        {/* Courts */}
         <div className="py-3">
-          <SectionHeader icon={<MapPin className="w-3.5 h-3.5 text-clay" />} label="Preferred Courts" editing={editing === 'courts'} onEdit={() => open('courts')} onCancel={() => setEditing(null)} />
+          <SectionHeader icon={<MapPin className="w-3.5 h-3.5 text-clay" />} label="Courts" editing={editing === 'courts'} onEdit={() => open('courts')} onCancel={() => setEditing(null)} />
           {editing === 'courts' ? (
             <div className="mt-2 space-y-2">
               {courtsDraft.length > 0 && (
@@ -385,9 +422,9 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
                 <Button size="sm" variant="clay" className="px-3 shrink-0" onClick={() => addCourt(courtInput)} disabled={!courtInput.trim()}>Add</Button>
               </div>
               {courtSuggestions.length > 0 && (
-                <div className="max-h-40 overflow-y-auto rounded-xl border border-fg/10 bg-tennis-dark/95 p-1">
+                <div className="max-h-40 overflow-y-auto rounded-xl bg-tennis-dark/95 p-1">
                   {courtSuggestions.map((c) => (
-                    <button key={c} type="button" onClick={() => addCourt(c)} className="w-full text-left px-3 py-2 text-sm text-fg/80 rounded-lg hover:bg-clay/20">{c}</button>
+                    <button key={c} type="button" onClick={() => addCourt(c)} className="w-full text-left px-3 py-2 text-sm text-fg rounded-lg hover:bg-clay/20">{c}</button>
                   ))}
                 </div>
               )}
@@ -396,35 +433,93 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
           ) : (
             <div className="mt-1 flex flex-wrap gap-1.5">
               {preferences.preferred_courts.length > 0
-                ? preferences.preferred_courts.map((c) => <span key={c} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70 border border-fg/10">{c}</span>)
-                : <span className="text-sm text-fg/40">None set.</span>}
+                ? preferences.preferred_courts.map((c) => <span key={c} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{c}</span>)
+                : <span className="text-sm text-fg/70">None set.</span>}
             </div>
           )}
         </div>
 
-        {/* Favourite Players */}
+        {/* Favourites */}
         <div className="py-3">
-          <SectionHeader icon={<Star className="w-3.5 h-3.5 text-clay" />} label="Favourite Players" editing={editing === 'favourites'} onEdit={() => open('favourites')} onCancel={() => setEditing(null)} />
+          <SectionHeader icon={<Star className="w-3.5 h-3.5 text-clay" />} label="Favourites" editing={editing === 'favourites'} onEdit={() => open('favourites')} onCancel={() => setEditing(null)} />
+          {/* A search box over what members have actually picked, ranked by popularity — the old
+              version was a grid of five hardcoded names as toggle chips. Chosen names are pills,
+              same treatment as Courts above, so the two sections read as one card. */}
           {editing === 'favourites' ? (
             <div className="mt-2 space-y-2">
-              <div className="flex flex-wrap gap-1.5">
-                {[...new Set([...FAVOURITE_PLAYERS, ...favDraft])].map((p) => (
-                  <button key={p} type="button" onClick={() => setFavDraft(favDraft.includes(p) ? favDraft.filter((x) => x !== p) : [...favDraft, p])}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${favDraft.includes(p) ? 'bg-clay text-fg border-clay' : 'bg-white text-tennis-dark border-fg'}`}>{p}</button>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Input placeholder="Add your own player…" value={favInput} onChange={(e) => setFavInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const v = favInput.trim(); if (v && !favDraft.includes(v)) { setFavDraft([...favDraft, v]); setFavInput(''); } } }} />
-                <Button size="sm" variant="clay" className="px-3 shrink-0" onClick={() => { const v = favInput.trim(); if (v && !favDraft.includes(v)) { setFavDraft([...favDraft, v]); setFavInput(''); } }} disabled={!favInput.trim()}>Add</Button>
-              </div>
+              {favDraft.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {favDraft.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setFavDraft(favDraft.filter((x) => x !== p))}
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold bg-clay text-fg flex items-center gap-1.5"
+                      aria-label={`Remove ${p}`}
+                    >
+                      {p} <span className="opacity-70">✕</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Quick picks — one tap for the names the two leagues actually pick most, so the
+                  common case needs no typing. Data-driven, not a hardcoded list. */}
+              {favQuickPicks.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {favQuickPicks.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => addFavourite(p)}
+                      className="px-3 py-1 rounded-full text-xs font-bold bg-fg/5 text-fg hover:bg-clay/20 transition-colors"
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <Input
+                placeholder="Search or add a player…"
+                value={favInput}
+                onChange={(e) => setFavInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFavourite(favInput); } }}
+              />
+
+              {favSuggestions.length > 0 && (
+                <div className="max-h-40 overflow-y-auto rounded-2xl bg-tennis-dark/60 p-1">
+                  {favSuggestions.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => addFavourite(p)}
+                      className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* The list only knows names members have already saved, so anything new has to be
+                  typed — that's also how the list grows. */}
+              {!!favInput.trim() && !favSuggestions.includes(favInput.trim()) && (
+                <button
+                  type="button"
+                  onClick={() => addFavourite(favInput)}
+                  className="text-xs font-bold text-clay hover:underline"
+                >
+                  Add “{favInput.trim()}”
+                </button>
+              )}
+
               <Button size="sm" onClick={() => save(() => actions.updateFavouritePlayers(favDraft))} isLoading={updateLoading}>Save</Button>
             </div>
           ) : (
             <div className="mt-1 flex flex-wrap gap-1.5">
               {preferences.favourite_players.length > 0
-                ? preferences.favourite_players.map((p) => <span key={p} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70 border border-fg/10">{p}</span>)
-                : <span className="text-sm text-fg/40">None set.</span>}
+                ? preferences.favourite_players.map((p) => <span key={p} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{p}</span>)
+                : <span className="text-sm text-fg/70">None set.</span>}
             </div>
           )}
         </div>
@@ -433,8 +528,8 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
             received/accepted, weekly incomplete-matches digest). Instant toggle, no draft/save. */}
         <div className="py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-widest text-fg/50">Email Notifications</p>
-            <p className="text-xs text-fg/40 mt-0.5">Challenge/rally updates and your weekly incomplete-matches reminder.</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-fg/70">Email Notifications</p>
+            <p className="text-xs text-fg/70 mt-0.5">Challenge/rally updates and your weekly incomplete-matches reminder.</p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer shrink-0">
             <input
@@ -454,7 +549,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message }
       <div className="pt-4 mt-1 border-t border-fg/5">
         {editing === 'email' ? (
           <div className="space-y-2">
-            <p className="text-xs font-bold text-fg/50 uppercase tracking-widest">Change Email Address</p>
+            <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Change Email Address</p>
             {emailSent ? (
               <div className="space-y-2">
                 <p className="text-sm text-fg/70">Verification sent to <span className="text-fg">{emailDraft}</span>. Confirm it, then refresh.</p>

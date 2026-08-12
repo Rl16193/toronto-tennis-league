@@ -1,7 +1,16 @@
 import { User } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from './firebase';
-import { UserData, UserPreferences, UserStats } from '../types';
+import { ContactData, UserData, UserPreferences, UserStats } from '../types';
+
+export const emptyContacts = (): ContactData => ({
+  email: '',
+  phone: '',
+  preferred_mode_of_contact: 'email',
+  whatsapp_contact: '',
+  whatsapp_same_as_phone: false,
+  contactable: false,
+});
 
 const createDefaultStats = (user: User): UserStats => ({
   name: user.displayName?.trim() || '',
@@ -32,10 +41,12 @@ export const ensureUserProfileDocuments = async (user: User) => {
   const userRef = doc(db, 'users', user.uid);
   const statsRef = doc(db, 'stats', user.uid);
   const preferencesRef = doc(db, 'preferences', user.uid);
-  const [userSnap, statsSnap, preferencesSnap] = await Promise.all([
+  const contactsRef = doc(db, 'contacts', user.uid);
+  const [userSnap, statsSnap, preferencesSnap, contactsSnap] = await Promise.all([
     getDoc(userRef),
     getDoc(statsRef),
     getDoc(preferencesRef),
+    getDoc(contactsRef),
   ]);
 
   const writes: Promise<void>[] = [];
@@ -43,23 +54,30 @@ export const ensureUserProfileDocuments = async (user: User) => {
   if (!userSnap.exists()) {
     const userData: UserData = {
       name: user.displayName?.trim() || '',
-      email: user.email || '',
-      phone: '',
-      preferred_mode_of_contact: 'email',
-      whatsapp_contact: '',
-      whatsapp_same_as_phone: false,
       avatar: user.photoURL || '',
       created_at: new Date().toISOString(),
     };
-    writes.push(setDoc(userRef, userData));
+    writes.push(setDoc(userRef, { ...userData, uid: user.uid }));
   }
 
   if (!statsSnap.exists()) {
-    writes.push(setDoc(statsRef, createDefaultStats(user)));
+    writes.push(setDoc(statsRef, { ...createDefaultStats(user), uid: user.uid }));
   }
 
   if (!preferencesSnap.exists()) {
-    writes.push(setDoc(preferencesRef, createDefaultPreferences()));
+    writes.push(setDoc(preferencesRef, { ...createDefaultPreferences(), uid: user.uid }));
+  }
+
+  // Created for every account, including legacy ones signing in for the first time after the
+  // contacts split — the backfill handles the rest. Seeded with the auth email so notification
+  // emails keep working before the member touches their profile.
+  if (!contactsSnap.exists()) {
+    writes.push(setDoc(contactsRef, {
+      ...emptyContacts(),
+      email: user.email || '',
+      updated_at: new Date().toISOString(),
+      uid: user.uid,
+    }));
   }
 
   await Promise.all(writes);
@@ -68,5 +86,6 @@ export const ensureUserProfileDocuments = async (user: User) => {
     createdUser: !userSnap.exists(),
     createdStats: !statsSnap.exists(),
     createdPreferences: !preferencesSnap.exists(),
+    createdContacts: !contactsSnap.exists(),
   };
 };

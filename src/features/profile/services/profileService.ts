@@ -1,4 +1,4 @@
-import { doc, updateDoc, getDocs, query, where, collection, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, getDocs, query, where, collection, writeBatch } from 'firebase/firestore';
 import { EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail, type User } from 'firebase/auth';
 import { db } from '../../../lib/firebase';
 import { gridToLegacy, type AvailabilityGrid } from '../../../utils/availability';
@@ -6,7 +6,7 @@ import { gridToLegacy, type AvailabilityGrid } from '../../../utils/availability
 // Sync the display name onto stats/preferences and every event_participants doc.
 const syncName = async (userId: string, name: string) => {
   await updateDoc(doc(db, 'stats', userId), { name });
-  const snap = await getDocs(query(collection(db, 'event_participants'), where('user_id', '==', userId)));
+  const snap = await getDocs(query(collection(db, 'event_participants'), where('uid', '==', userId)));
   if (!snap.empty) {
     const batch = writeBatch(db);
     snap.docs.forEach((d) => batch.update(d.ref, { user_name: name }));
@@ -22,22 +22,30 @@ export const updateName = async (userId: string, name: string) => {
   await syncName(userId, trimmed);
 };
 
+// Contact details live in `contacts/{uid}`, not `users` — see the ContactData doc comment.
+// setDoc(merge) rather than updateDoc so a legacy account with no contacts doc yet can still
+// save (updateDoc fails outright on a missing document).
 export const updatePhone = async (userId: string, phone: string) => {
   const digits = phone.replace(/\D/g, '');
   if (digits.length !== 10) throw new Error('Phone number must be exactly 10 digits.');
-  await updateDoc(doc(db, 'users', userId), {
+  await setDoc(doc(db, 'contacts', userId), {
     phone: `(${digits.slice(0, 3)})-${digits.slice(3, 6)}-${digits.slice(6, 10)}`,
-  });
+    updated_at: new Date().toISOString(),
+  }, { merge: true });
 };
 
 export const updateWhatsappContact = async (userId: string, whatsappContact: string, sameAsPhone: boolean) => {
   if (!sameAsPhone && whatsappContact && !/^\+[1-9]\d{6,14}$/.test(whatsappContact)) {
     throw new Error('Enter a valid WhatsApp number.');
   }
-  await updateDoc(doc(db, 'users', userId), {
+  await setDoc(doc(db, 'contacts', userId), {
     whatsapp_contact: sameAsPhone ? '' : whatsappContact,
     whatsapp_same_as_phone: sameAsPhone,
-  });
+    // Consent is implied by giving a reachable messaging number, either by saying the phone
+    // doubles as WhatsApp or by supplying a separate one. Clearing both withdraws it.
+    contactable: sameAsPhone || !!whatsappContact,
+    updated_at: new Date().toISOString(),
+  }, { merge: true });
 };
 
 export const updateBio = async (userId: string, bio: string) => {
@@ -52,7 +60,7 @@ export const updateSkills = async (userId: string, skillLevel: number, tournamen
   if (Number.isNaN(skillLevel)) throw new Error('Please select a valid skill level.');
   await updateDoc(doc(db, 'stats', userId), { skill_level: skillLevel, tournament_preference: tournamentPreference });
 
-  const snap = await getDocs(query(collection(db, 'event_participants'), where('user_id', '==', userId)));
+  const snap = await getDocs(query(collection(db, 'event_participants'), where('uid', '==', userId)));
   const toSync = snap.docs.filter((d) => (d.data().tournament_choice || '') !== 'Doubles');
   if (toSync.length > 0) {
     const batch = writeBatch(db);

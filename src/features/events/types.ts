@@ -5,6 +5,7 @@ export type JoinFormState = {
   seniors: boolean;
   partnerName: string;
   partnerInApp: 'yes' | 'no' | '';
+  partnerUid: string;
   combinedSkill: string;
   dateselected: string[];
 };
@@ -29,6 +30,7 @@ export const INITIAL_JOIN_FORM: JoinFormState = {
   seniors: false,
   partnerName: '',
   partnerInApp: '',
+  partnerUid: '',
   combinedSkill: '',
   dateselected: [],
 };

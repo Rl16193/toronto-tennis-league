@@ -3,19 +3,17 @@ import {
   collection,
   deleteDoc,
   doc,
-  getDoc,
-  getDocs,
   increment,
-  setDoc,
+  runTransaction,
   updateDoc,
-  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 
 // Collection backing the League Ladder challenge loop. A challenge is a lightweight,
 // organizer-confirmed head-to-head: on confirm the winner gains +3 leaguePoints26 and the
 // loser loses 3 (floored at 0) — the same league standings shown on the Leagues page.
-export const LADDER_COL = 'ladder_challenges';
+// Challenges live in the shared `matches` collection, tagged with category: 'challenge'.
+export const MATCHES_COL = 'matches';
 
 export type LadderDivision = 'mens' | 'womens';
 export type LadderChallengeStatus = 'open' | 'accepted' | 'reported' | 'confirmed' | 'rejected';
@@ -24,12 +22,12 @@ export interface LadderChallenge {
   id: string;
   event_id: string;
   division: LadderDivision;
-  challenger_id: string;
-  challenger_name: string;
-  opponent_id: string;
-  opponent_name: string;
+  player_1_uid: string;
+  player_1_name: string;
+  player_2_uid: string;
+  player_2_name: string;
   status: LadderChallengeStatus;
-  claimed_winner_id?: string;
+  claimed_winner_uid?: string;
   claimed_winner_name?: string;
   score_line?: string;
   court?: string;
@@ -49,9 +47,11 @@ export interface LadderChallenge {
 export const LADDER_POINTS = 3;
 // Days a pair must wait before re-challenging each other.
 export const LADDER_COOLDOWN_DAYS = 7;
-// A player may open at most this many challenges per calendar week (Mon–Sun). Counted from the
-// live challenge docs (cancelling deletes the doc, so a cancelled challenge refunds the slot).
-export const LADDER_CHALLENGES_PER_WEEK = 3;
+// A player may have at most this many of their own SENT challenges sitting in 'open' or
+// 'accepted' status at once — no time-based reset. A challenge stops counting once it's reported
+// (score submitted, awaiting confirm), confirmed, rejected, or cancelled (cancelling deletes the
+// doc outright).
+export const LADDER_ACTIVE_CHALLENGE_CAP = 3;
 
 export async function createChallenge(args: {
   eventId: string;
@@ -59,13 +59,14 @@ export async function createChallenge(args: {
   challenger: { id: string; name: string };
   opponent: { id: string; name: string };
 }): Promise<void> {
-  await addDoc(collection(db, LADDER_COL), {
+  await addDoc(collection(db, MATCHES_COL), {
+    category: 'challenge',
     event_id: args.eventId,
     division: args.division,
-    challenger_id: args.challenger.id,
-    challenger_name: args.challenger.name,
-    opponent_id: args.opponent.id,
-    opponent_name: args.opponent.name,
+    player_1_uid: args.challenger.id,
+    player_1_name: args.challenger.name,
+    player_2_uid: args.opponent.id,
+    player_2_name: args.opponent.name,
     status: 'open',
     created_at: new Date().toISOString(),
   });
@@ -74,7 +75,7 @@ export async function createChallenge(args: {
 // Opponent accepts or declines an open challenge — same accept/decline gate as Friendlies
 // rallies. Only once accepted does the pair get each other's contact info.
 export async function respondChallenge(id: string, accept: boolean): Promise<void> {
-  await updateDoc(doc(db, LADDER_COL, id), {
+  await updateDoc(doc(db, MATCHES_COL, id), {
     status: accept ? 'accepted' : 'rejected',
     responded_at: new Date().toISOString(),
   });
@@ -95,17 +96,18 @@ export async function proposeConversion(args: {
   scoreLine: string;
   court?: string;
 }): Promise<string> {
-  const ref = await addDoc(collection(db, LADDER_COL), {
+  const ref = await addDoc(collection(db, MATCHES_COL), {
+    category: 'challenge',
     event_id: args.eventId,
     division: args.division,
-    challenger_id: args.proposer.id,
-    challenger_name: args.proposer.name,
-    opponent_id: args.other.id,
-    opponent_name: args.other.name,
+    player_1_uid: args.proposer.id,
+    player_1_name: args.proposer.name,
+    player_2_uid: args.other.id,
+    player_2_name: args.other.name,
     status: 'open',
     source: args.source,
     source_id: args.sourceId,
-    claimed_winner_id: args.winner.id,
+    claimed_winner_uid: args.winner.id,
     claimed_winner_name: args.winner.name,
     score_line: args.scoreLine,
     ...(args.court ? { court: args.court } : {}),
@@ -126,10 +128,10 @@ export async function confirmConversion(
   court?: string,
 ): Promise<void> {
   const now = new Date().toISOString();
-  await updateDoc(doc(db, LADDER_COL, id), { status: 'accepted', responded_at: now });
-  await updateDoc(doc(db, LADDER_COL, id), {
+  await updateDoc(doc(db, MATCHES_COL, id), { status: 'accepted', responded_at: now });
+  await updateDoc(doc(db, MATCHES_COL, id), {
     status: 'reported',
-    claimed_winner_id: winner.id,
+    claimed_winner_uid: winner.id,
     claimed_winner_name: winner.name,
     score_line: scoreLine,
     reported_by: confirmer.id,
@@ -146,9 +148,9 @@ export async function reportChallenge(
   reportedBy: string,
   court?: string,
 ): Promise<void> {
-  await updateDoc(doc(db, LADDER_COL, id), {
+  await updateDoc(doc(db, MATCHES_COL, id), {
     status: 'reported',
-    claimed_winner_id: winner.id,
+    claimed_winner_uid: winner.id,
     claimed_winner_name: winner.name,
     score_line: scoreLine,
     reported_by: reportedBy,
@@ -158,12 +160,12 @@ export async function reportChallenge(
 }
 
 export async function rejectChallenge(id: string): Promise<void> {
-  await updateDoc(doc(db, LADDER_COL, id), { status: 'rejected' });
+  await updateDoc(doc(db, MATCHES_COL, id), { status: 'rejected' });
 }
 
 // Challenger may retract an open (not yet reported) challenge.
 export async function cancelChallenge(id: string): Promise<void> {
-  await deleteDoc(doc(db, LADDER_COL, id));
+  await deleteDoc(doc(db, MATCHES_COL, id));
 }
 
 // Organizer confirm: apply ±3 to leaguePoints26 (loser floored at 0) and tick match counters.
@@ -172,80 +174,48 @@ export async function cancelChallenge(id: string): Promise<void> {
 // counted when the tournament match itself was scored — counting them again here would count the
 // same match twice, so that case only adds the ±3 league points, nothing else.
 export async function confirmChallenge(ch: LadderChallenge): Promise<void> {
-  if (!ch.claimed_winner_id) throw new Error('No winner reported');
-  const winnerId = ch.claimed_winner_id;
-  const loserId = winnerId === ch.challenger_id ? ch.opponent_id : ch.challenger_id;
+  if (!ch.claimed_winner_uid) throw new Error('No winner reported');
+  const winnerId = ch.claimed_winner_uid;
+  const loserId = winnerId === ch.player_1_uid ? ch.player_2_uid : ch.player_1_uid;
   const countAsNewMatch = ch.source !== 'tournament';
 
   const loserRef = doc(db, 'stats', loserId);
-  const loserSnap = await getDoc(loserRef);
-  const curLoserPts = (loserSnap.data()?.leaguePoints26 as number | undefined) ?? 0;
-  const newLoserPts = Math.max(0, curLoserPts - LADDER_POINTS);
 
-  const batch = writeBatch(db);
-  batch.update(doc(db, 'stats', winnerId), {
-    leaguePoints26: increment(LADDER_POINTS),
-    ...(countAsNewMatch ? { matchesPlayed: increment(1), wins: increment(1) } : {}),
-  });
-  batch.update(loserRef, {
-    leaguePoints26: newLoserPts,
-    ...(countAsNewMatch ? { matchesPlayed: increment(1), loses: increment(1) } : {}),
-  });
-  batch.update(doc(db, LADDER_COL, ch.id), {
-    status: 'confirmed',
-    applied: true,
-    confirmed_at: new Date().toISOString(),
-  });
-  await batch.commit();
+  // A transaction, not a batch: the loser's points are floored at 0, which needs a read before
+  // the write, and a plain read-then-batch lets two concurrent confirms both read the same
+  // starting value and each write the same result — silently dropping one deduction. The
+  // transaction re-runs on contention so the second confirm sees the first one's result.
+  // Writes are set(merge) rather than update() so a player with no stats doc yet (or a deleted
+  // account) can't reject the whole thing and strand the challenge in 'reported'.
+  const challengeRef = doc(db, MATCHES_COL, ch.id);
 
-  // Record how many places the winner climbed — best-effort, never blocks the confirm. Only
-  // ladder-driven movement counts toward the "climb N spots" tasks, which is why it's measured
-  // here rather than from the standings at large (a tournament result must not move it).
-  recordLadderClimb(ch, winnerId).catch(() => { /* climb tracking is not worth failing over */ });
+  await runTransaction(db, async (tx) => {
+    // Read the challenge INSIDE the transaction and bail if it's already been applied. Without
+    // this, two confirms fired close together (a double-tap on mobile) each read a pre-confirm
+    // world and both apply ±3 — the winner ends up +6, the loser -6, and those phantom points
+    // are spendable on Services. `applied` was already being written here; it just wasn't
+    // being read. Reads must precede writes in a transaction, so this goes first.
+    const chSnap = await tx.get(challengeRef);
+    const chData = chSnap.data();
+    if (chData?.applied === true || chData?.status === 'confirmed') return;
+
+    const loserSnap = await tx.get(loserRef);
+    const curLoserPts = (loserSnap.data()?.leaguePoints26 as number | undefined) ?? 0;
+    const newLoserPts = Math.max(0, curLoserPts - LADDER_POINTS);
+
+    tx.set(doc(db, 'stats', winnerId), {
+      leaguePoints26: increment(LADDER_POINTS),
+      ...(countAsNewMatch ? { matchesPlayed: increment(1), wins: increment(1) } : {}),
+    }, { merge: true });
+    tx.set(loserRef, {
+      leaguePoints26: newLoserPts,
+      ...(countAsNewMatch ? { matchesPlayed: increment(1), loses: increment(1) } : {}),
+    }, { merge: true });
+    tx.set(challengeRef, {
+      status: 'confirmed',
+      applied: true,
+      confirmed_at: new Date().toISOString(),
+    }, { merge: true });
+  });
 }
 
-// Places gained = how many players in the same division the winner leapfrogged by gaining 3
-// points. Counted from the standings as they were before this result was applied.
-async function recordLadderClimb(ch: LadderChallenge, winnerId: string): Promise<void> {
-  const snap = await getDocs(collection(db, 'stats'));
-  const winnerDoc = snap.docs.find((d) => d.id === winnerId);
-  if (!winnerDoc) return;
-  const winner = winnerDoc.data();
-  const league = (winner.league || '').toString().toLowerCase();
-  const isWomens = league.includes('wom') || league.includes('female');
-
-  // Same-division players, with the winner's points rolled back to their pre-match value.
-  const before = snap.docs
-    .map((d) => {
-      const s = d.data();
-      const pts = d.id === winnerId
-        ? ((s.leaguePoints26 as number) ?? 0) - LADDER_POINTS
-        : ((s.leaguePoints26 as number) ?? 0);
-      return { id: d.id, league: (s.league || '').toString().toLowerCase(), pts };
-    })
-    .filter((r) => {
-      const l = r.league;
-      const w = l.includes('wom') || l.includes('female');
-      const m = (l.includes('men') || l.includes('male')) && !w;
-      return isWomens ? w : m;
-    });
-
-  const winnerBefore = before.find((r) => r.id === winnerId);
-  if (!winnerBefore) return;
-  // Anyone the winner was behind, but has now caught or passed.
-  const climbed = before.filter(
-    (r) => r.id !== winnerId && r.pts > winnerBefore.pts && r.pts <= winnerBefore.pts + LADDER_POINTS,
-  ).length;
-  if (climbed <= 0) return;
-
-  await setDoc(
-    doc(db, 'task_progress', winnerId),
-    {
-      user_id: winnerId,
-      name: ch.claimed_winner_name || '',
-      climbSpots: increment(climbed),
-      updatedAt: new Date().toISOString(),
-    },
-    { merge: true },
-  );
-}

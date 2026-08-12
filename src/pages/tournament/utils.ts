@@ -1,6 +1,8 @@
-import { EventParticipant, UserData, UserStats } from '../../types';
+import { EventParticipant, MemberInfo, UserData, UserStats } from '../../types';
 import { parseValidDate, type FirestoreDateLike } from '../../utils/eventDates';
-import { DrawConfig, SkillGroup, TemplateMatch, TournamentMatch, TournamentPlayer } from './types';
+import { EMAIL_REGEX } from '../../utils/emailRegex';
+import { DrawConfig, SkillGroup, SKILL_GROUP_ORDER, TemplateMatch, TournamentMatch, TournamentPlayer, UNASSIGNED_ZONE_ID, ZoneBucket, ZoneDrawConfig } from './types';
+import { ZONE_NAMES } from '../../utils/zones';
 
 // Format a scheduled match date+slot as e.g. "Jul 4th, 6pm". Shared by the bracket and
 // round-robin opponent panels and the schedule controls so they read identically.
@@ -70,11 +72,11 @@ export const getMatchDisplayFlags = (
 
   const scoreText = !isPreview && match.status === 'complete' ? formatSetScores(match) : '';
   const hasBye = match.player_1_name === BYE || match.player_2_name === BYE;
-  const hasRealPlayers = !isPreview && !hasBye && !!match.player_1_user_id && !!match.player_2_user_id;
+  const hasRealPlayers = !isPreview && !hasBye && !!match.player_1_uid && !!match.player_2_uid;
   // For the creator, also allow submitting when a slot is PLAYER_LOADING (winner pending).
   const hasPlayableSlots = !isPreview && !hasBye && (
-    (!!match.player_1_user_id || match.player_1_name === PLAYER_LOADING) &&
-    (!!match.player_2_user_id || match.player_2_name === PLAYER_LOADING)
+    (!!match.player_1_uid || match.player_1_name === PLAYER_LOADING) &&
+    (!!match.player_2_uid || match.player_2_name === PLAYER_LOADING)
   );
   const showDot = !isPreview && hasRealPlayers;
   // Creator submit button (also shown for complete matches so creator can overwrite).
@@ -90,6 +92,17 @@ export const getMatchDisplayFlags = (
   };
 };
 
+// Round deadline as a short "Aug 6". Returns '' for missing/malformed input so callers can gate on
+// truthiness. Callers add their own "Till " prefix — the bracket views and the PNG export word it
+// differently around the date.
+export const formatDeadline = (iso?: string): string => {
+  if (!iso) return '';
+  const [, m, d] = iso.split('-').map(Number);
+  if (!m || !d) return '';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[m - 1]} ${d}`;
+};
+
 export const formatPlayerName = (value?: string) => {
   const trimmed = (value || '').trim();
   if (!trimmed) return '';
@@ -102,7 +115,7 @@ export const formatPlayerName = (value?: string) => {
     .join(' ');
 };
 
-const isEmailLike = (value?: string) => !!value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const isEmailLike = (value?: string) => !!value && EMAIL_REGEX.test(value);
 
 export const getParticipantDisplayName = (participant: EventParticipant, userData?: UserData) => {
   if (userData?.name && (!participant.user_name || isEmailLike(participant.user_name))) {
@@ -111,7 +124,7 @@ export const getParticipantDisplayName = (participant: EventParticipant, userDat
   if (participant.user_name) {
     return isEmailLike(participant.user_name) ? participant.user_name : formatPlayerName(participant.user_name);
   }
-  return formatPlayerName(userData?.name || participant.doubles || participant.user_id || 'Player');
+  return formatPlayerName(userData?.name || participant.doubles || participant.uid || 'Player');
 };
 
 // Kept as a thin alias over the canonical parser so the two Firestore-date shapes are handled
@@ -126,8 +139,115 @@ export const isTournamentStarted = (event: { startDate?: unknown; start_date?: u
   return !!start && start.getTime() <= Date.now();
 };
 
-export const getDrawKey = (tournamentChoice: string, division: string, skillGroup: SkillGroup) =>
-  `${tournamentChoice}_${division}_${skillGroup}`.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+/**
+ * A draw or match with NO zone belongs to the default zone.
+ *
+ * Zones went live mid-event, so every group generated before that carries no `zone` at all. Those
+ * are not a fourth, zone-less category — they are Downtown-Midtown draws that predate the field.
+ * Treating them as a separate draw is what put the running groups outside the zone list and made
+ * "N signed up" count everyone twice (once in the zone-less draw, once in their zone's).
+ *
+ * Everything that identifies or compares a draw goes through this, so "missing" and "default"
+ * are the same thing everywhere.
+ */
+export const effectiveZone = (zone?: string | null): string => zone || zoneBucketId(DEFAULT_ZONE);
+
+/** True for the default zone, including the zone-less pre-zone case. */
+export const isDefaultZone = (zone?: string | null): boolean => effectiveZone(zone) === zoneBucketId(DEFAULT_ZONE);
+
+// The default zone deliberately produces the SHORT, pre-zone key, so groups generated before
+// zones existed keep their document ids and stay reachable. Do not "fix" this asymmetry by always
+// appending the zone — that re-orphans every match already in the database.
+export const getDrawKey = (tournamentChoice: string, division: string, skillGroup: SkillGroup, zone?: string) =>
+  `${tournamentChoice}_${division}_${skillGroup}${zone && !isDefaultZone(zone) ? `_${zone}` : ''}`.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+
+// Cross-products a division's skill draws with each zone bucket, so zone becomes a real,
+// selectable draw dimension (e.g. "Men's Beginners — Downtown") instead of just a within-group
+// heuristic. Singles only — doubles is untouched.
+//
+// DRAW HIERARCHY: gender → zone → skill → courts.
+// Zone is applied here, BEFORE skill merges, because a merge belongs to one (division, zone).
+// `courts` is the planned fourth level — splitting a zone's draw by specific court once a zone
+// grows too big for one bracket. Not implemented; nothing below should assume it exists.
+export const buildZoneAwareDrawConfigs = (draws: DrawConfig[], zoneConfig: ZoneDrawConfig | undefined): DrawConfig[] => {
+  if (!zoneConfig?.enabled || zoneConfig.buckets.length === 0) return draws;
+  const merges = zoneConfig.merges ?? {};
+  // A merged-away zone gets no draws of its own — its players are routed into the target's.
+  const active = zoneConfig.buckets.filter((b) => !merges[b.id]);
+  const buckets = zoneConfig.includeUnassigned
+    ? [...active, { id: UNASSIGNED_ZONE_ID, label: 'Unassigned', zones: [] }]
+    : active;
+  return draws.flatMap((d) => {
+    if (d.tournamentChoice !== 'Singles') return [d]; // doubles: zones don't apply
+    return buckets.map((b) => ({ ...d, zone: b.id, label: `${d.label} — ${b.label}` }));
+  });
+};
+
+// The zone everyone falls back to: players who never set preferred courts, players whose zone
+// isn't covered by any bucket, and players whose zone was merged into another for this tournament.
+export const DEFAULT_ZONE = 'Downtown - Midtown';
+
+// One bucket per real zone. Zones are a fixed dimension of every tournament now, not something a
+// creator opts into and hand-builds, so the bucket list is derived from ZONE_NAMES rather than
+// stored per event. A creator's only lever is merging a quiet zone into a neighbour.
+export const zoneBucketId = (zone: string) => zone.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+export const DEFAULT_ZONE_BUCKETS: ZoneBucket[] = ZONE_NAMES.map((z) => ({
+  id: zoneBucketId(z),
+  label: z,
+  zones: [z],
+}));
+
+/**
+ * Follow a zone through any merges to the zone it actually plays in. Chains resolve (A→B, B→C
+ * gives C) and a cycle bails out rather than looping forever.
+ */
+export const resolveMergedZone = (bucketId: string, merges: Record<string, string> = {}): string => {
+  let current = bucketId;
+  const seen = new Set<string>([current]);
+  while (merges[current]) {
+    const next = merges[current];
+    if (seen.has(next)) break;
+    seen.add(next);
+    current = next;
+  }
+  return current;
+};
+
+/**
+ * The zone config actually in force.
+ *
+ * Zone draws default to ON — an event that never configured zones still gets the standard seven,
+ * rather than needing the creator to opt in. A creator can still switch them off for a tournament
+ * from Manage Draw, and that explicit `false` is honoured.
+ *
+ * Every bucket is kept, including merged-away sources: a player whose own zone was merged still
+ * has to match a bucket before `zoneBucketFor` can redirect them to the target. Sources are
+ * dropped later, in `buildZoneAwareDrawConfigs`, which is what makes them produce no draws.
+ */
+export const resolveZoneConfig = (cfg: ZoneDrawConfig | undefined): ZoneDrawConfig => ({
+  ...(cfg ?? { includeUnassigned: false }),
+  enabled: cfg?.enabled ?? true,
+  buckets: cfg?.buckets?.length ? cfg.buckets : DEFAULT_ZONE_BUCKETS,
+  includeUnassigned: cfg?.includeUnassigned ?? false,
+  merges: cfg?.merges ?? {},
+});
+
+// Which zone bucket a participant's `preferred_zone` falls into, given the event's zone config.
+// Never returns undefined once zones are on — an unmatched player goes to the bucket holding
+// DEFAULT_ZONE, falling back to the explicit Unassigned bucket only if no bucket covers it.
+export const zoneBucketFor = (preferredZone: string | undefined, zoneConfig: ZoneDrawConfig | undefined): string | undefined => {
+  if (!zoneConfig?.enabled) return undefined;
+  const merges = zoneConfig.merges ?? {};
+  const zone = (preferredZone || '').trim();
+  // Match against ALL buckets, not the resolved (merge-filtered) list — a player whose own zone
+  // was merged away still needs matching before being redirected to the target.
+  const all = zoneConfig.buckets.length ? zoneConfig.buckets : DEFAULT_ZONE_BUCKETS;
+  const bucket = zone ? all.find((b) => b.zones.includes(zone)) : undefined;
+  if (bucket) return resolveMergedZone(bucket.id, merges);
+  const fallback = all.find((b) => b.zones.includes(DEFAULT_ZONE));
+  if (fallback) return resolveMergedZone(fallback.id, merges);
+  return zoneConfig.includeUnassigned ? UNASSIGNED_ZONE_ID : undefined;
+};
 
 // Skill band used to sub-group players within a draw (the TOURNAMENT_OPTIONS tiers):
 // Beginners 2–2.5, Challengers 3–3.5, Masters 4–5.
@@ -224,9 +344,9 @@ export const getWinnerPlaceholder = (slot: number | string, matches: TemplateMat
   return `Winner of ${sourceMatch.round}${pos}`;
 };
 
-const getContactValue = (userData?: UserData | null) => {
+const getContactValue = (userData?: MemberInfo | null) => {
   if (!userData) return '';
-  return userData.preferred_mode_of_contact === 'phone' ? userData.phone : userData.email;
+  return (userData.preferred_mode_of_contact === 'phone' ? userData.phone : userData.email) || '';
 };
 
 
@@ -277,19 +397,34 @@ export const filterParticipantsForDraw = (
   participants: EventParticipant[],
   draw: DrawConfig,
   statsMap: Record<string, UserStats> = {},
+  zoneMap: Record<string, string> = {},
+  zoneConfig?: ZoneDrawConfig,
 ): EventParticipant[] => {
   const filtered = participants.filter((p) => {
+    // Soft-deleted by the organizer — keeps the row for the record, out of every future draw.
+    if (p.removal) return false;
     if (p.tournament_choice !== draw.tournamentChoice) return false;
     if (draw.tournamentChoice === 'Doubles' && draw.division === 'All') return true;
     if (p.division !== draw.division) return false;
     if (draw.tournamentChoice === 'Doubles') return true;
-    if (draw.skillGroup === 'All') return true;
+    // Zone membership is ANDed with everything else below — a draw with no `zone` set (event
+    // never enabled zones, or a doubles draw) skips this check entirely.
+    // An organizer-set zone_override wins over the zone derived from preferred courts, so a
+    // player moved between zones stays put even if they later change their court preferences.
+    if (draw.zone && (p.zone_override ?? zoneBucketFor(zoneMap[p.uid], zoneConfig)) !== draw.zone) return false;
     // Retired Pro is opt-in at join time (age 55+), not skill-derived: a Retired Pro participant
-    // belongs ONLY to the Retired Pro draw, and never falls into Challengers/Masters.
+    // belongs ONLY to the Retired Pro draw, and never falls into Beginners/Challengers/Masters.
     if (p.skill_group === 'Retired Pro') return draw.skillGroup === 'Retired Pro';
     if (draw.skillGroup === 'Retired Pro') return false;
-    const effectiveSkill = statsMap[p.user_id]?.skill_level ?? Number(p.skill || 0);
-    return (effectiveSkill >= 4 ? 'Masters' : 'Challengers') === draw.skillGroup;
+    const effectiveSkill = statsMap[p.uid]?.skill_level ?? Number(p.skill || 0);
+    // A merged draw only includes the band(s) it was actually merged from — NOT every band —
+    // now that there are three real bands instead of one binary split.
+    if (draw.skillGroup === 'All') {
+      if (!draw.mergedFrom) return true; // consolidated doubles-style merge with no skill dimension
+      const bands = draw.mergedFrom.split('+') as SkillGroup[];
+      return bands.includes(skillBand(effectiveSkill));
+    }
+    return skillBand(effectiveSkill) === draw.skillGroup;
   });
   return draw.tournamentChoice === 'Doubles' ? deduplicateDoublesTeams(filtered) : filtered;
 };
@@ -299,33 +434,52 @@ export const isSpecialDraw = (draw: DrawConfig): boolean =>
   (draw.tournamentChoice === 'Singles' && draw.skillGroup === 'All') ||
   (draw.tournamentChoice === 'Doubles' && draw.division === 'All');
 
+// Seed order: league points first, then matches played, then name as a stable tiebreak — the same
+// ranking the Leaderboard uses, so slot 1 is genuinely the strongest player in the draw. Anyone
+// without a stats row scores 0 and sits at the bottom, which is also where the byes land.
+export const seedCompare = (statsMap: Record<string, UserStats>) =>
+  (a: EventParticipant, b: EventParticipant): number => {
+    const sa = statsMap[a.uid ?? ''];
+    const sb = statsMap[b.uid ?? ''];
+    const points = (sb?.leaguePoints26 ?? 0) - (sa?.leaguePoints26 ?? 0);
+    if (points !== 0) return points;
+    const played = (sb?.matchesPlayed ?? 0) - (sa?.matchesPlayed ?? 0);
+    if (played !== 0) return played;
+    return (a.user_name || '').localeCompare(b.user_name || '');
+  };
+
 // Orders participants by skill/division so early slots face empty high slots → first-round BYEs.
 export const sortParticipantsForDraw = (
   participants: EventParticipant[],
   draw: DrawConfig,
   statsMap: Record<string, UserStats> = {},
 ): EventParticipant[] => {
-  if (draw.tournamentChoice === 'Singles' && draw.skillGroup === 'All') {
-    const masters = participants.filter((p) => (statsMap[p.user_id]?.skill_level ?? Number(p.skill || 0)) >= 4);
-    const challengers = participants.filter((p) => (statsMap[p.user_id]?.skill_level ?? Number(p.skill || 0)) < 4);
-    return [...masters, ...challengers];
+  if (draw.tournamentChoice === 'Singles' && draw.skillGroup === 'All' && draw.mergedFrom) {
+    // Seed the merged bands highest-first (generalizes the old "masters first" rule to any
+    // adjacent pair, or all three).
+    const bands = (draw.mergedFrom.split('+') as SkillGroup[])
+      .sort((a, b) => SKILL_GROUP_ORDER.indexOf(b) - SKILL_GROUP_ORDER.indexOf(a));
+    const skillOf = (p: EventParticipant) => statsMap[p.uid]?.skill_level ?? Number(p.skill || 0);
+    // Bands stay in strongest-first order; within each band, seed by standings.
+    return bands.flatMap((band) =>
+      participants.filter((p) => skillBand(skillOf(p)) === band).sort(seedCompare(statsMap)));
   }
   if (draw.tournamentChoice === 'Doubles' && draw.division === 'All') {
-    const byeFirst = participants.filter((p) => p.division === "Women's" || p.division === 'Mixed Doubles');
-    const mens = participants.filter((p) => p.division === "Men's");
+    const byeFirst = participants.filter((p) => p.division === "Women's" || p.division === 'Mixed Doubles').sort(seedCompare(statsMap));
+    const mens = participants.filter((p) => p.division === "Men's").sort(seedCompare(statsMap));
     return [...byeFirst, ...mens];
   }
   return participants;
 };
 
-export const mapParticipantsToPlayers = (participants: EventParticipant[], userMap: Record<string, UserData>): TournamentPlayer[] =>
+export const mapParticipantsToPlayers = (participants: EventParticipant[], userMap: Record<string, MemberInfo>): TournamentPlayer[] =>
   participants.map((p) => {
-    const userData = userMap[p.user_id];
+    const userData = userMap[p.uid];
     const baseName = getParticipantDisplayName(p, userData) || 'Player';
     const partnerName = p.doubles ? formatPlayerName(p.doubles) : null;
     const name = partnerName ? `${baseName} / ${partnerName}` : baseName;
     return {
-      user_id: p.user_id,
+      uid: p.uid,
       name,
       contact: getContactValue(userData),
       preferredContact: userData?.preferred_mode_of_contact || 'email',
@@ -348,17 +502,22 @@ export const buildMatchFields = (
     tournamentChoice: 'Singles' | 'Doubles';
     division: string;
     skillGroup: SkillGroup;
+    zone?: string;
     drawsize: number;
     allMatches: TemplateMatch[];
   },
 ) => {
   const p1 = typeof tm.player_1 === 'number' ? (slotMap.get(tm.player_1) ?? null) : null;
   const p2 = typeof tm.player_2 === 'number' ? (slotMap.get(tm.player_2) ?? null) : null;
+  const p1Uid = p1?.uid || '';
+  const p2Uid = p2?.uid || '';
   return {
+    category: (cfg.tournamentChoice === 'Doubles' ? 'doubles' : 'singles') as 'singles' | 'doubles',
     event_id: cfg.eventId,
     tournament_choice: cfg.tournamentChoice,
     division: cfg.division,
     skill_group: cfg.skillGroup,
+    ...(cfg.zone ? { zone: cfg.zone } : {}),
     drawsize: cfg.drawsize,
     match_id: tm.match_id,
     round: tm.round,
@@ -366,11 +525,9 @@ export const buildMatchFields = (
     player_1_slot: tm.player_1,
     player_2_slot: tm.player_2,
     player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_1, cfg.allMatches)),
-    player_1_user_id: p1?.user_id || '',
-    player_1_contact: p1?.contact || '',
+    player_1_uid: p1Uid,
     player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_2, cfg.allMatches)),
-    player_2_user_id: p2?.user_id || '',
-    player_2_contact: p2?.contact || '',
+    player_2_uid: p2Uid,
     next_match_id: tm.next_match_id || '',
     next_slot: (tm.next_slot ?? '') as 'player_1' | 'player_2' | '',
     status: 'pending' as const,
@@ -378,17 +535,18 @@ export const buildMatchFields = (
 };
 
 // Returns the full sorted player list for a draw (no size limit — callers slice as needed).
+// Order here IS the seeding: index 0 becomes slot 1, which the bracket template puts opposite the
+// bottom slot. See `seedCompare` — this used to be alphabetical, which made seeding arbitrary.
 export const buildPlayerList = (
   drawParticipants: EventParticipant[],
   draw: DrawConfig,
   statsMap: Record<string, UserStats>,
-  userMap: Record<string, UserData>,
+  userMap: Record<string, MemberInfo>,
 ): TournamentPlayer[] => {
   if (isSpecialDraw(draw)) {
     return mapParticipantsToPlayers(sortParticipantsForDraw(drawParticipants, draw, statsMap), userMap)
       .filter((p) => p.name);
   }
-  return mapParticipantsToPlayers(drawParticipants, userMap)
-    .filter((p) => p.name)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  return mapParticipantsToPlayers([...drawParticipants].sort(seedCompare(statsMap)), userMap)
+    .filter((p) => p.name);
 };

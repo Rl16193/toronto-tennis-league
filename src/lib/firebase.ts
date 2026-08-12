@@ -9,6 +9,7 @@ import {
   setPersistence,
 } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -31,6 +32,8 @@ export const setAuthPersistence = (stayLoggedIn: boolean) =>
   setPersistence(auth, stayLoggedIn ? browserLocalPersistence : browserSessionPersistence);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+// Region must match REGION in functions/lib/constants.js — the callables are deployed there.
+export const functions = getFunctions(app, 'us-central1');
 export const googleProvider = new GoogleAuthProvider();
 export const appleProvider = new OAuthProvider('apple.com');
 

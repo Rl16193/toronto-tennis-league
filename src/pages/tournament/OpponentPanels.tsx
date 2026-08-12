@@ -33,8 +33,8 @@ export type OpponentRow = {
 // squeezes the player's name.
 const scheduleBadge = (m: TournamentMatch, viewerUid?: string): { text: string; cls: string } | null => {
   if (m.status === 'complete') {
-    if (viewerUid && m.winner_user_id) {
-      const won = m.winner_user_id === viewerUid;
+    if (viewerUid && m.winner_uid) {
+      const won = m.winner_uid === viewerUid;
       return won
         ? { text: 'Win', cls: 'bg-green-500/15 text-badge-win border-green-500/25' }
         : { text: 'Loss', cls: 'bg-red-500/15 text-badge-loss border-red-500/25' };
@@ -83,10 +83,10 @@ export const OpponentCard: React.FC<{
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between mb-3 group"
       >
-        <span className="text-xs uppercase tracking-widest text-fg/50 font-bold">Your Match</span>
+        <span className="text-xs uppercase tracking-widest text-fg/70 font-bold">Your Match</span>
         {open
-          ? <ChevronUp className="w-4 h-4 text-fg/40 group-hover:text-fg/70 transition-colors" />
-          : <ChevronDown className="w-4 h-4 text-fg/40 group-hover:text-fg/70 transition-colors" />}
+          ? <ChevronUp className="w-4 h-4 text-fg/70 group-hover:text-fg/70 transition-colors" />
+          : <ChevronDown className="w-4 h-4 text-fg/70 group-hover:text-fg/70 transition-colors" />}
       </button>
 
       {open && (
@@ -101,7 +101,7 @@ export const OpponentCard: React.FC<{
               still visible in the draw below this card; this row is just the quick-glance
               summary. Read-only (you can't edit another player's profile); phone first,
               email/WhatsApp as fallbacks. */}
-          <div className="rounded-2xl border border-fg/5 overflow-hidden">
+          <div className="rounded-2xl overflow-hidden">
             <div className="flex items-start justify-between gap-3 px-3.5 py-3">
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -172,7 +172,7 @@ export const RROpponentPanel: React.FC<{
   courtsMap?: Record<string, string[]>;
   availabilityMap?: Record<string, string[]>;
 }> = ({ group, userId, isDoubles, defaultOpen = false, pairingMatches, schedule, isCreator, contactMap, myCourts, courtsMap, availabilityMap }) => {
-  const others = group.filter((p) => p.user_id !== userId);
+  const others = group.filter((p) => p.uid !== userId);
   const [open, setOpen] = useState(defaultOpen);
   if (others.length === 0) return null;
 
@@ -183,17 +183,17 @@ export const RROpponentPanel: React.FC<{
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between mb-3 group"
       >
-        <span className="text-xs uppercase tracking-widest text-fg/50 font-bold">Your Group</span>
+        <span className="text-xs uppercase tracking-widest text-fg/70 font-bold">Your Group</span>
         {open
-          ? <ChevronUp className="w-4 h-4 text-fg/40 group-hover:text-fg/70 transition-colors" />
-          : <ChevronDown className="w-4 h-4 text-fg/40 group-hover:text-fg/70 transition-colors" />}
+          ? <ChevronUp className="w-4 h-4 text-fg/70 group-hover:text-fg/70 transition-colors" />
+          : <ChevronDown className="w-4 h-4 text-fg/70 group-hover:text-fg/70 transition-colors" />}
       </button>
 
       {open && (
       <div className="space-y-3">
         {others.map((p) => {
-          const c = contactMap?.[p.user_id];
-          const m = pairingMatches?.find((mm) => mm.player_1_user_id === p.user_id || mm.player_2_user_id === p.user_id);
+          const c = contactMap?.[p.uid];
+          const m = pairingMatches?.find((mm) => mm.player_1_uid === p.uid || mm.player_2_uid === p.uid);
           const canSchedule = !!schedule && !!m && !m.id.startsWith('preview_');
           const isComplete = m?.status === 'complete';
           const badge = canSchedule ? scheduleBadge(m!, userId) : null;
@@ -204,15 +204,15 @@ export const RROpponentPanel: React.FC<{
           const submitLabel = isCreator ? 'Score' : 'Submit Score';
 
           return (
-            <div key={p.user_id} className="rounded-2xl border border-fg/5 overflow-hidden">
+            <div key={p.uid} className="rounded-2xl overflow-hidden">
               {/* Two-column row: left is name/skill, tier, availability (3 lines); right is
                   schedule/score actions, then Contact (2 lines) — matches OpponentCard and the
                   Upcoming Matches list on the Profile page. */}
               <div className="flex items-start justify-between gap-3 px-3.5 py-3">
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    {p.user_id ? (
-                      <Link to={`/players/${p.user_id}`} className="text-sm font-semibold text-fg truncate hover:text-clay transition-colors">
+                    {p.uid ? (
+                      <Link to={`/players/${p.uid}`} className="text-sm font-semibold text-fg truncate hover:text-clay transition-colors">
                         {formatPlayerName(p.name)}
                       </Link>
                     ) : (
@@ -221,9 +221,9 @@ export const RROpponentPanel: React.FC<{
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {!!p.skillLevel && <span className="text-[11px] text-fg/70">Skill {p.skillLevel} · {skillBand(p.skillLevel)}</span>}
-                    <NearbyPill show={!!myCourts && sharesCourt(courtsMap?.[p.user_id], myCourts)} />
+                    <NearbyPill show={!!myCourts && sharesCourt(courtsMap?.[p.uid], myCourts)} />
                   </div>
-                  <AvailabilityPills tags={availabilityMap?.[p.user_id]} />
+                  <AvailabilityPills tags={availabilityMap?.[p.uid]} />
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                   <div className="flex items-center gap-1.5 flex-wrap justify-end">
@@ -253,7 +253,7 @@ export const RROpponentPanel: React.FC<{
         })}
 
         {/* No-show rule — shown once for the whole group */}
-        <p className="text-[11px] text-fg/40 leading-snug px-1">
+        <p className="text-[11px] text-fg/70 leading-snug px-1">
           Matchdays. Schedule prepared by organizer based on your availability.
         </p>
       </div>
