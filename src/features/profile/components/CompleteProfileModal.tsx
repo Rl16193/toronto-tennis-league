@@ -42,7 +42,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
           Finish these 3 things so we can match you with the right players.
         </p>
 
-        {error && <p className="text-xs font-semibold text-red-400">{error}</p>}
+        {error && <p className="text-xs font-semibold text-badge-loss">{error}</p>}
 
         <div className="space-y-3">
           <div className="flex justify-between items-end">

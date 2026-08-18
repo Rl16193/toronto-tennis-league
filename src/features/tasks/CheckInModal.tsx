@@ -129,14 +129,14 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 
         {step === 'error' && (
           <div className="text-center space-y-4 py-6">
-            <p className="text-red-400 text-sm">{error}</p>
+            <p className="text-badge-loss text-sm">{error}</p>
             <Button variant="outline" onClick={locate} className="w-full">Try again</Button>
           </div>
         )}
 
         {step === 'pick' && (
           <div className="space-y-2">
-            {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+            {error && <p className="text-badge-loss text-xs text-center">{error}</p>}
             {nearby.length === 0 ? (
               <p className="text-fg/70 text-sm text-center py-8">No courts nearby.</p>
             ) : (
@@ -163,7 +163,7 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         {step === 'success' && checkedInto && (
           <div className="text-center space-y-4 py-6">
             <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-8 h-8 text-green-500" />
+              <CheckCircle2 className="w-8 h-8 text-badge-win" />
             </div>
             <h3 className="text-lg font-bold text-fg">Completed.</h3>
             <Button variant="outline" className="w-full" onClick={onClose}>Done</Button>

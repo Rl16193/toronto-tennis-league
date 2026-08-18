@@ -190,8 +190,8 @@ export const Profile: React.FC = () => {
     <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-20 pt-8 space-y-4">
       {incompleteFields.length > 0 && (
         <div className="px-1">
-          <p className="text-sm text-orange-500 font-bold mb-1">Profile incomplete</p>
-          <p className="text-sm text-orange-500">Please add details for: {incompleteFields.join(', ')}.</p>
+          <p className="text-sm text-clay font-bold mb-1">Profile incomplete</p>
+          <p className="text-sm text-clay">Please add details for: {incompleteFields.join(', ')}.</p>
         </div>
       )}
 
@@ -270,7 +270,7 @@ export const Profile: React.FC = () => {
                 <p className="text-[9px] font-bold uppercase tracking-widest text-fg/70">Matches</p>
               </div>
               <div className="rounded-2xl bg-white/[0.04] py-3">
-                <p className={`text-lg font-black ${rankTrend === 'up' ? 'text-green-500' : rankTrend === 'down' ? 'text-red-400' : 'text-fg'}`}>{rankLabel}</p>
+                <p className={`text-lg font-black ${rankTrend === 'up' ? 'text-badge-win' : rankTrend === 'down' ? 'text-badge-loss' : 'text-fg'}`}>{rankLabel}</p>
                 <p className="text-[9px] font-bold uppercase tracking-widest text-fg/70">Rank Move</p>
               </div>
               <Link to="/history" className="rounded-2xl bg-white/[0.04] py-3 block hover:bg-white/[0.07] transition-colors">
@@ -291,7 +291,7 @@ export const Profile: React.FC = () => {
               <div className="divide-y divide-white/5 rounded-2xl overflow-hidden">
                 {recentMatches.map((m) => (
                   <div key={m.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                    <span className={`shrink-0 w-5 text-[11px] font-black ${m.won ? 'text-green-500' : 'text-red-400'}`}>
+                    <span className={`shrink-0 w-5 text-[11px] font-black ${m.won ? 'text-badge-win' : 'text-badge-loss'}`}>
                       {m.won ? 'W' : 'L'}
                     </span>
                     <span className="min-w-0 flex-1 text-sm font-semibold text-fg truncate">
@@ -338,24 +338,18 @@ export const Profile: React.FC = () => {
                     nameBadge={<SourceLetter source={o.source} />}
                     open={expandedOpponent === o.id}
                     onToggle={() => setExpandedOpponent((cur) => (cur === o.id ? null : o.id))}
-                    // Exactly four cells: Contact, Tags, P/G Won %, Rank Move. The volume figures
+                    // Exactly four cells: Schedule, Tags, P/G Won %, Rank Move. The volume figures
                     // (P/G Played, Matches Played, Matches Won) belong on the leaderboard, not on
                     // a row whose job is "how do I reach this person and what are they like".
-                    // Contact and Tags carry no title — their contents already say what they are.
+                    // Schedule and Tags carry no title — their contents already say what they are.
                     stats={[
                       {
+                        // Schedule sits in the tile Contact used to hold, and Contact moved into
+                        // the action row — same pairing as the tournament rows.
                         label: '',
-                        value: hasContact ? (
-                          <ContactOpponentButton
-                            name={o.opponentName}
-                            phone={phone}
-                            email={email}
-                            whatsappContact={contactFull?.whatsapp_contact}
-                            whatsappSameAsPhone={contactFull?.whatsapp_same_as_phone}
-                            variant="white"
-                            size="sm"
-                          />
-                        ) : <span className="text-[11px] text-fg/70">—</span>,
+                        value: o.source === 'tournament'
+                          ? <Link to={scoreHref} className={pillButtonCls('sm', 'clay')}>Schedule</Link>
+                          : <span className="text-[11px] text-fg/70">—</span>,
                       },
                       {
                         // Kept from the old row rather than dropped — court overlap and
@@ -378,8 +372,17 @@ export const Profile: React.FC = () => {
                           a white `Button` here for non-tournament rows and an orange pill for
                           tournament ones, so two rows in the same list looked like different
                           controls. */}
-                      {o.source === 'tournament' && (
-                        <Link to={scoreHref} className={pillButtonCls('sm', 'clay')}>Schedule</Link>
+                      {hasContact && (
+                        <ContactOpponentButton
+                          name={o.opponentName}
+                          phone={phone}
+                          email={email}
+                          whatsappContact={contactFull?.whatsapp_contact}
+                          whatsappSameAsPhone={contactFull?.whatsapp_same_as_phone}
+                          preferred={contactFull?.preferred_mode_of_contact}
+                          variant="white"
+                          size="sm"
+                        />
                       )}
                       <Link to={scoreHref} className={pillButtonCls('sm', 'clay')}>
                         <RacquetIcon className="w-3.5 h-3.5" />Score
@@ -511,8 +514,10 @@ export const Profile: React.FC = () => {
                         whileTap={past || !participantId ? undefined : tapScale.whileTap}
                         transition={tapScale.transition}
                         className={`p-2 text-xs rounded-lg transition-colors ${
-                          selected ? 'bg-orange-500 text-fg font-bold'
-                            : deflt ? 'border border-orange-500/60 text-orange-300 font-semibold hover:bg-orange-500/20 cursor-pointer'
+                          // text-white, not text-fg: the fill is always clay, so in light theme
+                          // text-fg would put dark green on orange. Same rule as a filled button.
+                          selected ? 'bg-clay text-white font-bold'
+                            : deflt ? 'border border-clay/60 text-clay font-semibold hover:bg-clay/20 cursor-pointer'
                             : past ? 'text-fg/70 bg-fg/5 opacity-50 cursor-not-allowed'
                             : participantId ? 'text-fg bg-fg/5 hover:bg-fg/10 cursor-pointer'
                             : 'text-fg/70 bg-fg/5'

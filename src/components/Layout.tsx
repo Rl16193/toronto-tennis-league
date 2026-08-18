@@ -25,26 +25,32 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      {/* Suspense sits OUTSIDE the route-keyed <main>. Inside, every navigation remounted the
-          boundary, so a route chunk that was still resolving left an empty <main> between the two
-          nav bars instead of this spinner — that's what made /marketplace look blank until the
-          user reloaded. Out here the boundary survives the route swap and actually shows. */}
-      <Suspense fallback={<RouteFallback />}>
-        <AnimatePresence mode="wait">
-          <motion.main
-            key={location.pathname}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.22 }}
-            // Full-height courts page reserves the top+bottom bars itself; every other page gets
-            // top padding for the fixed top bar and bottom padding for the fixed bottom tab bar.
-            className={`flex-grow${isCourts ? '' : isHome ? ' pb-16' : ' pt-16 pb-16'}`}
-          >
+      {/* Suspense goes INSIDE <main>, never around it.
+          Outside, the animated <main> is itself inside the boundary: a route chunk that suspends
+          makes React hide the whole subtree, so <main> is stuck holding its `initial` opacity of 0
+          and the enter animation never runs — and `mode="wait"` is simultaneously waiting on an
+          exit that can no longer complete. The page then renders header, footer and background
+          with an invisible <main> between them. It shows up on a COLD load of a deep route (a link
+          opened from an email), because in-app navigation usually has the chunk cached and never
+          suspends at all.
+          In here, <main> itself never suspends: it animates in normally and the spinner below
+          renders inside it. */}
+      <AnimatePresence mode="wait">
+        <motion.main
+          key={location.pathname}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.22 }}
+          // Full-height courts page reserves the top+bottom bars itself; every other page gets
+          // top padding for the fixed top bar and bottom padding for the fixed bottom tab bar.
+          className={`flex-grow${isCourts ? '' : isHome ? ' pb-16' : ' pt-16 pb-16'}`}
+        >
+          <Suspense fallback={<RouteFallback />}>
             {children}
-          </motion.main>
-        </AnimatePresence>
-      </Suspense>
+          </Suspense>
+        </motion.main>
+      </AnimatePresence>
       <BottomNav />
     </div>
   );

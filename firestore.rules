@@ -25,7 +25,11 @@ service cloud.firestore {
         );
     }
 
-    // New uid-based task fields a player may write on their own tasks/{uid} doc.
+    // Task fields a player may write on their own tasks/{uid} doc. DELIBERATELY SHORT: a progress
+    // doc carries 45 fields, but the counters (matchesPlayed, boardPhotos…) and tier flags
+    // (board5, streak3…) are awarded by Cloud Functions. Adding them here would let a player write
+    // their own counters and mint points, so the doc's uniform shape is maintained server-side
+    // instead — never by widening this list.
     function ownerTaskFields() {
       return [
         'uid', 'name', 'updatedAt',
@@ -34,11 +38,14 @@ service cloud.firestore {
       ];
     }
 
+    // The full contacts shape — all owner data, no points, so every field is safely self-writable.
+    // `secondary_email` already existed on real documents but was missing here, which meant an
+    // owner could not write their own field.
     function ownerContactFields() {
       return [
         'email', 'phone', 'preferred_mode_of_contact',
         'whatsapp_contact', 'whatsapp_same_as_phone',
-        'contactable', 'updated_at',
+        'contactable', 'updated_at', 'secondary_email',
       ];
     }
 
@@ -162,10 +169,21 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Site Stats
+    // Site Stats — PUBLIC. Anything here is readable by the entire internet.
     // ===============================================================
     match /site_stats/{docId} {
       allow read: if true;
+      allow write: if false;
+    }
+
+    // ===============================================================
+    // Admin Stats — business metrics for the admin dashboard.
+    // Deliberately NOT in site_stats, which is world-readable: these are membership, activity and
+    // marketplace numbers, and putting them there would publish them. Written only by
+    // aggregateAdminMetrics.
+    // ===============================================================
+    match /admin_stats/{docId} {
+      allow read: if isGlobalEventCreator();
       allow write: if false;
     }
 
@@ -205,8 +223,12 @@ service cloud.firestore {
           (
             resource.data.uid == request.auth.uid &&
             request.resource.data.event_id == resource.data.event_id &&
+            // `req_zone_change`/`new_zone` are the live pair. The `zone_change_*` names are legacy
+            // and only listed so the currently-deployed client keeps working; drop them once the
+            // new hosting build is out.
             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'dateselected', 'zone_change_requested', 'zone_change_requested_at',
+              'dateselected', 'req_zone_change', 'new_zone',
+              'zone_change_requested', 'zone_change_requested_at',
               'doubles', 'partner_in_app', 'skill'
             ])
           )
@@ -257,7 +279,47 @@ service cloud.firestore {
           (request.auth.uid == resource.data.player_1_uid || request.auth.uid == resource.data.player_2_uid) &&
           request.resource.data.status == 'reported' &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['status', 'claimed_winner_uid', 'claimed_winner_name', 'score_line', 'court', 'reported_by', 'reported_at'])
+            // Result fields are the tournament shape; the claimed_*/score_line trio is legacy and
+            // stays only until the hosting build that stopped writing them is out.
+            .hasOnly(['status', 'winner_uid', 'winner_name',
+                      'set_1_player_1', 'set_1_player_2', 'set_2_player_1', 'set_2_player_2',
+                      'set_3_player_1', 'set_3_player_2',
+                      'claimed_winner_uid', 'claimed_winner_name', 'score_line',
+                      'court', 'reported_by', 'reported_at'])
+        ) ||
+        // Either player reports the result of an accepted rally (friendly).
+        (
+          resource.data.category == 'rally' &&
+          resource.data.status == 'accepted' &&
+          (request.auth.uid == resource.data.player_1_uid || request.auth.uid == resource.data.player_2_uid) &&
+          request.resource.data.status == 'reported' &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            // Result fields are the tournament shape; the claimed_*/score_line trio is legacy and
+            // stays only until the hosting build that stopped writing them is out.
+            .hasOnly(['status', 'winner_uid', 'winner_name',
+                      'set_1_player_1', 'set_1_player_2', 'set_2_player_1', 'set_2_player_2',
+                      'set_3_player_1', 'set_3_player_2',
+                      'claimed_winner_uid', 'claimed_winner_name', 'score_line',
+                      'court', 'reported_by', 'reported_at'])
+        ) ||
+        // A SECOND party confirms that report — the other player, or any admin. The
+        // `reported_by` check is the whole security of friendly points: without it one player
+        // reports themselves the winner, confirms it, and mints points on demand. Points are paid
+        // by functions/friendlyPoints.js on this transition; no client may write leaguePoints26.
+        (
+          resource.data.category == 'rally' &&
+          resource.data.status == 'reported' &&
+          request.auth.uid != resource.data.reported_by &&
+          (
+            request.auth.uid == resource.data.player_1_uid ||
+            request.auth.uid == resource.data.player_2_uid ||
+            isGlobalEventCreator()
+          ) &&
+          request.resource.data.status in ['confirmed', 'disputed'] &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            // `completed_at` is stamped here too — a confirm is the moment a friendly becomes a
+            // played result. Omitting it rejected every confirm, which is the payout transition.
+            .hasOnly(['status', 'confirmed_at', 'confirmed_by', 'completed_at'])
         ) ||
         // Either player proposes / confirms a match time.
         (
@@ -431,13 +493,13 @@ service cloud.firestore {
     // ===============================================================
     // RR Drafts (creator pre-generation drafts)
     // ===============================================================
-    match /rr_drafts/{id} {
+    // Nested under the event, matching where useTournament.ts actually writes. Rules do NOT
+    // cascade into subcollections, so the old top-level /rr_drafts/{id} block could never match
+    // this path and every draft read/write was denied by default — silently, because the
+    // onSnapshot error path just sets the draft to null.
+    match /events/{eventId}/rr_drafts/{drawKey} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() &&
-        (
-          (request.resource != null && isCreatorOfEvent(request.resource.data.event_id)) ||
-          (resource != null && isCreatorOfEvent(resource.data.event_id))
-        );
+      allow write: if isAuthenticated() && isCreatorOfEvent(eventId);
     }
 
   }

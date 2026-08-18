@@ -10,14 +10,14 @@ import { useTournament } from './tournament/useTournament';
 import { getEventDate, zoneBucketFor } from './tournament/utils';
 import { parseValidDate } from '../utils/eventDates';
 import type { FirestoreDateLike } from '../utils/eventDates';
-import { downloadDrawAsPng, getRoundLabels, downloadRRGroupsAsPng } from './tournament/bracketImage';
+import { downloadDrawAsPng, getRoundLabels, downloadRRGroupsAsPng, downloadRoundAsPng } from './tournament/bracketImage';
 import { TournamentMatch } from './tournament/types';
 import { BracketView } from './tournament/BracketView';
 import { BracketAccordion } from './tournament/BracketAccordion';
 import {
   BracketErrorBoundary, ChangeZoneModal, DrawTabs, PendingScoresPanel, RRConfigModal,
-  RequestZoneChangeButton, ScheduleRequestsPanel, TournamentHeader, ZoneChangeRequestsPanel,
-  ZoneDrawConfigPanel,
+  RequestZoneChangeButton, ScheduleRequestsPanel, TournamentHeader, UnplacedPlayersPanel,
+  ZoneChangeRequestsPanel, ZoneDrawConfigPanel,
 } from './tournament/TournamentElements';
 import { OpponentCard } from './tournament/OpponentPanels';
 import { ScoreModal } from './tournament/ScoreModal';
@@ -94,6 +94,9 @@ export const Tournament: React.FC = () => {
   const [showEventSheet, setShowEventSheet] = useState(false);
   const [showZoneConfig, setShowZoneConfig] = useState(false);
   const [showChangeZone, setShowChangeZone] = useState(false);
+  // Round picker for the knockout download. Opens instead of downloading directly, so the
+  // creator can grab one round with contacts (or the whole bracket).
+  const [showDownloadPicker, setShowDownloadPicker] = useState(false);
   const [alsoConvertToChallenge, setAlsoConvertToChallenge] = useState(false);
   const [ladder, setLadder] = useState<TennisEvent | null>(null);
   const { profile } = useAuth();
@@ -129,8 +132,9 @@ export const Tournament: React.FC = () => {
     rrUnplacedPlayers,
     rrView, setRRView,
     handleGenerateRR, handleResetRR, handleGenerateRRKnockout, handleSaveGroupEdit,
-    handleCreateRRGroup, handleRenameGroup,
+    handleCreateRRGroup, handleRenameGroup, handleSetGroupBonus, handleResetMatchScore,
     visibleUserMatch, userRRMatches, scheduleRequests,
+    unplacedParticipants, openDrawSlots, handleSeatParticipant,
     handleAskOrganizerSchedule, handleSetSchedule,
     zoneChangeRequests, handleRequestZoneChange, handleClearZoneChangeRequest, handleMovePlayerZone, handleMoveZoneByUid,
     handleMergeZone, handleUnmergeZone, handleSetZoneDrawsEnabled, zoneConfig,
@@ -235,6 +239,22 @@ export const Tournament: React.FC = () => {
     return zoneConfig.buckets.find((b) => b.id === bucketId)?.label ?? 'Unassigned';
   }, [zoneConfig, userParticipant, zoneMap]);
 
+  // Rounds present in the current knockout draw, in play order, and the one to preselect in the
+  // download picker: the earliest round with an unplayed match, or the last one if all done.
+  // Must stay above the loading early-return (hooks order).
+  // For an RR draw the group-stage matches sit in displayMatches too (drawsize = group size), so
+  // the knockout image must be built from rrKnockoutMatches only.
+  const knockoutMatches = currentDrawFormat === 'rr' ? rrKnockoutMatches : displayMatches;
+  const downloadRounds = useMemo(() => {
+    const drawSize = Math.max(8, knockoutMatches[0]?.drawsize || 8);
+    return getRoundLabels(drawSize).filter((r) => knockoutMatches.some((m) => m.round === r));
+  }, [knockoutMatches]);
+  const defaultDownloadRound = useMemo(() => {
+    const open = downloadRounds.find((r) =>
+      knockoutMatches.some((m) => m.round === r && m.status !== 'complete'));
+    return open ?? downloadRounds[downloadRounds.length - 1] ?? '';
+  }, [downloadRounds, knockoutMatches]);
+
   const initialLoading = authLoading || (loading && allTournamentEvents.length === 0);
   const eventSwitching = !initialLoading && allTournamentEvents.length > 0 && !eventDataReady;
   if (initialLoading || eventSwitching) {
@@ -298,7 +318,7 @@ export const Tournament: React.FC = () => {
         ))}
       </div>
       {currentMatches.length > 0 && (
-        <p className="text-[11px] text-amber-400/80 mt-1.5">Matches already created. Reset this draw first to change the size.</p>
+        <p className="text-[11px] text-badge/80 mt-1.5">Matches already created. Reset this draw first to change the size.</p>
       )}
     </div>
   ) : undefined;
@@ -342,6 +362,9 @@ export const Tournament: React.FC = () => {
       pendingMatchIds={pendingMatchIds}
       onSaveGroupEdit={handleSaveGroupEdit}
       onRenameGroup={handleRenameGroup}
+      // Passed regardless of readOnly: players see the switch (disabled) so they can tell whether
+      // their group's bonus has been paid. handleSetGroupBonus is creator-gated on its own.
+      onSetGroupBonus={handleSetGroupBonus}
       onRemovePlayer={handleRemovePlayer}
       onMovePlayerZone={handleMoveZoneByUid}
       onAskSchedule={handleAskOrganizerSchedule}
@@ -374,6 +397,14 @@ export const Tournament: React.FC = () => {
       )}
 
       {!pastMode && isCreator && <ScheduleRequestsPanel requests={scheduleRequests} onSetSchedule={handleSetSchedule} />}
+      {/* Only once a draw exists — before that "unplaced" is everyone, which says nothing. */}
+      {!pastMode && isCreator && currentMatches.length > 0 && (
+        <UnplacedPlayersPanel
+          players={unplacedParticipants}
+          slots={openDrawSlots}
+          onSeat={handleSeatParticipant}
+        />
+      )}
       {!pastMode && isCreator && (
         <ZoneChangeRequestsPanel
           requests={zoneChangeRequests}
@@ -399,7 +430,7 @@ export const Tournament: React.FC = () => {
             Your zone: <span className="font-bold text-fg">{userZoneLabel}</span>
           </span>
           <RequestZoneChangeButton
-            requested={!!(userParticipant.req_zone_change || userParticipant.zone_change_requested)}
+            requested={!!userParticipant.req_zone_change}
             onRequest={() => setShowChangeZone(true)}
           />
         </div>
@@ -514,7 +545,7 @@ export const Tournament: React.FC = () => {
             currentDrawFormat={currentDrawFormat}
             onDownload={() => isRR && rrKnockoutMatches.length === 0
               ? downloadRRGroupsAsPng(rrGroups, rrGroupLabels, rrGroupMatches, currentDraw?.division || 'Draw', event?.title, userMap)
-              : downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, event?.round_deadlines ?? {})}
+              : setShowDownloadPicker(true)}
             onGenerateMatches={drawFormat === 'rr' ? () => setShowRRConfig(true) : handleGenerateAll}
             onCancelMatches={currentDrawFormat === 'rr' ? handleResetRR : handleResetDraw}
             onToggleEdit={() => setEditMode((v) => !v)}
@@ -554,7 +585,9 @@ export const Tournament: React.FC = () => {
             const form = scoreForm;
             const convert = alsoConvertToChallenge;
             await handleSubmitScore(e);
-            if (!convert || !canConvert || !match || !form?.winnerUserId || !ladder || !user) return;
+            // `form.noShow` matters: ticking No Show doesn't clear a winner already picked, so
+            // without this a no-show could still fire a challenge conversion for that winner.
+            if (!convert || !canConvert || !match || form?.noShow || !form?.winnerUserId || !ladder || !user) return;
             const isP1Winner = form.winnerUserId === match.player_1_uid;
             const winner = isP1Winner
               ? { id: match.player_1_uid, name: match.player_1_name }
@@ -563,11 +596,14 @@ export const Tournament: React.FC = () => {
               ? { id: match.player_2_uid, name: match.player_2_name }
               : { id: match.player_1_uid, name: match.player_1_name };
             const proposer = user.uid === winner.id ? winner : other;
-            const scoreLine = form.sets
+            // The creator enters a tournament score as player_1 vs player_2 of the MATCH, but the
+            // challenge doc makes the PROPOSER its player_1. Reorder so the converted challenge's
+            // sets are absolute for its own slots rather than inheriting the match's ordering.
+            const proposerIsMatchP1 = proposer.id === match.player_1_uid;
+            const sets = form.sets
               .map((s) => ({ mine: Number(s.mine || 0), opponent: Number(s.opponent || 0) }))
               .filter((s) => s.mine > 0 || s.opponent > 0)
-              .map((s) => `${s.mine}-${s.opponent}`)
-              .join(', ');
+              .map((s) => (proposerIsMatchP1 ? [s.mine, s.opponent] : [s.opponent, s.mine]) as [number, number]);
             await proposeConversion({
               eventId: ladder.id,
               division: (leagueDivision(match.division) === "Women's" ? 'womens' : 'mens') as LadderDivision,
@@ -576,7 +612,7 @@ export const Tournament: React.FC = () => {
               proposer: { id: proposer.id, name: proposer.name },
               other: proposer.id === winner.id ? other : winner,
               winner,
-              scoreLine,
+              sets,
             }).catch(() => { /* conversion is best-effort — the tournament score itself already landed */ });
             setAlsoConvertToChallenge(false);
           };
@@ -598,6 +634,16 @@ export const Tournament: React.FC = () => {
                 checked: alsoConvertToChallenge,
                 onChange: setAlsoConvertToChallenge,
               } : undefined}
+              // Organizer only, and group matches only — a no-show has no winner, so there is
+              // nobody for a knockout to advance. useTournament re-checks both conditions.
+              noShow={isCreator && scoreFormMatch.format === 'rr' && scoreFormMatch.round === 'RR' ? {
+                checked: !!scoreForm.noShow,
+                onChange: (v) => setScoreForm({ ...scoreForm, noShow: v }),
+              } : undefined}
+              // Only for an organizer, and only once there's a result to undo.
+              onReset={isCreator && scoreFormMatch.status === 'complete'
+                ? () => handleResetMatchScore(scoreFormMatch)
+                : undefined}
             />
           );
         })()}
@@ -671,6 +717,46 @@ export const Tournament: React.FC = () => {
                   )}
                 </motion.button>
               ))}
+            </div>
+          </Sheet>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showDownloadPicker && (
+          <Sheet onClose={() => setShowDownloadPicker(false)} title="Download Draw" maxWidthClassName="max-w-md">
+            <div className="p-3 pt-1 space-y-1">
+              {downloadRounds.map((r) => (
+                <motion.button
+                  key={r}
+                  type="button"
+                  onClick={() => {
+                    downloadRoundAsPng(knockoutMatches, r, currentDraw?.label || 'Draw', event?.title, userMap);
+                    setShowDownloadPicker(false);
+                  }}
+                  whileTap={tapScale.whileTap}
+                  transition={tapScale.transition}
+                  className={`w-full flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors ${
+                    r === defaultDownloadRound ? 'bg-clay/15 border border-clay/40' : 'bg-fg/5 border border-transparent hover:border-fg/20'
+                  }`}
+                >
+                  <span className="text-sm font-semibold text-fg">{r}</span>
+                  <span className="shrink-0 text-[11px] text-fg/70">Names and contacts</span>
+                </motion.button>
+              ))}
+              <motion.button
+                type="button"
+                onClick={() => {
+                  downloadDrawAsPng(knockoutMatches, currentDraw?.label || 'Draw', drawState, event?.title, event?.round_deadlines ?? {});
+                  setShowDownloadPicker(false);
+                }}
+                whileTap={tapScale.whileTap}
+                transition={tapScale.transition}
+                className="w-full flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors bg-fg/5 border border-transparent hover:border-fg/20"
+              >
+                <span className="text-sm font-semibold text-fg">All rounds</span>
+                <span className="shrink-0 text-[11px] text-fg/70">Full bracket with scores</span>
+              </motion.button>
             </div>
           </Sheet>
         )}

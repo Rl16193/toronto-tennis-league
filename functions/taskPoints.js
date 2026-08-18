@@ -205,8 +205,9 @@ exports.onLadderConfirmedAwardPoints = onDocumentUpdated(
       source: 'ladder',
       uidA: after.player_1_uid, nameA: after.player_1_name,
       uidB: after.player_2_uid, nameB: after.player_2_name,
-      wonUid: after.claimed_winner_uid,
-      whenISO: after.confirmed_at || new Date().toISOString(),
+      // New field first, legacy second — see friendlyPoints.js for why both are read.
+      wonUid: after.winner_uid || after.claimed_winner_uid,
+      whenISO: after.completed_at || after.confirmed_at || new Date().toISOString(),
     });
   },
 );

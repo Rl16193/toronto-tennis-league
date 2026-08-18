@@ -76,7 +76,7 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
         {success ? (
           <div className="text-center space-y-4 py-6">
             <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-8 h-8 text-green-500" />
+              <CheckCircle2 className="w-8 h-8 text-badge-win" />
             </div>
             <div className="space-y-1">
               <h3 className="text-lg font-bold text-fg">Sent for review</h3>
@@ -87,7 +87,7 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
         ) : (
           <>
             {error && (
-              <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-4 py-3">{error}</div>
+              <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-3">{error}</div>
             )}
 
             {type === 'volunteer' && (

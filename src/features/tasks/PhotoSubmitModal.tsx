@@ -148,7 +148,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
         {success ? (
           <div className="text-center space-y-4 py-6">
             <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-8 h-8 text-green-500" />
+              <CheckCircle2 className="w-8 h-8 text-badge-win" />
             </div>
             <h3 className="text-lg font-bold text-fg">Completed.</h3>
 
@@ -166,7 +166,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
               </div>
             )}
             {!user && subscribed && (
-              <p className="text-xs text-green-500 font-semibold">You&rsquo;re on the list.</p>
+              <p className="text-xs text-badge-win font-semibold">You&rsquo;re on the list.</p>
             )}
 
             {/* Flush an address typed but not submitted, so closing doesn't throw it away. */}
@@ -175,7 +175,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
         ) : (
           <>
             {error && (
-              <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-4 py-3">{error}</div>
+              <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-3">{error}</div>
             )}
 
             <div className="flex flex-wrap gap-2">
@@ -243,7 +243,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
                 <div className="space-y-1 pt-0.5">
                   {files.map((f, i) => (
                     <div key={`${f.name}-${i}`} className="flex items-center gap-1.5 text-xs text-fg/70">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-badge-win shrink-0" />
                       <span className="truncate flex-1">{f.name}</span>
                       <button type="button" onClick={() => removeFile(i)} aria-label="Remove photo" className="text-fg/70 hover:text-fg transition-colors shrink-0">
                         <X className="w-3.5 h-3.5" />

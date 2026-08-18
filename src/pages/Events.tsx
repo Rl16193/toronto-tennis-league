@@ -138,7 +138,7 @@ export const Events: React.FC = () => {
       />
 
       {eventFormMessage && !showEventForm && (
-        <div className={`mb-6 rounded-2xl border px-5 py-4 text-sm ${eventFormMessage.type === 'success' ? 'border-green-500/20 bg-green-500/10 text-green-300' : 'border-red-500/20 bg-red-500/10 text-red-300'}`}>
+        <div className={`mb-6 rounded-2xl border px-5 py-4 text-sm ${eventFormMessage.type === 'success' ? 'border-green-500/20 bg-green-500/10 text-badge-win' : 'border-red-500/20 bg-red-500/10 text-badge-loss'}`}>
           {eventFormMessage.text}
         </div>
       )}

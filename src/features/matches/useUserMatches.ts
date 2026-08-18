@@ -4,9 +4,13 @@ import { db } from '../../lib/firebase';
 import type { TournamentMatch } from '../../pages/tournament/types';
 
 // A user's completed matches, newest first, from their perspective (their games first).
-// Shared by the Profile "Recent Matches" block and the Home "Your Progress" chart.
+// Shared by the History page's "My Matches", the Profile "Recent Matches" block, and the Home
+// "Your Progress" chart.
 // Single array-contains query on the shared `matches` collection, with category filter in JS
 // so tournament, rally, and challenge rows load together without per-source queries.
+// A completed match is a tournament match with status 'complete', OR a challenge/rally with
+// status 'confirmed'. All three now carry the SAME result fields (winner_uid + absolute per-set
+// games), so the only difference left between the branches is which status means "played".
 
 export type UserMatch = {
   id: string;
@@ -42,6 +46,7 @@ const isRealOpponent = (name: string) =>
   !PLACEHOLDER_NAMES.has(name.trim().toLowerCase()) && !name.toLowerCase().startsWith('winner of ');
 
 const isTournamentMatch = (category?: string) => category === 'singles' || category === 'doubles';
+
 
 export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: UpcomingMatch[]; loading: boolean } {
   const [matches, setMatches] = useState<UserMatch[]>([]);
@@ -113,30 +118,50 @@ export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: 
             return;
           }
 
-          if (category === 'rally') {
-            if (raw.status !== 'accepted') return;
+          // Challenges and rallies share one lifecycle: accepted = still to play, confirmed = a
+          // played, points-paying result. Only 'accepted' used to be handled, so a CONFIRMED
+          // challenge or friendly appeared nowhere at all — not in upcoming, not in history.
+          if (category === 'challenge' || category === 'rally') {
             const iAmP1 = raw.player_1_uid === uid;
-            pending.push({
-              id: d.id,
-              opponentId: (iAmP1 ? raw.player_2_uid : raw.player_1_uid) || '',
-              opponentName: (iAmP1 ? raw.player_2_name : raw.player_1_name) || 'Opponent',
-              opponentContact: '',
-              eventId: '',
-              source: 'rally',
-            });
-            return;
-          }
+            const opponentId = (iAmP1 ? raw.player_2_uid : raw.player_1_uid) || '';
+            const opponentName = (iAmP1 ? raw.player_2_name : raw.player_1_name) || 'Opponent';
 
-          if (category === 'challenge') {
-            if (raw.status !== 'accepted') return;
-            const iAmP1 = raw.player_1_uid === uid;
-            pending.push({
+            if (raw.status === 'accepted') {
+              pending.push({
+                id: d.id,
+                opponentId,
+                opponentName,
+                opponentContact: '',
+                eventId: '',
+                source: category === 'rally' ? 'rally' : 'challenge',
+              });
+              return;
+            }
+
+            if (raw.status !== 'confirmed' || !raw.winner_uid) return;
+            // Sets are stored absolutely (player_1 first), exactly like a tournament match, so
+            // this is the same viewer-relative flip the tournament branch does — no score-line
+            // string to parse and no reporter's-viewpoint problem to correct for.
+            const mySets = iAmP1
+              ? [num(raw.set_1_player_1), num(raw.set_2_player_1), num(raw.set_3_player_1)]
+              : [num(raw.set_1_player_2), num(raw.set_2_player_2), num(raw.set_3_player_2)];
+            const oppSets = iAmP1
+              ? [num(raw.set_1_player_2), num(raw.set_2_player_2), num(raw.set_3_player_2)]
+              : [num(raw.set_1_player_1), num(raw.set_2_player_1), num(raw.set_3_player_1)];
+            const pairs = mySets
+              .map((a, i) => [a, oppSets[i]] as [number, number])
+              .filter(([a, b]) => a > 0 || b > 0);
+
+            list.push({
               id: d.id,
-              opponentId: (iAmP1 ? raw.player_2_uid : raw.player_1_uid) || '',
-              opponentName: (iAmP1 ? raw.player_2_name : raw.player_1_name) || 'Opponent',
-              opponentContact: '',
-              eventId: '',
-              source: 'challenge',
+              opponentId,
+              opponentName,
+              eventId: raw.event_id || '',
+              won: raw.winner_uid === uid,
+              completedAt: Date.parse(raw.completed_at || raw.confirmed_at || raw.reported_at || '') || 0,
+              myGames: pairs.reduce((s, [a]) => s + a, 0),
+              oppGames: pairs.reduce((s, [, b]) => s + b, 0),
+              scoreLine: pairs.map(([a, b]) => `${a}-${b}`).join(', '),
             });
           }
         });

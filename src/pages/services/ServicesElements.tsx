@@ -77,7 +77,7 @@ export const GroupLessonCard: React.FC = () => {
         </span>
       </div>
 
-      {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
+      {error && <p className="text-xs text-badge-loss mt-2">{error}</p>}
 
       <div className="flex items-center justify-between gap-2.5 mt-3.5 pt-3 border-t border-clay/20">
         <button
@@ -142,6 +142,7 @@ export const GroupLessonCard: React.FC = () => {
                         email={rosterContacts[p.uid]?.email}
                         whatsappContact={rosterContacts[p.uid]?.whatsapp_contact}
                         whatsappSameAsPhone={rosterContacts[p.uid]?.whatsapp_same_as_phone}
+                        preferred={rosterContacts[p.uid]?.preferred_mode_of_contact}
                         size="sm"
                         variant="white"
                       />
@@ -167,8 +168,8 @@ export const GroupLessonCard: React.FC = () => {
 // Compact field chrome, matching Add an Event: one size for every field in the sheet.
 const fieldCls =
   'w-full rounded-xl bg-tennis-dark/70 border border-fg/10 px-3.5 py-2.5 text-sm text-fg ' +
-  'placeholder-fg/30 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
-const labelCls = 'block text-[11px] font-bold uppercase tracking-widest text-fg/50 mb-1.5';
+  'placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
+const labelCls = 'block text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-1.5';
 
 type LinkCandidate = { uid: string; name: string };
 
@@ -297,7 +298,7 @@ export const AddServiceForm: React.FC<{
     <Sheet onClose={onClose} title={isEditing ? 'Edit service' : 'Add a service'} maxWidthClassName="max-w-md">
       <form onSubmit={submit} className="p-5 pt-2 space-y-3">
         {error && (
-          <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-4 py-2.5">{error}</div>
+          <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-2.5">{error}</div>
         )}
 
         <div>
@@ -384,7 +385,7 @@ export const AddServiceForm: React.FC<{
             <div className="flex items-center justify-between rounded-xl bg-fg/5 px-3.5 py-2.5">
               <span className="text-sm text-fg font-semibold">{linkName || 'Linked account'}</span>
               <button type="button" onClick={() => { setLinkUid(''); setLinkName(''); setLinkSearch(''); }}
-                className="text-fg/40 hover:text-fg"><X className="w-4 h-4" /></button>
+                className="text-fg/70 hover:text-fg"><X className="w-4 h-4" /></button>
             </div>
           ) : (
             <div className="relative">
@@ -416,7 +417,7 @@ export const AddServiceForm: React.FC<{
               {brands.map((b) => (
                 <span key={b} className="inline-flex items-center gap-1.5 rounded-full bg-fg/[0.06] pl-2.5 pr-1.5 py-1 text-[11px] text-fg/70">
                   {b}
-                  <button type="button" onClick={() => setBrands(brands.filter((x) => x !== b))} className="text-fg/40 hover:text-fg">
+                  <button type="button" onClick={() => setBrands(brands.filter((x) => x !== b))} className="text-fg/70 hover:text-fg">
                     <X className="w-3 h-3" />
                   </button>
                 </span>
@@ -448,7 +449,7 @@ export const AddServiceForm: React.FC<{
           </div>
         </div>
         {discountedPrice !== null && (
-          <p className="text-[11px] text-fg/40">Shown to members as ${discountedPrice} with {pointsCost || '—'} points, off a ${priceNum} regular price.</p>
+          <p className="text-[11px] text-fg/70">Shown to members as ${discountedPrice} with {pointsCost || '—'} points, off a ${priceNum} regular price.</p>
         )}
 
         <div className="flex gap-3 pt-1">
@@ -489,12 +490,12 @@ const OfferCard: React.FC<{
         <p className="text-sm font-bold text-fg leading-snug">{reward.offer}</p>
         <div className="flex items-center gap-2 shrink-0">
           {onEdit && (
-            <button type="button" aria-label="Edit offer" onClick={onEdit} className="text-fg/40 hover:text-fg transition-colors">
+            <button type="button" aria-label="Edit offer" onClick={onEdit} className="text-fg/70 hover:text-fg transition-colors">
               <Pencil className="w-3.5 h-3.5" />
             </button>
           )}
           {onDelete && (
-            <button type="button" aria-label="Remove offer" onClick={onDelete} className="text-fg/40 hover:text-red-400 transition-colors">
+            <button type="button" aria-label="Remove offer" onClick={onDelete} className="text-fg/70 hover:text-badge-loss transition-colors">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
@@ -582,7 +583,7 @@ const CouponCard: React.FC<{ r: Redemption; onCancel: (code: string) => void; bu
       <p className="text-[11px] text-fg/70 mt-1.5">Show this code when you go in</p>
 
       {r.status === 'flagged' && r.flag_note && (
-        <p className="text-[11px] text-amber-300/90 mt-2">Flagged: {r.flag_note}</p>
+        <p className="text-[11px] text-badge/90 mt-2">Flagged: {r.flag_note}</p>
       )}
 
       <div className="flex gap-2 mt-3.5">
@@ -622,9 +623,9 @@ const ProviderPanel: React.FC = () => {
 
   return (
     <div className="rounded-3xl border border-amber-400/30 bg-amber-400/5 p-5 mb-5">
-      <p className="text-xs font-bold text-amber-300 uppercase tracking-widest mb-3">Your shop</p>
+      <p className="text-xs font-bold text-badge uppercase tracking-widest mb-3">Your shop</p>
 
-      {error && <p className="text-xs text-red-400 mb-2.5">{error}</p>}
+      {error && <p className="text-xs text-badge-loss mb-2.5">{error}</p>}
 
       {loading ? (
         <div className="h-14 bg-fg/5 rounded-2xl animate-pulse" />
@@ -646,7 +647,7 @@ const ProviderPanel: React.FC = () => {
                     disabled={busy === r.code}
                     whileTap={tapScale.whileTap}
                     transition={tapScale.transition}
-                    className="p-2.5 rounded-xl bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors disabled:opacity-50"
+                    className="p-2.5 rounded-xl bg-green-500/15 text-badge-win hover:bg-green-500/25 transition-colors disabled:opacity-50"
                     aria-label={`Mark ${r.code} used`}
                   >
                     <Check className="w-4 h-4" />
@@ -657,7 +658,7 @@ const ProviderPanel: React.FC = () => {
                     disabled={busy === r.code}
                     whileTap={tapScale.whileTap}
                     transition={tapScale.transition}
-                    className="px-3 py-2.5 rounded-xl bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 transition-colors disabled:opacity-50 flex items-center gap-1.5 text-xs font-bold"
+                    className="px-3 py-2.5 rounded-xl bg-amber-500/15 text-badge hover:bg-amber-500/25 transition-colors disabled:opacity-50 flex items-center gap-1.5 text-xs font-bold"
                   >
                     <Flag className="w-3.5 h-3.5" />Dispute
                   </motion.button>
@@ -751,7 +752,7 @@ export const ServicesTab: React.FC = () => {
       )}
 
       {error && (
-        <div className="rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-4 py-3 mb-4">
+        <div className="rounded-2xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-3 mb-4">
           {error}
         </div>
       )}

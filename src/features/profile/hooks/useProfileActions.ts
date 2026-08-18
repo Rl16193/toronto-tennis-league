@@ -3,10 +3,11 @@ import { reload } from 'firebase/auth';
 import { useAuth } from '../../../context/AuthContext';
 import {
   updateName, updatePhone, updateWhatsappContact, updateBio, updateAvatar, updateSkills,
-  updateLeagueAndAgeCategory, updateDisplayBadges, updatePreferredCourts, updateFavouritePlayers, updateAvailabilityGrid,
+  updateLeagueAndAgeCategory, updateDisplayBadges, updatePreferredCourts, updatePreferredZone, updateFavouritePlayers,
   updateEmailNotifications, updateAvailabilityTags, changeEmail, updateEventParticipantDates,
+  updateContactMethods,
 } from '../services/profileService';
-import type { AvailabilityGrid } from '../../../utils/availability';
+import type { ContactMethod } from '../../../types';
 
 export const useProfileActions = () => {
   const { user, refreshProfile } = useAuth();
@@ -89,9 +90,10 @@ export const useProfileActions = () => {
         withProfileUpdate(() => updateLeagueAndAgeCategory(user!.uid, league, ageCategory, visible)),
       updateDisplayBadges: (badgeIds: string[]) => withProfileUpdate(() => updateDisplayBadges(user!.uid, badgeIds)),
       updatePreferredCourts: (courts: string[], zone: string) => withProfileUpdate(() => updatePreferredCourts(user!.uid, courts, zone)),
+      updatePreferredZone: (zone: string) => withProfileUpdate(() => updatePreferredZone(user!.uid, zone)),
       updateFavouritePlayers: (players: string[]) => withProfileUpdate(() => updateFavouritePlayers(user!.uid, players)),
-      updateAvailabilityGrid: (grid: AvailabilityGrid) => withProfileUpdate(() => updateAvailabilityGrid(user!.uid, grid)),
       updateEmailNotifications: (enabled: boolean) => withProfileUpdate(() => updateEmailNotifications(user!.uid, enabled)),
+      updateContactMethods: (methods: ContactMethod[]) => withProfileUpdate(() => updateContactMethods(user!.uid, methods)),
       updateAvailabilityTags: (tags: string[]) => withProfileUpdate(() => updateAvailabilityTags(user!.uid, tags)),
       changeEmail: handleChangeEmail,
       refreshEmailChange: handleRefreshEmailChange,

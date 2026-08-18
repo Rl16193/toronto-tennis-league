@@ -165,6 +165,7 @@ export const PlayerProfile: React.FC = () => {
     phone: player.phone,
     email: player.email,
     whatsappContact: player.whatsapp_contact,
+    preferred: player.preferred_mode_of_contact,
   });
   const courts = preferences?.preferred_courts ?? [];
   const favourites = preferences?.favourite_players ?? [];

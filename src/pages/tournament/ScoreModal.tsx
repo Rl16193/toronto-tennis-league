@@ -25,14 +25,28 @@ type Props = {
   // Optional single checkbox rendered above the submit button — e.g. Tournament's "Also count as
   // a Challenge" option. Generic so any caller can attach one extra choice without a new modal.
   extraCheckbox?: { label: string; checked: boolean; onChange: (checked: boolean) => void };
+  /**
+   * "Count As No Show" — its own prop rather than a second extraCheckbox because it isn't just a
+   * flag: it removes the winner and the games from the result entirely, so it has to switch the
+   * form's other controls off. Only passed for an organizer scoring an RR group match.
+   */
+  noShow?: { checked: boolean; onChange: (checked: boolean) => void };
+  /**
+   * Organizer-only, and only for a match that already has a score: wipe the result and the points
+   * it awarded, returning the match to unplayed. Omitted for an unplayed match — there is nothing
+   * to reset — and for players, who can't write the official record at all.
+   */
+  onReset?: () => Promise<void> | void;
 };
 
 // Mobile-first score entry (wireframe 1d): winner picked with two large tap-cards instead of a
 // native dropdown, games entered with +/− steppers instead of the number keyboard. Set values
 // stay strings in ScoreForm ('' means untouched → 0 downstream), so submit semantics — including
 // the all-0-0 walkover convention — are unchanged.
-export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, onClose, onSubmit, isCreatorSubmit, extraCheckbox }) => {
+export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, onClose, onSubmit, isCreatorSubmit, extraCheckbox, noShow, onReset }) => {
+  const isNoShow = !!noShow?.checked;
   const [submitting, setSubmitting] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [courts, setCourts] = useState<string[]>([]);
   const [courtSearch, setCourtSearch] = useState('');
   const [showCourtDropdown, setShowCourtDropdown] = useState(false);
@@ -77,24 +91,25 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
           <h2 className="text-2xl font-black text-fg">{matchInfo.title}</h2>
         </div>
 
-        <div className="flex items-center gap-2 mb-5 px-3 py-2.5 text-sm text-orange-500">
+        <div className="flex items-center gap-2 mb-5 px-3 py-2.5 text-sm text-clay">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           {isCreatorSubmit
             ? 'Entering score as event organizer. This will be accepted immediately.'
             : 'Pick the winner, enter the games, and submit. The organizer will confirm it.'}
         </div>
 
-        {/* Winner — two large tap-cards */}
+        {/* Winner — two large tap-cards. A no-show has no winner, so they switch off. */}
         <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-2">Winner</p>
-        <div className="flex gap-2.5 mb-6" role="radiogroup" aria-label="Winner">
+        <div className={`flex gap-2.5 mb-6 ${isNoShow ? 'opacity-50 pointer-events-none' : ''}`} role="radiogroup" aria-label="Winner">
           {winnerOptions.map((p) => {
-            const selected = scoreForm.winnerUserId === p.uid;
+            const selected = !isNoShow && scoreForm.winnerUserId === p.uid;
             return (
               <button
                 key={p.uid}
                 type="button"
                 role="radio"
                 aria-checked={selected}
+                disabled={isNoShow}
                 onClick={() => onChange({ ...scoreForm, winnerUserId: p.uid || '' })}
                 className={`flex-1 rounded-2xl border-2 px-3 py-4 text-center transition-colors ${
                   selected ? 'border-clay bg-clay/10' : 'border-fg/10 bg-fg/5 hover:border-fg/25'
@@ -141,8 +156,8 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
           )}
         </div>
 
-        {/* Sets — +/− steppers, no number keyboard */}
-        <div className="space-y-4">
+        {/* Sets — +/− steppers, no number keyboard. Nothing was played on a no-show. */}
+        <div className={`space-y-4 ${isNoShow ? 'opacity-50 pointer-events-none' : ''}`}>
           {scoreForm.sets.map((set, index) => (
             <div key={index}>
               <p className="text-fg font-bold text-sm mb-2">Set {index + 1}</p>
@@ -170,21 +185,62 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
           ))}
         </div>
 
-        {extraCheckbox && (
-          <label className="flex items-center gap-2.5 mt-5 px-1 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={extraCheckbox.checked}
-              onChange={(e) => extraCheckbox.onChange(e.target.checked)}
-              className="accent-clay w-4 h-4"
-            />
-            <span className="text-sm font-semibold text-fg">{extraCheckbox.label}</span>
-          </label>
-        )}
+        <div className="mt-5 space-y-2">
+          {/* The two options sit on one line. `flex-wrap` drops the second below the first only
+              when the sheet is too narrow for both; `min-w-0` lets each label's own text wrap
+              rather than forcing the row wider than the modal. */}
+          <div className="flex flex-wrap items-start gap-x-5 gap-y-2 px-1">
+            {extraCheckbox && (
+              <label className={`flex items-start gap-2.5 min-w-0 select-none ${isNoShow ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
+                <input
+                  type="checkbox"
+                  checked={extraCheckbox.checked}
+                  disabled={isNoShow}
+                  onChange={(e) => extraCheckbox.onChange(e.target.checked)}
+                  className="accent-clay w-4 h-4 mt-0.5 shrink-0"
+                />
+                <span className="text-sm font-semibold text-fg">{extraCheckbox.label}</span>
+              </label>
+            )}
+            {noShow && (
+              <label className="flex items-start gap-2.5 min-w-0 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={noShow.checked}
+                  onChange={(e) => noShow.onChange(e.target.checked)}
+                  className="accent-clay w-4 h-4 mt-0.5 shrink-0"
+                />
+                <span className="text-sm font-semibold text-fg">Count As No Show</span>
+              </label>
+            )}
+          </div>
+          {isNoShow && (
+            <p className="px-1 text-xs text-fg/70">
+              Recorded as unplayed: no winner, no games, and 1 point to each player.
+            </p>
+          )}
+        </div>
 
-        <Button type="submit" className="w-full mt-6" isLoading={submitting} disabled={submitting}>
-          {isCreatorSubmit ? 'Record Score' : 'Submit Score'}
-        </Button>
+        <div className="mt-6 flex gap-2.5">
+          <Button type="submit" className="flex-1" isLoading={submitting} disabled={submitting || resetting}>
+            {isNoShow ? 'Record No Show' : isCreatorSubmit ? 'Record Score' : 'Submit Score'}
+          </Button>
+          {onReset && (
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              isLoading={resetting}
+              disabled={submitting || resetting}
+              onClick={async () => {
+                setResetting(true);
+                try { await onReset(); } finally { setResetting(false); }
+              }}
+            >
+              Reset Score
+            </Button>
+          )}
+        </div>
       </form>
     </Sheet>
   );

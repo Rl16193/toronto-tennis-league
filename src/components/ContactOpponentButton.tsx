@@ -1,5 +1,6 @@
 import React from 'react';
 import { Mail, MessageSquare } from 'lucide-react';
+import type { ContactMethod } from '../types';
 
 // WhatsApp's own mark. lucide ships no brand logos, and a generic speech bubble made the WhatsApp
 // action indistinguishable from SMS once the buttons lost their text labels.
@@ -33,12 +34,12 @@ export const pillButtonCls = (size: 'sm' | 'md', variant: 'outline' | 'white' | 
 };
 
 /**
- * The contact channels for one person, in the order they're offered everywhere. The app carries no
- * messaging of its own, so this is the single place deciding which channels exist and how each
- * link is built.
+ * The contact channels for one person, in the order they're offered everywhere — the single place
+ * deciding which channels exist, and therefore the single place the preference is applied.
+ * `preferred` narrows, never adds; empty/absent means every filled-in channel is offered.
  */
 export const contactChannels = (c: {
-  phone?: string; email?: string; whatsappContact?: string;
+  phone?: string; email?: string; whatsappContact?: string; preferred?: ContactMethod[];
 }): Channel[] => {
   const phoneE164 = toE164Phone(c.phone);
   const waNumber = c.whatsappContact || phoneE164;
@@ -46,7 +47,11 @@ export const contactChannels = (c: {
   if (c.email) out.push({ key: 'email', label: 'Email', href: `mailto:${c.email}`, icon: Mail });
   if (phoneE164) out.push({ key: 'text', label: 'SMS', href: `sms:${phoneE164}`, icon: MessageSquare });
   if (waNumber) out.push({ key: 'whatsapp', label: 'WhatsApp', href: `https://wa.me/${waNumber.replace('+', '')}`, icon: WhatsAppIcon });
-  return out;
+  const preferred = c.preferred ?? [];
+  if (preferred.length === 0) return out;
+  const picked = out.filter((ch) => preferred.includes(ch.key as ContactMethod));
+  // A preference naming only channels they've since removed would leave nobody able to reach them.
+  return picked.length > 0 ? picked : out;
 };
 
 /**
@@ -65,15 +70,20 @@ export const ContactOpponentButton: React.FC<{
   email?: string;
   whatsappContact?: string;
   whatsappSameAsPhone?: boolean;
+  /** Their `contacts.preferred_mode_of_contact`. Empty/absent = offer every channel they have. */
+  preferred?: ContactMethod[];
   size?: 'sm' | 'md';
   variant?: 'outline' | 'white';
   className?: string;
-}> = ({ name, phone, email, whatsappContact, size = 'sm', variant = 'white', className }) => {
-  const channels = contactChannels({ phone, email, whatsappContact });
+}> = ({ name, phone, email, whatsappContact, preferred, size = 'sm', variant = 'white', className }) => {
+  const channels = contactChannels({ phone, email, whatsappContact, preferred });
   if (channels.length === 0) return null;
 
+  // `flex-wrap` + `min-w-0`: three nowrap pills are a rigid ~90px block, and every consumer puts
+  // this in a narrow slot (a 4-column grid cell, a shrink-0 column). Without these it can't give
+  // way and pushes its row wider or spills out of the card on a phone.
   return (
-    <span className={`inline-flex items-center gap-1.5 ${className ?? ''}`}>
+    <span className={`inline-flex flex-wrap items-center justify-center gap-1.5 min-w-0 ${className ?? ''}`}>
       {channels.map((c) => (
         <a
           key={c.key}

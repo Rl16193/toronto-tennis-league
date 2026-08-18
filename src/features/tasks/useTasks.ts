@@ -100,11 +100,7 @@ export const profileMissingFields = (p: UserProfile | null): string[] => {
   if (!(p.contacts.whatsapp_contact?.trim() || p.contacts.whatsapp_same_as_phone)) missing.push('WhatsApp contact');
   if (!p.user.bio?.trim()) missing.push('Bio');
   if (!p.preferences.preferred_courts?.length) missing.push('Preferred courts');
-  const grid = p.preferences.availability;
-  const hasAvailability =
-    (grid && Object.values(grid).some((slots) => slots && slots.length > 0)) ||
-    p.preferences.availability_day?.length > 0;
-  if (!hasAvailability) missing.push('Availability');
+  if (!p.preferences.availability_tags?.length) missing.push('Availability');
   return missing;
 };
 
@@ -161,8 +157,8 @@ const loadLadderResults = async (uid: string): Promise<PlayedResult[]> => {
     getDocs(query(collection(db, 'matches'), where('category', '==', 'challenge'), where('player_2_uid', '==', uid), where('status', '==', 'confirmed'))),
   ]);
   return dedupePlayedResults([...asChallenger.docs, ...asOpponent.docs], (c) => ({
-    at: new Date(c.confirmed_at || c.created_at || 0).getTime(),
-    won: c.claimed_winner_uid === uid,
+    at: new Date(c.completed_at || c.confirmed_at || c.created_at || 0).getTime(),
+    won: c.winner_uid === uid,
   }));
 };
 

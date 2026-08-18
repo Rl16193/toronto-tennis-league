@@ -44,11 +44,10 @@ export type TemplateMatch = {
   next_slot?: 'player_1' | 'player_2';
 };
 
+// No contact fields here — ContactOpponentButton resolves channels from `contacts` at display time.
 export type TournamentPlayer = {
   uid: string;
   name: string;
-  contact: string;
-  preferredContact: 'email' | 'phone';
   participantId: string;
   skillLevel?: number;
   preferredCourts?: string[];
@@ -101,6 +100,13 @@ export type TournamentMatch = {
   // is a separate, best-effort commit) — reversal must check it.
   rr_group_bonus_v2?: boolean;
   walkover?: boolean;
+  /**
+   * Neither player showed / the group match was never played. Pays 1 point to BOTH and has no
+   * winner — distinct from a walkover, which still pays 3/1 to a winner. Both are all-zero
+   * scores, so this flag is what tells them apart; it must be checked before `walkover`.
+   * RR group stage only, organizer only.
+   */
+  no_show?: boolean;
   court?: string;
   // Scheduling — players may edit only these fields (Firestore rules carve-out); scores stay
   // organizer-only. Absent schedule_status is treated as 'unscheduled'.
@@ -108,6 +114,25 @@ export type TournamentMatch = {
   proposed_date?: string; // YYYY-MM-DD
   proposed_slot?: 'AM' | 'PM';
   schedule_requested?: boolean; // player asked the organizer to schedule
+};
+
+/** A schedule request in the organizer's cross-tournament queue — hence the event title. */
+export type ScheduleRequest = TournamentMatch & { event_title: string };
+
+/** An empty slot in the current draw that an unplaced player can be seated into. */
+export type OpenDrawSlot = { matchId: string; slot: 'player_1' | 'player_2'; label: string };
+
+/** A registrant seated in no match. `zone` is '' when they've selected no courts — "No zone". */
+export type UnplacedEntry = {
+  participantId: string;
+  uid: string;
+  name: string;
+  eventId: string;
+  eventTitle: string;
+  division?: string;
+  tournamentChoice?: string;
+  skill?: number;
+  zone: string;
 };
 
 export type ScoreSubmission = {
@@ -127,6 +152,8 @@ export type ScoreForm = {
   winnerUserId: string;
   sets: Array<{ mine: string; opponent: string }>;
   court: string;
+  /** Organizer ticked "Count As No Show" — no winner, 1 point each. RR group stage only. */
+  noShow?: boolean;
 };
 
 // A player-submitted score awaiting the creator's confirmation (stored in the shared matches collection).
@@ -143,6 +170,14 @@ export type ScoreSubmissionDoc = ScoreSubmission & {
   submitted_by_name: string;
   is_walkover: boolean;
   created_at: string;
+  /**
+   * Set once actioned; the doc is KEPT rather than deleted so what each player submitted stays on
+   * record. Absent = still awaiting the organizer. 'superseded' means the match was already scored
+   * by the time this one was reached — typically the second player's copy of the same result.
+   */
+  resolved?: 'confirmed' | 'rejected' | 'superseded';
+  resolved_at?: string;
+  resolved_by?: string;
 };
 
 export type TournamentFormat = 'bracket' | 'rr';

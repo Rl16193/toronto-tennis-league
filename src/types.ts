@@ -5,6 +5,9 @@
  * member's phone and email. `contacts` requires a signed-in caller. Field names deliberately
  * match the old `users` shape, so consumers only changed which collection they read.
  */
+/** The three channels ContactOpponentButton can offer. Keys match its `Channel.key`. */
+export type ContactMethod = 'email' | 'text' | 'whatsapp';
+
 export interface ContactData {
   email: string;
   // Set only by the account-merge admin script when two signups (different emails) turn out to
@@ -12,7 +15,11 @@ export interface ContactData {
   // so a third signup attempt with this address is caught instead of creating another duplicate.
   secondary_email?: string;
   phone: string;
-  preferred_mode_of_contact: 'email' | 'phone';
+  /**
+   * Channels this member wants to be reached on. Empty/absent = no preference = all are offered.
+   * Applied only in `contactChannels()`. Singular name is historical — see CLAUDE.md.
+   */
+  preferred_mode_of_contact?: ContactMethod[];
   // WhatsApp-specific number (E.164, e.g. "+14165550123") — distinct from `phone` since not
   // everyone's WhatsApp uses the same country/number. Empty/absent when whatsapp_same_as_phone
   // is true, or when the player hasn't set one (falls back to `phone`).
@@ -63,22 +70,20 @@ export interface UserStats {
 
 // Collection: preferences
 export interface UserPreferences {
-  // Per-day AM/PM grid, e.g. { MON: ['AM','PM'], SAT: ['PM'] }. Supersedes the two legacy
-  // fields below, which are retained for back-compat until the availability backfill runs.
-  availability?: Record<string, ('AM' | 'PM')[]>;
-  availability_day: string[];
-  availability_time: string[];
   preferred_courts: string[];
   favourite_players: string[];
   scheduling_preference: 'I will schedule matches on my own' | 'Tell me more about matchdays';
   event_creator: boolean;
   preferred_zone: string;
+  // The member picked their zone by hand on the profile card. Court edits then stop recomputing
+  // `preferred_zone` from `preferred_courts` — silently undoing an explicit choice (and moving
+  // them between draws) is exactly what the manual picker exists to prevent.
+  preferred_zone_manual?: boolean;
   // Global opt-out for the Resend emails (challenge/rally received/accepted, weekly incomplete-
   // matches digest). Missing/undefined means opted in — only an explicit `false` disables them.
   email_notifications?: boolean;
-  // Any number of preset windows (see AvailabilityTag in utils/availability.ts). Replaces the old
-  // per-day AM/PM grid for new edits; `availability`/`availability_day`/`availability_time` remain
-  // for existing data and are unread by the new UI.
+  // Any number of preset windows (see AvailabilityTag in utils/availability.ts). The only
+  // availability representation — the old grid and day/time lists are gone from code and data.
   availability_tags?: string[];
   // Rewards: a stringer is an ordinary account flagged here, with `stringer_id` naming the
   // rewards-catalog entry they own. Same role-flag shape as `event_creator`. It only unlocks
@@ -206,15 +211,10 @@ export interface EventParticipant {
   skill_group?: 'Retired Pro';
   dateselected?: string[];
   created_at: string;
-  // Player asked to move zone. `req_zone_change` is the flag, `new_zone` the zone they picked —
-  // the request now carries a target instead of just "something's wrong".
+  // Player asked to move zone; `new_zone` is the zone they picked. Per-event on purpose: the
+  // notify trigger routes to the organizer via this row's event_id.
   req_zone_change?: boolean;
   new_zone?: string;
-  // Legacy flag. Still written alongside `req_zone_change` because the DEPLOYED Cloud Function
-  // (functions/notifications.js) triggers the organizer notification off this field. Drop it once
-  // that function is redeployed to watch `req_zone_change`.
-  zone_change_requested?: boolean;
-  zone_change_requested_at?: string;
   // Soft delete. The organizer removed this player from the draw, but the row stays so we can
   // still see who backed out. Absent/false means active. Removed players are skipped when
   // building draws; their already-played matches and earned stats are untouched.

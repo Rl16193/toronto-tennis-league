@@ -19,6 +19,17 @@ const {
 const { TZ, REGION } = require('./lib/constants');
 const db = () => admin.firestore();
 
+// "6-4, 6-3" from the absolute per-set fields every result now carries. Falls back to the legacy
+// `score_line` string for rows written before challenges/rallies used the tournament shape.
+const scoreLineOf = (m) => {
+  const line = [1, 2, 3]
+    .map((n) => [m[`set_${n}_player_1`] ?? 0, m[`set_${n}_player_2`] ?? 0])
+    .filter(([a, b]) => a > 0 || b > 0)
+    .map(([a, b]) => `${a}-${b}`)
+    .join(', ');
+  return line || m.score_line || '';
+};
+
 const matchPlayers = (m) => [m.player_1_uid, m.player_2_uid].filter(Boolean);
 const otherPlayer = (m, uid) => (m.player_1_uid === uid ? m.player_2_uid : m.player_1_uid);
 const opponentName = (m, uid) => (m.player_1_uid === uid ? m.player_2_name : m.player_1_name);
@@ -178,7 +189,9 @@ exports.onZoneChangeRequested = onDocumentUpdated(
   async (event) => {
     const before = event.data?.before.data() || {};
     const after = event.data?.after.data() || {};
-    if (before.zone_change_requested === true || after.zone_change_requested !== true) return;
+    const wasReq = before.req_zone_change === true;
+    const isReq = after.req_zone_change === true;
+    if (wasReq || !isReq) return;
     if (!after.event_id) return;
 
     const eventDoc = await db().doc(`events/${after.event_id}`).get();
@@ -201,11 +214,11 @@ exports.onLadderChallengeCreated = onDocumentCreated(
     if (!c || c.category !== 'challenge') return;
     if (!c.player_2_uid) return;
     // A conversion proposal (source set) is a distinct ask from a from-scratch challenge —
-    // the opponent already played the match/rally and is being asked to confirm it counts.
+    // the opponent already played the match and is being asked to confirm it counts.
     if (c.source) {
       await notify(c.player_2_uid, {
         type: 'challenge_conversion_proposed',
-        title: `${c.player_1_name || 'A player'} converted your ${c.source === 'friendly' ? 'rally' : 'match'} to a challenge`,
+        title: `${c.player_1_name || 'A player'} converted your match to a challenge`,
         body: 'Review and confirm the result to register it as a challenge.',
         link: '/matches?mode=challenges',
       });
@@ -265,7 +278,8 @@ exports.onLadderChallengeUpdated = onDocumentUpdated(
       await notify(other || both, {
         type: 'ladder_reported',
         title: 'A ladder result was reported',
-        body: after.claimed_winner_name ? `Reported winner: ${after.claimed_winner_name}` : '',
+        body: (after.winner_name || after.claimed_winner_name)
+          ? `Reported winner: ${after.winner_name || after.claimed_winner_name}` : '',
         link,
       });
       const eventDoc = await db().doc(`events/${after.event_id}`).get();
@@ -357,6 +371,26 @@ exports.onRallyUpdated = onDocumentUpdated(
         title: `${after.player_2_name || 'That player'} can’t rally right now`,
         link: '/matches?mode=friendlies',
       });
+    } else if (after.status === 'reported') {
+      // Points only land once the OTHER player confirms, so tell whoever that is.
+      const other = after.reported_by === after.player_1_uid ? after.player_2_uid : after.player_1_uid;
+      const reporterName = after.reported_by === after.player_1_uid ? after.player_1_name : after.player_2_name;
+      if (other) {
+        await notify(other, {
+          type: 'rally_reported',
+          title: `${reporterName || 'Your rally partner'} submitted your match score`,
+          body: `${scoreLineOf(after) || 'Confirm the result'} — confirm it and you both get points.`,
+          link: '/matches?mode=friendlies',
+        });
+      }
+    } else if (after.status === 'confirmed') {
+      const winner = after.winner_uid || after.claimed_winner_uid;
+      await Promise.all([after.player_1_uid, after.player_2_uid].filter(Boolean).map((uid) => notify(uid, {
+        type: 'rally_confirmed',
+        title: 'Friendly match recorded',
+        body: uid === winner ? 'You picked up 2 points.' : 'You picked up 1 point.',
+        link: '/matches?mode=friendlies',
+      })));
     }
   },
 );

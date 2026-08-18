@@ -47,6 +47,15 @@ Object.assign(exports, require('./accountLookup'));
 // Opponent connections — gates who may read whose contacts/{uid} doc.
 Object.assign(exports, require('./connections'));
 
+// Admin dashboard metrics (Sun + Wed) — Firestore doc, Google Sheets tabs, BigQuery history.
+Object.assign(exports, require('./adminMetrics'));
+
+// Friendly (rally) match points — paid when a second party confirms the reported score.
+Object.assign(exports, require('./friendlyPoints'));
+
+// Profile zone changes — takes the member out of a live draw belonging to the zone they left.
+Object.assign(exports, require('./zoneMoves'));
+
 // Likelihood levels we treat as unsafe.
 const UNSAFE = new Set(['LIKELY', 'VERY_LIKELY']);
 
@@ -221,7 +230,7 @@ const COLLECTION_MAP = [
   },
   {
     collection: 'matches', sheetTab: 'Challenges',
-    fields: ['player_1_name', 'player_2_name', 'claimed_winner_name', 'score_line', 'status', 'division'],
+    fields: ['player_1_name', 'player_2_name', 'winner_name', 'set_1_player_1', 'set_1_player_2', 'set_2_player_1', 'set_2_player_2', 'set_3_player_1', 'set_3_player_2', 'status', 'division'],
     where: ['category', '==', 'challenge'],
   },
 ];

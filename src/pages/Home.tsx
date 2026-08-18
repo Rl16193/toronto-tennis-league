@@ -128,8 +128,8 @@ export const Home: React.FC = () => {
         if (cancelled) return;
         if (!summary.exists()) return; // doc genuinely doesn't exist — not a transient failure
         const d = summary.data();
-        if (typeof d.activePlayers === 'number') setActivePlayers(d.activePlayers);
-        if (typeof d.matchesOrganized === 'number') setMatchesOrganized(d.matchesOrganized);
+        if (typeof d.active_players === 'number') setActivePlayers(d.active_players);
+        if (typeof d.matches_organized === 'number') setMatchesOrganized(d.matches_organized);
       } catch {
         if (cancelled || attempt >= 4) return; // site_stats rule/doc not deployed — give up quietly
         setTimeout(() => { if (!cancelled) load(attempt + 1); }, 1000 * 2 ** attempt);

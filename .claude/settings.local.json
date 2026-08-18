@@ -7,11 +7,19 @@
       "Bash(node scripts/backfillMatchStats.mjs)",
       "Bash(node scripts/backfillMatchStats.mjs --write)",
       "Bash(node scripts/syncLeagueStats.mjs --write)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "PowerShell(npm run lint)",
+      "Bash(node --check functions/zoneMoves.js)",
+      "Bash(node --check functions/index.js)",
+      "Bash(git check-ignore *)"
     ]
   },
   "deniedMcpServers": [
-    { "serverName": "8ba73ad4-9808-425a-9c5d-b3ed1998ee67" },
-    { "serverName": "a9082f3f-351f-459f-a914-3ea111178c91" }
+    {
+      "serverName": "8ba73ad4-9808-425a-9c5d-b3ed1998ee67"
+    },
+    {
+      "serverName": "a9082f3f-351f-459f-a914-3ea111178c91"
+    }
   ]
 }

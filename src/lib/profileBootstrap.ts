@@ -6,7 +6,9 @@ import { ContactData, UserData, UserPreferences, UserStats } from '../types';
 export const emptyContacts = (): ContactData => ({
   email: '',
   phone: '',
-  preferred_mode_of_contact: 'email',
+  // Empty = no preference = every channel they fill in is offered. Do NOT seed this with 'email':
+  // that would silently hide a new member's phone and WhatsApp the moment they add them.
+  preferred_mode_of_contact: [],
   whatsapp_contact: '',
   whatsapp_same_as_phone: false,
   contactable: false,
@@ -27,9 +29,7 @@ const createDefaultStats = (user: User): UserStats => ({
 });
 
 const createDefaultPreferences = (): UserPreferences => ({
-  availability: {},
-  availability_day: [],
-  availability_time: [],
+  availability_tags: [],
   preferred_courts: [],
   favourite_players: [],
   scheduling_preference: 'I will schedule matches on my own',

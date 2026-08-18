@@ -1,7 +1,7 @@
 import { doc, setDoc, updateDoc, getDocs, query, where, collection, writeBatch } from 'firebase/firestore';
 import { EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail, type User } from 'firebase/auth';
 import { db } from '../../../lib/firebase';
-import { gridToLegacy, type AvailabilityGrid } from '../../../utils/availability';
+import type { ContactMethod } from '../../../types';
 
 // Sync the display name onto stats/preferences and every event_participants doc.
 const syncName = async (userId: string, name: string) => {
@@ -44,6 +44,19 @@ export const updateWhatsappContact = async (userId: string, whatsappContact: str
     // Consent is implied by giving a reachable messaging number, either by saying the phone
     // doubles as WhatsApp or by supplying a separate one. Clearing both withdraws it.
     contactable: sameAsPhone || !!whatsappContact,
+    updated_at: new Date().toISOString(),
+  }, { merge: true });
+};
+
+/**
+ * Which channels the member wants to be reached on. An EMPTY array is a meaningful value — it means
+ * "no preference", and every channel they've filled in is offered. It is not the same as "email".
+ * `setDoc(..., { merge: true })` rather than `updateDoc` so a member whose contacts doc was never
+ * backfilled can still set this.
+ */
+export const updateContactMethods = async (userId: string, methods: ContactMethod[]) => {
+  await setDoc(doc(db, 'contacts', userId), {
+    preferred_mode_of_contact: methods,
     updated_at: new Date().toISOString(),
   }, { merge: true });
 };
@@ -96,6 +109,12 @@ export const updatePreferredCourts = async (userId: string, courts: string[], zo
   await updateDoc(doc(db, 'preferences', userId), { preferred_courts: courts, preferred_zone: zone });
 };
 
+// Picked by hand on the profile card. Never unseats them: matches already generated are left
+// alone, and `onZoneChanged` (functions/zoneMoves.js) only tells the organizer.
+export const updatePreferredZone = async (userId: string, zone: string) => {
+  await updateDoc(doc(db, 'preferences', userId), { preferred_zone: zone, preferred_zone_manual: true });
+};
+
 export const updateFavouritePlayers = async (userId: string, players: string[]) => {
   await updateDoc(doc(db, 'preferences', userId), { favourite_players: players });
 };
@@ -106,11 +125,6 @@ export const updateEmailNotifications = async (userId: string, enabled: boolean)
 
 export const updateAvailabilityTags = async (userId: string, tags: string[]) => {
   await updateDoc(doc(db, 'preferences', userId), { availability_tags: tags });
-};
-
-export const updateAvailabilityGrid = async (userId: string, grid: AvailabilityGrid) => {
-  // Write the grid plus the derived legacy fields so older readers keep working mid-migration.
-  await updateDoc(doc(db, 'preferences', userId), { availability: grid, ...gridToLegacy(grid) });
 };
 
 export const changeEmail = async (user: User, newEmail: string, password: string) => {

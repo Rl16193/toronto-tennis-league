@@ -8,6 +8,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { setFieldsFrom } from '../../pages/tournament/utils';
 
 // League Ladder challenge loop: an organizer-confirmed head-to-head. On confirm the winner gains
 // +3 leaguePoints26 and the loser loses 3 (floored at 0). Challenges live in the shared `matches`
@@ -26,15 +27,21 @@ export interface LadderChallenge {
   player_2_uid: string;
   player_2_name: string;
   status: LadderChallengeStatus;
-  claimed_winner_uid?: string;
-  claimed_winner_name?: string;
-  score_line?: string;
+  // Result fields are the SAME shape a tournament match uses — winner_uid/name plus absolute
+  // per-set games — so one formatter and one history mapping serve every kind of result.
+  winner_uid?: string;
+  winner_name?: string;
+  set_1_player_1?: number; set_1_player_2?: number;
+  set_2_player_1?: number; set_2_player_2?: number;
+  set_3_player_1?: number; set_3_player_2?: number;
   court?: string;
   reported_by?: string;
   created_at: string;
   responded_at?: string;
   reported_at?: string;
   confirmed_at?: string;
+  /** Stamped on confirm, matching a tournament match, so history sorts on one field. */
+  completed_at?: string;
   applied?: boolean;
   // Set only when this challenge was converted from an already-played Friendly or Tournament
   // match (see proposeConversion) — absent/undefined for a normal, from-scratch challenge.
@@ -79,9 +86,9 @@ export async function respondChallenge(id: string, accept: boolean): Promise<voi
   });
 }
 
-// Convert an already-played Friendly or Tournament match into a Challenge: one player proposes with
-// the winner/score already known, the other confirms via confirmConversion, then it waits for
-// organizer confirmation like any other challenge.
+// Convert an already-played Tournament match into a Challenge (Tournament.tsx's "Also count as a
+// Challenge"): proposed with the winner/score already known, then confirmed like any other
+// challenge. Friendlies no longer convert — they record themselves via reportRally.
 export async function proposeConversion(args: {
   eventId: string;
   division: LadderDivision;
@@ -90,7 +97,8 @@ export async function proposeConversion(args: {
   proposer: { id: string; name: string };
   other: { id: string; name: string };
   winner: { id: string; name: string };
-  scoreLine: string;
+  /** Ordered [proposer games, other games] — the proposer becomes player_1 below. */
+  sets: [number, number][];
   court?: string;
 }): Promise<string> {
   const ref = await addDoc(collection(db, MATCHES_COL), {
@@ -104,51 +112,30 @@ export async function proposeConversion(args: {
     status: 'open',
     source: args.source,
     source_id: args.sourceId,
-    claimed_winner_uid: args.winner.id,
-    claimed_winner_name: args.winner.name,
-    score_line: args.scoreLine,
+    winner_uid: args.winner.id,
+    winner_name: args.winner.name,
+    ...setFieldsFrom(args.sets),
     ...(args.court ? { court: args.court } : {}),
     created_at: new Date().toISOString(),
   });
   return ref.id;
 }
 
-// The other player's single "Confirm": accepts the conversion and immediately re-reports the same
-// score, landing it in 'reported' for the organizer's normal queue. Two sequential writes, each
-// already allowed by existing rules (accept while 'open', report while 'accepted').
-export async function confirmConversion(
-  id: string,
-  confirmer: { id: string; name: string },
-  winner: { id: string; name: string },
-  scoreLine: string,
-  court?: string,
-): Promise<void> {
-  const now = new Date().toISOString();
-  await updateDoc(doc(db, MATCHES_COL, id), { status: 'accepted', responded_at: now });
-  await updateDoc(doc(db, MATCHES_COL, id), {
-    status: 'reported',
-    claimed_winner_uid: winner.id,
-    claimed_winner_name: winner.name,
-    score_line: scoreLine,
-    reported_by: confirmer.id,
-    ...(court ? { court } : {}),
-    reported_at: now,
-  });
-}
 
 // Either participant reports the result once played; it then waits for organizer confirmation.
+// `sets` are ordered [player_1 games, player_2 games] — absolute, never the reporter's viewpoint.
 export async function reportChallenge(
   id: string,
   winner: { id: string; name: string },
-  scoreLine: string,
+  sets: [number, number][],
   reportedBy: string,
   court?: string,
 ): Promise<void> {
   await updateDoc(doc(db, MATCHES_COL, id), {
     status: 'reported',
-    claimed_winner_uid: winner.id,
-    claimed_winner_name: winner.name,
-    score_line: scoreLine,
+    winner_uid: winner.id,
+    winner_name: winner.name,
+    ...setFieldsFrom(sets),
     reported_by: reportedBy,
     ...(court ? { court } : {}),
     reported_at: new Date().toISOString(),
@@ -169,8 +156,8 @@ export async function cancelChallenge(id: string): Promise<void> {
 // A tournament-sourced conversion already counted matchesPlayed/wins/loses when the tournament
 // match was scored, so that case adds only the ±3 — counting again would double the same match.
 export async function confirmChallenge(ch: LadderChallenge): Promise<void> {
-  if (!ch.claimed_winner_uid) throw new Error('No winner reported');
-  const winnerId = ch.claimed_winner_uid;
+  if (!ch.winner_uid) throw new Error('No winner reported');
+  const winnerId = ch.winner_uid;
   const loserId = winnerId === ch.player_1_uid ? ch.player_2_uid : ch.player_1_uid;
   const countAsNewMatch = ch.source !== 'tournament';
 
@@ -207,6 +194,8 @@ export async function confirmChallenge(ch: LadderChallenge): Promise<void> {
       status: 'confirmed',
       applied: true,
       confirmed_at: new Date().toISOString(),
+      // Same field a tournament match stamps, so history sorts every result on one key.
+      completed_at: new Date().toISOString(),
     }, { merge: true });
   });
 }

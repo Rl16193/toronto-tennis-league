@@ -18,7 +18,7 @@ export const Input: React.FC<InputProps> = ({
       {label && (
         <label className="block text-sm font-medium text-fg">
           {label}
-          {required && <span className="text-orange-500 ml-0.5">*</span>}
+          {required && <span className="text-clay ml-0.5">*</span>}
         </label>
       )}
       <input
@@ -31,7 +31,7 @@ export const Input: React.FC<InputProps> = ({
         {...props}
       />
       {error && (
-        <p className="text-xs text-red-500 mt-1 ml-1">{error}</p>
+        <p className="text-xs text-badge-loss mt-1 ml-1">{error}</p>
       )}
     </div>
   );

@@ -146,7 +146,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
           {isLadder ? 'Challenges' : event.type}
         </span>
         <div className="flex items-center gap-2 shrink-0">
-          {isJoined && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+          {isJoined && <CheckCircle2 className="w-4 h-4 text-badge-win" />}
           {onEdit && (
             <button
               type="button"
@@ -167,7 +167,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
         <div className="min-w-0">
           <h3 className="text-base font-bold text-fg leading-snug">{event.title}</h3>
           {isSeasonOpener(event) && (
-            <p className="text-xs font-semibold uppercase tracking-wider text-amber-300 mt-1">First Tournament of 2026</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-badge mt-1">First Tournament of 2026</p>
           )}
         </div>
         <div className="shrink-0">
@@ -302,8 +302,8 @@ export const CreatorEventModal: React.FC<CreatorEventModalProps> = ({
         {eventFormMessage && (
           <div className={`rounded-xl border px-4 py-2.5 text-sm font-semibold ${
             eventFormMessage.type === 'success'
-              ? 'border-green-500/20 bg-green-500/10 text-green-300'
-              : 'border-red-500/20 bg-red-500/10 text-red-300'
+              ? 'border-green-500/20 bg-green-500/10 text-badge-win'
+              : 'border-red-500/20 bg-red-500/10 text-badge-loss'
           }`}>
             {eventFormMessage.text}
           </div>
@@ -557,14 +557,14 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
             )}
 
             {isLate && (
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300">
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-badge">
                 <p className="font-semibold">Late registration. Limited spots remaining.</p>
-                <p className="mt-0.5 text-amber-300/70">You'll be placed directly into an open draw slot.</p>
+                <p className="mt-0.5 text-badge/70">You'll be placed directly into an open draw slot.</p>
               </div>
             )}
 
             {slotStatus?.status === 'fallback' && (
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-300">
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-badge">
                 <p className="font-semibold mb-1">
                   {slotStatus.intendedGroup} draw is full — you'll be placed in the {slotStatus.actualGroup} draw.
                 </p>
@@ -580,14 +580,14 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
               </div>
             )}
             {slotStatus?.status === 'full' && (
-              <p className="text-xs text-red-400 font-semibold">This draw is currently full.</p>
+              <p className="text-xs text-badge-loss font-semibold">This draw is currently full.</p>
             )}
           </>
         ) : (
           <p className="text-sm text-fg/70">Reserve your spot in this event.</p>
         )}
 
-        {joinError && <p className="text-xs font-semibold text-red-400">{joinError}</p>}
+        {joinError && <p className="text-xs font-semibold text-badge-loss">{joinError}</p>}
 
         <Button
           onClick={onSubmitJoin}

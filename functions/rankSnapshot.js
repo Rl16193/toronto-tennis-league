@@ -63,7 +63,8 @@ exports.weeklyRankSnapshot = onSchedule(
     const active = new Set();
     (await db().collection('event_participants').get()).forEach((d) => { const u = d.data().uid; if (u) active.add(u); });
     const completed = await db().collection('matches').where('category', 'in', ['singles', 'doubles']).where('status', '==', 'complete').count().get();
-    const siteStats = { activePlayers: active.size, matchesOrganized: completed.data().count + 70, updatedAt: date };
+    // snake_case, matching every other site_stats doc — this one was the lone camelCase holdout.
+    const siteStats = { active_players: active.size, matches_organized: completed.data().count + 70, updated_at: date };
 
     for (let i = 0; i < ops.length; i += 400) {
       const batch = db().batch();
@@ -76,6 +77,6 @@ exports.weeklyRankSnapshot = onSchedule(
       await batch.commit();
     }
     await db().collection('site_stats').doc('summary').set(siteStats, { merge: true });
-    logger.info(`weeklyRankSnapshot: ${ops.length} rank update(s), site_stats activePlayers=${siteStats.activePlayers} matchesOrganized=${siteStats.matchesOrganized}`);
+    logger.info(`weeklyRankSnapshot: ${ops.length} rank update(s), site_stats active_players=${siteStats.active_players} matches_organized=${siteStats.matches_organized}`);
   },
 );

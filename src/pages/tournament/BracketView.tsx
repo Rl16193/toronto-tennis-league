@@ -62,7 +62,7 @@ export const BracketView: React.FC<Props> = ({
   return (
     <section className="overflow-x-auto rounded-[2rem] bg-tennis-surface/20 text-fg p-4 md:p-6">
       {editMode && (
-        <p className="text-center text-xs text-amber-300 font-semibold mb-4">
+        <p className="text-center text-xs text-badge font-semibold mb-4">
           Edit mode — use dropdowns to reassign players
         </p>
       )}

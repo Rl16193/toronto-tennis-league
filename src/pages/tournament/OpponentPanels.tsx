@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { TournamentMatch, TournamentPlayer } from './types';
+import type { ContactMethod } from '../../types';
 import { formatPlayerName, formatScheduledDate, getScheduleState } from './utils';
 import { ScheduleControls, type ScheduleApi } from './TournamentElements';
 import { ContactOpponentButton, pillButtonCls } from '../../components/ContactOpponentButton';
@@ -20,6 +21,7 @@ export type OpponentRow = {
   phone: string;
   whatsappContact: string;
   whatsappSameAsPhone: boolean;
+  preferredContactMethods?: ContactMethod[];
   skill: number | null;
   wins: number;
   losses: number;
@@ -121,10 +123,22 @@ export const OpponentCard: React.FC<{
                 </div>
                 <AvailabilityPills tags={availabilityMap?.[opponent.userId]} />
               </div>
-              <div className="flex flex-col items-end gap-1.5 shrink-0">
+              {/* min-w-0 + a truncating badge: "Scheduled on <long date>" used to set this
+                  column's max-content width and force the whole row wider than a phone. */}
+              <div className="min-w-0 flex flex-col items-end gap-1.5 shrink-0">
+                <ContactOpponentButton
+                  name={opponent.name}
+                  phone={opponent.phone}
+                  email={opponent.email}
+                  whatsappContact={opponent.whatsappContact}
+                  whatsappSameAsPhone={opponent.whatsappSameAsPhone}
+                  preferred={opponent.preferredContactMethods}
+                  variant="white"
+                  size="sm"
+                />
                 <div className="flex items-center gap-1.5 flex-wrap justify-end">
                   {badge && (
-                    <span className={`shrink-0 px-2 py-0.5 rounded-lg text-[9px] font-bold border ${badge.cls}`}>{badge.text}</span>
+                    <span className={`max-w-[9rem] truncate px-2 py-0.5 rounded-lg text-[9px] font-bold border ${badge.cls}`}>{badge.text}</span>
                   )}
                   {showAskInline && (
                     <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => schedule!.onAskOrganizer(currentMatch!)}>Schedule</button>
@@ -133,15 +147,6 @@ export const OpponentCard: React.FC<{
                     <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => schedule!.onSubmitScore!(currentMatch!)}>{submitLabel}</button>
                   )}
                 </div>
-                <ContactOpponentButton
-                  name={opponent.name}
-                  phone={opponent.phone}
-                  email={opponent.email}
-                  whatsappContact={opponent.whatsappContact}
-                  whatsappSameAsPhone={opponent.whatsappSameAsPhone}
-                  variant="white"
-                  size="sm"
-                />
               </div>
             </div>
           </div>
@@ -166,7 +171,7 @@ export const RROpponentPanel: React.FC<{
   // A creator who's also playing uses the same Enter/Edit Score flow as the Match List (RRGroupCard).
   isCreator?: boolean;
   // uid → contact details, so we can show the phone number (email only when no phone).
-  contactMap?: Record<string, { phone?: string; email?: string; whatsapp_contact?: string; whatsapp_same_as_phone?: boolean }>;
+  contactMap?: Record<string, { phone?: string; email?: string; whatsapp_contact?: string; whatsapp_same_as_phone?: boolean; preferred_mode_of_contact?: ContactMethod[] }>;
   // For the "Nearby" pill: the viewer's own preferred courts, and uid → preferred courts.
   myCourts?: Set<string>;
   courtsMap?: Record<string, string[]>;
@@ -225,10 +230,22 @@ export const RROpponentPanel: React.FC<{
                   </div>
                   <AvailabilityPills tags={availabilityMap?.[p.uid]} />
                 </div>
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                {/* min-w-0 + a truncating badge: "Scheduled on <long date>" used to set this
+                  column's max-content width and force the whole row wider than a phone. */}
+              <div className="min-w-0 flex flex-col items-end gap-1.5 shrink-0">
+                  <ContactOpponentButton
+                    name={formatPlayerName(p.name)}
+                    phone={c?.phone}
+                    email={c?.email}
+                    whatsappContact={c?.whatsapp_contact}
+                    whatsappSameAsPhone={c?.whatsapp_same_as_phone}
+                    preferred={c?.preferred_mode_of_contact}
+                    variant="white"
+                    size="sm"
+                  />
                   <div className="flex items-center gap-1.5 flex-wrap justify-end">
                     {badge && (
-                      <span className={`shrink-0 px-2 py-0.5 rounded-lg text-[9px] font-bold border ${badge.cls}`}>{badge.text}</span>
+                      <span className={`max-w-[9rem] truncate px-2 py-0.5 rounded-lg text-[9px] font-bold border ${badge.cls}`}>{badge.text}</span>
                     )}
                     {showAskInline && (
                       <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => schedule!.onAskOrganizer(m!)}>Schedule</button>
@@ -237,15 +254,6 @@ export const RROpponentPanel: React.FC<{
                       <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => schedule!.onSubmitScore!(m!)}>{submitLabel}</button>
                     )}
                   </div>
-                  <ContactOpponentButton
-                    name={formatPlayerName(p.name)}
-                    phone={c?.phone}
-                    email={c?.email}
-                    whatsappContact={c?.whatsapp_contact}
-                    whatsappSameAsPhone={c?.whatsapp_same_as_phone}
-                    variant="white"
-                    size="sm"
-                  />
                 </div>
               </div>
             </div>

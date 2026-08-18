@@ -56,7 +56,7 @@ export const BracketAccordion: React.FC<Props> = ({
   return (
     <section className="rounded-[2rem] bg-tennis-surface/20 p-4">
       {editMode && (
-        <p className="text-center text-xs text-amber-300 font-semibold mb-3">
+        <p className="text-center text-xs text-badge font-semibold mb-3">
           Edit mode — use dropdowns to reassign players
         </p>
       )}

@@ -44,6 +44,8 @@ type Props = {
   zoneBuckets?: { id: string; label: string }[];
   /** Participant asks the organizer to schedule an unplayed match. */
   onAskSchedule?: (match: TournamentMatch) => void;
+  /** Organizer pays/takes back this group's bonus. Players see the switch but can't move it. */
+  onSetGroupBonus?: (award: boolean) => Promise<void>;
 };
 
 
@@ -52,6 +54,7 @@ export const RRGroupCard: React.FC<Props> = ({
   isCreator, isParticipant, currentUserId, isPastEvent, editMode, editPlayers, allGroupPlayers,
   onEditPlayer, onSubmitScore, submittableMatchIds, pendingMatchIds, onSaveGroupEdit, onRenameGroup,
   statsByUid, contactsByUid, onRemovePlayer, onMovePlayerZone, zoneBuckets = [], onAskSchedule,
+  onSetGroupBonus,
 }) => {
   // Which standings row is expanded to show the full stat line (wireframe 1c: Pts is the one
   // primary number; MP/MW/GW/GL are a tap away — same disclosure the Leaderboard uses).
@@ -62,6 +65,11 @@ export const RRGroupCard: React.FC<Props> = ({
   const [localPlayers, setLocalPlayers] = useState<TournamentPlayer[]>(players);
   // Local draft of the group name (creator rename).
   const [labelDraft, setLabelDraft] = useState(groupLabel);
+  // Group bonus in flight — the switch is frozen until the batch lands.
+  const [awarding, setAwarding] = useState(false);
+
+  // The paid stamp lives on the match docs, so every viewer reads the same state off the live feed.
+  const bonusAwarded = matches.some((m) => m.rr_group_bonus_v2);
 
   // Sync local state when the roster actually changes (e.g. after a save completes) — NOT on
   // every new `players` array reference. `players` is derived from the live matches feed, so an
@@ -82,9 +90,33 @@ export const RRGroupCard: React.FC<Props> = ({
 
   return (
     <div className="rounded-2xl bg-tennis-surface/30 overflow-hidden">
-      {/* Group header */}
-      <div className="px-4 py-3 border-b border-fg/10 bg-fg/[0.03]">
-        <h3 className="text-sm font-bold text-fg">{groupLabel}</h3>
+      {/* Group header. Same switch as the profile card's Email Notifications. Shown to everyone so
+          players can see whether their group has been paid; only the organizer can move it, and
+          it's hidden in preview (no match docs yet) — nothing to pay or stamp. */}
+      <div className="px-4 py-3 border-b border-fg/10 bg-fg/[0.03] flex items-center justify-between gap-3">
+        <h3 className="text-sm font-bold text-fg min-w-0 truncate">{groupLabel}</h3>
+        {!!onSetGroupBonus && matches.length > 0 && (
+          <div className="shrink-0 flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-fg/70">
+              {bonusAwarded ? 'Bonus Awarded' : 'Group Bonus'}
+            </span>
+            <label className={`relative inline-flex items-center shrink-0 ${isCreator && !awarding ? 'cursor-pointer' : 'cursor-default opacity-50'}`}>
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={bonusAwarded}
+                disabled={!isCreator || awarding}
+                onChange={async (e) => {
+                  const award = e.target.checked;
+                  setAwarding(true);
+                  try { await onSetGroupBonus(award); } finally { setAwarding(false); }
+                }}
+              />
+              <div className="w-10 h-6 bg-fg/15 peer-checked:bg-clay rounded-full transition-colors" />
+              <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4" />
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Standings — ranked rows, Pts as the one primary number; tap a row for the full line */}
@@ -145,7 +177,7 @@ export const RRGroupCard: React.FC<Props> = ({
                           onRemovePlayer(row.userId);
                         }
                       }}
-                      className="shrink-0 mr-2 p-1.5 rounded-lg text-fg/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                      className="shrink-0 mr-2 p-1.5 rounded-lg text-fg/70 opacity-70 hover:opacity-100 hover:text-badge-loss hover:bg-red-500/10 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -186,6 +218,7 @@ export const RRGroupCard: React.FC<Props> = ({
                         email={contactsByUid[row.userId]?.email}
                         whatsappContact={contactsByUid[row.userId]?.whatsapp_contact}
                         whatsappSameAsPhone={contactsByUid[row.userId]?.whatsapp_same_as_phone}
+                        preferred={contactsByUid[row.userId]?.preferred_mode_of_contact}
                         size="sm"
                         variant="white"
                       />
@@ -202,17 +235,21 @@ export const RRGroupCard: React.FC<Props> = ({
                     ) : !relevant ? <span className="text-fg/70">—</span>
                       : played ? (
                         <span className="inline-flex items-center gap-1.5">
-                          {!!mine && (
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${wonIt ? 'bg-green-500/15 text-green-500' : 'bg-red-500/15 text-red-400'}`}>
+                          {/* A no show has no winner, so neither player gets a W/L pill — without
+                              this exclusion both of them are shown a red L. */}
+                          {!!mine && !relevant.no_show && (
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${wonIt ? 'bg-green-500/15 text-badge-win' : 'bg-red-500/15 text-badge-loss'}`}>
                               {wonIt ? 'W' : 'L'}
                             </span>
                           )}
-                          <span className="text-xs font-bold text-fg">{formatSetScores(relevant) || 'Recorded'}</span>
+                          <span className="text-xs font-bold text-fg">
+                            {relevant.no_show ? 'No show' : formatSetScores(relevant) || 'Recorded'}
+                          </span>
                         </span>
                       ) : isCreator ? (
                         <button type="button" onClick={() => onSubmitScore?.(relevant)} className={pillButtonCls('sm', 'clay')}>Score</button>
                       ) : pendingMatchIds?.has(relevant.id) ? (
-                        <span className="text-[10px] font-bold text-green-500 uppercase tracking-wider">Submitted ✓</span>
+                        <span className="text-[10px] font-bold text-badge-win uppercase tracking-wider">Submitted ✓</span>
                       ) : submittableMatchIds?.has(relevant.id) ? (
                         <button type="button" onClick={() => onSubmitScore?.(relevant)} className={pillButtonCls('sm', 'clay')}>Score</button>
                       ) : onAskSchedule ? (
@@ -224,10 +261,12 @@ export const RRGroupCard: React.FC<Props> = ({
                         {[
                           { label: 'MP', value: st ? st.matchesPlayed : '—' },
                           { label: 'P/G Won', value: st ? pgWinPct(st) : '—' },
-                          { label: 'Contact', value: contactTile },
                           { label: showOverview ? 'In Group' : played ? 'Score' : 'Match', value: actionTile },
+                          { label: 'Contact', value: contactTile },
                         ].map((s) => (
-                          <div key={s.label} className="rounded-xl bg-fg/[0.04] py-2 flex flex-col items-center justify-center">
+                          // min-w-0 so a 4-column track can actually shrink on a phone (~58px at
+                          // 320px) instead of its contents forcing the row wider.
+                          <div key={s.label} className="min-w-0 rounded-xl bg-fg/[0.04] py-2 flex flex-col items-center justify-center">
                             <div className="text-sm font-black text-fg tabular-nums flex-1 flex items-center justify-center">{s.value}</div>
                             <p className="text-[9px] font-bold uppercase tracking-widest text-fg/70 mt-0.5">{s.label}</p>
                           </div>
@@ -287,11 +326,13 @@ export const RRGroupCard: React.FC<Props> = ({
                         </span>
                       </p>
                       {isDone && scoreStr && <p className="text-xs text-fg/70 mt-0.5">{scoreStr}</p>}
-                      {m.walkover && <p className="text-[10px] text-amber-400/70 mt-0.5">Walkover</p>}
+                      {m.no_show
+                        ? <p className="text-[10px] text-badge/70 mt-0.5">No show · 1 pt each</p>
+                        : m.walkover && <p className="text-[10px] text-badge/70 mt-0.5">Walkover</p>}
                     </div>
                     <div className="shrink-0 flex items-center gap-2">
                       {isDone && (
-                        <span className="text-[10px] font-bold text-green-500 uppercase tracking-wider">Done</span>
+                        <span className="text-[10px] font-bold text-badge-win uppercase tracking-wider">Done</span>
                       )}
                       {!!onSubmitScore && (
                         <button type="button" onClick={() => onSubmitScore(m)} className={pillButtonCls('sm', 'clay')}>
@@ -340,7 +381,7 @@ export const RRGroupCard: React.FC<Props> = ({
                   onChange={(e) => {
                     if (e.target.value === PLAYER_LOADING_SENTINEL) {
                       setLocalPlayers((prev) => prev.map((pp, i) => i === idx
-                        ? { uid: PLAYER_LOADING_SENTINEL, name: PLAYER_LOADING, contact: '', preferredContact: 'email' as const, participantId: '' }
+                        ? { uid: PLAYER_LOADING_SENTINEL, name: PLAYER_LOADING, participantId: '' }
                         : pp));
                       return;
                     }

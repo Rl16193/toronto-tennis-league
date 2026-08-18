@@ -379,10 +379,13 @@ Unchanged from the previous inventory pass except line-number drift; not re-veri
 | | `refreshProfile` | Reloads the current user's profile bundle (calls `ensureUserProfileDocuments`). |
 | `profileBootstrap.ts` | `createDefaultStats` / `createDefaultPreferences` | Build default doc shapes for a new user. |
 | | `ensureUserProfileDocuments` | Guarantees `users`/`stats`/`preferences` docs exist on login. |
-| `useGoogleSignIn.ts` | `useGoogleSignIn` | Hook wrapping Google OAuth sign-in. |
-| | `handleGoogleSignIn` | Runs the Google sign-in popup flow. |
+| `useOAuthSignIn.ts` | `useOAuthSignIn` | **New (de-dup).** The entire OAuth flow: popup → redirect fallback, `getRedirectResult` mount effect (filtered by `providerId`), profile bootstrap, analytics, and the account-exists linking hand-off. |
+| | `completeSignIn` | Internal: shared post-sign-in bookkeeping for both the popup and redirect-return paths. |
+| `useGoogleSignIn.ts` | `useGoogleSignIn` | Thin wrapper binding `googleProvider` to `useOAuthSignIn`; still returns `handleGoogleSignIn`. |
+| `useAppleSignIn.ts` | `useAppleSignIn` | Thin wrapper binding `appleProvider`; still returns `handleAppleSignIn`. Was a ~95% copy of the Google hook. |
 | `authMessages.ts` | `getAuthErrorMessage` | Maps a Firebase Auth error code to a friendly message. |
-| | `getGoogleSignInErrorMessage` | Same, for Google sign-in–specific errors. |
+| | `getOAuthSignInErrorMessage` | **New (de-dup).** Provider-parameterised OAuth error copy — the Google and Apple versions were identical apart from the provider id and three strings. |
+| | `getGoogleSignInErrorMessage` / `getAppleSignInErrorMessage` | One-line wrappers over `getOAuthSignInErrorMessage`. |
 | `accountService.ts` | `emailExistsInProfiles` | Checks whether an email is already registered. |
 | `Signup.tsx` | `BrandMark` | Small decorative logo/brand mark component. |
 | | `Signup` | Combined login/signup/complete-profile page (1062 lines). |
@@ -536,6 +539,8 @@ The old bell-dropdown (`NotificationBell.tsx`, already removed before this pass)
 | | `onParticipantJoined` | Notifies the creator when a player joins their event. |
 | | `weeklyReminders` | Scheduled (Tuesday 9am) reminder digest for outstanding matches/challenges. |
 | | `pruneNotifications` | Scheduled cleanup of old notification docs. |
+| `courtCounts.js` | `aggregateCourtCounts` | **New file.** Scheduled (every 6h) — recomputes per-court player counts into `site_stats/court_counts`, replacing three full-collection reads the browser ran on the public `/courts` page. Stores raw `preferred_courts` keys so `matchCourtName` stays client-side. |
+| | `computeCourtCounts` | Internal: the active-player filter + tally. |
 | `taskPoints.js` | `awardPairPoints` | **New (de-dup).** Shared by `onMatchCompletedAwardPoints` and `onLadderConfirmedAwardPoints`: records both players' play results (`recordPlayResult`) and, if a court was recorded, checks both in (`checkInFromMatch`). |
 | | *(per-player award triggers)* | Same trigger set as before — awards individual tier/counter progress on match/ladder/event/court-visit/claim events. See CLAUDE.md's Stats data flow section. |
 | `groupAwards.js` | *(collective/group bonus engine)* | **New file.** Reads across many players' documents to award group bonuses — Matchday, Hourly Coverage, Court Pioneer, Board Freshness, Full Zone Sweep — into `task_progress.bonusPoints` via an idempotent `group_awards/{awardId}` ledger. Complementary to, not overlapping with, `taskPoints.js`. |
@@ -555,24 +560,18 @@ Not re-verified in this refresh pass — unchanged since the previous inventory 
 | | `parseEventDate` | Parses an event date field (Admin SDK context). |
 | | `commitOps` | Commits a batch of writes. |
 | | `main` | Entry point: places EOD late joiners into RR groups. |
-| `backfill-task-points.mjs` | `isProfileComplete` | Mirrors the client's profile-completeness check. |
-| | `main` | Entry point: backfills matches/streaks/months/Initiation counters and tiers. |
 | `snapshot-ranks.mjs` | `inDivision` | Division-filter helper (Admin SDK context). |
-| | `main` | Entry point: snapshots current league rank positions. |
-| `backfill-availability.js` | `normalizeDay` / `asSlots` | Mirrors of `availability.ts` helpers. |
-| | `deriveGrid` | Derives the availability grid shape from legacy data. |
-| | `main` | Entry point: backfills the availability grid for existing users. |
-| `backfill-zones.js` | `getZone` | Mirrors `zones.ts`'s zone lookup. |
-| | `buildCourtMap` | Builds a name→court lookup map. |
-| | `findCourtCoords` | Resolves a court's coordinates by name. |
-| | `main` | Entry point: backfills each user's zone from their preferred courts. |
-| `fix-stanley-park.js` | `main` | One-off data-correction script for a specific court entry. |
-| `add-booking-urls.js` | `D` | Small decode/lookup helper. |
-| | `getBookingUrl` | Resolves a court's external booking URL. |
-| | `parseCsvLine` | Parses one CSV line. |
+| | `main` | Entry point: snapshots current league rank positions. Now a **manual fallback** — `functions/rankSnapshot.js` runs the same logic weekly on a schedule. |
+| `backfill-setup-complete.mjs` | `main` | Awards `setupComplete` to anyone who already finished the Initiation checklist. **Re-runnable, and needed again every time `INITIATION_TASK_IDS` changes** — the Cloud Function only evaluates it on an incoming trigger, never on its own. |
+| `seed-rewards.mjs` | `main` | Seeds/updates the `rewards` catalog. Idempotent (stable doc ids), so safe to re-run after a price edit. |
+| `set-stringer.mjs` | `main` | Links a player to a rewards-catalog stringer (`stringer`/`stringer_id` on `preferences/{uid}`). Ongoing admin operation. |
+| `build-programs-csv.mjs` | `parseCsvLine` | Minimal CSV splitter matching the app's quoting rules. |
+| | *(top-level)* | **New build step** (wired into `npm run build`). Filters `data/Registered Programs.csv` (~9 MB, 29,299 rows) down to the 435 tennis rows as `public/programs-tennis.csv` (~0.15 MB). Rows are copied verbatim so `parsePrograms` is unchanged. |
 | `geocode-pickleball.js` | `parseCsvLine` / `parseCourts` | Parse the pickleball courts CSV. |
 | | `matchCourtName` | Fuzzy-matches a court name/preference. |
-| | `geocodeQuery` | Geocodes a location string. |
+| | `geocodeQuery` | Geocodes a location string. Kept: `courtMapUtils.ts` says to re-run this whenever `PICKLEBALL_DATA` locations change. |
+
+*Deleted 2026-08 — completed one-time operations, all recoverable from git history:* `backfill-rr-points.mjs` (RR points correction pass, since run), `backfill-court-checkins.mjs` (gap now covered live by `checkInFromMatch`), `backfill-availability-tags.mjs` and `backfill-availability.js` (pre-`availability_tags` migrations), `backfill-zones.js`, `backfill-task-points.mjs`, `merge-duplicate-accounts.mjs` (a fixed list of known duplicate pairs), `fix-stanley-park.js` (single-record fix), `add-booking-urls.js` (migration landed — `courtBookings.ts` is gone and the CSV now carries `BookingUrl`). The `npm run sync:league-stats` script was also removed: `scripts/syncLeagueStats.mjs` did not exist, so the command was already broken.
 
 ---
 

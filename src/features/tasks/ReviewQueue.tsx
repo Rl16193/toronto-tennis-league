@@ -45,9 +45,9 @@ export const ReviewQueue: React.FC<{ defaultOpen?: 'claims' | null }> = ({ defau
 
   return (
     <div className="rounded-3xl border border-amber-400/30 bg-amber-400/5 p-5 mb-3 space-y-3">
-      <p className="text-xs font-bold text-amber-300 uppercase tracking-widest">Needs your review</p>
+      <p className="text-xs font-bold text-badge uppercase tracking-widest">Needs your review</p>
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-badge-loss">{error}</p>}
 
       {claims.length > 0 && (
         <div>
@@ -72,10 +72,10 @@ export const ReviewQueue: React.FC<{ defaultOpen?: 'claims' | null }> = ({ defau
                     </p>
                     {c.note && <p className="text-xs text-fg/70 truncate">{c.note}</p>}
                   </div>
-                  <button disabled={busy === c.id} onClick={() => approveClaim(c.id)} className="p-2 rounded-lg bg-green-500/15 text-green-400 hover:bg-green-500/25" aria-label="Approve">
+                  <button disabled={busy === c.id} onClick={() => approveClaim(c.id)} className="p-2 rounded-lg bg-green-500/15 text-badge-win hover:bg-green-500/25" aria-label="Approve">
                     <Check className="w-4 h-4" />
                   </button>
-                  <button disabled={busy === c.id} onClick={() => rejectClaim(c.id)} className="p-2 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25" aria-label="Reject">
+                  <button disabled={busy === c.id} onClick={() => rejectClaim(c.id)} className="p-2 rounded-lg bg-red-500/15 text-badge-loss hover:bg-red-500/25" aria-label="Reject">
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -120,7 +120,7 @@ export const ReviewQueue: React.FC<{ defaultOpen?: 'claims' | null }> = ({ defau
                             ? reviewRedemption({ code: r.code, approve: true })
                             : markCouponUsed({ code: r.code })
                         ))}
-                        className="p-2 rounded-lg bg-green-500/15 text-green-400 hover:bg-green-500/25 disabled:opacity-50"
+                        className="p-2 rounded-lg bg-green-500/15 text-badge-win hover:bg-green-500/25 disabled:opacity-50"
                         aria-label={cancelling ? 'Approve cancellation and refund' : 'Mark coupon used'}
                       >
                         <Check className="w-4 h-4" />
@@ -128,7 +128,7 @@ export const ReviewQueue: React.FC<{ defaultOpen?: 'claims' | null }> = ({ defau
                       <button
                         disabled={busy === r.code}
                         onClick={() => runCoupon(r.code, () => reviewRedemption({ code: r.code, approve: false }))}
-                        className="p-2 rounded-lg bg-red-500/15 text-red-400 hover:bg-red-500/25 disabled:opacity-50"
+                        className="p-2 rounded-lg bg-red-500/15 text-badge-loss hover:bg-red-500/25 disabled:opacity-50"
                         aria-label="Decline, leave the coupon active"
                       >
                         <X className="w-4 h-4" />

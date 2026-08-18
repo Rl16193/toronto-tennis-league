@@ -30,6 +30,8 @@ type Props = {
   pendingMatchIds?: Set<string>;
   onSaveGroupEdit: (rrGroup: number, newPlayers: TournamentPlayer[]) => void;
   onRenameGroup?: (rrGroup: number, label: string) => void;
+  /** Organizer pays/takes back one group's bonus. Passed even to players — the card shows it disabled. */
+  onSetGroupBonus?: (rrGroup: number, award: boolean) => Promise<void>;
   onRemovePlayer?: (uid: string) => void;
   /** Organizer moves a player into another zone’s draw (see handleMoveZoneByUid). */
   onMovePlayerZone?: (uid: string, bucketId: string) => void;
@@ -143,7 +145,7 @@ export const RoundRobinView: React.FC<Props> = ({
   groups, groupLabels, groupIndices, standingsByGroup, groupMatches, knockoutMatches,
   advancementCount, isCreator, isParticipant, currentUserId, isPastEvent, editMode, editPlayers,
   onEditPlayer, onSubmitScore, submittableMatchIds, pendingMatchIds, onSaveGroupEdit,
-  onRenameGroup, onRemovePlayer, onMovePlayerZone, zoneBuckets, onAskSchedule, onCreateGroup, unplacedPlayers,
+  onRenameGroup, onSetGroupBonus, onRemovePlayer, onMovePlayerZone, zoneBuckets, onAskSchedule, onCreateGroup, unplacedPlayers,
   rrKnockoutReady, generatingKnockout, onGenerateKnockout, rrView,
   roundDeadlines, onUpdateDeadline,
 }) => {
@@ -247,6 +249,7 @@ export const RoundRobinView: React.FC<Props> = ({
               // saves/renames target the correct group even when indices are non-contiguous.
               onSaveGroupEdit={(_, newPlayers) => onSaveGroupEdit(groupIndices?.[gi] ?? gi, newPlayers)}
               onRenameGroup={onRenameGroup ? (label) => onRenameGroup(groupIndices?.[gi] ?? gi, label) : undefined}
+              onSetGroupBonus={onSetGroupBonus ? (award) => onSetGroupBonus(groupIndices?.[gi] ?? gi, award) : undefined}
               onRemovePlayer={onRemovePlayer}
               onMovePlayerZone={onMovePlayerZone}
               zoneBuckets={zoneBuckets}

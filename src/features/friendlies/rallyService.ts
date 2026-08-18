@@ -3,14 +3,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { ContactData } from '../../types';
+import { setFieldsFrom } from '../../pages/tournament/utils';
 
-// Rallies — friendly-match requests, modelled on the ladder-challenge loop but with no points,
-// no standings impact, and no organizer step: the recipient simply accepts or declines.
-// Cloud Functions notify each side on create / respond / cancel (see functions/notifications.js).
+// Rallies — friendly-match requests, modelled on the ladder-challenge loop. The recipient accepts
+// or declines; either player then reports the score, and a SECOND party (the other player, or an
+// admin) confirms it. Points are paid on that confirm by functions/friendlyPoints.js — winner +2,
+// loser +1 leaguePoints26, and a match each way. A friendly never costs points.
 // Rallies live in the shared `matches` collection, tagged with category: 'rally'.
 export const MATCHES_COL = 'matches';
 
-export type RallyStatus = 'open' | 'accepted' | 'declined';
+export type RallyStatus = 'open' | 'accepted' | 'declined' | 'reported' | 'confirmed' | 'disputed';
 
 export interface Rally {
   id: string;
@@ -21,6 +23,22 @@ export interface Rally {
   status: RallyStatus;
   created_at: string;
   responded_at?: string;
+  // Result fields are the SAME shape a tournament match uses — winner_uid/name plus absolute
+  // per-set games — so one formatter and one history mapping serve every kind of result.
+  winner_uid?: string;
+  winner_name?: string;
+  set_1_player_1?: number; set_1_player_2?: number;
+  set_2_player_1?: number; set_2_player_2?: number;
+  set_3_player_1?: number; set_3_player_2?: number;
+  /** Stamped on confirm, matching a tournament match, so history sorts on one field. */
+  completed_at?: string;
+  court?: string;
+  reported_by?: string;
+  reported_at?: string;
+  confirmed_by?: string;
+  confirmed_at?: string;
+  /** Stamped by friendlyPoints.js in the payout transaction. Never written by a client. */
+  applied?: boolean;
 }
 
 export async function createRally(
@@ -48,6 +66,37 @@ export const respondRally = (id: string, accept: boolean) =>
 // Sender may retract an open rally (deleting notifies the recipient server-side).
 export const cancelRally = (id: string) => deleteDoc(doc(db, MATCHES_COL, id));
 
+// Either player reports the score of an accepted rally. Pays nothing on its own — it waits for a
+// second party to confirm.
+// `sets` are ordered [player_1 games, player_2 games] — absolute, never the reporter's viewpoint.
+export const reportRally = (
+  id: string,
+  winner: { id: string; name: string },
+  sets: [number, number][],
+  reportedBy: string,
+  court?: string,
+) =>
+  updateDoc(doc(db, MATCHES_COL, id), {
+    status: 'reported',
+    winner_uid: winner.id,
+    winner_name: winner.name,
+    ...setFieldsFrom(sets),
+    ...(court ? { court } : {}),
+    reported_by: reportedBy,
+    reported_at: new Date().toISOString(),
+  });
+
+// The second party (other player or admin) confirms or disputes. Confirming is what triggers the
+// payout; firestore.rules blocks the reporter from confirming their own report.
+export const resolveRally = (id: string, confirmedBy: string, confirm: boolean) =>
+  updateDoc(doc(db, MATCHES_COL, id), {
+    status: confirm ? 'confirmed' : 'disputed',
+    confirmed_by: confirmedBy,
+    confirmed_at: new Date().toISOString(),
+    // Only a confirm is a played result; a dispute isn't one, so it gets no completion stamp.
+    ...(confirm ? { completed_at: new Date().toISOString() } : {}),
+  });
+
 // Live view of the signed-in player's rallies, both directions.
 export function useRallies() {
   const { user } = useAuth();
@@ -73,29 +122,41 @@ export function useRallies() {
     return () => { un1(); un2(); };
   }, [user?.uid]);
 
-  // Players you already have an open/accepted rally with (either direction) — used to disable
-  // duplicate Rally buttons.
+  // Rallies still in flight — used to disable duplicate Rally buttons. A finished one (declined,
+  // confirmed, disputed) frees the pairing so the two can arrange another friendly.
+  const FINISHED: RallyStatus[] = ['declined', 'confirmed', 'disputed'];
   const activePartnerIds = useMemo(() => {
     const ids = new Set<string>();
     [...sent, ...received].forEach((r) => {
-      if (r.status === 'declined') return;
+      if (FINISHED.includes(r.status)) return;
       ids.add(r.player_1_uid);
       ids.add(r.player_2_uid);
     });
     return ids;
   }, [sent, received]);
 
-  // Players you have an ACCEPTED rally with — these get a Contact button instead of "Pending"
-  // in the players list.
+  // Players whose rally is accepted or awaiting confirmation — these get a Contact button instead
+  // of "Pending" in the players list.
   const acceptedPartnerIds = useMemo(() => {
     const ids = new Set<string>();
     [...sent, ...received].forEach((r) => {
-      if (r.status !== 'accepted') return;
+      if (r.status !== 'accepted' && r.status !== 'reported') return;
       ids.add(r.player_1_uid);
       ids.add(r.player_2_uid);
     });
     ids.delete(user?.uid ?? '');
     return ids;
+  }, [sent, received, user?.uid]);
+
+  /** The in-flight rally with one player, if any — the doc a score is reported against. */
+  const rallyWith = useMemo(() => {
+    const map: Record<string, Rally> = {};
+    [...sent, ...received].forEach((r) => {
+      if (FINISHED.includes(r.status)) return;
+      const other = r.player_1_uid === user?.uid ? r.player_2_uid : r.player_1_uid;
+      map[other] = r;
+    });
+    return map;
   }, [sent, received, user?.uid]);
 
   // Contact info for accepted-rally partners (for the ContactOpponentButton).
@@ -124,5 +185,5 @@ export function useRallies() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acceptedPartnerIds]);
 
-  return { sent, received, loading, activePartnerIds, acceptedPartnerIds, contactMap };
+  return { sent, received, loading, activePartnerIds, acceptedPartnerIds, rallyWith, contactMap };
 }

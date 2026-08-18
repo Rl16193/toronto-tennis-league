@@ -1,5 +1,5 @@
 import { DrawConfig, RRConfig, RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
-import { BYE, PLAYER_LOADING, fallbackTemplate, skillBand } from './utils';
+import { BYE, PLAYER_LOADING, fallbackTemplate, matchAward, skillBand } from './utils';
 
 // ── Zone-tier group formation ─────────────────────────────────────────────────
 
@@ -257,11 +257,11 @@ export function buildSafeGroupRewrite(params: {
 }
 
 /**
- * Standings for one group: 3 pts to the winner, 1 to the loser — a walkover scores the same as a
- * played match. +5 to everyone once all group matches complete, applied after ranking is locked.
- * Sort: points DESC → gamesWon DESC.
+ * Standings for one group. The POINTS come from `matchAward` in utils.ts — the same function the
+ * stats writer uses — so the table can never show a different number from the one paid. This file
+ * only decides the extra display columns (wins, losses, games) and the ordering.
  *
- * Display-side twin of computeMatchPoints in useTournament.ts — keep the two in step.
+ * Sort: points DESC → gamesWon DESC. No completion bonus: see the note at the foot of the function.
  */
 export function computeGroupStandings(
   groupMatches: TournamentMatch[],
@@ -276,21 +276,33 @@ export function computeGroupStandings(
   for (const uid of playerMap.keys()) stats.set(uid, { matchWins: 0, matchLosses: 0, gamesWon: 0, gamesLost: 0, points: 0 });
 
   for (const m of groupMatches) {
-    if (m.status !== 'complete' || !m.winner_uid) continue;
-    const winnerUid = m.winner_uid;
-    const loserUid = winnerUid === m.player_1_uid ? m.player_2_uid : m.player_1_uid;
+    if (m.status !== 'complete') continue;
+    const award = matchAward(m);
+
+    // A no show has no winner: both players take the same points and neither a win, a loss, nor
+    // any games — a match nobody played must not move anyone's record.
+    if (award.noShow) {
+      [m.player_1_uid, m.player_2_uid].filter(Boolean).forEach((uid) => {
+        const s = stats.get(uid);
+        if (s) s.points += award.winnerPts;
+      });
+      continue;
+    }
+
+    const { winnerUid, loserUid } = award;
+    if (!winnerUid) continue;
 
     const p1Games = (m.set_1_player_1 ?? 0) + (m.set_2_player_1 ?? 0) + (m.set_3_player_1 ?? 0);
     const p2Games = (m.set_1_player_2 ?? 0) + (m.set_2_player_2 ?? 0) + (m.set_3_player_2 ?? 0);
     const winnerGames = winnerUid === m.player_1_uid ? p1Games : p2Games;
     const loserGames  = winnerUid === m.player_1_uid ? p2Games : p1Games;
 
-    // 3 pts to the winner, 1 to the loser — walkover or not. Games are still tracked either way
-    // (a walkover normally has none, but a creator can enter a score alongside the flag).
+    // Games are tracked for a walkover too: it normally has none, but a creator can enter a score
+    // alongside the flag.
     const w = stats.get(winnerUid);
-    const l = stats.get(loserUid);
-    if (w) { w.matchWins++; w.gamesWon += winnerGames; w.gamesLost += loserGames; w.points += 3; }
-    if (l) { l.matchLosses++; l.gamesWon += loserGames; l.gamesLost += winnerGames; l.points += 1; }
+    const l = loserUid ? stats.get(loserUid) : undefined;
+    if (w) { w.matchWins++; w.gamesWon += winnerGames; w.gamesLost += loserGames; w.points += award.winnerPts; }
+    if (l) { l.matchLosses++; l.gamesWon += loserGames; l.gamesLost += winnerGames; l.points += award.loserPts; }
   }
 
   const rows: RRStandingRow[] = [];
@@ -300,13 +312,10 @@ export function computeGroupStandings(
   rows.sort((a, b) => b.points - a.points || b.gamesWon - a.gamesWon);
   rows.forEach((r, i) => { r.rank = i + 1; });
 
-  // After all group matches complete, award end-of-group bonus to everyone (does not affect
-  // rank order — rank is already fixed above).
-  const allComplete = groupMatches.length > 0 && groupMatches.every((m) => m.status === 'complete');
-  if (allComplete) {
-    rows.forEach((r) => { r.points += 5; });
-  }
-
+  // No completion bonus here. It used to add +5 to everyone the moment a group's last match
+  // completed, which stopped being true when the bonus became the organizer's Group Bonus switch:
+  // the table then showed 5 points nobody had actually been given. The award is the organizer's
+  // to make and is not shown in this table.
   return rows;
 }
 

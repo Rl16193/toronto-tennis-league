@@ -88,7 +88,7 @@ export const AddTeammatePanel: React.FC<Props> = ({ currentUserId, saving, onSav
         </div>
       )}
 
-      {error && <p className="text-[11px] text-red-400">{error}</p>}
+      {error && <p className="text-[11px] text-badge-loss">{error}</p>}
 
       <Button variant="clay" isLoading={saving} onClick={submit} className="w-full">
         Save teammate

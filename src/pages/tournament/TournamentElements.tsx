@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { AlertCircle, Check, Download, Pencil, Play, Settings2, X, XCircle } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, ChevronUp, Download, Pencil, Play, Settings2, X, XCircle } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
 import { SegmentedControl } from '../../components/SegmentedControl';
@@ -9,8 +9,8 @@ import { ZONE_NAMES, ZoneName } from '../../utils/zones';
 import { ZONE_COURT_COUNTS } from '../../utils/zoneCourtCounts';
 import { pillButtonCls } from '../../components/ContactOpponentButton';
 import {
-  DrawConfig, DrawTab, RRConfig, ScoreSubmissionDoc, SkillGroup, SkillMergePair,
-  TournamentFormat, TournamentMatch, ZoneDrawConfig,
+  DrawConfig, DrawTab, OpenDrawSlot, RRConfig, ScheduleRequest, ScoreSubmissionDoc, SkillGroup,
+  SkillMergePair, TournamentFormat, TournamentMatch, UnplacedEntry, ZoneDrawConfig,
 } from './types';
 import {
   formatPlayerName, formatScheduledDate, formatSetScores, getScheduleState, zoneBucketFor,
@@ -35,7 +35,7 @@ export class BracketErrorBoundary extends React.Component<BoundaryProps, Boundar
     if (this.state.hasError) {
       return (
         <div className="rounded-[2rem] bg-red-500/10 border border-red-500/20 p-10 text-center space-y-4">
-          <AlertCircle className="w-10 h-10 text-red-400 mx-auto" />
+          <AlertCircle className="w-10 h-10 text-badge-loss mx-auto" />
           <p className="text-fg font-bold text-lg">Failed to load the bracket.</p>
           <p className="text-fg text-sm">Download the draw to view it offline.</p>
           <Button variant="outline" onClick={this.props.onDownload}>
@@ -135,16 +135,52 @@ export const ChangeZoneModal: React.FC<{
 
 // ─── Creator request queues ───────────────────────────────────────────────────────────────────
 
+/**
+ * Collapsible queue. Every organizer-only queue uses this so they read as one stack of dropdowns
+ * rather than a column of permanently-open amber panels — the shape the organizer overview will
+ * inherit when these move behind it.
+ */
+const QueueDropdown: React.FC<{
+  title: string;
+  count: number;
+  children: React.ReactNode;
+}> = ({ title, count, children }) => {
+  const [open, setOpen] = useState(false);
+  if (count === 0) return null;
+  return (
+    <div className="mb-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-amber-500/5 transition-colors"
+      >
+        <span className="text-xs font-bold uppercase tracking-widest text-badge">
+          {title} ({count})
+        </span>
+        {open ? <ChevronUp className="w-4 h-4 text-badge shrink-0" />
+              : <ChevronDown className="w-4 h-4 text-badge shrink-0" />}
+      </button>
+      {open && <div className="px-4 pb-3">{children}</div>}
+    </div>
+  );
+};
+
 const ScheduleRequestRow: React.FC<{
-  match: TournamentMatch;
+  match: ScheduleRequest;
   onSet: (m: TournamentMatch, date: string, slot: 'AM' | 'PM') => void;
 }> = ({ match, onSet }) => {
   const [date, setDate] = useState(match.proposed_date ?? '');
   const [slot, setSlot] = useState<'AM' | 'PM'>(match.proposed_slot ?? 'AM');
   return (
     <div className="flex flex-wrap items-center gap-2 py-2 border-b border-fg/5 last:border-0">
-      <span className="text-sm text-fg flex-1 min-w-[140px]">
-        {formatPlayerName(match.player_1_name)} vs {formatPlayerName(match.player_2_name)}
+      <span className="flex-1 min-w-[140px]">
+        <span className="block text-sm text-fg">
+          {formatPlayerName(match.player_1_name)} vs {formatPlayerName(match.player_2_name)}
+        </span>
+        {!!match.event_title && (
+          <span className="block text-[11px] text-fg/70 truncate">{match.event_title}</span>
+        )}
       </span>
       <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
         className="border border-fg/25 rounded-lg bg-tennis-surface px-2 py-1.5 text-fg text-xs" />
@@ -159,21 +195,85 @@ const ScheduleRequestRow: React.FC<{
   );
 };
 
-// Creator-only: matches a player asked the organizer to schedule; set a date + AM/PM per match.
+// Creator-only, and spans every tournament they run — each row names its tournament.
 export const ScheduleRequestsPanel: React.FC<{
-  requests: TournamentMatch[];
+  requests: ScheduleRequest[];
   onSetSchedule: (m: TournamentMatch, date: string, slot: 'AM' | 'PM') => void;
-}> = ({ requests, onSetSchedule }) => {
-  if (requests.length === 0) return null;
+}> = ({ requests, onSetSchedule }) => (
+  <QueueDropdown title="Scheduling requested" count={requests.length}>
+    {requests.map((m) => <ScheduleRequestRow key={m.id} match={m} onSet={onSetSchedule} />)}
+  </QueueDropdown>
+);
+
+const UnplacedPlayerRow: React.FC<{
+  player: UnplacedEntry;
+  slots: OpenDrawSlot[];
+  onSeat: (uid: string, name: string, matchId: string, slot: 'player_1' | 'player_2') => void;
+}> = ({ player, slots, onSeat }) => {
+  const [pick, setPick] = useState('');
+  // Empty zone means they picked no courts — say so rather than showing the placement default.
+  const meta = [
+    player.tournamentChoice, player.division,
+    player.skill ? `skill ${player.skill}` : '',
+    player.zone || 'No zone',
+  ].filter(Boolean).join(' · ');
   return (
-    <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
-      <p className="text-xs font-bold uppercase tracking-widest text-amber-300 mb-2">
-        Scheduling requested ({requests.length})
-      </p>
-      {requests.map((m) => <ScheduleRequestRow key={m.id} match={m} onSet={onSetSchedule} />)}
+    <div className="flex flex-wrap items-center gap-2 py-2 border-b border-fg/5 last:border-0">
+      <span className="flex-1 min-w-[140px]">
+        <span className="block text-sm text-fg">{formatPlayerName(player.name)}</span>
+        {!!player.eventTitle && <span className="block text-[11px] font-semibold text-fg truncate">{player.eventTitle}</span>}
+        {!!meta && <span className="block text-[11px] text-fg/70">{meta}</span>}
+      </span>
+      <select
+        value={pick}
+        onChange={(e) => setPick(e.target.value)}
+        aria-label={`Slot for ${player.name}`}
+        className="bg-tennis-surface rounded-lg px-2 py-1.5 text-fg text-xs max-w-[11rem]"
+      >
+        <option value="">Open slot…</option>
+        {slots.map((s) => (
+          <option key={`${s.matchId}_${s.slot}`} value={`${s.matchId}_${s.slot}`}>{s.label}</option>
+        ))}
+      </select>
+      <Button
+        size="sm"
+        className="px-3"
+        disabled={!pick}
+        onClick={() => {
+          const chosen = slots.find((s) => `${s.matchId}_${s.slot}` === pick);
+          if (chosen) onSeat(player.uid, player.name, chosen.matchId, chosen.slot);
+          setPick('');
+        }}
+      >
+        Place
+      </Button>
     </div>
   );
 };
+
+/**
+ * Creator-only: everyone registered for the event who is in no match of it. A player's own join
+ * cannot seat them (that write is organizer-only under the rules), so without this they are
+ * invisible — registered, expecting to play, and in no draw.
+ */
+export const UnplacedPlayersPanel: React.FC<{
+  players: UnplacedEntry[];
+  slots: OpenDrawSlot[];
+  onSeat: (uid: string, name: string, matchId: string, slot: 'player_1' | 'player_2') => void;
+}> = ({ players, slots, onSeat }) => (
+  <QueueDropdown title="Unplaced players" count={players.length}>
+    {slots.length === 0 && (
+      <p className="py-2 text-[11px] text-fg/70">
+        No free slots in this draw. Switch draw, or make room, to place these players.
+      </p>
+    )}
+    {/* The slot picker only offers the draw on screen, so the row names the event a player
+        actually joined — placing a Zephyr registrant into another tournament is the mistake. */}
+    {players.map((p) => (
+      <UnplacedPlayerRow key={`${p.eventId}_${p.uid}`} player={p} slots={slots} onSeat={onSeat} />
+    ))}
+  </QueueDropdown>
+);
 
 // Creator-only queue. Approve pins `zone_override` and clears the request in one write; reject
 // only clears it. Changes which draw the player routes to — does not touch matches they're in.
@@ -189,7 +289,7 @@ export const ZoneChangeRequestsPanel: React.FC<{
   if (requests.length === 0) return null;
   return (
     <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
-      <p className="text-xs font-bold uppercase tracking-widest text-amber-300 mb-2">
+      <p className="text-xs font-bold uppercase tracking-widest text-badge mb-2">
         Zone change requested ({requests.length})
       </p>
       {requests.map((p) => (
@@ -221,7 +321,7 @@ export const ZoneChangeRequestsPanel: React.FC<{
               aria-label={`Approve move to ${p.new_zone}`}
               title={`Approve — move to ${p.new_zone}`}
               onClick={() => onApprove(p.id, p.new_zone!)}
-              className="shrink-0 p-2 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors"
+              className="shrink-0 p-2 rounded-lg bg-green-500/10 text-badge-win hover:bg-green-500/20 transition-colors"
             >
               <Check className="w-4 h-4" />
             </button>
@@ -231,7 +331,7 @@ export const ZoneChangeRequestsPanel: React.FC<{
             aria-label="Reject zone change"
             title="Reject — leave them in their current zone"
             onClick={() => onClear(p.id)}
-            className="shrink-0 p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+            className="shrink-0 p-2 rounded-lg bg-red-500/10 text-badge-loss hover:bg-red-500/20 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -390,13 +490,13 @@ export const RRConfigModal: React.FC<{
         {/* Conversion warning */}
         {isConversion && (
           <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 space-y-2">
-            <p className="text-sm font-semibold text-red-400">
+            <p className="text-sm font-semibold text-badge-loss">
               This will delete all existing bracket matches and rebuild as Round Robin.
             </p>
-            <p className="text-xs text-red-400/70">
+            <p className="text-xs text-badge-loss/70">
               Stats from any completed matches will not be reversed. Only convert before play has begun.
             </p>
-            <label className="flex items-center gap-2 cursor-pointer text-sm text-red-300 mt-1">
+            <label className="flex items-center gap-2 cursor-pointer text-sm text-badge-loss mt-1">
               <input
                 type="checkbox"
                 checked={convertConfirmed}
@@ -428,7 +528,7 @@ export const RRConfigModal: React.FC<{
             <p className="text-fg/70 text-xs pt-1">The exact groups are shown in the preview on the page.</p>
           </div>
         ) : (
-          <p className="text-sm text-red-400">Need at least 3 registered players to generate a group draw.</p>
+          <p className="text-sm text-badge-loss">Need at least 3 registered players to generate a group draw.</p>
         )}
 
         {/* Actions */}
@@ -812,12 +912,12 @@ export const TournamentHeader: React.FC<{
       }`}
     >
       <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-        danger ? 'bg-red-500/15 text-red-400' : active ? 'bg-clay/20 text-clay' : 'bg-fg/5 text-fg/70'
+        danger ? 'bg-red-500/15 text-badge-loss' : active ? 'bg-clay/20 text-clay' : 'bg-fg/5 text-fg/70'
       }`}>
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className={`block text-sm font-bold ${danger ? 'text-red-400' : 'text-fg'}`}>{label}</span>
+        <span className={`block text-sm font-bold ${danger ? 'text-badge-loss' : 'text-fg'}`}>{label}</span>
         {hint && <span className="block text-xs text-fg/70 mt-0.5">{hint}</span>}
       </span>
       {active && <span className="text-[10px] font-black uppercase tracking-wide text-clay shrink-0">On</span>}

@@ -1,287 +1,381 @@
 # Racquets & Strings — Complete Workflow Map
 
+**Revised 2026-08-12.** Updated for: the `matches`/`courts`/`tasks` collection consolidation
+(`tournament_matches` is gone), zone-based draws, the current RR engine (`buildZoneTierGroups`),
+removal of the LL/reserves draw (dead code, deleted), placement-based draw visibility, the
+Friendlies/Challenges hub at `/matches`, server-side rewards, and the connections-based contact
+model. Sections marked **NEW** are workflows added since the last revision — each maps to a test
+block in `Test_Cases_Gaps.xlsx` (prefix noted).
+
 ---
 
 ## 1. Authentication
 
 ### Sign Up (Email)
-1. User lands on `/signup` (or clicks "Join the League" from home)
-2. **Step 1** — Personal info: name, email, password (min 6 chars), phone, avatar upload, preferred contact mode
-3. **Step 2** — Skills & preferences: NTRP skill level (slider 1–7), preferred courts, favourite players, availability days/times
-4. **Step 3** — Review & confirm
-5. On submit: Firebase Auth `createUserWithEmailAndPassword` → creates `users/{uid}`, `stats/{uid}`, `preferences/{uid}` in Firestore via `profileBootstrap`
-6. Redirects to `returnTo` param (default `/events`)
+1. `/signup` — personal info: name, email (mailcheck typo hints; `checkSignupEmail` callable
+   pre-checks for an existing account), password, phone (`@intl-tel-input`), avatar, contact mode
+2. Skills & preferences: NTRP skill level, preferred courts, availability days/times
+3. On submit: Firebase Auth create → `profileBootstrap` guarantees `users/{uid}`, `stats/{uid}`,
+   `preferences/{uid}`; contact details land in `contacts/{uid}` (PII is **never** written to
+   `users` — it is world-readable)
+4. Redirect to `returnTo` param
 
-### Sign Up (Google OAuth — new user)
-1. Click Google button on Login page
-2. `signInWithPopup` → `getAdditionalUserInfo.isNewUser === true`
-3. `ensureUserProfileDocuments` creates `users/stats/preferences` docs
-4. Redirected to `/signup` to complete profile (name, skill, etc.)
+### OAuth (Google / Apple)
+1. One shared flow in `useOAuthSignIn.ts`: popup → redirect fallback on `popup-blocked` →
+   `getRedirectResult` on mount → profile bootstrap → `account-exists-with-different-credential`
+   linking hand-off
+2. `useGoogleSignIn` / `useAppleSignIn` are thin wrappers; each filters redirect results on its own
+   `providerId`. **Add providers by adding a wrapper.**
+3. New user → `/signup` to complete the profile; returning user → `returnTo`
 
-### Login (Email)
-1. Enter email + password → `signInWithEmailAndPassword`
-2. Optional "Stay logged in" checkbox sets `browserLocalPersistence` vs `browserSessionPersistence`
-3. Email suggestion via mailcheck (e.g., gnail → gmail)
-4. On success: redirects to `returnTo` param (default `/events`)
+### Session
+- Email verification is removed: `AuthContext` marks any signed-in user `isVerified: true`
+  (idempotent) which fires the one-shot Resend welcome email on `welcomeEmailSent` false → true
+- "Stay logged in" toggles local vs session persistence
+- Public routes: `/`, `/events`, `/leagues`, `/courts`, `/marketplace`, static pages. Everything
+  else is behind `<PrivateRoute>`
 
-### Login (Google — returning user)
-1. `signInWithPopup` → `ensureUserProfileDocuments` (no-ops if docs exist)
-2. Redirects to `returnTo`
-
-### Password Reset
-1. Toggle "Forgot Password?" → email-only form appears
-2. `sendPasswordResetEmail` → success screen with instructions
-
-### Auth Guards
-- `/leagues` → redirects to `/login?returnTo=%2Fleagues` if not logged in
-- `/events` join button → redirects to login with `intent=join-event`
+*Test coverage: A-01…A-14, X-10…X-13.*
 
 ---
 
-## 2. Profile (Own)
+## 2. Profile & Player Profile
 
-**Route:** `/profile`  
-**Auth required:** yes
+- `/profile` — name/bio/avatar (→ `users`), skill + tournament preference (→ `stats`, the only
+  scoring-doc fields an owner may write), contact details (→ `contacts`), preferred courts,
+  availability tags, visibility settings (→ `preferences`)
+- `/players/:userId` — public view of another player; contact details render **only** if the
+  viewer passes the contacts read rule (owner / organizer / connection / public-contact — see §12)
 
-- **ProfileInfo** — name, email, phone, skill level; edit mode saves to `users/{uid}`
-- **ProfileStats** — matchesPlayed, wins, losses, % pts won (from `stats/{uid}`)
-- **ProfileEvents** — events the user has joined (from `event_participants` where `user_id == uid`)
-- **ProfileAvailability** — preferred courts, availability days/times, favourite players; saves to `preferences/{uid}`
-- **Calendar** — May 2026 date picker for marking availability
-
----
-
-## 3. Player Profile (Public)
-
-**Route:** `/players/:userId`
-
-- Shows name, skill level, tournament preference, contact info, contact mode
-- Match stats: played, wins, losses, % pts won
-- Availability calendar (May 2026)
-- Organizer contact section (if accessed via event context)
-- Visible to any logged-in user
+*Test coverage: P-*, PP-*.*
 
 ---
 
-## 4. Events Page
+## 3. Events
 
-**Route:** `/events`
+### Browsing & joining
+1. `/events` lists `events`; expired events hidden
+2. Join expands inline: Singles/Doubles → division → (doubles) partner name + in-app toggle +
+   combined skill
+3. Submit creates `event_participants` (`uid`, `event_id`, `skill`, `division`, `dateselected`, …)
+4. **Knockout events:** slot status is computed against generated `matches` — full draws offer the
+   sibling skill bracket as fallback
+5. **RR events:** slot status is **bypassed** — registration stays open even after the draw is
+   generated (late joiners, §7)
 
-### Browsing
-- All events fetched from `events` collection
-- **Visible events filter:**
-  - Social/non-tournament events: hidden once start date has passed
-  - Any event: hidden once end date has passed
-- Shown as 3-column card grid
+### Creating (creator only)
+`event_creator` flag → "Add an Event" → writes `events` doc (image via Storage). Format field
+selects knockout vs `tournament_format: 'rr'`.
 
-### Joining an Event (Player)
-1. Click "Join" on an EventCard → card expands inline (no modal)
-2. **Tournament event:**
-   - Select format: Singles or Doubles
-   - Select division: Men's / Women's (Singles) or Men's / Women's / Mixed (Doubles)
-   - Doubles-only: partner name, partner in-app toggle (yes/no), combined skill level
-   - Slot availability checked against `tournament_matches` — shows "Full" or fallback bracket message
-   - On submit: creates `event_participants` doc with `tournament_choice`, `division`, `skill`, etc.
-3. **Social/regular event:**
-   - Simple "Reserve your spot" → creates `event_participants` doc
-4. Slot status logic:
-   - Counts players in `tournament_matches` for the chosen draw
-   - If full, offers fallback to alternate skill bracket (Challengers ↔ Masters)
-
-### Check Past Events
-- Button (top-right, hidden for creators) → navigates to `/tournament?tab=past`
-
-### Creating an Event (Creator only)
-1. Click "Add an Event" → modal form opens
-2. Fields: title, type, date, end date, location, description, organizer, skill level, image
-3. `createEvent` uploads image to Firebase Storage, writes `events` doc
-4. New event appears in the grid immediately
+*Test coverage: E-*, C-*.*
 
 ---
 
-## 5. Matches Page (Tournament)
+## 4. Tournament Page
 
-**Route:** `/tournament`
+**Route:** `/tournament` (private). Tabs Upcoming / Active / Past per event; accordion per event.
 
-### Tab Structure
-- **Upcoming** — tournament event with no `tournament_matches` docs yet
-- **Active** — `tournament_matches` exist but no final match (`round === 'F'`) is `status === 'complete'`
-- **Past** — a final match with `status === 'complete'` and `winner_user_id` set
+### Draw visibility — placement-based, not skill-based
+| Viewer | Sees |
+|---|---|
+| Creator | All draws |
+| Participant, draw generated | The draw their `user_id` **actually appears in** (`userDraw` scans generated matches) |
+| Participant, pre-generation | **Every draw** — `userDraw` is deliberately `undefined`; there is no skill-derived fallback. Don't "fix" this |
+| RR participant | **Both skill draws of their own division**, read-only |
+| Non-participant | All draws (preview) |
 
-URL param `?tab=past|active|upcoming` sets the initial tab.
+A creator can move a player across skill groups without touching their `event_participants` skill —
+placement-based visibility is what keeps the moved player looking at the right draw.
 
-### Accordion Per Event
-- Each tab shows a collapsible list of tournament events
-- Header: event name + date range
-- One accordion open at a time per tab
-
-### Draw Visibility (inside an accordion)
-| User type | Which draws shown |
-|-----------|------------------|
-| Creator | All draws always |
-| Participant (in `event_participants`) | Only the draw they are **placed in** (see below) |
-| Non-participant / new user | All draws (preview mode) |
-
-For Past events: participant sees their draw; non-participant defaults to Men's Challengers.
-
-**Participant draw resolution (`userDraw`)** — once matches are generated, a participant sees the draw their `user_id` actually appears in (`tournament_choice` + `division` + `skill_group` of their match). Only before generation does it fall back to skill-derived routing (`skill_level >= 4` → Masters, else Challengers). This matters because a creator can move a player across skill groups (e.g. Challengers → Masters) without editing their `event_participants` skill; placement-based visibility ensures the moved player sees the draw they're really in. Do not change `userDraw` back to skill-only routing.
-
-### Draw Tabs
-Within an accordion, draw sub-tabs are shown based on visibility:
-- **Men's Singles** → Challengers / Masters skill groups (or merged)
-- **Women's Singles** → Challengers (or merged)
-- **Doubles** → Men's / Women's / Mixed / Consolidated
-
-### Opponent Card (Active tournaments only)
-- Collapsible dropdown header. Bracket draws show **"Your Matches"** (`OpponentCard`); RR draws show **"Your Group"** (`RROpponentPanel`). Same collapsible pattern for both formats.
-- Only rendered once the draw is generated — never during preview (so no "Player Loading" opponent appears).
-- Name / contact / profile link are resolved live by `user_id` (fall back to the match-doc snapshot), so a re-seated or profile-updated player shows current info.
-- "View Profile" button hidden when there is no `user_id`.
+*Test coverage: T-*, VS-01…VS-03.*
 
 ---
 
-## 6. Draw Lifecycle
+## 5. Zone-Based Draws — **NEW** *(tests: Z-01…Z-08)*
 
-### Phase 1: Preview (no Firestore match docs)
+Draws in the same division/skill can be split by city zone. Zone geometry lives in
+`src/utils/zones.ts` (built from the Toronto Centreline dataset; the DVP and Hwy 404 are spliced
+into one polyline, Steeles stands in for the 407).
 
-`displayMatches` is computed entirely client-side:
+Workflow rules, each learned from a real defect:
 
-1. `filterParticipantsForDraw` — filters `event_participants` by `tournament_choice`, `division`, and `skillGroup`
-2. `buildPlayerList` — maps participants to `TournamentPlayer` objects, sorted alphabetically (or by skill for merged draws)
-3. `getDrawSize(playerCount, tournamentChoice)`:
-   - Doubles → always 16
-   - Singles ≤ 8 players → draw size 8
-   - Singles 9–16 players → draw size 16
-   - Singles 17+ players → draw size 32
-4. `fallbackTemplate(drawsize)` generates the bracket structure for size 8/16/32
-5. Players slotted into positions 1..drawsize; slots beyond player count show "Player Loading"
-6. `previewSlotOverrides` applied on top (creator's manual drag-and-drop changes)
-
-**Key:** draw size is recalculated live every time `participants` changes. Adding a new participant (via join or creator add) can bump the draw from 8→16 or 16→32 automatically in preview.
-
-### Phase 2: Generated (Firestore match docs exist)
-
-1. Creator clicks "Generate Matches"
-2. `generateDraw` runs with current preview state (including slot overrides)
-3. Each match written to `tournament_matches/{eventId}_{drawKey}_{matchId}` via batched write
-4. `currentMatches` is now non-empty → `displayMatches` returns Firestore data directly
-5. Draw size is **locked** to whatever was written — adding more participants after this point does NOT expand the draw
-
-### After Generation: Adding a Player
-- `handleAddPlayer` creates an `event_participants` doc
-- `participants` updates via `onSnapshot`
-- The new player appears in `reservesPlayers` (players filtered for the draw but not placed in any match slot)
-- Creator can place them in the LL Draw (reserves bracket) — they do NOT enter the main draw
-- Main draw expansion requires cancelling the draw (only possible if no scores have been submitted), then regenerating
-
-**Round Robin events are different (RR-only).** Group formation is **skill-first and honors the creator's group size**: players are ordered by skill (zone is a secondary tiebreak) and filled into groups of exactly the chosen size, remainder in the last group (5 players at size 5 → one group of 5; 12 → [5,5,2]). A group's zone suffix is its single zone, or **"Mixed Zones"** when zones differ. Masters + Challengers can be merged via the "Merge Draws" toggle. In edit mode the creator can **move a player between groups** ("Move to → Group"); emptying a group dissolves it (a one-player group keeps a placeholder so nobody is dropped), and groups with a played match can't be reshuffled.
-
-RR accepts registration after the draw exists (no "draw full"); late joiners are NOT sent to reserves. The EOD script `scripts/regroup-rr.js` (run via `npm run regroup:rr`) **fills the most incomplete group first** (below the target size, closest skill, matching zone, no played matches) and otherwise forms new skill-first groups for the overflow. Groups with a completed/started match are never disturbed, and the script is idempotent (a run with no new joiners writes nothing). Bracket/knockout events keep the reserves flow above.
-
-### Phase 3: Cancel Draw
-- `handleResetDraw` checks for any `status === 'complete'` match in `tournament_matches`
-- If found → blocked: "Cannot cancel — a match has already been played in this draw."
-- If clear → confirms with `window.confirm` → deletes all `currentMatches` docs → returns to preview mode
+1. **`effectiveZone`** — groups generated before zones went live carry no `zone`; they are mapped
+   onto the **default zone** (Downtown-Midtown), never shown as a separate zone-less draw (that
+   double-counted every signup)
+2. **Every destructive path is zone-filtered** — reset, cancel and regenerate iterate
+   `currentMatches`, which **must** filter on `zone`; without it, resetting one zone deletes the
+   other zone's matches and reverses those players' points
+3. **Winner advancement normalizes zone** — template match ids (M1, M5, …) repeat across zone
+   draws; advancement matches on zone + bracket, not id alone
+4. **Zone change requests** — a participant may write only
+   `zone_change_requested`/`zone_change_requested_at` on their own participant doc;
+   `onZoneChangeRequested` notifies the creator, who moves them
+5. **Cross-draw dedupe is disabled** (`AUTO_DEDUPE_ENABLED = false`) — a player seated in two draws
+   is surfaced, never silently unseated
 
 ---
 
-## 7. Creator Draw Controls
+## 6. Knockout Draw Lifecycle
 
-### Edit Mode
-- Toggle "Edit Draw" button (only in preview, before generation)
-- In edit mode, creator can drag/reassign players to any slot via `handleEditPlayer`
-- Changes stored in `previewSlotOverrides` (client-side, not saved until Generate is clicked)
-- Edit dropdown includes ALL players in that division/choice regardless of skill group
+### Preview (client-side only)
+1. `filterParticipantsForDraw` → `buildPlayerList` → `getDrawSize(count)` — Singles **and**
+   Doubles both scale 8/16/32 with participant count
+2. Bracket template generated; players slotted; empty slots show "Player Loading";
+   `previewSlotOverrides` hold the creator's manual placements
+3. Draw size recalculates live as participants change; creator may override it (cleared on
+   generate)
 
-### Move Players (Live Draw)
-- After generation, `handleEditPlayer` on a live match updates `tournament_matches` doc directly
-- Can swap/replace any player in any slot
+### Generate
+Batched write of every match to `matches/{eventId}_{drawKey}_{matchId}`
+(`drawKey = getDrawKey(choice, division, skillGroup)`). Draw size is then **locked**.
 
-### Add Player (Creator)
-- Available in edit mode
-- `availableUsers` = all registered users (`users` collection) minus current participants
-- Adds player to `event_participants`; in preview this expands the draw automatically if count crosses a threshold
-- In a generated draw, player goes to reserves list
+### After generation
+- `handleAddPlayer` → new participant appears in the unplaced list; the **main draw does not
+  expand** (cancel + regenerate first, only possible with no completed matches)
+- `handleEditPlayer` on a live match rewrites the doc directly (creator)
+- Merge toggles: Challengers + Masters into one draw (`skillGroup: 'All'`); doubles consolidation.
+  Merge inference on load keys on `[matches, statsMap]` — with a stale statsMap it silently guessed
+  wrong
+- **There is no LL/reserves draw.** The `bracket: 'reserves'` flow was dead code and was removed —
+  nothing generates or reads those docs
 
-### Draw Size Override (Preview only)
-- Creator can manually set draw size via `handleSetPreviewDrawSize`
-- Overrides the auto-calculated `getDrawSize` result
-- Cleared on generate
+### Cancel / reset
+Blocked if any match in **this zone's** draw is complete; otherwise deletes this draw's docs and
+returns to preview, reversing stats via `reverseMatchStatsInto` (which honors the bonus and partner
+stamps — §9).
 
-### Merge / Consolidate
-- **Merge Men's Singles** — combines Challengers + Masters into one draw (skill group = 'All'); BYE slots placed to separate skill groups in early rounds
-- **Merge Women's Singles** — same for women
-- **Consolidate Doubles** — merges Men's/Women's/Mixed doubles into one draw
-- Auto-enabled when loading an event that already has merged/consolidated match docs
-
-### Generate Matches
-- Writes all preview matches to Firestore
-- Clears `previewSlotOverrides` and `previewDrawSize` for that draw
-
-### Download Draw
-- Renders bracket as PNG via html-to-image (or similar)
+*Test coverage: T-*, X-05…X-22, Z-02…Z-04.*
 
 ---
 
-## 8. Score Submission (Creator only)
+## 7. Round Robin Lifecycle — **NEW shape** *(tests: RR-01…RR-12, LJ-01…LJ-04)*
 
-1. Creator clicks on a match → score form opens
-2. Enter sets (up to 3), select winner
-3. On submit:
-   - `tournament_matches/{matchId}` updated: scores, winner, `status = 'complete'`
-   - Winner propagated to next match slot (`next_match_id` + `next_slot`)
-   - **Stats updated** (idempotent delta logic):
+Events with `tournament_format === 'rr'`.
 
-| Stat | Winner | Loser |
-|------|--------|-------|
-| matchesPlayed | +1 | +1 |
-| wins | +1 | — |
-| loses | — | +1 |
-| leaguePoints26 | +20 (final only) | +round pts (R32=1, R16=2, QF=3, SF=5, F=10) |
-| tournamentsPlayed | +1 (final only) | +1 (any round) |
-| pointswon | games won | games won |
-| totalPointsPlayed | total games | total games |
+### Group formation (`buildZoneTierGroups`) — skill-band × zone, auto-sized
+1. Players bucket by skill band (Beginners 2–2.5, Challengers 3–3.5, Masters 4–5), then by
+   preferred-court zone
+2. Each bucket splits via `splitEvenly(n)`: `g = ceil(n/5)` balanced groups of 3–5
+   (6→[3,3], 7→[4,3], 9→[5,4], 12→[4,4,4])
+3. **≤5 total players = one group** (band/zone ignored)
+4. A lone player in a distinct zone gets a placeholder group only when the draw already has >3
+   zone-clustered groups; otherwise the band pools and the singleton folds in
+5. Labels: `Group X · Band · Zone` (zone segment dropped when mixed/unassigned); letters are
+   positional at render; a creator rename (`rr_label_custom`) shows verbatim
+6. **The size algorithm is authoritative** — band boundaries never force uneven splits
+7. Preview (`previewRRGroups`) uses the same function, so preview == generated
 
-4. **Edit score** (re-entry on completed match): computes delta (new − old) for each stat field and applies only the difference — no double-counting
+### Creator group editing
+- `handleSaveGroupEdit` rewrites one group's roster; a cross-group move = include the player in the
+  target's list, omit from the source — **both docs reconcile atomically**
+- Rename (`handleRenameGroup`), Add Group from unplaced players (`handleCreateRRGroup`)
+- Emptying a group dissolves it; a one-player group keeps a placeholder match (never silently
+  dropped)
+- Any move into/out of a group with a played match is **refused**
+- Cross-skill-draw moves have no dedicated action: a background effect removes a player from this
+  draw's groups when they're found seated in the sibling skill draw (self-heal)
+- Pre-generation edits persist to `events/{eventId}/rr_drafts/{drawKey}` — ⚠️ **currently broken**:
+  the rules declare `/rr_drafts` top-level, so draft writes are silently denied (test DR-01 is
+  expected-fail until the nested rule ships)
 
-### LL Draw (Reserves) — halved points
-- Winner: +10 pts, rounds: R32=0.5, R16=1, QF=1.5, SF=2.5, F=5
+### Knockout stage
+`handleGenerateRRKnockout` at creator-chosen R4/R8/R16. Group winners auto-seed
+(`selectGroupWinners`: points → gamesWon; top seed slot 1); remaining slots stay `PLAYER_LOADING`
+for manual fill (`manualFill: true` also disables first-round bye auto-advance). Re-selecting a
+size rebuilds — refused once any knockout match is played. No automatic runner-up fill.
 
----
-
-## 9. LL Draw (Lucky Losers / Reserves)
-
-- Shown below the main draw when reserves players exist
-- Creator sets LL draw size (4 / 8 / 16) via `handleSetLLDrawSize`
-- Creator assigns players to slots via `handleEditPlayer` (LL preview)
-- "Generate LL Draw" → writes to `tournament_matches` with `bracket = 'reserves'`
-- LL Draw can be reset independently of main draw
-- Scores submitted for LL matches earn halved league points
-
----
-
-## 10. Leagues Page
-
-**Route:** `/leagues`  
-**Auth required:** yes
-
-- Fetches all `stats` docs where `leaguePoints26 > 0`
-- Division tabs: Men's / Women's / Doubles
-- `inDivision` filter on `stats.league` field (string match)
-- Sorted by `leaguePoints26` descending
-- Shows top 15; current user's row always shown (below separator if outside top 15)
-- `*` marker on Matches column for players still active in a live tournament (not yet eliminated)
-- Columns: # | Skill | Name | Matches | Wins | Pts
+### Late joiners (EOD workflow)
+1. RR registration stays open post-generation; joiners are **not** sent to any reserves flow
+2. `npm run regroup:rr` (Admin SDK; **always `--dry-run` first**):
+   - groups with **4–5 players or any played match are locked**
+   - a joiner lands in a **≤3 group with a matching band** (zone preferred)
+   - overflow forms new `(band, zone)` groups via `splitEvenly`
+   - idempotent — a run with no new joiners writes nothing
+3. The script hand-mirrors the pure helpers in `rrGeneration.ts`/`utils.ts` — keep in sync
 
 ---
 
-## 11. Firestore Collections Reference
+## 8. Score Submission
 
-| Collection | Key fields | Written by |
-|-----------|-----------|-----------|
-| `events` | title, type, startDate, endDate, creator_id | Creator (event form) |
-| `event_participants` | user_id, event_id, tournament_choice, division, skill | Player join / Creator add |
-| `tournament_matches` | event_id, draw key fields, player slots, scores, status, bracket | Creator generate / score submit |
-| `stats` | matchesPlayed, wins, loses, leaguePoints26, tournamentsPlayed, pointswon, totalPointsPlayed, league | Score submission |
-| `users` | name, email, phone, preferred_mode_of_contact | Signup / Profile edit |
-| `preferences` | preferred_courts, availability, favourite_players | Signup / Profile edit |
+### Player-filed submissions
+A player may create a `matches` doc with `category: 'score_submission'`
+(`submitted_by`, `match_id`). `onScoreSubmitted` notifies the creator; confirming (or the
+submitter retracting) **deletes** it, firing `onScoreSubmissionResolved` back to the submitter.
+
+### Creator scoring (`handleSubmitScore` → `updateMatchWithSubmission`)
+**Three isolated steps** — a rules rejection in a later step never rolls back a recorded score:
+1. Match result batch (scores, `winner_uid`, `status: 'complete'`)
+2. Stats batch (best-effort)
+3. Winner advancement (best-effort; resolves the next match from loaded state with normalized
+   bracket **and zone**, reconstructed doc id as fallback)
+
+Guards: a **blank `winner_uid` is rejected** (it used to complete the match with a phantom winner
+and advance an empty uid). `completed_at` is **pinned to first scoring**; edits stamp
+`score_edited_at` instead. Score edits apply stat deltas (new − old), never double-count.
+
+*Test coverage: S-*, PT-07, PT-08, NT-03.*
+
+---
+
+## 9. Points — **NEW consolidated rules** *(tests: PT-01…PT-09)*
+
+Computed by the shared `computeMatchPoints(match)` (and reversed by its exact inverse):
+
+| Situation | Winner | Loser |
+|---|---|---|
+| RR group-stage match (incl. **walkover**) | **+3, live** | **+1** |
+| Knockout R32 / R16 / QF / SF | — (nothing at that moment) | 1 / 2 / 3 / 5 |
+| Final | **+20** | 10 |
+
+- The walkover penalty (`isWalkover ? 1 : 3`) was deliberately removed — it penalised the player
+  who showed up. `computeGroupStandings` is the display-side twin of the same 3/1 rule.
+- **RR +5 group-completion bonus** — paid in a separate best-effort commit that stamps
+  `rr_group_bonus_v2: true` on every group match. Payment **and** reversal check the stamp:
+  "group complete" is not proof it was paid, and a corrected match must not pay it twice.
+- **Doubles partner credits** — applied in the same scoring batch; reversed with the same
+  per-captain `partner_uid` map (`doubles_partner_pts_v2` backfill stamp).
+- **Community/RS points** are a separate system: tiers in `taskCatalog.ts`, awarded server-side by
+  `taskPoints.js`, summed by `earnedRsPoints` in `functions/lib/points.js` — the two files are
+  hand-synced twins (parity test PT-09).
+
+---
+
+## 10. Matches Hub (Friendlies & Challenges) — **NEW** *(tests: LD-01…LD-05)*
+
+**Route:** `/matches` (private; `/friendlies` and `/challenges` redirect here).
+
+### Friendlies (rallies)
+Request → accept/decline → play. No points, no standings, no organizer. `matches` docs with
+`category: 'rally'`; sender may retract while open; recipient responds (rules-whitelisted fields).
+
+### Challenges (ladder)
+1. Challenge sent (`category: 'challenge'`, `status: 'open'`) → recipient accepts
+2. Either player reports (`status: 'reported'`, claimed winner + score line)
+3. **Organizer confirms — `confirmChallenge` runs in a `runTransaction`**: reads the `applied`
+   flag inside the txn (a double-tap must not apply ±3 twice), floors the loser's deduction at 0,
+   and uses `set(merge)` so a missing stats doc can't strand the challenge in `reported`
+4. Scheduling: either player proposes/confirms times (whitelisted `schedule_*` fields);
+   `onScheduleRequested` notifies the opponent
+
+### Suggestion filters
+Three exclusive pools allocated in order of **constraint, not display**: Nearby picks first
+(smallest candidate set), each filter claims a block wider than the 10 shown, so the weekly refresh
+and the dice draw from spares — and the visible sets can never overlap.
+
+---
+
+## 11. Rewards, Services & Providers — **NEW** *(tests: RW-01…RW-07)*
+
+1. Offers are `type: 'offer'` rows in `tasks` (seeded by `seed-rewards.mjs`, **bare** doc ids)
+2. Player redeems via the `redeemReward` **callable** — the server recomputes their redeemable
+   balance from `earnedRsPoints` (client numbers are display-only) and writes a `redemptions` doc
+   whose **id is the coupon code**
+3. Coupon lifecycle — all callables, role-checked server-side: provider `markCouponUsed` /
+   `flagCoupon`; player `requestCancellation`; organizer `reviewRedemption`
+4. Group lessons: `joinGroupLesson` / `leaveGroupLesson` against the monthly
+   `group_lessons/{month}` roster, capacity enforced server-side
+5. Providers are `preferences.coach_id` / `stringer_id` (assigned via `set-stringer.mjs`);
+   `isProviderFor()` in rules lets a provider read **their own** redemptions only
+6. The whole surface is browsable logged-out inside `/marketplace` — balance reads 0, nothing
+   redeemable
+7. `offers`, `redemptions`, `group_lessons` reject **all** client writes
+
+---
+
+## 12. Marketplace & Contact Sharing — **NEW** *(tests: MP-01…MP-06)*
+
+### Listings
+Create (`kind: 'rent' | 'sell'`, `status: 'available'`, own uid — rules-enforced) → photos to
+`listings/{uid}/` (image-only, <5 MB, SafeSearch-moderated) → edit/delete by owner.
+
+### The contact model (no in-app messaging)
+`contacts/{uid}` is readable by: the owner; an organizer; a **connection**
+(`connections/{uidA__uidB}`, written *only* by `onMatchConnection` on an **accepted**
+rally/challenge or a shared tournament fixture — an open request earns nothing); or a
+**public-contact holder** (`public_contacts/{uid}`, maintained by `onListingContact`: posting a
+listing *is* the invitation to be contacted; deleting the last listing revokes it).
+
+**Consequence for all code:** a denied `contacts` read is *normal*. `.catch()` every read
+individually — one `Promise.all()` over the batch blanks the whole page when a single connection
+doc hasn't landed yet.
+
+`pairId()` exists in both `functions/connections.js` and `firestore.rules` — the two must stay
+byte-identical (test MP-06).
+
+---
+
+## 13. Tasks, Check-ins & Group Awards *(tests: GA-01…GA-03)*
+
+- `/tasks`: tiered tasks (play/challenge/check-in/photo/social), progress in `tasks/{uid}` —
+  owners may write only the whitelisted setup fields; points are server-awarded (`taskPoints.js`)
+- Check-ins/attendance: geolocated, ≤400 m from the court, uid-prefixed doc ids (rules-enforced)
+- Photo reports (condition / waiting board / queue): auto-approve on create; **`courts` docs are
+  immutable** — which is why Board Freshness pays from `onDocumentCreated`
+- Claims (volunteer/ambassador/host): player creates as `pending`; only an organizer may update
+- Collective bonuses (`groupAwards.js`): Matchday (±36h-bounded query), Hourly Coverage, Court
+  Pioneer, Board Freshness, Full Zone Sweep → `tasks.bonusPoints`. Distinct from per-player tier
+  points — the two engines never pay for the same thing
+
+---
+
+## 14. Player Removal (creator) *(tests: RM-01…RM-03)*
+
+Removal is an **event-wide purge in one batch**: strip the player from every match doc in the
+event (any survivor keeps reconstructing their name), delete their `event_participants` doc (it is
+what routes them into a draw), and update the withdrawn list — all in the **same batch**, or the
+snapshot race re-seats them before the withdrawal lands.
+
+---
+
+## 15. Notifications *(tests: NT-01…NT-04)*
+
+14 Firestore triggers (`functions/notifications.js`) cover match/rally/challenge lifecycle, score
+submissions, schedule and zone-change requests, task progress and event joins; `weeklyReminders`
+and `pruneNotifications` run on schedules. Clients can never create; recipients may read,
+mark-read (`read`/`read_at` only) and delete their own.
+
+---
+
+## 16. Firestore Collections Reference
+
+The authoritative table (with primary/foreign keys and access model) lives in
+`TECHNICAL_HANDOVER.md` §7 and CLAUDE.md. Quick map:
+
+| Collection | Purpose | Writers |
+|---|---|---|
+| `users` / `stats` / `preferences` / `contacts` | Identity (doc id = uid; PII only in `contacts`) | Signup / profile / functions |
+| `events` (+ `rr_drafts` subcoll.) | Events + pre-generation RR drafts | Creator |
+| `event_participants` | Joins, routes players into draws | Player / creator |
+| `matches` | singles · doubles · rally · challenge · score_submission | Tournament / ladder / rally services |
+| `courts` | check-in · attendance · condition · waiting_board · queue (immutable) | Check-in / photo services |
+| `tasks` (+ `task_claims`) | Progress per uid + `offer` catalog rows | Player (whitelist) / functions |
+| `offers` / `redemptions` / `group_lessons` | Rewards (server-only writes) | `rewards.js` |
+| `listings` | Marketplace | Owner |
+| `connections` / `public_contacts` | Contact-visibility grants (server-only) | `connections.js` |
+| `notifications` / `ranking_history` / `site_stats` | Feed, rank history, aggregates (server-only) | Functions |
+| `mailing_list` | Newsletter (open create) | Public form |
+
+**Retired (do not reintroduce):** `tournament_matches`, `court_visits`, `court_attendance`,
+`court_reports`, `court_suggestions`, `rallies`, `ladder_challenges`, `score_submissions`,
+`task_progress`, `redeemable`, `rewards`, `group_awards`, `zone_sweeps`.
+
+---
+
+## 17. New workflows to test — quick index
+
+| Workflow | Section | Test cases |
+|---|---|---|
+| Zone-based draws (reset/advancement isolation, zone changes) | §5 | Z-01…Z-08 |
+| RR group formation & editing | §7 | RR-01…RR-09 |
+| RR knockout generation | §7 | RR-10, RR-11 |
+| RR sibling-draw self-heal | §7 | RR-12 |
+| RR late joiners + `regroup:rr` EOD script | §7 | LJ-01…LJ-04 |
+| Points: RR 3/1, +5 stamped bonus, doubles partners, round table | §9 | PT-01…PT-09 |
+| Ladder confirm (transaction, floor, connections) | §10 | LD-01…LD-05 |
+| Rewards / coupons / group lessons (server-side) | §11 | RW-01…RW-07 |
+| Marketplace listing → contact visibility | §12 | MP-01…MP-06 |
+| Notifications routing & access | §15 | NT-01…NT-04 |
+| Player removal purge | §14 | RM-01…RM-03 |
+| Group awards (create-trigger, bounded queries) | §13 | GA-01…GA-03 |
+| RR drafts rules bug (expected-fail regression) | §7 | DR-01, DR-02 |
+| Placement-based draw visibility | §4 | VS-01…VS-03 |

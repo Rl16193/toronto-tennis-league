@@ -25,7 +25,7 @@ const VARIANTS = {
     winner: 'border-t border-fg/10 px-2 py-1 text-xs font-black text-clay',
     creatorBtn: 'w-full border-t border-fg/10 px-2 py-1 text-[10px] text-fg/70 hover:text-clay transition-colors text-center leading-tight',
     playerBtn: 'w-full border-t border-fg/10 px-2 py-1 text-[10px] text-fg/70 hover:text-clay transition-colors text-center leading-tight',
-    submitted: 'w-full border-t border-fg/10 px-2 py-1 text-[10px] text-green-400 text-center leading-tight',
+    submitted: 'w-full border-t border-fg/10 px-2 py-1 text-[10px] text-badge-win text-center leading-tight',
   },
   // Mobile: roomier, with 44px touch targets.
   stack: {
@@ -38,7 +38,7 @@ const VARIANTS = {
     winner: 'border-t border-fg/10 px-3 py-1.5 text-xs font-black text-clay',
     creatorBtn: 'w-full border-t border-fg/10 px-3 py-2 text-xs font-bold text-fg/70 hover:text-clay transition-colors text-center bg-fg/[0.03]',
     playerBtn: 'w-full border-t border-fg/10 px-3 py-2 text-xs font-bold text-clay transition-colors text-center bg-clay/10',
-    submitted: 'w-full border-t border-fg/10 px-3 py-2 text-xs text-green-400 text-center',
+    submitted: 'w-full border-t border-fg/10 px-3 py-2 text-xs text-badge-win text-center',
   },
 } as const;
 
@@ -61,7 +61,7 @@ export const PlayerSelect: React.FC<PlayerSelectProps> = ({ matchId, slot, curre
         value={selectValue}
         onChange={(e) => {
           if (e.target.value === PLAYER_LOADING) {
-            onSelect(matchId, slot, { uid: '', name: PLAYER_LOADING, contact: '', preferredContact: 'email', participantId: '' });
+            onSelect(matchId, slot, { uid: '', name: PLAYER_LOADING, participantId: '' });
           } else {
             const p = e.target.value ? players.find((p) => p.uid === e.target.value) ?? null : null;
             onSelect(matchId, slot, p);
@@ -87,7 +87,7 @@ export const PlayerSelect: React.FC<PlayerSelectProps> = ({ matchId, slot, curre
               onRemovePlayer(currentUserId);
             }
           }}
-          className="shrink-0 p-1 rounded text-fg/30 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+          className="shrink-0 p-1 rounded text-fg/70 opacity-70 hover:opacity-100 hover:text-badge-loss hover:bg-red-500/10 transition-colors"
         >
           <Trash2 className="w-3 h-3" />
         </button>

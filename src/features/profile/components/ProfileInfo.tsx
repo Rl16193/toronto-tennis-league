@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
 import { Camera, Pencil, X, Check, MapPin, Star, Loader2, Users, Award } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import IntlTelInput from '@intl-tel-input/react/with-utils';
@@ -13,14 +14,15 @@ import {
   defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts,
   getCourtSuggestions, mergeCourtOptions,
 } from '../../signup/utils/courtSearch';
-import { zoneFromCourts } from '../../../utils/zones';
+import { zoneFromCourts, ZONE_NAMES } from '../../../utils/zones';
+import { Sheet } from '../../../components/Sheet';
 import { formatPhone } from '../../../utils/formatPhone';
 import { skillBand } from '../../../pages/tournament/utils';
 import { getFavouritePlayerSuggestions, useFavouritePlayerOptions } from '../favouritePlayers';
 import { BadgePicker } from '../../tasks/BadgePicker';
 import { BADGE_PILL_CLASS } from '../../tasks/badges';
 import { Counters } from '../../tasks/useTasks';
-import { TaskProgress } from '../../../types';
+import { ContactMethod, TaskProgress } from '../../../types';
 
 type Actions = {
   updateName: (name: string) => Promise<boolean>;
@@ -32,8 +34,10 @@ type Actions = {
   updateLeagueAgeCategory: (league: "Men's" | "Women's" | '', ageCategory: 'Retired Pro' | 'Juniors' | '', visible: boolean) => Promise<boolean>;
   updateDisplayBadges: (badgeIds: string[]) => Promise<boolean>;
   updatePreferredCourts: (courts: string[], zone: string) => Promise<boolean>;
+  updatePreferredZone: (zone: string) => Promise<boolean>;
   updateFavouritePlayers: (players: string[]) => Promise<boolean>;
   updateEmailNotifications: (enabled: boolean) => Promise<boolean>;
+  updateContactMethods: (methods: ContactMethod[]) => Promise<boolean>;
   changeEmail: (email: string, password: string) => Promise<boolean | undefined>;
   refreshEmailChange: () => Promise<void>;
 };
@@ -49,18 +53,100 @@ interface Props {
 
 type Row = 'name' | 'phone' | 'whatsapp' | 'bio' | 'skill' | 'league' | 'courts' | 'favourites' | 'email' | null;
 
-const SectionHeader: React.FC<{ icon: React.ReactNode; label: string; editing: boolean; onEdit: () => void; onCancel: () => void }> = ({ icon, label, editing, onEdit, onCancel }) => (
+// `action` renders left of the Pencil/X and is always visible — it holds the contact-method
+// switches, which write a stored preference rather than a draft.
+const SectionHeader: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  editing: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  action?: React.ReactNode;
+}> = ({ icon, label, editing, onEdit, onCancel, action }) => (
   <div className="flex items-center justify-between gap-3">
-    <span className="text-xs font-bold text-fg/70 uppercase tracking-widest flex items-center gap-1.5">{icon}{label}</span>
-    <button type="button" onClick={editing ? onCancel : onEdit} className="text-fg/70 hover:text-fg transition-colors" aria-label={editing ? 'Cancel' : `Edit ${label}`}>
-      {editing ? <X className="w-4 h-4" /> : <Pencil className="w-3.5 h-3.5" />}
-    </button>
+    <span className="text-xs font-bold text-fg/70 uppercase tracking-widest flex items-center gap-1.5 min-w-0">{icon}{label}</span>
+    <div className="flex items-center gap-3 shrink-0">
+      {action}
+      <button
+        type="button"
+        onClick={editing ? onCancel : onEdit}
+        className={`transition-colors ${editing ? 'text-badge-loss hover:opacity-80' : 'text-fg/70 hover:text-fg'}`}
+        aria-label={editing ? 'Cancel' : `Edit ${label}`}
+      >
+        {editing ? <X className="w-4 h-4" /> : <Pencil className="w-3.5 h-3.5" />}
+      </button>
+    </div>
   </div>
+);
+
+// Zone picker. Immediate, not a request: the profile card isn't event-scoped, so there is no
+// organizer attached to review it. A change NEVER unseats them — matches already generated are
+// untouched; the new zone only decides draws not yet made (see functions/zoneMoves.js).
+const ZonePickerSheet: React.FC<{
+  currentZone: string;
+  saving: boolean;
+  onClose: () => void;
+  onPick: (zone: string) => void;
+}> = ({ currentZone, saving, onClose, onPick }) => (
+  <Sheet onClose={onClose} title="Your Zone" maxWidthClassName="max-w-md">
+    <div className="p-6 pt-3 space-y-4">
+      <p className="text-sm text-fg/70">
+        Your zone decides which tournament draw you are placed in. Any matches you are already
+        playing stay exactly as they are; the new zone applies to draws that haven&apos;t been made yet.
+      </p>
+      <div className="space-y-2">
+        {ZONE_NAMES.map((z) => {
+          const isCurrent = z === currentZone;
+          return (
+            <button
+              key={z}
+              type="button"
+              disabled={isCurrent || saving}
+              onClick={() => onPick(z)}
+              className={`w-full flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors ${
+                isCurrent ? 'bg-clay/15 border border-clay/50' : 'bg-fg/5 hover:bg-fg/[0.08] border border-transparent'
+              } ${saving ? 'opacity-50' : ''}`}
+            >
+              <span className="text-sm font-bold text-fg truncate">{z}</span>
+              {isCurrent && <span className="text-[11px] font-bold text-clay shrink-0">Current</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  </Sheet>
+);
+
+// "Contact Method: X" — decides which channels an opponent is offered. Independent of each other;
+// disabled when the channel has no detail saved. None on = every channel offered.
+const ContactMethodToggle: React.FC<{
+  label: string;
+  on: boolean;
+  disabled?: boolean;
+  onChange: (on: boolean) => void;
+}> = ({ label, on, disabled, onChange }) => (
+  <label className={`flex items-center gap-2 select-none ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
+    <span className="text-[10px] font-bold uppercase tracking-widest text-fg/70 whitespace-nowrap">
+      Contact Method: {label}
+    </span>
+    <span className="relative inline-flex items-center shrink-0">
+      <input
+        type="checkbox"
+        className="sr-only peer"
+        checked={on}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span className="block w-10 h-6 bg-fg/15 peer-checked:bg-clay rounded-full transition-colors" />
+      <span className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4" />
+    </span>
+  </label>
 );
 
 export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, progress, counters }) => {
   const { profile } = useAuth();
   const [editing, setEditing] = useState<Row>(null);
+  const [showZoneSheet, setShowZoneSheet] = useState(false);
 
   // Court option list + coords (for the court editor + zone recompute), loaded once.
   const [courtOptions, setCourtOptions] = useState<string[]>(defaultCourtOptions);
@@ -134,7 +220,29 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
   };
   const save = async (fn: () => Promise<boolean>) => { if (await fn()) setEditing(null); };
 
+  // Which channels the member wants to be reached on. Empty = no preference = all offered.
+  const methods = contacts.preferred_mode_of_contact ?? [];
+  const toggleMethod = (m: ContactMethod, on: boolean) =>
+    actions.updateContactMethods(on ? [...methods, m] : methods.filter((x) => x !== m));
+  // A channel with nothing behind it can't be a contact method, so its switch is disabled.
+  const hasWhatsapp = !!(contacts.whatsapp_contact?.trim() || contacts.whatsapp_same_as_phone || contacts.phone?.trim());
+  const methodToggle = (m: ContactMethod, label: string, available: boolean) => (
+    <ContactMethodToggle
+      label={label}
+      on={methods.includes(m)}
+      disabled={updateLoading || !available}
+      onChange={(on) => toggleMethod(m, on)}
+    />
+  );
+
+  const pickZone = async (zone: string) => {
+    if (await actions.updatePreferredZone(zone)) setShowZoneSheet(false);
+  };
+
   const computeZone = (courts: string[]): string => {
+    // A zone chosen by hand wins over the courts. Recomputing here would silently undo the pick
+    // and move the member between draws the next time they edit their court list.
+    if (preferences.preferred_zone_manual) return preferences.preferred_zone;
     if (courts.length === 0) return '';
     // Majority vote across ALL preferred courts (not just the first one) — a player who splits
     // time across zones should land in whichever zone most of their courts are actually in,
@@ -206,7 +314,11 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
 
         {/* Phone */}
         <div className="py-3">
-          <SectionHeader icon={null} label="Phone" editing={editing === 'phone'} onEdit={() => open('phone')} onCancel={() => setEditing(null)} />
+          <SectionHeader
+            icon={null} label="Phone" editing={editing === 'phone'}
+            onEdit={() => open('phone')} onCancel={() => setEditing(null)}
+            action={methodToggle('text', 'SMS/Text', !!contacts.phone?.trim())}
+          />
           {editing === 'phone' ? (
             <div className="mt-2 flex gap-2">
               <Input value={phoneDraft} onChange={(e) => setPhoneDraft(formatPhone(e.target.value))} placeholder="(416)-555-0123" />
@@ -217,7 +329,11 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
 
         {/* WhatsApp Contact */}
         <div className="py-3">
-          <SectionHeader icon={null} label="WhatsApp Contact" editing={editing === 'whatsapp'} onEdit={() => open('whatsapp')} onCancel={() => setEditing(null)} />
+          <SectionHeader
+            icon={null} label="WhatsApp Contact" editing={editing === 'whatsapp'}
+            onEdit={() => open('whatsapp')} onCancel={() => setEditing(null)}
+            action={methodToggle('whatsapp', 'WhatsApp', hasWhatsapp)}
+          />
           {editing === 'whatsapp' ? (
             <div className="mt-2 space-y-2">
               <label className="flex items-center gap-2 cursor-pointer text-sm text-fg/70">
@@ -439,6 +555,29 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
           )}
         </div>
 
+        {/* Zone — sits under Courts because it's normally derived from them. Changing it here is
+            immediate (no organizer request) but never unseats them from matches that already
+            exist; the picker is a sheet, not a dropdown. */}
+        <div className="py-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-bold text-fg/70 uppercase tracking-widest flex items-center gap-1.5 min-w-0">
+              <MapPin className="w-3.5 h-3.5 text-clay" />Zone
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowZoneSheet(true)}
+              className="text-xs font-semibold text-clay hover:text-clay/80 transition-colors shrink-0"
+            >
+              Change
+            </button>
+          </div>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {preferences.preferred_zone
+              ? <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{preferences.preferred_zone}</span>
+              : <span className="text-sm text-fg/70">None set.</span>}
+          </div>
+        </div>
+
         {/* Favourites */}
         <div className="py-3">
           <SectionHeader icon={<Star className="w-3.5 h-3.5 text-clay" />} label="Favourites" editing={editing === 'favourites'} onEdit={() => open('favourites')} onCancel={() => setEditing(null)} />
@@ -545,8 +684,14 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
         </div>
       </div>
 
-      {/* Change email — hidden until requested */}
+      {/* Email — address changes go through verification; the contact-method switch sits here so
+          "email and WhatsApp" is expressible. */}
       <div className="pt-4 mt-1 border-t border-fg/5">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <span className="text-xs font-bold text-fg/70 uppercase tracking-widest">Email</span>
+          {methodToggle('email', 'Email', !!contacts.email?.trim())}
+        </div>
+        <p className="text-sm text-fg mb-2 break-all">{contacts.email || '—'}</p>
         {editing === 'email' ? (
           <div className="space-y-2">
             <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Change Email Address</p>
@@ -575,8 +720,19 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
       </div>
 
       {message?.text && (
-        <p className={`text-sm font-semibold mt-3 ${message.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>{message.text}</p>
+        <p className={`text-sm font-semibold mt-3 ${message.type === 'success' ? 'text-badge-win' : 'text-badge-loss'}`}>{message.text}</p>
       )}
+
+      <AnimatePresence>
+        {showZoneSheet && (
+          <ZonePickerSheet
+            currentZone={preferences.preferred_zone}
+            saving={updateLoading}
+            onClose={() => setShowZoneSheet(false)}
+            onPick={pickZone}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

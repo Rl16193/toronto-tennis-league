@@ -74,7 +74,7 @@ export const History: React.FC = () => {
             <motion.div key={m.id} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }} className="flex items-center gap-3 px-4 py-3.5">
               <span
                 className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center text-xs font-black ${
-                  m.won ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'
+                  m.won ? 'bg-green-500/15 text-badge-win' : 'bg-red-500/15 text-badge-loss'
                 }`}
               >
                 {m.won ? 'W' : 'L'}

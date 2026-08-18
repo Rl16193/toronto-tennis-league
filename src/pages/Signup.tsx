@@ -527,13 +527,13 @@ export const Signup: React.FC = () => {
           className="p-6 md:p-10"
         >
           {error && (
-            <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center space-x-3">
+            <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-badge-loss flex items-center space-x-3">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <span>{error}</span>
             </div>
           )}
           {statusMessage && (
-            <div className="mb-8 p-4 rounded-2xl bg-green-500/10 border border-green-500/20 text-green-400 flex items-center space-x-3">
+            <div className="mb-8 p-4 rounded-2xl bg-green-500/10 border border-green-500/20 text-badge-win flex items-center space-x-3">
               <CheckCircle2 className="w-5 h-5 shrink-0" />
               <span>{statusMessage}</span>
             </div>
@@ -566,10 +566,10 @@ export const Signup: React.FC = () => {
                     required
                   />
                   {emailSuggestion && (
-                    <div className="text-sm text-blue-400 mt-1">
+                    <div className="text-sm text-clay mt-1">
                       Did you mean{' '}
                       <button
-                        className="underline hover:text-blue-300"
+                        className="underline hover:text-clay"
                         onClick={() => { setFormData({ ...formData, email: emailSuggestion.full }); setEmailSuggestion(null); }}
                       >
                         {emailSuggestion.full}
@@ -623,7 +623,7 @@ export const Signup: React.FC = () => {
               {resetSent ? (
                 <div className="text-center space-y-6 py-8">
                   <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-10 h-10 text-green-500" />
+                    <CheckCircle2 className="w-10 h-10 text-badge-win" />
                   </div>
                   <div className="space-y-2">
                     <h3 className="text-xl font-bold text-fg">Reset Link Sent</h3>
@@ -752,7 +752,7 @@ export const Signup: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="w-full space-y-1.5">
                     <label className="block text-sm font-medium text-fg">
-                      Password <span className="text-orange-500">*</span>
+                      Password <span className="text-clay">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -766,12 +766,12 @@ export const Signup: React.FC = () => {
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
-                    {errors.password && <p className="text-xs text-red-500 mt-1 ml-1">{errors.password}</p>}
+                    {errors.password && <p className="text-xs text-badge-loss mt-1 ml-1">{errors.password}</p>}
                   </div>
 
                   <div className="w-full space-y-1.5">
                     <label className="block text-sm font-medium text-fg">
-                      Re-enter Password <span className="text-orange-500">*</span>
+                      Re-enter Password <span className="text-clay">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -790,10 +790,10 @@ export const Signup: React.FC = () => {
                       </button>
                     </div>
                     {formData.confirmPassword && formData.confirmPassword !== formData.password && (
-                      <p className="text-xs text-red-500 mt-1 ml-1">Passwords do not match</p>
+                      <p className="text-xs text-badge-loss mt-1 ml-1">Passwords do not match</p>
                     )}
                     {errors.confirmPassword && !formData.confirmPassword && (
-                      <p className="text-xs text-red-500 mt-1 ml-1">{errors.confirmPassword}</p>
+                      <p className="text-xs text-badge-loss mt-1 ml-1">{errors.confirmPassword}</p>
                     )}
                   </div>
                 </div>
@@ -815,7 +815,7 @@ export const Signup: React.FC = () => {
               </button>
 
               <div className="mx-auto w-16 h-16 rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center mb-5">
-                <CheckCircle2 className="w-9 h-9 text-green-400" />
+                <CheckCircle2 className="w-9 h-9 text-badge-win" />
               </div>
               <h1 className="text-2xl font-black text-fg mb-3">Thank you for joining the league</h1>
               <p className="text-fg/70 text-sm leading-relaxed">
@@ -854,7 +854,7 @@ export const Signup: React.FC = () => {
                       required
                     />
                     {formData.name && !isNameValid() && !errors.name && (
-                      <p className="text-xs text-red-500 mt-1 ml-1">Name must be 3–80 letters, no numbers.</p>
+                      <p className="text-xs text-badge-loss mt-1 ml-1">Name must be 3–80 letters, no numbers.</p>
                     )}
                   </div>
                   <div>

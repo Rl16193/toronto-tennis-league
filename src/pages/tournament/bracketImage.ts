@@ -2,6 +2,8 @@ import { TournamentMatch, TournamentPlayer } from './types';
 import { formatDeadline, formatPlayerName } from './utils';
 
 export const getRoundLabels = (drawSize: number): string[] => {
+  if (drawSize <= 2) return ['F'];
+  if (drawSize === 4) return ['SF', 'F'];
   if (drawSize === 8) return ['QF', 'SF', 'F'];
   if (drawSize === 16) return ['R16', 'QF', 'SF', 'F'];
   if (drawSize === 32) return ['R32', 'R16', 'QF', 'SF', 'F'];
@@ -153,10 +155,11 @@ const buildRRGroupSvg = (
       return first.length <= last.length ? first : last;
     }).join(' / ');
 
-  // Phone first, email only when no phone, then the match-snapshot contact as a last resort.
+  // Phone first, email only when no phone. There is no third fallback: the old snapshot string on
+  // TournamentPlayer was derived from a preference nobody set, and is gone.
   const contactOf = (p: TournamentPlayer): string => {
     const c = contacts[p.uid];
-    return c?.phone || c?.email || p.contact || '';
+    return c?.phone || c?.email || '';
   };
 
   const cardHeights = shown.map((g) => cardPad * 2 + 24 + g.players.length * rowH + 8);
@@ -248,6 +251,116 @@ export const downloadRRGroupsAsPng = (groups: TournamentPlayer[][], groupLabels:
   };
 
   svgImg.src = svgUrl;
+};
+
+// ── Single knockout round image ─────────────────────────────────────────────
+// One card per match, players stacked with name + contact (phone first, then email), laid out
+// two across like the RR group cards. Complements the full-bracket image rather than replacing
+// it: that one shows scores and deadlines across every round; this one exists so a round's
+// players can reach each other.
+
+const buildRoundSvg = (
+  matches: TournamentMatch[],
+  round: string,
+  drawTitle: string,
+  eventTitle?: string,
+  contacts: RRContactMap = {},
+): { svg: string; width: number; height: number } => {
+  const roundMatches = matches
+    .filter((m) => m.round === round)
+    .sort((a, b) => a.position - b.position);
+
+  const cols = Math.min(2, Math.max(1, roundMatches.length));
+  const cardW = 360;
+  const cardPad = 20;
+  const headerH = 80;
+  const rowH = 44;
+  const cardGap = 20;
+  const outerPad = 40;
+  const footerH = 50;
+  const cardH = cardPad * 2 + 2 * rowH;
+  const width = outerPad * 2 + cols * cardW + (cols - 1) * cardGap;
+
+  const rowCount = Math.max(1, Math.ceil(roundMatches.length / cols));
+  const height = headerH + rowCount * cardH + Math.max(0, rowCount - 1) * cardGap + footerH;
+
+  const contactOf = (uid: string): string => {
+    const c = contacts[uid];
+    return c?.phone || c?.email || '';
+  };
+
+  let cards = '';
+  roundMatches.forEach((match, i) => {
+    const c = i % cols;
+    const r = Math.floor(i / cols);
+    const x = outerPad + c * (cardW + cardGap);
+    const y = headerH + r * (cardH + cardGap);
+    cards += `<rect x="${x}" y="${y}" width="${cardW}" height="${cardH}" rx="12" fill="${C.colNormal}" stroke="${C.colStroke}" />`;
+
+    const slots: [string, string, boolean][] = [
+      [match.player_1_name, match.player_1_uid, match.winner_uid === match.player_1_uid],
+      [match.player_2_name, match.player_2_uid, match.winner_uid === match.player_2_uid],
+    ];
+    slots.forEach(([name, uid, won], si) => {
+      const rowY = y + cardPad + si * rowH;
+      const label = truncate(formatPlayerName(name), 24);
+      const contact = truncate(contactOf(uid), 22);
+      cards += `<text x="${x + cardPad}" y="${rowY + 16}" font-size="13" font-weight="700" fill="${won ? C.winner : C.text}" font-family="Montserrat,Arial,sans-serif">${escapeSvg(label)}</text>`;
+      if (contact) {
+        cards += `<text x="${x + cardPad}" y="${rowY + 32}" font-size="11" fill="${C.textMuted}" font-family="Montserrat,Arial,sans-serif">${escapeSvg(contact)}</text>`;
+      }
+      if (si === 0) {
+        cards += `<line x1="${x}" y1="${y + cardPad + rowH - 2}" x2="${x + cardW}" y2="${y + cardPad + rowH - 2}" stroke="${C.divider}" />`;
+      }
+    });
+  });
+
+  const footerLabel = escapeSvg(eventTitle || drawTitle);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="100%" height="100%" fill="${C.page}" />
+  <text x="${width / 2}" y="36" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="22" font-weight="900" fill="${C.text}">${escapeSvg(drawTitle)}</text>
+  <text x="${width / 2}" y="58" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="12" font-weight="700" fill="${C.winner}" letter-spacing="2">${escapeSvg(round.toUpperCase())}</text>
+  <g>${cards}</g>
+  <text x="${width / 2}" y="${height - 24}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="14" font-weight="900" fill="${C.text}">${footerLabel}</text>
+  <text x="${width / 2}" y="${height - 8}" text-anchor="middle" font-family="Montserrat,Arial,sans-serif" font-size="11" font-weight="600" fill="${C.textMuted}">Presented by Racquets &amp; Strings</text>
+</svg>`;
+  return { svg, width, height };
+};
+
+// Rasterises an SVG string to a PNG at 2x and triggers a download. Shared by all three exports.
+const downloadSvgAsPng = (svg: string, width: number, height: number, filename: string): void => {
+  const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+  const svgUrl = URL.createObjectURL(svgBlob);
+  const svgImg = new Image(width, height);
+  svgImg.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = width * 2;
+    canvas.height = height * 2;
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(2, 2);
+    ctx.drawImage(svgImg, 0, 0, width, height);
+    URL.revokeObjectURL(svgUrl);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const pngUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = pngUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(pngUrl);
+    }, 'image/png');
+  };
+  svgImg.src = svgUrl;
+};
+
+export const downloadRoundAsPng = (
+  matches: TournamentMatch[], round: string, drawTitle: string, eventTitle?: string, contacts?: RRContactMap,
+): void => {
+  const { svg, width, height } = buildRoundSvg(matches, round, drawTitle, eventTitle, contacts);
+  const slug = drawTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  downloadSvgAsPng(svg, width, height, `${slug}-${round.toLowerCase()}.png`);
 };
 
 export const downloadDrawAsPng = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, roundDeadlines: Record<string, string> = {}): void => {

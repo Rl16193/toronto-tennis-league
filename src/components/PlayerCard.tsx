@@ -7,11 +7,11 @@ import { AnimatePresence, motion } from 'motion/react';
 // renders on every surface that shows a player row.
 export const RankMove: React.FC<{ t?: 'up' | 'down' | 'flat'; move?: number }> = ({ t, move }) =>
   t === 'up' ? (
-    <span className="inline-flex items-center gap-0.5 text-green-400" aria-label={`rising${move ? ` ${move}` : ''}`}>
+    <span className="inline-flex items-center gap-0.5 text-badge-win" aria-label={`rising${move ? ` ${move}` : ''}`}>
       <ArrowUp className="w-3 h-3" />{!!move && <span className="text-[10px] font-bold">{move}</span>}
     </span>
   ) : t === 'down' ? (
-    <span className="inline-flex items-center gap-0.5 text-red-400" aria-label={`falling${move ? ` ${move}` : ''}`}>
+    <span className="inline-flex items-center gap-0.5 text-badge-loss" aria-label={`falling${move ? ` ${move}` : ''}`}>
       <ArrowDown className="w-3 h-3" />{!!move && <span className="text-[10px] font-bold">{move}</span>}
     </span>
   ) : (

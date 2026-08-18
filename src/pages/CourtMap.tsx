@@ -12,13 +12,14 @@ import {
   TORONTO_CENTER,
   formatDist,
   parseDateStr,
+  getProgramStatus,
   geocodeQuery, geocodeLocationId,
   courtMarkerHtml, pickleballMarkerHtml, hasPublicHours,
   GENERIC_OSM_TYPES,
   locationGeoCache,
 } from './courtmap/courtMapUtils';
 import {
-  Badge, CourtPopup, CourtResultsList, DaysDropdown, FilterSelect, PickleballBadges,
+  Badge, CourtPopup, CourtResultsList, FilterSelect, MultiFilterSelect, PickleballBadges,
   ProgramResultsList,
 } from './courtmap/CourtMapElements';
 import { useCourtData } from './courtmap/useCourtData';
@@ -70,21 +71,16 @@ const PickleballMarker = React.memo<{ pb: PickleballOnlyCourt; onSelect: (p: Pic
 
 // Filter option lists are fixed. Written inline they were rebuilt on every render (including
 // every search keystroke), handing FilterSelect a new array identity each time.
-// No Pickleball entry: pickleball is no longer a way to filter the map. Courts that also host
-// pickleball still carry their PickleballBadges — only the filter option is gone.
+// FilterSelect renders its own "All" entry for the empty value, so it isn't listed here.
+// Every option except Pickleball is a tennis-court filter — see displayedPickleballOnly.
 const COURT_TYPE_OPTIONS = [
-  { value: 'Public',    label: 'Public'          },
-  { value: 'Club',      label: 'Club'            },
-  { value: 'OpenHours', label: 'Open Hours'      },
-  { value: 'Programs',  label: 'Tennis Programs' },
-  { value: 'Bookings',  label: 'Court Bookings'  },
-];
-const PROGRAM_TYPE_OPTIONS = [
-  { value: 'Public',    label: 'Public'          },
-  { value: 'Club',      label: 'Club'            },
-  { value: 'OpenHours', label: 'Open Hours'      },
-  { value: 'Programs',  label: 'Tennis Programs' },
-  { value: 'Bookings',  label: 'Court Bookings'  },
+  { value: 'Tennis',     label: 'Tennis'                  },
+  { value: 'Pickleball', label: 'Pickleball'              },
+  { value: 'Public',     label: 'Public Tennis Courts'    },
+  { value: 'Club',       label: 'Tennis Clubs'            },
+  { value: 'Programs',   label: 'Tennis Programs'         },
+  { value: 'Bookings',   label: 'Court Bookings'          },
+  { value: 'OpenHours',  label: 'Clubs with Public Hours' },
 ];
 const LIGHTS_OPTIONS = [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }];
 const ZONE_OPTIONS = ZONE_NAMES.map((z) => ({ value: z, label: z }));
@@ -95,8 +91,8 @@ const COURT_COUNT_OPTIONS = [
   { value: '5to8', label: '5 – 8'       },
   { value: 'gt8',  label: 'More than 8'  },
 ];
-const PROGRAM_STATUS_OPTIONS = [{ value: 'ongoing', label: 'Ongoing' }, { value: 'upcoming', label: 'Upcoming' }];
-const PROGRAM_AGE_OPTIONS = [{ value: 'under13', label: 'Under 13' }, { value: '13to18', label: '13–18' }, { value: '19plus', label: '19+' }];
+// Program status lives on the results header as pills (STATUS_PILLS in CourtMapElements), and
+// Age/Days are read off each row's pills — none of them are filter-panel controls any more.
 
 export const CourtMap: React.FC = () => {
   useEffect(() => { document.title = 'Court Locator · Racquets & Strings'; }, []);
@@ -117,8 +113,10 @@ export const CourtMap: React.FC = () => {
   // courtTypeFilter also handles 'Programs' to switch to programs view
   const [courtTypeFilter, setCourtTypeFilter] = useState('');
   const [courtLightsFilter, setCourtLightsFilter] = useState('');
-  const [courtCountFilter, setCourtCountFilter] = useState('');
-  const [zoneFilter, setZoneFilter] = useState('');
+  // Multi-select: an empty set means "all" and applies no filtering. Selections within one filter
+  // are OR'd (two zones = either zone); the filters themselves still AND together.
+  const [courtCountFilters, setCourtCountFilters] = useState(new Set<string>());
+  const [zoneFilters, setZoneFilters] = useState(new Set<string>());
   // Zone overlay — off by default so it doesn't clutter the map for people just finding a court.
   const [showZones, setShowZones] = useState(false);
   const zoneGeoJSON = useMemo(() => zoneOverlayGeoJSON(), []);
@@ -129,8 +127,6 @@ export const CourtMap: React.FC = () => {
   // the rest (empty courts, programs-only, etc.) as a deliberate opt-in layer toggle.
   const [showAllCourts, setShowAllCourts] = useState(false);
 
-  const [progDaysFilter, setProgDaysFilter] = useState(new Set<string>());
-  const [progAgeFilter, setProgAgeFilter] = useState('');
   const [progStatusFilter, setProgStatusFilter] = useState('');
   const [progLocationFilter, setProgLocationFilter] = useState('');
 
@@ -147,7 +143,9 @@ export const CourtMap: React.FC = () => {
   const lastGeocodedCoords = useRef<{ lat: number; lng: number } | null>(null);
   const mapRef = useRef<MapRef>(null);
 
-  const isPrograms = courtTypeFilter === 'Programs';
+  // The programs list is now a drill-down from one court's "View Available Programs", not a value
+  // of the Type filter — 'Programs' there filters the COURT list to courts that run programs.
+  const isPrograms = progLocationFilter !== '';
 
   // Single consolidated GA4 event for all court-map interactions
   // (search, filter changes, marker/result selection). Break down in GA4 by
@@ -161,18 +159,24 @@ export const CourtMap: React.FC = () => {
   // ── Filtered courts ──────────────────────────────────────────────────────────
   const displayedCourts = useMemo((): NearestCourt[] => {
     let list = courts;
-    if (zoneFilter) list = list.filter((c) => c.zone === zoneFilter);
+    if (zoneFilters.size) list = list.filter((c) => zoneFilters.has(c.zone));
+    // 'Tennis' needs no clause — every court in this list is a tennis site. 'Pickleball' keeps only
+    // the tennis sites that ALSO host pickleball; the pickleball-only sites come in separately.
+    if (courtTypeFilter === 'Pickleball') list = list.filter((c) => c.pickleballEntries.length > 0);
     if (courtTypeFilter === 'Public')    list = list.filter((c) => c.courtType.toLowerCase() === 'public');
     if (courtTypeFilter === 'Club')      list = list.filter((c) => c.courtType.toLowerCase() === 'club');
-    if (courtTypeFilter === 'OpenHours') list = list.filter((c) => hasPublicHours(c));
+    if (courtTypeFilter === 'OpenHours') list = list.filter((c) => c.courtType.toLowerCase() === 'club' && hasPublicHours(c));
     if (courtTypeFilter === 'Programs')  list = list.filter((c) => c.hasPrograms);
     if (courtTypeFilter === 'Bookings')  list = list.filter((c) => !!c.bookingUrl);
     if (courtLightsFilter === 'yes') list = list.filter((c) => c.lights);
     if (courtLightsFilter === 'no')  list = list.filter((c) => !c.lights);
-    if (courtCountFilter === 'lt4')  list = list.filter((c) => c.numCourts < 4);
-    if (courtCountFilter === 'eq4')  list = list.filter((c) => c.numCourts === 4);
-    if (courtCountFilter === '5to8') list = list.filter((c) => c.numCourts >= 5 && c.numCourts <= 8);
-    if (courtCountFilter === 'gt8')  list = list.filter((c) => c.numCourts > 8);
+    if (courtCountFilters.size) {
+      list = list.filter((c) =>
+        (courtCountFilters.has('lt4')  && c.numCourts < 4) ||
+        (courtCountFilters.has('eq4')  && c.numCourts === 4) ||
+        (courtCountFilters.has('5to8') && c.numCourts >= 5 && c.numCourts <= 8) ||
+        (courtCountFilters.has('gt8')  && c.numCourts > 8));
+    }
     if (!showAllCourts) list = list.filter((c) => c.count > 0);
 
     return list
@@ -182,46 +186,33 @@ export const CourtMap: React.FC = () => {
         if (b.count !== a.count) return b.count - a.count;
         return a.dropdown.localeCompare(b.dropdown);
       });
-  }, [courts, zoneFilter, courtTypeFilter, courtLightsFilter, courtCountFilter, userCoords, showAllCourts]);
+  }, [courts, zoneFilters, courtTypeFilter, courtLightsFilter, courtCountFilters, userCoords, showAllCourts]);
 
   const displayedPickleballOnly = useMemo((): PickleballOnlyCourt[] => {
-    if (!showAllCourts) return [];
-    // Any active court-type filter is a tennis-court filter, so pickleball-only sites drop out.
-    if (courtTypeFilter) return [];
+    // Pickleball-only sites belong to All and Pickleball alone — every other Type is a tennis-court
+    // filter, and a pickleball park is not a public tennis court, a tennis club, or bookable.
+    const pickleballAsked = courtTypeFilter === 'Pickleball';
+    if (courtTypeFilter && !pickleballAsked) return [];
+    // These sites carry no check-in counts, so the default "courts with players" view would always
+    // hide them. Asking for Pickleball explicitly overrides that; All still respects the toggle.
+    if (!showAllCourts && !pickleballAsked) return [];
     let list = pickleballOnly;
-    if (zoneFilter) {
+    if (zoneFilters.size) {
       list = list.filter((pb) =>
-        pb.lat !== undefined && pb.lng !== undefined && getZone(pb.lat, pb.lng) === zoneFilter,
+        pb.lat !== undefined && pb.lng !== undefined && zoneFilters.has(getZone(pb.lat, pb.lng)),
       );
     }
     return list;
-  }, [pickleballOnly, courtTypeFilter, zoneFilter, showAllCourts]);
+  }, [pickleballOnly, courtTypeFilter, zoneFilters, showAllCourts]);
 
   // ── Filtered programs ────────────────────────────────────────────────────────
   const displayedPrograms = useMemo((): NearestProgram[] => {
     const today = new Date();
     let list = programs;
 
-    if (progStatusFilter) {
-      list = list.filter((p) => {
-        const parts = p.dateRange.split(' to ');
-        const start = parseDateStr(parts[0] || '');
-        const end = parts.length > 1 ? parseDateStr(parts[1]) : null;
-        if (progStatusFilter === 'ongoing') return start !== null && end !== null && start <= today && end >= today;
-        if (progStatusFilter === 'upcoming') return start !== null && start > today;
-        return true;
-      });
-    }
-    if (progDaysFilter.size > 0) {
-      list = list.filter((p) => {
-        const days = p.days.split(/[,\s]+/).map((d) => d.trim()).filter(Boolean);
-        return days.some((d) => progDaysFilter.has(d));
-      });
-    }
-    if (progAgeFilter === 'under13') list = list.filter((p) => (p.minAgeYr ?? 0) < 13);
-    else if (progAgeFilter === '13to18') list = list.filter((p) => { const m = p.minAgeYr ?? 0; return m >= 13 && m <= 18; });
-    else if (progAgeFilter === '19plus') list = list.filter((p) => (p.minAgeYr ?? 0) >= 19);
-
+    // Same helper the row badge uses, so the pill you pick always agrees with the badge you see.
+    // (The old inline version had no 'past' branch and silently matched everything.)
+    if (progStatusFilter) list = list.filter((p) => getProgramStatus(p.dateRange, today) === progStatusFilter);
     if (progLocationFilter) list = list.filter((p) => p.matchedDropdown === progLocationFilter);
 
     const scored: NearestProgram[] = list.map((p) => ({
@@ -230,19 +221,31 @@ export const CourtMap: React.FC = () => {
         ? haversineKm(userCoords.lat, userCoords.lng, p.lat, p.lng) : null,
     }));
 
+    // A typed address means "what's near me" — distance wins outright, as it always has.
     if (userCoords) {
       const withDist = scored.filter((p) => p.distKm !== null).sort((a, b) => a.distKm! - b.distKm!);
       return [...withDist, ...scored.filter((p) => p.distKm === null)];
     }
+
+    // Otherwise: what you can still sign up for, first. Upcoming (soonest start first), then
+    // ongoing, then past (most recently finished first) — a finished program is the least useful
+    // row on the page, and date-only sorting buried every upcoming one behind them.
+    const rank = (p: NearestProgram) => {
+      const s = getProgramStatus(p.dateRange, today);
+      return s === 'upcoming' ? 0 : s === 'ongoing' ? 1 : 2;
+    };
+    const startOf = (p: NearestProgram) => parseDateStr(p.dateRange.split(' to ')[0]?.trim() || '');
     return scored.sort((a, b) => {
-      const da = parseDateStr(a.dateRange.split(' to ')[0]?.trim() || '');
-      const db_ = parseDateStr(b.dateRange.split(' to ')[0]?.trim() || '');
+      const ra = rank(a); const rb = rank(b);
+      if (ra !== rb) return ra - rb;
+      const da = startOf(a); const db_ = startOf(b);
       if (!da && !db_) return 0;
       if (!da) return 1;
       if (!db_) return -1;
-      return da.getTime() - db_.getTime();
+      // Past runs newest-first; everything else soonest-first.
+      return ra === 2 ? db_.getTime() - da.getTime() : da.getTime() - db_.getTime();
     });
-  }, [programs, progStatusFilter, progDaysFilter, progAgeFilter, userCoords, progLocationFilter]);
+  }, [programs, progStatusFilter, userCoords, progLocationFilter]);
 
   // ── FitBounds ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -338,10 +341,8 @@ export const CourtMap: React.FC = () => {
     handleClear();
     setCourtTypeFilter('');
     setCourtLightsFilter('');
-    setCourtCountFilter('');
-    setZoneFilter('');
-    setProgDaysFilter(new Set());
-    setProgAgeFilter('');
+    setCourtCountFilters(new Set());
+    setZoneFilters(new Set());
     setProgStatusFilter('');
   }, [handleClear]);
 
@@ -435,6 +436,10 @@ export const CourtMap: React.FC = () => {
       loading={loading}
       userCoords={userCoords}
       onSelectCourt={handleSelectCourt}
+      onViewPrograms={(c) => {
+        setProgLocationFilter(c.dropdown || c.name);
+        setMobileResultsOpen(true);
+      }}
     />
   ) : (
     <ProgramResultsList
@@ -442,10 +447,14 @@ export const CourtMap: React.FC = () => {
       totalPrograms={programs.length}
       loading={loading}
       userCoords={userCoords}
+      status={progStatusFilter}
+      onStatusChange={(v) => { setProgStatusFilter(v); trackMap('filter', { filter_name: 'program_status', filter_value: v || '(all)' }); }}
     />
   );
 
-  const filtersBody = !isPrograms ? (
+  // One filter view, always these four. Programs carry no filters of their own any more — Status
+  // moved onto the results header and Age/Days are shown as pills on each row instead.
+  const filtersBody = (
     <div className="space-y-1.5">
       <div className="grid grid-cols-2 gap-1.5">
         <FilterSelect
@@ -460,39 +469,16 @@ export const CourtMap: React.FC = () => {
         />
       </div>
       <div className="grid grid-cols-2 gap-1.5">
-        <FilterSelect
-          label="Zone" value={zoneFilter}
-          onChange={(v) => { setZoneFilter(v); trackMap('filter', { filter_name: 'zone', filter_value: v || '(all)' }); }}
+        <MultiFilterSelect
+          label="Zone" allLabel="All zones" selected={zoneFilters}
+          onChange={(s) => { setZoneFilters(s); trackMap('filter', { filter_name: 'zone', filter_value: s.size ? [...s].join('|') : '(all)' }); }}
           options={ZONE_OPTIONS}
         />
-        <FilterSelect
-          label="Total Courts" value={courtCountFilter}
-          onChange={(v) => { setCourtCountFilter(v); trackMap('filter', { filter_name: 'court_count', filter_value: v || '(all)' }); }}
+        <MultiFilterSelect
+          label="Total Courts" allLabel="Any size" selected={courtCountFilters}
+          onChange={(s) => { setCourtCountFilters(s); trackMap('filter', { filter_name: 'court_count', filter_value: s.size ? [...s].join('|') : '(all)' }); }}
           options={COURT_COUNT_OPTIONS}
         />
-      </div>
-    </div>
-  ) : (
-    <div className="space-y-1.5">
-      <div className="grid grid-cols-2 gap-1.5">
-        <FilterSelect
-          label="Type" value={courtTypeFilter}
-          onChange={(v) => { setCourtTypeFilter(v); setProgLocationFilter(''); trackMap('filter', { filter_name: 'type', filter_value: v || '(all)' }); }}
-          options={PROGRAM_TYPE_OPTIONS}
-        />
-        <FilterSelect
-          label="Status" value={progStatusFilter}
-          onChange={(v) => { setProgStatusFilter(v); trackMap('filter', { filter_name: 'program_status', filter_value: v || '(all)' }); }}
-          options={PROGRAM_STATUS_OPTIONS}
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-1.5">
-        <FilterSelect
-          label="Age" value={progAgeFilter}
-          onChange={(v) => { setProgAgeFilter(v); trackMap('filter', { filter_name: 'program_age', filter_value: v || '(all)' }); }}
-          options={PROGRAM_AGE_OPTIONS}
-        />
-        <DaysDropdown selected={progDaysFilter} onChange={setProgDaysFilter} />
       </div>
     </div>
   );
@@ -579,9 +565,11 @@ export const CourtMap: React.FC = () => {
             >
               <CourtPopup
                 court={selectedCourt}
+                // Opens the results panel on this court's programs. `setMobileResultsOpen` matters:
+                // on mobile the panel is collapsed by default, so without it the tap looked inert.
                 onViewPrograms={selectedCourt.hasPrograms ? () => {
                   setProgLocationFilter(selectedCourt.dropdown || selectedCourt.name);
-                  setCourtTypeFilter('Programs');
+                  setMobileResultsOpen(true);
                   setSelectedCourt(null);
                 } : undefined}
                 onSuggest={() => {
@@ -646,7 +634,7 @@ export const CourtMap: React.FC = () => {
                 onChange={(e) => handleSearchInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(e); }}
                 placeholder="Search courts or an address…"
-                className="border border-fg/25 flex-1 bg-transparent text-fg placeholder-fg/30 text-sm outline-none min-w-0"
+                className="flex-1 bg-transparent text-fg placeholder-fg/30 text-sm outline-none min-w-0"
               />
               {searching
                 ? <Loader2 className="w-3.5 h-3.5 text-clay animate-spin shrink-0" />
@@ -671,7 +659,7 @@ export const CourtMap: React.FC = () => {
                 ))}
               </div>
             )}
-            {searchError && <p className="text-red-400 text-xs mt-1.5 bg-tennis-dark/80 rounded-lg px-2 py-1">{searchError}</p>}
+            {searchError && <p className="text-badge-loss text-xs mt-1.5 bg-tennis-dark/80 rounded-lg px-2 py-1">{searchError}</p>}
           </div>
           <button
             type="button"

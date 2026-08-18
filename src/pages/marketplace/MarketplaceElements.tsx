@@ -83,7 +83,7 @@ const ListingCard: React.FC<{
               </Button>
               <button type="button" aria-label="Delete listing" disabled={busy}
                 onClick={() => { if (confirm('Delete this listing?')) { setBusy(true); deleteListing(listing.id).finally(() => setBusy(false)); } }}
-                className="p-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                className="p-2 rounded-lg bg-red-500/10 text-badge-loss hover:bg-red-500/20 transition-colors disabled:opacity-50">
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </>
@@ -96,6 +96,7 @@ const ListingCard: React.FC<{
                 phone={seller?.phone}
                 email={seller?.email}
                 whatsappContact={seller?.whatsapp_contact}
+                preferred={seller?.preferred_mode_of_contact}
                 size="sm"
                 variant="white"
               />
@@ -225,7 +226,7 @@ export const ListingForm: React.FC<{ kind: ListingKind; editingListing?: Listing
     >
       <form onSubmit={submit} className="p-5 pt-2 space-y-3.5">
         {error && (
-          <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-4 py-2.5">{error}</div>
+          <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-2.5">{error}</div>
         )}
 
         <div>

@@ -16,9 +16,6 @@ npm run hosting:preview  # build + deploy to a preview channel
 # Lives in the gitignored, local-only analysis/ folder (data dumps contain user PII)
 node analysis/export-firestore.js --key serviceAccount.json
 
-# Place RR late joiners into groups (EOD automation; Admin SDK, requires serviceAccount.json)
-npm run regroup:rr              # add --dry-run via: node scripts/regroup-rr.js --key serviceAccount.json --dry-run
-
 # Deploy Firestore rules (separate from hosting)
 firebase deploy --only firestore:rules
 ```
@@ -79,6 +76,7 @@ The core is `useTournament.ts` (~2000 lines), a single hook consumed only by `To
 - Preview draw (client-side, in `displayMatches`) vs. generated draw (Firestore docs)
 - Draw size auto-calculation: `getDrawSize(count)` in `utils.ts` — Singles and Doubles both scale 8/16/32 with participant count
 - Score submission (`handleSubmitScore` → `updateMatchWithSubmission`): **three separate steps** — (1) match result batch, (2) stats batch (best-effort), (3) winner advancement (best-effort). Stats and advancement are isolated so a rules rejection never rolls back a recorded score.
+- **Three match outcomes, not two.** A normal result and a **walkover** both pay 3/1 to a winner (the walkover penalty was deliberately removed). A **no show** — organizer-only, RR group stage only, the "Count As No Show" box in the score modal — has *no winner* and pays `NO_SHOW_POINTS` (1) to **both** players, with no `matchesPlayed`, win, loss or games, so a match nobody played can't dilute a win rate. Walkover and no-show are both all-zero scores, so `no_show` must be tested **before** the walkover check and before the blank-`winner_uid` guard, which it is the one legitimate exception to. `reverseMatchStatsInto` and `computeGroupStandings` each branch on it first for the same reason.
 - Points are computed by the shared `computeMatchPoints(match)` helper (used by both `updateMatchWithSubmission` and its exact inverse `reverseMatchStatsInto`). An RR group-stage win scores **3 points** and the loser **1**, *whether or not it was a walkover* — the old `isWalkover ? 1 : 3` penalised the player who showed up, and was deliberately removed. `computeGroupStandings` in `rrGeneration.ts` is the display-side twin of the same rule (3/1, no walkover branch) — keep the two in sync. (There was a third copy in `scripts/backfill-rr-points.mjs`; that one-off correction pass has been run and the script is deleted.)
 - Winner advancement resolves the next match from loaded state (`matches` array) using normalized bracket comparison (`m.bracket ?? null`), with reconstructed doc ID as fallback.
 - Participant draw visibility (`userDraw`): a participant sees the draw they are **actually placed in** — `userDraw` looks for the participant's `user_id` in a generated match and returns that match's draw. **Do not** route `userDraw` by skill: a creator can move a player across skill groups (e.g. Challengers → Masters) without changing their `event_participants` skill, and skill-derived routing would hide the draw they're really in. There is deliberately **no** pre-generation fallback — before any draw is generated there is no placement, so `userDraw` is `undefined` and `visibleDraws` shows the participant every draw. That is intended (nothing to hide pre-generation), so don't "fix" the undefined by guessing a draw from `skill_level`.
@@ -98,7 +96,13 @@ Events with `tournament_format === 'rr'` use group-stage + knockout instead of a
 
 **Knockout** — the creator picks the bracket size (R4/R8/R16) via `handleGenerateRRKnockout`. Every group winner is auto-seeded (`selectGroupWinners`, ordered points → gamesWon so the top seed lands in slot 1); the remaining slots are left as `PLAYER_LOADING` for the creator to fill by hand in the draw editor (`buildRRKnockoutDocs` with `manualFill: true`, which also skips first-round bye auto-advancement). Re-selecting a size rebuilds the knockout, and is refused once any knockout match has been played. There is **no** automatic runner-up fill — that behaviour was removed along with `selectAdvancingPlayers`.
 
-**Late joiners** — unlike knockout draws, **RR accepts registration after the draw is generated** (`slotStatus` in `useJoin.ts` is bypassed for RR); they are NOT sent to the reserves/LL draw. The EOD script `scripts/regroup-rr.js` (Admin SDK) places them: groups with **4–5 players (or any played group) are locked**; only groups with **≤3 players** accept a joiner, needing a matching band (zone preferred), else the overflow forms new `(band, zone)` groups via `splitEvenly`. Groups with played matches are never touched. The script duplicates the pure helpers from `rrGeneration.ts`/`utils.ts` — keep them in sync.
+**Placement is manual. There is no "late joiner" concept.** RR still accepts registration after the draw is generated (`slotStatus` in `useJoin.ts` is bypassed for RR), but nobody is ever seated automatically. Generation auto-forms the initial groups by the established hierarchy — **zone → skill → court preference** — and everyone else waits in the **unplaced list** until the organizer places them.
+
+Two auto-placers used to fight over this and were deleted: an in-browser effect that topped up any group under 5 **ignoring band and zone**, and only ran while an organizer happened to have that draw open; and a nightly Admin script (`scripts/regroup-rr.js`, `npm run regroup:rr`) applying a *different* rule (≤3 only, matching band required). Whichever fired first won, so a player's group depended on whether a browser tab was open. Don't reintroduce either.
+
+**Groups are capped at 5** (`RR_GROUP_MAX`). `splitEvenly` already never exceeds it when auto-forming; `overGroupCap` guards the manual paths — `handleSeatParticipant`, `handleSaveGroupEdit`, `handleCreateRRGroup` — which are now the only way anyone is seated.
+
+**Two unplaced lists, deliberately.** `rrUnplacedPlayers` is **draw-scoped** and feeds the Add Group picker — it must stay scoped or the picker would offer another event's players. `unplacedParticipants` spans **every tournament the organizer runs** and is for awareness: each row names the event joined, so a registrant in one tournament can't be placed into another by mistake. It shows each player's zone, and **"No zone" when they've selected no courts** — `effectiveZone`'s Downtown default exists for placement only, and showing it would report a choice the player never made. **It lists live *draws*, never live events.** One event runs Men's/Women's × band × zone side by side, so an event-level "has matches / final played" test both keeps registrants whose own draw was never generated (Zephyr Open's women and beginners, listed under a tournament whose men's draws were running) and hides registrants of a still-live draw the moment a *sibling* draw's final is played (Season Opener's women, after the men finished). A draw is live once it has generated matches and its own final isn't complete, and a `division`/`skill_group` of `All` matches any (merged draws). **Zone is deliberately NOT part of the draw-match test, and seating is tested in two branches.** Never placed → listed if any live draw matching their choice/division/band exists, *whatever its zone* (the organizer can seat them anywhere). Already seated → normally not listed; the one thing that brings them back is a **zone change**, i.e. every seat they hold is in another zone AND the zone they moved to already has a draw they'd belong to. Folding zone into the base match instead listed players the creator had moved across skill groups (a 3.5 seated in Masters looked "missing" from Challengers) — three real players in the Summer Gauntlet. Doubles has no zone dimension, so a placed doubles player never resurfaces.
 
 ### Leagues, Friendlies & Matches (`src/pages/Matches.tsx`)
 League Ladder standings and challenges no longer live on the Tournament page — they moved to `/matches` (`Matches.tsx`), which has a Friendlies/Challenges segmented control. The **Challenges** tab reuses the unchanged `src/features/leagues/` module (`ladderService.ts`, `useLadder.ts`, `useStandings.ts`). The **Friendlies** tab is a separate, newer module, `src/features/friendlies/` (`rallyService.ts`), implementing a parallel non-competitive request/accept flow (a `rallies` collection) modelled on the ladder-challenge loop but with no points, standings impact, or organizer step. `src/pages/Leagues.tsx` is now pure standings/leaderboard (tournament + community boards) — it no longer renders any challenge UI.
@@ -109,9 +113,20 @@ One source writes to `stats/{userId}` at runtime:
 
 All fields are camelCase (`matchesPlayed`, `leaguePoints26`, etc.). Snake_case and `_xlsx` fields are dead.
 
+**`matchAward` (`utils.ts`) is the single source of truth for match scoring.** Both the writer
+(`updateMatchWithSubmission` / `reverseMatchStatsInto`, which move real points) and the display
+(`computeGroupStandings`, which draws the group table) read it. They used to be two implementations
+of the same rules and **did drift** — the table kept adding a +5 completion bonus long after the
+payout became the organizer's manual switch, so players were shown points nobody had given them.
+Never re-fork it. The rules: an RR group win pays **3** and the loss **1**, walkover or not (the old
+walkover penalty punished the player who turned up and was removed); a knockout pays by how far you
+got, banked when you go out, and its winner only scores by taking the final; a **no show** has no
+winner and pays both players `NO_SHOW_POINTS`. The group table shows **only** what the group's
+matches earned — the Group Bonus is the organizer's to award and is not displayed there.
+
 Two rules for writing `leaguePoints26`, both learned from real defects:
 - **`confirmChallenge` (`ladderService.ts`) uses `runTransaction`, not a batch.** The loser's deduction is floored at 0, which needs a read-then-write; done in a plain batch, two concurrent organizer confirms both read the same starting value and one −3 is silently lost. All three writes use `set(…, { merge: true })` so a player with no `stats` doc can't reject the whole thing and strand the challenge in `reported`.
-- **The RR +5 group-completion bonus is paid in a separate, best-effort commit, so "group is complete" is NOT proof it was paid.** The same batch stamps `rr_group_bonus_v2: true` on every match in the group; `reverseRRBonusesInto` must check that stamp before deducting, or a failed bonus commit followed by a draw reset takes 5 points players never received.
+- **The RR +5 group bonus is awarded manually by the organizer, never automatically.** `handleSetGroupBonus` — the "Group Bonus" switch in each group card's header — is the only thing that moves it; completing a group's last match awards nothing. It is a real two-way switch: on pays every player in the group, off takes the same amount back. `rr_group_bonus_v2` on every match in the group **is** that switch's stored state, and the only proof of payment: `handleSetGroupBonus` no-ops when it already matches the requested state, and `reverseRRBonusesInto` requires it before deducting on a draw reset, or the reset takes 5 points players never received. The amount is the single `RR_GROUP_BONUS` constant, shared by payout and reversal. The organizer may award a group that still has unplayed matches (they get a confirm warning), so reversal must **not** gate on completeness.
 - **Doubles partner credits are applied in the same live scoring batch and reversed with the same per-captain `partner_uid` lookup.** The backfill script `scripts/backfill-doubles-partners.mjs` stamps processed matches with `doubles_partner_pts_v2: true`; `reverseMatchStatsInto` receives the same `partnerUidByCaptain` map so reset/cancel undoes partner credits in the same pass.
 
 `functions/courtCounts.js` (`aggregateCourtCounts`, every 6h) maintains `site_stats/court_counts` — the per-court player counts shown on the public `/courts` page. It stores counts keyed by the **raw** `preferred_courts` string rather than a resolved court name, so `matchCourtName` (which needs the courts CSV) stays client-side only. `useCourtData.ts` reads that one doc and falls back to the original three full-collection reads if it's missing, so the page works before the function is deployed. Needs `firebase deploy --only functions:aggregateCourtCounts`.
@@ -170,6 +185,19 @@ every contact on the page.
 `users` must never carry `email`/`phone`/`whatsapp_contact` again — it is `allow read: if true`,
 so anything there is public to the entire internet, signed in or not.
 
+**Which channels are offered is decided in exactly one place: `contactChannels()` in
+`ContactOpponentButton.tsx`.** It reads `contacts.preferred_mode_of_contact`, a **string array** of
+`'email' | 'text' | 'whatsapp'` set by the three always-visible "Contact Method" switches on the
+profile card. Empty or absent means *no preference* and every channel the member has filled in is
+offered — **not** "email only". The preference only ever *narrows*; a channel with no detail behind
+it is never offered, so a preference alone can't make someone contactable, and a preference naming
+only channels they've since removed falls back to showing everything rather than nobody.
+
+The field keeps its singular name purely so it stays inside `ownerContactFields()` and needs no
+rules deploy. `TournamentPlayer` deliberately carries **no** contact fields: `contact` and
+`preferredContact` were derived from the old single-value form, constructed at four call sites, and
+read by nothing.
+
 Security rules (`firestore.rules`): owners can only update `skill_level / tournament_preference / name / uid / league` in `stats` — scoring fields are organiser-only. `event_creator` in `preferences` can only be set by the super-admin UID (`7PvfzNtDmsOq5GLMieId7QRT7wH3`). Rules require `firebase deploy --only firestore:rules` to take effect — a git push alone does not deploy them.
 
 Storage rules (`storage.rules`) also require a manual deploy — `firebase deploy --only storage`, or paste into Firebase Console → Storage → Rules → Publish. A git push alone does not deploy them.
@@ -180,10 +208,12 @@ server in between. Five rules follow from that, all learned from real defects:
 
 **Rules do not cascade into subcollections.** A `match /events/{eventId}` block does *not* cover
 `events/{eventId}/rr_drafts/{drawKey}`; that path needs its own nested `match`, or every read and
-write is denied by default. This has already bitten once — `useTournament.ts` writes RR drafts to
-that subcollection while `firestore.rules` declares a *top-level* `/rr_drafts/{id}` that can never
-match, and the `onSnapshot` error path sets the draft to `null`, so it fails **silently**. When you
-add a subcollection, add its rule at the full nested path and verify a write actually lands.
+write is denied by default. This bit for months: the rules declared a *top-level* `/rr_drafts/{id}`
+that could never match the subcollection the client writes, and because the `onSnapshot` error path
+sets the draft to `null` it failed **silently** — not one draft saved in that entire period, and the
+only surviving draft state was four stale top-level docs from before the move (since migrated to the
+nested path). The rule now sits at `events/{eventId}/rr_drafts/{drawKey}`. When you add a
+subcollection, add its rule at the full nested path and **verify a write actually lands**.
 
 **Whitelist writable fields with `hasOnly()`, never blacklist with `!hasAny()`.** A blacklist permits
 every field you didn't think of — including writing PII into a world-readable doc. `contacts` and
@@ -208,14 +238,15 @@ whose own header warns that deploying **replaces** the console copy.
 `vite.config.ts` `define:` performs a literal text substitution at build time — anything put there is
 compiled into the JavaScript every visitor downloads. `VITE_FIREBASE_*` values are fine (they are
 public identifiers by design; security comes from the rules). Any real credential is not: call it
-from a Cloud Function and keep the key server-side. There is a live instance of this to clean up —
-`GEMINI_API_KEY` is inlined by `define:` and has no consumer anywhere in `src/`.
+from a Cloud Function and keep the key server-side. `vite.config.ts` now carries **no `define:`
+block at all** — `GEMINI_API_KEY` used to be inlined there with no consumer anywhere in `src/`.
+Don't reintroduce one.
 
 ### Production is the only environment
 There is no staging project and no emulator config, so `npm run dev` and every Admin SDK script in
 `scripts/` read and write **production data**. There are also no backups — no scheduled Firestore
-export and no PITR — so a bad write is permanent. Run admin scripts with `--dry-run` first
-(`regroup-rr.js` supports it), and treat any destructive one-off as unrecoverable until backups exist.
+export and no PITR — so a bad write is permanent. Run admin scripts with `--dry-run` first, and
+treat any destructive one-off as unrecoverable until backups exist.
 
 ### Auth flow
 `AuthContext.tsx` calls `ensureUserProfileDocuments` (`profileBootstrap.ts`) on every login to guarantee `users/stats/preferences` docs exist. The `profile` object (`UserProfile` type) bundles all three docs and is consumed throughout the app via `useAuth()`.
@@ -242,7 +273,53 @@ foreground or surfaces. White text is invisible on a light card. Use `text-fg` a
 **Disabled is a state, not a colour tier.** Keep `text-fg/70` and add `opacity-50` to the control.
 Fading text toward the card background is what made disabled controls vanish in light theme.
 
+**Status colours use the badge tokens, never raw palette classes.** `--color-badge-win`,
+`--color-badge-loss` and `--color-badge` (`src/index.css`) flip between themes; `text-green-300`,
+`text-red-400`, `text-amber-300` and friends do not, and wash out to near-invisible on the light
+theme's near-white surfaces. That is what made success banners unreadable — `AlertMessage` carries
+every banner in the app and had hardcoded exactly those three. Use `text-badge-win` (success/win),
+`text-badge-loss` (error/loss/destructive), `text-badge` (warning), and `text-clay` for the brand
+accent (required asterisks, actionable hints). Tinted **backgrounds and borders** at 10–20% are fine
+either way; it is the **text** that fails.
+
 Check every change in **both** themes.
+
+### One name per thing
+Several features carried two names for the same idea, with the old one kept alive "for now". Each
+became a bug. The surviving pairs are listed here; **don't add another.**
+
+- **Zone requests are `req_zone_change` + `new_zone`.** `zone_change_requested` /
+  `zone_change_requested_at` are legacy and **no longer written** — read-only, for rows raised
+  before the rename. Writing both was masking a real defect: the rules' player-write whitelist
+  listed only the legacy pair, so `hasOnly()` rejected the whole update and a player could not
+  request a zone change at all. The whitelist now carries both; drop the legacy names once the new
+  hosting build is out. **There are now two zone paths and they are deliberately different.** The
+  tournament page's "Request Zone Change" is per-event and *notify-only* — the organizer moves the
+  player by hand. The profile card's Zone section (`updatePreferredZone`) writes
+  `preferences.preferred_zone` directly and is not event-scoped, so a member can change it with no
+  organizer in the loop. **A zone change never unseats anyone.** Matches that already exist are
+  untouched — the player keeps playing every one of them — and the new zone only decides draws not
+  yet generated. Three cases, and `onZoneChanged` (`functions/zoneMoves.js`) exists solely for the
+  first: (1) they're seated *and* the zone they moved to already has a generated draw they'd belong
+  to, so nothing can be done automatically — the organizer is notified and the player appears in
+  Unplaced Players for the new zone, to be placed by hand; (2) the new zone has no draw yet —
+  silent, `preferred_zone` alone routes them in when it's generated, alongside the draw they're
+  already playing; (3) not in a tournament, or in one with nothing generated — silent, same reason.
+  There is deliberately **no** auto-seating and **no** removal in any case. This is why
+  `unplacedParticipants` tests seating **per draw**, not per event: a zone-changer is seated in
+  their old draw and unseated in the new one, and only the second fact matters. A hand-picked zone
+  also sets `preferred_zone_manual`, which stops a later court edit silently recomputing
+  `preferred_zone` and moving them between draws.
+  Needs `firebase deploy --only functions:onZoneChanged`.
+- **Results are `winner_uid` + absolute `set_N_player_1/2`,** for tournament matches, challenges and
+  rallies alike. `claimed_winner_*` and `score_line` are legacy and no longer written; the Cloud
+  Functions read new-name-first with a legacy fallback so deploy order can't stop points being paid.
+  Strip the old fields only after functions **and** hosting are deployed.
+- **Genuinely irreducible duplicates** — these cross a language boundary and cannot share code, so
+  they stay hand-synced: `functions/lib/points.js` ↔ `taskCatalog.ts` (what the server pays vs what
+  the client promises), and `pairId()` in `functions/connections.js` ↔ `firestore.rules` (writes the
+  connection doc vs reads it to permit a `contacts` read — if these ever disagree, every contact
+  read in the app starts failing).
 
 ### Defect notes (detail compressed out of code comments)
 Each of these was a real bug. The code carries a one-to-four line warning; the reasoning is here.
@@ -282,9 +359,11 @@ Each of these was a real bug. The code carries a one-to-four line warning; the r
 - **`completed_at` is pinned to first scoring.** Re-editing a complete match used to overwrite it
   with "now", corrupting anything sorted by it (streaks, months active, best finish). Edits stamp
   `score_edited_at` instead.
-- **The RR +5 bonus checks its own stamp before paying and before reversing.** `status !==
-  'complete'` only means *this* match was unscored — a corrected match re-confirmed would pay a
-  second +5, and a later reset removes only 5, leaving a permanent surplus.
+- **The RR +5 bonus checks its own stamp before paying and before reversing.** It used to pay
+  automatically on the last match completing, keyed off `status !== 'complete'` — which only means
+  *this* match was unscored, so a corrected match re-confirmed paid a second +5 while a later reset
+  removed only 5, leaving a permanent surplus. It is now an organizer button, but the stamp is
+  still the only thing standing between a double payout and a phantom deduction.
 - **A blank `winner_uid` must be rejected.** It completes the match displaying player 2 as winner,
   credits player 1 with a loss, awards nobody a win, and writes an empty uid into the next round.
 - **`confirmChallenge` reads the `applied` flag inside the transaction.** Two confirms fired close
