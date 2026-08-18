@@ -19,3 +19,27 @@ analysis/
 
 # Git worktrees created by Claude Code sessions (local only)
 .claude/worktrees/
+
+# Generated handover/audit reports and their spreadsheet exports. Kept on disk locally,
+# deliberately out of the repo — they are session output, not part of the app. Listed by
+# name rather than as *.md/*.xlsx so CLAUDE.md and the public/ + data/ CSVs stay tracked.
+Code_Conflicts_Audit.xlsx
+DATA_MIGRATION_REPORT.md
+FILE_MAP.md
+Function_Inventory.md
+Function_Inventory.xlsx
+PRODUCT_JOURNEY.md
+PROVIDER_GUIDE.md
+SECURITY_AND_MOBILE_READINESS.md
+Session_Changes_2026-08-12.xlsx
+Setup_Documentation.docx
+TECHNICAL_HANDOVER.md
+Technical_Handover_Anuj_Raja.xlsx
+Test_Cases_Gaps.xlsx
+Tournament_Logic_Report.md
+WORKFLOWS.md
+change_reports.xlsx
+public/2025League.xlsx
+
+# Stray directory created by a mistyped path (local only)
+~/
