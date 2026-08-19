@@ -39,14 +39,23 @@ export const pillButtonCls = (size: 'sm' | 'md', variant: 'outline' | 'white' | 
  * `preferred` narrows, never adds; empty/absent means every filled-in channel is offered.
  */
 export const contactChannels = (c: {
-  phone?: string; email?: string; whatsappContact?: string; preferred?: ContactMethod[];
+  phone?: string;
+  email?: string;
+  whatsappContact?: string;
+  preferred?: ContactMethod[];
 }): Channel[] => {
   const phoneE164 = toE164Phone(c.phone);
   const waNumber = c.whatsappContact || phoneE164;
   const out: Channel[] = [];
   if (c.email) out.push({ key: 'email', label: 'Email', href: `mailto:${c.email}`, icon: Mail });
   if (phoneE164) out.push({ key: 'text', label: 'SMS', href: `sms:${phoneE164}`, icon: MessageSquare });
-  if (waNumber) out.push({ key: 'whatsapp', label: 'WhatsApp', href: `https://wa.me/${waNumber.replace('+', '')}`, icon: WhatsAppIcon });
+  if (waNumber)
+    out.push({
+      key: 'whatsapp',
+      label: 'WhatsApp',
+      href: `https://wa.me/${waNumber.replace('+', '')}`,
+      icon: WhatsAppIcon,
+    });
   const preferred = c.preferred ?? [];
   if (preferred.length === 0) return out;
   const picked = out.filter((ch) => preferred.includes(ch.key as ContactMethod));

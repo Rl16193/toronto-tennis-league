@@ -33,7 +33,13 @@ const MAX_RESULTS = 8;
  * because a doubles team is only recognised when both partners name each other exactly.
  */
 export const MemberSearchInput: React.FC<Props> = ({
-  label, value, onChange, excludeId, allowGuest = false, placeholder = 'Search members…', hint,
+  label,
+  value,
+  onChange,
+  excludeId,
+  allowGuest = false,
+  placeholder = 'Search members…',
+  hint,
 }) => {
   const members = useMemberRoster(excludeId);
   const [search, setSearch] = useState('');
@@ -59,7 +65,10 @@ export const MemberSearchInput: React.FC<Props> = ({
           </span>
           <button
             type="button"
-            onClick={() => { setSearch(''); onChange(null); }}
+            onClick={() => {
+              setSearch('');
+              onChange(null);
+            }}
             className="shrink-0 ml-3 text-xs font-bold text-fg hover:text-clay"
           >
             Change

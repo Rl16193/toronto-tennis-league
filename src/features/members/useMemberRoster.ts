@@ -27,7 +27,9 @@ const loadRoster = (): Promise<Member[]> => {
         .sort((a, b) => a.name.localeCompare(b.name));
       return cache;
     })
-    .finally(() => { inFlight = null; });
+    .finally(() => {
+      inFlight = null;
+    });
   return inFlight;
 };
 
@@ -38,9 +40,15 @@ export function useMemberRoster(excludeId?: string): Member[] {
   useEffect(() => {
     let cancelled = false;
     loadRoster()
-      .then((list) => { if (!cancelled) setMembers(list); })
-      .catch(() => { /* search degrades to free text */ });
-    return () => { cancelled = true; };
+      .then((list) => {
+        if (!cancelled) setMembers(list);
+      })
+      .catch(() => {
+        /* search degrades to free text */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return excludeId ? members.filter((m) => m.id !== excludeId) : members;

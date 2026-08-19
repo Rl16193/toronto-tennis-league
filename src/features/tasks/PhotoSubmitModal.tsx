@@ -76,7 +76,9 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
         created_at: new Date().toISOString(),
       });
       setSubscribed(true);
-    } catch { /* never blocks the report itself */ }
+    } catch {
+      /* never blocks the report itself */
+    }
   };
 
   useEffect(() => {
@@ -104,8 +106,14 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
 
   const addFiles = (picked: File[]) => {
     if (picked.length === 0) return;
-    if (picked.find((f) => !f.type.startsWith('image/'))) { setError('Please choose image files only.'); return; }
-    if (picked.find((f) => f.size > 5 * 1024 * 1024)) { setError('Each image must be under 5 MB.'); return; }
+    if (picked.find((f) => !f.type.startsWith('image/'))) {
+      setError('Please choose image files only.');
+      return;
+    }
+    if (picked.find((f) => f.size > 5 * 1024 * 1024)) {
+      setError('Each image must be under 5 MB.');
+      return;
+    }
     setError('');
     setFiles((prev) => [...prev, ...picked].slice(0, MAX_PHOTOS));
   };
@@ -113,10 +121,22 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
   const removeFile = (i: number) => setFiles((prev) => prev.filter((_, idx) => idx !== i));
 
   const handleSubmit = async () => {
-    if (!court) { setError('Please select a court.'); return; }
-    if (!note.trim()) { setError('Please add a note.'); return; }
-    if (type === 'queue' && !racquetsInQueue.trim()) { setError('Please enter the number of racquets in queue.'); return; }
-    if (type === 'waiting_board' && !waitingBoards.trim()) { setError('Please enter the number of waiting boards.'); return; }
+    if (!court) {
+      setError('Please select a court.');
+      return;
+    }
+    if (!note.trim()) {
+      setError('Please add a note.');
+      return;
+    }
+    if (type === 'queue' && !racquetsInQueue.trim()) {
+      setError('Please enter the number of racquets in queue.');
+      return;
+    }
+    if (type === 'waiting_board' && !waitingBoards.trim()) {
+      setError('Please enter the number of waiting boards.');
+      return;
+    }
 
     setSubmitting(true);
     setError('');
@@ -156,26 +176,45 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
               <div className="text-left rounded-2xl bg-fg/[0.03] p-4 space-y-3">
                 <p className="text-sm font-semibold text-fg">Want to stay in the loop?</p>
                 <p className="text-xs text-fg/70">Leave your email to hear about upcoming events. Totally optional.</p>
-                <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
                 {/* This box used to be decorative: the mailing-list write happened during submit,
                     before this screen existed, so anything typed here was silently discarded and
                     the reporter believed they'd subscribed. */}
-                <Button size="sm" variant="outline" className="w-full" disabled={!email.trim()} onClick={() => void saveEmail()}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  disabled={!email.trim()}
+                  onClick={() => void saveEmail()}
+                >
                   Keep me posted
                 </Button>
               </div>
             )}
-            {!user && subscribed && (
-              <p className="text-xs text-badge-win font-semibold">You&rsquo;re on the list.</p>
-            )}
+            {!user && subscribed && <p className="text-xs text-badge-win font-semibold">You&rsquo;re on the list.</p>}
 
             {/* Flush an address typed but not submitted, so closing doesn't throw it away. */}
-            <Button variant="outline" className="w-full" onClick={() => { void saveEmail().finally(onClose); }}>Done</Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                void saveEmail().finally(onClose);
+              }}
+            >
+              Done
+            </Button>
           </div>
         ) : (
           <>
             {error && (
-              <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-3">{error}</div>
+              <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-3">
+                {error}
+              </div>
             )}
 
             <div className="flex flex-wrap gap-2">
@@ -194,12 +233,18 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
             </div>
 
             <div className="space-y-1.5 relative">
-              <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Select Court <span className="text-clay">*</span></p>
+              <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">
+                Select Court <span className="text-clay">*</span>
+              </p>
               <input
                 type="text"
                 placeholder="Search courts…"
                 value={court || courtSearch}
-                onChange={(e) => { setCourt(''); setCourtSearch(e.target.value); setShowDropdown(true); }}
+                onChange={(e) => {
+                  setCourt('');
+                  setCourtSearch(e.target.value);
+                  setShowDropdown(true);
+                }}
                 onFocus={() => setShowDropdown(true)}
                 onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
                 className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
@@ -210,7 +255,11 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
                     <button
                       key={c}
                       type="button"
-                      onMouseDown={() => { setCourt(c); setCourtSearch(''); setShowDropdown(false); }}
+                      onMouseDown={() => {
+                        setCourt(c);
+                        setCourtSearch('');
+                        setShowDropdown(false);
+                      }}
                       className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
                     >
                       {c}
@@ -227,16 +276,38 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {/* Take Photo — opens the camera directly on mobile. */}
-                <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-dashed border-fg/20 cursor-pointer hover:border-fg/40 transition-colors ${files.length >= MAX_PHOTOS ? 'opacity-40 pointer-events-none' : ''}`}>
+                <label
+                  className={`flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-dashed border-fg/20 cursor-pointer hover:border-fg/40 transition-colors ${files.length >= MAX_PHOTOS ? 'opacity-40 pointer-events-none' : ''}`}
+                >
                   <Camera className="w-5 h-5 text-fg/70 shrink-0" />
                   <span className="text-sm text-fg/70">Take Photo</span>
-                  <input type="file" accept="image/*" capture="environment" onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = ''; }} className="hidden" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={(e) => {
+                      addFiles(Array.from(e.target.files ?? []));
+                      e.target.value = '';
+                    }}
+                    className="hidden"
+                  />
                 </label>
                 {/* Upload — opens the gallery / file picker; multi-select. */}
-                <label className={`flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-dashed border-fg/20 cursor-pointer hover:border-fg/40 transition-colors ${files.length >= MAX_PHOTOS ? 'opacity-40 pointer-events-none' : ''}`}>
+                <label
+                  className={`flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-dashed border-fg/20 cursor-pointer hover:border-fg/40 transition-colors ${files.length >= MAX_PHOTOS ? 'opacity-40 pointer-events-none' : ''}`}
+                >
                   <ImageUp className="w-5 h-5 text-fg/70 shrink-0" />
                   <span className="text-sm text-fg/70">Upload</span>
-                  <input type="file" accept="image/*" multiple onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = ''; }} className="hidden" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      addFiles(Array.from(e.target.files ?? []));
+                      e.target.value = '';
+                    }}
+                    className="hidden"
+                  />
                 </label>
               </div>
               {files.length > 0 && (
@@ -245,7 +316,12 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
                     <div key={`${f.name}-${i}`} className="flex items-center gap-1.5 text-xs text-fg/70">
                       <CheckCircle2 className="w-3.5 h-3.5 text-badge-win shrink-0" />
                       <span className="truncate flex-1">{f.name}</span>
-                      <button type="button" onClick={() => removeFile(i)} aria-label="Remove photo" className="text-fg/70 hover:text-fg transition-colors shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => removeFile(i)}
+                        aria-label="Remove photo"
+                        className="text-fg/70 hover:text-fg transition-colors shrink-0"
+                      >
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -254,14 +330,19 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
               )}
               {submitting && (
                 <div className="w-full h-1.5 rounded-full bg-fg/10 overflow-hidden">
-                  <div className="h-full bg-clay rounded-full transition-all duration-200" style={{ width: `${progress}%` }} />
+                  <div
+                    className="h-full bg-clay rounded-full transition-all duration-200"
+                    style={{ width: `${progress}%` }}
+                  />
                 </div>
               )}
             </div>
 
             {type === 'waiting_board' && (
               <div className="space-y-1.5">
-                <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">How many waiting boards? <span className="text-clay">*</span></p>
+                <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">
+                  How many waiting boards? <span className="text-clay">*</span>
+                </p>
                 <input
                   type="number"
                   min={0}
@@ -277,7 +358,9 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
             {type === 'queue' && (
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Racquets in Queue <span className="text-clay">*</span></p>
+                  <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">
+                    Racquets in Queue <span className="text-clay">*</span>
+                  </p>
                   <input
                     type="number"
                     min={0}
@@ -307,7 +390,9 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
             )}
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-fg/70 uppercase tracking-widest">Note <span className="text-clay">*</span></label>
+              <label className="block text-xs font-bold text-fg/70 uppercase tracking-widest">
+                Note <span className="text-clay">*</span>
+              </label>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
@@ -321,13 +406,22 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
             {!user && (
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-fg/70 uppercase tracking-widest">Get updates</label>
-                <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
               </div>
             )}
 
             <div className="flex gap-3 pt-1">
-              <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-              <Button onClick={handleSubmit} isLoading={submitting} className="flex-1">Submit</Button>
+              <Button variant="outline" onClick={onClose} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handleSubmit} isLoading={submitting} className="flex-1">
+                Submit
+              </Button>
             </div>
           </>
         )}

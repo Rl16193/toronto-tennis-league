@@ -9,19 +9,19 @@ skill installation.
 
 Source: `firebase/agent-skills` on GitHub. These are existing project-local skills preserved from the repository and tracked in `skills-lock.json` with computed hashes.
 
-| Local skill | Purpose | Use when |
-| --- | --- | --- |
-| `firebase-ai-logic-basics` | Firebase AI Logic setup and usage | AI Logic or model integration |
-| `firebase-app-hosting-basics` | App Hosting configuration and emulation | App Hosting work |
-| `firebase-auth-basics` | Firebase Auth setup and client patterns | Sign-in, identity, or auth boundaries |
-| `firebase-basics` | Firebase CLI, project, and local environment basics | CLI/project operations |
-| `firebase-crashlytics` | Crashlytics setup | Mobile crash reporting |
-| `firebase-data-connect` | Data Connect schemas and SDKs | Data Connect work |
-| `firebase-firestore` | Firestore setup, data models, indexes, and rules | Any Firestore change or audit |
-| `firebase-hosting-basics` | Hosting configuration and deployment | Hosting changes; never bypass environment gates |
-| `firebase-remote-config-basics` | Remote Config | Remote Config work |
-| `firebase-security-rules-auditor` | Adversarial Firestore rules review | Every rules change and security audit |
-| `xcode-project-setup` | Firebase iOS project configuration | Future mobile setup only |
+| Local skill                       | Purpose                                             | Use when                                        |
+| --------------------------------- | --------------------------------------------------- | ----------------------------------------------- |
+| `firebase-ai-logic-basics`        | Firebase AI Logic setup and usage                   | AI Logic or model integration                   |
+| `firebase-app-hosting-basics`     | App Hosting configuration and emulation             | App Hosting work                                |
+| `firebase-auth-basics`            | Firebase Auth setup and client patterns             | Sign-in, identity, or auth boundaries           |
+| `firebase-basics`                 | Firebase CLI, project, and local environment basics | CLI/project operations                          |
+| `firebase-crashlytics`            | Crashlytics setup                                   | Mobile crash reporting                          |
+| `firebase-data-connect`           | Data Connect schemas and SDKs                       | Data Connect work                               |
+| `firebase-firestore`              | Firestore setup, data models, indexes, and rules    | Any Firestore change or audit                   |
+| `firebase-hosting-basics`         | Hosting configuration and deployment                | Hosting changes; never bypass environment gates |
+| `firebase-remote-config-basics`   | Remote Config                                       | Remote Config work                              |
+| `firebase-security-rules-auditor` | Adversarial Firestore rules review                  | Every rules change and security audit           |
+| `xcode-project-setup`             | Firebase iOS project configuration                  | Future mobile setup only                        |
 
 ## Architecture diagrams
 

@@ -1,6 +1,4 @@
-import {
-  addDoc, collection, deleteDoc, doc, onSnapshot, query, updateDoc, where,
-} from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { useEffect, useState } from 'react';
 import { db, storage } from '../../lib/firebase';
@@ -78,7 +76,9 @@ export const emptyDraft = (kind: ListingKind): ListingDraft => ({
  * avatars. Returns an error message, or null on success.
  */
 export async function createListing(
-  uid: string, userName: string, draft: ListingDraft,
+  uid: string,
+  userName: string,
+  draft: ListingDraft,
   onProgress?: (pct: number) => void,
 ): Promise<string | null> {
   if (!draft.title.trim()) return 'Please give your listing a title.';
@@ -104,7 +104,8 @@ export async function createListing(
         });
         task.on(
           'state_changed',
-          (snap) => onProgress?.(Math.round(((i + snap.bytesTransferred / snap.totalBytes) / draft.files.length) * 100)),
+          (snap) =>
+            onProgress?.(Math.round(((i + snap.bytesTransferred / snap.totalBytes) / draft.files.length) * 100)),
           reject,
           resolve,
         );
@@ -142,7 +143,10 @@ export const setListingStatus = (id: string, status: ListingStatus) =>
  * `created_at` are never touched here.
  */
 export async function updateListing(
-  id: string, uid: string, draft: ListingDraft, keepPhotoPaths: string[],
+  id: string,
+  uid: string,
+  draft: ListingDraft,
+  keepPhotoPaths: string[],
   onProgress?: (pct: number) => void,
 ): Promise<string | null> {
   if (!draft.title.trim()) return 'Please give your listing a title.';
@@ -168,7 +172,8 @@ export async function updateListing(
         });
         task.on(
           'state_changed',
-          (snap) => onProgress?.(Math.round(((i + snap.bytesTransferred / snap.totalBytes) / draft.files.length) * 100)),
+          (snap) =>
+            onProgress?.(Math.round(((i + snap.bytesTransferred / snap.totalBytes) / draft.files.length) * 100)),
           reject,
           resolve,
         );
@@ -207,7 +212,10 @@ export function useListings(kind: ListingKind, enabled = true) {
     // `setLoading(false)` matters here: without it a disabled board reports `loading: true`
     // forever, so anything reading it (a count, a badge, an empty state) waits on a listener
     // that was never going to open.
-    if (!enabled) { setLoading(false); return; }
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     // Sorted client-side: pairing an orderBy with the `kind` filter would need a composite
     // index, and this project ships no firestore.indexes.json.
     return onSnapshot(
@@ -238,10 +246,17 @@ export function useImageUrl(path: string | undefined) {
     if (!path || urlCache.has(path)) return;
     let alive = true;
     getDownloadURL(ref(storage, path))
-      .then((u) => { urlCache.set(path, u); if (alive) setUrl(u); })
+      .then((u) => {
+        urlCache.set(path, u);
+        if (alive) setUrl(u);
+      })
       // A missing file is expected: moderation deletes unsafe uploads out from under the doc.
-      .catch(() => { /* card falls back to its placeholder */ });
-    return () => { alive = false; };
+      .catch(() => {
+        /* card falls back to its placeholder */
+      });
+    return () => {
+      alive = false;
+    };
   }, [path]);
   return url;
 }

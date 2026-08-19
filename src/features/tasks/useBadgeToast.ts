@@ -9,11 +9,17 @@ const readSeen = (): string[] => {
   try {
     const raw = localStorage.getItem(SEEN_KEY);
     return raw ? (JSON.parse(raw) as string[]) : [];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 };
 
 const writeSeen = (ids: string[]) => {
-  try { localStorage.setItem(SEEN_KEY, JSON.stringify(ids)); } catch { /* private mode */ }
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify(ids));
+  } catch {
+    /* private mode */
+  }
 };
 
 /**
@@ -36,7 +42,11 @@ export function useBadgeToast(
   const [toast, setToast] = useState<string | null>(null);
   const seeded = useRef(false);
 
-  const earnedIds = progressLoaded ? earnedBadges(progress, counters).map((b) => b.id).join(',') : '';
+  const earnedIds = progressLoaded
+    ? earnedBadges(progress, counters)
+        .map((b) => b.id)
+        .join(',')
+    : '';
 
   useEffect(() => {
     if (!progressLoaded) return;
@@ -45,7 +55,10 @@ export function useBadgeToast(
     if (!seeded.current) {
       seeded.current = true;
       // No stored list at all — this device has never seen the player's badges. Record and stay quiet.
-      if (localStorage.getItem(SEEN_KEY) === null) { writeSeen(current); return; }
+      if (localStorage.getItem(SEEN_KEY) === null) {
+        writeSeen(current);
+        return;
+      }
     }
 
     const seen = new Set(readSeen());

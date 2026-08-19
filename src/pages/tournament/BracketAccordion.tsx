@@ -28,30 +28,44 @@ type Props = {
 const STATE_LABEL = { preview: 'Live Preview', loading: 'Loading', started: 'Started', finished: 'Finished' } as const;
 
 export const BracketAccordion: React.FC<Props> = ({
-  matches, editMode, editPlayers = [], onEditPlayer, onRemovePlayer,
-  isCreator, onSubmitScore, submittableMatchIds, pendingMatchIds,
-  roundDeadlines = {}, onUpdateDeadline,
+  matches,
+  editMode,
+  editPlayers = [],
+  onEditPlayer,
+  onRemovePlayer,
+  isCreator,
+  onSubmitScore,
+  submittableMatchIds,
+  pendingMatchIds,
+  roundDeadlines = {},
+  onUpdateDeadline,
 }) => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
 
   const rounds = useMemo(
-    () => roundLabels.map((round) => {
-      const roundMatches = matches.filter((m) => m.round === round).sort((a, b) => a.position - b.position);
-      return { round, matches: roundMatches, state: getRoundState(roundMatches) };
-    }),
+    () =>
+      roundLabels.map((round) => {
+        const roundMatches = matches.filter((m) => m.round === round).sort((a, b) => a.position - b.position);
+        return { round, matches: roundMatches, state: getRoundState(roundMatches) };
+      }),
     [matches, roundLabels],
   );
 
   // Default open: the first round that's still in play (loading/started/preview after a
   // finished one), else the final.
   const defaultOpen = useMemo(() => {
-    const live = rounds.find((r) => r.state === 'started') || rounds.find((r) => r.state === 'loading') || rounds.find((r) => r.state === 'preview');
+    const live =
+      rounds.find((r) => r.state === 'started') ||
+      rounds.find((r) => r.state === 'loading') ||
+      rounds.find((r) => r.state === 'preview');
     return (live ?? rounds[rounds.length - 1])?.round ?? null;
   }, [rounds]);
 
   const [openRound, setOpenRound] = useState<string | null>(defaultOpen);
-  useEffect(() => { setOpenRound(defaultOpen); }, [defaultOpen]);
+  useEffect(() => {
+    setOpenRound(defaultOpen);
+  }, [defaultOpen]);
 
   return (
     <section className="rounded-[2rem] bg-tennis-surface/20 p-4">
@@ -74,7 +88,8 @@ export const BracketAccordion: React.FC<Props> = ({
                 : 'bg-fg/5 border-fg/10 text-fg/70 hover:border-fg/30'
             }`}
           >
-            {r.round}{r.state === 'finished' ? ' ✓' : ''}
+            {r.round}
+            {r.state === 'finished' ? ' ✓' : ''}
           </button>
         ))}
       </div>

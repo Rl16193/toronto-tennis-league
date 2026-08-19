@@ -68,7 +68,9 @@ const readCachedSlides = (): string[] => {
     const { urls, savedAt } = JSON.parse(raw);
     if (!Array.isArray(urls) || Date.now() - savedAt > SLIDESHOW_CACHE_TTL_MS) return [];
     return urls;
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 };
 
 // Live figures come from the public site_stats/summary doc; these seed the strip so it never
@@ -93,24 +95,27 @@ export const Home: React.FC = () => {
   const [slides, setSlides] = useState<string[]>(readCachedSlides);
   const [slideIndex, setSlideIndex] = useState(0);
 
-  useEffect(() => { document.title = 'Racquets & Strings'; }, []);
+  useEffect(() => {
+    document.title = 'Racquets & Strings';
+  }, []);
 
   // Resolve the gs:// slideshow images to download URLs; keep only the ones that resolve, and
   // cache them for next time so a refresh/repeat visit never shows the Logo.png fallback.
   useEffect(() => {
     let cancelled = false;
-    Promise.all(SLIDESHOW_PATHS.map((p) => resolveStorageUrl(p).catch(() => '')))
-      .then((urls) => {
-        const resolved = urls.filter(Boolean);
-        if (cancelled || resolved.length === 0) return;
-        setSlides(resolved);
-        try {
-          localStorage.setItem(SLIDESHOW_CACHE_KEY, JSON.stringify({ urls: resolved, savedAt: Date.now() }));
-        } catch {
-          // A full or restricted local cache should not prevent the slideshow from rendering.
-        }
-      });
-    return () => { cancelled = true; };
+    Promise.all(SLIDESHOW_PATHS.map((p) => resolveStorageUrl(p).catch(() => ''))).then((urls) => {
+      const resolved = urls.filter(Boolean);
+      if (cancelled || resolved.length === 0) return;
+      setSlides(resolved);
+      try {
+        localStorage.setItem(SLIDESHOW_CACHE_KEY, JSON.stringify({ urls: resolved, savedAt: Date.now() }));
+      } catch {
+        // A full or restricted local cache should not prevent the slideshow from rendering.
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Rotate slides every 5s (only once more than one resolved).
@@ -136,11 +141,18 @@ export const Home: React.FC = () => {
         if (typeof d.matches_organized === 'number') setMatchesOrganized(d.matches_organized);
       } catch {
         if (cancelled || attempt >= 4) return; // site_stats rule/doc not deployed — give up quietly
-        setTimeout(() => { if (!cancelled) load(attempt + 1); }, 1000 * 2 ** attempt);
+        setTimeout(
+          () => {
+            if (!cancelled) load(attempt + 1);
+          },
+          1000 * 2 ** attempt,
+        );
       }
     };
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Check-In needs an account; logged-out visitors are sent to sign in first (like the auth tabs).
@@ -155,9 +167,9 @@ export const Home: React.FC = () => {
   const courtsWithMembers = courts.filter((c) => c.count > 0).length;
   const courtsCoveredDisplay = useCountUp(courtsWithMembers || COMMUNITY_BASELINE.courts);
   const stats = [
-    { value: `${activePlayersDisplay}`, label: 'Players', to: '/leagues'},
-    { value: `${matchesOrganizedDisplay}`, label: 'Matches', to: '/events'},
-    { value: `${courtsCoveredDisplay}`, label: 'Courts', to: '/courts'},
+    { value: `${activePlayersDisplay}`, label: 'Players', to: '/leagues' },
+    { value: `${matchesOrganizedDisplay}`, label: 'Matches', to: '/events' },
+    { value: `${courtsCoveredDisplay}`, label: 'Courts', to: '/courts' },
   ];
 
   return (
@@ -165,10 +177,7 @@ export const Home: React.FC = () => {
       {/* ── Hero — full-bleed to the viewport width (not just the page's own max-w-xl column),
           so it has no side gaps in landscape/wide viewports, starting below the header rather
           than behind it. ~70% viewport height, tagline + description overlaid near the bottom. ── */}
-      <motion.div
-        {...fadeUp}
-        className="relative left-1/2 -ml-[50vw] w-screen h-[70vh] overflow-hidden"
-      >
+      <motion.div {...fadeUp} className="relative left-1/2 -ml-[50vw] w-screen h-[70vh] overflow-hidden">
         <div className="absolute inset-0 dark-gradient" />
         {slides.map((url, i) => (
           <img
@@ -189,7 +198,8 @@ export const Home: React.FC = () => {
         <div className="absolute inset-x-0 bottom-0 px-4 sm:px-6 pb-6 text-center">
           <h1 className="text-2xl sm:text-3xl font-black text-clay tracking-tight">L&apos;ŒUF FOR THE GAME</h1>
           <p className="mt-2 text-sm text-fg max-w-md mx-auto">
-            Toronto&apos;s home for free tennis events, public court and wait time insights. Join our movement to make tennis more accessible.
+            Toronto&apos;s home for free tennis events, public court and wait time insights. Join our movement to make
+            tennis more accessible.
           </p>
         </div>
       </motion.div>
@@ -204,15 +214,29 @@ export const Home: React.FC = () => {
       >
         {!user ? (
           <Link to="/login" className="block">
-            <Button size="md" variant="clay" className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2">Join or Log In</Button>
+            <Button size="md" variant="clay" className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2">
+              Join or Log In
+            </Button>
           </Link>
         ) : (
           <>
-            <Button size="md" variant="clay" className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2" onClick={onCheckIn}>
-              <MapPin className="w-3.5 h-3.5 mr-1 shrink-0" />Court
+            <Button
+              size="md"
+              variant="clay"
+              className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2"
+              onClick={onCheckIn}
+            >
+              <MapPin className="w-3.5 h-3.5 mr-1 shrink-0" />
+              Court
             </Button>
-            <Button size="md" variant="white" className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2" onClick={onReport}>
-              <Camera className="w-3.5 h-3.5 mr-1 shrink-0" />Report
+            <Button
+              size="md"
+              variant="white"
+              className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2"
+              onClick={onReport}
+            >
+              <Camera className="w-3.5 h-3.5 mr-1 shrink-0" />
+              Report
             </Button>
           </>
         )}
@@ -220,11 +244,7 @@ export const Home: React.FC = () => {
 
       {/* ── Stats strip — plain icon/number/label groups blended into the page (no card
           background/border); hover/tap gives a slight zoom as the only interactive cue. ── */}
-      <motion.div
-        {...fadeUp}
-        transition={{ ...fadeUp.transition, delay: 0.2 }}
-        className="grid grid-cols-3 gap-2.5"
-      >
+      <motion.div {...fadeUp} transition={{ ...fadeUp.transition, delay: 0.2 }} className="grid grid-cols-3 gap-2.5">
         {stats.map((s) => (
           <MotionLink
             key={s.label}

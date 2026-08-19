@@ -14,7 +14,9 @@ export const Notifications: React.FC = () => {
   const claimableRewards = Math.floor(Math.max(0, redeemable) / MIN_REWARD_COST);
   const navigate = useNavigate();
 
-  useEffect(() => { document.title = 'Notifications · Racquets & Strings'; }, []);
+  useEffect(() => {
+    document.title = 'Notifications · Racquets & Strings';
+  }, []);
 
   useEffect(() => {
     if (!loading && unreadCount > 0) markAllRead();
@@ -51,7 +53,8 @@ export const Notifications: React.FC = () => {
           >
             <Gift className="w-5 h-5 text-clay shrink-0" />
             <p className="min-w-0 flex-1 text-sm font-bold text-fg">
-              You have collected {redeemable} Points. {claimableRewards} Reward{claimableRewards === 1 ? '' : 's'} available.
+              You have collected {redeemable} Points. {claimableRewards} Reward{claimableRewards === 1 ? '' : 's'}{' '}
+              available.
             </p>
             <ChevronRight className="w-4 h-4 text-clay shrink-0" />
           </Link>
@@ -60,7 +63,9 @@ export const Notifications: React.FC = () => {
 
       {loading ? (
         <div className="space-y-2">
-          {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-16 bg-tennis-surface/30 rounded-2xl animate-pulse" />
+          ))}
         </div>
       ) : items.length === 0 && claimableRewards === 0 ? (
         <div className="rounded-3xl bg-tennis-surface/30 py-16 text-center">

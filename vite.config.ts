@@ -1,7 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import { defineConfig } from 'vite';
 
 // No `define:` block — it inlines values into the bundle every visitor downloads. Secrets belong
 // in a Cloud Function. See CLAUDE.md, "Never ship a secret to the client".
@@ -41,7 +41,7 @@ export default defineConfig(() => {
     },
     server: {
       host: true,
-      allowedHosts: ["lvh.me"],
+      allowedHosts: ['lvh.me'],
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify — file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

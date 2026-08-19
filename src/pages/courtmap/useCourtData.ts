@@ -2,8 +2,15 @@ import { useEffect, useState } from 'react';
 import { getDocs, getDoc, doc, collection } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import {
-  parseCourts, parsePrograms, getPickleballMappings, matchCourtName, NINETY_DAYS_MS,
-  type CourtWithCount, type TennisProgram, type PickleballOnlyCourt, type CsvCourt,
+  parseCourts,
+  parsePrograms,
+  getPickleballMappings,
+  matchCourtName,
+  NINETY_DAYS_MS,
+  type CourtWithCount,
+  type TennisProgram,
+  type PickleballOnlyCourt,
+  type CsvCourt,
 } from './courtMapUtils';
 
 // sessionStorage is ~5 MB per origin, so anything over this simply isn't cached (writing it would
@@ -17,10 +24,16 @@ const fetchCsv = async (url: string): Promise<string> => {
   try {
     const hit = sessionStorage.getItem(key);
     if (hit) return hit;
-  } catch { /* sessionStorage unavailable */ }
+  } catch {
+    /* sessionStorage unavailable */
+  }
   const text = await fetch(url).then((r) => (r.ok ? r.text() : ''));
   if (text && text.length <= MAX_CACHE_BYTES) {
-    try { sessionStorage.setItem(key, text); } catch { /* quota exceeded */ }
+    try {
+      sessionStorage.setItem(key, text);
+    } catch {
+      /* quota exceeded */
+    }
   }
   return text;
 };
@@ -65,18 +78,21 @@ export function useCourtData(): {
       setLoadingProgress(70);
 
       // `hasPrograms` starts false and is filled in by the programs pass below.
-      setCourts(rawCourts.map((c) => ({
-        ...c, count: 0,
-        hasPrograms: false,
-        pickleballEntries: pbByDropdown.get(c.dropdown) ?? [],
-      })));
+      setCourts(
+        rawCourts.map((c) => ({
+          ...c,
+          count: 0,
+          hasPrograms: false,
+          pickleballEntries: pbByDropdown.get(c.dropdown) ?? [],
+        })),
+      );
       setLoadingProgress(100);
       setLoading(false);
 
       // ── Player counts per court (independent, merged by dropdown) ──────────────
       const loadCounts = async () => {
         const TIMEOUT_MS = 10_000;
-        const withTimeout = <T,>(p: Promise<T>) =>
+        const withTimeout = <T>(p: Promise<T>) =>
           Promise.race([p, new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), TIMEOUT_MS))]);
 
         // Preferred path: one document, written every 6h by the aggregateCourtCounts function
@@ -96,7 +112,9 @@ export function useCourtData(): {
             setCourts((prev) => prev.map((c) => ({ ...c, count: aggMap.get(c.dropdown) ?? 0 })));
             return;
           }
-        } catch { /* aggregate unavailable — fall through to computing it client-side */ }
+        } catch {
+          /* aggregate unavailable — fall through to computing it client-side */
+        }
 
         // Fallback: the original in-browser computation. Kept so the page still works before the
         // Cloud Function is deployed, and if the aggregate doc is ever missing or empty.
@@ -156,19 +174,28 @@ export function useCourtData(): {
         if (cancelled) return;
         setPrograms(parsedPrograms);
         // Functional update: the counts pass may have already landed.
-        setCourts((prev) => prev.map((c) => ({
-          ...c, hasPrograms: programDropdowns.has(c.dropdown.toLowerCase()),
-        })));
+        setCourts((prev) =>
+          prev.map((c) => ({
+            ...c,
+            hasPrograms: programDropdowns.has(c.dropdown.toLowerCase()),
+          })),
+        );
       };
 
       await Promise.all([
-        loadCounts().catch(() => { /* Firestore unavailable — counts stay 0 */ }),
-        loadPrograms().catch(() => { /* programs stay empty; courts still work */ }),
+        loadCounts().catch(() => {
+          /* Firestore unavailable — counts stay 0 */
+        }),
+        loadPrograms().catch(() => {
+          /* programs stay empty; courts still work */
+        }),
       ]);
     };
 
     load().catch(() => setLoading(false));
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return { courts, programs, pickleballOnly, loading, loadingProgress, setPrograms };

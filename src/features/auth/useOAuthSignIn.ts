@@ -1,9 +1,14 @@
 import { useEffect } from 'react';
 import { NavigateFunction } from 'react-router-dom';
 import {
-  GoogleAuthProvider, OAuthProvider,
-  getAdditionalUserInfo, getRedirectResult, signInWithPopup, signInWithRedirect,
-  type AuthProvider, type OAuthCredential,
+  GoogleAuthProvider,
+  OAuthProvider,
+  getAdditionalUserInfo,
+  getRedirectResult,
+  signInWithPopup,
+  signInWithRedirect,
+  type AuthProvider,
+  type OAuthCredential,
 } from 'firebase/auth';
 import { appleProvider, auth, googleProvider, setAuthPersistence } from '../../lib/firebase';
 import { track } from '../../lib/analytics';
@@ -74,7 +79,7 @@ export function useOAuthSignIn({
       .catch(async (err: any) => {
         setError(await getOAuthSignInErrorMessage(err, '', providerId));
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSignIn = async () => {
@@ -117,9 +122,7 @@ export function useOAuthSignIn({
  * provider, the providerId string, and which class exposes credentialFromError. Both keep their
  * original return names so Signup.tsx is unchanged. Add a provider by adding a binding here.
  */
-type ProviderBoundOptions = Omit<
-  UseOAuthSignInOptions, 'provider' | 'providerId' | 'credentialFromError'
->;
+type ProviderBoundOptions = Omit<UseOAuthSignInOptions, 'provider' | 'providerId' | 'credentialFromError'>;
 
 /** Google Sign-In. All behaviour lives in useOAuthSignIn — this only binds the provider. */
 export function useGoogleSignIn(options: ProviderBoundOptions) {

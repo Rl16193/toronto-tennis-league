@@ -1,8 +1,23 @@
 import { EventParticipant, MemberInfo, UserData, UserStats } from '../../types';
 import { parseValidDate, type FirestoreDateLike } from '../../utils/eventDates';
 import { EMAIL_REGEX } from '../../utils/emailRegex';
-import { BYE, DrawConfig, PLAYER_LOADING, SkillGroup, SKILL_GROUP_ORDER, TemplateMatch, TournamentMatch, TournamentPlayer, UNASSIGNED_ZONE_ID, ZoneDrawConfig } from './types';
-import { isDefaultZone, skillBand as tournamentSkillBand, zoneBucketFor } from '../../features/tournament/domain/placement';
+import {
+  BYE,
+  DrawConfig,
+  PLAYER_LOADING,
+  SkillGroup,
+  SKILL_GROUP_ORDER,
+  TemplateMatch,
+  TournamentMatch,
+  TournamentPlayer,
+  UNASSIGNED_ZONE_ID,
+  ZoneDrawConfig,
+} from './types';
+import {
+  isDefaultZone,
+  skillBand as tournamentSkillBand,
+  zoneBucketFor,
+} from '../../features/tournament/domain/placement';
 
 // Compatibility exports keep existing page/feature consumers stable while the pure rules live in
 // the feature domain boundary.
@@ -22,9 +37,12 @@ export const formatScheduledDate = (d?: string, slot?: string) => {
 
 // Any doc shape carrying the six set-score fields — a TournamentMatch or a ScoreSubmission(Doc).
 type ScoredSets = {
-  set_1_player_1?: number; set_1_player_2?: number;
-  set_2_player_1?: number; set_2_player_2?: number;
-  set_3_player_1?: number; set_3_player_2?: number;
+  set_1_player_1?: number;
+  set_1_player_2?: number;
+  set_2_player_1?: number;
+  set_2_player_2?: number;
+  set_3_player_1?: number;
+  set_3_player_2?: number;
 };
 
 export const formatSetScores = (m: ScoredSets): string => {
@@ -33,13 +51,22 @@ export const formatSetScores = (m: ScoredSets): string => {
     [m.set_2_player_1 ?? 0, m.set_2_player_2 ?? 0],
     [m.set_3_player_1 ?? 0, m.set_3_player_2 ?? 0],
   ];
-  return pairs.filter(([a, b]) => a > 0 || b > 0).map(([a, b]) => `${a}-${b}`).join('  ');
+  return pairs
+    .filter(([a, b]) => a > 0 || b > 0)
+    .map(([a, b]) => `${a}-${b}`)
+    .join('  ');
 };
 
 export { BYE, PLAYER_LOADING } from '../../features/tournament/types';
 export {
-  DEFAULT_ZONE, DEFAULT_ZONE_BUCKETS, effectiveZone, isDefaultZone, resolveMergedZone, resolveZoneConfig,
-  zoneBucketFor, zoneBucketId,
+  DEFAULT_ZONE,
+  DEFAULT_ZONE_BUCKETS,
+  effectiveZone,
+  isDefaultZone,
+  resolveMergedZone,
+  resolveZoneConfig,
+  zoneBucketFor,
+  zoneBucketId,
 } from '../../features/tournament/domain/placement';
 
 export type MatchDisplayFlags = {
@@ -73,29 +100,44 @@ export const getMatchDisplayFlags = (
   const { editMode, hasEditHandler, isCreator, hasSubmitHandler, submittableMatchIds, pendingMatchIds } = opts;
 
   const isPreview = match.id.startsWith('preview_') || match.id.startsWith('ll_preview_');
-  const isPreviewFirstRound = isPreview &&
-    typeof match.player_1_slot === 'number' && typeof match.player_2_slot === 'number';
+  const isPreviewFirstRound =
+    isPreview && typeof match.player_1_slot === 'number' && typeof match.player_2_slot === 'number';
   const isEditable = !!editMode && hasEditHandler && (!isPreview || isPreviewFirstRound);
 
   const scoreText = !isPreview && match.status === 'complete' ? formatSetScores(match) : '';
   const hasBye = match.player_1_name === BYE || match.player_2_name === BYE;
   const hasRealPlayers = !isPreview && !hasBye && !!match.player_1_uid && !!match.player_2_uid;
   // For the creator, also allow submitting when a slot is PLAYER_LOADING (winner pending).
-  const hasPlayableSlots = !isPreview && !hasBye && (
+  const hasPlayableSlots =
+    !isPreview &&
+    !hasBye &&
     (!!match.player_1_uid || match.player_1_name === PLAYER_LOADING) &&
-    (!!match.player_2_uid || match.player_2_name === PLAYER_LOADING)
-  );
+    (!!match.player_2_uid || match.player_2_name === PLAYER_LOADING);
   const showDot = !isPreview && hasRealPlayers;
   // Creator submit button (also shown for complete matches so creator can overwrite).
   const showCreatorSubmit = !!isCreator && hasSubmitHandler && hasPlayableSlots && !editMode;
   // Player submit: current user is in this match (or doubles teammate), not yet complete.
-  const showPlayerSubmit = !isCreator && hasSubmitHandler && hasRealPlayers && !editMode &&
-    !!submittableMatchIds?.has(match.id) && match.status !== 'complete';
+  const showPlayerSubmit =
+    !isCreator &&
+    hasSubmitHandler &&
+    hasRealPlayers &&
+    !editMode &&
+    !!submittableMatchIds?.has(match.id) &&
+    match.status !== 'complete';
   const alreadySubmitted = !!pendingMatchIds?.has(match.id);
 
   return {
-    isPreview, isPreviewFirstRound, isEditable, scoreText, hasBye, hasRealPlayers,
-    hasPlayableSlots, showDot, showCreatorSubmit, showPlayerSubmit, alreadySubmitted,
+    isPreview,
+    isPreviewFirstRound,
+    isEditable,
+    scoreText,
+    hasBye,
+    hasRealPlayers,
+    hasPlayableSlots,
+    showDot,
+    showCreatorSubmit,
+    showPlayerSubmit,
+    alreadySubmitted,
   };
 };
 
@@ -138,10 +180,17 @@ export const getParticipantDisplayName = (participant: EventParticipant, userDat
 // in one place (src/utils/eventDates.ts). Callers pass raw event fields, hence the `unknown`.
 export const parseDateValue = (value: unknown) => parseValidDate(value as FirestoreDateLike);
 
-export const getEventDate = (event: { startDate?: unknown; start_date?: unknown; date?: unknown; endDate?: unknown; end_date?: unknown }) =>
-  parseDateValue(event.startDate || event.start_date || event.date || event.endDate || event.end_date);
+export const getEventDate = (event: {
+  startDate?: unknown;
+  start_date?: unknown;
+  date?: unknown;
+  endDate?: unknown;
+  end_date?: unknown;
+}) => parseDateValue(event.startDate || event.start_date || event.date || event.endDate || event.end_date);
 
-export const isTournamentStarted = (event: { startDate?: unknown; start_date?: unknown; date?: unknown; endDate?: unknown; end_date?: unknown } | null) => {
+export const isTournamentStarted = (
+  event: { startDate?: unknown; start_date?: unknown; date?: unknown; endDate?: unknown; end_date?: unknown } | null,
+) => {
   const start = event ? getEventDate(event) : null;
   return !!start && start.getTime() <= Date.now();
 };
@@ -150,7 +199,9 @@ export const isTournamentStarted = (event: { startDate?: unknown; start_date?: u
 // zones existed keep their document ids and stay reachable. Do not "fix" this asymmetry by always
 // appending the zone — that re-orphans every match already in the database.
 export const getDrawKey = (tournamentChoice: string, division: string, skillGroup: SkillGroup, zone?: string) =>
-  `${tournamentChoice}_${division}_${skillGroup}${zone && !isDefaultZone(zone) ? `_${zone}` : ''}`.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+  `${tournamentChoice}_${division}_${skillGroup}${zone && !isDefaultZone(zone) ? `_${zone}` : ''}`
+    .replace(/[^a-z0-9]+/gi, '_')
+    .toLowerCase();
 
 // Cross-products a division's skill draws with each zone bucket, making zone a selectable draw
 // dimension (e.g. "Men's Beginners — Downtown"). Singles only.
@@ -158,7 +209,10 @@ export const getDrawKey = (tournamentChoice: string, division: string, skillGrou
 // DRAW HIERARCHY: gender → zone → skill → courts.
 // Zone is applied BEFORE skill merges, because a merge belongs to one (division, zone).
 // `courts` is planned, not implemented — nothing below should assume it exists.
-export const buildZoneAwareDrawConfigs = (draws: DrawConfig[], zoneConfig: ZoneDrawConfig | undefined): DrawConfig[] => {
+export const buildZoneAwareDrawConfigs = (
+  draws: DrawConfig[],
+  zoneConfig: ZoneDrawConfig | undefined,
+): DrawConfig[] => {
   if (!zoneConfig?.enabled || zoneConfig.buckets.length === 0) return draws;
   const merges = zoneConfig.merges ?? {};
   // A merged-away zone gets no draws of its own — its players are routed into the target's.
@@ -198,19 +252,40 @@ export const getDrawSize = (count: number, _tournamentChoice: 'Singles' | 'Doubl
 export const fallbackTemplate = (drawsize: number): TemplateMatch[] => {
   const seedOrder: Record<number, Array<[number, number]>> = {
     2: [[1, 2]],
-    4: [[1, 4], [3, 2]],
-    8: [[1, 8], [4, 5], [3, 6], [2, 7]],
-    16: [[1, 16], [8, 9], [4, 13], [5, 12], [3, 14], [6, 11], [7, 10], [2, 15]],
+    4: [
+      [1, 4],
+      [3, 2],
+    ],
+    8: [
+      [1, 8],
+      [4, 5],
+      [3, 6],
+      [2, 7],
+    ],
+    16: [
+      [1, 16],
+      [8, 9],
+      [4, 13],
+      [5, 12],
+      [3, 14],
+      [6, 11],
+      [7, 10],
+      [2, 15],
+    ],
     32: Array.from({ length: 16 }, (_, i) => [i + 1, 32 - i] as [number, number]),
   };
 
   const firstRound = seedOrder[drawsize] || seedOrder[8];
   const rounds =
-    drawsize === 2 ? ['F'] :
-    drawsize === 4 ? ['SF', 'F'] :
-    drawsize === 8 ? ['QF', 'SF', 'F'] :
-    drawsize === 16 ? ['R16', 'QF', 'SF', 'F'] :
-    ['R32', 'R16', 'QF', 'SF', 'F'];
+    drawsize === 2
+      ? ['F']
+      : drawsize === 4
+        ? ['SF', 'F']
+        : drawsize === 8
+          ? ['QF', 'SF', 'F']
+          : drawsize === 16
+            ? ['R16', 'QF', 'SF', 'F']
+            : ['R32', 'R16', 'QF', 'SF', 'F'];
 
   const matches: TemplateMatch[] = [];
   let matchNumber = 1;
@@ -235,8 +310,14 @@ export const fallbackTemplate = (drawsize: number): TemplateMatch[] => {
       });
       const src1 = matches.find((m) => m.match_id === previousRoundIds[i]);
       const src2 = matches.find((m) => m.match_id === previousRoundIds[i + 1]);
-      if (src1) { src1.next_match_id = matchId; src1.next_slot = 'player_1'; }
-      if (src2) { src2.next_match_id = matchId; src2.next_slot = 'player_2'; }
+      if (src1) {
+        src1.next_match_id = matchId;
+        src1.next_slot = 'player_1';
+      }
+      if (src2) {
+        src2.next_match_id = matchId;
+        src2.next_slot = 'player_2';
+      }
     }
     previousRoundIds = currentRoundIds;
   }
@@ -256,7 +337,10 @@ export const normalizeTemplateMatches = (matches: TemplateMatch[]): TemplateMatc
 
 export const getWinnerPlaceholder = (slot: number | string, matches: TemplateMatch[]) => {
   if (typeof slot !== 'string') return '';
-  const sourceMatchId = slot.toLowerCase().match(/winner\s+(.+)/)?.[1]?.trim();
+  const sourceMatchId = slot
+    .toLowerCase()
+    .match(/winner\s+(.+)/)?.[1]
+    ?.trim();
   if (!sourceMatchId) return '';
   const sourceMatch = matches.find((m) => m.match_id.toLowerCase() === sourceMatchId);
   if (!sourceMatch) return `Winner of ${sourceMatchId.toUpperCase()}`;
@@ -266,8 +350,7 @@ export const getWinnerPlaceholder = (slot: number | string, matches: TemplateMat
 };
 
 // Normalise a name string for fuzzy partner matching (case, whitespace, punctuation)
-const normalizeForMatch = (name?: string) =>
-  (name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const normalizeForMatch = (name?: string) => (name || '').trim().toLowerCase().replace(/\s+/g, ' ');
 
 /**
  * Doubles: collapses mutual partner pairs into one entry and normalises `doubles` to the
@@ -295,11 +378,7 @@ export const deduplicateDoublesTeams = (participants: EventParticipant[]): Event
       : undefined;
 
     // Use the partner's actual registered name so the bracket shows the real spelling
-    result.push(
-      partner
-        ? { ...p, doubles: formatPlayerName(partner.user_name) || p.doubles }
-        : p,
-    );
+    result.push(partner ? { ...p, doubles: formatPlayerName(partner.user_name) || p.doubles } : p);
     processed.add(p.id);
     if (partner) processed.add(partner.id);
   }
@@ -350,7 +429,8 @@ export const isSpecialDraw = (draw: DrawConfig): boolean =>
 // Seed order: league points first, then matches played, then name as a stable tiebreak — the same
 // ranking the Leaderboard uses, so slot 1 is genuinely the strongest player in the draw. Anyone
 // without a stats row scores 0 and sits at the bottom, which is also where the byes land.
-export const seedCompare = (statsMap: Record<string, UserStats>) =>
+export const seedCompare =
+  (statsMap: Record<string, UserStats>) =>
   (a: EventParticipant, b: EventParticipant): number => {
     const sa = statsMap[a.uid ?? ''];
     const sb = statsMap[b.uid ?? ''];
@@ -370,22 +450,29 @@ export const sortParticipantsForDraw = (
   if (draw.tournamentChoice === 'Singles' && draw.skillGroup === 'All' && draw.mergedFrom) {
     // Seed the merged bands highest-first (generalizes the old "masters first" rule to any
     // adjacent pair, or all three).
-    const bands = (draw.mergedFrom.split('+') as SkillGroup[])
-      .sort((a, b) => SKILL_GROUP_ORDER.indexOf(b) - SKILL_GROUP_ORDER.indexOf(a));
+    const bands = (draw.mergedFrom.split('+') as SkillGroup[]).sort(
+      (a, b) => SKILL_GROUP_ORDER.indexOf(b) - SKILL_GROUP_ORDER.indexOf(a),
+    );
     const skillOf = (p: EventParticipant) => statsMap[p.uid]?.skill_level ?? Number(p.skill || 0);
     // Bands stay in strongest-first order; within each band, seed by standings.
     return bands.flatMap((band) =>
-      participants.filter((p) => skillBand(skillOf(p)) === band).sort(seedCompare(statsMap)));
+      participants.filter((p) => skillBand(skillOf(p)) === band).sort(seedCompare(statsMap)),
+    );
   }
   if (draw.tournamentChoice === 'Doubles' && draw.division === 'All') {
-    const byeFirst = participants.filter((p) => p.division === "Women's" || p.division === 'Mixed Doubles').sort(seedCompare(statsMap));
+    const byeFirst = participants
+      .filter((p) => p.division === "Women's" || p.division === 'Mixed Doubles')
+      .sort(seedCompare(statsMap));
     const mens = participants.filter((p) => p.division === "Men's").sort(seedCompare(statsMap));
     return [...byeFirst, ...mens];
   }
   return participants;
 };
 
-export const mapParticipantsToPlayers = (participants: EventParticipant[], userMap: Record<string, MemberInfo>): TournamentPlayer[] =>
+export const mapParticipantsToPlayers = (
+  participants: EventParticipant[],
+  userMap: Record<string, MemberInfo>,
+): TournamentPlayer[] =>
   participants.map((p) => {
     const userData = userMap[p.uid];
     const baseName = getParticipantDisplayName(p, userData) || 'Player';
@@ -435,9 +522,13 @@ export const buildMatchFields = (
     position: index + 1,
     player_1_slot: tm.player_1,
     player_2_slot: tm.player_2,
-    player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_1, cfg.allMatches)),
+    player_1_name:
+      p1?.name ||
+      (typeof tm.player_1 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_1, cfg.allMatches)),
     player_1_uid: p1Uid,
-    player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_2, cfg.allMatches)),
+    player_2_name:
+      p2?.name ||
+      (typeof tm.player_2 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_2, cfg.allMatches)),
     player_2_uid: p2Uid,
     next_match_id: tm.next_match_id || '',
     next_slot: (tm.next_slot ?? '') as 'player_1' | 'player_2' | '',
@@ -455,9 +546,9 @@ export const buildPlayerList = (
   userMap: Record<string, MemberInfo>,
 ): TournamentPlayer[] => {
   if (isSpecialDraw(draw)) {
-    return mapParticipantsToPlayers(sortParticipantsForDraw(drawParticipants, draw, statsMap), userMap)
-      .filter((p) => p.name);
+    return mapParticipantsToPlayers(sortParticipantsForDraw(drawParticipants, draw, statsMap), userMap).filter(
+      (p) => p.name,
+    );
   }
-  return mapParticipantsToPlayers([...drawParticipants].sort(seedCompare(statsMap)), userMap)
-    .filter((p) => p.name);
+  return mapParticipantsToPlayers([...drawParticipants].sort(seedCompare(statsMap)), userMap).filter((p) => p.name);
 };

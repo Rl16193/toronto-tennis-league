@@ -120,18 +120,33 @@ const AddGroupForm: React.FC<{
         <div className="max-h-48 overflow-y-auto space-y-1">
           {unplacedPlayers.map((p) => (
             <label key={p.uid} className="flex items-center gap-2 text-fg text-xs cursor-pointer">
-              <input type="checkbox" checked={selected.has(p.uid)} onChange={() => toggle(p.uid)} className="accent-clay" />
+              <input
+                type="checkbox"
+                checked={selected.has(p.uid)}
+                onChange={() => toggle(p.uid)}
+                className="accent-clay"
+              />
               {formatPlayerName(p.name)}
             </label>
           ))}
         </div>
       ) : (
         <p className="text-xs text-fg/70">
-          No unplaced players. You can still create an empty group and use &quot;Add player...&quot; inside a group card to move players in.
+          No unplaced players. You can still create an empty group and use &quot;Add player...&quot; inside a group card
+          to move players in.
         </p>
       )}
       <div className="flex gap-2 pt-1">
-        <Button variant="outline" size="sm" onClick={() => { setOpen(false); setSelected(new Set()); setName(''); }} className="flex-1">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setOpen(false);
+            setSelected(new Set());
+            setName('');
+          }}
+          className="flex-1"
+        >
           Cancel
         </Button>
         <Button size="sm" onClick={submit} className="flex-1">
@@ -143,12 +158,38 @@ const AddGroupForm: React.FC<{
 };
 
 export const RoundRobinView: React.FC<Props> = ({
-  groups, groupLabels, groupIndices, standingsByGroup, groupMatches, knockoutMatches,
-  advancementCount, isCreator, isParticipant, currentUserId, isPastEvent, editMode, editPlayers,
-  onEditPlayer, onSubmitScore, submittableMatchIds, pendingMatchIds, onSaveGroupEdit,
-  onRenameGroup, onSetGroupBonus, onRemovePlayer, onMovePlayerZone, zoneBuckets, onAskSchedule, onCreateGroup, unplacedPlayers,
-  rrKnockoutReady, generatingKnockout, onGenerateKnockout, rrView,
-  roundDeadlines, onUpdateDeadline,
+  groups,
+  groupLabels,
+  groupIndices,
+  standingsByGroup,
+  groupMatches,
+  knockoutMatches,
+  advancementCount,
+  isCreator,
+  isParticipant,
+  currentUserId,
+  isPastEvent,
+  editMode,
+  editPlayers,
+  onEditPlayer,
+  onSubmitScore,
+  submittableMatchIds,
+  pendingMatchIds,
+  onSaveGroupEdit,
+  onRenameGroup,
+  onSetGroupBonus,
+  onRemovePlayer,
+  onMovePlayerZone,
+  zoneBuckets,
+  onAskSchedule,
+  onCreateGroup,
+  unplacedPlayers,
+  rrKnockoutReady,
+  generatingKnockout,
+  onGenerateKnockout,
+  rrView,
+  roundDeadlines,
+  onUpdateDeadline,
 }) => {
   // HOOKS FIRST — every hook below has to run on every render. These used to sit further down,
   // after `groups.length === 0` and the knockout branch returned early, which changes the hook
@@ -157,12 +198,16 @@ export const RoundRobinView: React.FC<Props> = ({
   // One standings read and one contacts read for every group card on the page, so the expanded
   // tiles show career numbers and a Contact button without each card fetching its own.
   const { rows: standingsRows } = useStandings();
-  const statsByUid = React.useMemo(
-    () => new Map(standingsRows.map((r) => [r.user_id, r])),
-    [standingsRows],
-  );
+  const statsByUid = React.useMemo(() => new Map(standingsRows.map((r) => [r.user_id, r])), [standingsRows]);
   const contactUids = React.useMemo(
-    () => [...new Set(groups.flat().map((p) => p.uid).filter(Boolean))],
+    () => [
+      ...new Set(
+        groups
+          .flat()
+          .map((p) => p.uid)
+          .filter(Boolean),
+      ),
+    ],
     [groups],
   );
   const contactsByUid = useContacts(contactUids);
@@ -173,9 +218,8 @@ export const RoundRobinView: React.FC<Props> = ({
   // In edit mode, use editPlayers (skill-group: All) so the creator can pull cross-skill players
   // (e.g. a Challengers-level player into a Masters group) that wouldn't appear in the
   // skill-filtered unplaced pool.
-  const allGroupPlayers = editMode && editPlayers.length > 0
-    ? editPlayers
-    : [...groups.flat(), ...(unplacedPlayers ?? [])];
+  const allGroupPlayers =
+    editMode && editPlayers.length > 0 ? editPlayers : [...groups.flat(), ...(unplacedPlayers ?? [])];
 
   // Knockout view (3rd-level tab): size selector + the bracket, or a prompt to build it.
   if (rrView === 'knockout') {
@@ -208,7 +252,9 @@ export const RoundRobinView: React.FC<Props> = ({
         ) : (
           <div className="rounded-2xl bg-tennis-surface/20 p-8 text-center">
             <p className="text-sm text-fg/70">
-              {isCreator ? 'Pick a round size above to build the knockout bracket.' : 'The knockout bracket has not been set up yet.'}
+              {isCreator
+                ? 'Pick a round size above to build the knockout bracket.'
+                : 'The knockout bracket has not been set up yet.'}
             </p>
           </div>
         )}
@@ -250,7 +296,9 @@ export const RoundRobinView: React.FC<Props> = ({
               // saves/renames target the correct group even when indices are non-contiguous.
               onSaveGroupEdit={(_, newPlayers) => onSaveGroupEdit(groupIndices?.[gi] ?? gi, newPlayers)}
               onRenameGroup={onRenameGroup ? (label) => onRenameGroup(groupIndices?.[gi] ?? gi, label) : undefined}
-              onSetGroupBonus={onSetGroupBonus ? (award) => onSetGroupBonus(groupIndices?.[gi] ?? gi, award) : undefined}
+              onSetGroupBonus={
+                onSetGroupBonus ? (award) => onSetGroupBonus(groupIndices?.[gi] ?? gi, award) : undefined
+              }
               onRemovePlayer={onRemovePlayer}
               onMovePlayerZone={onMovePlayerZone}
               zoneBuckets={zoneBuckets}

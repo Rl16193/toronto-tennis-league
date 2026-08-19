@@ -44,7 +44,7 @@ export type TennisProgram = {
   activityUrl: string;
   lat?: number;
   lng?: number;
-  matchedDropdown?: string;  // dropdown of the court this program maps to (for filtering)
+  matchedDropdown?: string; // dropdown of the court this program maps to (for filtering)
 };
 
 export type NearestCourt = CourtWithCount & { distKm: number };
@@ -64,145 +64,155 @@ const COURT_ALIASES: Record<string, string> = {
 };
 
 const PICKLEBALL_DATA: Array<{ location: string; netType: PickleballNetType; lights: boolean; numCourts: number }> = [
-  { location: '20 Castlefield Avenue Park',         netType: 'Pickleball', lights: true,  numCourts: 2  },
-  { location: '50 Queens Quay East Park',           netType: 'No Net',     lights: false, numCourts: 2  },
-  { location: 'Albion Gardens Park',                netType: 'Tennis',     lights: true,  numCourts: 3  },
-  { location: 'Alexandra Park',                     netType: 'Pickleball', lights: false, numCourts: 1  },
-  { location: 'Amesbury Park',                      netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Ancaster Park',                      netType: 'Tennis',     lights: false, numCourts: 1  },
-  { location: 'Angela James Arena & Tennis Courts', netType: 'Tennis',     lights: true,  numCourts: 4  },
-  { location: 'Antibes Community Centre',           netType: 'No Net',     lights: false, numCourts: 1  },
-  { location: 'Banbury Park',                       netType: 'Pickleball', lights: false, numCourts: 1  },
-  { location: 'Baycrest Park',                      netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'Bayview Village Park',               netType: 'Tennis',     lights: false, numCourts: 1  },
-  { location: 'Beaumonde Heights Park',             netType: 'Tennis',     lights: false, numCourts: 2  },
-  { location: 'Bennington Heights Park',            netType: 'No Net',     lights: true,  numCourts: 1  },
-  { location: 'Bestview Park',                      netType: 'Tennis',     lights: true,  numCourts: 3  },
-  { location: 'Birch Park',                         netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'Birchmount Park',                    netType: 'Pickleball', lights: true,  numCourts: 6  },
-  { location: 'Buttonwood Park',                    netType: 'Tennis',     lights: true,  numCourts: 3  },
-  { location: 'Campbell Avenue Park',               netType: 'No Net',     lights: true,  numCourts: 5  },
-  { location: 'Cedarvale Park',                     netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'Centennial Park - Etobicoke',        netType: 'Pickleball', lights: true,  numCourts: 12 },
-  { location: 'Chalkfarm Park',                     netType: 'Tennis',     lights: false, numCourts: 1  },
-  { location: 'Champlain Parkette',                 netType: 'Tennis',     lights: false, numCourts: 2  },
-  { location: 'Christie Pits Park',                 netType: 'No Net',     lights: true,  numCourts: 5  },
-  { location: 'Clairlea Park',                      netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Cliffwood Park',                     netType: 'Tennis',     lights: false, numCourts: 3  },
-  { location: 'Cloverdale Park',                    netType: 'Tennis',     lights: true,  numCourts: 3  },
-  { location: 'Cummer Park',                        netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'Dieppe Park',                        netType: 'No Net',     lights: true,  numCourts: 8  },
-  { location: 'Dufferin Grove Park',                netType: 'No Net',     lights: true,  numCourts: 4  },
-  { location: 'Earlscourt Park',                    netType: 'No Net',     lights: true,  numCourts: 5  },
-  { location: 'Eglinton Flats',                     netType: 'Tennis',     lights: true,  numCourts: 6  },
-  { location: 'Eglinton Flats',                     netType: 'No Net',     lights: true,  numCourts: 1  },
-  { location: 'Eglinton Park',                      netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Elie Wiesel Park',                   netType: 'Tennis',     lights: true,  numCourts: 3  },
-  { location: 'Fairmount Park',                     netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'Fenside Park',                       netType: 'Tennis',     lights: true,  numCourts: 4  },
-  { location: 'Firgrove Park',                      netType: 'Tennis',     lights: false, numCourts: 2  },
-  { location: 'Flagstaff Park',                     netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'Gihon Spring Park',                  netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Glen Park',                          netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'Glendora Park',                      netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'Gracedale Park',                     netType: 'No Net',     lights: false, numCourts: 1  },
-  { location: 'Greenwood Park',                     netType: 'No Net',     lights: true,  numCourts: 4  },
-  { location: 'High Park',                          netType: 'Tennis',     lights: false, numCourts: 2  },
-  { location: 'High Park',                          netType: 'No Net',     lights: true,  numCourts: 9  },
-  { location: 'Howard Talbot Park',                 netType: 'Tennis',     lights: false, numCourts: 2  },
-  { location: 'Hullmar Park',                       netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'Humber Valley Park',                 netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'Indian Line Park',                   netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Irving W. Chapley Park',             netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'Jeff Healey Park',                   netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Jimmie Simpson Park',                netType: 'No Net',     lights: true,  numCourts: 4  },
-  { location: 'Jonathan Ashbridge Park',            netType: 'Tennis',     lights: false, numCourts: 2  },
-  { location: 'Kew Gardens',                        netType: 'No Net',     lights: true,  numCourts: 5  },
-  { location: 'Kingsview Park',                     netType: 'Pickleball', lights: true,  numCourts: 2  },
-  { location: 'Kirkwood Park',                      netType: 'Tennis',     lights: true,  numCourts: 4  },
-  { location: 'Laburnham Park',                     netType: 'Pickleball', lights: true,  numCourts: 2  },
-  { location: 'Lakeshore Boulevard Parklands',      netType: 'Tennis',     lights: false, numCourts: 4  },
-  { location: 'Lambton - Kingsway Park',            netType: 'Tennis',     lights: false, numCourts: 1  },
-  { location: 'Lanyard Park',                       netType: 'No Net',     lights: false, numCourts: 2  },
-  { location: 'Lillian Park',                       netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Lora Hill Park',                     netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Main Sewage Treatment Playground',   netType: 'Pickleball', lights: false, numCourts: 11 },
-  { location: 'Malvern Park',                       netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Manchester Park',                    netType: 'Tennis',     lights: true,  numCourts: 3  },
-  { location: 'Maple Leaf Park',                    netType: 'No Net',     lights: true,  numCourts: 2  },
-  { location: 'Maple Leaf Park',                    netType: 'Tennis',     lights: true,  numCourts: 3  },
-  { location: 'Martingrove Gardens Park',           netType: 'Pickleball', lights: true,  numCourts: 2  },
-  { location: 'McCowan District Park',              netType: 'No Net',     lights: true,  numCourts: 4  },
-  { location: 'McDairmid Woods Park',               netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'McDairmid Woods Park',               netType: 'Adjustable', lights: true,  numCourts: 2  },
-  { location: 'McGregor Park',                      netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'McGregor Park',                      netType: 'Pickleball', lights: true,  numCourts: 2  },
-  { location: 'Michael Mostyn Balmoral Park',       netType: 'Tennis',     lights: true,  numCourts: 3  },
-  { location: 'Mill Valley Park',                   netType: 'Tennis',     lights: false, numCourts: 2  },
-  { location: 'Millwood Park',                      netType: 'Tennis',     lights: false, numCourts: 1  },
-  { location: 'Monarch Park',                       netType: 'No Net',     lights: true,  numCourts: 4  },
-  { location: 'Otter Creek Centre',                 netType: 'Tennis',     lights: false, numCourts: 1  },
-  { location: 'Ourland Park',                       netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Park Lawn Park',                     netType: 'Tennis',     lights: true,  numCourts: 3  },
-  { location: 'Pelmo Park',                         netType: 'Tennis',     lights: true,  numCourts: 3  },
-  { location: 'Pine Point Park',                    netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'Prairie Drive Park',                 netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Queensway Park',                     netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Ramsden Park',                       netType: 'No Net',     lights: true,  numCourts: 7  },
-  { location: 'Ramsden Park',                       netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Regent Park Athletic Grounds',       netType: 'No Net',     lights: true,  numCourts: 5  },
-  { location: 'Riverdale Park East',                netType: 'No Net',     lights: true,  numCourts: 4  },
-  { location: 'Riverdale Park East',                netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'Rotary Peace Park',                  netType: 'Tennis',     lights: false, numCourts: 1  },
-  { location: 'Sentinel Park',                      netType: 'Tennis',     lights: false, numCourts: 1  },
-  { location: 'Shawnee Park',                       netType: 'Tennis',     lights: false, numCourts: 1  },
-  { location: 'Sir Adam Beck Park',                 netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Stanley Greene Park',                netType: 'Tennis',     lights: true,  numCourts: 1  },
-  { location: 'Stanley Park South - Toronto',       netType: 'Tennis',     lights: false, numCourts: 2  },
-  { location: 'Stephenson Park',                    netType: 'No Net',     lights: false, numCourts: 1  },
-  { location: 'Strathburn Park',                    netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: 'Strathburn Park',                    netType: 'No Net',     lights: false, numCourts: 3  },
-  { location: 'Sunnylea Park',                      netType: 'Tennis',     lights: false, numCourts: 2  },
-  { location: 'Sweeney Park',                       netType: 'Tennis',     lights: true,  numCourts: 3  },
-  { location: 'Tom Riley Park',                     netType: 'Tennis',     lights: true,  numCourts: 2  },
-  { location: "Toronto Island Park - Ward's Island",netType: 'Pickleball', lights: false, numCourts: 2  },
-  { location: 'Trinity Bellwoods Park',             netType: 'No Net',     lights: true,  numCourts: 4  },
-  { location: 'Valleyfield Park',                   netType: 'No Net',     lights: true,  numCourts: 5  },
-  { location: 'Wanless Park',                       netType: 'No Net',     lights: true,  numCourts: 1  },
-  { location: 'Wedgewood Park - Etobicoke',         netType: 'No Net',     lights: true,  numCourts: 1  },
-  { location: 'Wedgewood Park - North York',        netType: 'Tennis',     lights: false, numCourts: 1  },
-  { location: 'Wellesley Park',                     netType: 'Pickleball', lights: false, numCourts: 1  },
-  { location: 'Westgrove Park',                     netType: 'No Net',     lights: true,  numCourts: 1  },
-  { location: 'Westmount Park',                     netType: 'Tennis',     lights: true,  numCourts: 3  },
-  { location: 'Withrow Park and Clubhouse',         netType: 'Tennis',     lights: false, numCourts: 1  },
-  { location: 'Withrow Park and Clubhouse',         netType: 'No Net',     lights: true,  numCourts: 2  },
+  { location: '20 Castlefield Avenue Park', netType: 'Pickleball', lights: true, numCourts: 2 },
+  { location: '50 Queens Quay East Park', netType: 'No Net', lights: false, numCourts: 2 },
+  { location: 'Albion Gardens Park', netType: 'Tennis', lights: true, numCourts: 3 },
+  { location: 'Alexandra Park', netType: 'Pickleball', lights: false, numCourts: 1 },
+  { location: 'Amesbury Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Ancaster Park', netType: 'Tennis', lights: false, numCourts: 1 },
+  { location: 'Angela James Arena & Tennis Courts', netType: 'Tennis', lights: true, numCourts: 4 },
+  { location: 'Antibes Community Centre', netType: 'No Net', lights: false, numCourts: 1 },
+  { location: 'Banbury Park', netType: 'Pickleball', lights: false, numCourts: 1 },
+  { location: 'Baycrest Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'Bayview Village Park', netType: 'Tennis', lights: false, numCourts: 1 },
+  { location: 'Beaumonde Heights Park', netType: 'Tennis', lights: false, numCourts: 2 },
+  { location: 'Bennington Heights Park', netType: 'No Net', lights: true, numCourts: 1 },
+  { location: 'Bestview Park', netType: 'Tennis', lights: true, numCourts: 3 },
+  { location: 'Birch Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'Birchmount Park', netType: 'Pickleball', lights: true, numCourts: 6 },
+  { location: 'Buttonwood Park', netType: 'Tennis', lights: true, numCourts: 3 },
+  { location: 'Campbell Avenue Park', netType: 'No Net', lights: true, numCourts: 5 },
+  { location: 'Cedarvale Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'Centennial Park - Etobicoke', netType: 'Pickleball', lights: true, numCourts: 12 },
+  { location: 'Chalkfarm Park', netType: 'Tennis', lights: false, numCourts: 1 },
+  { location: 'Champlain Parkette', netType: 'Tennis', lights: false, numCourts: 2 },
+  { location: 'Christie Pits Park', netType: 'No Net', lights: true, numCourts: 5 },
+  { location: 'Clairlea Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Cliffwood Park', netType: 'Tennis', lights: false, numCourts: 3 },
+  { location: 'Cloverdale Park', netType: 'Tennis', lights: true, numCourts: 3 },
+  { location: 'Cummer Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'Dieppe Park', netType: 'No Net', lights: true, numCourts: 8 },
+  { location: 'Dufferin Grove Park', netType: 'No Net', lights: true, numCourts: 4 },
+  { location: 'Earlscourt Park', netType: 'No Net', lights: true, numCourts: 5 },
+  { location: 'Eglinton Flats', netType: 'Tennis', lights: true, numCourts: 6 },
+  { location: 'Eglinton Flats', netType: 'No Net', lights: true, numCourts: 1 },
+  { location: 'Eglinton Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Elie Wiesel Park', netType: 'Tennis', lights: true, numCourts: 3 },
+  { location: 'Fairmount Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'Fenside Park', netType: 'Tennis', lights: true, numCourts: 4 },
+  { location: 'Firgrove Park', netType: 'Tennis', lights: false, numCourts: 2 },
+  { location: 'Flagstaff Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'Gihon Spring Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Glen Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'Glendora Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'Gracedale Park', netType: 'No Net', lights: false, numCourts: 1 },
+  { location: 'Greenwood Park', netType: 'No Net', lights: true, numCourts: 4 },
+  { location: 'High Park', netType: 'Tennis', lights: false, numCourts: 2 },
+  { location: 'High Park', netType: 'No Net', lights: true, numCourts: 9 },
+  { location: 'Howard Talbot Park', netType: 'Tennis', lights: false, numCourts: 2 },
+  { location: 'Hullmar Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'Humber Valley Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'Indian Line Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Irving W. Chapley Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'Jeff Healey Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Jimmie Simpson Park', netType: 'No Net', lights: true, numCourts: 4 },
+  { location: 'Jonathan Ashbridge Park', netType: 'Tennis', lights: false, numCourts: 2 },
+  { location: 'Kew Gardens', netType: 'No Net', lights: true, numCourts: 5 },
+  { location: 'Kingsview Park', netType: 'Pickleball', lights: true, numCourts: 2 },
+  { location: 'Kirkwood Park', netType: 'Tennis', lights: true, numCourts: 4 },
+  { location: 'Laburnham Park', netType: 'Pickleball', lights: true, numCourts: 2 },
+  { location: 'Lakeshore Boulevard Parklands', netType: 'Tennis', lights: false, numCourts: 4 },
+  { location: 'Lambton - Kingsway Park', netType: 'Tennis', lights: false, numCourts: 1 },
+  { location: 'Lanyard Park', netType: 'No Net', lights: false, numCourts: 2 },
+  { location: 'Lillian Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Lora Hill Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Main Sewage Treatment Playground', netType: 'Pickleball', lights: false, numCourts: 11 },
+  { location: 'Malvern Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Manchester Park', netType: 'Tennis', lights: true, numCourts: 3 },
+  { location: 'Maple Leaf Park', netType: 'No Net', lights: true, numCourts: 2 },
+  { location: 'Maple Leaf Park', netType: 'Tennis', lights: true, numCourts: 3 },
+  { location: 'Martingrove Gardens Park', netType: 'Pickleball', lights: true, numCourts: 2 },
+  { location: 'McCowan District Park', netType: 'No Net', lights: true, numCourts: 4 },
+  { location: 'McDairmid Woods Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'McDairmid Woods Park', netType: 'Adjustable', lights: true, numCourts: 2 },
+  { location: 'McGregor Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'McGregor Park', netType: 'Pickleball', lights: true, numCourts: 2 },
+  { location: 'Michael Mostyn Balmoral Park', netType: 'Tennis', lights: true, numCourts: 3 },
+  { location: 'Mill Valley Park', netType: 'Tennis', lights: false, numCourts: 2 },
+  { location: 'Millwood Park', netType: 'Tennis', lights: false, numCourts: 1 },
+  { location: 'Monarch Park', netType: 'No Net', lights: true, numCourts: 4 },
+  { location: 'Otter Creek Centre', netType: 'Tennis', lights: false, numCourts: 1 },
+  { location: 'Ourland Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Park Lawn Park', netType: 'Tennis', lights: true, numCourts: 3 },
+  { location: 'Pelmo Park', netType: 'Tennis', lights: true, numCourts: 3 },
+  { location: 'Pine Point Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'Prairie Drive Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Queensway Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Ramsden Park', netType: 'No Net', lights: true, numCourts: 7 },
+  { location: 'Ramsden Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Regent Park Athletic Grounds', netType: 'No Net', lights: true, numCourts: 5 },
+  { location: 'Riverdale Park East', netType: 'No Net', lights: true, numCourts: 4 },
+  { location: 'Riverdale Park East', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'Rotary Peace Park', netType: 'Tennis', lights: false, numCourts: 1 },
+  { location: 'Sentinel Park', netType: 'Tennis', lights: false, numCourts: 1 },
+  { location: 'Shawnee Park', netType: 'Tennis', lights: false, numCourts: 1 },
+  { location: 'Sir Adam Beck Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Stanley Greene Park', netType: 'Tennis', lights: true, numCourts: 1 },
+  { location: 'Stanley Park South - Toronto', netType: 'Tennis', lights: false, numCourts: 2 },
+  { location: 'Stephenson Park', netType: 'No Net', lights: false, numCourts: 1 },
+  { location: 'Strathburn Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: 'Strathburn Park', netType: 'No Net', lights: false, numCourts: 3 },
+  { location: 'Sunnylea Park', netType: 'Tennis', lights: false, numCourts: 2 },
+  { location: 'Sweeney Park', netType: 'Tennis', lights: true, numCourts: 3 },
+  { location: 'Tom Riley Park', netType: 'Tennis', lights: true, numCourts: 2 },
+  { location: "Toronto Island Park - Ward's Island", netType: 'Pickleball', lights: false, numCourts: 2 },
+  { location: 'Trinity Bellwoods Park', netType: 'No Net', lights: true, numCourts: 4 },
+  { location: 'Valleyfield Park', netType: 'No Net', lights: true, numCourts: 5 },
+  { location: 'Wanless Park', netType: 'No Net', lights: true, numCourts: 1 },
+  { location: 'Wedgewood Park - Etobicoke', netType: 'No Net', lights: true, numCourts: 1 },
+  { location: 'Wedgewood Park - North York', netType: 'Tennis', lights: false, numCourts: 1 },
+  { location: 'Wellesley Park', netType: 'Pickleball', lights: false, numCourts: 1 },
+  { location: 'Westgrove Park', netType: 'No Net', lights: true, numCourts: 1 },
+  { location: 'Westmount Park', netType: 'Tennis', lights: true, numCourts: 3 },
+  { location: 'Withrow Park and Clubhouse', netType: 'Tennis', lights: false, numCourts: 1 },
+  { location: 'Withrow Park and Clubhouse', netType: 'No Net', lights: true, numCourts: 2 },
 ];
 
 // Pre-geocoded coordinates for pickleball-only parks (not in tennis courts CSV).
 // Generated by scripts/geocode-pickleball.js — re-run if PICKLEBALL_DATA locations change.
 const PICKLEBALL_ONLY_COORDS: Record<string, { lat: number; lng: number }> = {
-  '20 Castlefield Avenue Park':        { lat: 43.708825, lng: -79.413713 },
-  '50 Queens Quay East Park':          { lat: 43.642900, lng: -79.372800 },
-  'Alexandra Park':                    { lat: 43.650380, lng: -79.401620 },
-  'Campbell Avenue Park':              { lat: 43.663764, lng: -79.448410 },
-  'Centennial Park - Etobicoke':       { lat: 43.653590, lng: -79.588869 },
-  'Christie Pits Park':                { lat: 43.664746, lng: -79.420776 },
-  'Dieppe Park':                       { lat: 43.691657, lng: -79.335582 },
-  'Dufferin Grove Park':               { lat: 43.656206, lng: -79.432451 },
-  'Greenwood Park':                    { lat: 43.668404, lng: -79.328439 },
-  'Main Sewage Treatment Playground':  { lat: 43.663237, lng: -79.316919 },
-  'McCowan District Park':             { lat: 43.733571, lng: -79.238277 },
-  'Monarch Park':                      { lat: 43.677793, lng: -79.325523 },
-  'Otter Creek Centre':                { lat: 43.718027, lng: -79.414760 },
-  'Regent Park Athletic Grounds':      { lat: 43.659296, lng: -79.359032 },
-  'Stephenson Park':                   { lat: 43.686020, lng: -79.303655 },
+  '20 Castlefield Avenue Park': { lat: 43.708825, lng: -79.413713 },
+  '50 Queens Quay East Park': { lat: 43.6429, lng: -79.3728 },
+  'Alexandra Park': { lat: 43.65038, lng: -79.40162 },
+  'Campbell Avenue Park': { lat: 43.663764, lng: -79.44841 },
+  'Centennial Park - Etobicoke': { lat: 43.65359, lng: -79.588869 },
+  'Christie Pits Park': { lat: 43.664746, lng: -79.420776 },
+  'Dieppe Park': { lat: 43.691657, lng: -79.335582 },
+  'Dufferin Grove Park': { lat: 43.656206, lng: -79.432451 },
+  'Greenwood Park': { lat: 43.668404, lng: -79.328439 },
+  'Main Sewage Treatment Playground': { lat: 43.663237, lng: -79.316919 },
+  'McCowan District Park': { lat: 43.733571, lng: -79.238277 },
+  'Monarch Park': { lat: 43.677793, lng: -79.325523 },
+  'Otter Creek Centre': { lat: 43.718027, lng: -79.41476 },
+  'Regent Park Athletic Grounds': { lat: 43.659296, lng: -79.359032 },
+  'Stephenson Park': { lat: 43.68602, lng: -79.303655 },
   "Toronto Island Park - Ward's Island": { lat: 43.631315, lng: -79.357145 },
-  'Wellesley Park':                    { lat: 43.669596, lng: -79.362199 },
+  'Wellesley Park': { lat: 43.669596, lng: -79.362199 },
 };
 
 export const MONTH_ABBR: Record<string, number> = {
-  Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
-  Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+  Jan: 0,
+  Feb: 1,
+  Mar: 2,
+  Apr: 3,
+  May: 4,
+  Jun: 5,
+  Jul: 6,
+  Aug: 7,
+  Sep: 8,
+  Oct: 9,
+  Nov: 10,
+  Dec: 11,
 };
 
 export const PROGRAM_LOCATION_ADDRESSES: Record<string, string> = {
@@ -250,8 +260,16 @@ export const PROGRAM_LOCATION_ADDRESSES: Record<string, string> = {
 export const locationGeoCache = new Map<string, { lat: number; lng: number } | null>();
 
 export const GENERIC_OSM_TYPES = new Set([
-  'city', 'county', 'state', 'administrative', 'country',
-  'municipality', 'region', 'province', 'suburb', 'quarter',
+  'city',
+  'county',
+  'state',
+  'administrative',
+  'country',
+  'municipality',
+  'region',
+  'province',
+  'suburb',
+  'quarter',
 ]);
 
 // ─── Pickleball mappings (module-level cache) ─────────────────────────────────
@@ -281,12 +299,11 @@ export function getPickleballMappings(
     }
   }
 
-  const pbOnly: PickleballOnlyCourt[] = [...unmatchedByLocation.entries()]
-    .map(([loc, entries]) => ({
-      location: loc,
-      entries,
-      ...PICKLEBALL_ONLY_COORDS[loc],
-    }));
+  const pbOnly: PickleballOnlyCourt[] = [...unmatchedByLocation.entries()].map(([loc, entries]) => ({
+    location: loc,
+    entries,
+    ...PICKLEBALL_ONLY_COORDS[loc],
+  }));
 
   _pbByDropdown = pbByDropdown;
   _pbOnly = pbOnly;
@@ -366,13 +383,20 @@ export function parsePrograms(
   const headers = parseCsvLine(headerLine);
   const pIdx = (col: string) => headers.indexOf(col);
 
-  const iCourseId = pIdx('Course_ID'), iLocId = pIdx('Location ID');
-  const iLocName = pIdx('Location Name'), iSection = pIdx('Section');
-  const iCourseTitle = pIdx('Course Title'), iDays = pIdx('Days of The Week');
-  const iFromTo = pIdx('From To'), iStartHr = pIdx('Start Hour');
-  const iStartMin = pIdx('Start Min'), iEndHr = pIdx('End Hour');
-  const iEndMin = pIdx('End Min'), iMinAge = pIdx('Min Age');
-  const iMaxAge = pIdx('Max Age'), iStatus = pIdx('Status / Information');
+  const iCourseId = pIdx('Course_ID'),
+    iLocId = pIdx('Location ID');
+  const iLocName = pIdx('Location Name'),
+    iSection = pIdx('Section');
+  const iCourseTitle = pIdx('Course Title'),
+    iDays = pIdx('Days of The Week');
+  const iFromTo = pIdx('From To'),
+    iStartHr = pIdx('Start Hour');
+  const iStartMin = pIdx('Start Min'),
+    iEndHr = pIdx('End Hour');
+  const iEndMin = pIdx('End Min'),
+    iMinAge = pIdx('Min Age');
+  const iMaxAge = pIdx('Max Age'),
+    iStatus = pIdx('Status / Information');
   const iActivityUrl = pIdx('Activity URL');
 
   const programs: TennisProgram[] = [];
@@ -394,9 +418,12 @@ export function parsePrograms(
 
     const minAgeYr = toYears(cells[iMinAge]?.trim());
     const maxAgeYr = toYears(cells[iMaxAge]?.trim());
-    const ageRange = minAgeYr !== null && maxAgeYr !== null
-      ? `${minAgeYr}–${maxAgeYr} yr`
-      : minAgeYr !== null ? `${minAgeYr}+ yr` : 'All ages';
+    const ageRange =
+      minAgeYr !== null && maxAgeYr !== null
+        ? `${minAgeYr}–${maxAgeYr} yr`
+        : minAgeYr !== null
+          ? `${minAgeYr}+ yr`
+          : 'All ages';
 
     const courtMatch = locationName ? matchCourtName(locationName, byDropdown, byName) : undefined;
     if (courtMatch && !locationGeoCache.has(locationId)) {
@@ -405,16 +432,19 @@ export function parsePrograms(
     const cached = locationGeoCache.get(locationId);
 
     programs.push({
-      courseId, locationId,
+      courseId,
+      locationId,
       locationName: locationName || address,
       address,
       title: cells[iCourseTitle]?.trim() || '',
       days: cells[iDays]?.trim() || '',
       dateRange: cells[iFromTo]?.trim() || '',
-      timeRange, ageRange,
-      minAgeYr, maxAgeYr,
+      timeRange,
+      ageRange,
+      minAgeYr,
+      maxAgeYr,
       status: cells[iStatus]?.trim() || '',
-      activityUrl: iActivityUrl >= 0 ? (cells[iActivityUrl]?.trim() || '') : '',
+      activityUrl: iActivityUrl >= 0 ? cells[iActivityUrl]?.trim() || '' : '',
       lat: cached?.lat,
       lng: cached?.lng,
       matchedDropdown: courtMatch?.dropdown,
@@ -437,17 +467,23 @@ export async function geocodeQuery(query: string): Promise<{ lat: number; lng: n
     if (GENERIC_OSM_TYPES.has(r.type) || GENERIC_OSM_TYPES.has(r.class)) continue;
     const lat = parseFloat(r.lat);
     const lng = parseFloat(r.lon);
-    if (haversineKm(43.70, -79.38, lat, lng) > 35) continue;
+    if (haversineKm(43.7, -79.38, lat, lng) > 35) continue;
     return { lat, lng };
   }
   return null;
 }
 
-export async function geocodeLocationId(locationId: string, locationName: string): Promise<{ lat: number; lng: number } | null> {
+export async function geocodeLocationId(
+  locationId: string,
+  locationName: string,
+): Promise<{ lat: number; lng: number } | null> {
   if (locationGeoCache.has(locationId)) return locationGeoCache.get(locationId) ?? null;
   const address = PROGRAM_LOCATION_ADDRESSES[locationId] || '';
   const query = locationName ? `${locationName} Toronto` : address;
-  if (!query) { locationGeoCache.set(locationId, null); return null; }
+  if (!query) {
+    locationGeoCache.set(locationId, null);
+    return null;
+  }
   try {
     const coords = await geocodeQuery(query);
     locationGeoCache.set(locationId, coords);
@@ -461,9 +497,9 @@ export async function geocodeLocationId(locationId: string, locationName: string
 // ─── Marker HTML ──────────────────────────────────────────────────────────────
 
 export function hasPublicHours(court: CourtWithCount): boolean {
-  return court.courtType.toLowerCase() === 'club'
-    && !!court.clubInfo
-    && !court.clubInfo.toLowerCase().includes('private');
+  return (
+    court.courtType.toLowerCase() === 'club' && !!court.clubInfo && !court.clubInfo.toLowerCase().includes('private')
+  );
 }
 
 // Half-and-half circle (two markers at once, e.g. active players + a program).
@@ -479,9 +515,10 @@ const splitMarkerSvg = (s: number, colorA: string, colorB: string, label: string
 // Single-color circle, with an optional centered count label.
 const soloMarkerSvg = (s: number, color: string, opacity: number, label?: string, fs?: number): string => {
   const r = s / 2;
-  const text = label != null
-    ? `\n      <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>`
-    : '';
+  const text =
+    label != null
+      ? `\n      <text x="${r}" y="${r}" dominant-baseline="central" text-anchor="middle" fill="white" font-size="${fs}" font-family="sans-serif" font-weight="bold">${label}</text>`
+      : '';
   return `<svg width="${s}" height="${s}" xmlns="http://www.w3.org/2000/svg">
       <circle cx="${r}" cy="${r}" r="${r}" fill="${color}" opacity="${opacity}"/>${text}
     </svg>`;
@@ -506,10 +543,7 @@ const MARKER_SIZES = [16, 22, 28, 34];
 export function courtMarkerHtml(court: CourtWithCount, busiestCount = 0): string {
   const hasPlayers = court.count > 0;
   const bands = markerSizeBands(busiestCount);
-  const tier = court.count <= bands.small ? 0
-    : court.count <= bands.medium ? 1
-    : court.count <= bands.large ? 2
-    : 3;
+  const tier = court.count <= bands.small ? 0 : court.count <= bands.medium ? 1 : court.count <= bands.large ? 2 : 3;
   const s = !hasPlayers ? 12 : MARKER_SIZES[tier];
   const label = String(court.count);
   // Three-digit counts need to shrink to stay inside the circle.

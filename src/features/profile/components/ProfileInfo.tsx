@@ -11,8 +11,11 @@ import { Input } from '../../../components/Input';
 import { RacquetIcon } from '../../../components/RacquetIcon';
 import { SELECTABLE_SKILL_LEVELS, skillTier, leagueDivision, leagueAgeCategory } from '../../../utils/skillLevels';
 import {
-  defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts,
-  getCourtSuggestions, mergeCourtOptions,
+  defaultCourtOptions,
+  extractCourtsWithCoords,
+  extractDropdownCourts,
+  getCourtSuggestions,
+  mergeCourtOptions,
 } from '../../signup/utils/courtSearch';
 import { zoneFromCourts, ZONE_NAMES } from '../../../utils/zones';
 import { Sheet } from '../../../components/Sheet';
@@ -31,7 +34,11 @@ type Actions = {
   updateBio: (bio: string) => Promise<boolean>;
   updateAvatar: (url: string) => Promise<boolean>;
   updateSkills: (skill: number, pref: string) => Promise<boolean>;
-  updateLeagueAgeCategory: (league: "Men's" | "Women's" | '', ageCategory: 'Retired Pro' | 'Juniors' | '', visible: boolean) => Promise<boolean>;
+  updateLeagueAgeCategory: (
+    league: "Men's" | "Women's" | '',
+    ageCategory: 'Retired Pro' | 'Juniors' | '',
+    visible: boolean,
+  ) => Promise<boolean>;
   updateDisplayBadges: (badgeIds: string[]) => Promise<boolean>;
   updatePreferredCourts: (courts: string[], zone: string) => Promise<boolean>;
   updatePreferredZone: (zone: string) => Promise<boolean>;
@@ -50,7 +57,6 @@ interface Props {
   counters: Counters;
 }
 
-
 type Row = 'name' | 'phone' | 'whatsapp' | 'bio' | 'skill' | 'league' | 'courts' | 'favourites' | 'email' | null;
 
 // `action` renders left of the Pencil/X and is always visible — it holds the contact-method
@@ -64,7 +70,10 @@ const SectionHeader: React.FC<{
   action?: React.ReactNode;
 }> = ({ icon, label, editing, onEdit, onCancel, action }) => (
   <div className="flex items-center justify-between gap-3">
-    <span className="text-xs font-bold text-fg/70 uppercase tracking-widest flex items-center gap-1.5 min-w-0">{icon}{label}</span>
+    <span className="text-xs font-bold text-fg/70 uppercase tracking-widest flex items-center gap-1.5 min-w-0">
+      {icon}
+      {label}
+    </span>
     <div className="flex items-center gap-3 shrink-0">
       {action}
       <button
@@ -91,8 +100,8 @@ const ZonePickerSheet: React.FC<{
   <Sheet onClose={onClose} title="Your Zone" maxWidthClassName="max-w-md">
     <div className="p-6 pt-3 space-y-4">
       <p className="text-sm text-fg/70">
-        Your zone decides which tournament draw you are placed in. Any matches you are already
-        playing stay exactly as they are; the new zone applies to draws that haven&apos;t been made yet.
+        Your zone decides which tournament draw you are placed in. Any matches you are already playing stay exactly as
+        they are; the new zone applies to draws that haven&apos;t been made yet.
       </p>
       <div className="space-y-2">
         {ZONE_NAMES.map((z) => {
@@ -125,7 +134,9 @@ const ContactMethodToggle: React.FC<{
   disabled?: boolean;
   onChange: (on: boolean) => void;
 }> = ({ label, on, disabled, onChange }) => (
-  <label className={`flex items-center gap-2 select-none ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
+  <label
+    className={`flex items-center gap-2 select-none ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+  >
     <span className="text-[10px] font-bold uppercase tracking-widest text-fg/70 whitespace-nowrap">
       Contact Method: {label}
     </span>
@@ -155,9 +166,16 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
     let alive = true;
     fetch('/Tennis Courts Facilities - 4326.csv')
       .then((r) => (r.ok ? r.text() : ''))
-      .then((csv) => { if (alive && csv) { setCourtOptions(mergeCourtOptions(extractDropdownCourts(csv))); setCourtCoords(extractCourtsWithCoords(csv)); } })
+      .then((csv) => {
+        if (alive && csv) {
+          setCourtOptions(mergeCourtOptions(extractDropdownCourts(csv)));
+          setCourtCoords(extractCourtsWithCoords(csv));
+        }
+      })
       .catch(() => {});
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
   // Drafts
@@ -215,17 +233,27 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
     setVisibleDraft(!!user.profile_details_visible);
     setCourtsDraft(preferences.preferred_courts);
     setFavDraft(preferences.favourite_players);
-    setCourtInput(''); setFavInput(''); setEmailDraft(''); setEmailPassword(''); setEmailSent(false);
+    setCourtInput('');
+    setFavInput('');
+    setEmailDraft('');
+    setEmailPassword('');
+    setEmailSent(false);
     setEditing(row);
   };
-  const save = async (fn: () => Promise<boolean>) => { if (await fn()) setEditing(null); };
+  const save = async (fn: () => Promise<boolean>) => {
+    if (await fn()) setEditing(null);
+  };
 
   // Which channels the member wants to be reached on. Empty = no preference = all offered.
   const methods = contacts.preferred_mode_of_contact ?? [];
   const toggleMethod = (m: ContactMethod, on: boolean) =>
     actions.updateContactMethods(on ? [...methods, m] : methods.filter((x) => x !== m));
   // A channel with nothing behind it can't be a contact method, so its switch is disabled.
-  const hasWhatsapp = !!(contacts.whatsapp_contact?.trim() || contacts.whatsapp_same_as_phone || contacts.phone?.trim());
+  const hasWhatsapp = !!(
+    contacts.whatsapp_contact?.trim() ||
+    contacts.whatsapp_same_as_phone ||
+    contacts.phone?.trim()
+  );
   const methodToggle = (m: ContactMethod, label: string, available: boolean) => (
     <ContactMethodToggle
       label={label}
@@ -255,7 +283,8 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
   const addCourt = (court: string) => {
     const t = court.trim();
     if (!t || courtsDraft.includes(t)) return;
-    setCourtsDraft([...courtsDraft, t]); setCourtInput('');
+    setCourtsDraft([...courtsDraft, t]);
+    setCourtInput('');
   };
 
   const onPickAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -284,9 +313,11 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
       <div className="flex flex-col items-center gap-4 pb-5 border-b border-fg/5">
         <div className="relative">
           <div className="w-24 h-24 rounded-full bg-tennis-surface flex items-center justify-center overflow-hidden">
-            {user.avatar
-              ? <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              : <span className="text-4xl font-black text-fg">{initial}</span>}
+            {user.avatar ? (
+              <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              <span className="text-4xl font-black text-fg">{initial}</span>
+            )}
           </div>
           <button
             type="button"
@@ -303,35 +334,59 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
       <div className="divide-y divide-white/5">
         {/* Name */}
         <div className="py-3">
-          <SectionHeader icon={null} label="Name" editing={editing === 'name'} onEdit={() => open('name')} onCancel={() => setEditing(null)} />
+          <SectionHeader
+            icon={null}
+            label="Name"
+            editing={editing === 'name'}
+            onEdit={() => open('name')}
+            onCancel={() => setEditing(null)}
+          />
           {editing === 'name' ? (
             <div className="mt-2 flex gap-2">
               <Input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} />
-              <Button size="sm" onClick={() => save(() => actions.updateName(nameDraft))} isLoading={updateLoading}><Check className="w-4 h-4" /></Button>
+              <Button size="sm" onClick={() => save(() => actions.updateName(nameDraft))} isLoading={updateLoading}>
+                <Check className="w-4 h-4" />
+              </Button>
             </div>
-          ) : <p className="text-lg font-bold text-fg mt-0.5">{user.name || '—'}</p>}
+          ) : (
+            <p className="text-lg font-bold text-fg mt-0.5">{user.name || '—'}</p>
+          )}
         </div>
 
         {/* Phone */}
         <div className="py-3">
           <SectionHeader
-            icon={null} label="Phone" editing={editing === 'phone'}
-            onEdit={() => open('phone')} onCancel={() => setEditing(null)}
+            icon={null}
+            label="Phone"
+            editing={editing === 'phone'}
+            onEdit={() => open('phone')}
+            onCancel={() => setEditing(null)}
             action={methodToggle('text', 'SMS/Text', !!contacts.phone?.trim())}
           />
           {editing === 'phone' ? (
             <div className="mt-2 flex gap-2">
-              <Input value={phoneDraft} onChange={(e) => setPhoneDraft(formatPhone(e.target.value))} placeholder="(416)-555-0123" />
-              <Button size="sm" onClick={() => save(() => actions.updatePhone(phoneDraft))} isLoading={updateLoading}><Check className="w-4 h-4" /></Button>
+              <Input
+                value={phoneDraft}
+                onChange={(e) => setPhoneDraft(formatPhone(e.target.value))}
+                placeholder="(416)-555-0123"
+              />
+              <Button size="sm" onClick={() => save(() => actions.updatePhone(phoneDraft))} isLoading={updateLoading}>
+                <Check className="w-4 h-4" />
+              </Button>
             </div>
-          ) : <p className="text-lg font-bold text-fg mt-0.5">{contacts.phone || '—'}</p>}
+          ) : (
+            <p className="text-lg font-bold text-fg mt-0.5">{contacts.phone || '—'}</p>
+          )}
         </div>
 
         {/* WhatsApp Contact */}
         <div className="py-3">
           <SectionHeader
-            icon={null} label="WhatsApp Contact" editing={editing === 'whatsapp'}
-            onEdit={() => open('whatsapp')} onCancel={() => setEditing(null)}
+            icon={null}
+            label="WhatsApp Contact"
+            editing={editing === 'whatsapp'}
+            onEdit={() => open('whatsapp')}
+            onCancel={() => setEditing(null)}
             action={methodToggle('whatsapp', 'WhatsApp', hasWhatsapp)}
           />
           {editing === 'whatsapp' ? (
@@ -354,7 +409,8 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
                   separateDialCode
                   inputProps={{
                     placeholder: 'WhatsApp number',
-                    className: 'w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none',
+                    className:
+                      'w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none',
                   }}
                 />
               )}
@@ -369,27 +425,50 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
             </div>
           ) : (
             <p className="text-lg font-bold text-fg mt-0.5">
-              {contacts.whatsapp_same_as_phone ? 'Same as phone number' : (contacts.whatsapp_contact || '—')}
+              {contacts.whatsapp_same_as_phone ? 'Same as phone number' : contacts.whatsapp_contact || '—'}
             </p>
           )}
         </div>
 
         {/* Bio */}
         <div className="py-3">
-          <SectionHeader icon={null} label="Bio" editing={editing === 'bio'} onEdit={() => open('bio')} onCancel={() => setEditing(null)} />
+          <SectionHeader
+            icon={null}
+            label="Bio"
+            editing={editing === 'bio'}
+            onEdit={() => open('bio')}
+            onCancel={() => setEditing(null)}
+          />
           {editing === 'bio' ? (
             <div className="mt-2 space-y-2">
-              <textarea value={bioDraft} onChange={(e) => setBioDraft(e.target.value)} rows={3} maxLength={300}
+              <textarea
+                value={bioDraft}
+                onChange={(e) => setBioDraft(e.target.value)}
+                rows={3}
+                maxLength={300}
                 placeholder="Your tennis vibe: play times, rally or games, and any other details?"
-                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none" />
-              <Button size="sm" onClick={() => save(() => actions.updateBio(bioDraft))} isLoading={updateLoading}>Save</Button>
+                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
+              />
+              <Button size="sm" onClick={() => save(() => actions.updateBio(bioDraft))} isLoading={updateLoading}>
+                Save
+              </Button>
             </div>
-          ) : <p className="text-sm text-fg/70 mt-0.5">{user.bio?.trim() || <span className="text-fg/70">No bio yet.</span>}</p>}
+          ) : (
+            <p className="text-sm text-fg/70 mt-0.5">
+              {user.bio?.trim() || <span className="text-fg/70">No bio yet.</span>}
+            </p>
+          )}
         </div>
 
         {/* Skill */}
         <div className="py-3">
-          <SectionHeader icon={<RacquetIcon className="w-3.5 h-3.5 text-clay" />} label="Skill Level" editing={editing === 'skill'} onEdit={() => open('skill')} onCancel={() => setEditing(null)} />
+          <SectionHeader
+            icon={<RacquetIcon className="w-3.5 h-3.5 text-clay" />}
+            label="Skill Level"
+            editing={editing === 'skill'}
+            onEdit={() => open('skill')}
+            onCancel={() => setEditing(null)}
+          />
           {editing === 'skill' ? (
             <div className="mt-3 space-y-3">
               {/* Same control as signup: one column per level filling the width, an INSET border
@@ -405,7 +484,9 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
                       type="button"
                       onClick={() => setSkillDraft(level)}
                       className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
-                        active ? 'bg-clay/10 text-clay border-clay' : 'bg-fg/5 text-fg border-transparent hover:bg-fg/10'
+                        active
+                          ? 'bg-clay/10 text-clay border-clay'
+                          : 'bg-fg/5 text-fg border-transparent hover:bg-fg/10'
                       }`}
                     >
                       {level.toFixed(1)}
@@ -416,7 +497,13 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
               {/* skillBand is the same function the draw engine groups on, so this label and the
                   group a player actually lands in can never disagree. */}
               <p className="text-sm font-bold text-clay text-center">{skillBand(skillDraft)}</p>
-              <Button size="sm" onClick={() => save(() => actions.updateSkills(skillDraft, skillBand(skillDraft)))} isLoading={updateLoading}>Save</Button>
+              <Button
+                size="sm"
+                onClick={() => save(() => actions.updateSkills(skillDraft, skillBand(skillDraft)))}
+                isLoading={updateLoading}
+              >
+                Save
+              </Button>
             </div>
           ) : (
             <div className="mt-1 flex items-center gap-2">
@@ -427,7 +514,13 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
 
         {/* League */}
         <div className="py-3">
-          <SectionHeader icon={<Users className="w-3.5 h-3.5 text-clay" />} label="League" editing={editing === 'league'} onEdit={() => open('league')} onCancel={() => setEditing(null)} />
+          <SectionHeader
+            icon={<Users className="w-3.5 h-3.5 text-clay" />}
+            label="League"
+            editing={editing === 'league'}
+            onEdit={() => open('league')}
+            onCancel={() => setEditing(null)}
+          />
           {editing === 'league' ? (
             <div className="mt-2 space-y-3">
               <div className="flex flex-wrap gap-2">
@@ -480,22 +573,41 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
                 <p className="text-[11px] text-fg/70">Choose a league above to unlock Retired Pro / Juniors.</p>
               )}
               <label className="flex items-center gap-2 cursor-pointer text-sm text-fg/70">
-                <input type="checkbox" checked={visibleDraft} onChange={(e) => setVisibleDraft(e.target.checked)} className="accent-clay" />
+                <input
+                  type="checkbox"
+                  checked={visibleDraft}
+                  onChange={(e) => setVisibleDraft(e.target.checked)}
+                  className="accent-clay"
+                />
                 Make visible to others
               </label>
-              <Button size="sm" onClick={() => save(() => actions.updateLeagueAgeCategory(leagueDraft, ageCategoryDraft, visibleDraft))} isLoading={updateLoading}>Save</Button>
+              <Button
+                size="sm"
+                onClick={() => save(() => actions.updateLeagueAgeCategory(leagueDraft, ageCategoryDraft, visibleDraft))}
+                isLoading={updateLoading}
+              >
+                Save
+              </Button>
             </div>
           ) : (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {leagueDivision(stats.league) && (
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{leagueDivision(stats.league)} League</span>
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">
+                  {leagueDivision(stats.league)} League
+                </span>
               )}
               {leagueAgeCategory(stats.league) && (
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{leagueAgeCategory(stats.league)}</span>
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">
+                  {leagueAgeCategory(stats.league)}
+                </span>
               )}
-              {!leagueDivision(stats.league)
-                ? <span className="text-sm text-fg/70">Not set.</span>
-                : <span className="text-[11px] text-fg/70 ml-1">{user.profile_details_visible ? 'Visible to others' : 'Hidden from others'}</span>}
+              {!leagueDivision(stats.league) ? (
+                <span className="text-sm text-fg/70">Not set.</span>
+              ) : (
+                <span className="text-[11px] text-fg/70 ml-1">
+                  {user.profile_details_visible ? 'Visible to others' : 'Hidden from others'}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -503,7 +615,8 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
         {/* Badges */}
         <div className="py-3">
           <span className="text-xs font-bold text-fg/70 uppercase tracking-widest flex items-center gap-1.5">
-            <Award className="w-3.5 h-3.5 text-clay" />Badges
+            <Award className="w-3.5 h-3.5 text-clay" />
+            Badges
           </span>
           {/* Skill tag and badges share one row — badges use the same pill so the whole line
               reads as one set of labels. */}
@@ -521,36 +634,84 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
 
         {/* Courts */}
         <div className="py-3">
-          <SectionHeader icon={<MapPin className="w-3.5 h-3.5 text-clay" />} label="Courts" editing={editing === 'courts'} onEdit={() => open('courts')} onCancel={() => setEditing(null)} />
+          <SectionHeader
+            icon={<MapPin className="w-3.5 h-3.5 text-clay" />}
+            label="Courts"
+            editing={editing === 'courts'}
+            onEdit={() => open('courts')}
+            onCancel={() => setEditing(null)}
+          />
           {editing === 'courts' ? (
             <div className="mt-2 space-y-2">
               {courtsDraft.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {courtsDraft.map((c) => (
-                    <button key={c} type="button" onClick={() => setCourtsDraft(courtsDraft.filter((x) => x !== c))}
-                      className="px-2.5 py-1 rounded-lg text-xs font-bold bg-clay text-fg flex items-center gap-1.5">{c} <span className="opacity-70">✕</span></button>
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCourtsDraft(courtsDraft.filter((x) => x !== c))}
+                      className="px-2.5 py-1 rounded-lg text-xs font-bold bg-clay text-fg flex items-center gap-1.5"
+                    >
+                      {c} <span className="opacity-70">✕</span>
+                    </button>
                   ))}
                 </div>
               )}
               <div className="flex gap-2">
-                <Input placeholder="Search courts…" value={courtInput} onChange={(e) => setCourtInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCourt(courtInput); } }} />
-                <Button size="sm" variant="clay" className="px-3 shrink-0" onClick={() => addCourt(courtInput)} disabled={!courtInput.trim()}>Add</Button>
+                <Input
+                  placeholder="Search courts…"
+                  value={courtInput}
+                  onChange={(e) => setCourtInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addCourt(courtInput);
+                    }
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="clay"
+                  className="px-3 shrink-0"
+                  onClick={() => addCourt(courtInput)}
+                  disabled={!courtInput.trim()}
+                >
+                  Add
+                </Button>
               </div>
               {courtSuggestions.length > 0 && (
                 <div className="max-h-40 overflow-y-auto rounded-xl bg-tennis-dark/95 p-1">
                   {courtSuggestions.map((c) => (
-                    <button key={c} type="button" onClick={() => addCourt(c)} className="w-full text-left px-3 py-2 text-sm text-fg rounded-lg hover:bg-clay/20">{c}</button>
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => addCourt(c)}
+                      className="w-full text-left px-3 py-2 text-sm text-fg rounded-lg hover:bg-clay/20"
+                    >
+                      {c}
+                    </button>
                   ))}
                 </div>
               )}
-              <Button size="sm" onClick={() => save(() => actions.updatePreferredCourts(courtsDraft, computeZone(courtsDraft)))} isLoading={updateLoading}>Save</Button>
+              <Button
+                size="sm"
+                onClick={() => save(() => actions.updatePreferredCourts(courtsDraft, computeZone(courtsDraft)))}
+                isLoading={updateLoading}
+              >
+                Save
+              </Button>
             </div>
           ) : (
             <div className="mt-1 flex flex-wrap gap-1.5">
-              {preferences.preferred_courts.length > 0
-                ? preferences.preferred_courts.map((c) => <span key={c} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{c}</span>)
-                : <span className="text-sm text-fg/70">None set.</span>}
+              {preferences.preferred_courts.length > 0 ? (
+                preferences.preferred_courts.map((c) => (
+                  <span key={c} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">
+                    {c}
+                  </span>
+                ))
+              ) : (
+                <span className="text-sm text-fg/70">None set.</span>
+              )}
             </div>
           )}
         </div>
@@ -561,7 +722,8 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
         <div className="py-3">
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs font-bold text-fg/70 uppercase tracking-widest flex items-center gap-1.5 min-w-0">
-              <MapPin className="w-3.5 h-3.5 text-clay" />Zone
+              <MapPin className="w-3.5 h-3.5 text-clay" />
+              Zone
             </span>
             <button
               type="button"
@@ -572,15 +734,25 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
             </button>
           </div>
           <div className="mt-1 flex flex-wrap gap-1.5">
-            {preferences.preferred_zone
-              ? <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{preferences.preferred_zone}</span>
-              : <span className="text-sm text-fg/70">None set.</span>}
+            {preferences.preferred_zone ? (
+              <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">
+                {preferences.preferred_zone}
+              </span>
+            ) : (
+              <span className="text-sm text-fg/70">None set.</span>
+            )}
           </div>
         </div>
 
         {/* Favourites */}
         <div className="py-3">
-          <SectionHeader icon={<Star className="w-3.5 h-3.5 text-clay" />} label="Favourites" editing={editing === 'favourites'} onEdit={() => open('favourites')} onCancel={() => setEditing(null)} />
+          <SectionHeader
+            icon={<Star className="w-3.5 h-3.5 text-clay" />}
+            label="Favourites"
+            editing={editing === 'favourites'}
+            onEdit={() => open('favourites')}
+            onCancel={() => setEditing(null)}
+          />
           {/* A search box over what members have actually picked, ranked by popularity — the old
               version was a grid of five hardcoded names as toggle chips. Chosen names are pills,
               same treatment as Courts above, so the two sections read as one card. */}
@@ -623,7 +795,12 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
                 placeholder="Search or add a player…"
                 value={favInput}
                 onChange={(e) => setFavInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFavourite(favInput); } }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addFavourite(favInput);
+                  }
+                }}
               />
 
               {favSuggestions.length > 0 && (
@@ -652,13 +829,25 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
                 </button>
               )}
 
-              <Button size="sm" onClick={() => save(() => actions.updateFavouritePlayers(favDraft))} isLoading={updateLoading}>Save</Button>
+              <Button
+                size="sm"
+                onClick={() => save(() => actions.updateFavouritePlayers(favDraft))}
+                isLoading={updateLoading}
+              >
+                Save
+              </Button>
             </div>
           ) : (
             <div className="mt-1 flex flex-wrap gap-1.5">
-              {preferences.favourite_players.length > 0
-                ? preferences.favourite_players.map((p) => <span key={p} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{p}</span>)
-                : <span className="text-sm text-fg/70">None set.</span>}
+              {preferences.favourite_players.length > 0 ? (
+                preferences.favourite_players.map((p) => (
+                  <span key={p} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">
+                    {p}
+                  </span>
+                ))
+              ) : (
+                <span className="text-sm text-fg/70">None set.</span>
+              )}
             </div>
           )}
         </div>
@@ -668,7 +857,9 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
         <div className="py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-widest text-fg/70">Email Notifications</p>
-            <p className="text-xs text-fg/70 mt-0.5">Challenge/rally updates and your weekly incomplete-matches reminder.</p>
+            <p className="text-xs text-fg/70 mt-0.5">
+              Challenge/rally updates and your weekly incomplete-matches reminder.
+            </p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer shrink-0">
             <input
@@ -697,30 +888,66 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
             <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Change Email Address</p>
             {emailSent ? (
               <div className="space-y-2">
-                <p className="text-sm text-fg/70">Verification sent to <span className="text-fg">{emailDraft}</span>. Confirm it, then refresh.</p>
+                <p className="text-sm text-fg/70">
+                  Verification sent to <span className="text-fg">{emailDraft}</span>. Confirm it, then refresh.
+                </p>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => actions.refreshEmailChange()}>Refresh</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Done</Button>
+                  <Button size="sm" variant="outline" onClick={() => actions.refreshEmailChange()}>
+                    Refresh
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                    Done
+                  </Button>
                 </div>
               </div>
             ) : (
               <>
-                <Input type="email" placeholder="New email address" value={emailDraft} onChange={(e) => setEmailDraft(e.target.value)} />
-                <Input type="password" placeholder="Current password" value={emailPassword} onChange={(e) => setEmailPassword(e.target.value)} />
+                <Input
+                  type="email"
+                  placeholder="New email address"
+                  value={emailDraft}
+                  onChange={(e) => setEmailDraft(e.target.value)}
+                />
+                <Input
+                  type="password"
+                  placeholder="Current password"
+                  value={emailPassword}
+                  onChange={(e) => setEmailPassword(e.target.value)}
+                />
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={async () => { if (await actions.changeEmail(emailDraft, emailPassword)) setEmailSent(true); }} isLoading={updateLoading}>Send verification</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      if (await actions.changeEmail(emailDraft, emailPassword)) setEmailSent(true);
+                    }}
+                    isLoading={updateLoading}
+                  >
+                    Send verification
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                    Cancel
+                  </Button>
                 </div>
               </>
             )}
           </div>
         ) : (
-          <button type="button" onClick={() => open('email')} className="text-xs font-semibold text-clay hover:text-clay/80 transition-colors">Change email address</button>
+          <button
+            type="button"
+            onClick={() => open('email')}
+            className="text-xs font-semibold text-clay hover:text-clay/80 transition-colors"
+          >
+            Change email address
+          </button>
         )}
       </div>
 
       {message?.text && (
-        <p className={`text-sm font-semibold mt-3 ${message.type === 'success' ? 'text-badge-win' : 'text-badge-loss'}`}>{message.text}</p>
+        <p
+          className={`text-sm font-semibold mt-3 ${message.type === 'success' ? 'text-badge-win' : 'text-badge-loss'}`}
+        >
+          {message.text}
+        </p>
       )}
 
       <AnimatePresence>

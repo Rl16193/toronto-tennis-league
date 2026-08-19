@@ -12,7 +12,8 @@ export const AvailabilityModal: React.FC<{ onClose: () => void; onDone?: () => v
   const { updateLoading, actions } = useProfileActions();
   const [selected, setSelected] = useState<string[]>(profile?.preferences.availability_tags || []);
 
-  const toggle = (id: string) => setSelected((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
+  const toggle = (id: string) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
 
   const handleSave = async () => {
     if (await actions.updateAvailabilityTags(selected)) {
@@ -31,14 +32,18 @@ export const AvailabilityModal: React.FC<{ onClose: () => void; onDone?: () => v
               type="button"
               onClick={() => toggle(t.id)}
               className={`px-3.5 py-2 rounded-xl text-sm font-bold border transition-colors ${
-                selected.includes(t.id) ? 'bg-clay border-clay text-white' : 'bg-white text-ink border-fg/10 hover:bg-white/90'
+                selected.includes(t.id)
+                  ? 'bg-clay border-clay text-white'
+                  : 'bg-white text-ink border-fg/10 hover:bg-white/90'
               }`}
             >
               {t.label}
             </button>
           ))}
         </div>
-        <Button onClick={handleSave} isLoading={updateLoading} className="w-full">Save Availability</Button>
+        <Button onClick={handleSave} isLoading={updateLoading} className="w-full">
+          Save Availability
+        </Button>
       </div>
     </Sheet>
   );

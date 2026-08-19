@@ -3,9 +3,7 @@ import { collection, doc, getDoc, getDocs, onSnapshot, query, where } from 'fire
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { useTasks } from '../tasks/useTasks';
-import {
-  GroupLesson, Redemption, Reward, ServiceCategory, currentMonthKey,
-} from './types';
+import { GroupLesson, Redemption, Reward, ServiceCategory, currentMonthKey } from './types';
 
 export * from './types';
 
@@ -34,11 +32,12 @@ export function useServicesCatalog() {
           snap.docs
             .map((d) => ({ id: d.id, ...(d.data() as Omit<Reward, 'id'>) }))
             .filter((r) => r.active !== false)
-            .sort((a, b) =>
-              a.provider_name.localeCompare(b.provider_name) || (a.sort ?? 0) - (b.sort ?? 0)),
+            .sort((a, b) => a.provider_name.localeCompare(b.provider_name) || (a.sort ?? 0) - (b.sort ?? 0)),
         );
       })
-      .catch(() => { /* catalog unreadable — the page shows its empty state */ })
+      .catch(() => {
+        /* catalog unreadable — the page shows its empty state */
+      })
       .finally(() => setLoading(false));
   }, [reloadKey]);
 
@@ -50,7 +49,10 @@ export function useServicesCatalog() {
       const category = r.category ?? 'stringing';
       const list = cats.get(category) ?? [];
       const existing = list.find((p) => p.id === r.provider_id);
-      if (existing) { existing.offers.push(r); return; }
+      if (existing) {
+        existing.offers.push(r);
+        return;
+      }
       list.push({
         id: r.provider_id,
         name: r.provider_name,
@@ -77,21 +79,27 @@ const avatarCache = new Map<string, string>();
 
 export function useProviderAvatars(uids: (string | undefined)[]): Record<string, string> {
   const key = [...new Set(uids.filter((u): u is string => !!u))].sort().join(',');
-  const [avatars, setAvatars] = useState<Record<string, string>>(
-    () => Object.fromEntries(avatarCache),
-  );
+  const [avatars, setAvatars] = useState<Record<string, string>>(() => Object.fromEntries(avatarCache));
 
   useEffect(() => {
     const missing = (key ? key.split(',') : []).filter((u) => !avatarCache.has(u));
     if (missing.length === 0) return;
     let cancelled = false;
-    Promise.all(missing.map((u) => getDoc(doc(db, 'users', u)).then((s) => [u, s.data()?.avatar as string | undefined] as const)))
+    Promise.all(
+      missing.map((u) => getDoc(doc(db, 'users', u)).then((s) => [u, s.data()?.avatar as string | undefined] as const)),
+    )
       .then((entries) => {
-        entries.forEach(([u, url]) => { if (url) avatarCache.set(u, url); });
+        entries.forEach(([u, url]) => {
+          if (url) avatarCache.set(u, url);
+        });
         if (!cancelled) setAvatars(Object.fromEntries(avatarCache));
       })
-      .catch(() => { /* no photo — the row falls back to an initial */ });
-    return () => { cancelled = true; };
+      .catch(() => {
+        /* no photo — the row falls back to an initial */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [key]);
 
   return avatars;
@@ -110,7 +118,11 @@ export function useRedeemablePoints() {
   const [spentLoaded, setSpentLoaded] = useState(false);
 
   useEffect(() => {
-    if (!user) { setSpent(0); setSpentLoaded(true); return; }
+    if (!user) {
+      setSpent(0);
+      setSpentLoaded(true);
+      return;
+    }
     return onSnapshot(
       doc(db, 'offers', user.uid),
       (snap) => {
@@ -148,7 +160,11 @@ export function useMyRedemptions() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) { setRedemptions([]); setLoading(false); return; }
+    if (!user) {
+      setRedemptions([]);
+      setLoading(false);
+      return;
+    }
     return onSnapshot(
       query(collection(db, 'redemptions'), where('uid', '==', user.uid)),
       (snap) => {
@@ -173,8 +189,7 @@ export function useMyRedemptions() {
 export function useProviderRole() {
   const { profile } = useAuth();
   const prefs = profile?.preferences as
-    | { stringer?: boolean; stringer_id?: string; coach?: boolean; coach_id?: string }
-    | undefined;
+    { stringer?: boolean; stringer_id?: string; coach?: boolean; coach_id?: string } | undefined;
   if (prefs?.stringer === true && prefs.stringer_id) {
     return { providerId: prefs.stringer_id, role: 'stringer' as const };
   }
@@ -191,7 +206,11 @@ export function useProviderRedemptions() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!providerId) { setRedemptions([]); setLoading(false); return; }
+    if (!providerId) {
+      setRedemptions([]);
+      setLoading(false);
+      return;
+    }
     // Sorted client-side rather than with orderBy: pairing orderBy with the id filter would
     // need a composite index, and this project ships no firestore.indexes.json.
     return onSnapshot(
@@ -216,7 +235,10 @@ export function usePendingRedemptionReviews(enabled: boolean) {
   const [items, setItems] = useState<Redemption[]>([]);
 
   useEffect(() => {
-    if (!enabled) { setItems([]); return; }
+    if (!enabled) {
+      setItems([]);
+      return;
+    }
     return onSnapshot(
       query(collection(db, 'redemptions'), where('status', 'in', ['flagged', 'cancel_requested'])),
       (snap) => setItems(snap.docs.map((d) => d.data() as Redemption)),
@@ -240,7 +262,10 @@ export function useGroupLesson() {
   useEffect(() => {
     return onSnapshot(
       doc(db, 'group_lessons', month),
-      (snap) => { setLesson(snap.exists() ? (snap.data() as GroupLesson) : null); setLoading(false); },
+      (snap) => {
+        setLesson(snap.exists() ? (snap.data() as GroupLesson) : null);
+        setLoading(false);
+      },
       () => setLoading(false),
     );
   }, [month]);

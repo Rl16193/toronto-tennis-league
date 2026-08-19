@@ -13,10 +13,10 @@ const call = <T, R>(name: string) => {
 export const redeemReward = call<{ rewardId: string }, { code: string }>('redeemReward');
 export const markCouponUsed = call<{ code: string }, { ok: boolean }>('markCouponUsed');
 export const flagCoupon = call<{ code: string; note?: string }, { ok: boolean }>('flagCoupon');
-export const requestCancellation =
-  call<{ code: string; reason?: string }, { ok: boolean }>('requestCancellation');
-export const reviewRedemption =
-  call<{ code: string; approve: boolean; note?: string }, { ok: boolean }>('reviewRedemption');
+export const requestCancellation = call<{ code: string; reason?: string }, { ok: boolean }>('requestCancellation');
+export const reviewRedemption = call<{ code: string; approve: boolean; note?: string }, { ok: boolean }>(
+  'reviewRedemption',
+);
 
 // Free monthly group lesson — the 4-spot cap is enforced in a transaction so two people
 // tapping Join at once can't both take the last seat.

@@ -9,20 +9,15 @@ const getRoundTone = (round: string) => {
   return 'bg-tennis-dark/40 border-fg/10';
 };
 
-const isPlaceholder = (name?: string) =>
-  (name || '').toLowerCase().startsWith('winner of ');
+const isPlaceholder = (name?: string) => (name || '').toLowerCase().startsWith('winner of ');
 
 export const getRoundState = (roundMatches: TournamentMatch[]): 'preview' | 'loading' | 'started' | 'finished' => {
-  const real = roundMatches.filter(
-    (m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_'),
-  );
+  const real = roundMatches.filter((m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_'));
   if (real.length === 0) return 'preview';
   // Any slot still waiting on a previous-round winner → Loading
   if (real.some((m) => isPlaceholder(m.player_1_name) || isPlaceholder(m.player_2_name))) return 'loading';
   // round is "started" once at least one match has both slots filled with real players
-  const anyReady = real.some(
-    (m) => m.player_1_name !== PLAYER_LOADING && m.player_2_name !== PLAYER_LOADING,
-  );
+  const anyReady = real.some((m) => m.player_1_name !== PLAYER_LOADING && m.player_2_name !== PLAYER_LOADING);
   if (!anyReady) return 'preview';
   if (real.every((m) => !!m.winner_uid)) return 'finished';
   return 'started';
@@ -44,18 +39,28 @@ type Props = {
 };
 
 export const BracketView: React.FC<Props> = ({
-  matches, drawTitle, editMode, editPlayers = [], onEditPlayer, onRemovePlayer,
-  isCreator, onSubmitScore, submittableMatchIds, pendingMatchIds,
-  roundDeadlines = {}, onUpdateDeadline,
+  matches,
+  drawTitle,
+  editMode,
+  editPlayers = [],
+  onEditPlayer,
+  onRemovePlayer,
+  isCreator,
+  onSubmitScore,
+  submittableMatchIds,
+  pendingMatchIds,
+  roundDeadlines = {},
+  onUpdateDeadline,
 }) => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
 
   const rounds = useMemo(
-    () => roundLabels.map((round) => ({
-      round,
-      matches: matches.filter((m) => m.round === round).sort((a, b) => a.position - b.position),
-    })),
+    () =>
+      roundLabels.map((round) => ({
+        round,
+        matches: matches.filter((m) => m.round === round).sort((a, b) => a.position - b.position),
+      })),
     [matches, roundLabels],
   );
 
@@ -80,8 +85,17 @@ export const BracketView: React.FC<Props> = ({
               {(() => {
                 const rs = getRoundState(round.matches);
                 return (
-                  <p className={`text-center text-xs uppercase tracking-widest font-black ${rs === 'finished' ? 'text-clay' : rs === 'loading' ? 'text-fg/70' : 'text-fg'}`}>
-                    {round.round} — {rs === 'preview' ? 'Live Preview' : rs === 'loading' ? 'Loading' : rs === 'started' ? 'Started' : 'Finished'}
+                  <p
+                    className={`text-center text-xs uppercase tracking-widest font-black ${rs === 'finished' ? 'text-clay' : rs === 'loading' ? 'text-fg/70' : 'text-fg'}`}
+                  >
+                    {round.round} —{' '}
+                    {rs === 'preview'
+                      ? 'Live Preview'
+                      : rs === 'loading'
+                        ? 'Loading'
+                        : rs === 'started'
+                          ? 'Started'
+                          : 'Finished'}
                   </p>
                 );
               })()}

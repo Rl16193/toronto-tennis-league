@@ -66,7 +66,7 @@ export function buildZoneTierGroups(
 
   type Bucket = { band: string; zone: string; players: TournamentPlayer[] };
   const multiBuckets: Bucket[] = []; // zones with ≥2 players in a band
-  const singletons: Bucket[] = [];   // zones with exactly 1 player in a band
+  const singletons: Bucket[] = []; // zones with exactly 1 player in a band
 
   for (const band of bands) {
     const bandPlayers = players.filter((p) => bandOf(p) === band);
@@ -132,19 +132,33 @@ export function buildZoneTierGroups(
 /**
  * Build Firestore write objects for all matches in one group.
  */
-export function buildRRGroupMatchFields(params: {
-  eventId: string;
-  drawKey: string;
-  draw: DrawConfig;
-  groupIndex: number;
-  groupLabel?: string;
-  labelCustom?: boolean;
-  groupPlayers: TournamentPlayer[];
-  pairings: [number, number][];
-  advancementCount: number;
-  started: boolean;
-}, startPosition = 1): Array<{ docId: string; fields: Record<string, unknown> }> {
-  const { eventId, drawKey, draw, groupIndex, groupLabel, labelCustom, groupPlayers, pairings, advancementCount, started } = params;
+export function buildRRGroupMatchFields(
+  params: {
+    eventId: string;
+    drawKey: string;
+    draw: DrawConfig;
+    groupIndex: number;
+    groupLabel?: string;
+    labelCustom?: boolean;
+    groupPlayers: TournamentPlayer[];
+    pairings: [number, number][];
+    advancementCount: number;
+    started: boolean;
+  },
+  startPosition = 1,
+): Array<{ docId: string; fields: Record<string, unknown> }> {
+  const {
+    eventId,
+    drawKey,
+    draw,
+    groupIndex,
+    groupLabel,
+    labelCustom,
+    groupPlayers,
+    pairings,
+    advancementCount,
+    started,
+  } = params;
 
   return pairings.map(([i1, i2], idx) => {
     const p1 = groupPlayers[i1] ?? null;
@@ -206,19 +220,51 @@ export function buildSafeGroupRewrite(params: {
   advancementCount: number;
   started: boolean;
 }): { toDelete: string[]; toWrite: Array<{ docId: string; fields: Record<string, unknown> }> } {
-  const { eventId, drawKey, draw, groupIndex, groupLabel, labelCustom, oldMatches, newPlayers, advancementCount, started } = params;
+  const {
+    eventId,
+    drawKey,
+    draw,
+    groupIndex,
+    groupLabel,
+    labelCustom,
+    oldMatches,
+    newPlayers,
+    advancementCount,
+    started,
+  } = params;
   const completedOld = oldMatches.filter((m) => m.status === 'complete');
   const pendingOld = oldMatches.filter((m) => m.status !== 'complete');
   const playedPairs = new Set(completedOld.map((m) => [m.player_1_uid, m.player_2_uid].sort().join('|')));
-  const basePairings = newPlayers.length >= 2 ? generateGroupPairings(newPlayers.length) : newPlayers.length === 1 ? [[0, 1]] as [number, number][] : [];
+  const basePairings =
+    newPlayers.length >= 2
+      ? generateGroupPairings(newPlayers.length)
+      : newPlayers.length === 1
+        ? ([[0, 1]] as [number, number][])
+        : [];
   const pairings = basePairings.filter(([i1, i2]) => {
-    const a = newPlayers[i1]?.uid, b = newPlayers[i2]?.uid;
+    const a = newPlayers[i1]?.uid,
+      b = newPlayers[i2]?.uid;
     return !(a && b && playedPairs.has([a, b].sort().join('|')));
   });
   const startPosition = 1 + Math.max(0, ...oldMatches.map((m) => m.position ?? 0));
-  const toWrite = newPlayers.length > 0
-    ? buildRRGroupMatchFields({ eventId, drawKey, draw, groupIndex, groupLabel, labelCustom, groupPlayers: newPlayers, pairings, advancementCount, started }, startPosition)
-    : [];
+  const toWrite =
+    newPlayers.length > 0
+      ? buildRRGroupMatchFields(
+          {
+            eventId,
+            drawKey,
+            draw,
+            groupIndex,
+            groupLabel,
+            labelCustom,
+            groupPlayers: newPlayers,
+            pairings,
+            advancementCount,
+            started,
+          },
+          startPosition,
+        )
+      : [];
   return { toDelete: pendingOld.map((m) => m.id), toWrite };
 }
 
@@ -229,17 +275,19 @@ export function buildSafeGroupRewrite(params: {
  *
  * Sort: points DESC → gamesWon DESC. No completion bonus: see the note at the foot of the function.
  */
-export function computeGroupStandings(
-  groupMatches: TournamentMatch[],
-): RRStandingRow[] {
+export function computeGroupStandings(groupMatches: TournamentMatch[]): RRStandingRow[] {
   const playerMap = new Map<string, string>(); // uid → name
   for (const m of groupMatches) {
     if (m.player_1_uid) playerMap.set(m.player_1_uid, m.player_1_name);
     if (m.player_2_uid) playerMap.set(m.player_2_uid, m.player_2_name);
   }
 
-  const stats = new Map<string, { matchWins: number; matchLosses: number; gamesWon: number; gamesLost: number; points: number }>();
-  for (const uid of playerMap.keys()) stats.set(uid, { matchWins: 0, matchLosses: 0, gamesWon: 0, gamesLost: 0, points: 0 });
+  const stats = new Map<
+    string,
+    { matchWins: number; matchLosses: number; gamesWon: number; gamesLost: number; points: number }
+  >();
+  for (const uid of playerMap.keys())
+    stats.set(uid, { matchWins: 0, matchLosses: 0, gamesWon: 0, gamesLost: 0, points: 0 });
 
   for (const m of groupMatches) {
     if (m.status !== 'complete') continue;
@@ -261,14 +309,24 @@ export function computeGroupStandings(
     const p1Games = (m.set_1_player_1 ?? 0) + (m.set_2_player_1 ?? 0) + (m.set_3_player_1 ?? 0);
     const p2Games = (m.set_1_player_2 ?? 0) + (m.set_2_player_2 ?? 0) + (m.set_3_player_2 ?? 0);
     const winnerGames = winnerUid === m.player_1_uid ? p1Games : p2Games;
-    const loserGames  = winnerUid === m.player_1_uid ? p2Games : p1Games;
+    const loserGames = winnerUid === m.player_1_uid ? p2Games : p1Games;
 
     // Games are tracked for a walkover too: it normally has none, but a creator can enter a score
     // alongside the flag.
     const w = stats.get(winnerUid);
     const l = loserUid ? stats.get(loserUid) : undefined;
-    if (w) { w.matchWins++; w.gamesWon += winnerGames; w.gamesLost += loserGames; w.points += award.winnerPts; }
-    if (l) { l.matchLosses++; l.gamesWon += loserGames; l.gamesLost += winnerGames; l.points += award.loserPts; }
+    if (w) {
+      w.matchWins++;
+      w.gamesWon += winnerGames;
+      w.gamesLost += loserGames;
+      w.points += award.winnerPts;
+    }
+    if (l) {
+      l.matchLosses++;
+      l.gamesWon += loserGames;
+      l.gamesLost += winnerGames;
+      l.points += award.loserPts;
+    }
   }
 
   const rows: RRStandingRow[] = [];
@@ -276,7 +334,9 @@ export function computeGroupStandings(
     rows.push({ name: playerMap.get(userId) ?? '', userId, ...s, rank: 0 });
   }
   rows.sort((a, b) => b.points - a.points || b.gamesWon - a.gamesWon);
-  rows.forEach((r, i) => { r.rank = i + 1; });
+  rows.forEach((r, i) => {
+    r.rank = i + 1;
+  });
 
   // No completion bonus here. It used to add +5 to everyone the moment a group's last match
   // completed, which stopped being true when the bonus became the organizer's Group Bonus switch:
@@ -286,7 +346,11 @@ export function computeGroupStandings(
 }
 
 // Smallest knockout bracket size (power of two, min 2, cap 32) that seats `x` players.
-const nextPow2 = (x: number) => { let s = 2; while (s < x) s *= 2; return Math.min(s, 32); };
+const nextPow2 = (x: number) => {
+  let s = 2;
+  while (s < x) s *= 2;
+  return Math.min(s, 32);
+};
 
 /**
  * Each group's #1, strongest-first (points → gamesWon) so the top seed lands in slot 1.
@@ -345,8 +409,8 @@ export function buildRRKnockoutDocs(params: {
       if (!tm.next_match_id) return;
       const p1 = typeof tm.player_1 === 'number' ? (slotMap.get(tm.player_1) ?? null) : null;
       const p2 = typeof tm.player_2 === 'number' ? (slotMap.get(tm.player_2) ?? null) : null;
-      const real = (p1 && !p2 && typeof tm.player_2 === 'number') ? p1
-        : (!p1 && p2 && typeof tm.player_1 === 'number') ? p2 : null;
+      const real =
+        p1 && !p2 && typeof tm.player_2 === 'number' ? p1 : !p1 && p2 && typeof tm.player_1 === 'number' ? p2 : null;
       if (!real) return;
       let nextSlot = (tm.next_slot || '') as 'player_1' | 'player_2' | '';
       if (!nextSlot) {
@@ -362,7 +426,10 @@ export function buildRRKnockoutDocs(params: {
   const placeholder = (slot: number | string): string => {
     // Numeric slot with no seeded player → BYE (or an editable placeholder in manual-fill mode).
     if (typeof slot === 'number') return manualFill ? PLAYER_LOADING : BYE;
-    const srcId = slot.toLowerCase().match(/winner\s+(.+)/)?.[1]?.trim();
+    const srcId = slot
+      .toLowerCase()
+      .match(/winner\s+(.+)/)?.[1]
+      ?.trim();
     if (!srcId) return PLAYER_LOADING;
     const src = template.find((m) => m.match_id === srcId);
     if (!src) return `Winner of ${srcId.toUpperCase()}`;
@@ -416,5 +483,5 @@ export function deriveRRConfig(rrMatches: TournamentMatch[]): RRConfig | null {
   const groupStage = rrMatches.filter((m) => m.round === 'RR');
   if (groupStage.length === 0) return null;
   const adv = groupStage[0]?.rr_advancement_count ?? 1;
-  return { advancementCount: (adv as 1 | 2) };
+  return { advancementCount: adv as 1 | 2 };
 }

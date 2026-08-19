@@ -14,8 +14,7 @@ export const getRoundLabels = (drawSize: number): string[] => {
 const escapeSvg = (value: string) =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-const truncate = (value: string, max = 20) =>
-  value.length > max ? `${value.slice(0, max - 1)}…` : value;
+const truncate = (value: string, max = 20) => (value.length > max ? `${value.slice(0, max - 1)}…` : value);
 
 // Format a stored 'YYYY-MM-DD' round deadline like the on-screen bracket ("Till May 23").
 const formatSvgScore = (match: TournamentMatch): string => {
@@ -47,7 +46,13 @@ const C = {
   score: '#CBD5E1',
 };
 
-const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, roundDeadlines: Record<string, string> = {}): string => {
+const buildDrawSvg = (
+  matches: TournamentMatch[],
+  drawTitle: string,
+  drawState?: string,
+  eventTitle?: string,
+  roundDeadlines: Record<string, string> = {},
+): string => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
   const rowHeight = 46;
@@ -63,37 +68,42 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?:
     matches: matches.filter((m) => m.round === round).sort((a, b) => a.position - b.position),
   }));
 
-  const cells = rounds.flatMap((round, ri) => {
-    const x = 40 + ri * colWidth;
-    const colColor = round.round === 'SF' || round.round === 'F' ? C.colLate : C.colNormal;
-    const colH = height - colStart - footerHeight - 10;
-    const colCenterX = x - 12 + (colWidth - 24) / 2;
+  const cells = rounds
+    .flatMap((round, ri) => {
+      const x = 40 + ri * colWidth;
+      const colColor = round.round === 'SF' || round.round === 'F' ? C.colLate : C.colNormal;
+      const colH = height - colStart - footerHeight - 10;
+      const colCenterX = x - 12 + (colWidth - 24) / 2;
 
-    const col = `<rect x="${x - 12}" y="${colStart}" width="${colWidth - 24}" height="${colH}" rx="14" fill="${colColor}" stroke="${C.colStroke}" />`;
+      const col = `<rect x="${x - 12}" y="${colStart}" width="${colWidth - 24}" height="${colH}" rx="14" fill="${colColor}" stroke="${C.colStroke}" />`;
 
-    const formatted = formatDeadline(roundDeadlines[round.round]);
-    const deadline = formatted ? `Till ${formatted}` : '';
-    const label = `<text x="${colCenterX}" y="${colStart + 22}" text-anchor="middle" font-size="13" font-weight="800" fill="${C.text}">${round.round}</text>${
-      deadline ? `<text x="${colCenterX}" y="${colStart + 36}" text-anchor="middle" font-size="9" fill="${C.textMuted}">${deadline}</text>` : ''
-    }`;
+      const formatted = formatDeadline(roundDeadlines[round.round]);
+      const deadline = formatted ? `Till ${formatted}` : '';
+      const label = `<text x="${colCenterX}" y="${colStart + 22}" text-anchor="middle" font-size="13" font-weight="800" fill="${C.text}">${round.round}</text>${
+        deadline
+          ? `<text x="${colCenterX}" y="${colStart + 36}" text-anchor="middle" font-size="9" fill="${C.textMuted}">${deadline}</text>`
+          : ''
+      }`;
 
-    const items = round.matches.map((match, mi) => {
-      const rowSpan = 2 ** ri;
-      const centerRow = mi * 2 ** (ri + 1) + rowSpan;
-      const y = topOffset + centerRow * rowHeight - 18;
-      const p1 = truncate(formatPlayerName(match.player_1_name));
-      const p2 = truncate(formatPlayerName(match.player_2_name));
-      const connX = x + colWidth - 38;
-      const connector = ri < rounds.length - 1
-        ? `<line x1="${connX - 16}" y1="${y + 36}" x2="${connX}" y2="${y + 36}" stroke="${C.connector}" stroke-width="1.5" />`
-        : '';
+      const items = round.matches
+        .map((match, mi) => {
+          const rowSpan = 2 ** ri;
+          const centerRow = mi * 2 ** (ri + 1) + rowSpan;
+          const y = topOffset + centerRow * rowHeight - 18;
+          const p1 = truncate(formatPlayerName(match.player_1_name));
+          const p2 = truncate(formatPlayerName(match.player_2_name));
+          const connX = x + colWidth - 38;
+          const connector =
+            ri < rounds.length - 1
+              ? `<line x1="${connX - 16}" y1="${y + 36}" x2="${connX}" y2="${y + 36}" stroke="${C.connector}" stroke-width="1.5" />`
+              : '';
 
-      const scoreText = match.status === 'complete' ? formatSvgScore(match) : '';
-      const p1Y = y + (scoreText ? 20 : 27);
-      const divY = y + (scoreText ? 28 : 36);
-      const p2Y = y + (scoreText ? 48 : 61);
+          const scoreText = match.status === 'complete' ? formatSvgScore(match) : '';
+          const p1Y = y + (scoreText ? 20 : 27);
+          const divY = y + (scoreText ? 28 : 36);
+          const p2Y = y + (scoreText ? 48 : 61);
 
-      return `<g>
+          return `<g>
         <rect x="${x}" y="${y}" width="${colWidth - 58}" height="72" rx="4" fill="${C.cardFill}" stroke="${C.cardStroke}" />
         <text x="${x + 10}" y="${p1Y}" font-size="13" font-weight="700" fill="${match.winner_uid === match.player_1_uid ? C.winner : C.text}">${escapeSvg(p1)}</text>
         <line x1="${x}" y1="${divY}" x2="${x + colWidth - 58}" y2="${divY}" stroke="${C.divider}" />
@@ -101,10 +111,12 @@ const buildDrawSvg = (matches: TournamentMatch[], drawTitle: string, drawState?:
         ${scoreText ? `<line x1="${x}" y1="${y + 56}" x2="${x + colWidth - 58}" y2="${y + 56}" stroke="${C.divider}" /><text x="${x + 10}" y="${y + 67}" font-size="10" fill="${C.score}" font-family="monospace">${escapeSvg(scoreText)}</text>` : ''}
         ${connector}
       </g>`;
-    }).join('');
+        })
+        .join('');
 
-    return `${col}${label}${items}`;
-  }).join('');
+      return `${col}${label}${items}`;
+    })
+    .join('');
 
   const footerLabel = escapeSvg(eventTitle || drawTitle);
 
@@ -147,13 +159,16 @@ const buildRRGroupSvg = (
 
   // For doubles "Alice Smith / Bob Jones" → shortest of first/last per partner e.g. "Alice / Bob"
   const doublesShortNames = (name: string): string =>
-    name.split(' / ').map((n) => {
-      const parts = n.trim().split(/\s+/);
-      if (parts.length <= 1) return parts[0] ?? n.trim();
-      const first = parts[0];
-      const last = parts[parts.length - 1];
-      return first.length <= last.length ? first : last;
-    }).join(' / ');
+    name
+      .split(' / ')
+      .map((n) => {
+        const parts = n.trim().split(/\s+/);
+        if (parts.length <= 1) return parts[0] ?? n.trim();
+        const first = parts[0];
+        const last = parts[parts.length - 1];
+        return first.length <= last.length ? first : last;
+      })
+      .join(' / ');
 
   // Phone first, email only when no phone. There is no third fallback: the old snapshot string on
   // TournamentPlayer was derived from a preference nobody set, and is gone.
@@ -221,7 +236,14 @@ const buildRRGroupSvg = (
   return { svg, width, height };
 };
 
-export const downloadRRGroupsAsPng = (groups: TournamentPlayer[][], groupLabels: string[], groupMatches: TournamentMatch[], drawTitle: string, eventTitle?: string, contacts?: RRContactMap): void => {
+export const downloadRRGroupsAsPng = (
+  groups: TournamentPlayer[][],
+  groupLabels: string[],
+  groupMatches: TournamentMatch[],
+  drawTitle: string,
+  eventTitle?: string,
+  contacts?: RRContactMap,
+): void => {
   // Use the exact dimensions the SVG was built with (previously recomputed with an averaging
   // approximation, which stretched the PNG and left empty space).
   const { svg, width, height } = buildRRGroupSvg(groups, groupLabels, groupMatches, drawTitle, eventTitle, contacts);
@@ -266,9 +288,7 @@ const buildRoundSvg = (
   eventTitle?: string,
   contacts: RRContactMap = {},
 ): { svg: string; width: number; height: number } => {
-  const roundMatches = matches
-    .filter((m) => m.round === round)
-    .sort((a, b) => a.position - b.position);
+  const roundMatches = matches.filter((m) => m.round === round).sort((a, b) => a.position - b.position);
 
   const cols = Math.min(2, Math.max(1, roundMatches.length));
   const cardW = 360;
@@ -356,14 +376,24 @@ const downloadSvgAsPng = (svg: string, width: number, height: number, filename: 
 };
 
 export const downloadRoundAsPng = (
-  matches: TournamentMatch[], round: string, drawTitle: string, eventTitle?: string, contacts?: RRContactMap,
+  matches: TournamentMatch[],
+  round: string,
+  drawTitle: string,
+  eventTitle?: string,
+  contacts?: RRContactMap,
 ): void => {
   const { svg, width, height } = buildRoundSvg(matches, round, drawTitle, eventTitle, contacts);
   const slug = drawTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   downloadSvgAsPng(svg, width, height, `${slug}-${round.toLowerCase()}.png`);
 };
 
-export const downloadDrawAsPng = (matches: TournamentMatch[], drawTitle: string, drawState?: string, eventTitle?: string, roundDeadlines: Record<string, string> = {}): void => {
+export const downloadDrawAsPng = (
+  matches: TournamentMatch[],
+  drawTitle: string,
+  drawState?: string,
+  eventTitle?: string,
+  roundDeadlines: Record<string, string> = {},
+): void => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
   const roundLabels = getRoundLabels(drawSize);
   const width = Math.max(900, roundLabels.length * 190 + 80);

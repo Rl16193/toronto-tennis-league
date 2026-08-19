@@ -12,10 +12,18 @@ let cached: CsvCourt[] | null = null;
 export async function loadCourtList(): Promise<CsvCourt[]> {
   if (cached) return cached;
   let text = '';
-  try { text = sessionStorage.getItem(CACHE_KEY) || ''; } catch { /* unavailable */ }
+  try {
+    text = sessionStorage.getItem(CACHE_KEY) || '';
+  } catch {
+    /* unavailable */
+  }
   if (!text) {
     text = await fetch(CSV_URL).then((r) => (r.ok ? r.text() : ''));
-    try { if (text) sessionStorage.setItem(CACHE_KEY, text); } catch { /* quota */ }
+    try {
+      if (text) sessionStorage.setItem(CACHE_KEY, text);
+    } catch {
+      /* quota */
+    }
   }
   cached = text ? parseCourts(text) : [];
   return cached;

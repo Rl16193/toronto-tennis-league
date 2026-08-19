@@ -19,7 +19,9 @@ export const History: React.FC = () => {
   const [pastEvents, setPastEvents] = useState<PastEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
 
-  useEffect(() => { document.title = 'History · Racquets & Strings'; }, []);
+  useEffect(() => {
+    document.title = 'History · Racquets & Strings';
+  }, []);
 
   // A tournament is "past" once its final has a confirmed winner — same rule the Tournament
   // page uses to classify events.
@@ -46,8 +48,12 @@ export const History: React.FC = () => {
         setPastEvents(rows);
       })
       .catch(() => {})
-      .finally(() => { if (!cancelled) setEventsLoading(false); });
-    return () => { cancelled = true; };
+      .finally(() => {
+        if (!cancelled) setEventsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [user?.uid]);
 
   if (!user) return null; // private route
@@ -62,7 +68,9 @@ export const History: React.FC = () => {
 
       {loading ? (
         <div className="space-y-2">
-          {[1, 2, 3].map((i) => <div key={i} className="h-16 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-16 bg-tennis-surface/30 rounded-2xl animate-pulse" />
+          ))}
         </div>
       ) : matches.length === 0 ? (
         <div className="rounded-3xl bg-tennis-surface/30 py-12 text-center">
@@ -71,7 +79,12 @@ export const History: React.FC = () => {
       ) : (
         <div className="rounded-3xl bg-tennis-surface/30 overflow-hidden divide-y divide-fg/5">
           {matches.map((m, i) => (
-            <motion.div key={m.id} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }} className="flex items-center gap-3 px-4 py-3.5">
+            <motion.div
+              key={m.id}
+              {...fadeUp}
+              transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}
+              className="flex items-center gap-3 px-4 py-3.5"
+            >
               <span
                 className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center text-xs font-black ${
                   m.won ? 'bg-green-500/15 text-badge-win' : 'bg-red-500/15 text-badge-loss'
@@ -83,7 +96,11 @@ export const History: React.FC = () => {
                 <p className="text-sm font-semibold text-fg truncate">vs {m.opponentName}</p>
                 {m.completedAt > 0 && (
                   <p className="text-[11px] text-fg/70">
-                    {new Date(m.completedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {new Date(m.completedAt).toLocaleDateString('en-CA', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
                   </p>
                 )}
               </div>
@@ -97,7 +114,9 @@ export const History: React.FC = () => {
 
       {eventsLoading ? (
         <div className="space-y-2">
-          {[1, 2].map((i) => <div key={i} className="h-14 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
+          {[1, 2].map((i) => (
+            <div key={i} className="h-14 bg-tennis-surface/30 rounded-2xl animate-pulse" />
+          ))}
         </div>
       ) : pastEvents.length === 0 ? (
         <div className="rounded-3xl bg-tennis-surface/30 py-10 text-center">
@@ -107,23 +126,23 @@ export const History: React.FC = () => {
         <div className="rounded-3xl bg-tennis-surface/30 overflow-hidden divide-y divide-fg/5">
           {pastEvents.map((e, i) => (
             <motion.div key={e.id} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}>
-            <Link
-              to={`/matches?mode=tournament&event=${e.id}`}
-              className="flex items-center gap-3 px-4 py-3.5 hover:bg-fg/[0.04] transition-colors"
-            >
-              <span className="w-8 h-8 shrink-0 rounded-xl bg-clay/15 border border-clay/25 flex items-center justify-center">
-                <Trophy className="w-4 h-4 text-clay" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-fg truncate">{e.title}</p>
-                {e.when && (
-                  <p className="text-[11px] text-fg/70">
-                    {e.when.toLocaleDateString('en-CA', { month: 'short', year: 'numeric' })}
-                  </p>
-                )}
-              </div>
-              <ChevronRight className="w-4 h-4 text-fg/70 shrink-0" />
-            </Link>
+              <Link
+                to={`/matches?mode=tournament&event=${e.id}`}
+                className="flex items-center gap-3 px-4 py-3.5 hover:bg-fg/[0.04] transition-colors"
+              >
+                <span className="w-8 h-8 shrink-0 rounded-xl bg-clay/15 border border-clay/25 flex items-center justify-center">
+                  <Trophy className="w-4 h-4 text-clay" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-fg truncate">{e.title}</p>
+                  {e.when && (
+                    <p className="text-[11px] text-fg/70">
+                      {e.when.toLocaleDateString('en-CA', { month: 'short', year: 'numeric' })}
+                    </p>
+                  )}
+                </div>
+                <ChevronRight className="w-4 h-4 text-fg/70 shrink-0" />
+              </Link>
             </motion.div>
           ))}
         </div>

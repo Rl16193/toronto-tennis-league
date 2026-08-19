@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import { collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, updateDoc, where, writeBatch } from 'firebase/firestore';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  updateDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 
@@ -8,26 +19,48 @@ import { useAuth } from '../../context/AuthContext';
 
 export type NotificationType =
   // matches
-  | 'match_scheduled' | 'draw_published' | 'match_advanced' | 'match_bye'
+  | 'match_scheduled'
+  | 'draw_published'
+  | 'match_advanced'
+  | 'match_bye'
   | 'score_rejected'
-  | 'group_assigned' | 'draw_cancelled'
+  | 'group_assigned'
+  | 'draw_cancelled'
   // ladder / challenges
-  | 'ladder_challenged' | 'ladder_reported'
-  | 'ladder_cancelled' | 'ladder_challenges_reset' | 'ladder_cooldown_expired'
-  | 'challenge_conversion_proposed' | 'challenge_conversion_rejected'
+  | 'ladder_challenged'
+  | 'ladder_reported'
+  | 'ladder_cancelled'
+  | 'ladder_challenges_reset'
+  | 'ladder_cooldown_expired'
+  | 'challenge_conversion_proposed'
+  | 'challenge_conversion_rejected'
   // tasks
-  | 'task_completed' | 'initiation_complete' | 'task_revoked' | 'tasks_unlocked'
-  | 'claim_approved' | 'claim_rejected' | 'group_award_received'
+  | 'task_completed'
+  | 'initiation_complete'
+  | 'task_revoked'
+  | 'tasks_unlocked'
+  | 'claim_approved'
+  | 'claim_rejected'
+  | 'group_award_received'
   // ranking
-  | 'rank_moved' | 'rank_first'
+  | 'rank_moved'
+  | 'rank_first'
   // account
-  | 'welcome' | 'profile_incomplete' | 'photo_removed' | 'suggestion_reviewed'
+  | 'welcome'
+  | 'profile_incomplete'
+  | 'photo_removed'
+  | 'suggestion_reviewed'
   // reminders
-  | 'reminder_pending_matches' | 'reminder_round_deadline'
-  | 'reminder_event_tomorrow' | 'reminder_signup_closing'
+  | 'reminder_pending_matches'
+  | 'reminder_round_deadline'
+  | 'reminder_event_tomorrow'
+  | 'reminder_signup_closing'
   // organizer
-  | 'organizer_score_pending' | 'organizer_schedule_request'
-  | 'organizer_ladder_pending' | 'organizer_event_roster' | 'organizer_review_pending';
+  | 'organizer_score_pending'
+  | 'organizer_schedule_request'
+  | 'organizer_ladder_pending'
+  | 'organizer_event_roster'
+  | 'organizer_review_pending';
 
 export interface AppNotification {
   id: string;
@@ -80,7 +113,11 @@ export function useNotifications() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) { setItems([]); setLoading(false); return; }
+    if (!user) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     // Single-field filter + ordering on created_at needs a composite index; the feed is small,
     // so we sort client-side instead and keep the query index-free.
@@ -94,7 +131,9 @@ export function useNotifications() {
         const now = Date.now();
         const expired = all.filter((n) => n.read && n.read_at && now - new Date(n.read_at).getTime() > READ_TTL_MS);
         if (expired.length > 0) {
-          expired.forEach((n) => { deleteDoc(doc(db, 'notifications', n.id)).catch(() => {}); });
+          expired.forEach((n) => {
+            deleteDoc(doc(db, 'notifications', n.id)).catch(() => {});
+          });
         }
         const expiredIds = new Set(expired.map((n) => n.id));
 
@@ -112,7 +151,11 @@ export function useNotifications() {
   const unreadCount = items.filter((n) => !n.read).length;
 
   const markRead = useCallback(async (id: string) => {
-    try { await updateDoc(doc(db, 'notifications', id), { read: true, read_at: new Date().toISOString() }); } catch { /* best-effort */ }
+    try {
+      await updateDoc(doc(db, 'notifications', id), { read: true, read_at: new Date().toISOString() });
+    } catch {
+      /* best-effort */
+    }
   }, []);
 
   const markAllRead = useCallback(async () => {
@@ -123,7 +166,9 @@ export function useNotifications() {
       const readAt = new Date().toISOString();
       unread.forEach((n) => batch.update(doc(db, 'notifications', n.id), { read: true, read_at: readAt }));
       await batch.commit();
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   }, [items]);
 
   return { items, unreadCount, loading, markRead, markAllRead };

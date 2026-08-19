@@ -24,7 +24,8 @@ import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 const RELOAD_KEY_PREFIX = 'rs-chunk-reload-at:';
 const RELOAD_COOLDOWN_MS = 15_000;
 
-const CHUNK_ERROR = /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/i;
+const CHUNK_ERROR =
+  /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/i;
 
 export const isChunkLoadError = (error: unknown): boolean =>
   CHUNK_ERROR.test(error instanceof Error ? error.message : String(error));
@@ -63,9 +64,7 @@ export function reloadForStaleChunk(key = 'app'): boolean {
 const ChunkLoadFailed: ComponentType = () => (
   <div className="max-w-xl mx-auto px-4 py-16 text-center space-y-4">
     <h2 className="text-lg font-bold text-fg">Couldn’t load this page</h2>
-    <p className="text-sm text-fg/70">
-      This usually means a new version was released while the app was open.
-    </p>
+    <p className="text-sm text-fg/70">This usually means a new version was released while the app was open.</p>
     <button
       type="button"
       onClick={() => window.location.reload()}
@@ -99,7 +98,9 @@ export function lazyWithRetry<T extends ComponentType<any>>(
       // does, and that case recovers without costing the user a reload.
       try {
         return await factory();
-      } catch { /* still failing — treat it as a stale chunk */ }
+      } catch {
+        /* still failing — treat it as a stale chunk */
+      }
 
       reloadForStaleChunk(key);
       // Resolve either way. If the reload lands, this render is thrown away; if it doesn't

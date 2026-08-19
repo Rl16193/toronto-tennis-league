@@ -36,8 +36,18 @@ const BQ_DATASET = 'rs_analytics';
 // ── data load ────────────────────────────────────────────────────────────────
 
 async function readAll() {
-  const names = ['users', 'stats', 'events', 'event_participants', 'matches', 'courts', 'tasks',
-    'listings', 'connections', 'preferences'];
+  const names = [
+    'users',
+    'stats',
+    'events',
+    'event_participants',
+    'matches',
+    'courts',
+    'tasks',
+    'listings',
+    'connections',
+    'preferences',
+  ];
   const snaps = await Promise.all(names.map((n) => db.collection(n).get()));
   const out = {};
   names.forEach((n, i) => {
@@ -73,11 +83,19 @@ async function writeSheets(metrics, previous) {
   }
 
   const keys = Object.keys(metrics.headline);
-  const label = (k) => k.replace(/_7d$/, ' (7d)').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+  const label = (k) =>
+    k
+      .replace(/_7d$/, ' (7d)')
+      .replace(/_/g, ' ')
+      .replace(/^./, (c) => c.toUpperCase());
 
-  const put = (range, values) => sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID, range, valueInputOption: 'USER_ENTERED', resource: { values },
-  });
+  const put = (range, values) =>
+    sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range,
+      valueInputOption: 'USER_ENTERED',
+      resource: { values },
+    });
   const clear = (range) => sheets.spreadsheets.values.clear({ spreadsheetId: SPREADSHEET_ID, range });
 
   // Dashboard — current value against the previous run.
@@ -95,7 +113,8 @@ async function writeSheets(metrics, previous) {
   const snapHeader = ['run_date', ...keys];
   const snapRow = [runDate, ...keys.map((k) => metrics.headline[k])];
   const current = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID, range: 'Snapshots!A1:A',
+    spreadsheetId: SPREADSHEET_ID,
+    range: 'Snapshots!A1:A',
   });
   if (!current.data.values || current.data.values.length === 0) {
     await put('Snapshots!A1', [snapHeader, snapRow]);
@@ -161,7 +180,9 @@ async function writeBigQuery(metrics) {
   const dataset = bq.dataset(BQ_DATASET);
   const [dsExists] = await dataset.exists();
   if (!dsExists) {
-    logger.warn(`[adminMetrics] BigQuery dataset "${BQ_DATASET}" does not exist — skipping. Create it once, then this starts filling.`);
+    logger.warn(
+      `[adminMetrics] BigQuery dataset "${BQ_DATASET}" does not exist — skipping. Create it once, then this starts filling.`,
+    );
     return;
   }
 
@@ -172,7 +193,8 @@ async function writeBigQuery(metrics) {
 
   // Long format — one row per metric per run. Adding a metric never needs a schema change.
   const rows = Object.entries(metrics.headline).map(([metric, value]) => ({ metric, dimension: null, value }));
-  for (const r of metrics.byCourt) rows.push({ metric: 'court_checkins_7d_by_court', dimension: r.court, value: r.checkins_7d });
+  for (const r of metrics.byCourt)
+    rows.push({ metric: 'court_checkins_7d_by_court', dimension: r.court, value: r.checkins_7d });
   for (const r of metrics.byZone) rows.push({ metric: 'members_by_zone', dimension: r.zone, value: r.members });
   for (const r of metrics.byEvent) rows.push({ metric: 'entries_by_event', dimension: r.event, value: r.entries });
 
@@ -205,11 +227,20 @@ async function writeBigQuery(metrics) {
               FROM UNNEST(@rows)`,
       params: { rows: metrics.matchFacts },
       types: {
-        rows: [{
-          match_id: 'STRING', completed_at: 'STRING', category: 'STRING', event_id: 'STRING',
-          player_1_uid: 'STRING', player_2_uid: 'STRING', winner_uid: 'STRING',
-          division: 'STRING', skill_group: 'STRING', zone: 'STRING',
-        }],
+        rows: [
+          {
+            match_id: 'STRING',
+            completed_at: 'STRING',
+            category: 'STRING',
+            event_id: 'STRING',
+            player_1_uid: 'STRING',
+            player_2_uid: 'STRING',
+            winner_uid: 'STRING',
+            division: 'STRING',
+            skill_group: 'STRING',
+            zone: 'STRING',
+          },
+        ],
       },
     });
   }
@@ -227,7 +258,10 @@ exports.aggregateAdminMetrics = onSchedule(
 
     // Firestore first: it's the one the app depends on, so it must land even if an external
     // service is down. Each target is isolated so one failure can't take the others with it.
-    const prevSnap = await db.doc('admin_stats/dashboard').get().catch(() => null);
+    const prevSnap = await db
+      .doc('admin_stats/dashboard')
+      .get()
+      .catch(() => null);
     const previous = prevSnap && prevSnap.exists ? prevSnap.data().headline : null;
 
     await db.doc('admin_stats/dashboard').set({

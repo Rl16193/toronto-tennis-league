@@ -25,7 +25,13 @@ interface Params {
   hasJoinedAnyTournament: () => boolean;
 }
 
-export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament }: Params) {
+export function useJoin({
+  user,
+  profile,
+  hasJoinedRegularEvent,
+  hasJoinedTournamentChoice,
+  hasJoinedAnyTournament,
+}: Params) {
   const [selectedEvent, setSelectedEvent] = useState<DisplayEvent | null>(null);
   const [joinForm, setJoinForm] = useState<JoinFormState>(INITIAL_JOIN_FORM);
   const [joinError, setJoinError] = useState('');
@@ -53,7 +59,10 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
     setJoinError('');
     setTournamentMatches([]);
 
-    if (!selectedEvent || !isTournamentEvent(selectedEvent)) { setLoadingMatches(false); return; }
+    if (!selectedEvent || !isTournamentEvent(selectedEvent)) {
+      setLoadingMatches(false);
+      return;
+    }
 
     let cancelled = false;
     setLoadingMatches(true);
@@ -62,11 +71,17 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
         if (cancelled) return;
         setTournamentMatches(matches);
       })
-      .finally(() => { if (!cancelled) setLoadingMatches(false); });
-    return () => { cancelled = true; };
+      .finally(() => {
+        if (!cancelled) setLoadingMatches(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedEvent?.id]);
 
-  useEffect(() => { setSlotFallbackConfirmed(false); }, [joinForm.division, joinForm.tournamentChoice]);
+  useEffect(() => {
+    setSlotFallbackConfirmed(false);
+  }, [joinForm.division, joinForm.tournamentChoice]);
 
   useEffect(() => {
     if (!joinError) return;
@@ -75,7 +90,8 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
   }, [joinError]);
 
   const slotStatus = useMemo((): SlotResult | null => {
-    if (!selectedEvent || !isTournamentEvent(selectedEvent) || !joinForm.division || tournamentMatches.length === 0) return null;
+    if (!selectedEvent || !isTournamentEvent(selectedEvent) || !joinForm.division || tournamentMatches.length === 0)
+      return null;
 
     // RR draws fill every slot with a real player at generation, so there are no open
     // slots to "find" — placement happens by (re)grouping the participant list, not by
@@ -87,9 +103,7 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
     // With zones on, a late joiner may only take a slot in THEIR zone's bracket — the whole point
     // of splitting by zone is that you don't get sent across the city. Zones off: no restriction.
     const zoneCfg = selectedEvent.zone_draw_config;
-    const myZone = zoneCfg?.enabled
-      ? zoneBucketFor(profile?.preferences?.preferred_zone, zoneCfg)
-      : undefined;
+    const myZone = zoneCfg?.enabled ? zoneBucketFor(profile?.preferences?.preferred_zone, zoneCfg) : undefined;
 
     // Match a draw slot — `div` is what the user selected; also accept 'All' in Firestore
     // (consolidated/merged draws store division as 'All' rather than the specific gender).
@@ -116,7 +130,8 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
       const altGroup = skill >= 4 ? 'Challengers' : 'Masters';
       // Merged draw: skill_group 'All', division matches selected or 'All'
       const mergedDraw = tournamentMatches.some(
-        (m) => m.tournament_choice === 'Singles' &&
+        (m) =>
+          m.tournament_choice === 'Singles' &&
           (m.division === joinForm.division || m.division === 'All') &&
           m.skill_group === 'All',
       );
@@ -127,7 +142,14 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
       const intended = findSlot('Singles', joinForm.division, intendedGroup);
       if (intended) return { status: 'available', ...intended, skillOverride: skill };
       const alt = findSlot('Singles', joinForm.division, altGroup);
-      if (alt) return { status: 'fallback', ...alt, skillOverride: altGroup === 'Masters' ? 4 : 3, intendedGroup, actualGroup: altGroup };
+      if (alt)
+        return {
+          status: 'fallback',
+          ...alt,
+          skillOverride: altGroup === 'Masters' ? 4 : 3,
+          intendedGroup,
+          actualGroup: altGroup,
+        };
       return { status: 'full', skillOverride: skill };
     }
 
@@ -145,7 +167,15 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
     }
 
     return null;
-  }, [selectedEvent, tournamentMatches, joinForm.division, joinForm.tournamentChoice, joinForm.seniors, joinForm.combinedSkill, profile]);
+  }, [
+    selectedEvent,
+    tournamentMatches,
+    joinForm.division,
+    joinForm.tournamentChoice,
+    joinForm.seniors,
+    joinForm.combinedSkill,
+    profile,
+  ]);
 
   const handleSubmitJoin = async () => {
     if (!selectedEvent || !user) return;
@@ -163,37 +193,58 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
       return;
     }
 
-    const trackJoin = () => analyticsPromise.then((analytics) => {
-      if (!analytics) return;
-      logEvent(analytics, 'join_event', {
-        event_id:   selectedEvent.id,
-        event_name: selectedEvent.title,
-        event_type: selectedEvent.type,
+    const trackJoin = () =>
+      analyticsPromise.then((analytics) => {
+        if (!analytics) return;
+        logEvent(analytics, 'join_event', {
+          event_id: selectedEvent.id,
+          event_name: selectedEvent.title,
+          event_type: selectedEvent.type,
+        });
       });
-    });
 
     if (!isTournamentEvent(selectedEvent)) {
-      if (hasJoinedRegularEvent(selectedEvent.id)) { setJoinError('You are already registered for this event.'); return; }
-      if (isWeekendMatchdaysEvent(selectedEvent) && !hasJoinedAnyTournament()) { setJoinError('Please join a tournament before joining matchdays.'); return; }
+      if (hasJoinedRegularEvent(selectedEvent.id)) {
+        setJoinError('You are already registered for this event.');
+        return;
+      }
+      if (isWeekendMatchdaysEvent(selectedEvent) && !hasJoinedAnyTournament()) {
+        setJoinError('Please join a tournament before joining matchdays.');
+        return;
+      }
       setJoining(true);
       try {
         const participant: EventParticipantWrite = {
-          uid: user.uid, user_name: participantName,
-          event_id: selectedEvent.id, event_name: selectedEvent.title,
-          tournament_choice: '', doubles: '', partner_in_app: '',
-          skill: Number(profile?.stats.skill_level || 0), dateselected: [],
+          uid: user.uid,
+          user_name: participantName,
+          event_id: selectedEvent.id,
+          event_name: selectedEvent.title,
+          tournament_choice: '',
+          doubles: '',
+          partner_in_app: '',
+          skill: Number(profile?.stats.skill_level || 0),
+          dateselected: [],
           created_at: new Date().toISOString(),
         };
         await createEventParticipant(participant);
         trackJoin();
         setSelectedEvent(null);
-      } catch { setJoinError('Could not join the event right now. Please try again.'); }
-      finally { setJoining(false); }
+      } catch {
+        setJoinError('Could not join the event right now. Please try again.');
+      } finally {
+        setJoining(false);
+      }
       return;
     }
 
-    if (!joinForm.division) { setJoinError('Please select a division.'); return; }
-    if (choice === 'Singles' && joinForm.division === 'Mixed Doubles') { setJoinError('Mixed Doubles is locked for singles.'); return; }
+    if (!joinForm.division) {
+      setJoinError('Please select a division.');
+      return;
+    }
+    if (choice === 'Singles' && joinForm.division === 'Mixed Doubles') {
+      setJoinError('Mixed Doubles is locked for singles.');
+      return;
+    }
     // Retired Pro draw is gated on the player's League selection (Profile → League).
     if (joinForm.seniors && !isSeniorsLeague(profile?.stats.league)) {
       setJoinError('The Retired Pro draw is for players in the Retired Pro league. Set it on your profile first.');
@@ -203,12 +254,27 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
     // that were saved as Singles despite the player filling in a Doubles form, which is why they
     // all have an empty partner field.
     if (choice === 'Doubles') {
-      if (!joinForm.partnerName.trim()) { setJoinError('Please enter your partner name for doubles.'); return; }
-      if (joinForm.partnerName.trim().length < 3 || joinForm.partnerName.length > 80) { setJoinError('Partner name must be 3–80 characters.'); return; }
-      if (/\d/.test(joinForm.partnerName)) { setJoinError('Partner name cannot contain numbers.'); return; }
+      if (!joinForm.partnerName.trim()) {
+        setJoinError('Please enter your partner name for doubles.');
+        return;
+      }
+      if (joinForm.partnerName.trim().length < 3 || joinForm.partnerName.length > 80) {
+        setJoinError('Partner name must be 3–80 characters.');
+        return;
+      }
+      if (/\d/.test(joinForm.partnerName)) {
+        setJoinError('Partner name cannot contain numbers.');
+        return;
+      }
     }
-    if (slotStatus?.status === 'full') { setJoinError('No empty spots left.'); return; }
-    if (slotStatus?.status === 'fallback' && !slotFallbackConfirmed) { setJoinError('Please confirm the draw assignment above.'); return; }
+    if (slotStatus?.status === 'full') {
+      setJoinError('No empty spots left.');
+      return;
+    }
+    if (slotStatus?.status === 'fallback' && !slotFallbackConfirmed) {
+      setJoinError('Please confirm the draw assignment above.');
+      return;
+    }
 
     setJoining(true);
     setJoinError('');
@@ -217,22 +283,30 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
       const dateselected = (() => {
         if (isWeekend) return joinForm.dateselected;
         if (isSeasonOpener(selectedEvent)) {
-          const d = parseValidDate((selectedEvent.start_date || selectedEvent.startDate || selectedEvent.date) as FirestoreDateLike);
+          const d = parseValidDate(
+            (selectedEvent.start_date || selectedEvent.startDate || selectedEvent.date) as FirestoreDateLike,
+          );
           return d ? [`May ${d.getDate()}, ${d.getFullYear()}`] : [];
         }
         return [];
       })();
 
       const participant: EventParticipantWrite = {
-        uid: user.uid, user_name: participantName,
-        event_id: selectedEvent.id, event_name: selectedEvent.title,
-        tournament_choice: choice, division: joinForm.division,
+        uid: user.uid,
+        user_name: participantName,
+        event_id: selectedEvent.id,
+        event_name: selectedEvent.title,
+        tournament_choice: choice,
+        division: joinForm.division,
         ...(choice === 'Singles' && joinForm.seniors ? { skill_group: 'Retired Pro' } : {}),
         doubles: choice === 'Doubles' ? joinForm.partnerName.trim() : '',
-        partner_in_app: choice === 'Doubles' ? (joinForm.partnerInApp || 'no') : '',
+        partner_in_app: choice === 'Doubles' ? joinForm.partnerInApp || 'no' : '',
         partner_uid: choice === 'Doubles' ? joinForm.partnerUid : '',
-        skill: slotStatus?.skillOverride ?? (choice === 'Singles' ? Number(profile?.stats.skill_level || 0) : Number(joinForm.combinedSkill || 3)),
-        dateselected, created_at: new Date().toISOString(),
+        skill:
+          slotStatus?.skillOverride ??
+          (choice === 'Singles' ? Number(profile?.stats.skill_level || 0) : Number(joinForm.combinedSkill || 3)),
+        dateselected,
+        created_at: new Date().toISOString(),
       };
       await createEventParticipant(participant);
       trackJoin();
@@ -252,16 +326,24 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
         }
       }
       setSelectedEvent(null);
-    } catch { setJoinError('Could not join the event right now. Please try again.'); }
-    finally { setJoining(false); }
+    } catch {
+      setJoinError('Could not join the event right now. Please try again.');
+    } finally {
+      setJoining(false);
+    }
   };
 
   return {
-    selectedEvent, setSelectedEvent,
-    joinForm, setJoinForm,
+    selectedEvent,
+    setSelectedEvent,
+    joinForm,
+    setJoinForm,
     joinError,
-    joining, slotStatus, loadingMatches,
-    slotFallbackConfirmed, setSlotFallbackConfirmed,
+    joining,
+    slotStatus,
+    loadingMatches,
+    slotFallbackConfirmed,
+    setSlotFallbackConfirmed,
     handleSubmitJoin,
   };
 }

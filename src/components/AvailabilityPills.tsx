@@ -18,7 +18,8 @@ export const AvailabilityPills: React.FC<{ tags?: string[]; className?: string }
           key={tag}
           className="shrink-0 rounded-full bg-fg/5 text-fg text-[9px] font-bold px-2 py-0.5 inline-flex items-center gap-1"
         >
-          <Clock className="w-2.5 h-2.5 shrink-0" />{availabilityTagLabel(tag)}
+          <Clock className="w-2.5 h-2.5 shrink-0" />
+          {availabilityTagLabel(tag)}
         </span>
       ))}
     </div>

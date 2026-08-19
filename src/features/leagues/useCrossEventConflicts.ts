@@ -11,7 +11,10 @@ export function useCrossEventConflicts(uid: string | undefined, ladderEventId: s
   const [opponents, setOpponents] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!uid) { setOpponents(new Set()); return; }
+    if (!uid) {
+      setOpponents(new Set());
+      return;
+    }
     let alive = true;
 
     (async () => {
@@ -21,10 +24,12 @@ export function useCrossEventConflicts(uid: string | undefined, ladderEventId: s
         getDocs(query(collection(db, 'matches'), where('player_1_uid', '==', uid))),
         getDocs(query(collection(db, 'matches'), where('player_2_uid', '==', uid))),
       ]);
-      const snap = { docs: [...s1.docs, ...s2.docs].filter((d) => {
-        const cat = d.data().category;
-        return cat === 'singles' || cat === 'doubles';
-      }) };
+      const snap = {
+        docs: [...s1.docs, ...s2.docs].filter((d) => {
+          const cat = d.data().category;
+          return cat === 'singles' || cat === 'doubles';
+        }),
+      };
 
       // event_id → opponent uids I share a match with in that event.
       const perEvent = new Map<string, Set<string>>();
@@ -36,7 +41,10 @@ export function useCrossEventConflicts(uid: string | undefined, ladderEventId: s
         if (!perEvent.has(m.event_id)) perEvent.set(m.event_id, new Set());
         perEvent.get(m.event_id)!.add(opp);
       });
-      if (perEvent.size === 0) { if (alive) setOpponents(new Set()); return; }
+      if (perEvent.size === 0) {
+        if (alive) setOpponents(new Set());
+        return;
+      }
 
       // An event is completed once its Final ('F') is played with a winner. Same query shape the
       // Tournament page already uses (event_id `in` …), so no new index; Final check is client-side.
@@ -44,7 +52,14 @@ export function useCrossEventConflicts(uid: string | undefined, ladderEventId: s
       const completed = new Set<string>();
       for (let i = 0; i < eids.length; i += 10) {
         const chunk = eids.slice(i, i + 10);
-        const finalSnap = await getDocs(query(collection(db, 'matches'), where('event_id', 'in', chunk), where('round', '==', 'F'), where('status', '==', 'complete')));
+        const finalSnap = await getDocs(
+          query(
+            collection(db, 'matches'),
+            where('event_id', 'in', chunk),
+            where('round', '==', 'F'),
+            where('status', '==', 'complete'),
+          ),
+        );
         finalSnap.docs.forEach((d) => {
           const m = d.data();
           if (m.winner_uid) completed.add(m.event_id as string);
@@ -53,11 +68,17 @@ export function useCrossEventConflicts(uid: string | undefined, ladderEventId: s
 
       // Opponents from events that are NOT yet completed = active conflicts.
       const active = new Set<string>();
-      perEvent.forEach((opps, eid) => { if (!completed.has(eid)) opps.forEach((o) => active.add(o)); });
+      perEvent.forEach((opps, eid) => {
+        if (!completed.has(eid)) opps.forEach((o) => active.add(o));
+      });
       if (alive) setOpponents(active);
-    })().catch(() => { if (alive) setOpponents(new Set()); });
+    })().catch(() => {
+      if (alive) setOpponents(new Set());
+    });
 
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [uid, ladderEventId]);
 
   return opponents;

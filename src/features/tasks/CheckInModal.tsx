@@ -4,8 +4,16 @@ import { Sheet } from '../../components/Sheet';
 import { Button } from '../../components/Button';
 import { useAuth } from '../../context/AuthContext';
 import {
-  CHECKIN_RADIUS_M, NearbyCourt, TopCheckIn, VISIT_TYPES, VisitType,
-  checkIn, findNearbyCourts, getCurrentPosition, getTopCheckIns, logAttendance,
+  CHECKIN_RADIUS_M,
+  NearbyCourt,
+  TopCheckIn,
+  VISIT_TYPES,
+  VisitType,
+  checkIn,
+  findNearbyCourts,
+  getCurrentPosition,
+  getTopCheckIns,
+  logAttendance,
 } from './checkinService';
 
 type Step = 'start' | 'locating' | 'pick' | 'success' | 'error';
@@ -25,7 +33,9 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   const [topCheckIns, setTopCheckIns] = useState<TopCheckIn[]>([]);
 
   useEffect(() => {
-    getTopCheckIns().then(setTopCheckIns).catch(() => {});
+    getTopCheckIns()
+      .then(setTopCheckIns)
+      .catch(() => {});
   }, []);
 
   const locate = async () => {
@@ -87,7 +97,9 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                     type="button"
                     onClick={() => setVisitType(t)}
                     className={`px-3 py-2.5 rounded-2xl text-sm font-bold border transition-colors ${
-                      visitType === t ? 'bg-clay text-white border-clay' : 'bg-white text-ink border-fg hover:bg-white/90'
+                      visitType === t
+                        ? 'bg-clay text-white border-clay'
+                        : 'bg-white text-ink border-fg hover:bg-white/90'
                     }`}
                   >
                     {t}
@@ -115,7 +127,8 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
             </div>
 
             <Button onClick={locate} className="w-full">
-              <Navigation className="w-4 h-4 mr-2" />Courts nearby
+              <Navigation className="w-4 h-4 mr-2" />
+              Courts nearby
             </Button>
           </div>
         )}
@@ -130,7 +143,9 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
         {step === 'error' && (
           <div className="text-center space-y-4 py-6">
             <p className="text-badge-loss text-sm">{error}</p>
-            <Button variant="outline" onClick={locate} className="w-full">Try again</Button>
+            <Button variant="outline" onClick={locate} className="w-full">
+              Try again
+            </Button>
           </div>
         )}
 
@@ -143,13 +158,18 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
               nearby.slice(0, 6).map((c) => {
                 const here = c.distM <= CHECKIN_RADIUS_M;
                 return (
-                  <div key={c.dropdown} className="rounded-2xl bg-tennis-surface/40 px-4 py-3 flex items-center justify-between gap-3">
+                  <div
+                    key={c.dropdown}
+                    className="rounded-2xl bg-tennis-surface/40 px-4 py-3 flex items-center justify-between gap-3"
+                  >
                     <div className="min-w-0">
                       <p className="text-fg font-semibold text-sm truncate">{c.dropdown}</p>
                       <p className="text-fg/70 text-xs">{Math.round(c.distM)} m away</p>
                     </div>
                     {here ? (
-                      <Button size="sm" onClick={() => doCheckIn(c)} isLoading={busy}>Court</Button>
+                      <Button size="sm" onClick={() => doCheckIn(c)} isLoading={busy}>
+                        Court
+                      </Button>
                     ) : (
                       <span className="text-[11px] text-fg/70 shrink-0">Get closer</span>
                     )}
@@ -166,7 +186,9 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
               <CheckCircle2 className="w-8 h-8 text-badge-win" />
             </div>
             <h3 className="text-lg font-bold text-fg">Completed.</h3>
-            <Button variant="outline" className="w-full" onClick={onClose}>Done</Button>
+            <Button variant="outline" className="w-full" onClick={onClose}>
+              Done
+            </Button>
           </div>
         )}
       </div>

@@ -47,7 +47,9 @@ export const extractCourtsWithCoords = (csvText: string): Map<string, { lat: num
       const [lng, lat] = geom.coordinates[0];
       const dropdown = (cells[iDropdown] || cells[iName] || '').trim();
       if (dropdown && lat && lng) map.set(dropdown.toLowerCase(), { lat, lng });
-    } catch { /* skip malformed */ }
+    } catch {
+      /* skip malformed */
+    }
   }
   return map;
 };

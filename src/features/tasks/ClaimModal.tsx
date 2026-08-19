@@ -36,8 +36,12 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
   useEffect(() => {
     if (type === 'volunteer') {
       getDocs(collection(db, 'events')).then((snap) =>
-        setEvents(snap.docs.map((d) => ({ id: d.id, title: (d.data().title as string) || 'Untitled event' }))
-          .sort((a, b) => a.title.localeCompare(b.title))));
+        setEvents(
+          snap.docs
+            .map((d) => ({ id: d.id, title: (d.data().title as string) || 'Untitled event' }))
+            .sort((a, b) => a.title.localeCompare(b.title)),
+        ),
+      );
     }
     // The member roster is loaded by MemberSearchInput (shared, cached) — not here.
   }, [type, user?.uid]);
@@ -45,9 +49,18 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
   const submit = async () => {
     if (!user) return;
     setError('');
-    if (type === 'volunteer' && !eventId) { setError('Please select an event.'); return; }
-    if (type === 'host' && !meetupTitle.trim()) { setError('Please name the meetup.'); return; }
-    if (type === 'ambassador' && !selected) { setError('Please select who you invited.'); return; }
+    if (type === 'volunteer' && !eventId) {
+      setError('Please select an event.');
+      return;
+    }
+    if (type === 'host' && !meetupTitle.trim()) {
+      setError('Please name the meetup.');
+      return;
+    }
+    if (type === 'ambassador' && !selected) {
+      setError('Please select who you invited.');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -60,7 +73,10 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
         setSuccess(true);
       } else if (selected) {
         const errorMsg = await createAmbassadorClaim(user.uid, name, selected.id, selected.name);
-        if (errorMsg) { setError(errorMsg); return; }
+        if (errorMsg) {
+          setError(errorMsg);
+          return;
+        }
         setSuccess(true);
       }
     } catch {
@@ -82,12 +98,16 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
               <h3 className="text-lg font-bold text-fg">Sent for review</h3>
               <p className="text-fg/70 text-sm">An organizer will approve it before it counts.</p>
             </div>
-            <Button variant="outline" className="w-full" onClick={onClose}>Done</Button>
+            <Button variant="outline" className="w-full" onClick={onClose}>
+              Done
+            </Button>
           </div>
         ) : (
           <>
             {error && (
-              <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-3">{error}</div>
+              <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-3">
+                {error}
+              </div>
             )}
 
             {type === 'volunteer' && (
@@ -99,14 +119,23 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
                   className="w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
                 >
                   <option value="">Select an event…</option>
-                  {events.map((e) => <option key={e.id} value={e.id}>{e.title}</option>)}
+                  {events.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.title}
+                    </option>
+                  ))}
                 </select>
               </div>
             )}
 
             {type === 'host' && (
               <>
-                <Input label="Meetup name" value={meetupTitle} onChange={(e) => setMeetupTitle(e.target.value)} placeholder="e.g. Saturday doubles at High Park" />
+                <Input
+                  label="Meetup name"
+                  value={meetupTitle}
+                  onChange={(e) => setMeetupTitle(e.target.value)}
+                  placeholder="e.g. Saturday doubles at High Park"
+                />
                 <Input label="Date" type="date" value={meetupDate} onChange={(e) => setMeetupDate(e.target.value)} />
               </>
             )}
@@ -137,8 +166,12 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
             )}
 
             <div className="flex gap-3 pt-1">
-              <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-              <Button onClick={submit} isLoading={submitting} className="flex-1">Submit</Button>
+              <Button variant="outline" onClick={onClose} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={submit} isLoading={submitting} className="flex-1">
+                Submit
+              </Button>
             </div>
           </>
         )}

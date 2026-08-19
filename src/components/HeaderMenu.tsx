@@ -18,7 +18,9 @@ export const HeaderMenu: React.FC = () => {
   const [open, setOpen] = useState(false);
   const closeRef = useRef<() => void>(() => setOpen(false));
 
-  useEffect(() => { closeRef.current = () => setOpen(false); }, []);
+  useEffect(() => {
+    closeRef.current = () => setOpen(false);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -33,7 +35,9 @@ export const HeaderMenu: React.FC = () => {
     if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = prev; };
+    return () => {
+      document.body.style.overflow = prev;
+    };
   }, [open]);
 
   const close = () => setOpen(false);
@@ -88,7 +92,11 @@ export const HeaderMenu: React.FC = () => {
             >
               <div className="px-4 pt-4 pb-3 border-b border-fg/8">
                 <div className="flex items-center justify-between gap-2">
-                  <Link to="/" onClick={close} className="text-sm font-bold font-['Montserrat'] tracking-tight whitespace-nowrap">
+                  <Link
+                    to="/"
+                    onClick={close}
+                    className="text-sm font-bold font-['Montserrat'] tracking-tight whitespace-nowrap"
+                  >
                     <span className="text-fg">RACQUETS</span>
                     <span className="text-clay"> &</span>
                     <span className="text-fg"> STRINGS</span>

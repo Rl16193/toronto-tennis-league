@@ -16,7 +16,18 @@ export const Accordion: React.FC<{
   titleClassName?: string;
   bodyClassName?: string;
   children: React.ReactNode;
-}> = ({ id, title, right, open, onToggle, locked, highlight, titleClassName = 'font-bold text-sm', bodyClassName = 'mt-2', children }) => (
+}> = ({
+  id,
+  title,
+  right,
+  open,
+  onToggle,
+  locked,
+  highlight,
+  titleClassName = 'font-bold text-sm',
+  bodyClassName = 'mt-2',
+  children,
+}) => (
   <div
     className={`rounded-3xl border p-5 ${
       locked

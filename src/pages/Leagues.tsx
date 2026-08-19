@@ -24,10 +24,16 @@ export type TrendSeries = { label: string; color: string; data: number[] };
 const AreaChart: React.FC<{ series: TrendSeries[]; className?: string }> = ({ series, className }) => {
   const longest = Math.max(0, ...series.map((s) => s.data.length));
   if (longest < 2) {
-    return <div className={`flex items-center justify-center text-fg/70 text-xs ${className ?? ''}`}>Not enough matches yet</div>;
+    return (
+      <div className={`flex items-center justify-center text-fg/70 text-xs ${className ?? ''}`}>
+        Not enough matches yet
+      </div>
+    );
   }
 
-  const W = 300, H = 80, PAD = 6;
+  const W = 300,
+    H = 80,
+    PAD = 6;
   const allValues = series.flatMap((s) => s.data);
   const min = Math.min(...allValues);
   const max = Math.max(...allValues);
@@ -44,9 +50,22 @@ const AreaChart: React.FC<{ series: TrendSeries[]; className?: string }> = ({ se
 
   return (
     <div className={`flex flex-col ${className ?? ''}`}>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full flex-1 min-h-0" preserveAspectRatio="none" role="img" aria-label="Progress trend">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full flex-1 min-h-0"
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="Progress trend"
+      >
         {series.map((s) => (
-          <path key={s.label} d={lineFor(s.data)} fill="none" stroke={s.color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
+          <path
+            key={s.label}
+            d={lineFor(s.data)}
+            fill="none"
+            stroke={s.color}
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+          />
         ))}
       </svg>
       <div className="flex items-center justify-center gap-4 pt-1.5 shrink-0">
@@ -67,7 +86,9 @@ export const Leagues: React.FC = () => {
   const { matches: userMatches } = useUserMatches(user?.uid);
   const { rows: communityRows, loading: communityLoading, reload: reloadCommunity } = useCommunityStandings();
 
-  useEffect(() => { document.title = 'Leaderboard · Racquets & Strings'; }, []);
+  useEffect(() => {
+    document.title = 'Leaderboard · Racquets & Strings';
+  }, []);
   const [board, setBoard] = useState<Board>('tournament');
   const [challengeBusy, setChallengeBusy] = useState<string | null>(null);
   // Keyed by user_id so the message renders inline under the exact row that was tapped, instead
@@ -92,8 +113,13 @@ export const Leagues: React.FC = () => {
   // Matches page can surface brand-new signups, but a leaderboard of people on 0 points isn't a
   // leaderboard.
   const flatRows = useMemo(
-    () => rows.filter((r) => r.leaguePoints26 > 0)
-      .sort((a, b) => b.leaguePoints26 - a.leaguePoints26 || b.matchesPlayed - a.matchesPlayed || a.name.localeCompare(b.name)),
+    () =>
+      rows
+        .filter((r) => r.leaguePoints26 > 0)
+        .sort(
+          (a, b) =>
+            b.leaguePoints26 - a.leaguePoints26 || b.matchesPlayed - a.matchesPlayed || a.name.localeCompare(b.name),
+        ),
     [rows],
   );
   const shownRows = user ? flatRows : flatRows.slice(0, 15);
@@ -106,7 +132,9 @@ export const Leagues: React.FC = () => {
   // match-by-match instead of only totaled at the end, to plot how it's changed over time.
   const { pgWonSeries, winPctSeries } = useMemo(() => {
     const asc = [...userMatches].sort((a, b) => a.completedAt - b.completedAt);
-    let gamesWon = 0, gamesTotal = 0, wins = 0;
+    let gamesWon = 0,
+      gamesTotal = 0,
+      wins = 0;
     const pg: number[] = [];
     const wp: number[] = [];
     asc.forEach((m, i) => {
@@ -119,11 +147,13 @@ export const Leagues: React.FC = () => {
     return { pgWonSeries: pg, winPctSeries: wp };
   }, [userMatches]);
 
-  const toggle = (uid: string) => setExpanded((prev) => {
-    const next = new Set(prev);
-    if (next.has(uid)) next.delete(uid); else next.add(uid);
-    return next;
-  });
+  const toggle = (uid: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
 
   if (authLoading) {
     return (
@@ -140,158 +170,183 @@ export const Leagues: React.FC = () => {
       {/* Compact header (wireframe 1h): one band — board toggle + division chips */}
       <div className="space-y-2.5 mb-5">
         <SegmentedControl<Board>
-          options={[{ value: 'tournament', label: 'Tournament' }, { value: 'community', label: 'RS Points' }]}
+          options={[
+            { value: 'tournament', label: 'Tournament' },
+            { value: 'community', label: 'RS Points' },
+          ]}
           value={board}
           onChange={setBoard}
           className="max-w-xs"
         />
       </div>
 
-      {board === 'tournament' && (<>
-      {/* Your Progress — collapsible so the list sits higher up */}
-      {user && userStats && userRankIdx >= 0 && (
-        <div className="bg-tennis-surface/30 rounded-3xl p-5 mb-6">
-          <button
-            type="button"
-            onClick={() => setProgressOpen((v) => !v)}
-            className="w-full flex items-center justify-between text-left"
-            aria-expanded={progressOpen}
-          >
-            <h2 className="text-lg font-bold text-fg">Progress</h2>
-            <span className="text-xs font-bold text-fg/70">{progressOpen ? 'hide ▴' : 'show ▾'}</span>
-          </button>
-          <AnimatePresence initial={false}>
-            {progressOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25, ease: 'easeInOut' }}
-                className="overflow-hidden"
+      {board === 'tournament' && (
+        <>
+          {/* Your Progress — collapsible so the list sits higher up */}
+          {user && userStats && userRankIdx >= 0 && (
+            <div className="bg-tennis-surface/30 rounded-3xl p-5 mb-6">
+              <button
+                type="button"
+                onClick={() => setProgressOpen((v) => !v)}
+                className="w-full flex items-center justify-between text-left"
+                aria-expanded={progressOpen}
               >
-                <div className="mt-4">
-                  <div className="grid grid-cols-3 gap-3 mb-4">
-                    {[
-                      { label: 'Rank', value: userRankIdx >= 0 ? `#${userRankIdx + 1}` : '—' },
-                      { label: 'Matches', value: `${userStats.matchesPlayed ?? 0}` },
-                      { label: 'P/G Win %', value: (userStats.totalPointsPlayed ?? 0) > 0
-                          ? `${Math.round(((userStats.pointswon ?? 0) / (userStats.totalPointsPlayed ?? 1)) * 100)}%` : '—' },
-                    ].map((t) => (
-                      <div key={t.label} className="rounded-2xl bg-fg/[0.03] px-3 py-3 text-center">
-                        <p className="text-2xl font-black text-fg">{t.value}</p>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70 mt-1">{t.label}</p>
+                <h2 className="text-lg font-bold text-fg">Progress</h2>
+                <span className="text-xs font-bold text-fg/70">{progressOpen ? 'hide ▴' : 'show ▾'}</span>
+              </button>
+              <AnimatePresence initial={false}>
+                {progressOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-4">
+                      <div className="grid grid-cols-3 gap-3 mb-4">
+                        {[
+                          { label: 'Rank', value: userRankIdx >= 0 ? `#${userRankIdx + 1}` : '—' },
+                          { label: 'Matches', value: `${userStats.matchesPlayed ?? 0}` },
+                          {
+                            label: 'P/G Win %',
+                            value:
+                              (userStats.totalPointsPlayed ?? 0) > 0
+                                ? `${Math.round(((userStats.pointswon ?? 0) / (userStats.totalPointsPlayed ?? 1)) * 100)}%`
+                                : '—',
+                          },
+                        ].map((t) => (
+                          <div key={t.label} className="rounded-2xl bg-fg/[0.03] px-3 py-3 text-center">
+                            <p className="text-2xl font-black text-fg">{t.value}</p>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70 mt-1">{t.label}</p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                  <AreaChart
-                    series={[
-                      { label: 'P/G Won %', color: '#3b82f6', data: pgWonSeries },
-                      { label: 'Win %', color: '#FF6B35', data: winPctSeries },
-                    ]}
-                    className="w-full h-24"
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
+                      <AreaChart
+                        series={[
+                          { label: 'P/G Won %', color: '#3b82f6', data: pgWonSeries },
+                          { label: 'Win %', color: '#FF6B35', data: winPctSeries },
+                        ]}
+                        className="w-full h-24"
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
 
-      {loading ? (
-        <div className="space-y-2">
-          {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-12 bg-tennis-surface/30 rounded-xl animate-pulse" />)}
-        </div>
-      ) : (
-        <div className="rounded-3xl bg-tennis-surface/30 overflow-hidden divide-y divide-fg/5">
-          {shownRows.length === 0 ? (
-            <p className="text-sm text-fg/70 py-6 text-center">Standings appear once matches are played.</p>
-          ) : shownRows.map((row, i) => {
-            const isUser = user?.uid === row.user_id;
-            const isOpen = expanded.has(row.user_id);
-            const blocked = blockReason(row);
-            return (
-              <motion.div
-                key={row.user_id}
-                {...fadeUp}
-                transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}
-              >
-                <PlayerCard
-                  id={row.user_id}
-                  name={toTitleCase(row.name)}
-                  subtitle={`Skill ${row.skill_level}`}
-                  rank={i + 1}
-                  isYou={isUser}
-                  primary={row.leaguePoints26}
-                  trailing={<RankMove t={row.rankTrend} move={row.rankMove} />}
-                  open={isOpen}
-                  onToggle={() => toggle(row.user_id)}
-                  stats={[
-                    { label: 'P/G Won %', value: pgWinPct(row) },
-                    { label: 'P/G Played', value: `${row.totalPointsPlayed}` },
-                    { label: 'Matches Won', value: `${row.wins}` },
-                    { label: 'Rank Move', value: <RankMove t={row.rankTrend} move={row.rankMove} /> },
-                  ]}
-                  action={blocked !== 'self' && blocked !== 'unsupported' ? (
-                    <Button
-                      size="sm"
-                      variant="clay"
-                      className="w-full justify-center !px-2 !py-1 !text-[11px] !rounded-lg whitespace-nowrap"
-                      disabled={(!!blocked && blocked !== 'active-limit') || challengeBusy === row.user_id}
-                      isLoading={challengeBusy === row.user_id}
-                      title={blocked && blocked !== 'active-limit' ? CHALLENGE_BLOCK_LABEL[blocked] : undefined}
-                      onClick={() => {
-                        if (blocked === 'active-limit') {
-                          showChallengeMessage(row.user_id, CHALLENGE_BLOCK_LABEL['active-limit']);
-                          return;
-                        }
-                        setChallengeBusy(row.user_id);
-                        challenge(row)
-                          .catch(() => showChallengeMessage(row.user_id, 'Could not send that challenge. Try again.'))
-                          .finally(() => setChallengeBusy(null));
-                      }}
-                    >
-                      Challenge
-                    </Button>
-                  ) : null}
-                />
-                <AnimatePresence initial={false}>
-                  {challengeMessage?.userId === row.user_id && (
+          {loading ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-12 bg-tennis-surface/30 rounded-xl animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-3xl bg-tennis-surface/30 overflow-hidden divide-y divide-fg/5">
+              {shownRows.length === 0 ? (
+                <p className="text-sm text-fg/70 py-6 text-center">Standings appear once matches are played.</p>
+              ) : (
+                shownRows.map((row, i) => {
+                  const isUser = user?.uid === row.user_id;
+                  const isOpen = expanded.has(row.user_id);
+                  const blocked = blockReason(row);
+                  return (
                     <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2, ease: 'easeInOut' }}
-                      className="overflow-hidden"
+                      key={row.user_id}
+                      {...fadeUp}
+                      transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}
                     >
-                      <p className="pl-9 pr-3 pb-2 pt-1 text-[11px] text-clay">{challengeMessage.text}</p>
+                      <PlayerCard
+                        id={row.user_id}
+                        name={toTitleCase(row.name)}
+                        subtitle={`Skill ${row.skill_level}`}
+                        rank={i + 1}
+                        isYou={isUser}
+                        primary={row.leaguePoints26}
+                        trailing={<RankMove t={row.rankTrend} move={row.rankMove} />}
+                        open={isOpen}
+                        onToggle={() => toggle(row.user_id)}
+                        stats={[
+                          { label: 'P/G Won %', value: pgWinPct(row) },
+                          { label: 'P/G Played', value: `${row.totalPointsPlayed}` },
+                          { label: 'Matches Won', value: `${row.wins}` },
+                          { label: 'Rank Move', value: <RankMove t={row.rankTrend} move={row.rankMove} /> },
+                        ]}
+                        action={
+                          blocked !== 'self' && blocked !== 'unsupported' ? (
+                            <Button
+                              size="sm"
+                              variant="clay"
+                              className="w-full justify-center !px-2 !py-1 !text-[11px] !rounded-lg whitespace-nowrap"
+                              disabled={(!!blocked && blocked !== 'active-limit') || challengeBusy === row.user_id}
+                              isLoading={challengeBusy === row.user_id}
+                              title={blocked && blocked !== 'active-limit' ? CHALLENGE_BLOCK_LABEL[blocked] : undefined}
+                              onClick={() => {
+                                if (blocked === 'active-limit') {
+                                  showChallengeMessage(row.user_id, CHALLENGE_BLOCK_LABEL['active-limit']);
+                                  return;
+                                }
+                                setChallengeBusy(row.user_id);
+                                challenge(row)
+                                  .catch(() =>
+                                    showChallengeMessage(row.user_id, 'Could not send that challenge. Try again.'),
+                                  )
+                                  .finally(() => setChallengeBusy(null));
+                              }}
+                            >
+                              Challenge
+                            </Button>
+                          ) : null
+                        }
+                      />
+                      <AnimatePresence initial={false}>
+                        {challengeMessage?.userId === row.user_id && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                          >
+                            <p className="pl-9 pr-3 pb-2 pt-1 text-[11px] text-clay">{challengeMessage.text}</p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            );
-          })}
-        </div>
-      )}
+                  );
+                })
+              )}
+            </div>
+          )}
 
-      {/* Footnotes */}
-      <div className="mt-4 space-y-1">
-        <p className="text-xs text-fg/70">
-          <span className="font-semibold text-fg/70">P/G</span> — Points or Games, depending on the match format chosen by the players.
-        </p>
-      </div>
-      </>)}
+          {/* Footnotes */}
+          <div className="mt-4 space-y-1">
+            <p className="text-xs text-fg/70">
+              <span className="font-semibold text-fg/70">P/G</span> — Points or Games, depending on the match format
+              chosen by the players.
+            </p>
+          </div>
+        </>
+      )}
 
       {/* ── Community board: points from completing tasks (Tasks tab) ── */}
-      {board === 'community' && (
-        communityLoading ? (
+      {board === 'community' &&
+        (communityLoading ? (
           <div className="space-y-2">
-            {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-12 bg-tennis-surface/30 rounded-xl animate-pulse" />)}
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-12 bg-tennis-surface/30 rounded-xl animate-pulse" />
+            ))}
           </div>
         ) : communityVisible.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-xl font-bold text-fg">No RS Points yet</p>
             <p className="text-fg/70 mt-1 text-sm">
-              Complete tasks in the <Link to="/tasks" className="text-clay font-semibold">Tasks</Link> tab to earn points.
+              Complete tasks in the{' '}
+              <Link to="/tasks" className="text-clay font-semibold">
+                Tasks
+              </Link>{' '}
+              tab to earn points.
             </p>
           </div>
         ) : (
@@ -324,8 +379,7 @@ export const Leagues: React.FC = () => {
               );
             })}
           </div>
-        )
-      )}
+        ))}
     </div>
   );
 };

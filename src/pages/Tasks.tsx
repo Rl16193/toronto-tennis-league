@@ -9,9 +9,18 @@ import { Button } from '../components/Button';
 import { Accordion } from '../components/Accordion';
 import { useAuth } from '../context/AuthContext';
 import {
-  CATEGORIES, COMMUNITY_GROUP_TASKS, DAILY_GROUP_TASKS, SETUP_POINTS, TASKS,
+  CATEGORIES,
+  COMMUNITY_GROUP_TASKS,
+  DAILY_GROUP_TASKS,
+  SETUP_POINTS,
+  TASKS,
   UNLOCKED_TASK_IDS,
-  categoryTotal, type CategoryDef, type GroupTaskDef, type TaskId, setTaskDone, useTasks,
+  categoryTotal,
+  type CategoryDef,
+  type GroupTaskDef,
+  type TaskId,
+  setTaskDone,
+  useTasks,
 } from '../features/tasks/useTasks';
 import { CheckInModal } from '../features/tasks/CheckInModal';
 import { PhotoSubmitModal } from '../features/tasks/PhotoSubmitModal';
@@ -34,7 +43,9 @@ export const Tasks: React.FC = () => {
   const { balance: redeemable } = useRedeemablePoints();
   const { toast: badgeToast, dismissToast } = useBadgeToast(progress, counters, progressLoaded);
 
-  useEffect(() => { document.title = 'Tasks · Racquets & Strings'; }, []);
+  useEffect(() => {
+    document.title = 'Tasks · Racquets & Strings';
+  }, []);
 
   const claimableRewards = Math.floor(Math.max(0, redeemable) / MIN_REWARD_COST);
   // Tournament points live on the stats doc as leaguePoints26 — the same field the Leaderboard
@@ -100,7 +111,8 @@ export const Tasks: React.FC = () => {
             <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-fg/70">Soon</span>
           ) : (
             <span className="text-xs font-bold text-fg/70">
-              {earnedPoints}<span className="text-fg/70">/{categoryTotal(c)} pts</span>
+              {earnedPoints}
+              <span className="text-fg/70">/{categoryTotal(c)} pts</span>
             </span>
           )
         }
@@ -121,11 +133,17 @@ export const Tasks: React.FC = () => {
                 {t.title}
               </span>
               {!done && !c.locked && have > 0 && (
-                <span className="text-[11px] text-fg/70 shrink-0">{have}/{t.need}</span>
+                <span className="text-[11px] text-fg/70 shrink-0">
+                  {have}/{t.need}
+                </span>
               )}
               <span className={`text-xs font-bold shrink-0 ${done ? 'text-clay' : 'text-fg/70'}`}>{t.points}</span>
               {!done && !c.locked && c.to && (
-                <Link to={c.to} className="text-fg/70 hover:text-clay transition-colors shrink-0" aria-label={`Go to ${t.title}`}>
+                <Link
+                  to={c.to}
+                  className="text-fg/70 hover:text-clay transition-colors shrink-0"
+                  aria-label={`Go to ${t.title}`}
+                >
                   <ChevronRight className="w-4 h-4" />
                 </Link>
               )}
@@ -143,7 +161,11 @@ export const Tasks: React.FC = () => {
       id={id}
       title={title}
       {...sectionProps(id)}
-      right={<span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-clay/70 border border-clay/25">Bonus</span>}
+      right={
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-clay/70 border border-clay/25">
+          Bonus
+        </span>
+      }
     >
       {tasks.map((g) => (
         <div key={g.id} className="py-3">
@@ -170,9 +192,7 @@ export const Tasks: React.FC = () => {
       <motion.div {...fadeUp} className="rounded-3xl bg-tennis-surface/30 p-5 mb-6">
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="text-center">
-            <p className="text-2xl font-black text-clay leading-none">
-              {points}
-            </p>
+            <p className="text-2xl font-black text-clay leading-none">{points}</p>
             <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mt-1">RS Points</p>
           </div>
           <div className="text-center">
@@ -186,13 +206,22 @@ export const Tasks: React.FC = () => {
         </div>
         <div className="flex items-center justify-center gap-2 flex-wrap">
           <Link to="/tasks?checkin=1">
-            <Button variant="outline" size="sm"><MapPin className="w-4 h-4 mr-1.5" />Court</Button>
+            <Button variant="outline" size="sm">
+              <MapPin className="w-4 h-4 mr-1.5" />
+              Court
+            </Button>
           </Link>
           <Link to="/marketplace">
-            <Button variant="clay" size="sm"><Gift className="w-4 h-4 mr-1.5" />Redeem</Button>
+            <Button variant="clay" size="sm">
+              <Gift className="w-4 h-4 mr-1.5" />
+              Redeem
+            </Button>
           </Link>
           <Link to="/tasks?photo=1">
-            <Button variant="white" size="sm"><Camera className="w-4 h-4 mr-1.5" />Report</Button>
+            <Button variant="white" size="sm">
+              <Camera className="w-4 h-4 mr-1.5" />
+              Report
+            </Button>
           </Link>
         </div>
       </motion.div>
@@ -206,13 +235,17 @@ export const Tasks: React.FC = () => {
           id="initiation"
           title="Community Member Initiation"
           {...sectionProps('initiation')}
-          right={initiationComplete ? (
-            <span className="px-2 py-0.5 rounded-lg text-[11px] font-black bg-clay/15 text-clay border border-clay/25">
-              +{SETUP_POINTS} pts
-            </span>
-          ) : (
-            <span className="text-xs font-bold text-fg/70">{doneUnlocked}/{UNLOCKED_TASK_IDS.length}</span>
-          )}
+          right={
+            initiationComplete ? (
+              <span className="px-2 py-0.5 rounded-lg text-[11px] font-black bg-clay/15 text-clay border border-clay/25">
+                +{SETUP_POINTS} pts
+              </span>
+            ) : (
+              <span className="text-xs font-bold text-fg/70">
+                {doneUnlocked}/{UNLOCKED_TASK_IDS.length}
+              </span>
+            )
+          }
         >
           {TASKS.map((t) => {
             const done = !!rec[t.id];
@@ -235,12 +268,21 @@ export const Tasks: React.FC = () => {
                     Soon
                   </span>
                 ) : t.link ? (
-                  <a href={t.link} target="_blank" rel="noopener noreferrer"
-                    className="text-clay/70 hover:text-clay transition-colors shrink-0" aria-label={`Open link for ${t.title}`}>
+                  <a
+                    href={t.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-clay/70 hover:text-clay transition-colors shrink-0"
+                    aria-label={`Open link for ${t.title}`}
+                  >
                     <ExternalLink className="w-4 h-4" />
                   </a>
                 ) : t.to && !done ? (
-                  <Link to={t.to} className="text-fg/70 hover:text-clay transition-colors shrink-0" aria-label={`Go to ${t.title}`}>
+                  <Link
+                    to={t.to}
+                    className="text-fg/70 hover:text-clay transition-colors shrink-0"
+                    aria-label={`Go to ${t.title}`}
+                  >
                     <ChevronRight className="w-4 h-4" />
                   </Link>
                 ) : null}

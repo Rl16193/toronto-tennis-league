@@ -10,7 +10,8 @@ export const NearbyPill: React.FC<{ show: boolean; className?: string }> = ({ sh
     <span
       className={`shrink-0 rounded-full bg-fg/5 text-fg text-[9px] font-bold px-2 py-0.5 inline-flex items-center gap-1 ${className ?? ''}`}
     >
-      <MapPin className="w-2.5 h-2.5 shrink-0" />Nearby
+      <MapPin className="w-2.5 h-2.5 shrink-0" />
+      Nearby
     </span>
   );
 };

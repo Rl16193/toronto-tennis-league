@@ -2,9 +2,21 @@ import { useState } from 'react';
 import { reload } from 'firebase/auth';
 import { useAuth } from '../../../context/AuthContext';
 import {
-  updateName, updatePhone, updateWhatsappContact, updateBio, updateAvatar, updateSkills,
-  updateLeagueAndAgeCategory, updateDisplayBadges, updatePreferredCourts, updatePreferredZone, updateFavouritePlayers,
-  updateEmailNotifications, updateAvailabilityTags, changeEmail, updateEventParticipantDates,
+  updateName,
+  updatePhone,
+  updateWhatsappContact,
+  updateBio,
+  updateAvatar,
+  updateSkills,
+  updateLeagueAndAgeCategory,
+  updateDisplayBadges,
+  updatePreferredCourts,
+  updatePreferredZone,
+  updateFavouritePlayers,
+  updateEmailNotifications,
+  updateAvailabilityTags,
+  changeEmail,
+  updateEventParticipantDates,
   updateContactMethods,
 } from '../services/profileService';
 import type { ContactMethod } from '../../../types';
@@ -39,13 +51,22 @@ export const useProfileActions = () => {
     if (!user) return;
     try {
       await changeEmail(user, newEmail, password);
-      showMessage('Verification email sent to your new address. Please confirm it, then click refresh below.', 'success');
+      showMessage(
+        'Verification email sent to your new address. Please confirm it, then click refresh below.',
+        'success',
+      );
       return true;
     } catch (error: any) {
       const code = (error?.code || error?.message || '').toString().toLowerCase();
       if (code.includes('invalid-email')) showMessage('Please enter a valid email address.', 'error');
-      else if (code.includes('wrong-password') || code.includes('invalid-credential') || code.includes('invalid-password')) showMessage('Incorrect password. Please try again.', 'error');
-      else if (code.includes('requires-recent-login')) showMessage('Please sign out and sign in again to continue.', 'error');
+      else if (
+        code.includes('wrong-password') ||
+        code.includes('invalid-credential') ||
+        code.includes('invalid-password')
+      )
+        showMessage('Incorrect password. Please try again.', 'error');
+      else if (code.includes('requires-recent-login'))
+        showMessage('Please sign out and sign in again to continue.', 'error');
       else if (code.includes('email-already-in-use')) showMessage('That email is already registered.', 'error');
       else showMessage('Unable to change your email. Please try again.', 'error');
       return false;
@@ -60,7 +81,8 @@ export const useProfileActions = () => {
       showMessage('Email updated successfully.', 'success');
     } catch (error: any) {
       const code = (error?.code || error?.message || '').toString().toLowerCase();
-      if (code.includes('email-not-verified') || code.includes('verification')) showMessage('Your email is not verified yet. Please complete verification and try again.', 'error');
+      if (code.includes('email-not-verified') || code.includes('verification'))
+        showMessage('Your email is not verified yet. Please complete verification and try again.', 'error');
       else showMessage('Unable to refresh your email verification. Please try again.', 'error');
     }
   };
@@ -85,15 +107,23 @@ export const useProfileActions = () => {
         withProfileUpdate(() => updateWhatsappContact(user!.uid, whatsappContact, sameAsPhone)),
       updateBio: (bio: string) => withProfileUpdate(() => updateBio(user!.uid, bio)),
       updateAvatar: (url: string) => withProfileUpdate(() => updateAvatar(user!.uid, url)),
-      updateSkills: (skillLevel: number, tournamentPreference: string) => withProfileUpdate(() => updateSkills(user!.uid, skillLevel, tournamentPreference)),
-      updateLeagueAgeCategory: (league: "Men's" | "Women's" | '', ageCategory: 'Retired Pro' | 'Juniors' | '', visible: boolean) =>
-        withProfileUpdate(() => updateLeagueAndAgeCategory(user!.uid, league, ageCategory, visible)),
+      updateSkills: (skillLevel: number, tournamentPreference: string) =>
+        withProfileUpdate(() => updateSkills(user!.uid, skillLevel, tournamentPreference)),
+      updateLeagueAgeCategory: (
+        league: "Men's" | "Women's" | '',
+        ageCategory: 'Retired Pro' | 'Juniors' | '',
+        visible: boolean,
+      ) => withProfileUpdate(() => updateLeagueAndAgeCategory(user!.uid, league, ageCategory, visible)),
       updateDisplayBadges: (badgeIds: string[]) => withProfileUpdate(() => updateDisplayBadges(user!.uid, badgeIds)),
-      updatePreferredCourts: (courts: string[], zone: string) => withProfileUpdate(() => updatePreferredCourts(user!.uid, courts, zone)),
+      updatePreferredCourts: (courts: string[], zone: string) =>
+        withProfileUpdate(() => updatePreferredCourts(user!.uid, courts, zone)),
       updatePreferredZone: (zone: string) => withProfileUpdate(() => updatePreferredZone(user!.uid, zone)),
-      updateFavouritePlayers: (players: string[]) => withProfileUpdate(() => updateFavouritePlayers(user!.uid, players)),
-      updateEmailNotifications: (enabled: boolean) => withProfileUpdate(() => updateEmailNotifications(user!.uid, enabled)),
-      updateContactMethods: (methods: ContactMethod[]) => withProfileUpdate(() => updateContactMethods(user!.uid, methods)),
+      updateFavouritePlayers: (players: string[]) =>
+        withProfileUpdate(() => updateFavouritePlayers(user!.uid, players)),
+      updateEmailNotifications: (enabled: boolean) =>
+        withProfileUpdate(() => updateEmailNotifications(user!.uid, enabled)),
+      updateContactMethods: (methods: ContactMethod[]) =>
+        withProfileUpdate(() => updateContactMethods(user!.uid, methods)),
       updateAvailabilityTags: (tags: string[]) => withProfileUpdate(() => updateAvailabilityTags(user!.uid, tags)),
       changeEmail: handleChangeEmail,
       refreshEmailChange: handleRefreshEmailChange,

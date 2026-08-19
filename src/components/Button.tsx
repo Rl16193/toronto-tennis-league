@@ -3,7 +3,10 @@ import { motion } from 'motion/react';
 import { cn } from '../lib/cn';
 import { tapScale } from '../lib/motion';
 
-interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onDrag' | 'onDragStart' | 'onDragEnd' | 'onAnimationStart'> {
+interface ButtonProps extends Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  'onDrag' | 'onDragStart' | 'onDragEnd' | 'onAnimationStart'
+> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'clay' | 'white';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
@@ -42,7 +45,7 @@ export const Button: React.FC<ButtonProps> = ({
         'inline-flex items-center justify-center rounded-2xl font-semibold transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed',
         variants[variant],
         sizes[size],
-        className
+        className,
       )}
       disabled={disabled || isLoading}
       {...props}

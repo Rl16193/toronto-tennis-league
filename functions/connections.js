@@ -28,11 +28,14 @@ const pairId = (a, b) => (a < b ? `${a}__${b}` : `${b}__${a}`);
 async function linkPlayers(a, b, reason) {
   if (!a || !b || a === b) return false;
   try {
-    await db().collection('connections').doc(pairId(a, b)).create({
-      uids: [a, b].sort(),
-      reason,
-      created_at: new Date().toISOString(),
-    });
+    await db()
+      .collection('connections')
+      .doc(pairId(a, b))
+      .create({
+        uids: [a, b].sort(),
+        reason,
+        created_at: new Date().toISOString(),
+      });
     return true;
   } catch (err) {
     if (err.code === 6 || err.code === 'already-exists') return false; // already linked
@@ -50,55 +53,51 @@ exports.pairId = pairId;
  * answers it — one per seller, present only while they have a listing. Without it, locking
  * `contacts` to opponents removes the Contact button from every listing on the board.
  */
-exports.onListingContact = onDocumentWritten(
-  { document: 'listings/{id}', region: REGION },
-  async (event) => {
-    const uid = event.data?.after?.data()?.uid || event.data?.before?.data()?.uid;
-    if (!uid) return;
+exports.onListingContact = onDocumentWritten({ document: 'listings/{id}', region: REGION }, async (event) => {
+  const uid = event.data?.after?.data()?.uid || event.data?.before?.data()?.uid;
+  if (!uid) return;
 
-    const remaining = await db().collection('listings').where('uid', '==', uid).limit(1).get();
-    const ref = db().collection('public_contacts').doc(uid);
+  const remaining = await db().collection('listings').where('uid', '==', uid).limit(1).get();
+  const ref = db().collection('public_contacts').doc(uid);
 
-    if (remaining.empty) {
-      await ref.delete().catch(() => { /* already gone */ });
-      logger.info('public_contacts cleared', { uid: safeId(uid) });
-      return;
-    }
-    await ref.set({ uid, reason: 'listing', updated_at: new Date().toISOString() });
-  },
-);
+  if (remaining.empty) {
+    await ref.delete().catch(() => {
+      /* already gone */
+    });
+    logger.info('public_contacts cleared', { uid: safeId(uid) });
+    return;
+  }
+  await ref.set({ uid, reason: 'listing', updated_at: new Date().toISOString() });
+});
 
 /**
  * `onDocumentWritten`, not created/updated separately: a tournament match arrives already
  * populated (create) while a rally or challenge earns its connection later, on accept (update).
  */
-exports.onMatchConnection = onDocumentWritten(
-  { document: 'matches/{id}', region: REGION },
-  async (event) => {
-    const after = event.data?.after?.data();
-    if (!after) return; // deleted
+exports.onMatchConnection = onDocumentWritten({ document: 'matches/{id}', region: REGION }, async (event) => {
+  const after = event.data?.after?.data();
+  if (!after) return; // deleted
 
-    const a = after.player_1_uid;
-    const b = after.player_2_uid;
-    if (!a || !b) return;
+  const a = after.player_1_uid;
+  const b = after.player_2_uid;
+  if (!a || !b) return;
 
-    // Score submissions are bookkeeping about a match, not a fixture of their own.
-    if (after.category === 'score_submission') return;
+  // Score submissions are bookkeeping about a match, not a fixture of their own.
+  if (after.category === 'score_submission') return;
 
-    if (after.category === 'rally' || after.category === 'challenge') {
-      // Only an ACCEPTED request earns contact access. An open request must not — otherwise
-      // anyone could harvest a phone number by firing off a challenge nobody answers.
-      if (after.status !== 'accepted') return;
-      if (await linkPlayers(a, b, after.category)) {
-        logger.info('connection created', { pair: safeId(pairId(a, b)), reason: after.category });
-      }
-      return;
+  if (after.category === 'rally' || after.category === 'challenge') {
+    // Only an ACCEPTED request earns contact access. An open request must not — otherwise
+    // anyone could harvest a phone number by firing off a challenge nobody answers.
+    if (after.status !== 'accepted') return;
+    if (await linkPlayers(a, b, after.category)) {
+      logger.info('connection created', { pair: safeId(pairId(a, b)), reason: after.category });
     }
+    return;
+  }
 
-    // Tournament fixture: both slots filled with real players. PLAYER_LOADING placeholders carry
-    // no uid, so they never reach here.
-    if (await linkPlayers(a, b, 'tournament')) {
-      logger.info('connection created', { pair: safeId(pairId(a, b)), reason: 'tournament' });
-    }
-  },
-);
+  // Tournament fixture: both slots filled with real players. PLAYER_LOADING placeholders carry
+  // no uid, so they never reach here.
+  if (await linkPlayers(a, b, 'tournament')) {
+    logger.info('connection created', { pair: safeId(pairId(a, b)), reason: 'tournament' });
+  }
+});

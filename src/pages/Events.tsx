@@ -9,12 +9,18 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
 import { Fab } from '../components/Fab';
 import { SegmentedControl } from '../components/SegmentedControl';
-import { createEvent, updateEvent, formFromEvent, DisplayEvent, EventFormState, INITIAL_EVENT_FORM, validateEventForm } from '../features/events/services/eventService';
+import {
+  createEvent,
+  updateEvent,
+  formFromEvent,
+  DisplayEvent,
+  EventFormState,
+  INITIAL_EVENT_FORM,
+  validateEventForm,
+} from '../features/events/services/eventService';
 import { useEvents } from '../features/events/hooks/useEvents';
 import { useJoin } from '../features/events/hooks/useJoin';
-import {
-  CreatorEventModal, EventCard, JoinEventSheet, isLateRegistration,
-} from '../features/events/EventsElements';
+import { CreatorEventModal, EventCard, JoinEventSheet, isLateRegistration } from '../features/events/EventsElements';
 import { track } from '../lib/analytics';
 import { getEventDate } from './tournament/utils';
 import { isSeniorsLeague } from '../utils/skillLevels';
@@ -28,8 +34,29 @@ export const Events: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
   const isEventCreator = !!profile?.preferences.event_creator;
 
-  const { events, setEvents, loading, visibleEvents, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament, isFullyJoinedEvent } = useEvents();
-  const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed, handleSubmitJoin } = useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament });
+  const {
+    events,
+    setEvents,
+    loading,
+    visibleEvents,
+    hasJoinedRegularEvent,
+    hasJoinedTournamentChoice,
+    hasJoinedAnyTournament,
+    isFullyJoinedEvent,
+  } = useEvents();
+  const {
+    selectedEvent,
+    setSelectedEvent,
+    joinForm,
+    setJoinForm,
+    joinError,
+    joining,
+    slotStatus,
+    loadingMatches,
+    slotFallbackConfirmed,
+    setSlotFallbackConfirmed,
+    handleSubmitJoin,
+  } = useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament });
 
   const [category, setCategory] = useState<EventCategory>('tournaments');
   const [tab, setTab] = useState<EventsTab>('upcoming');
@@ -41,7 +68,9 @@ export const Events: React.FC = () => {
   const [eventFormMessage, setEventFormMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [creatingEvent, setCreatingEvent] = useState(false);
 
-  useEffect(() => { document.title = 'Events · Racquets & Strings'; }, []);
+  useEffect(() => {
+    document.title = 'Events · Racquets & Strings';
+  }, []);
 
   useEffect(() => {
     if (!eventFormMessage) return;
@@ -79,9 +108,11 @@ export const Events: React.FC = () => {
   }, [tab, completedEvents.length]);
 
   const categoryEvents = visibleEvents.filter((e) =>
-    category === 'tournaments' ? isTournamentCategoryEvent(e) : !isTournamentCategoryEvent(e));
+    category === 'tournaments' ? isTournamentCategoryEvent(e) : !isTournamentCategoryEvent(e),
+  );
   const categoryCompletedEvents = completedEvents.filter((e) =>
-    category === 'tournaments' ? isTournamentCategoryType(e.type) : !isTournamentCategoryType(e.type));
+    category === 'tournaments' ? isTournamentCategoryType(e.type) : !isTournamentCategoryType(e.type),
+  );
 
   const handleJoin = (event: DisplayEvent) => {
     setSelectedEvent(event);
@@ -90,9 +121,15 @@ export const Events: React.FC = () => {
 
   const handleCreateEvent = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!user || !isEventCreator) { setEventFormMessage({ type: 'error', text: 'Only event creators can add events.' }); return; }
+    if (!user || !isEventCreator) {
+      setEventFormMessage({ type: 'error', text: 'Only event creators can add events.' });
+      return;
+    }
     const err = validateEventForm(eventForm);
-    if (err) { setEventFormMessage({ type: 'error', text: err }); return; }
+    if (err) {
+      setEventFormMessage({ type: 'error', text: err });
+      return;
+    }
     setCreatingEvent(true);
     setEventFormMessage(null);
     try {
@@ -109,7 +146,10 @@ export const Events: React.FC = () => {
       setEditingEventId(null);
       setShowEventForm(false);
     } catch {
-      setEventFormMessage({ type: 'error', text: `Could not ${editingEventId ? 'save' : 'add'} the event. Please check creator permissions and try again.` });
+      setEventFormMessage({
+        type: 'error',
+        text: `Could not ${editingEventId ? 'save' : 'add'} the event. Please check creator permissions and try again.`,
+      });
     } finally {
       setCreatingEvent(false);
     }
@@ -125,20 +165,28 @@ export const Events: React.FC = () => {
   return (
     <div className="max-w-xl mx-auto px-4 pb-20 pt-4">
       <SegmentedControl<EventCategory>
-        options={[{ value: 'socials', label: 'Socials' }, { value: 'tournaments', label: 'Tournaments' }]}
+        options={[
+          { value: 'socials', label: 'Socials' },
+          { value: 'tournaments', label: 'Tournaments' },
+        ]}
         value={category}
         onChange={setCategory}
         className="mb-3 max-w-xs"
       />
       <SegmentedControl<EventsTab>
-        options={[{ value: 'upcoming', label: 'Upcoming' }, { value: 'completed', label: 'Completed' }]}
+        options={[
+          { value: 'upcoming', label: 'Upcoming' },
+          { value: 'completed', label: 'Completed' },
+        ]}
         value={tab}
         onChange={setTab}
         className="mb-5 max-w-xs"
       />
 
       {eventFormMessage && !showEventForm && (
-        <div className={`mb-6 rounded-2xl border px-5 py-4 text-sm ${eventFormMessage.type === 'success' ? 'border-green-500/20 bg-green-500/10 text-badge-win' : 'border-red-500/20 bg-red-500/10 text-badge-loss'}`}>
+        <div
+          className={`mb-6 rounded-2xl border px-5 py-4 text-sm ${eventFormMessage.type === 'success' ? 'border-green-500/20 bg-green-500/10 text-badge-win' : 'border-red-500/20 bg-red-500/10 text-badge-loss'}`}
+        >
           {eventFormMessage.text}
         </div>
       )}
@@ -146,7 +194,9 @@ export const Events: React.FC = () => {
       {tab === 'completed' ? (
         completedLoading ? (
           <div className="space-y-2 max-w-xl">
-            {[1, 2].map((i) => <div key={i} className="h-14 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
+            {[1, 2].map((i) => (
+              <div key={i} className="h-14 bg-tennis-surface/30 rounded-2xl animate-pulse" />
+            ))}
           </div>
         ) : categoryCompletedEvents.length === 0 ? (
           <div className="text-center py-16">
@@ -178,7 +228,9 @@ export const Events: React.FC = () => {
         )
       ) : loading ? (
         <div className="space-y-4">
-          {[1, 2, 3].map((i) => <div key={i} className="h-48 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-48 bg-tennis-surface/30 rounded-2xl animate-pulse" />
+          ))}
         </div>
       ) : categoryEvents.length > 0 ? (
         <div className="space-y-4">
@@ -248,7 +300,10 @@ export const Events: React.FC = () => {
             organizerPlaceholder={profile?.user.name || 'Organizer name'}
             isEditing={!!editingEventId}
             onSubmit={handleCreateEvent}
-            onClose={() => { setShowEventForm(false); setEditingEventId(null); }}
+            onClose={() => {
+              setShowEventForm(false);
+              setEditingEventId(null);
+            }}
           />
         )}
       </AnimatePresence>

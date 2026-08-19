@@ -1,12 +1,4 @@
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  increment,
-  runTransaction,
-  updateDoc,
-} from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, increment, runTransaction, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { setFieldsFrom } from '../tournament/domain/scoring';
 
@@ -31,9 +23,12 @@ export interface LadderChallenge {
   // per-set games — so one formatter and one history mapping serve every kind of result.
   winner_uid?: string;
   winner_name?: string;
-  set_1_player_1?: number; set_1_player_2?: number;
-  set_2_player_1?: number; set_2_player_2?: number;
-  set_3_player_1?: number; set_3_player_2?: number;
+  set_1_player_1?: number;
+  set_1_player_2?: number;
+  set_2_player_1?: number;
+  set_2_player_2?: number;
+  set_3_player_1?: number;
+  set_3_player_2?: number;
   court?: string;
   reported_by?: string;
   created_at: string;
@@ -121,7 +116,6 @@ export async function proposeConversion(args: {
   return ref.id;
 }
 
-
 // Either participant reports the result once played; it then waits for organizer confirmation.
 // `sets` are ordered [player_1 games, player_2 games] — absolute, never the reporter's viewpoint.
 export async function reportChallenge(
@@ -182,20 +176,32 @@ export async function confirmChallenge(ch: LadderChallenge): Promise<void> {
     const curLoserPts = (loserSnap.data()?.leaguePoints26 as number | undefined) ?? 0;
     const newLoserPts = Math.max(0, curLoserPts - LADDER_POINTS);
 
-    tx.set(doc(db, 'stats', winnerId), {
-      leaguePoints26: increment(LADDER_POINTS),
-      ...(countAsNewMatch ? { matchesPlayed: increment(1), wins: increment(1) } : {}),
-    }, { merge: true });
-    tx.set(loserRef, {
-      leaguePoints26: newLoserPts,
-      ...(countAsNewMatch ? { matchesPlayed: increment(1), loses: increment(1) } : {}),
-    }, { merge: true });
-    tx.set(challengeRef, {
-      status: 'confirmed',
-      applied: true,
-      confirmed_at: new Date().toISOString(),
-      // Same field a tournament match stamps, so history sorts every result on one key.
-      completed_at: new Date().toISOString(),
-    }, { merge: true });
+    tx.set(
+      doc(db, 'stats', winnerId),
+      {
+        leaguePoints26: increment(LADDER_POINTS),
+        ...(countAsNewMatch ? { matchesPlayed: increment(1), wins: increment(1) } : {}),
+      },
+      { merge: true },
+    );
+    tx.set(
+      loserRef,
+      {
+        leaguePoints26: newLoserPts,
+        ...(countAsNewMatch ? { matchesPlayed: increment(1), loses: increment(1) } : {}),
+      },
+      { merge: true },
+    );
+    tx.set(
+      challengeRef,
+      {
+        status: 'confirmed',
+        applied: true,
+        confirmed_at: new Date().toISOString(),
+        // Same field a tournament match stamps, so history sorts every result on one key.
+        completed_at: new Date().toISOString(),
+      },
+      { merge: true },
+    );
   });
 }

@@ -43,7 +43,17 @@ type Props = {
 // native dropdown, games entered with +/− steppers instead of the number keyboard. Set values
 // stay strings in ScoreForm ('' means untouched → 0 downstream), so submit semantics — including
 // the all-0-0 walkover convention — are unchanged.
-export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, onClose, onSubmit, isCreatorSubmit, extraCheckbox, noShow, onReset }) => {
+export const ScoreModal: React.FC<Props> = ({
+  matchInfo,
+  scoreForm,
+  onChange,
+  onClose,
+  onSubmit,
+  isCreatorSubmit,
+  extraCheckbox,
+  noShow,
+  onReset,
+}) => {
   const isNoShow = !!noShow?.checked;
   const [submitting, setSubmitting] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -52,7 +62,9 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
   const [showCourtDropdown, setShowCourtDropdown] = useState(false);
 
   useEffect(() => {
-    loadCourtList().then((list) => setCourts([...new Set(list.map((c) => c.dropdown))].sort((a, b) => a.localeCompare(b))));
+    loadCourtList().then((list) =>
+      setCourts([...new Set(list.map((c) => c.dropdown))].sort((a, b) => a.localeCompare(b))),
+    );
   }, []);
 
   const courtMatches = useMemo(() => {
@@ -100,7 +112,11 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
 
         {/* Winner — two large tap-cards. A no-show has no winner, so they switch off. */}
         <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-2">Winner</p>
-        <div className={`flex gap-2.5 mb-6 ${isNoShow ? 'opacity-50 pointer-events-none' : ''}`} role="radiogroup" aria-label="Winner">
+        <div
+          className={`flex gap-2.5 mb-6 ${isNoShow ? 'opacity-50 pointer-events-none' : ''}`}
+          role="radiogroup"
+          aria-label="Winner"
+        >
           {winnerOptions.map((p) => {
             const selected = !isNoShow && scoreForm.winnerUserId === p.uid;
             return (
@@ -135,7 +151,11 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
             type="text"
             placeholder="Search courts…"
             value={scoreForm.court || courtSearch}
-            onChange={(e) => { onChange({ ...scoreForm, court: '' }); setCourtSearch(e.target.value); setShowCourtDropdown(true); }}
+            onChange={(e) => {
+              onChange({ ...scoreForm, court: '' });
+              setCourtSearch(e.target.value);
+              setShowCourtDropdown(true);
+            }}
             onFocus={() => setShowCourtDropdown(true)}
             onBlur={() => setTimeout(() => setShowCourtDropdown(false), 150)}
             className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
@@ -146,7 +166,11 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
                 <button
                   key={c}
                   type="button"
-                  onMouseDown={() => { onChange({ ...scoreForm, court: c }); setCourtSearch(''); setShowCourtDropdown(false); }}
+                  onMouseDown={() => {
+                    onChange({ ...scoreForm, court: c });
+                    setCourtSearch('');
+                    setShowCourtDropdown(false);
+                  }}
                   className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
                 >
                   {c}
@@ -191,7 +215,9 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
               rather than forcing the row wider than the modal. */}
           <div className="flex flex-wrap items-start gap-x-5 gap-y-2 px-1">
             {extraCheckbox && (
-              <label className={`flex items-start gap-2.5 min-w-0 select-none ${isNoShow ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
+              <label
+                className={`flex items-start gap-2.5 min-w-0 select-none ${isNoShow ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}
+              >
                 <input
                   type="checkbox"
                   checked={extraCheckbox.checked}
@@ -234,7 +260,11 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
               disabled={submitting || resetting}
               onClick={async () => {
                 setResetting(true);
-                try { await onReset(); } finally { setResetting(false); }
+                try {
+                  await onReset();
+                } finally {
+                  setResetting(false);
+                }
               }}
             >
               Reset Score

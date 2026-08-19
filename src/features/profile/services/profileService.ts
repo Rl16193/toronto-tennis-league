@@ -28,24 +28,32 @@ export const updateName = async (userId: string, name: string) => {
 export const updatePhone = async (userId: string, phone: string) => {
   const digits = phone.replace(/\D/g, '');
   if (digits.length !== 10) throw new Error('Phone number must be exactly 10 digits.');
-  await setDoc(doc(db, 'contacts', userId), {
-    phone: `(${digits.slice(0, 3)})-${digits.slice(3, 6)}-${digits.slice(6, 10)}`,
-    updated_at: new Date().toISOString(),
-  }, { merge: true });
+  await setDoc(
+    doc(db, 'contacts', userId),
+    {
+      phone: `(${digits.slice(0, 3)})-${digits.slice(3, 6)}-${digits.slice(6, 10)}`,
+      updated_at: new Date().toISOString(),
+    },
+    { merge: true },
+  );
 };
 
 export const updateWhatsappContact = async (userId: string, whatsappContact: string, sameAsPhone: boolean) => {
   if (!sameAsPhone && whatsappContact && !/^\+[1-9]\d{6,14}$/.test(whatsappContact)) {
     throw new Error('Enter a valid WhatsApp number.');
   }
-  await setDoc(doc(db, 'contacts', userId), {
-    whatsapp_contact: sameAsPhone ? '' : whatsappContact,
-    whatsapp_same_as_phone: sameAsPhone,
-    // Consent is implied by giving a reachable messaging number, either by saying the phone
-    // doubles as WhatsApp or by supplying a separate one. Clearing both withdraws it.
-    contactable: sameAsPhone || !!whatsappContact,
-    updated_at: new Date().toISOString(),
-  }, { merge: true });
+  await setDoc(
+    doc(db, 'contacts', userId),
+    {
+      whatsapp_contact: sameAsPhone ? '' : whatsappContact,
+      whatsapp_same_as_phone: sameAsPhone,
+      // Consent is implied by giving a reachable messaging number, either by saying the phone
+      // doubles as WhatsApp or by supplying a separate one. Clearing both withdraws it.
+      contactable: sameAsPhone || !!whatsappContact,
+      updated_at: new Date().toISOString(),
+    },
+    { merge: true },
+  );
 };
 
 /**
@@ -55,10 +63,14 @@ export const updateWhatsappContact = async (userId: string, whatsappContact: str
  * backfilled can still set this.
  */
 export const updateContactMethods = async (userId: string, methods: ContactMethod[]) => {
-  await setDoc(doc(db, 'contacts', userId), {
-    preferred_mode_of_contact: methods,
-    updated_at: new Date().toISOString(),
-  }, { merge: true });
+  await setDoc(
+    doc(db, 'contacts', userId),
+    {
+      preferred_mode_of_contact: methods,
+      updated_at: new Date().toISOString(),
+    },
+    { merge: true },
+  );
 };
 
 export const updateBio = async (userId: string, bio: string) => {

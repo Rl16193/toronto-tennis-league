@@ -6,8 +6,13 @@
 // number of these 7 preset windows (multi-select, e.g. "Weekday Evenings" + "Weekend Mornings"
 // is a valid combination) instead of checking individual day/slot cells.
 export type AvailabilityTag =
-  | 'weekday_mornings' | 'weekend_mornings' | 'weekend_evenings' | 'weekday_evenings'
-  | 'mornings' | 'evenings' | 'anytime';
+  | 'weekday_mornings'
+  | 'weekend_mornings'
+  | 'weekend_evenings'
+  | 'weekday_evenings'
+  | 'mornings'
+  | 'evenings'
+  | 'anytime';
 
 export const AVAILABILITY_TAGS: { id: AvailabilityTag; label: string }[] = [
   { id: 'weekday_mornings', label: 'Weekday Mornings' },

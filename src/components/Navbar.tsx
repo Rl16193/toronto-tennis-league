@@ -16,7 +16,9 @@ export const Navbar: React.FC = () => {
   const [avatarFailed, setAvatarFailed] = useState(false);
 
   // Retry the image if the account's avatar actually changes.
-  useEffect(() => { setAvatarFailed(false); }, [profile?.user.avatar]);
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [profile?.user.avatar]);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -41,14 +43,11 @@ export const Navbar: React.FC = () => {
       // themes, so without a visible edge the bar has no separation at all (worst in light,
       // where it's #EDEDE7 on #EDEDE7).
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? 'bg-tennis-dark py-2 shadow-lg border-b border-fg/10'
-          : 'bg-transparent py-4'
+        scrolled ? 'bg-tennis-dark py-2 shadow-lg border-b border-fg/10' : 'bg-transparent py-4'
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
-
           {/* Logo — back arrow on the auth page */}
           {isAuthPage ? (
             <Link
@@ -107,7 +106,6 @@ export const Navbar: React.FC = () => {
               <HeaderMenu />
             </div>
           )}
-
         </div>
       </div>
     </nav>

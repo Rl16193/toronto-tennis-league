@@ -34,13 +34,18 @@ function useSellers(userIds: string[]) {
     if (missing.length === 0) return;
     // `contacts`, not `users` — and it's sign-in gated, so a logged-out visitor resolves nothing
     // and simply sees no Contact button (which is the intended behaviour anyway).
-    Promise.all(missing.map((id) =>
-      getDoc(doc(db, 'contacts', id)).then((s) => [id, s.data() as ContactData | undefined] as const)))
+    Promise.all(
+      missing.map((id) =>
+        getDoc(doc(db, 'contacts', id)).then((s) => [id, s.data() as ContactData | undefined] as const),
+      ),
+    )
       .then((entries) => {
         const found = entries.filter((e): e is [string, ContactData] => !!e[1]);
         if (found.length) setSellers((prev) => ({ ...prev, ...Object.fromEntries(found) }));
       })
-      .catch(() => { /* Contact just falls back to hidden if we can't resolve them */ });
+      .catch(() => {
+        /* Contact just falls back to hidden if we can't resolve them */
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
@@ -51,13 +56,13 @@ export const Marketplace: React.FC = () => {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const initial = searchParams.get('tab');
-  const [tab, setTab] = useState<Tab>(
-    initial === 'rent' || initial === 'trade' ? initial : 'services',
-  );
+  const [tab, setTab] = useState<Tab>(initial === 'rent' || initial === 'trade' ? initial : 'services');
   const [formKind, setFormKind] = useState<ListingKind | null>(null);
   const [editingListing, setEditingListing] = useState<Listing | null>(null);
 
-  useEffect(() => { document.title = 'Marketplace · Racquets & Strings'; }, []);
+  useEffect(() => {
+    document.title = 'Marketplace · Racquets & Strings';
+  }, []);
 
   // Both boards are subscribed here rather than inside ListingsTab — the seller lookup needs to
   // span both, and holding the listeners at this level means switching tabs doesn't tear down
@@ -81,14 +86,12 @@ export const Marketplace: React.FC = () => {
   }, [searchParams]);
   const { listings: rentListings, loading: rentLoading } = useListings('rent', openedBoards.has('rent'));
   const { listings: sellListings, loading: sellLoading } = useListings('sell', openedBoards.has('trade'));
-  const sellerIds = useMemo(
-    () => [...rentListings, ...sellListings].map((l) => l.uid),
-    [rentListings, sellListings],
-  );
+  const sellerIds = useMemo(() => [...rentListings, ...sellListings].map((l) => l.uid), [rentListings, sellListings]);
   const sellers = useSellers(sellerIds);
-  const board = tab === 'rent'
-    ? { listings: rentListings, loading: rentLoading }
-    : { listings: sellListings, loading: sellLoading };
+  const board =
+    tab === 'rent'
+      ? { listings: rentListings, loading: rentLoading }
+      : { listings: sellListings, loading: sellLoading };
 
   const onChange = (next: Tab) => {
     setTab(next);
@@ -140,8 +143,14 @@ export const Marketplace: React.FC = () => {
 
       <AnimatePresence>
         {editingListing ? (
-          <ListingForm kind={editingListing.kind} editingListing={editingListing} onClose={() => setEditingListing(null)} />
-        ) : formKind && <ListingForm kind={formKind} onClose={() => setFormKind(null)} />}
+          <ListingForm
+            kind={editingListing.kind}
+            editingListing={editingListing}
+            onClose={() => setEditingListing(null)}
+          />
+        ) : (
+          formKind && <ListingForm kind={formKind} onClose={() => setFormKind(null)} />
+        )}
       </AnimatePresence>
     </div>
   );

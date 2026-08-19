@@ -31,7 +31,10 @@ export const BadgePicker: React.FC<{
     return null;
   }
 
-  const open = () => { setDraft(selected); setEditing(true); };
+  const open = () => {
+    setDraft(selected);
+    setEditing(true);
+  };
 
   const toggle = (id: string) => {
     setDraft((cur) => {
@@ -45,7 +48,9 @@ export const BadgePicker: React.FC<{
   return (
     <>
       {shown.map((b) => (
-        <span key={b.id} title={b.requirement} className={BADGE_PILL_CLASS}>{b.name}</span>
+        <span key={b.id} title={b.requirement} className={BADGE_PILL_CLASS}>
+          {b.name}
+        </span>
       ))}
       <button
         type="button"
@@ -86,12 +91,16 @@ export const BadgePicker: React.FC<{
               </div>
 
               <div className="flex gap-3 pt-1">
-                <Button variant="outline" className="flex-1" onClick={() => setEditing(false)}>Cancel</Button>
+                <Button variant="outline" className="flex-1" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
                 <Button
                   variant="clay"
                   className="flex-1"
                   isLoading={saving}
-                  onClick={async () => { if (await onSave(draft)) setEditing(false); }}
+                  onClick={async () => {
+                    if (await onSave(draft)) setEditing(false);
+                  }}
                 >
                   Save
                 </Button>

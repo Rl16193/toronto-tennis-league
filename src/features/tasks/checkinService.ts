@@ -18,8 +18,13 @@ export type NearbyCourt = CsvCourt & { distM: number };
 export function torontoDayKey(d: Date = new Date()): string {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit',
-    }).formatToParts(d).map((p) => [p.type, p.value]),
+      timeZone: 'America/Toronto',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(d)
+      .map((p) => [p.type, p.value]),
   );
   return `${parts.year}${parts.month}${parts.day}`;
 }
@@ -27,7 +32,12 @@ export function torontoDayKey(d: Date = new Date()): string {
 // Shared by logAttendance/checkIn below — both stamp a player's presence at a court, just to
 // different id-schemes (deterministic {uid}_{courtKey} vs {uid}_{courtKey}_{day}) with one extra
 // field each. `type` discriminates the doc's kind inside the consolidated `courts` collection.
-const baseVisitDoc = (uid: string, name: string, court: CsvCourt, coords: { lat: number; lng: number; distM: number }) => ({
+const baseVisitDoc = (
+  uid: string,
+  name: string,
+  court: CsvCourt,
+  coords: { lat: number; lng: number; distM: number },
+) => ({
   uid,
   type: 'attendance' as const,
   user_name: name,

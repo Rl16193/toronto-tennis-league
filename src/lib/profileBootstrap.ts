@@ -72,12 +72,14 @@ export const ensureUserProfileDocuments = async (user: User) => {
   // contacts split — the backfill handles the rest. Seeded with the auth email so notification
   // emails keep working before the member touches their profile.
   if (!contactsSnap.exists()) {
-    writes.push(setDoc(contactsRef, {
-      ...emptyContacts(),
-      email: user.email || '',
-      updated_at: new Date().toISOString(),
-      uid: user.uid,
-    }));
+    writes.push(
+      setDoc(contactsRef, {
+        ...emptyContacts(),
+        email: user.email || '',
+        updated_at: new Date().toISOString(),
+        uid: user.uid,
+      }),
+    );
   }
 
   await Promise.all(writes);

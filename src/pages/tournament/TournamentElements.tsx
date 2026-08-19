@@ -1,5 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { AlertCircle, Check, ChevronDown, ChevronUp, Download, Pencil, Play, Settings2, X, XCircle } from 'lucide-react';
+import {
+  AlertCircle,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Pencil,
+  Play,
+  Settings2,
+  X,
+  XCircle,
+} from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
 import { SegmentedControl } from '../../components/SegmentedControl';
@@ -9,12 +20,20 @@ import { ZONE_NAMES, ZoneName } from '../../utils/zones';
 import { ZONE_COURT_COUNTS } from '../../utils/zoneCourtCounts';
 import { pillButtonCls } from '../../components/ContactOpponentButton';
 import {
-  DrawConfig, DrawTab, OpenDrawSlot, RRConfig, ScheduleRequest, ScoreSubmissionDoc, SkillGroup,
-  SkillMergePair, TournamentFormat, TournamentMatch, UnplacedEntry, ZoneDrawConfig,
+  DrawConfig,
+  DrawTab,
+  OpenDrawSlot,
+  RRConfig,
+  ScheduleRequest,
+  ScoreSubmissionDoc,
+  SkillGroup,
+  SkillMergePair,
+  TournamentFormat,
+  TournamentMatch,
+  UnplacedEntry,
+  ZoneDrawConfig,
 } from './types';
-import {
-  formatPlayerName, formatScheduledDate, formatSetScores, getScheduleState, zoneBucketFor,
-} from './utils';
+import { formatPlayerName, formatScheduledDate, formatSetScores, getScheduleState, zoneBucketFor } from './utils';
 
 // Tournament page presentation: error boundary, request panels, modals, draw selector, and the
 // organizer's Manage Draw sheet. Props in, callbacks out — all state lives in useTournament.ts.
@@ -90,8 +109,8 @@ export const ChangeZoneModal: React.FC<{
     <Sheet onClose={onClose} title="Change Zone" maxWidthClassName="max-w-md">
       <div className="p-6 pt-3 space-y-4">
         <p className="text-sm text-fg/70">
-          You&apos;re currently in <span className="font-bold text-fg">{currentZone || 'no zone'}</span>.
-          Pick the zone you&apos;d like to play in — the organizer reviews every request.
+          You&apos;re currently in <span className="font-bold text-fg">{currentZone || 'no zone'}</span>. Pick the zone
+          you&apos;d like to play in — the organizer reviews every request.
         </p>
 
         <div className="space-y-2">
@@ -105,9 +124,11 @@ export const ChangeZoneModal: React.FC<{
                 disabled={isCurrent}
                 onClick={() => setPicked(z)}
                 className={`w-full flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors ${
-                  isPicked ? 'bg-clay/15 border border-clay/50'
-                    : isCurrent ? 'bg-fg/[0.03] opacity-50 cursor-not-allowed'
-                    : 'bg-fg/5 hover:bg-fg/[0.08] border border-transparent'
+                  isPicked
+                    ? 'bg-clay/15 border border-clay/50'
+                    : isCurrent
+                      ? 'bg-fg/[0.03] opacity-50 cursor-not-allowed'
+                      : 'bg-fg/5 hover:bg-fg/[0.08] border border-transparent'
                 }`}
               >
                 <span className="min-w-0">
@@ -116,14 +137,18 @@ export const ChangeZoneModal: React.FC<{
                     {ZONE_COURT_COUNTS[z].courts} courts · {ZONE_COURT_COUNTS[z].sites} locations
                   </span>
                 </span>
-                {isCurrent && <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-fg/70">Current</span>}
+                {isCurrent && (
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-fg/70">Current</span>
+                )}
               </button>
             );
           })}
         </div>
 
         <div className="flex gap-2 pt-1">
-          <Button variant="outline" size="sm" onClick={onClose} className="flex-1">Cancel</Button>
+          <Button variant="outline" size="sm" onClick={onClose} className="flex-1">
+            Cancel
+          </Button>
           <Button size="sm" onClick={submit} isLoading={saving} disabled={!picked} className="flex-1">
             Request move
           </Button>
@@ -158,8 +183,11 @@ const QueueDropdown: React.FC<{
         <span className="text-xs font-bold uppercase tracking-widest text-badge">
           {title} ({count})
         </span>
-        {open ? <ChevronUp className="w-4 h-4 text-badge shrink-0" />
-              : <ChevronDown className="w-4 h-4 text-badge shrink-0" />}
+        {open ? (
+          <ChevronUp className="w-4 h-4 text-badge shrink-0" />
+        ) : (
+          <ChevronDown className="w-4 h-4 text-badge shrink-0" />
+        )}
       </button>
       {open && <div className="px-4 pb-3">{children}</div>}
     </div>
@@ -178,19 +206,29 @@ const ScheduleRequestRow: React.FC<{
         <span className="block text-sm text-fg">
           {formatPlayerName(match.player_1_name)} vs {formatPlayerName(match.player_2_name)}
         </span>
-        {!!match.event_title && (
-          <span className="block text-[11px] text-fg/70 truncate">{match.event_title}</span>
-        )}
+        {!!match.event_title && <span className="block text-[11px] text-fg/70 truncate">{match.event_title}</span>}
       </span>
-      <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-        className="border border-fg/25 rounded-lg bg-tennis-surface px-2 py-1.5 text-fg text-xs" />
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        className="border border-fg/25 rounded-lg bg-tennis-surface px-2 py-1.5 text-fg text-xs"
+      />
       <div className="flex rounded-lg overflow-hidden">
         {(['AM', 'PM'] as const).map((s) => (
-          <button key={s} type="button" onClick={() => setSlot(s)}
-            className={`px-3 py-1.5 text-xs font-bold ${slot === s ? 'bg-clay text-white' : 'bg-white text-ink'}`}>{s}</button>
+          <button
+            key={s}
+            type="button"
+            onClick={() => setSlot(s)}
+            className={`px-3 py-1.5 text-xs font-bold ${slot === s ? 'bg-clay text-white' : 'bg-white text-ink'}`}
+          >
+            {s}
+          </button>
         ))}
       </div>
-      <Button size="sm" className="px-3" onClick={() => onSet(match, date, slot)} disabled={!date}>Set</Button>
+      <Button size="sm" className="px-3" onClick={() => onSet(match, date, slot)} disabled={!date}>
+        Set
+      </Button>
     </div>
   );
 };
@@ -201,7 +239,9 @@ export const ScheduleRequestsPanel: React.FC<{
   onSetSchedule: (m: TournamentMatch, date: string, slot: 'AM' | 'PM') => void;
 }> = ({ requests, onSetSchedule }) => (
   <QueueDropdown title="Scheduling requested" count={requests.length}>
-    {requests.map((m) => <ScheduleRequestRow key={m.id} match={m} onSet={onSetSchedule} />)}
+    {requests.map((m) => (
+      <ScheduleRequestRow key={m.id} match={m} onSet={onSetSchedule} />
+    ))}
   </QueueDropdown>
 );
 
@@ -213,15 +253,20 @@ const UnplacedPlayerRow: React.FC<{
   const [pick, setPick] = useState('');
   // Empty zone means they picked no courts — say so rather than showing the placement default.
   const meta = [
-    player.tournamentChoice, player.division,
+    player.tournamentChoice,
+    player.division,
     player.skill ? `skill ${player.skill}` : '',
     player.zone || 'No zone',
-  ].filter(Boolean).join(' · ');
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return (
     <div className="flex flex-wrap items-center gap-2 py-2 border-b border-fg/5 last:border-0">
       <span className="flex-1 min-w-[140px]">
         <span className="block text-sm text-fg">{formatPlayerName(player.name)}</span>
-        {!!player.eventTitle && <span className="block text-[11px] font-semibold text-fg truncate">{player.eventTitle}</span>}
+        {!!player.eventTitle && (
+          <span className="block text-[11px] font-semibold text-fg truncate">{player.eventTitle}</span>
+        )}
         {!!meta && <span className="block text-[11px] text-fg/70">{meta}</span>}
       </span>
       <select
@@ -232,7 +277,9 @@ const UnplacedPlayerRow: React.FC<{
       >
         <option value="">Open slot…</option>
         {slots.map((s) => (
-          <option key={`${s.matchId}_${s.slot}`} value={`${s.matchId}_${s.slot}`}>{s.label}</option>
+          <option key={`${s.matchId}_${s.slot}`} value={`${s.matchId}_${s.slot}`}>
+            {s.label}
+          </option>
         ))}
       </select>
       <Button
@@ -296,20 +343,22 @@ export const ZoneChangeRequestsPanel: React.FC<{
         <div key={p.id} className="flex flex-wrap items-center gap-2 py-2 border-b border-fg/5 last:border-0">
           <span className="flex-1 min-w-[140px]">
             <span className="block text-sm text-fg">{formatPlayerName(p.user_name || 'Player')}</span>
-            {p.new_zone && (
-              <span className="block text-[11px] text-fg/70">wants: {p.new_zone}</span>
-            )}
+            {p.new_zone && <span className="block text-[11px] text-fg/70">wants: {p.new_zone}</span>}
           </span>
           {!!buckets.length && onMoveZone && (
             <select
               value=""
-              onChange={(e) => { if (e.target.value) onMoveZone(p.id, e.target.value); }}
+              onChange={(e) => {
+                if (e.target.value) onMoveZone(p.id, e.target.value);
+              }}
               aria-label={`Move ${formatPlayerName(p.user_name || 'Player')} to a zone`}
               className="text-xs bg-tennis-surface rounded-lg px-2 py-1.5 text-fg cursor-pointer"
             >
               <option value="">Move to zone…</option>
               {buckets.map((b) => (
-                <option key={b.id} value={b.id}>{b.label}</option>
+                <option key={b.id} value={b.id}>
+                  {b.label}
+                </option>
               ))}
             </select>
           )}
@@ -362,7 +411,10 @@ export const PendingScoresPanel: React.FC<{
             <div key={s.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
               <div className="min-w-0">
                 <p className="text-sm text-fg truncate">
-                  <span className="text-fg/70 text-xs mr-2">{s.match_round}{s.draw_label ? ` · ${s.draw_label}` : ''}</span>
+                  <span className="text-fg/70 text-xs mr-2">
+                    {s.match_round}
+                    {s.draw_label ? ` · ${s.draw_label}` : ''}
+                  </span>
                   <span className={winnerIsP1 ? 'font-bold text-fg' : ''}>{formatPlayerName(s.player_1_name)}</span>
                   <span className="text-fg/70 mx-1.5">vs</span>
                   <span className={!winnerIsP1 ? 'font-bold text-fg' : ''}>{formatPlayerName(s.player_2_name)}</span>
@@ -420,21 +472,35 @@ export const ScheduleControls: React.FC<{
   buttonLayout?: 'flex' | 'grid-2';
   /** Signed-in user, so a completed match reads "Win"/"Loss" instead of a generic "Completed". */
   viewerUid?: string;
-}> = ({ match, api, hideRule, hideBadge, hideAskButton, hideSubmitButton, className, buttonLayout = 'flex', viewerUid }) => {
+}> = ({
+  match,
+  api,
+  hideRule,
+  hideBadge,
+  hideAskButton,
+  hideSubmitButton,
+  className,
+  buttonLayout = 'flex',
+  viewerUid,
+}) => {
   const s = getScheduleState(match);
   const isComplete = match.status === 'complete';
 
   const badge = isComplete
-    ? (viewerUid && match.winner_uid
-      ? (match.winner_uid === viewerUid
+    ? viewerUid && match.winner_uid
+      ? match.winner_uid === viewerUid
         ? { text: 'Win', cls: 'bg-green-500/15 text-badge-win border-green-500/25' }
-        : { text: 'Loss', cls: 'bg-red-500/15 text-badge-loss border-red-500/25' })
-      : { text: 'Completed', cls: 'bg-green-500/15 text-badge-win border-green-500/25' })
+        : { text: 'Loss', cls: 'bg-red-500/15 text-badge-loss border-red-500/25' }
+      : { text: 'Completed', cls: 'bg-green-500/15 text-badge-win border-green-500/25' }
     : s.status === 'scheduled'
-      ? { text: `Scheduled on ${formatScheduledDate(s.date, s.slot ?? '')}`, cls: 'bg-green-500/15 text-badge-win border-green-500/25' }
+      ? {
+          text: `Scheduled on ${formatScheduledDate(s.date, s.slot ?? '')}`,
+          cls: 'bg-green-500/15 text-badge-win border-green-500/25',
+        }
       : { text: 'Unscheduled', cls: 'bg-fg/5 text-fg/70 border-fg/10' };
 
-  const showSubmit = !!api.onSubmitScore && !!api.submittableMatchIds?.has(match.id) && !isComplete && !hideSubmitButton;
+  const showSubmit =
+    !!api.onSubmitScore && !!api.submittableMatchIds?.has(match.id) && !isComplete && !hideSubmitButton;
   const showAsk = !isComplete && !hideAskButton && !s.requested;
 
   return (
@@ -449,10 +515,14 @@ export const ScheduleControls: React.FC<{
       {(showAsk || showSubmit) && (
         <div className={buttonLayout === 'grid-2' ? 'grid grid-cols-2 gap-2' : 'flex flex-wrap gap-2'}>
           {showAsk && (
-            <Button size="sm" variant="clay" onClick={() => api.onAskOrganizer(match)}>Schedule</Button>
+            <Button size="sm" variant="clay" onClick={() => api.onAskOrganizer(match)}>
+              Schedule
+            </Button>
           )}
           {showSubmit && (
-            <Button size="sm" variant="clay" className="px-3" onClick={() => api.onSubmitScore!(match)}>Submit Score</Button>
+            <Button size="sm" variant="clay" className="px-3" onClick={() => api.onSubmitScore!(match)}>
+              Submit Score
+            </Button>
           )}
         </div>
       )}
@@ -482,9 +552,7 @@ export const RRConfigModal: React.FC<{
       <div className="p-6 space-y-5">
         {/* Header */}
         <div className="pr-10">
-          <h2 className="text-lg font-bold text-fg">
-            {isConversion ? 'Convert to Round Robin' : 'Round Robin Setup'}
-          </h2>
+          <h2 className="text-lg font-bold text-fg">{isConversion ? 'Convert to Round Robin' : 'Round Robin Setup'}</h2>
         </div>
 
         {/* Conversion warning */}
@@ -522,8 +590,8 @@ export const RRConfigModal: React.FC<{
               <span className="text-fg">preferred-court zone</span>, in balanced groups of 3–5.
             </p>
             <p className="text-fg/70">
-              Every group winner advances to the knockout, then the best runners-up fill up to the next
-              4 / 8 / 16-player bracket.
+              Every group winner advances to the knockout, then the best runners-up fill up to the next 4 / 8 /
+              16-player bracket.
             </p>
             <p className="text-fg/70 text-xs pt-1">The exact groups are shown in the preview on the page.</p>
           </div>
@@ -583,7 +651,9 @@ export const ZoneDrawConfigPanel: React.FC<{
   }, [participants, zoneMap, config]);
 
   const sourcesMergedInto = (targetId: string) =>
-    Object.entries(merges).filter(([, t]) => t === targetId).map(([s]) => s);
+    Object.entries(merges)
+      .filter(([, t]) => t === targetId)
+      .map(([s]) => s);
   const labelOf = (id: string) => config.buckets.find((b) => b.id === id)?.label ?? id;
   const courtsIn = (id: string) => ZONE_COURT_COUNTS[labelOf(id) as ZoneName]?.courts;
 
@@ -606,91 +676,100 @@ export const ZoneDrawConfigPanel: React.FC<{
               {config.enabled ? 'Each zone runs its own draws' : 'One draw per skill, zones ignored'}
             </span>
           </span>
-          <span className={`text-[10px] font-black uppercase tracking-wide shrink-0 ${config.enabled ? 'text-clay' : 'text-fg/70'}`}>
+          <span
+            className={`text-[10px] font-black uppercase tracking-wide shrink-0 ${config.enabled ? 'text-clay' : 'text-fg/70'}`}
+          >
             {config.enabled ? 'On' : 'Off'}
           </span>
         </button>
 
-        {config.enabled && (<>
-        <p className="text-sm text-fg/70">
-          Merge a quiet zone into a neighbour so it doesn&apos;t run a near-empty draw — you can
-          unmerge it again at any point before its draws are generated.
-        </p>
+        {config.enabled && (
+          <>
+            <p className="text-sm text-fg/70">
+              Merge a quiet zone into a neighbour so it doesn&apos;t run a near-empty draw — you can unmerge it again at
+              any point before its draws are generated.
+            </p>
 
-        <div className="space-y-2">
-          {activeBuckets.map((b) => {
-            const swallowed = sourcesMergedInto(b.id);
-            const locked = zonesWithMatches?.has(b.id);
-            const courts = courtsIn(b.id);
-            return (
-              <div key={b.id} className="rounded-2xl bg-fg/5 px-3.5 py-3 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0">
-                    <span className="block text-sm font-bold text-fg truncate">{b.label}</span>
-                    <span className="block text-[11px] text-fg/70">
-                      {counts.get(b.id) ?? 0} players{courts ? ` · ${courts} courts` : ''}
-                    </span>
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={locked || activeBuckets.length < 2}
-                    title={locked ? 'This zone already has matches' : undefined}
-                    onClick={() => setMergeSource(b.id)}
-                  >
-                    Merge Zone
-                  </Button>
-                </div>
-
-                {/* One unmerge button per zone this one swallowed. */}
-                {swallowed.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-1 border-t border-fg/5">
-                    {swallowed.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => onUnmerge(s)}
-                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-clay/10 text-clay hover:bg-clay/20 transition-colors"
+            <div className="space-y-2">
+              {activeBuckets.map((b) => {
+                const swallowed = sourcesMergedInto(b.id);
+                const locked = zonesWithMatches?.has(b.id);
+                const courts = courtsIn(b.id);
+                return (
+                  <div key={b.id} className="rounded-2xl bg-fg/5 px-3.5 py-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="min-w-0">
+                        <span className="block text-sm font-bold text-fg truncate">{b.label}</span>
+                        <span className="block text-[11px] text-fg/70">
+                          {counts.get(b.id) ?? 0} players{courts ? ` · ${courts} courts` : ''}
+                        </span>
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={locked || activeBuckets.length < 2}
+                        title={locked ? 'This zone already has matches' : undefined}
+                        onClick={() => setMergeSource(b.id)}
                       >
-                        Unmerge {labelOf(s)}
+                        Merge Zone
+                      </Button>
+                    </div>
+
+                    {/* One unmerge button per zone this one swallowed. */}
+                    {swallowed.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1 border-t border-fg/5">
+                        {swallowed.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => onUnmerge(s)}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-clay/10 text-clay hover:bg-clay/20 transition-colors"
+                          >
+                            Unmerge {labelOf(s)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* "Merge <zone> into…" — the target list is every other active zone. */}
+            {mergeSource && (
+              <div className="rounded-2xl border border-clay/40 bg-clay/5 p-3.5 space-y-2">
+                <p className="text-xs font-bold uppercase tracking-widest text-clay">
+                  Merge {labelOf(mergeSource)} into
+                </p>
+                <div className="space-y-1.5">
+                  {activeBuckets
+                    .filter((b) => b.id !== mergeSource)
+                    .map((b) => (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => {
+                          onMerge(mergeSource, b.id);
+                          setMergeSource(null);
+                        }}
+                        className="w-full flex items-center justify-between gap-2 rounded-xl bg-fg/5 hover:bg-fg/[0.09] px-3 py-2 text-left transition-colors"
+                      >
+                        <span className="text-sm font-semibold text-fg truncate">{b.label}</span>
+                        <span className="shrink-0 text-[11px] text-fg/70">{counts.get(b.id) ?? 0} players</span>
                       </button>
                     ))}
-                  </div>
-                )}
+                </div>
+                <Button size="sm" variant="outline" className="w-full" onClick={() => setMergeSource(null)}>
+                  Cancel
+                </Button>
               </div>
-            );
-          })}
-        </div>
-
-        {/* "Merge <zone> into…" — the target list is every other active zone. */}
-        {mergeSource && (
-          <div className="rounded-2xl border border-clay/40 bg-clay/5 p-3.5 space-y-2">
-            <p className="text-xs font-bold uppercase tracking-widest text-clay">
-              Merge {labelOf(mergeSource)} into
-            </p>
-            <div className="space-y-1.5">
-              {activeBuckets.filter((b) => b.id !== mergeSource).map((b) => (
-                <button
-                  key={b.id}
-                  type="button"
-                  onClick={() => { onMerge(mergeSource, b.id); setMergeSource(null); }}
-                  className="w-full flex items-center justify-between gap-2 rounded-xl bg-fg/5 hover:bg-fg/[0.09] px-3 py-2 text-left transition-colors"
-                >
-                  <span className="text-sm font-semibold text-fg truncate">{b.label}</span>
-                  <span className="shrink-0 text-[11px] text-fg/70">
-                    {counts.get(b.id) ?? 0} players
-                  </span>
-                </button>
-              ))}
-            </div>
-            <Button size="sm" variant="outline" className="w-full" onClick={() => setMergeSource(null)}>
-              Cancel
-            </Button>
-          </div>
+            )}
+          </>
         )}
-        </>)}
 
-        <Button variant="clay" className="w-full" onClick={onClose}>Done</Button>
+        <Button variant="clay" className="w-full" onClick={onClose}>
+          Done
+        </Button>
       </div>
     </Sheet>
   );
@@ -726,8 +805,15 @@ export const DrawTabs: React.FC<{
   /** Draw-size picker, rendered inside the selected draw's row (creator, pre-generation only). */
   drawSizeControl?: React.ReactNode;
 }> = ({
-  currentDraw, visibleDraws, drawCounts,
-  onTabChange, onSkillChange, onDoublesChange, onZoneChange, rrView, onRRViewChange,
+  currentDraw,
+  visibleDraws,
+  drawCounts,
+  onTabChange,
+  onSkillChange,
+  onDoublesChange,
+  onZoneChange,
+  rrView,
+  onRRViewChange,
   drawSizeControl,
 }) => {
   const drawKey = (d: DrawConfig) => `${d.tab}|${d.division}|${d.skillGroup}|${d.zone ?? ''}`;
@@ -771,9 +857,9 @@ export const DrawTabs: React.FC<{
     onZoneChange(d.zone);
   };
 
-  const tabs = TAB_ORDER
-    .map((tab) => ({ tab, draws: visibleDraws.filter((d) => d.tab === tab) }))
-    .filter((g) => g.draws.length > 0);
+  const tabs = TAB_ORDER.map((tab) => ({ tab, draws: visibleDraws.filter((d) => d.tab === tab) })).filter(
+    (g) => g.draws.length > 0,
+  );
 
   return (
     <>
@@ -836,7 +922,10 @@ export const DrawTabs: React.FC<{
 
       {rrView && onRRViewChange && (
         <SegmentedControl<'groups' | 'knockout'>
-          options={[{ value: 'groups', label: 'Groups' }, { value: 'knockout', label: 'Knockout' }]}
+          options={[
+            { value: 'groups', label: 'Groups' },
+            { value: 'knockout', label: 'Knockout' },
+          ]}
           value={rrView}
           onChange={onRRViewChange}
           className="mb-5 max-w-xs"
@@ -870,12 +959,24 @@ export const TournamentHeader: React.FC<{
   zoneDrawsEnabled: boolean;
   onOpenZoneConfig: () => void;
 }> = ({
-  isCreator, hasMatches, isProcessing, editMode, started,
-  mensSkillMerge, womensSkillMerge, consolidateDoubles,
+  isCreator,
+  hasMatches,
+  isProcessing,
+  editMode,
+  started,
+  mensSkillMerge,
+  womensSkillMerge,
+  consolidateDoubles,
   currentDrawFormat,
-  onDownload, onGenerateMatches, onCancelMatches, onToggleEdit,
-  onSetMensSkillMerge, onSetWomensSkillMerge, onToggleConsolidateDoubles,
-  zoneDrawsEnabled, onOpenZoneConfig,
+  onDownload,
+  onGenerateMatches,
+  onCancelMatches,
+  onToggleEdit,
+  onSetMensSkillMerge,
+  onSetWomensSkillMerge,
+  onToggleConsolidateDoubles,
+  zoneDrawsEnabled,
+  onOpenZoneConfig,
 }) => {
   const [open, setOpen] = useState(false);
   // Collapsed by default so the sheet stays compact instead of listing every pair up front.
@@ -896,8 +997,13 @@ export const TournamentHeader: React.FC<{
   ];
 
   const Row: React.FC<{
-    icon: React.ReactNode; label: string; hint?: string; danger?: boolean; active?: boolean;
-    onClick: () => void; busy?: boolean;
+    icon: React.ReactNode;
+    label: string;
+    hint?: string;
+    danger?: boolean;
+    active?: boolean;
+    onClick: () => void;
+    busy?: boolean;
   }> = ({ icon, label, hint, danger, active, onClick, busy }) => (
     <button
       type="button"
@@ -911,9 +1017,11 @@ export const TournamentHeader: React.FC<{
             : 'border-fg/10 bg-fg/5 hover:border-fg/30'
       }`}
     >
-      <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-        danger ? 'bg-red-500/15 text-badge-loss' : active ? 'bg-clay/20 text-clay' : 'bg-fg/5 text-fg/70'
-      }`}>
+      <span
+        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+          danger ? 'bg-red-500/15 text-badge-loss' : active ? 'bg-clay/20 text-clay' : 'bg-fg/5 text-fg/70'
+        }`}
+      >
         {icon}
       </span>
       <span className="min-w-0 flex-1">
@@ -927,7 +1035,8 @@ export const TournamentHeader: React.FC<{
   return (
     <div className="mb-8">
       <Button variant="white" onClick={() => setOpen(true)} className="w-full sm:w-auto">
-        <Settings2 className="w-4 h-4 mr-2" />Manage Draw
+        <Settings2 className="w-4 h-4 mr-2" />
+        Manage Draw
       </Button>
 
       {open && (
@@ -937,7 +1046,10 @@ export const TournamentHeader: React.FC<{
               icon={<Download className="w-4 h-4" />}
               label="Download Draw"
               hint="Save the current draw as an image"
-              onClick={() => { onDownload(); setOpen(false); }}
+              onClick={() => {
+                onDownload();
+                setOpen(false);
+              }}
             />
             {hasMatches ? (
               <Row
@@ -946,7 +1058,10 @@ export const TournamentHeader: React.FC<{
                 hint="Delete this draw's generated matches"
                 danger
                 busy={isProcessing}
-                onClick={() => { onCancelMatches(); setOpen(false); }}
+                onClick={() => {
+                  onCancelMatches();
+                  setOpen(false);
+                }}
               />
             ) : (
               <Row
@@ -954,7 +1069,10 @@ export const TournamentHeader: React.FC<{
                 label="Generate Matches"
                 hint="Lock the draw in and create matches"
                 busy={isProcessing}
-                onClick={() => { onGenerateMatches(); setOpen(false); }}
+                onClick={() => {
+                  onGenerateMatches();
+                  setOpen(false);
+                }}
               />
             )}
             <Row
@@ -962,7 +1080,10 @@ export const TournamentHeader: React.FC<{
               label={editMode ? 'Done Editing' : 'Edit Draw'}
               hint={editMode ? undefined : 'Reassign players, set draw size'}
               active={editMode}
-              onClick={() => { onToggleEdit(); setOpen(false); }}
+              onClick={() => {
+                onToggleEdit();
+                setOpen(false);
+              }}
             />
             {canMerge && (
               <Row
@@ -970,7 +1091,10 @@ export const TournamentHeader: React.FC<{
                 label="Zone Draws"
                 hint={zoneDrawsEnabled ? 'Split by zone — tap to edit' : 'Split this draw by geographic zone'}
                 active={zoneDrawsEnabled}
-                onClick={() => { onOpenZoneConfig(); setOpen(false); }}
+                onClick={() => {
+                  onOpenZoneConfig();
+                  setOpen(false);
+                }}
               />
             )}
             {canMerge && (
@@ -983,7 +1107,11 @@ export const TournamentHeader: React.FC<{
                       <Row
                         icon={<Settings2 className="w-4 h-4" />}
                         label={section.label}
-                        hint={section.current ? section.current.split('+').join(' + ') : 'Tap to choose which levels to merge'}
+                        hint={
+                          section.current
+                            ? section.current.split('+').join(' + ')
+                            : 'Tap to choose which levels to merge'
+                        }
                         active={!!section.current}
                         onClick={() => setExpandedMerge(isExpanded ? null : section.key)}
                       />
@@ -998,7 +1126,11 @@ export const TournamentHeader: React.FC<{
                                 label={opt.label}
                                 hint={active ? 'Tap to unmerge' : undefined}
                                 active={active}
-                                onClick={() => { section.onSet(active ? null : opt.pair); setOpen(false); setExpandedMerge(null); }}
+                                onClick={() => {
+                                  section.onSet(active ? null : opt.pair);
+                                  setOpen(false);
+                                  setExpandedMerge(null);
+                                }}
                               />
                             );
                           })}
@@ -1012,7 +1144,10 @@ export const TournamentHeader: React.FC<{
                   label="Merge Doubles"
                   hint={consolidateDoubles ? 'Tap to unmerge' : undefined}
                   active={consolidateDoubles}
-                  onClick={() => { onToggleConsolidateDoubles(); setOpen(false); }}
+                  onClick={() => {
+                    onToggleConsolidateDoubles();
+                    setOpen(false);
+                  }}
                 />
               </>
             )}

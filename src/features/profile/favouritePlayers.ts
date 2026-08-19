@@ -24,9 +24,7 @@ const rank = (docs: PrefDoc[]): string[] => {
       if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
     }
   }
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([name]) => name);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name);
 };
 
 /** The whole ranked list, plus the top 3 picked by each league's members. */
@@ -66,8 +64,12 @@ export function useFavouritePlayerOptions(enabled: boolean): FavouriteOptions {
         };
         if (!cancelled) setOptions(cache);
       })
-      .catch(() => { /* suggestions are a convenience — free text still works */ });
-    return () => { cancelled = true; };
+      .catch(() => {
+        /* suggestions are a convenience — free text still works */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [enabled]);
 
   return options;

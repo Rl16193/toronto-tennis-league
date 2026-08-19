@@ -26,20 +26,44 @@ export const ReviewQueue: React.FC<{ defaultOpen?: 'claims' | null }> = ({ defau
 
   useEffect(() => {
     const unsub = onSnapshot(query(collection(db, 'task_claims'), where('status', '==', 'pending')), (snap) =>
-      setClaims(snap.docs.map((d) => ({ id: d.id, ...d.data() } as TaskClaim))));
+      setClaims(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as TaskClaim)),
+    );
     return () => unsub();
   }, []);
 
-  useEffect(() => { if (defaultOpen) setOpen(defaultOpen); }, [defaultOpen]);
+  useEffect(() => {
+    if (defaultOpen) setOpen(defaultOpen);
+  }, [defaultOpen]);
 
   if (claims.length === 0 && coupons.length === 0) return null;
 
-  const approveClaim = async (id: string) => { setBusy(id); try { await reviewClaim(id, true); } finally { setBusy(null); } };
-  const rejectClaim = async (id: string) => { setBusy(id); try { await reviewClaim(id, false); } finally { setBusy(null); } };
+  const approveClaim = async (id: string) => {
+    setBusy(id);
+    try {
+      await reviewClaim(id, true);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const rejectClaim = async (id: string) => {
+    setBusy(id);
+    try {
+      await reviewClaim(id, false);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const runCoupon = async (code: string, fn: () => Promise<unknown>) => {
-    setBusy(code); setError('');
-    try { await fn(); } catch (err) { setError(serviceErrorMessage(err)); } finally { setBusy(null); }
+    setBusy(code);
+    setError('');
+    try {
+      await fn();
+    } catch (err) {
+      setError(serviceErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
   };
 
   return (
@@ -55,15 +79,21 @@ export const ReviewQueue: React.FC<{ defaultOpen?: 'claims' | null }> = ({ defau
             onClick={() => setOpen(open === 'claims' ? null : 'claims')}
             className="w-full flex items-center justify-between text-left"
           >
-            <span className="text-sm font-semibold text-fg">{claims.length} task{claims.length > 1 ? 's' : ''} need approval</span>
-            <ChevronDown className={`w-4 h-4 text-fg/70 transition-transform ${open === 'claims' ? 'rotate-180' : ''}`} />
+            <span className="text-sm font-semibold text-fg">
+              {claims.length} task{claims.length > 1 ? 's' : ''} need approval
+            </span>
+            <ChevronDown
+              className={`w-4 h-4 text-fg/70 transition-transform ${open === 'claims' ? 'rotate-180' : ''}`}
+            />
           </button>
           {open === 'claims' && (
             <div className="mt-2 space-y-2">
               {claims.map((c) => (
                 <div key={c.id} className="flex items-center gap-3 rounded-2xl bg-tennis-surface/40 px-3 py-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-fg truncate">{c.user_name} — {CLAIM_LABEL[c.type]}</p>
+                    <p className="text-sm font-semibold text-fg truncate">
+                      {c.user_name} — {CLAIM_LABEL[c.type]}
+                    </p>
                     <p className="text-xs text-fg/70 truncate">
                       {c.type === 'volunteer' && c.event_title}
                       {c.type === 'ambassador' && c.invitee_name}
@@ -71,10 +101,20 @@ export const ReviewQueue: React.FC<{ defaultOpen?: 'claims' | null }> = ({ defau
                     </p>
                     {c.note && <p className="text-xs text-fg/70 truncate">{c.note}</p>}
                   </div>
-                  <button disabled={busy === c.id} onClick={() => approveClaim(c.id)} className="p-2 rounded-lg bg-green-500/15 text-badge-win hover:bg-green-500/25" aria-label="Approve">
+                  <button
+                    disabled={busy === c.id}
+                    onClick={() => approveClaim(c.id)}
+                    className="p-2 rounded-lg bg-green-500/15 text-badge-win hover:bg-green-500/25"
+                    aria-label="Approve"
+                  >
                     <Check className="w-4 h-4" />
                   </button>
-                  <button disabled={busy === c.id} onClick={() => rejectClaim(c.id)} className="p-2 rounded-lg bg-red-500/15 text-badge-loss hover:bg-red-500/25" aria-label="Reject">
+                  <button
+                    disabled={busy === c.id}
+                    onClick={() => rejectClaim(c.id)}
+                    className="p-2 rounded-lg bg-red-500/15 text-badge-loss hover:bg-red-500/25"
+                    aria-label="Reject"
+                  >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
@@ -93,8 +133,12 @@ export const ReviewQueue: React.FC<{ defaultOpen?: 'claims' | null }> = ({ defau
             onClick={() => setOpen(open === 'coupons' ? null : 'coupons')}
             className="w-full flex items-center justify-between text-left"
           >
-            <span className="text-sm font-semibold text-fg">{coupons.length} coupon{coupons.length > 1 ? 's' : ''} need a decision</span>
-            <ChevronDown className={`w-4 h-4 text-fg/70 transition-transform ${open === 'coupons' ? 'rotate-180' : ''}`} />
+            <span className="text-sm font-semibold text-fg">
+              {coupons.length} coupon{coupons.length > 1 ? 's' : ''} need a decision
+            </span>
+            <ChevronDown
+              className={`w-4 h-4 text-fg/70 transition-transform ${open === 'coupons' ? 'rotate-180' : ''}`}
+            />
           </button>
           {open === 'coupons' && (
             <div className="mt-2 space-y-2">
@@ -105,20 +149,25 @@ export const ReviewQueue: React.FC<{ defaultOpen?: 'claims' | null }> = ({ defau
                     <div className="flex items-center gap-3">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-fg truncate">
-                          <span className="font-mono tracking-wider">{r.code}</span> — {cancelling ? 'cancel requested' : 'flagged'}
+                          <span className="font-mono tracking-wider">{r.code}</span> —{' '}
+                          {cancelling ? 'cancel requested' : 'flagged'}
                         </p>
-                        <p className="text-xs text-fg/70 truncate">{r.user_name} · {r.offer} · {r.stringer_name}</p>
+                        <p className="text-xs text-fg/70 truncate">
+                          {r.user_name} · {r.offer} · {r.stringer_name}
+                        </p>
                         {(r.cancel_reason || r.flag_note) && (
                           <p className="text-xs text-fg/70 truncate">{r.cancel_reason || r.flag_note}</p>
                         )}
                       </div>
                       <button
                         disabled={busy === r.code}
-                        onClick={() => runCoupon(r.code, () => (
-                          cancelling
-                            ? reviewRedemption({ code: r.code, approve: true })
-                            : markCouponUsed({ code: r.code })
-                        ))}
+                        onClick={() =>
+                          runCoupon(r.code, () =>
+                            cancelling
+                              ? reviewRedemption({ code: r.code, approve: true })
+                              : markCouponUsed({ code: r.code }),
+                          )
+                        }
                         className="p-2 rounded-lg bg-green-500/15 text-badge-win hover:bg-green-500/25 disabled:opacity-50"
                         aria-label={cancelling ? 'Approve cancellation and refund' : 'Mark coupon used'}
                       >

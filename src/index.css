@@ -1,5 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap');
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* Court Map: clear the collapsed pull-up results handle (~48px) at the bottom of the map so the
    zoom +/- controls (moved to bottom-right to stop the top Search/Filters bar covering them)
@@ -9,17 +9,17 @@
 }
 
 @theme {
-  --font-sans: "Montserrat", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
   /* Clay stays the accent color in both themes — only the neutrals below flip. */
-  --color-clay: #FF6B35;
-  --color-clay-dark: #E84A27;
-  --color-tennis-dark: #143D34;
-  --color-tennis-surface: #143D34;
-  --color-tennis-deep: #0B3027;
+  --color-clay: #ff6b35;
+  --color-clay-dark: #e84a27;
+  --color-tennis-dark: #143d34;
+  --color-tennis-surface: #143d34;
+  --color-tennis-deep: #0b3027;
   /* Bottom tab bar fill — the page background in both themes, so the bar reads as part of the
      page rather than a separate white/dark surface. */
-  --color-nav: #143D34;
+  --color-nav: #143d34;
   /* Primary text/icon color — white in dark mode, brand-dark-green in light. Every
      `text-white`/`border-white` in the app is being migrated to `text-fg`/`border-fg` so it
      follows the toggle; see ThemeContext.tsx for how `data-theme` gets set on <html>. */
@@ -28,7 +28,7 @@
      fill by design (e.g. Button's `white` variant, a solid-white chip state), not page body
      text. Using --color-tennis-dark there would break in light mode, since that token IS the
      page background and flips to a light color. */
-  --color-ink: #143D34;
+  --color-ink: #143d34;
   /* Badge/skill-tier pill text — amber-300 reads fine on the dark surface but is nearly
      invisible on light theme's near-white surface, so it flips to a darker amber there. */
   --color-badge: #fcd34d;
@@ -42,12 +42,12 @@
    so every utility built from them (bg-tennis-dark, bg-tennis-surface, text-fg, border-fg, …)
    picks up the new values automatically with no component changes needed. Toggled by
    ThemeContext.tsx setting data-theme="light" on <html> (defaults to dark; persisted). */
-:root[data-theme="light"] {
-  --color-tennis-dark: #EDEDE7;
-  --color-tennis-surface: #FFFFFF;
-  --color-tennis-deep: #DEDED5;
-  --color-nav: #EDEDE7;
-  --color-fg: #143D34;
+:root[data-theme='light'] {
+  --color-tennis-dark: #edede7;
+  --color-tennis-surface: #ffffff;
+  --color-tennis-deep: #deded5;
+  --color-nav: #edede7;
+  --color-fg: #143d34;
   --color-badge: #92400e;
   --color-badge-win: #15803d;
   --color-badge-loss: #b91c1c;
@@ -64,13 +64,19 @@
 }
 
 @layer base {
-  html, body {
+  html,
+  body {
     @apply overflow-x-hidden;
   }
   body {
     @apply bg-tennis-dark text-fg font-sans antialiased;
   }
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-display font-bold;
   }
 }
@@ -84,7 +90,9 @@
 :root {
   color-scheme: dark;
 }
-select, option, optgroup {
+select,
+option,
+optgroup {
   background-color: var(--color-tennis-dark);
   color: var(--color-fg);
 }
@@ -101,7 +109,8 @@ select, option, optgroup {
 .iti__country.iti__highlight {
   background-color: rgba(255, 107, 53, 0.18);
 }
-.iti__country-name, .iti__dial-code {
+.iti__country-name,
+.iti__dial-code {
   color: inherit;
 }
 .iti__search-input {
@@ -126,12 +135,12 @@ input[type='range'] {
   cursor: pointer;
 }
 input[type='range']::-webkit-slider-runnable-track {
-  background: #FF6B35;
+  background: #ff6b35;
   border-radius: 9999px;
   height: 0.5rem;
 }
 input[type='range']::-moz-range-track {
-  background: #FF6B35;
+  background: #ff6b35;
   border-radius: 9999px;
   height: 0.5rem;
 }
@@ -143,7 +152,7 @@ input[type='range']::-webkit-slider-thumb {
   width: 1.25rem;
   height: 1.25rem;
   margin-top: -0.375rem;
-  box-shadow: 0 0 0 3px rgba(255,107,53,0.4);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.4);
 }
 input[type='range']::-moz-range-thumb {
   background: #ffffff;
@@ -151,7 +160,7 @@ input[type='range']::-moz-range-thumb {
   border-radius: 9999px;
   width: 1.25rem;
   height: 1.25rem;
-  box-shadow: 0 0 0 3px rgba(255,107,53,0.4);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.4);
 }
 
 .clay-gradient {

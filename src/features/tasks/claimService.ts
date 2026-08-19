@@ -27,7 +27,11 @@ export interface TaskClaim {
 }
 
 export async function createVolunteerClaim(
-  uid: string, name: string, eventId: string, eventTitle: string, note: string,
+  uid: string,
+  name: string,
+  eventId: string,
+  eventTitle: string,
+  note: string,
 ): Promise<void> {
   await addDoc(collection(db, 'task_claims'), {
     type: 'volunteer',
@@ -42,7 +46,11 @@ export async function createVolunteerClaim(
 }
 
 export async function createHostClaim(
-  uid: string, name: string, meetupTitle: string, meetupDate: string, note: string,
+  uid: string,
+  name: string,
+  meetupTitle: string,
+  meetupDate: string,
+  note: string,
 ): Promise<void> {
   await addDoc(collection(db, 'task_claims'), {
     type: 'host',
@@ -72,7 +80,10 @@ const alreadyClaimed = async (inviteeId: string): Promise<boolean> => {
 // gate, and the server enforces "one inviter per member" authoritatively at that point too.
 // Returns an error message on failure, or null on success.
 export async function createAmbassadorClaim(
-  uid: string, name: string, inviteeId: string, inviteeName: string,
+  uid: string,
+  name: string,
+  inviteeId: string,
+  inviteeName: string,
 ): Promise<string | null> {
   if (inviteeId === uid) return 'You can’t invite yourself.';
   const played = await hasPlayedAMatch(inviteeId);

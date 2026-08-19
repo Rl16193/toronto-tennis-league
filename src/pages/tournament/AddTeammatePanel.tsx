@@ -28,11 +28,20 @@ export const AddTeammatePanel: React.FC<Props> = ({ currentUserId, saving, onSav
   const isGuest = !!pick && pick.memberId === null;
 
   const submit = () => {
-    if (!pick) { setError('Please choose your teammate.'); return; }
+    if (!pick) {
+      setError('Please choose your teammate.');
+      return;
+    }
     const name = pick.name.trim();
     // Same rules the join form applies, so both paths produce identical data.
-    if (name.length < 3 || name.length > 80) { setError('Teammate name must be 3–80 characters.'); return; }
-    if (/\d/.test(name)) { setError('Teammate name cannot contain numbers.'); return; }
+    if (name.length < 3 || name.length > 80) {
+      setError('Teammate name must be 3–80 characters.');
+      return;
+    }
+    if (/\d/.test(name)) {
+      setError('Teammate name cannot contain numbers.');
+      return;
+    }
 
     let combined: number | null = null;
     if (isGuest) {
@@ -53,16 +62,17 @@ export const AddTeammatePanel: React.FC<Props> = ({ currentUserId, saving, onSav
         <Users className="w-4 h-4 text-clay shrink-0" />
         <div>
           <p className="text-sm font-bold text-fg">Add your teammate</p>
-          <p className="text-[11px] text-fg">
-            You’re registered for doubles but we don’t have your partner yet.
-          </p>
+          <p className="text-[11px] text-fg">You’re registered for doubles but we don’t have your partner yet.</p>
         </div>
       </div>
 
       <MemberSearchInput
         label="Teammate"
         value={pick}
-        onChange={(p) => { setPick(p); setError(''); }}
+        onChange={(p) => {
+          setPick(p);
+          setError('');
+        }}
         excludeId={currentUserId}
         allowGuest
         placeholder="Search for your teammate…"

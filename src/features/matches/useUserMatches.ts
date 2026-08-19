@@ -47,7 +47,6 @@ const isRealOpponent = (name: string) =>
 
 const isTournamentMatch = (category?: string) => category === 'singles' || category === 'doubles';
 
-
 export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: UpcomingMatch[]; loading: boolean } {
   const [matches, setMatches] = useState<UserMatch[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingMatch[]>([]);
@@ -56,7 +55,12 @@ export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: 
   useEffect(() => {
     // Clear BOTH lists on sign-out — leaving `upcoming` populated kept the previous user's
     // opponent names and contact strings on screen until the next remount.
-    if (!uid) { setMatches([]); setUpcoming([]); setLoading(false); return; }
+    if (!uid) {
+      setMatches([]);
+      setUpcoming([]);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
 
@@ -100,9 +104,7 @@ export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: 
             const oppSets = iAmP1
               ? [num(m.set_1_player_2), num(m.set_2_player_2), num(m.set_3_player_2)]
               : [num(m.set_1_player_1), num(m.set_2_player_1), num(m.set_3_player_1)];
-            const parts = mySets
-              .map((a, i) => [a, oppSets[i]] as [number, number])
-              .filter(([a, b]) => a > 0 || b > 0);
+            const parts = mySets.map((a, i) => [a, oppSets[i]] as [number, number]).filter(([a, b]) => a > 0 || b > 0);
 
             list.push({
               id: m.id,
@@ -148,9 +150,7 @@ export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: 
             const oppSets = iAmP1
               ? [num(raw.set_1_player_2), num(raw.set_2_player_2), num(raw.set_3_player_2)]
               : [num(raw.set_1_player_1), num(raw.set_2_player_1), num(raw.set_3_player_1)];
-            const pairs = mySets
-              .map((a, i) => [a, oppSets[i]] as [number, number])
-              .filter(([a, b]) => a > 0 || b > 0);
+            const pairs = mySets.map((a, i) => [a, oppSets[i]] as [number, number]).filter(([a, b]) => a > 0 || b > 0);
 
             list.push({
               id: d.id,
@@ -167,14 +167,24 @@ export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: 
         });
 
         list.sort((a, b) => b.completedAt - a.completedAt);
-        if (!cancelled) { setMatches(list); setUpcoming(pending); setLoading(false); }
+        if (!cancelled) {
+          setMatches(list);
+          setUpcoming(pending);
+          setLoading(false);
+        }
       } catch (err) {
         console.error('Failed to load user matches:', err);
-        if (!cancelled) { setMatches([]); setUpcoming([]); setLoading(false); }
+        if (!cancelled) {
+          setMatches([]);
+          setUpcoming([]);
+          setLoading(false);
+        }
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [uid]);
 
   return { matches, upcoming, loading };

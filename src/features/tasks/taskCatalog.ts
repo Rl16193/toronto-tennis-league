@@ -12,30 +12,40 @@ export const SETUP_POINTS = 25;
 // Counters are computed from real data (matches, challenges) or stored on the player's
 // tasks doc (things the app can't derive yet, like courts visited).
 export type CounterKey =
-  | 'matchesPlayed'      // completed matches with real set scores (walkovers excluded)
-  | 'challengesPlayed'   // confirmed ladder challenges, either side
-  | 'challengesWon'      // confirmed ladder challenges won
-  | 'bestStreak'         // longest run of wins ever
-  | 'monthsActive'       // distinct months with a completed match
-  | 'suggestions'        // court improvement suggestions submitted
-  | 'courtsVisited'      // passport stamps
-  | 'zoneComplete'       // 1 once every court in your zone is stamped
-  | 'boardPhotos'        // waiting-board photos accepted
-  | 'queueUpdates'       // racquet queue photos submitted
-  | 'volunteerEvents'    // events volunteered at
-  | 'invites'            // players who joined via your invite
-  | 'meetups';           // meetups hosted
+  | 'matchesPlayed' // completed matches with real set scores (walkovers excluded)
+  | 'challengesPlayed' // confirmed ladder challenges, either side
+  | 'challengesWon' // confirmed ladder challenges won
+  | 'bestStreak' // longest run of wins ever
+  | 'monthsActive' // distinct months with a completed match
+  | 'suggestions' // court improvement suggestions submitted
+  | 'courtsVisited' // passport stamps
+  | 'zoneComplete' // 1 once every court in your zone is stamped
+  | 'boardPhotos' // waiting-board photos accepted
+  | 'queueUpdates' // racquet queue photos submitted
+  | 'volunteerEvents' // events volunteered at
+  | 'invites' // players who joined via your invite
+  | 'meetups'; // meetups hosted
 
 export type Counters = Record<CounterKey, number>;
 
 export const EMPTY_COUNTERS: Counters = {
-  matchesPlayed: 0, challengesPlayed: 0, challengesWon: 0, bestStreak: 0,
-  monthsActive: 0, suggestions: 0, courtsVisited: 0, zoneComplete: 0, boardPhotos: 0,
-  queueUpdates: 0, volunteerEvents: 0, invites: 0, meetups: 0,
+  matchesPlayed: 0,
+  challengesPlayed: 0,
+  challengesWon: 0,
+  bestStreak: 0,
+  monthsActive: 0,
+  suggestions: 0,
+  courtsVisited: 0,
+  zoneComplete: 0,
+  boardPhotos: 0,
+  queueUpdates: 0,
+  volunteerEvents: 0,
+  invites: 0,
+  meetups: 0,
 };
 
 export interface TierDef {
-  id: string;        // field name on task_progress
+  id: string; // field name on task_progress
   title: string;
   points: number;
   counter: CounterKey;
@@ -46,8 +56,8 @@ export interface CategoryDef {
   id: string;
   title: string;
   tiers: TierDef[];
-  locked?: boolean;  // the feature that feeds it doesn't exist yet
-  to?: string;       // where to go to make progress
+  locked?: boolean; // the feature that feeds it doesn't exist yet
+  to?: string; // where to go to make progress
 }
 
 export const CATEGORIES: CategoryDef[] = [
@@ -182,8 +192,8 @@ export const CATEGORIES: CategoryDef[] = [
 export interface GroupTaskDef {
   id: string;
   name: string;
-  trigger: string;   // full sentence — rendered wrapped, not truncated
-  points: string;    // e.g. "+10 each" — a label, since group bonuses aren't a single tier value
+  trigger: string; // full sentence — rendered wrapped, not truncated
+  points: string; // e.g. "+10 each" — a label, since group bonuses aren't a single tier value
 }
 
 // Reset every day (the calendar day is part of the award, so yesterday's bonus never blocks today's).
@@ -191,15 +201,17 @@ export const DAILY_GROUP_TASKS: GroupTaskDef[] = [
   {
     id: 'matchday',
     name: 'Matchday',
-    trigger: 'When more than 3 matches are played across the league on the same day, every member '
-      + 'who played a match that day unlocks the bonus. Walkovers don’t count.',
+    trigger:
+      'When more than 3 matches are played across the league on the same day, every member ' +
+      'who played a match that day unlocks the bonus. Walkovers don’t count.',
     points: '+10 each',
   },
   {
     id: 'hourlyCoverage',
     name: 'Hourly Coverage',
-    trigger: 'When a court has at least one live racquet-queue report for every hour from 8 AM to '
-      + '10 PM on the same day, everyone who posted a queue report there that day unlocks the bonus.',
+    trigger:
+      'When a court has at least one live racquet-queue report for every hour from 8 AM to ' +
+      '10 PM on the same day, everyone who posted a queue report there that day unlocks the bonus.',
     points: '+10 each',
   },
 ];
@@ -215,15 +227,17 @@ export const COMMUNITY_GROUP_TASKS: GroupTaskDef[] = [
   {
     id: 'boardFreshness',
     name: 'Board Freshness',
-    trigger: 'Submit the first approved waiting-board report for a court. +5. Every court in a '
-      + 'zone has a waiting-board report, everyone who contributed in that zone gets +10.',
+    trigger:
+      'Submit the first approved waiting-board report for a court. +5. Every court in a ' +
+      'zone has a waiting-board report, everyone who contributed in that zone gets +10.',
     points: '+5 / +10',
   },
   {
     id: 'zoneSweep',
     name: 'Full Zone Sweep',
-    trigger: 'Every member with a check for a court in that a zone, unlocks the bonus. The sweep '
-      + 'then resets to zero and starts again.',
+    trigger:
+      'Every member with a check for a court in that a zone, unlocks the bonus. The sweep ' +
+      'then resets to zero and starts again.',
     points: '+10 each',
   },
 ];
@@ -239,6 +253,6 @@ export const TOTAL_AVAILABLE = CATEGORIES.reduce((n, c) => n + categoryTotal(c),
 // Badge grouping: "playing tasks" spans the three match-based categories.
 export const PLAYING_CATEGORY_IDS = ['tournament', 'ladder', 'streaks'];
 export const LADDER_TIER_IDS = CATEGORIES.find((c) => c.id === 'ladder')!.tiers.map((t) => t.id);
-export const PLAYING_TIER_IDS = CATEGORIES
-  .filter((c) => PLAYING_CATEGORY_IDS.includes(c.id))
-  .flatMap((c) => c.tiers.map((t) => t.id));
+export const PLAYING_TIER_IDS = CATEGORIES.filter((c) => PLAYING_CATEGORY_IDS.includes(c.id)).flatMap((c) =>
+  c.tiers.map((t) => t.id),
+);

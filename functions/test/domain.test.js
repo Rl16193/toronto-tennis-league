@@ -11,26 +11,41 @@ test('earnedRsPoints combines setup, completed tiers, and server bonus points', 
 });
 
 test('email delivery blocks emulators and non-production by default', () => {
-  assert.deepEqual(emailDeliveryDecision({
-    projectId: 'rands-local', recipient: 'test@example.invalid', emulator: true,
-  }), { deliver: false, reason: 'emulator' });
-  assert.deepEqual(emailDeliveryDecision({
-    projectId: 'rands-staging', recipient: 'test@example.invalid',
-  }), { deliver: false, reason: 'non-production-disabled' });
+  assert.deepEqual(
+    emailDeliveryDecision({
+      projectId: 'rands-local',
+      recipient: 'test@example.invalid',
+      emulator: true,
+    }),
+    { deliver: false, reason: 'emulator' },
+  );
+  assert.deepEqual(
+    emailDeliveryDecision({
+      projectId: 'rands-staging',
+      recipient: 'test@example.invalid',
+    }),
+    { deliver: false, reason: 'non-production-disabled' },
+  );
 });
 
 test('email delivery requires an exact allowlist in non-production', () => {
   const base = { projectId: 'rands-staging', recipient: 'qa@example.invalid', enabled: true };
   assert.deepEqual(emailDeliveryDecision({ ...base, allowlist: [] }), {
-    deliver: false, reason: 'recipient-not-allowlisted',
+    deliver: false,
+    reason: 'recipient-not-allowlisted',
   });
   assert.deepEqual(emailDeliveryDecision({ ...base, allowlist: ['qa@example.invalid'] }), {
-    deliver: true, reason: 'non-production-allowlisted',
+    deliver: true,
+    reason: 'non-production-allowlisted',
   });
 });
 
 test('production delivery remains explicit by project identity', () => {
-  assert.deepEqual(emailDeliveryDecision({
-    projectId: 'toronto-tennis-league', recipient: 'member@example.invalid',
-  }), { deliver: true, reason: 'production' });
+  assert.deepEqual(
+    emailDeliveryDecision({
+      projectId: 'toronto-tennis-league',
+      recipient: 'member@example.invalid',
+    }),
+    { deliver: true, reason: 'production' },
+  );
 });

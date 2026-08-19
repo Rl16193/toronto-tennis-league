@@ -10,10 +10,8 @@
     <script>
       (function () {
         var h = location.hostname;
-        if (h === 'toronto-tennis-league.web.app' ||
-            h === 'toronto-tennis-league.firebaseapp.com') {
-          location.replace('https://www.racquetsandstrings.ca' +
-            location.pathname + location.search + location.hash);
+        if (h === 'toronto-tennis-league.web.app' || h === 'toronto-tennis-league.firebaseapp.com') {
+          location.replace('https://www.racquetsandstrings.ca' + location.pathname + location.search + location.hash);
         }
       })();
     </script>
@@ -25,8 +23,14 @@
     <link rel="apple-touch-icon" href="/Logo.png" />
 
     <!-- SEO -->
-    <meta name="description" content="Racquets &amp; Strings — Toronto's tennis community. Join events, play competitive matches, track results and connect with other players." />
-    <meta name="keywords" content="tennis Toronto, Toronto tennis community, Toronto tennis club, Toronto tennis league, Toronto tennis meetup, recreational tennis Toronto, tennis players Toronto, NTRP Toronto, doubles tennis Toronto, singles tennis Toronto, tennis tournament Toronto, Racquets and Strings, find tennis courts Toronto, tennis courts near me, tennis courts near you Toronto, public tennis courts Toronto, outdoor tennis courts Toronto, tennis court map Toronto, find tennis programs Toronto, tennis programs near me, tennis programs near you, tennis lessons Toronto, Toronto tennis programs, City of Toronto tennis, tennis court locations Toronto, where to play tennis Toronto" />
+    <meta
+      name="description"
+      content="Racquets &amp; Strings — Toronto's tennis community. Join events, play competitive matches, track results and connect with other players."
+    />
+    <meta
+      name="keywords"
+      content="tennis Toronto, Toronto tennis community, Toronto tennis club, Toronto tennis league, Toronto tennis meetup, recreational tennis Toronto, tennis players Toronto, NTRP Toronto, doubles tennis Toronto, singles tennis Toronto, tennis tournament Toronto, Racquets and Strings, find tennis courts Toronto, tennis courts near me, tennis courts near you Toronto, public tennis courts Toronto, outdoor tennis courts Toronto, tennis court map Toronto, find tennis programs Toronto, tennis programs near me, tennis programs near you, tennis lessons Toronto, Toronto tennis programs, City of Toronto tennis, tennis court locations Toronto, where to play tennis Toronto"
+    />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://www.racquetsandstrings.ca/" />
 
@@ -35,48 +39,60 @@
     <meta property="og:locale" content="en_CA" />
     <meta property="og:site_name" content="Racquets &amp; Strings" />
     <meta property="og:title" content="Racquets &amp; Strings — Toronto's Tennis Community" />
-    <meta property="og:description" content="Join events, play competitive matches, track results and connect with other players in Toronto." />
+    <meta
+      property="og:description"
+      content="Join events, play competitive matches, track results and connect with other players in Toronto."
+    />
     <meta property="og:url" content="https://www.racquetsandstrings.ca/" />
-    <meta property="og:image" content="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FScreenshot%202026-06-01%20130844.png?alt=media" />
+    <meta
+      property="og:image"
+      content="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FScreenshot%202026-06-01%20130844.png?alt=media"
+    />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Racquets &amp; Strings — Toronto's Tennis Community" />
-    <meta name="twitter:description" content="Join events, play competitive matches, track results and connect with other players in Toronto." />
-    <meta name="twitter:image" content="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FScreenshot%202026-06-01%20130844.png?alt=media" />
+    <meta
+      name="twitter:description"
+      content="Join events, play competitive matches, track results and connect with other players in Toronto."
+    />
+    <meta
+      name="twitter:image"
+      content="https://firebasestorage.googleapis.com/v0/b/toronto-tennis-league.firebasestorage.app/o/LandingPage%2FScreenshot%202026-06-01%20130844.png?alt=media"
+    />
 
     <!-- Structured data. The contact email and Instagram URL below MIRROR
          src/components/FooterElements.tsx — this file is outside the Vite module graph so it
          can't import them. Change them in both places or search results go stale. -->
     <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "SportsOrganization",
-      "name": "Racquets & Strings",
-      "alternateName": "Racquets and Strings",
-      "url": "https://www.racquetsandstrings.ca",
-      "logo": "https://www.racquetsandstrings.ca/Logo.png",
-      "description": "Toronto's tennis community. Find tennis courts and programs near you, join events, play competitive matches, and connect with other players.",
-      "sport": "Tennis",
-      "areaServed": {
-        "@type": "City",
-        "name": "Toronto",
-        "addressCountry": "CA"
-      },
-      "address": {
-        "@type": "PostalAddress",
-        "addressLocality": "Toronto",
-        "addressRegion": "ON",
-        "addressCountry": "CA"
-      },
-      "sameAs": ["https://www.instagram.com/racqnstringstoronto"],
-      "contactPoint": {
-        "@type": "ContactPoint",
-        "contactType": "customer support",
-        "email": "events@racquetsandstrings.ca",
-        "url": "https://www.racquetsandstrings.ca/contact"
+      {
+        "@context": "https://schema.org",
+        "@type": "SportsOrganization",
+        "name": "Racquets & Strings",
+        "alternateName": "Racquets and Strings",
+        "url": "https://www.racquetsandstrings.ca",
+        "logo": "https://www.racquetsandstrings.ca/Logo.png",
+        "description": "Toronto's tennis community. Find tennis courts and programs near you, join events, play competitive matches, and connect with other players.",
+        "sport": "Tennis",
+        "areaServed": {
+          "@type": "City",
+          "name": "Toronto",
+          "addressCountry": "CA"
+        },
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Toronto",
+          "addressRegion": "ON",
+          "addressCountry": "CA"
+        },
+        "sameAs": ["https://www.instagram.com/racqnstringstoronto"],
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "contactType": "customer support",
+          "email": "events@racquetsandstrings.ca",
+          "url": "https://www.racquetsandstrings.ca/contact"
+        }
       }
-    }
     </script>
 
     <!-- Warm up connections to Firebase so auth/data start loading sooner -->
@@ -90,14 +106,20 @@
         try {
           var t = localStorage.getItem('rs-theme');
           if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
-        } catch (e) { /* default (dark) applies */ }
+        } catch (e) {
+          /* default (dark) applies */
+        }
       })();
     </script>
 
     <!-- Instant loading screen (replaced by React on mount; no extra JS/CSS request) -->
     <style>
-      html { background-color: #143D34; }
-      html[data-theme="light"] { background-color: #EDEDE7; }
+      html {
+        background-color: #143d34;
+      }
+      html[data-theme='light'] {
+        background-color: #edede7;
+      }
       #app-splash {
         position: fixed;
         inset: 0;
@@ -106,27 +128,41 @@
         align-items: center;
         justify-content: center;
         gap: 28px;
-        background-color: #143D34;
-        font-family: 'Montserrat', system-ui, -apple-system, sans-serif;
+        background-color: #143d34;
+        font-family:
+          'Montserrat',
+          system-ui,
+          -apple-system,
+          sans-serif;
       }
-      html[data-theme="light"] #app-splash { background-color: #EDEDE7; }
+      html[data-theme='light'] #app-splash {
+        background-color: #edede7;
+      }
       #app-splash .splash-wordmark {
         font-size: 22px;
         font-weight: 700;
         letter-spacing: 0.02em;
         color: #ffffff;
       }
-      html[data-theme="light"] #app-splash .splash-wordmark { color: #16261F; }
-      #app-splash .splash-wordmark span { color: #FF6B35; }
+      html[data-theme='light'] #app-splash .splash-wordmark {
+        color: #16261f;
+      }
+      #app-splash .splash-wordmark span {
+        color: #ff6b35;
+      }
       #app-splash .splash-spinner {
         width: 44px;
         height: 44px;
         border: 4px solid rgba(255, 107, 53, 0.25);
-        border-top-color: #FF6B35;
+        border-top-color: #ff6b35;
         border-radius: 9999px;
         animation: splash-spin 0.8s linear infinite;
       }
-      @keyframes splash-spin { to { transform: rotate(360deg); } }
+      @keyframes splash-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
     </style>
   </head>
   <body>

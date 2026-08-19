@@ -23,7 +23,9 @@ export const Stepper: React.FC<{
   };
 
   return (
-    <div className={`flex items-center justify-between rounded-xl border border-fg/10 bg-fg/5 px-1.5 py-1 ${className}`}>
+    <div
+      className={`flex items-center justify-between rounded-xl border border-fg/10 bg-fg/5 px-1.5 py-1 ${className}`}
+    >
       <motion.button
         type="button"
         onClick={() => onChange(Math.max(min, value - 1))}

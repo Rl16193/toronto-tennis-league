@@ -19,9 +19,20 @@
 // using a smart quote or ellipsis doesn't silently ship "You&rsquo;ve" to recipients. Numeric
 // escapes (&#129309;, &#x27;) are handled generically below and need no table.
 const NAMED = {
-  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
-  middot: '·', mdash: '—', ndash: '–', hellip: '…',
-  lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+  middot: '·',
+  mdash: '—',
+  ndash: '–',
+  hellip: '…',
+  lsquo: '‘',
+  rsquo: '’',
+  ldquo: '“',
+  rdquo: '”',
 };
 
 function decodeEntities(s) {
@@ -40,7 +51,10 @@ function htmlToText(html) {
       .replace(/<!--[\s\S]*?-->/g, '')
       // Links: keep the destination. "Label: url", or just the url when the label repeats it.
       .replace(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_, href, label) => {
-        const text = label.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+        const text = label
+          .replace(/<[^>]+>/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
         return !text || href.includes(text) ? ` ${href} ` : ` ${text}: ${href} `;
       })
       // Block-level tags become line breaks; <br> too.

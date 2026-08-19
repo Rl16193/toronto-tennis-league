@@ -14,7 +14,7 @@ import { ZoneName } from './zones';
  */
 export const ZONE_COURT_COUNTS: Record<ZoneName, { courts: number; sites: number }> = {
   'York West': { courts: 72, sites: 28 },
-  'Etobicoke': { courts: 87, sites: 28 },
+  Etobicoke: { courts: 87, sites: 28 },
   'Etobicoke - Lakeshore': { courts: 72, sites: 24 },
   'North York': { courts: 118, sites: 34 },
   'Downtown - Midtown': { courts: 77, sites: 17 },
@@ -22,5 +22,4 @@ export const ZONE_COURT_COUNTS: Record<ZoneName, { courts: number; sites: number
   'East York and South Scarborough': { courts: 70, sites: 19 },
 };
 
-export const totalCourtsIn = (zone: string): number =>
-  ZONE_COURT_COUNTS[zone as ZoneName]?.courts ?? 0;
+export const totalCourtsIn = (zone: string): number => ZONE_COURT_COUNTS[zone as ZoneName]?.courts ?? 0;

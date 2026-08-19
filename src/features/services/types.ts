@@ -39,11 +39,11 @@ export interface Reward {
 }
 
 export type RedemptionStatus =
-  | 'active'            // coupon issued, not yet used
-  | 'used'              // provider or organizer burned it
-  | 'flagged'           // provider raised a problem — organizer decides
-  | 'cancel_requested'  // player asked to undo it — organizer decides
-  | 'cancelled';        // undone, points refunded
+  | 'active' // coupon issued, not yet used
+  | 'used' // provider or organizer burned it
+  | 'flagged' // provider raised a problem — organizer decides
+  | 'cancel_requested' // player asked to undo it — organizer decides
+  | 'cancelled'; // undone, points refunded
 
 // Collection: redemptions — doc id IS the coupon code, which is what makes codes unique.
 // Written only by the Cloud Functions in functions/rewards.js; read-only to everyone else.
@@ -81,7 +81,7 @@ export const MIN_REWARD_COST = 15;
 
 /** Collection: group_lessons/{YYYY-MM} — one doc per month, so spots reset on the 1st. */
 export interface GroupLesson {
-  month: string;             // 'YYYY-MM'
+  month: string; // 'YYYY-MM'
   coach_id: string;
   coach_name: string;
   capacity: number;
@@ -101,7 +101,9 @@ export const GROUP_LESSON_CAPACITY = 4;
 /** Current month key in Toronto time — must match monthKey() in functions/rewards.js. */
 export const currentMonthKey = (): string => {
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto', year: 'numeric', month: '2-digit',
+    timeZone: 'America/Toronto',
+    year: 'numeric',
+    month: '2-digit',
   }).formatToParts(new Date());
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
   return `${get('year')}-${get('month')}`;

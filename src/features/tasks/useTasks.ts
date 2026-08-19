@@ -3,9 +3,7 @@ import { collection, doc, getDocs, increment, limit, onSnapshot, query, setDoc, 
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import type { TaskProgress, UserProfile } from '../../types';
-import {
-  ALL_TIERS, CATEGORIES, Counters, EMPTY_COUNTERS, SETUP_POINTS, TIER_POINTS,
-} from './taskCatalog';
+import { ALL_TIERS, CATEGORIES, Counters, EMPTY_COUNTERS, SETUP_POINTS, TIER_POINTS } from './taskCatalog';
 import { fetchCompletedTournamentMatches } from './matchHistory';
 import { INSTAGRAM_URL, WHATSAPP_URL } from '../../components/FooterElements';
 
@@ -43,9 +41,21 @@ export const TASKS: TaskDef[] = [
   { id: 'profileComplete', title: 'Complete your profile', label: 'Profile', kind: 'auto', to: '/profile' },
   { id: 'followSocial', title: 'Follow us on Instagram', label: 'Follow', kind: 'trust', link: INSTAGRAM_URL },
   { id: 'tagPost', title: 'Tag us in a story or post', label: 'Tag Post', kind: 'trust', link: INSTAGRAM_URL },
-  { id: 'waitingBoard', title: 'Submit a waiting-board report', label: 'Board Report', kind: 'auto', to: '/tasks?photo=1' },
+  {
+    id: 'waitingBoard',
+    title: 'Submit a waiting-board report',
+    label: 'Board Report',
+    kind: 'auto',
+    to: '/tasks?photo=1',
+  },
   { id: 'courtVisit', title: 'Visit one public court', label: 'Court Visit', kind: 'auto', to: '/tasks?checkin=1' },
-  { id: 'queuePhoto', title: 'Submit a racquet queue report', label: 'Queue Report', kind: 'auto', to: '/tasks?photo=1' },
+  {
+    id: 'queuePhoto',
+    title: 'Submit a racquet queue report',
+    label: 'Queue Report',
+    kind: 'auto',
+    to: '/tasks?photo=1',
+  },
   { id: 'playMatch', title: 'Play 1 match', label: 'Match', kind: 'auto', to: '/tournament' },
   { id: 'courtSuggestion', title: 'Submit a court improvement', label: 'Suggestion', kind: 'auto', to: '/courts' },
   { id: 'whatsappGroup', title: 'Join the WhatsApp group', label: 'WhatsApp', kind: 'trust', link: WHATSAPP_URL },
@@ -153,8 +163,22 @@ const loadTournamentResults = async (uid: string): Promise<PlayedResult[]> => {
 
 const loadLadderResults = async (uid: string): Promise<PlayedResult[]> => {
   const [asChallenger, asOpponent] = await Promise.all([
-    getDocs(query(collection(db, 'matches'), where('category', '==', 'challenge'), where('player_1_uid', '==', uid), where('status', '==', 'confirmed'))),
-    getDocs(query(collection(db, 'matches'), where('category', '==', 'challenge'), where('player_2_uid', '==', uid), where('status', '==', 'confirmed'))),
+    getDocs(
+      query(
+        collection(db, 'matches'),
+        where('category', '==', 'challenge'),
+        where('player_1_uid', '==', uid),
+        where('status', '==', 'confirmed'),
+      ),
+    ),
+    getDocs(
+      query(
+        collection(db, 'matches'),
+        where('category', '==', 'challenge'),
+        where('player_2_uid', '==', uid),
+        where('status', '==', 'confirmed'),
+      ),
+    ),
   ]);
   return dedupePlayedResults([...asChallenger.docs, ...asOpponent.docs], (c) => ({
     at: new Date(c.completed_at || c.confirmed_at || c.created_at || 0).getTime(),
@@ -166,10 +190,12 @@ const loadLadderResults = async (uid: string): Promise<PlayedResult[]> => {
 const longestWinStreak = (results: PlayedResult[]): number => {
   let best = 0;
   let run = 0;
-  [...results].sort((a, b) => a.at - b.at).forEach((r) => {
-    run = r.won ? run + 1 : 0;
-    if (run > best) best = run;
-  });
+  [...results]
+    .sort((a, b) => a.at - b.at)
+    .forEach((r) => {
+      run = r.won ? run + 1 : 0;
+      if (run > best) best = run;
+    });
   return best;
 };
 
@@ -188,7 +214,10 @@ export function useTasks() {
   useEffect(() => {
     setProgressLoaded(false);
     written.current.clear();
-    if (!user) { setProgress(null); return; }
+    if (!user) {
+      setProgress(null);
+      return;
+    }
     return onSnapshot(doc(db, 'tasks', user.uid), (s) => {
       setProgress(s.exists() ? (s.data() as TaskProgress) : null);
       setProgressLoaded(true);
@@ -199,7 +228,7 @@ export function useTasks() {
   useEffect(() => {
     if (!user) return;
     let alive = true;
-    const safe = <T,>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
+    const safe = <T>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
     // The `joinEvent` task used to be awarded from here off an event_participants lookup.
     // functions/taskPoints.js (onEventJoinedAwardPoints) now does it server-side, so that
     // query was dropped along with the client write it fed.
@@ -217,7 +246,9 @@ export function useTasks() {
         monthsActive: distinctMonths(all),
       });
     });
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [user?.uid]);
 
   // Stored counters (things the app can't derive) come straight off task_progress.
@@ -261,7 +292,9 @@ export function useTasks() {
     (Object.keys(selfEvident) as TaskId[]).forEach((id) => {
       if (selfEvident[id] && !rec[id] && !written.current.has(id)) {
         written.current.add(id);
-        setTaskDone(user.uid, name, id, true).catch(() => { /* stays marked — see note above */ });
+        setTaskDone(user.uid, name, id, true).catch(() => {
+          /* stays marked — see note above */
+        });
       }
     });
   }, [user?.uid, profile, progress, progressLoaded, missing.length]);
@@ -282,7 +315,7 @@ export function useTasks() {
 export type CommunityRow = TaskProgress & {
   points: number;
   tasksCompleted: number; // total individual tasks done across all categories
-  milestones: number;     // categories fully completed
+  milestones: number; // categories fully completed
 };
 
 export function useCommunityStandings() {
@@ -309,14 +342,18 @@ export function useCommunityStandings() {
             return !type || (type !== 'offer' && type !== 'group');
           })
           .filter((r) => r.points > 0 || r.tasksCompleted > 0)
-          .sort((a, b) =>
-            b.points - a.points ||
-            b.tasksCompleted - a.tasksCompleted ||
-            b.milestones - a.milestones ||
-            (a.name || '').localeCompare(b.name || ''));
+          .sort(
+            (a, b) =>
+              b.points - a.points ||
+              b.tasksCompleted - a.tasksCompleted ||
+              b.milestones - a.milestones ||
+              (a.name || '').localeCompare(b.name || ''),
+          );
         setRows(data);
       })
-      .catch(() => { /* rules not deployed yet — board shows its empty state */ })
+      .catch(() => {
+        /* rules not deployed yet — board shows its empty state */
+      })
       .finally(() => setLoading(false));
   }, [reloadKey]);
 

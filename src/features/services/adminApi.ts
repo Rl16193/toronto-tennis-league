@@ -4,7 +4,10 @@ import { ServiceCategory } from './types';
 
 // Mirror of slug() in scripts/seed-rewards.mjs — keep in sync.
 const slug = (s: string) =>
-  s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 
 export interface NewOfferInput {
   category: ServiceCategory;
@@ -36,30 +39,35 @@ export async function createOffer(input: NewOfferInput): Promise<string> {
   const discountedPrice = Math.max(0, input.totalPrice - input.discount);
 
   const batch = writeBatch(db);
-  batch.set(doc(db, 'tasks', offerId), {
-    type: 'offer',
-    category: input.category,
-    provider_id: providerId,
-    provider_name: input.providerName,
-    ...(input.linkUid ? { uid: input.linkUid } : {}),
-    ...(input.phone ? { contact_phone: input.phone } : {}),
-    ...(input.email ? { contact_email: input.email } : {}),
-    area: input.area,
-    offer: input.offer,
-    ...(input.brands ? { brands: input.brands } : {}),
-    discount: input.discount,
-    total_price: input.totalPrice,
-    discounted_price: discountedPrice,
-    points_cost: input.pointsCost,
-    ...(input.certified ? { certified: true } : {}),
-    active: true,
-    sort: Date.now(),
-  }, { merge: true });
+  batch.set(
+    doc(db, 'tasks', offerId),
+    {
+      type: 'offer',
+      category: input.category,
+      provider_id: providerId,
+      provider_name: input.providerName,
+      ...(input.linkUid ? { uid: input.linkUid } : {}),
+      ...(input.phone ? { contact_phone: input.phone } : {}),
+      ...(input.email ? { contact_email: input.email } : {}),
+      area: input.area,
+      offer: input.offer,
+      ...(input.brands ? { brands: input.brands } : {}),
+      discount: input.discount,
+      total_price: input.totalPrice,
+      discounted_price: discountedPrice,
+      points_cost: input.pointsCost,
+      ...(input.certified ? { certified: true } : {}),
+      active: true,
+      sort: Date.now(),
+    },
+    { merge: true },
+  );
 
   if (input.linkUid) {
-    const roleFields = input.category === 'coaching'
-      ? { coach: true, coach_id: providerId }
-      : { stringer: true, stringer_id: providerId };
+    const roleFields =
+      input.category === 'coaching'
+        ? { coach: true, coach_id: providerId }
+        : { stringer: true, stringer_id: providerId };
     batch.set(doc(db, 'preferences', input.linkUid), roleFields, { merge: true });
   }
 
@@ -73,7 +81,9 @@ export async function createOffer(input: NewOfferInput): Promise<string> {
  * different provider row.
  */
 export async function updateOffer(
-  id: string, providerId: string, input: Omit<NewOfferInput, 'providerId'>,
+  id: string,
+  providerId: string,
+  input: Omit<NewOfferInput, 'providerId'>,
 ): Promise<void> {
   const discountedPrice = Math.max(0, input.totalPrice - input.discount);
 
@@ -95,9 +105,10 @@ export async function updateOffer(
   });
 
   if (input.linkUid) {
-    const roleFields = input.category === 'coaching'
-      ? { coach: true, coach_id: providerId }
-      : { stringer: true, stringer_id: providerId };
+    const roleFields =
+      input.category === 'coaching'
+        ? { coach: true, coach_id: providerId }
+        : { stringer: true, stringer_id: providerId };
     batch.set(doc(db, 'preferences', input.linkUid), roleFields, { merge: true });
   }
 

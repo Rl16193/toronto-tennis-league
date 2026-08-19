@@ -4,7 +4,12 @@ import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { useAuth } from '../../../context/AuthContext';
 import { useProfileActions } from '../hooks/useProfileActions';
-import { SELECTABLE_SKILL_LEVELS, SKILL_LEVEL_TIERS, leagueAgeCategory, leagueDivision } from '../../../utils/skillLevels';
+import {
+  SELECTABLE_SKILL_LEVELS,
+  SKILL_LEVEL_TIERS,
+  leagueAgeCategory,
+  leagueDivision,
+} from '../../../utils/skillLevels';
 import { defaultCourtOptions, getCourtSuggestions } from '../../../features/signup/utils/courtSearch';
 
 // Blocks Challenges/Friendlies until the 3 fields real matching needs are set: preferred courts,
@@ -16,18 +21,29 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
 
   const [skillLevel, setSkillLevel] = useState(profile?.stats.skill_level || 2);
   const [league, setLeague] = useState<"Men's" | "Women's" | ''>(leagueDivision(profile?.stats.league));
-  const [ageCategory, setAgeCategory] = useState<'Retired Pro' | 'Juniors' | ''>(leagueAgeCategory(profile?.stats.league));
+  const [ageCategory, setAgeCategory] = useState<'Retired Pro' | 'Juniors' | ''>(
+    leagueAgeCategory(profile?.stats.league),
+  );
   const [courts, setCourts] = useState<string[]>(profile?.preferences.preferred_courts || []);
   const [courtQuery, setCourtQuery] = useState('');
   const [error, setError] = useState('');
 
   const suggestions = getCourtSuggestions(defaultCourtOptions, courts, courtQuery);
-  const addCourt = (court: string) => { setCourts((prev) => [...new Set([...prev, court])]); setCourtQuery(''); };
+  const addCourt = (court: string) => {
+    setCourts((prev) => [...new Set([...prev, court])]);
+    setCourtQuery('');
+  };
   const removeCourt = (court: string) => setCourts((prev) => prev.filter((c) => c !== court));
 
   const handleSave = async () => {
-    if (!league) { setError('Please choose your league.'); return; }
-    if (courts.length === 0) { setError('Please add at least one preferred court.'); return; }
+    if (!league) {
+      setError('Please choose your league.');
+      return;
+    }
+    if (courts.length === 0) {
+      setError('Please add at least one preferred court.');
+      return;
+    }
     setError('');
     const ok1 = await actions.updateSkills(skillLevel, profile?.stats.tournament_preference || 'Challengers');
     const ok2 = await actions.updateLeagueAgeCategory(league, ageCategory, true);
@@ -38,9 +54,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
   return (
     <Sheet onClose={onClose} title="Complete Your Profile" maxWidthClassName="max-w-md">
       <div className="p-6 pt-2 space-y-6">
-        <p className="text-sm text-fg/70">
-          Finish these 3 things so we can match you with the right players.
-        </p>
+        <p className="text-sm text-fg/70">Finish these 3 things so we can match you with the right players.</p>
 
         {error && <p className="text-xs font-semibold text-badge-loss">{error}</p>}
 
@@ -51,13 +65,19 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
           </div>
           <input
             type="range"
-            min={0} max={SELECTABLE_SKILL_LEVELS.length - 1} step={1}
-            value={SELECTABLE_SKILL_LEVELS.indexOf(skillLevel as typeof SELECTABLE_SKILL_LEVELS[number])}
+            min={0}
+            max={SELECTABLE_SKILL_LEVELS.length - 1}
+            step={1}
+            value={SELECTABLE_SKILL_LEVELS.indexOf(skillLevel as (typeof SELECTABLE_SKILL_LEVELS)[number])}
             onChange={(e) => setSkillLevel(SELECTABLE_SKILL_LEVELS[Number(e.target.value)])}
             className="w-full h-3 rounded-full"
           />
           <div className="flex justify-between text-[10px] text-fg/70">
-            {SKILL_LEVEL_TIERS.map((t) => <span key={t.label}>{t.range} · {t.label}</span>)}
+            {SKILL_LEVEL_TIERS.map((t) => (
+              <span key={t.label}>
+                {t.range} · {t.label}
+              </span>
+            ))}
           </div>
         </div>
 
@@ -107,9 +127,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
               Juniors
             </button>
           </div>
-          {!league && (
-            <p className="text-[11px] text-fg/70">Choose a league above to unlock Retired Pro / Juniors.</p>
-          )}
+          {!league && <p className="text-[11px] text-fg/70">Choose a league above to unlock Retired Pro / Juniors.</p>}
         </div>
 
         <div className="space-y-2">
@@ -149,7 +167,9 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
           )}
         </div>
 
-        <Button onClick={handleSave} isLoading={updateLoading} className="w-full">Save & Continue</Button>
+        <Button onClick={handleSave} isLoading={updateLoading} className="w-full">
+          Save & Continue
+        </Button>
       </div>
     </Sheet>
   );

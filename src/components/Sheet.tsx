@@ -40,7 +40,9 @@ export const Sheet: React.FC<Props> = ({ onClose, title, ariaLabel, maxWidthClas
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
     window.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = prevOverflow;
@@ -78,7 +80,9 @@ export const Sheet: React.FC<Props> = ({ onClose, title, ariaLabel, maxWidthClas
         dragListener={false}
         dragConstraints={{ top: 0, bottom: 0 }}
         dragElastic={{ top: 0, bottom: 0.5 }}
-        onDragEnd={(_, info) => { if (info.offset.y > 100 || info.velocity.y > 500) onClose(); }}
+        onDragEnd={(_, info) => {
+          if (info.offset.y > 100 || info.velocity.y > 500) onClose();
+        }}
         className={`relative w-full ${maxWidthClassName} bg-tennis-surface border border-fg/10
                     rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl
                     max-h-[92vh] sm:max-h-[90vh] overflow-y-auto`}

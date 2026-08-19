@@ -3,8 +3,18 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent } from '../../../types';
-import { isLadderEvent, isTopspinMeetupEvent, isTournamentEvent, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
-import { parseEndInstant, parseValidDate, sortEventsByStartDate, type FirestoreDateLike } from '../../../utils/eventDates';
+import {
+  isLadderEvent,
+  isTopspinMeetupEvent,
+  isTournamentEvent,
+  isWeekendMatchdaysEvent,
+} from '../../../utils/eventTypes';
+import {
+  parseEndInstant,
+  parseValidDate,
+  sortEventsByStartDate,
+  type FirestoreDateLike,
+} from '../../../utils/eventDates';
 import { DisplayEvent, fetchEvents, resolveStorageUrl } from '../services/eventService';
 import type { JoinedRegistration } from '../types';
 
@@ -30,7 +40,10 @@ export function useEvents() {
   // even as the key legitimately changes, and makes a path that resolves to nothing stay done
   // instead of being retried on every later pass.
   const resolvingRef = useRef(new Set<string>());
-  const unresolvedKey = events.filter((e) => e.imagePath && !e.image).map((e) => e.imagePath).join('|');
+  const unresolvedKey = events
+    .filter((e) => e.imagePath && !e.image)
+    .map((e) => e.imagePath)
+    .join('|');
 
   useEffect(() => {
     const paths = unresolvedKey ? unresolvedKey.split('|') : [];
@@ -40,22 +53,33 @@ export function useEvents() {
 
     let cancelled = false;
     todo.forEach((path) => {
-      resolveStorageUrl(path).then((url) => {
-        if (cancelled || !url) return;
-        setEvents((prev) => prev.map((e) => e.imagePath === path ? { ...e, image: url, imagePath: undefined } : e));
-      }).catch(() => { /* image stays unset; the card renders its placeholder */ });
+      resolveStorageUrl(path)
+        .then((url) => {
+          if (cancelled || !url) return;
+          setEvents((prev) => prev.map((e) => (e.imagePath === path ? { ...e, image: url, imagePath: undefined } : e)));
+        })
+        .catch(() => {
+          /* image stays unset; the card renders its placeholder */
+        });
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [unresolvedKey]);
 
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, 'event_participants'), where('uid', '==', user.uid));
     return onSnapshot(q, (snap) => {
-      setJoinedRegistrations(snap.docs.map((d) => {
-        const data = d.data();
-        return { eventId: data.event_id, tournamentChoice: (data.tournament_choice || '') as JoinedRegistration['tournamentChoice'] };
-      }));
+      setJoinedRegistrations(
+        snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            eventId: data.event_id,
+            tournamentChoice: (data.tournament_choice || '') as JoinedRegistration['tournamentChoice'],
+          };
+        }),
+      );
     });
     // `user?.uid`: a new User object arrives on every token refresh, needlessly re-subscribing.
   }, [user?.uid]);
@@ -90,7 +114,9 @@ export function useEvents() {
   }, [allDisplayableEvents]);
 
   const getJoinedChoices = (eventId: string) =>
-    new Set(joinedRegistrations.filter((r) => r.eventId === eventId && r.tournamentChoice).map((r) => r.tournamentChoice));
+    new Set(
+      joinedRegistrations.filter((r) => r.eventId === eventId && r.tournamentChoice).map((r) => r.tournamentChoice),
+    );
 
   const hasJoinedRegularEvent = (eventId: string) =>
     joinedRegistrations.some((r) => r.eventId === eventId && !r.tournamentChoice);

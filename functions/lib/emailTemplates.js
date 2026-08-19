@@ -266,9 +266,7 @@ function buildChallengeAcceptedEmail(opponentName, ladderName) {
  */
 function buildIncompleteMatchesEmail(totalCount, firstName) {
   const plural = totalCount === 1 ? '' : 'es';
-  const greeting = firstName
-    ? `Ready to hit the court, ${firstName}? &#127934;`
-    : 'Ready to hit the court? &#127934;';
+  const greeting = firstName ? `Ready to hit the court, ${firstName}? &#127934;` : 'Ready to hit the court? &#127934;';
   return wrapEmail({
     preheader: `You have ${totalCount} incomplete match${plural} waiting on you.`,
     title: 'Incomplete Matches',
@@ -310,10 +308,13 @@ function buildWelcomeEmail(firstName) {
               <p style="margin:0 0 16px;padding:0;font-size:15px;color:${COLORS.bodyText};font-family:${FONT};">
                 Everything you need, right here:
               </p>
-              ${buttonRow([
-                { href: LINK.events, label: 'Browse Events' },
-                { href: FAQ, label: 'View FAQ', bg: COLORS.card, color: COLORS.darkGreen },
-              ], '8px')}
+              ${buttonRow(
+                [
+                  { href: LINK.events, label: 'Browse Events' },
+                  { href: FAQ, label: 'View FAQ', bg: COLORS.card, color: COLORS.darkGreen },
+                ],
+                '8px',
+              )}
               ${buttonRow([
                 { href: WHATSAPP, label: 'Join WhatsApp', bg: '#25d366' },
                 { href: INSTAGRAM, label: 'Instagram', bg: '#8a3ab9' },

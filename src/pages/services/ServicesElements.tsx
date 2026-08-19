@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import {
-  BadgeCheck, Check, ChevronDown, Copy, Flag, Pencil, Plus, Sparkles, Trash2, Users, X,
-} from 'lucide-react';
+import { BadgeCheck, Check, ChevronDown, Copy, Flag, Pencil, Plus, Sparkles, Trash2, Users, X } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -15,13 +13,29 @@ import { ContactOpponentButton } from '../../components/ContactOpponentButton';
 import { useContacts } from '../../features/contacts/useContacts';
 import { fadeUp, tapScale } from '../../lib/motion';
 import {
-  CATEGORY_LABEL, GROUP_LESSON_CAPACITY, MIN_REWARD_COST, Provider, Redemption, Reward,
-  ServiceCategory, useGroupLesson, useMyRedemptions, useProviderAvatars, useProviderRedemptions,
-  useProviderRole, useRedeemablePoints, useServicesCatalog,
+  CATEGORY_LABEL,
+  GROUP_LESSON_CAPACITY,
+  MIN_REWARD_COST,
+  Provider,
+  Redemption,
+  Reward,
+  ServiceCategory,
+  useGroupLesson,
+  useMyRedemptions,
+  useProviderAvatars,
+  useProviderRedemptions,
+  useProviderRole,
+  useRedeemablePoints,
+  useServicesCatalog,
 } from '../../features/services/useServices';
 import {
-  flagCoupon, joinGroupLesson, leaveGroupLesson, markCouponUsed, redeemReward,
-  requestCancellation, serviceErrorMessage,
+  flagCoupon,
+  joinGroupLesson,
+  leaveGroupLesson,
+  markCouponUsed,
+  redeemReward,
+  requestCancellation,
+  serviceErrorMessage,
 } from '../../features/services/servicesApi';
 import { createOffer, deactivateOffer, updateOffer } from '../../features/services/adminApi';
 
@@ -59,8 +73,15 @@ export const GroupLessonCard: React.FC = () => {
   const rosterContacts = useContacts(rosterIds);
 
   const act = async (fn: () => Promise<unknown>) => {
-    setBusy(true); setError('');
-    try { await fn(); } catch (err) { setError(serviceErrorMessage(err)); } finally { setBusy(false); }
+    setBusy(true);
+    setError('');
+    try {
+      await fn();
+    } catch (err) {
+      setError(serviceErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -68,9 +89,7 @@ export const GroupLessonCard: React.FC = () => {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-bold text-fg leading-snug">30 min group lesson</p>
-          <p className="text-[11px] text-fg/70 mt-0.5">
-            Free · 2–4 players · {monthLabel(month)}
-          </p>
+          <p className="text-[11px] text-fg/70 mt-0.5">Free · 2–4 players · {monthLabel(month)}</p>
         </div>
         <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-clay border border-clay/45 rounded-full px-2 py-0.5">
           Free
@@ -92,8 +111,8 @@ export const GroupLessonCard: React.FC = () => {
         </button>
 
         {/* The coach runs the session, so they get the roster rather than a Join button. */}
-        {!isCoach && (
-          joined ? (
+        {!isCoach &&
+          (joined ? (
             <Button size="sm" variant="outline" onClick={() => act(() => leaveGroupLesson({}))} isLoading={busy}>
               Leave
             </Button>
@@ -107,8 +126,7 @@ export const GroupLessonCard: React.FC = () => {
             >
               {full ? 'Full' : !user ? 'Log in to join' : 'Join'}
             </Button>
-          )
-        )}
+          ))}
       </div>
 
       <AnimatePresence initial={false}>
@@ -122,9 +140,7 @@ export const GroupLessonCard: React.FC = () => {
           >
             <div className="mt-3 pt-3 border-t border-clay/20 space-y-1.5">
               {players.length === 0 ? (
-                <p className="text-xs text-fg/70">
-                  No one has joined yet. All {GROUP_LESSON_CAPACITY} spots are open.
-                </p>
+                <p className="text-xs text-fg/70">No one has joined yet. All {GROUP_LESSON_CAPACITY} spots are open.</p>
               ) : (
                 players.map((p) => (
                   <div key={p.uid} className="flex items-center gap-2 min-h-[32px]">
@@ -192,7 +208,12 @@ export const AddServiceForm: React.FC<{
   const [offer, setOffer] = useState(editingReward?.offer ?? '');
   const [brandInput, setBrandInput] = useState('');
   const [brands, setBrands] = useState<string[]>(
-    editingReward?.brands ? editingReward.brands.split(',').map((b) => b.trim()).filter(Boolean) : [],
+    editingReward?.brands
+      ? editingReward.brands
+          .split(',')
+          .map((b) => b.trim())
+          .filter(Boolean)
+      : [],
   );
   const [totalPrice, setTotalPrice] = useState(editingReward ? String(editingReward.total_price) : '');
   const [discount, setDiscount] = useState(editingReward ? String(editingReward.discount) : '');
@@ -212,15 +233,18 @@ export const AddServiceForm: React.FC<{
     // Loaded once, lazily, only when the account-link picker is actually used — `users` is
     // world-readable, and this keeps the common (no linking) case free of an extra read.
     if (linkSearch.trim().length < 2 || candidates.length > 0) return;
-    getDocs(collection(db, 'users')).then((snap) => {
-      setCandidates(snap.docs.map((d) => ({ uid: d.id, name: (d.data().name as string) || '' })));
-    }).catch(() => {});
+    getDocs(collection(db, 'users'))
+      .then((snap) => {
+        setCandidates(snap.docs.map((d) => ({ uid: d.id, name: (d.data().name as string) || '' })));
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkSearch]);
 
-  const linkMatches = linkSearch.trim().length < 2 ? [] : candidates
-    .filter((c) => c.name.toLowerCase().includes(linkSearch.trim().toLowerCase()))
-    .slice(0, 6);
+  const linkMatches =
+    linkSearch.trim().length < 2
+      ? []
+      : candidates.filter((c) => c.name.toLowerCase().includes(linkSearch.trim().toLowerCase())).slice(0, 6);
 
   const addBrand = () => {
     const b = brandInput.trim();
@@ -238,16 +262,39 @@ export const AddServiceForm: React.FC<{
     e.preventDefault();
     setError('');
 
-    const name = isEditing ? editingReward!.provider_name
-      : providerMode === 'existing' ? providersInCategory.find((p) => p.id === providerId)?.name || ''
-      : providerName.trim();
-    if (!name) { setError('Choose a provider, or enter a new provider name.'); return; }
-    if (!offer.trim()) { setError('Enter an offer title.'); return; }
-    if (!Number.isFinite(priceNum) || priceNum < 0) { setError('Enter a valid price.'); return; }
-    if (!Number.isFinite(discountNum) || discountNum < 0 || discountNum > priceNum) { setError('Discount must be between 0 and the price.'); return; }
-    if (!Number.isFinite(pointsNum) || pointsNum <= 0) { setError('Enter the points required.'); return; }
-    if (!isEditing && providerMode === 'new' && !area.trim()) { setError('Enter the new provider\'s area.'); return; }
-    if (isEditing && !area.trim()) { setError('Enter the provider\'s area.'); return; }
+    const name = isEditing
+      ? editingReward!.provider_name
+      : providerMode === 'existing'
+        ? providersInCategory.find((p) => p.id === providerId)?.name || ''
+        : providerName.trim();
+    if (!name) {
+      setError('Choose a provider, or enter a new provider name.');
+      return;
+    }
+    if (!offer.trim()) {
+      setError('Enter an offer title.');
+      return;
+    }
+    if (!Number.isFinite(priceNum) || priceNum < 0) {
+      setError('Enter a valid price.');
+      return;
+    }
+    if (!Number.isFinite(discountNum) || discountNum < 0 || discountNum > priceNum) {
+      setError('Discount must be between 0 and the price.');
+      return;
+    }
+    if (!Number.isFinite(pointsNum) || pointsNum <= 0) {
+      setError('Enter the points required.');
+      return;
+    }
+    if (!isEditing && providerMode === 'new' && !area.trim()) {
+      setError("Enter the new provider's area.");
+      return;
+    }
+    if (isEditing && !area.trim()) {
+      setError("Enter the provider's area.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -271,9 +318,10 @@ export const AddServiceForm: React.FC<{
           category,
           providerId: providerMode === 'existing' ? providerId : undefined,
           providerName: name,
-          area: providerMode === 'existing'
-            ? (providersInCategory.find((p) => p.id === providerId)?.area || '')
-            : area.trim(),
+          area:
+            providerMode === 'existing'
+              ? providersInCategory.find((p) => p.id === providerId)?.area || ''
+              : area.trim(),
           phone: providerMode === 'new' ? phone.trim() || undefined : undefined,
           email: providerMode === 'new' ? email.trim() || undefined : undefined,
           certified: providerMode === 'new' ? certified : undefined,
@@ -298,7 +346,9 @@ export const AddServiceForm: React.FC<{
     <Sheet onClose={onClose} title={isEditing ? 'Edit service' : 'Add a service'} maxWidthClassName="max-w-md">
       <form onSubmit={submit} className="p-5 pt-2 space-y-3">
         {error && (
-          <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-2.5">{error}</div>
+          <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-2.5">
+            {error}
+          </div>
         )}
 
         <div>
@@ -308,9 +358,14 @@ export const AddServiceForm: React.FC<{
               <button
                 key={c}
                 type="button"
-                onClick={() => { setCategory(c); setProviderId(''); }}
+                onClick={() => {
+                  setCategory(c);
+                  setProviderId('');
+                }}
                 className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-colors ${
-                  category === c ? 'bg-clay border-clay text-white' : 'bg-tennis-dark/70 text-fg/60 border-fg/10 hover:border-fg/30'
+                  category === c
+                    ? 'bg-clay border-clay text-white'
+                    : 'bg-tennis-dark/70 text-fg/60 border-fg/10 hover:border-fg/30'
                 }`}
               >
                 {CATEGORY_LABEL[c]}
@@ -327,12 +382,27 @@ export const AddServiceForm: React.FC<{
               <p className="text-sm font-bold text-fg">{editingReward!.provider_name}</p>
               <input className={fieldCls} placeholder="Area" value={area} onChange={(e) => setArea(e.target.value)} />
               <div className="grid grid-cols-2 gap-2">
-                <input className={fieldCls} placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-                <input className={fieldCls} placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <input
+                  className={fieldCls}
+                  placeholder="Phone"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+                <input
+                  className={fieldCls}
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
               </div>
               {category === 'coaching' && (
                 <label className="flex items-center gap-2 text-sm text-fg/70 cursor-pointer">
-                  <input type="checkbox" checked={certified} onChange={(e) => setCertified(e.target.checked)} className="accent-clay" />
+                  <input
+                    type="checkbox"
+                    checked={certified}
+                    onChange={(e) => setCertified(e.target.checked)}
+                    className="accent-clay"
+                  />
                   Certified
                 </label>
               )}
@@ -340,16 +410,26 @@ export const AddServiceForm: React.FC<{
           ) : (
             <>
               <div className="flex gap-2 mb-2">
-                <button type="button" onClick={() => setProviderMode('existing')}
+                <button
+                  type="button"
+                  onClick={() => setProviderMode('existing')}
                   className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-colors ${
-                    providerMode === 'existing' ? 'bg-clay border-clay text-white' : 'bg-tennis-dark/70 text-fg/60 border-fg/10'
-                  }`}>
+                    providerMode === 'existing'
+                      ? 'bg-clay border-clay text-white'
+                      : 'bg-tennis-dark/70 text-fg/60 border-fg/10'
+                  }`}
+                >
                   Existing
                 </button>
-                <button type="button" onClick={() => setProviderMode('new')}
+                <button
+                  type="button"
+                  onClick={() => setProviderMode('new')}
                   className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-colors ${
-                    providerMode === 'new' ? 'bg-clay border-clay text-white' : 'bg-tennis-dark/70 text-fg/60 border-fg/10'
-                  }`}>
+                    providerMode === 'new'
+                      ? 'bg-clay border-clay text-white'
+                      : 'bg-tennis-dark/70 text-fg/60 border-fg/10'
+                  }`}
+                >
                   New provider
                 </button>
               </div>
@@ -357,19 +437,48 @@ export const AddServiceForm: React.FC<{
               {providerMode === 'existing' ? (
                 <select value={providerId} onChange={(e) => setProviderId(e.target.value)} className={fieldCls}>
                   <option value="">Select a provider…</option>
-                  {providersInCategory.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {providersInCategory.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
                 </select>
               ) : (
                 <div className="space-y-2">
-                  <input className={fieldCls} placeholder="Provider name" value={providerName} onChange={(e) => setProviderName(e.target.value)} />
-                  <input className={fieldCls} placeholder="Area (e.g. Downtown Toronto)" value={area} onChange={(e) => setArea(e.target.value)} />
+                  <input
+                    className={fieldCls}
+                    placeholder="Provider name"
+                    value={providerName}
+                    onChange={(e) => setProviderName(e.target.value)}
+                  />
+                  <input
+                    className={fieldCls}
+                    placeholder="Area (e.g. Downtown Toronto)"
+                    value={area}
+                    onChange={(e) => setArea(e.target.value)}
+                  />
                   <div className="grid grid-cols-2 gap-2">
-                    <input className={fieldCls} placeholder="Phone (optional)" value={phone} onChange={(e) => setPhone(e.target.value)} />
-                    <input className={fieldCls} placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} />
+                    <input
+                      className={fieldCls}
+                      placeholder="Phone (optional)"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                    />
+                    <input
+                      className={fieldCls}
+                      placeholder="Email (optional)"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
                   </div>
                   {category === 'coaching' && (
                     <label className="flex items-center gap-2 text-sm text-fg/70 cursor-pointer">
-                      <input type="checkbox" checked={certified} onChange={(e) => setCertified(e.target.checked)} className="accent-clay" />
+                      <input
+                        type="checkbox"
+                        checked={certified}
+                        onChange={(e) => setCertified(e.target.checked)}
+                        className="accent-clay"
+                      />
                       Certified
                     </label>
                   )}
@@ -384,18 +493,39 @@ export const AddServiceForm: React.FC<{
           {linkUid ? (
             <div className="flex items-center justify-between rounded-xl bg-fg/5 px-3.5 py-2.5">
               <span className="text-sm text-fg font-semibold">{linkName || 'Linked account'}</span>
-              <button type="button" onClick={() => { setLinkUid(''); setLinkName(''); setLinkSearch(''); }}
-                className="text-fg/70 hover:text-fg"><X className="w-4 h-4" /></button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLinkUid('');
+                  setLinkName('');
+                  setLinkSearch('');
+                }}
+                className="text-fg/70 hover:text-fg"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           ) : (
             <div className="relative">
-              <input className={fieldCls} placeholder="Search by name…" value={linkSearch} onChange={(e) => setLinkSearch(e.target.value)} />
+              <input
+                className={fieldCls}
+                placeholder="Search by name…"
+                value={linkSearch}
+                onChange={(e) => setLinkSearch(e.target.value)}
+              />
               {linkMatches.length > 0 && (
                 <div className="mt-1.5 rounded-xl border border-fg/10 bg-tennis-dark/95 overflow-hidden">
                   {linkMatches.map((c) => (
-                    <button key={c.uid} type="button"
-                      onClick={() => { setLinkUid(c.uid); setLinkName(c.name); setLinkSearch(''); }}
-                      className="w-full text-left px-3.5 py-2 text-sm text-fg/80 hover:bg-clay/20 transition-colors">
+                    <button
+                      key={c.uid}
+                      type="button"
+                      onClick={() => {
+                        setLinkUid(c.uid);
+                        setLinkName(c.name);
+                        setLinkSearch('');
+                      }}
+                      className="w-full text-left px-3.5 py-2 text-sm text-fg/80 hover:bg-clay/20 transition-colors"
+                    >
                       {c.name || '(no name)'}
                     </button>
                   ))}
@@ -407,7 +537,12 @@ export const AddServiceForm: React.FC<{
 
         <div>
           <label className={labelCls}>Offer title</label>
-          <input className={fieldCls} placeholder="Mid-level Strings Replacement" value={offer} onChange={(e) => setOffer(e.target.value)} />
+          <input
+            className={fieldCls}
+            placeholder="Mid-level Strings Replacement"
+            value={offer}
+            onChange={(e) => setOffer(e.target.value)}
+          />
         </div>
 
         <div>
@@ -415,9 +550,16 @@ export const AddServiceForm: React.FC<{
           {brands.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-2">
               {brands.map((b) => (
-                <span key={b} className="inline-flex items-center gap-1.5 rounded-full bg-fg/[0.06] pl-2.5 pr-1.5 py-1 text-[11px] text-fg/70">
+                <span
+                  key={b}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-fg/[0.06] pl-2.5 pr-1.5 py-1 text-[11px] text-fg/70"
+                >
                   {b}
-                  <button type="button" onClick={() => setBrands(brands.filter((x) => x !== b))} className="text-fg/70 hover:text-fg">
+                  <button
+                    type="button"
+                    onClick={() => setBrands(brands.filter((x) => x !== b))}
+                    className="text-fg/70 hover:text-fg"
+                  >
                     <X className="w-3 h-3" />
                   </button>
                 </span>
@@ -425,36 +567,84 @@ export const AddServiceForm: React.FC<{
             </div>
           )}
           <div className="flex gap-2">
-            <input className={fieldCls} placeholder="Add a brand…" value={brandInput} onChange={(e) => setBrandInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBrand(); } }} />
-            <Button type="button" variant="clay" className="px-3 shrink-0" onClick={addBrand} disabled={!brandInput.trim()}>Add</Button>
+            <input
+              className={fieldCls}
+              placeholder="Add a brand…"
+              value={brandInput}
+              onChange={(e) => setBrandInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addBrand();
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="clay"
+              className="px-3 shrink-0"
+              onClick={addBrand}
+              disabled={!brandInput.trim()}
+            >
+              Add
+            </Button>
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
           <div>
             <label className={labelCls}>Price</label>
-            <input type="number" inputMode="decimal" min="0" step="1" value={totalPrice}
-              onChange={(e) => setTotalPrice(e.target.value)} placeholder="40" className={fieldCls} />
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="1"
+              value={totalPrice}
+              onChange={(e) => setTotalPrice(e.target.value)}
+              placeholder="40"
+              className={fieldCls}
+            />
           </div>
           <div>
             <label className={labelCls}>Discount</label>
-            <input type="number" inputMode="decimal" min="0" step="1" value={discount}
-              onChange={(e) => setDiscount(e.target.value)} placeholder="5" className={fieldCls} />
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="1"
+              value={discount}
+              onChange={(e) => setDiscount(e.target.value)}
+              placeholder="5"
+              className={fieldCls}
+            />
           </div>
           <div>
             <label className={labelCls}>Points</label>
-            <input type="number" inputMode="decimal" min="1" step="1" value={pointsCost}
-              onChange={(e) => setPointsCost(e.target.value)} placeholder="15" className={fieldCls} />
+            <input
+              type="number"
+              inputMode="decimal"
+              min="1"
+              step="1"
+              value={pointsCost}
+              onChange={(e) => setPointsCost(e.target.value)}
+              placeholder="15"
+              className={fieldCls}
+            />
           </div>
         </div>
         {discountedPrice !== null && (
-          <p className="text-[11px] text-fg/70">Shown to members as ${discountedPrice} with {pointsCost || '—'} points, off a ${priceNum} regular price.</p>
+          <p className="text-[11px] text-fg/70">
+            Shown to members as ${discountedPrice} with {pointsCost || '—'} points, off a ${priceNum} regular price.
+          </p>
         )}
 
         <div className="flex gap-3 pt-1">
-          <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-          <Button type="submit" variant="clay" isLoading={saving} className="flex-1">{isEditing ? 'Save' : 'Add'}</Button>
+          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+            Cancel
+          </Button>
+          <Button type="submit" variant="clay" isLoading={saving} className="flex-1">
+            {isEditing ? 'Save' : 'Add'}
+          </Button>
         </div>
       </form>
     </Sheet>
@@ -466,8 +656,7 @@ export const AddServiceForm: React.FC<{
 // Only the app owner can add/edit the Services catalog — matches firestore.rules isSuperAdmin().
 const SUPER_ADMIN_UID = '7PvfzNtDmsOq5GLMieId7QRT7wH3';
 
-const money = (n: number | null | undefined) =>
-  typeof n === 'number' ? `$${n % 1 === 0 ? n : n.toFixed(2)}` : '—';
+const money = (n: number | null | undefined) => (typeof n === 'number' ? `$${n % 1 === 0 ? n : n.toFixed(2)}` : '—');
 
 // ─── One offer ──────────────────────────────────────────────────────────────────────────────
 
@@ -490,12 +679,22 @@ const OfferCard: React.FC<{
         <p className="text-sm font-bold text-fg leading-snug">{reward.offer}</p>
         <div className="flex items-center gap-2 shrink-0">
           {onEdit && (
-            <button type="button" aria-label="Edit offer" onClick={onEdit} className="text-fg/70 hover:text-fg transition-colors">
+            <button
+              type="button"
+              aria-label="Edit offer"
+              onClick={onEdit}
+              className="text-fg/70 hover:text-fg transition-colors"
+            >
               <Pencil className="w-3.5 h-3.5" />
             </button>
           )}
           {onDelete && (
-            <button type="button" aria-label="Remove offer" onClick={onDelete} className="text-fg/70 hover:text-badge-loss transition-colors">
+            <button
+              type="button"
+              aria-label="Remove offer"
+              onClick={onDelete}
+              className="text-fg/70 hover:text-badge-loss transition-colors"
+            >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
@@ -505,11 +704,15 @@ const OfferCard: React.FC<{
 
       {reward.brands && (
         <div className="flex flex-wrap gap-1.5 mt-2.5">
-          {reward.brands.split(',').map((b) => b.trim()).filter(Boolean).map((b) => (
-            <span key={b} className="text-[11px] font-medium text-fg/70 bg-fg/[0.06] rounded-full px-2.5 py-0.5">
-              {b}
-            </span>
-          ))}
+          {reward.brands
+            .split(',')
+            .map((b) => b.trim())
+            .filter(Boolean)
+            .map((b) => (
+              <span key={b} className="text-[11px] font-medium text-fg/70 bg-fg/[0.06] rounded-full px-2.5 py-0.5">
+                {b}
+              </span>
+            ))}
         </div>
       )}
 
@@ -541,33 +744,36 @@ const OfferCard: React.FC<{
 // The provider's own uploaded profile photo, resolved through the uid stamped on their offers.
 // Falls back to their initial, so a provider without a member account (or without a photo) still
 // gets the same round marker and the rows stay aligned.
-const ProviderAvatar: React.FC<{ name: string; src?: string }> = ({ name, src }) => (
+const ProviderAvatar: React.FC<{ name: string; src?: string }> = ({ name, src }) =>
   src ? (
-    <img
-      src={src}
-      alt=""
-      loading="lazy"
-      className="w-6 h-6 rounded-full object-cover shrink-0 bg-fg/10"
-    />
+    <img src={src} alt="" loading="lazy" className="w-6 h-6 rounded-full object-cover shrink-0 bg-fg/10" />
   ) : (
     <span className="w-6 h-6 rounded-full shrink-0 bg-fg/10 text-fg/70 text-[11px] font-black flex items-center justify-center">
       {name.trim().charAt(0).toUpperCase() || '?'}
     </span>
-  )
-);
+  );
 
 // ─── One issued coupon (player's view) ──────────────────────────────────────────────────────
 
-const CouponCard: React.FC<{ r: Redemption; onCancel: (code: string) => void; busy: boolean }> = ({ r, onCancel, busy }) => {
+const CouponCard: React.FC<{ r: Redemption; onCancel: (code: string) => void; busy: boolean }> = ({
+  r,
+  onCancel,
+  busy,
+}) => {
   const [copied, setCopied] = useState(false);
   const copy = () => {
-    navigator.clipboard?.writeText(r.code)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })
-      .catch(() => { /* clipboard blocked — the code is on screen anyway */ });
+    navigator.clipboard
+      ?.writeText(r.code)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {
+        /* clipboard blocked — the code is on screen anyway */
+      });
   };
 
-  const label = r.status === 'cancel_requested' ? 'Cancelling'
-    : r.status === 'flagged' ? 'Flagged' : 'Active';
+  const label = r.status === 'cancel_requested' ? 'Cancelling' : r.status === 'flagged' ? 'Flagged' : 'Active';
 
   return (
     <div className="rounded-2xl bg-clay/[0.08] border border-clay/45 p-4">
@@ -577,7 +783,9 @@ const CouponCard: React.FC<{ r: Redemption; onCancel: (code: string) => void; bu
           {label}
         </span>
       </div>
-      <p className="text-xs text-fg/70 mt-1">{r.stringer_name} · {money(r.discounted_price)}</p>
+      <p className="text-xs text-fg/70 mt-1">
+        {r.stringer_name} · {money(r.discounted_price)}
+      </p>
 
       <p className="mt-3.5 font-mono text-2xl tracking-[0.14em] text-clay">{r.code}</p>
       <p className="text-[11px] text-fg/70 mt-1.5">Show this code when you go in</p>
@@ -617,8 +825,15 @@ const ProviderPanel: React.FC = () => {
   const recent = redemptions.filter((r) => r.status === 'used').slice(0, 5);
 
   const run = async (code: string, fn: () => Promise<unknown>) => {
-    setBusy(code); setError('');
-    try { await fn(); } catch (err) { setError(serviceErrorMessage(err)); } finally { setBusy(null); }
+    setBusy(code);
+    setError('');
+    try {
+      await fn();
+    } catch (err) {
+      setError(serviceErrorMessage(err));
+    } finally {
+      setBusy(null);
+    }
   };
 
   return (
@@ -638,7 +853,9 @@ const ProviderPanel: React.FC = () => {
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-fg truncate">{r.user_name}</p>
-                  <p className="font-mono text-xs text-fg/70 tracking-wider mt-0.5">{r.code} · {r.offer}</p>
+                  <p className="font-mono text-xs text-fg/70 tracking-wider mt-0.5">
+                    {r.code} · {r.offer}
+                  </p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <motion.button
@@ -660,7 +877,8 @@ const ProviderPanel: React.FC = () => {
                     transition={tapScale.transition}
                     className="px-3 py-2.5 rounded-xl bg-amber-500/15 text-badge hover:bg-amber-500/25 transition-colors disabled:opacity-50 flex items-center gap-1.5 text-xs font-bold"
                   >
-                    <Flag className="w-3.5 h-3.5" />Dispute
+                    <Flag className="w-3.5 h-3.5" />
+                    Dispute
                   </motion.button>
                 </div>
               </div>
@@ -706,21 +924,36 @@ export const ServicesTab: React.FC = () => {
   const [error, setError] = useState('');
 
   const openCoupons = redemptions.filter(
-    (r) => r.status === 'active' || r.status === 'flagged' || r.status === 'cancel_requested');
+    (r) => r.status === 'active' || r.status === 'flagged' || r.status === 'cancel_requested',
+  );
   const openRewardIds = new Set(openCoupons.map((r) => r.reward_id));
 
   const pct = Math.min(100, (Math.max(0, balance) / MIN_REWARD_COST) * 100);
 
   const run = async (id: string, fn: () => Promise<unknown>) => {
-    setBusyId(id); setError('');
-    try { await fn(); } catch (err) { setError(serviceErrorMessage(err)); } finally { setBusyId(null); }
+    setBusyId(id);
+    setError('');
+    try {
+      await fn();
+    } catch (err) {
+      setError(serviceErrorMessage(err));
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const removeOffer = async (reward: Reward) => {
     if (!confirm(`Remove "${reward.offer}"? It'll no longer be shown, but existing coupons for it still work.`)) return;
-    setDeletingId(reward.id); setError('');
-    try { await deactivateOffer(reward.id); reloadCatalog(); } catch { setError('Could not remove that offer. Try again.'); }
-    finally { setDeletingId(null); }
+    setDeletingId(reward.id);
+    setError('');
+    try {
+      await deactivateOffer(reward.id);
+      reloadCatalog();
+    } catch {
+      setError('Could not remove that offer. Try again.');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const categories: ServiceCategory[] = ['stringing', 'coaching', 'others'];
@@ -732,9 +965,7 @@ export const ServicesTab: React.FC = () => {
       <motion.div {...fadeUp} className="flex items-end justify-between gap-3 mb-4">
         <div>
           <p className="text-3xl font-black text-clay leading-none">{balanceLoading ? '—' : balance}</p>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70 mt-1.5">
-            Redeemable points
-          </p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70 mt-1.5">Redeemable points</p>
         </div>
         <div className="text-right">
           <p className="text-sm text-fg">Use points to get discounts</p>
@@ -747,7 +978,9 @@ export const ServicesTab: React.FC = () => {
 
       {!user && (
         <p className="text-[11px] text-fg/70 mb-5 -mt-3">
-          <Link to="/login" className="text-clay font-bold hover:underline">Join or Log in</Link>{' '}
+          <Link to="/login" className="text-clay font-bold hover:underline">
+            Join or Log in
+          </Link>{' '}
           to redeem points or avail the services.
         </p>
       )}
@@ -816,9 +1049,17 @@ export const ServicesTab: React.FC = () => {
                     }
                     // Signed-out visitors can browse the catalogue but don't get providers'
                     // phone numbers and emails handed to them.
-                    right={user
-                      ? <ContactOpponentButton name={p.name} phone={p.phone} email={p.email} size="sm" variant="white" />
-                      : undefined}
+                    right={
+                      user ? (
+                        <ContactOpponentButton
+                          name={p.name}
+                          phone={p.phone}
+                          email={p.email}
+                          size="sm"
+                          variant="white"
+                        />
+                      ) : undefined
+                    }
                     bodyClassName="px-5 space-y-2.5"
                   >
                     {/* The free monthly group lesson is Archie's offer — lives under his name. */}
@@ -853,7 +1094,10 @@ export const ServicesTab: React.FC = () => {
         <AddServiceForm
           byCategory={byCategory}
           editingReward={editingReward ?? undefined}
-          onClose={() => { setShowAddService(false); setEditingReward(null); }}
+          onClose={() => {
+            setShowAddService(false);
+            setEditingReward(null);
+          }}
           onCreated={reloadCatalog}
         />
       )}

@@ -3,7 +3,15 @@ import React from 'react';
 // Racquet + ball + wrist strap — the single mark used for Matches, Challenge, and Rally.
 // Stroke inherits currentColor (white on clay buttons, tennis-dark on white buttons, automatically).
 export const RacquetIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}>
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
     <circle cx="5.5" cy="5.5" r="2.4" />
     <path d="M4 4c.8.5 1.3 1.4 1.3 2.4M7 4c-.8.5-1.3 1.4-1.3 2.4" strokeWidth="0.8" />
     <g transform="rotate(38 14.5 10)">

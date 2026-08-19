@@ -10,14 +10,15 @@ import { MemberSearchInput, type MemberPick } from '../members/MemberSearchInput
 import { TennisEvent } from '../../types';
 import { isLadderEvent, isRecurringWeekly, isSeasonOpener, isTournamentEvent } from '../../utils/eventTypes';
 import {
-  getEventEndDate, getEventStartDate, parseEndInstant, parseValidDate,
+  getEventEndDate,
+  getEventStartDate,
+  parseEndInstant,
+  parseValidDate,
   type FirestoreDateLike,
 } from '../../utils/eventDates';
 import { DOUBLES_DIVISIONS } from '../tournament/types';
 import { JoinFormState, SlotResult } from './types';
-import {
-  DisplayEvent, EVENT_SKILL_OPTIONS, EVENT_TYPE_OPTIONS, EventFormState,
-} from './services/eventService';
+import { DisplayEvent, EVENT_SKILL_OPTIONS, EVENT_TYPE_OPTIONS, EventFormState } from './services/eventService';
 
 // Events page presentation: event card, creator form, join sheet, schedule formatters.
 // Data access lives in ./services/eventService.ts and ./hooks/; shared form types in ./types.ts.
@@ -25,13 +26,22 @@ import {
 // ─── Schedule formatting ─────────────────────────────────────────────────────────────────────────
 
 const WEEKDAY_MAP: Record<string, number> = {
-  sunday: 0, sun: 0,
-  monday: 1, mon: 1,
-  tuesday: 2, tue: 2, tues: 2,
-  wednesday: 3, wed: 3,
-  thursday: 4, thu: 4, thurs: 4,
-  friday: 5, fri: 5,
-  saturday: 6, sat: 6,
+  sunday: 0,
+  sun: 0,
+  monday: 1,
+  mon: 1,
+  tuesday: 2,
+  tue: 2,
+  tues: 2,
+  wednesday: 3,
+  wed: 3,
+  thursday: 4,
+  thu: 4,
+  thurs: 4,
+  friday: 5,
+  fri: 5,
+  saturday: 6,
+  sat: 6,
 };
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -41,7 +51,10 @@ export const getEventDays = (event: TennisEvent): number[] => {
   const parts = Array.isArray(raw)
     ? raw
     : typeof raw === 'string'
-      ? raw.split(/,|&|and|\//i).map((p) => p.trim()).filter(Boolean)
+      ? raw
+          .split(/,|&|and|\//i)
+          .map((p) => p.trim())
+          .filter(Boolean)
       : [];
   return parts.map((d) => WEEKDAY_MAP[d.toLowerCase()]).filter((d): d is number => d !== undefined);
 };
@@ -106,7 +119,15 @@ interface EventCardProps {
 
 // Event card — display only. The join form lives in JoinEventSheet now, so tapping Join never
 // reflows the grid.
-export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, authLoading, isLoggedIn, onJoin, onEdit }) => {
+export const EventCard: React.FC<EventCardProps> = ({
+  event,
+  index,
+  isJoined,
+  authLoading,
+  isLoggedIn,
+  onJoin,
+  onEdit,
+}) => {
   const dateLabel = isTournamentEvent(event) ? formatTournamentRange(event) : formatEventSchedule(event);
   const isTournament = isTournamentEvent(event);
   // League Ladder: no registration — the card's action opens the ladder Challenges tab.
@@ -300,69 +321,135 @@ export const CreatorEventModal: React.FC<CreatorEventModalProps> = ({
     <Sheet maxWidthClassName="max-w-md" onClose={onClose} title={isEditing ? 'Edit Event' : 'Add an Event'}>
       <form onSubmit={onSubmit} className="p-5 pt-2 space-y-3.5">
         {eventFormMessage && (
-          <div className={`rounded-xl border px-4 py-2.5 text-sm font-semibold ${
-            eventFormMessage.type === 'success'
-              ? 'border-green-500/20 bg-green-500/10 text-badge-win'
-              : 'border-red-500/20 bg-red-500/10 text-badge-loss'
-          }`}>
+          <div
+            className={`rounded-xl border px-4 py-2.5 text-sm font-semibold ${
+              eventFormMessage.type === 'success'
+                ? 'border-green-500/20 bg-green-500/10 text-badge-win'
+                : 'border-red-500/20 bg-red-500/10 text-badge-loss'
+            }`}
+          >
             {eventFormMessage.text}
           </div>
         )}
 
         <div>
-          <label className={labelCls} htmlFor="ev-title">Title {req}</label>
-          <input id="ev-title" value={eventForm.title} onChange={(e) => set({ title: e.target.value })}
-            className={fieldCls} placeholder="Spring Ladder Tournament" />
+          <label className={labelCls} htmlFor="ev-title">
+            Title {req}
+          </label>
+          <input
+            id="ev-title"
+            value={eventForm.title}
+            onChange={(e) => set({ title: e.target.value })}
+            className={fieldCls}
+            placeholder="Spring Ladder Tournament"
+          />
         </div>
 
         {/* Type and Skill are both short selects — pairing them saves a row. */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls} htmlFor="ev-type">Type {req}</label>
-            <select id="ev-type" value={eventForm.type} onChange={(e) => set({ type: e.target.value })} className={fieldCls}>
-              {EVENT_TYPE_OPTIONS.map((type) => <option key={type} value={type}>{type}</option>)}
+            <label className={labelCls} htmlFor="ev-type">
+              Type {req}
+            </label>
+            <select
+              id="ev-type"
+              value={eventForm.type}
+              onChange={(e) => set({ type: e.target.value })}
+              className={fieldCls}
+            >
+              {EVENT_TYPE_OPTIONS.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
             </select>
           </div>
           <div>
-            <label className={labelCls} htmlFor="ev-skill">Skill level</label>
-            <select id="ev-skill" value={eventForm.skillLevel} onChange={(e) => set({ skillLevel: e.target.value })} className={fieldCls}>
-              {EVENT_SKILL_OPTIONS.map((skill) => <option key={skill} value={skill}>{skill}</option>)}
+            <label className={labelCls} htmlFor="ev-skill">
+              Skill level
+            </label>
+            <select
+              id="ev-skill"
+              value={eventForm.skillLevel}
+              onChange={(e) => set({ skillLevel: e.target.value })}
+              className={fieldCls}
+            >
+              {EVENT_SKILL_OPTIONS.map((skill) => (
+                <option key={skill} value={skill}>
+                  {skill}
+                </option>
+              ))}
             </select>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls} htmlFor="ev-loc">Location</label>
-            <input id="ev-loc" value={eventForm.location} onChange={(e) => set({ location: e.target.value })}
-              className={fieldCls} placeholder="High Park" />
+            <label className={labelCls} htmlFor="ev-loc">
+              Location
+            </label>
+            <input
+              id="ev-loc"
+              value={eventForm.location}
+              onChange={(e) => set({ location: e.target.value })}
+              className={fieldCls}
+              placeholder="High Park"
+            />
           </div>
         </div>
 
         {/* The three dates sit together — a native date input is narrow enough to pair. */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls} htmlFor="ev-start">Start date {req}</label>
-            <input id="ev-start" type="date" value={eventForm.startDate}
-              onChange={(e) => set({ startDate: e.target.value })} className={fieldCls} />
+            <label className={labelCls} htmlFor="ev-start">
+              Start date {req}
+            </label>
+            <input
+              id="ev-start"
+              type="date"
+              value={eventForm.startDate}
+              onChange={(e) => set({ startDate: e.target.value })}
+              className={fieldCls}
+            />
           </div>
           <div>
-            <label className={labelCls} htmlFor="ev-end">End date {req}</label>
-            <input id="ev-end" type="date" value={eventForm.endDate}
-              onChange={(e) => set({ endDate: e.target.value })} className={fieldCls} />
+            <label className={labelCls} htmlFor="ev-end">
+              End date {req}
+            </label>
+            <input
+              id="ev-end"
+              type="date"
+              value={eventForm.endDate}
+              onChange={(e) => set({ endDate: e.target.value })}
+              className={fieldCls}
+            />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelCls} htmlFor="ev-join">Join by</label>
-            <input id="ev-join" type="date" value={eventForm.joinLastDate}
-              onChange={(e) => set({ joinLastDate: e.target.value })} className={fieldCls} />
+            <label className={labelCls} htmlFor="ev-join">
+              Join by
+            </label>
+            <input
+              id="ev-join"
+              type="date"
+              value={eventForm.joinLastDate}
+              onChange={(e) => set({ joinLastDate: e.target.value })}
+              className={fieldCls}
+            />
           </div>
           <div>
-            <label className={labelCls} htmlFor="ev-time">Time</label>
-            <input id="ev-time" value={eventForm.time} onChange={(e) => set({ time: e.target.value })}
-              className={fieldCls} placeholder="10:00 AM - 2:00 PM" />
+            <label className={labelCls} htmlFor="ev-time">
+              Time
+            </label>
+            <input
+              id="ev-time"
+              value={eventForm.time}
+              onChange={(e) => set({ time: e.target.value })}
+              className={fieldCls}
+              placeholder="10:00 AM - 2:00 PM"
+            />
           </div>
         </div>
 
@@ -370,13 +457,19 @@ export const CreatorEventModal: React.FC<CreatorEventModalProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <Toggle
               label="Format"
-              options={[{ value: 'knockout', label: 'Knockout' }, { value: 'rr', label: 'Round Robin' }]}
+              options={[
+                { value: 'knockout', label: 'Knockout' },
+                { value: 'rr', label: 'Round Robin' },
+              ]}
               value={eventForm.tournamentFormat}
               onChange={(v) => set({ tournamentFormat: v as EventFormState['tournamentFormat'] })}
             />
             <Toggle
               label="Participants"
-              options={[{ value: 'Singles', label: 'Singles' }, { value: 'Doubles', label: 'Doubles' }]}
+              options={[
+                { value: 'Singles', label: 'Singles' },
+                { value: 'Doubles', label: 'Doubles' },
+              ]}
               value={eventForm.tournamentChoice}
               onChange={(v) => set({ tournamentChoice: v as EventFormState['tournamentChoice'] })}
             />
@@ -384,15 +477,26 @@ export const CreatorEventModal: React.FC<CreatorEventModalProps> = ({
         )}
 
         <div>
-          <label className={labelCls} htmlFor="ev-about">About {req}</label>
-          <textarea id="ev-about" value={eventForm.about} onChange={(e) => set({ about: e.target.value })}
-            rows={3} className={fieldCls}
-            placeholder="Format, expectations, and anything players should know." />
+          <label className={labelCls} htmlFor="ev-about">
+            About {req}
+          </label>
+          <textarea
+            id="ev-about"
+            value={eventForm.about}
+            onChange={(e) => set({ about: e.target.value })}
+            rows={3}
+            className={fieldCls}
+            placeholder="Format, expectations, and anything players should know."
+          />
         </div>
 
         <div className="flex gap-3 pt-1">
-          <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-          <Button type="submit" variant="clay" isLoading={creatingEvent} className="flex-1">{isEditing ? 'Save' : 'Add Event'}</Button>
+          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+            Cancel
+          </Button>
+          <Button type="submit" variant="clay" isLoading={creatingEvent} className="flex-1">
+            {isEditing ? 'Save' : 'Add Event'}
+          </Button>
         </div>
       </form>
     </Sheet>
@@ -428,9 +532,19 @@ const chip = (active: boolean) =>
 // notices, submit. Extracted from the old in-card expanding form so the events grid never
 // reflows, and the flow matches every other sheet in the app.
 export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
-  event, isLate, seniorsEligible, joinForm, setJoinForm, joinError,
-  slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed,
-  joining, onSubmitJoin, onClose,
+  event,
+  isLate,
+  seniorsEligible,
+  joinForm,
+  setJoinForm,
+  joinError,
+  slotStatus,
+  loadingMatches,
+  slotFallbackConfirmed,
+  setSlotFallbackConfirmed,
+  joining,
+  onSubmitJoin,
+  onClose,
 }) => {
   const { user } = useAuth();
   const currentUserId = user?.uid;
@@ -469,7 +583,9 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
                     <button
                       key={choice}
                       type="button"
-                      onClick={() => setJoinForm({ ...joinForm, tournamentChoice: choice, division: '', seniors: false })}
+                      onClick={() =>
+                        setJoinForm({ ...joinForm, tournamentChoice: choice, division: '', seniors: false })
+                      }
                       className={`flex-1 ${chip(joinForm.tournamentChoice === choice)}`}
                     >
                       {choice}
@@ -508,11 +624,15 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
               >
                 <span>
                   <span className="block text-sm font-bold text-fg">Join the Retired Pro draw (55+)</span>
-                  <span className="block text-xs text-fg/70 mt-0.5">Play in the age-based Retired Pro group instead of skill routing.</span>
+                  <span className="block text-xs text-fg/70 mt-0.5">
+                    Play in the age-based Retired Pro group instead of skill routing.
+                  </span>
                 </span>
-                <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${
-                  joinForm.seniors ? 'bg-clay border-clay text-white text-xs' : 'border-fg/20'
-                }`}>
+                <span
+                  className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${
+                    joinForm.seniors ? 'bg-clay border-clay text-white text-xs' : 'border-fg/20'
+                  }`}
+                >
                   {joinForm.seniors ? '✓' : ''}
                 </span>
               </button>
@@ -546,7 +666,9 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
                   <p className="text-xs font-bold text-fg/70 uppercase tracking-widest mb-2">Combined Skill (1–5)</p>
                   <input
                     type="number"
-                    min={1} max={5} step={0.5}
+                    min={1}
+                    max={5}
+                    step={0.5}
                     value={joinForm.combinedSkill}
                     onChange={(e) => setJoinForm({ ...joinForm, combinedSkill: e.target.value })}
                     placeholder="e.g. 3.5"
@@ -592,7 +714,12 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
         <Button
           onClick={onSubmitJoin}
           isLoading={joining || loadingMatches}
-          disabled={joining || loadingMatches || slotStatus?.status === 'full' || (slotStatus?.status === 'fallback' && !slotFallbackConfirmed)}
+          disabled={
+            joining ||
+            loadingMatches ||
+            slotStatus?.status === 'full' ||
+            (slotStatus?.status === 'fallback' && !slotFallbackConfirmed)
+          }
           className="w-full"
         >
           {loadingMatches ? 'Loading draw…' : 'Join Event'}

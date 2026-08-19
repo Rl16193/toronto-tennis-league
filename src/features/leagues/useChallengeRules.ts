@@ -23,16 +23,16 @@ export const isReadyForMatches = (
 ) => !!profile && profile.stats.league !== '' && profile.preferences.preferred_courts.length > 0;
 
 export type ChallengeBlockReason =
-  | null                 // go ahead
-  | 'self'               // that's you
-  | 'not-ready'          // no league and/or no preferred courts set
-  | 'no-ladder'          // no active ladder event right now
-  | 'other-division'     // they play in a different league
-  | 'unsupported'        // doubles / Retired Pro — the ladder has no such division
-  | 'pending'            // a challenge between you two is already open
-  | 'cooldown'           // played them too recently
-  | 'active-limit'       // already have 3 sent challenges open/accepted
-  | 'conflict';          // already drawn against them in another live event
+  | null // go ahead
+  | 'self' // that's you
+  | 'not-ready' // no league and/or no preferred courts set
+  | 'no-ladder' // no active ladder event right now
+  | 'other-division' // they play in a different league
+  | 'unsupported' // doubles / Retired Pro — the ladder has no such division
+  | 'pending' // a challenge between you two is already open
+  | 'cooldown' // played them too recently
+  | 'active-limit' // already have 3 sent challenges open/accepted
+  | 'conflict'; // already drawn against them in another live event
 
 export const CHALLENGE_BLOCK_LABEL: Record<Exclude<ChallengeBlockReason, null>, string> = {
   self: 'This is you',
@@ -52,7 +52,9 @@ export function useActiveLadder() {
   useEffect(() => {
     fetchEvents()
       .then((all) => setLadder(all.filter((e) => isLadderEvent(e))[0] ?? null))
-      .catch(() => { /* no ladder — challenging is simply unavailable */ });
+      .catch(() => {
+        /* no ladder — challenging is simply unavailable */
+      });
   }, []);
   return ladder;
 }

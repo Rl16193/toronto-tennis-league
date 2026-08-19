@@ -3,7 +3,12 @@ import { motion } from 'motion/react';
 
 // Two-or-three-way toggle (Groups/Knockout, Upcoming/Completed, Tournament/Community).
 // Options share the width equally; the active one fills clay and slides between segments.
-export function SegmentedControl<T extends string>({ options, value, onChange, className = '' }: {
+export function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  className = '',
+}: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;

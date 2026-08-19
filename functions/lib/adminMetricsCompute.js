@@ -15,15 +15,16 @@ const isoDaysAgo = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOSt
 /** ISO strings sort lexicographically, so a plain >= is a valid date filter. */
 const after = (v, cutoff) => !!v && str(v) >= cutoff;
 /** Court `type` is inconsistent in the data ('waitingBoard' vs 'waiting_board'). */
-const ctype = (row) => str(row.type).replace(/[^a-z]/gi, '').toLowerCase();
-
+const ctype = (row) =>
+  str(row.type)
+    .replace(/[^a-z]/gi, '')
+    .toLowerCase();
 
 // ── metrics ──────────────────────────────────────────────────────────────────
 
 function computeMetrics(data) {
   const cutoff = isoDaysAgo(WINDOW_DAYS);
-  const { users, stats, events, event_participants, matches, courts, tasks, listings, connections,
-    preferences } = data;
+  const { users, stats, events, event_participants, matches, courts, tasks, listings, connections, preferences } = data;
 
   const parts = event_participants.filter((p) => !p.removal);
   const completed = matches.filter((m) => str(m.status) === 'complete');
@@ -35,7 +36,7 @@ function computeMetrics(data) {
   const checkins7 = checkins.filter((c) => after(c.created_at, cutoff));
 
   const requests = byCat(matches, 'rally', 'challenge');
-  const progress = tasks.filter((t) => !str(t.type));       // per-member progress docs
+  const progress = tasks.filter((t) => !str(t.type)); // per-member progress docs
 
   const headline = {
     // — activity, rolling 7 days —
@@ -48,8 +49,7 @@ function computeMetrics(data) {
     court_checkins_7d: checkins7.length,
     court_reports_7d: reports.filter((c) => after(c.created_at, cutoff)).length,
     requests_created_7d: requests.filter((m) => after(m.created_at, cutoff)).length,
-    requests_accepted_7d: requests.filter((m) => after(m.responded_at, cutoff)
-      && str(m.status) === 'accepted').length,
+    requests_accepted_7d: requests.filter((m) => after(m.responded_at, cutoff) && str(m.status) === 'accepted').length,
 
     // — totals, current state —
     members_total: users.length,
@@ -69,12 +69,20 @@ function computeMetrics(data) {
     const d = courtAgg.get(key) || { court: key, zone: '', checkins_7d: 0, members: new Set(), last: '' };
     d.zone = d.zone || str(c.zone);
     d.last = d.last > str(c.created_at) ? d.last : str(c.created_at).slice(0, 10);
-    if (after(c.created_at, cutoff)) { d.checkins_7d += 1; d.members.add(str(c.uid)); }
+    if (after(c.created_at, cutoff)) {
+      d.checkins_7d += 1;
+      d.members.add(str(c.uid));
+    }
     courtAgg.set(key, d);
   }
   const byCourt = [...courtAgg.values()]
-    .map((d) => ({ court: d.court, zone: d.zone, checkins_7d: d.checkins_7d,
-      distinct_members_7d: d.members.size, last_checkin: d.last }))
+    .map((d) => ({
+      court: d.court,
+      zone: d.zone,
+      checkins_7d: d.checkins_7d,
+      distinct_members_7d: d.members.size,
+      last_checkin: d.last,
+    }))
     .sort((a, b) => b.checkins_7d - a.checkins_7d || a.court.localeCompare(b.court));
 
   const zoneAgg = new Map();
@@ -82,7 +90,8 @@ function computeMetrics(data) {
     const z = str(p.preferred_zone) || '(none set)';
     zoneAgg.set(z, (zoneAgg.get(z) || 0) + 1);
   }
-  const byZone = [...zoneAgg.entries()].map(([zone, members]) => ({ zone, members }))
+  const byZone = [...zoneAgg.entries()]
+    .map(([zone, members]) => ({ zone, members }))
     .sort((a, b) => b.members - a.members);
 
   const eventTitle = new Map(events.map((e) => [e._id, str(e.title)]));
@@ -91,7 +100,8 @@ function computeMetrics(data) {
     const t = eventTitle.get(str(p.event_id)) || str(p.event_name) || '(unknown)';
     eventAgg.set(t, (eventAgg.get(t) || 0) + 1);
   }
-  const byEvent = [...eventAgg.entries()].map(([event, entries]) => ({ event, entries }))
+  const byEvent = [...eventAgg.entries()]
+    .map(([event, entries]) => ({ event, entries }))
     .sort((a, b) => b.entries - a.entries);
 
   // A walkover and a no-show are both stored as an ALL-ZERO score (see CLAUDE.md), so printing the

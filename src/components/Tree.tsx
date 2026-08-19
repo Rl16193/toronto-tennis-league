@@ -22,13 +22,9 @@ export const Tree: React.FC<{
   children: React.ReactNode;
 }> = ({ title, footnote, className = '', children }) => (
   <div className={`rounded-3xl bg-tennis-surface/30 overflow-hidden ${className}`}>
-    {title && (
-      <h2 className="px-5 pt-5 pb-3.5 text-base font-black text-fg">{title}</h2>
-    )}
+    {title && <h2 className="px-5 pt-5 pb-3.5 text-base font-black text-fg">{title}</h2>}
     <div className={`divide-y divide-fg/5 ${title ? 'border-t border-fg/5' : ''}`}>{children}</div>
-    {footnote && (
-      <p className="px-5 py-3 border-t border-fg/5 text-[11px] text-fg/70 text-center">{footnote}</p>
-    )}
+    {footnote && <p className="px-5 py-3 border-t border-fg/5 text-[11px] text-fg/70 text-center">{footnote}</p>}
   </div>
 );
 
@@ -46,7 +42,13 @@ export const TreeGroup: React.FC<{
   bodyClassName?: string;
   children: React.ReactNode;
 }> = ({ id, label, right, open, onToggle, level = 0, disabled, bodyClassName = '', children }) => (
-  <div className={level === 1 ? 'relative before:absolute before:left-5 before:top-0 before:bottom-0 before:w-px before:bg-fg/10' : ''}>
+  <div
+    className={
+      level === 1
+        ? 'relative before:absolute before:left-5 before:top-0 before:bottom-0 before:w-px before:bg-fg/10'
+        : ''
+    }
+  >
     <div
       className={`w-full flex items-center gap-2 py-3.5 pr-5 ${level === 1 ? 'pl-10' : 'pl-5'} ${disabled ? 'opacity-40' : ''}`}
     >
@@ -59,9 +61,7 @@ export const TreeGroup: React.FC<{
           disabled ? 'cursor-not-allowed' : 'hover:text-fg'
         }`}
       >
-        <ChevronRight
-          className={`w-3.5 h-3.5 shrink-0 text-fg/70 transition-transform ${open ? 'rotate-90' : ''}`}
-        />
+        <ChevronRight className={`w-3.5 h-3.5 shrink-0 text-fg/70 transition-transform ${open ? 'rotate-90' : ''}`} />
         <span className={`min-w-0 flex-1 ${level === 1 ? 'text-sm font-bold' : 'text-sm font-black'} text-fg`}>
           {label}
         </span>
@@ -105,13 +105,12 @@ export const TreeRow: React.FC<{
   // The width is stated explicitly rather than left to a block-level flex box stretching on its
   // own, so the row is guaranteed to run all the way to the right edge of the group.
   const shared = `flex items-center gap-2.5 py-2 pr-3.5 text-left rounded-xl transition-colors ${
-    level === 1 ? 'ml-10 w-[calc(100%-2.5rem)] pl-4' : 'ml-5 w-[calc(100%-1.25rem)] pl-5'}`;
+    level === 1 ? 'ml-10 w-[calc(100%-2.5rem)] pl-4' : 'ml-5 w-[calc(100%-1.25rem)] pl-5'
+  }`;
   const pct = fill ? Math.min(100, Math.round((fill.count / Math.max(1, fill.size)) * 100)) : 0;
   const body = (
     <>
-      <span className={`min-w-0 flex-1 text-sm truncate ${active ? 'font-bold' : 'text-fg'}`}>
-        {label}
-      </span>
+      <span className={`min-w-0 flex-1 text-sm truncate ${active ? 'font-bold' : 'text-fg'}`}>{label}</span>
       {fill ? (
         <span className="shrink-0 flex items-center gap-1.5 w-20">
           <span className={`flex-1 h-1.5 rounded-full overflow-hidden ${active ? 'bg-clay/15' : 'bg-fg/10'}`}>
@@ -120,10 +119,14 @@ export const TreeRow: React.FC<{
               style={{ width: `${pct}%` }}
             />
           </span>
-          <span className={`shrink-0 text-[10px] tabular-nums ${active ? 'text-clay/70' : 'text-fg/70'}`}>{fill.count}/{fill.size}</span>
+          <span className={`shrink-0 text-[10px] tabular-nums ${active ? 'text-clay/70' : 'text-fg/70'}`}>
+            {fill.count}/{fill.size}
+          </span>
         </span>
       ) : right ? (
-        <span className={`shrink-0 flex items-center gap-1.5 text-xs tabular-nums ${active ? 'text-clay/70' : 'text-fg/70'}`}>
+        <span
+          className={`shrink-0 flex items-center gap-1.5 text-xs tabular-nums ${active ? 'text-clay/70' : 'text-fg/70'}`}
+        >
           {right}
           {dot && <span className="w-1.5 h-1.5 rounded-full bg-clay" aria-hidden="true" />}
         </span>

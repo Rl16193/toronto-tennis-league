@@ -27,9 +27,12 @@ export interface Rally {
   // per-set games — so one formatter and one history mapping serve every kind of result.
   winner_uid?: string;
   winner_name?: string;
-  set_1_player_1?: number; set_1_player_2?: number;
-  set_2_player_1?: number; set_2_player_2?: number;
-  set_3_player_1?: number; set_3_player_2?: number;
+  set_1_player_1?: number;
+  set_1_player_2?: number;
+  set_2_player_1?: number;
+  set_2_player_2?: number;
+  set_3_player_1?: number;
+  set_3_player_2?: number;
   /** Stamped on confirm, matching a tournament match, so history sorts on one field. */
   completed_at?: string;
   court?: string;
@@ -41,10 +44,7 @@ export interface Rally {
   applied?: boolean;
 }
 
-export async function createRally(
-  from: { id: string; name: string },
-  to: { id: string; name: string },
-): Promise<void> {
+export async function createRally(from: { id: string; name: string }, to: { id: string; name: string }): Promise<void> {
   await addDoc(collection(db, MATCHES_COL), {
     category: 'rally',
     player_1_uid: from.id,
@@ -105,7 +105,12 @@ export function useRallies() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) { setSent([]); setReceived([]); setLoading(false); return; }
+    if (!user) {
+      setSent([]);
+      setReceived([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const toRows = (snap: { docs: { id: string; data: () => unknown }[] }) =>
       snap.docs
@@ -113,13 +118,22 @@ export function useRallies() {
         .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
     const un1 = onSnapshot(
       query(collection(db, MATCHES_COL), where('category', '==', 'rally'), where('player_1_uid', '==', user.uid)),
-      (s) => { setSent(toRows(s)); setLoading(false); },
+      (s) => {
+        setSent(toRows(s));
+        setLoading(false);
+      },
     );
     const un2 = onSnapshot(
       query(collection(db, MATCHES_COL), where('category', '==', 'rally'), where('player_2_uid', '==', user.uid)),
-      (s) => { setReceived(toRows(s)); setLoading(false); },
+      (s) => {
+        setReceived(toRows(s));
+        setLoading(false);
+      },
     );
-    return () => { un1(); un2(); };
+    return () => {
+      un1();
+      un2();
+    };
   }, [user?.uid]);
 
   // Rallies still in flight — used to disable duplicate Rally buttons. A finished one (declined,
@@ -160,9 +174,7 @@ export function useRallies() {
   }, [sent, received, user?.uid]);
 
   // Contact info for accepted-rally partners (for the ContactOpponentButton).
-  const [contactMap, setContactMap] = useState<
-    Record<string, ContactData>
-  >({});
+  const [contactMap, setContactMap] = useState<Record<string, ContactData>>({});
 
   useEffect(() => {
     if (!acceptedPartnerIds.size) return;
@@ -174,7 +186,9 @@ export function useRallies() {
           try {
             const c = await getDoc(doc(db, 'contacts', id));
             return c.exists() ? ([id, c.data()] as const) : null;
-          } catch { return null; }
+          } catch {
+            return null;
+          }
         }),
       );
       // Filter before fromEntries — a null entry in the list throws.

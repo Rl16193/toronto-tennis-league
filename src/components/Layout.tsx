@@ -46,9 +46,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           // top padding for the fixed top bar and bottom padding for the fixed bottom tab bar.
           className={`flex-grow${isCourts ? '' : isHome ? ' pb-16' : ' pt-16 pb-16'}`}
         >
-          <Suspense fallback={<RouteFallback />}>
-            {children}
-          </Suspense>
+          <Suspense fallback={<RouteFallback />}>{children}</Suspense>
         </motion.main>
       </AnimatePresence>
       <BottomNav />

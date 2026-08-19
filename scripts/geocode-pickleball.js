@@ -15,109 +15,109 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const COURT_ALIASES = { 'stanley park': 'stanley park south - toronto' };
 
 const PICKLEBALL_DATA = [
-  { location: '20 Castlefield Avenue Park'         },
-  { location: '50 Queens Quay East Park'           },
-  { location: 'Albion Gardens Park'                },
-  { location: 'Alexandra Park'                     },
-  { location: 'Amesbury Park'                      },
-  { location: 'Ancaster Park'                      },
+  { location: '20 Castlefield Avenue Park' },
+  { location: '50 Queens Quay East Park' },
+  { location: 'Albion Gardens Park' },
+  { location: 'Alexandra Park' },
+  { location: 'Amesbury Park' },
+  { location: 'Ancaster Park' },
   { location: 'Angela James Arena & Tennis Courts' },
-  { location: 'Antibes Community Centre'           },
-  { location: 'Banbury Park'                       },
-  { location: 'Baycrest Park'                      },
-  { location: 'Bayview Village Park'               },
-  { location: 'Beaumonde Heights Park'             },
-  { location: 'Bennington Heights Park'            },
-  { location: 'Bestview Park'                      },
-  { location: 'Birch Park'                         },
-  { location: 'Birchmount Park'                    },
-  { location: 'Buttonwood Park'                    },
-  { location: 'Campbell Avenue Park'               },
-  { location: 'Cedarvale Park'                     },
-  { location: 'Centennial Park - Etobicoke'        },
-  { location: 'Chalkfarm Park'                     },
-  { location: 'Champlain Parkette'                 },
-  { location: 'Christie Pits Park'                 },
-  { location: 'Clairlea Park'                      },
-  { location: 'Cliffwood Park'                     },
-  { location: 'Cloverdale Park'                    },
-  { location: 'Cummer Park'                        },
-  { location: 'Dieppe Park'                        },
-  { location: 'Dufferin Grove Park'                },
-  { location: 'Earlscourt Park'                    },
-  { location: 'Eglinton Flats'                     },
-  { location: 'Eglinton Park'                      },
-  { location: 'Elie Wiesel Park'                   },
-  { location: 'Fairmount Park'                     },
-  { location: 'Fenside Park'                       },
-  { location: 'Firgrove Park'                      },
-  { location: 'Flagstaff Park'                     },
-  { location: 'Gihon Spring Park'                  },
-  { location: 'Glen Park'                          },
-  { location: 'Glendora Park'                      },
-  { location: 'Gracedale Park'                     },
-  { location: 'Greenwood Park'                     },
-  { location: 'High Park'                          },
-  { location: 'Howard Talbot Park'                 },
-  { location: 'Hullmar Park'                       },
-  { location: 'Humber Valley Park'                 },
-  { location: 'Indian Line Park'                   },
-  { location: 'Irving W. Chapley Park'             },
-  { location: 'Jeff Healey Park'                   },
-  { location: 'Jimmie Simpson Park'                },
-  { location: 'Jonathan Ashbridge Park'            },
-  { location: 'Kew Gardens'                        },
-  { location: 'Kingsview Park'                     },
-  { location: 'Kirkwood Park'                      },
-  { location: 'Laburnham Park'                     },
-  { location: 'Lakeshore Boulevard Parklands'      },
-  { location: 'Lambton - Kingsway Park'            },
-  { location: 'Lanyard Park'                       },
-  { location: 'Lillian Park'                       },
-  { location: 'Lora Hill Park'                     },
-  { location: 'Main Sewage Treatment Playground'   },
-  { location: 'Malvern Park'                       },
-  { location: 'Manchester Park'                    },
-  { location: 'Maple Leaf Park'                    },
-  { location: 'Martingrove Gardens Park'           },
-  { location: 'McCowan District Park'              },
-  { location: 'McDairmid Woods Park'               },
-  { location: 'McGregor Park'                      },
-  { location: 'Michael Mostyn Balmoral Park'       },
-  { location: 'Mill Valley Park'                   },
-  { location: 'Millwood Park'                      },
-  { location: 'Monarch Park'                       },
-  { location: 'Otter Creek Centre'                 },
-  { location: 'Ourland Park'                       },
-  { location: 'Park Lawn Park'                     },
-  { location: 'Pelmo Park'                         },
-  { location: 'Pine Point Park'                    },
-  { location: 'Prairie Drive Park'                 },
-  { location: 'Queensway Park'                     },
-  { location: 'Ramsden Park'                       },
-  { location: 'Regent Park Athletic Grounds'       },
-  { location: 'Riverdale Park East'                },
-  { location: 'Rotary Peace Park'                  },
-  { location: 'Sentinel Park'                      },
-  { location: 'Shawnee Park'                       },
-  { location: 'Sir Adam Beck Park'                 },
-  { location: 'Stanley Greene Park'                },
-  { location: 'Stanley Park South - Toronto'       },
-  { location: 'Stephenson Park'                    },
-  { location: 'Strathburn Park'                    },
-  { location: 'Sunnylea Park'                      },
-  { location: 'Sweeney Park'                       },
-  { location: 'Tom Riley Park'                     },
-  { location: "Toronto Island Park - Ward's Island"},
-  { location: 'Trinity Bellwoods Park'             },
-  { location: 'Valleyfield Park'                   },
-  { location: 'Wanless Park'                       },
-  { location: 'Wedgewood Park - Etobicoke'         },
-  { location: 'Wedgewood Park - North York'        },
-  { location: 'Wellesley Park'                     },
-  { location: 'Westgrove Park'                     },
-  { location: 'Westmount Park'                     },
-  { location: 'Withrow Park and Clubhouse'         },
+  { location: 'Antibes Community Centre' },
+  { location: 'Banbury Park' },
+  { location: 'Baycrest Park' },
+  { location: 'Bayview Village Park' },
+  { location: 'Beaumonde Heights Park' },
+  { location: 'Bennington Heights Park' },
+  { location: 'Bestview Park' },
+  { location: 'Birch Park' },
+  { location: 'Birchmount Park' },
+  { location: 'Buttonwood Park' },
+  { location: 'Campbell Avenue Park' },
+  { location: 'Cedarvale Park' },
+  { location: 'Centennial Park - Etobicoke' },
+  { location: 'Chalkfarm Park' },
+  { location: 'Champlain Parkette' },
+  { location: 'Christie Pits Park' },
+  { location: 'Clairlea Park' },
+  { location: 'Cliffwood Park' },
+  { location: 'Cloverdale Park' },
+  { location: 'Cummer Park' },
+  { location: 'Dieppe Park' },
+  { location: 'Dufferin Grove Park' },
+  { location: 'Earlscourt Park' },
+  { location: 'Eglinton Flats' },
+  { location: 'Eglinton Park' },
+  { location: 'Elie Wiesel Park' },
+  { location: 'Fairmount Park' },
+  { location: 'Fenside Park' },
+  { location: 'Firgrove Park' },
+  { location: 'Flagstaff Park' },
+  { location: 'Gihon Spring Park' },
+  { location: 'Glen Park' },
+  { location: 'Glendora Park' },
+  { location: 'Gracedale Park' },
+  { location: 'Greenwood Park' },
+  { location: 'High Park' },
+  { location: 'Howard Talbot Park' },
+  { location: 'Hullmar Park' },
+  { location: 'Humber Valley Park' },
+  { location: 'Indian Line Park' },
+  { location: 'Irving W. Chapley Park' },
+  { location: 'Jeff Healey Park' },
+  { location: 'Jimmie Simpson Park' },
+  { location: 'Jonathan Ashbridge Park' },
+  { location: 'Kew Gardens' },
+  { location: 'Kingsview Park' },
+  { location: 'Kirkwood Park' },
+  { location: 'Laburnham Park' },
+  { location: 'Lakeshore Boulevard Parklands' },
+  { location: 'Lambton - Kingsway Park' },
+  { location: 'Lanyard Park' },
+  { location: 'Lillian Park' },
+  { location: 'Lora Hill Park' },
+  { location: 'Main Sewage Treatment Playground' },
+  { location: 'Malvern Park' },
+  { location: 'Manchester Park' },
+  { location: 'Maple Leaf Park' },
+  { location: 'Martingrove Gardens Park' },
+  { location: 'McCowan District Park' },
+  { location: 'McDairmid Woods Park' },
+  { location: 'McGregor Park' },
+  { location: 'Michael Mostyn Balmoral Park' },
+  { location: 'Mill Valley Park' },
+  { location: 'Millwood Park' },
+  { location: 'Monarch Park' },
+  { location: 'Otter Creek Centre' },
+  { location: 'Ourland Park' },
+  { location: 'Park Lawn Park' },
+  { location: 'Pelmo Park' },
+  { location: 'Pine Point Park' },
+  { location: 'Prairie Drive Park' },
+  { location: 'Queensway Park' },
+  { location: 'Ramsden Park' },
+  { location: 'Regent Park Athletic Grounds' },
+  { location: 'Riverdale Park East' },
+  { location: 'Rotary Peace Park' },
+  { location: 'Sentinel Park' },
+  { location: 'Shawnee Park' },
+  { location: 'Sir Adam Beck Park' },
+  { location: 'Stanley Greene Park' },
+  { location: 'Stanley Park South - Toronto' },
+  { location: 'Stephenson Park' },
+  { location: 'Strathburn Park' },
+  { location: 'Sunnylea Park' },
+  { location: 'Sweeney Park' },
+  { location: 'Tom Riley Park' },
+  { location: "Toronto Island Park - Ward's Island" },
+  { location: 'Trinity Bellwoods Park' },
+  { location: 'Valleyfield Park' },
+  { location: 'Wanless Park' },
+  { location: 'Wedgewood Park - Etobicoke' },
+  { location: 'Wedgewood Park - North York' },
+  { location: 'Wellesley Park' },
+  { location: 'Westgrove Park' },
+  { location: 'Westmount Park' },
+  { location: 'Withrow Park and Clubhouse' },
 ];
 
 // ── Simple CSV helpers (mirrors CourtMap.tsx logic) ─────────────────────────
@@ -129,10 +129,13 @@ function parseCsvLine(line) {
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (ch === '"') {
-      if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
-      else inQ = !inQ;
+      if (inQ && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else inQ = !inQ;
     } else if (ch === ',' && !inQ) {
-      fields.push(cur); cur = '';
+      fields.push(cur);
+      cur = '';
     } else {
       cur += ch;
     }
@@ -145,7 +148,9 @@ function parseCourts(csvText) {
   const [headerLine, ...lines] = csvText.split(/\r?\n/).filter(Boolean);
   const headers = parseCsvLine(headerLine);
   const idx = (col) => headers.indexOf(col);
-  const iName = idx('Name'), iDropdown = idx('Dropdown'), iGeom = idx('geometry');
+  const iName = idx('Name'),
+    iDropdown = idx('Dropdown'),
+    iGeom = idx('geometry');
   const courts = [];
   for (const line of lines) {
     const cells = parseCsvLine(line);
@@ -157,7 +162,9 @@ function parseCourts(csvText) {
       const dropdown = cells[iDropdown]?.trim() || cells[iName]?.trim() || '';
       if (!dropdown || !lat || !lng) continue;
       courts.push({ name: cells[iName]?.trim() || dropdown, dropdown, lat, lng });
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
   return courts;
 }
@@ -186,16 +193,29 @@ async function geocodeQuery(location) {
     `&limit=5&countrycodes=ca&viewbox=${viewbox}`;
   const res = await fetch(url, { headers: { 'User-Agent': 'toronto-tennis-league-geocoder' } });
   const data = await res.json();
-  const genericTypes = new Set(['city', 'county', 'state', 'administrative', 'country', 'municipality', 'region', 'province', 'suburb', 'quarter']);
+  const genericTypes = new Set([
+    'city',
+    'county',
+    'state',
+    'administrative',
+    'country',
+    'municipality',
+    'region',
+    'province',
+    'suburb',
+    'quarter',
+  ]);
   for (const r of data) {
     if (genericTypes.has(r.type) || genericTypes.has(r.class)) continue;
     const lat = parseFloat(r.lat);
     const lng = parseFloat(r.lon);
     // Must be within ~35km of Toronto centre
-    const dLat = (lat - 43.70) * Math.PI / 180;
-    const dLng = (lng - (-79.38)) * Math.PI / 180;
-    const a = Math.sin(dLat/2)**2 + Math.cos(43.70*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.sin(dLng/2)**2;
-    const dist = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const dLat = ((lat - 43.7) * Math.PI) / 180;
+    const dLng = ((lng - -79.38) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((43.7 * Math.PI) / 180) * Math.cos((lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    const dist = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     if (dist > 35) continue;
     return { lat, lng };
   }
@@ -216,27 +236,29 @@ for (const c of courts) {
 }
 
 // Find unique locations that don't match the tennis courts CSV
-const uniqueLocations = [...new Set(PICKLEBALL_DATA.map(e => e.location))];
-const pbOnlyLocations = uniqueLocations.filter(loc => !matchCourtName(loc, byDropdown, byName));
+const uniqueLocations = [...new Set(PICKLEBALL_DATA.map((e) => e.location))];
+const pbOnlyLocations = uniqueLocations.filter((loc) => !matchCourtName(loc, byDropdown, byName));
 
 console.error(`Found ${pbOnlyLocations.length} pickleball-only locations needing geocoding:`);
-pbOnlyLocations.forEach(l => console.error(' -', l));
+pbOnlyLocations.forEach((l) => console.error(' -', l));
 console.error('');
 
 const coords = {};
 for (let i = 0; i < pbOnlyLocations.length; i++) {
   const location = pbOnlyLocations[i];
-  if (i > 0) await new Promise(r => setTimeout(r, 1200));
+  if (i > 0) await new Promise((r) => setTimeout(r, 1200));
   try {
     const result = await geocodeQuery(location);
     if (result) {
       coords[location] = { lat: result.lat, lng: result.lng };
-      console.error(`✓ [${i+1}/${pbOnlyLocations.length}] ${location}: ${result.lat.toFixed(5)}, ${result.lng.toFixed(5)}`);
+      console.error(
+        `✓ [${i + 1}/${pbOnlyLocations.length}] ${location}: ${result.lat.toFixed(5)}, ${result.lng.toFixed(5)}`,
+      );
     } else {
-      console.error(`✗ [${i+1}/${pbOnlyLocations.length}] ${location}: no result`);
+      console.error(`✗ [${i + 1}/${pbOnlyLocations.length}] ${location}: no result`);
     }
   } catch (e) {
-    console.error(`✗ [${i+1}/${pbOnlyLocations.length}] ${location}: error - ${e.message}`);
+    console.error(`✗ [${i + 1}/${pbOnlyLocations.length}] ${location}: error - ${e.message}`);
   }
 }
 

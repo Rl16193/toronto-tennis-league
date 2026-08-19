@@ -80,8 +80,17 @@ const ALL_TIERS = [
 // which most new players never reach. The field is still written when someone plays a ladder
 // match (see taskPoints.js), it just no longer counts toward setupComplete.
 const INITIATION_TASK_IDS = [
-  'profileComplete', 'followSocial', 'tagPost', 'waitingBoard', 'courtVisit', 'queuePhoto',
-  'playMatch', 'courtSuggestion', 'whatsappGroup', 'profilePhoto', 'joinEvent',
+  'profileComplete',
+  'followSocial',
+  'tagPost',
+  'waitingBoard',
+  'courtVisit',
+  'queuePhoto',
+  'playMatch',
+  'courtSuggestion',
+  'whatsappGroup',
+  'profilePhoto',
+  'joinEvent',
 ];
 
 const TIER_POINTS = Object.fromEntries(ALL_TIERS.map((t) => [t.id, t.points]));

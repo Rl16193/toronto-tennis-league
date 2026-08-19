@@ -27,11 +27,7 @@ export const getAuthErrorMessage = (error: any, context: 'login' | 'reset' | 'go
 
 // One implementation for every OAuth provider — the Google and Apple versions were byte-identical
 // apart from the provider id and the words in three strings.
-export const getOAuthSignInErrorMessage = async (
-  error: any,
-  email: string,
-  providerId: 'google.com' | 'apple.com',
-) => {
+export const getOAuthSignInErrorMessage = async (error: any, email: string, providerId: 'google.com' | 'apple.com') => {
   const label = providerId === 'google.com' ? 'Google' : 'Apple';
   const code = (error?.code || error?.message || '').toString().toLowerCase();
   if (code.includes('popup-closed-by-user')) {

@@ -29,12 +29,18 @@ if (projectId === PRODUCTION_PROJECT && (!productionApproval || !productionConfi
   process.exit(2);
 }
 
-const args = mode === 'preview'
-  ? ['hosting:channel:deploy', 'preview', '--project', projectId]
-  : ['deploy', '--only', 'hosting', '--project', projectId];
+const args =
+  mode === 'preview'
+    ? ['hosting:channel:deploy', 'preview', '--project', projectId]
+    : ['deploy', '--only', 'hosting', '--project', projectId];
 
 console.log(`Running Firebase Hosting ${mode} for explicitly selected project ${projectId}.`);
-const firebaseBinary = path.join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'firebase.cmd' : 'firebase');
+const firebaseBinary = path.join(
+  root,
+  'node_modules',
+  '.bin',
+  process.platform === 'win32' ? 'firebase.cmd' : 'firebase',
+);
 const result = spawnSync(firebaseBinary, args, { cwd: root, stdio: 'inherit' });
 if (result.error) {
   console.error(`Firebase CLI could not be started: ${result.error.message}`);

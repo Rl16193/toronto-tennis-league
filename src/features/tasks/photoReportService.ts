@@ -29,11 +29,11 @@ export type PhotoMetadata = {
   file_size: number;
   file_type: string;
   file_last_modified: string | null; // ISO — when the file was last saved on the device
-  exif_taken_at: string | null;      // ISO — EXIF DateTimeOriginal (capture time), if present
-  exif_camera: string | null;        // "Apple iPhone 14", etc., if present
+  exif_taken_at: string | null; // ISO — EXIF DateTimeOriginal (capture time), if present
+  exif_camera: string | null; // "Apple iPhone 14", etc., if present
   exif_gps_lat: number | null;
   exif_gps_lng: number | null;
-  exif_present: boolean;             // did the image carry any readable EXIF at all
+  exif_present: boolean; // did the image carry any readable EXIF at all
 };
 
 async function extractPhotoMetadata(file: File): Promise<PhotoMetadata> {
@@ -65,7 +65,9 @@ async function extractPhotoMetadata(file: File): Promise<PhotoMetadata> {
       base.exif_gps_lat = gps.latitude;
       base.exif_gps_lng = gps.longitude;
     }
-  } catch { /* no readable EXIF — keep the nulls */ }
+  } catch {
+    /* no readable EXIF — keep the nulls */
+  }
   return base;
 }
 

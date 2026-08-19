@@ -16,87 +16,104 @@ export interface BadgeDef {
 
 export const BADGES: BadgeDef[] = [
   {
-    id: 'member', name: 'Community Member',
+    id: 'member',
+    name: 'Community Member',
     requirement: 'Finish the Community Member Initiation',
     earned: (p) => !!p.setupComplete,
   },
   {
-    id: 'tourBeginner', name: 'Tournament Beginner',
+    id: 'tourBeginner',
+    name: 'Tournament Beginner',
     requirement: '5 playing tasks',
     earned: (_p, _c, count) => count(PLAYING_TIER_IDS) >= 5,
   },
   {
-    id: 'tourIntermediate', name: 'Tournament Intermediate',
+    id: 'tourIntermediate',
+    name: 'Tournament Intermediate',
     requirement: '10 playing tasks',
     earned: (_p, _c, count) => count(PLAYING_TIER_IDS) >= 10,
   },
   {
-    id: 'tourExpert', name: 'Tournament Expert',
+    id: 'tourExpert',
+    name: 'Tournament Expert',
     requirement: '15 playing tasks',
     earned: (_p, _c, count) => count(PLAYING_TIER_IDS) >= 15,
   },
   {
-    id: 'onFire', name: 'On Fire',
+    id: 'onFire',
+    name: 'On Fire',
     requirement: 'A 10-match winning streak',
     earned: (_p, c) => c.bestStreak >= 10,
   },
   {
-    id: 'ladderChallenger', name: 'Ladder Challenger',
+    id: 'ladderChallenger',
+    name: 'Ladder Challenger',
     requirement: '3 ladder tasks',
     earned: (_p, _c, count) => count(LADDER_TIER_IDS) >= 3,
   },
   {
-    id: 'ladderDuellist', name: 'Ladder Duellist',
+    id: 'ladderDuellist',
+    name: 'Ladder Duellist',
     requirement: '6 ladder tasks',
     earned: (_p, _c, count) => count(LADDER_TIER_IDS) >= 6,
   },
   {
-    id: 'ladderMaster', name: 'Ladder Master',
+    id: 'ladderMaster',
+    name: 'Ladder Master',
     requirement: 'All 7 ladder tasks',
     earned: (_p, _c, count) => count(LADDER_TIER_IDS) >= LADDER_TIER_IDS.length,
   },
   {
-    id: 'traveler', name: 'Traveler',
+    id: 'traveler',
+    name: 'Traveler',
     requirement: '10 courts visited',
     earned: (_p, c) => c.courtsVisited >= 10,
   },
   {
-    id: 'explorer', name: 'Explorer',
+    id: 'explorer',
+    name: 'Explorer',
     requirement: 'Every court in Toronto visited',
     earned: (p) => !!p.visitedAllCourts,
   },
   {
-    id: 'infoGatherer', name: 'Information Gatherer',
+    id: 'infoGatherer',
+    name: 'Information Gatherer',
     requirement: '15 photos submitted',
     earned: (_p, c) => c.boardPhotos + c.queueUpdates >= 15,
   },
   {
-    id: 'courtGuardian', name: 'Court Guardian',
+    id: 'courtGuardian',
+    name: 'Court Guardian',
     requirement: '10 court improvements',
     earned: (_p, c) => c.suggestions >= 10,
   },
   {
-    id: 'volunteer', name: 'Volunteer',
+    id: 'volunteer',
+    name: 'Volunteer',
     requirement: 'Volunteer at 10 events',
     earned: (_p, c) => c.volunteerEvents >= 10,
   },
   {
-    id: 'ambassador', name: 'Ambassador',
+    id: 'ambassador',
+    name: 'Ambassador',
     requirement: '10 players invited',
     earned: (_p, c) => c.invites >= 10,
   },
   {
-    id: 'host', name: 'Host',
+    id: 'host',
+    name: 'Host',
     requirement: '10 meetups hosted',
     earned: (_p, c) => c.meetups >= 10,
   },
   {
-    id: 'seasonRegular', name: 'Season Regular',
+    id: 'seasonRegular',
+    name: 'Season Regular',
     requirement: 'Play in 12 different months',
     earned: (_p, c) => c.monthsActive >= 12,
   },
   {
-    id: 'master', name: 'Master',
+    id: 'master',
+    name: 'Master',
     requirement: 'Reach the top playing and ladder tiers',
     earned: (_p, _c, count) => count(PLAYING_TIER_IDS) >= 15 && count(LADDER_TIER_IDS) >= LADDER_TIER_IDS.length,
   },
@@ -111,6 +128,7 @@ export const BADGE_BY_ID = Object.fromEntries(BADGES.map((b) => [b.id, b])) as R
 
 export const earnedBadges = (p: Partial<TaskProgress> | null | undefined, c: Counters): BadgeDef[] => {
   const progress = p || {};
-  const tierCount = (ids: string[]) => ids.reduce((n, id) => n + ((progress as Record<string, unknown>)[id] ? 1 : 0), 0);
+  const tierCount = (ids: string[]) =>
+    ids.reduce((n, id) => n + ((progress as Record<string, unknown>)[id] ? 1 : 0), 0);
   return BADGES.filter((b) => b.earned(progress, c, tierCount));
 };

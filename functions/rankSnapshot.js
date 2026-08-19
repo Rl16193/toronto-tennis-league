@@ -26,57 +26,70 @@ const inDivision = (league, tab) => {
   return false;
 };
 
-exports.weeklyRankSnapshot = onSchedule(
-  { schedule: '0 1 * * 6', timeZone: TZ, region: REGION },
-  async () => {
-    const snap = await db().collection('stats').get();
-    const players = [];
-    snap.forEach((d) => {
-      const s = d.data();
-      if (!s.leaguePoints26 || s.leaguePoints26 <= 0) return;
-      players.push({
-        uid: d.id,
-        league: s.league || '',
-        points: s.leaguePoints26,
-        rankPosition: typeof s.rankPosition === 'number' ? s.rankPosition : null,
-        rankTrend: s.rankTrend ?? 'flat',
-      });
+exports.weeklyRankSnapshot = onSchedule({ schedule: '0 1 * * 6', timeZone: TZ, region: REGION }, async () => {
+  const snap = await db().collection('stats').get();
+  const players = [];
+  snap.forEach((d) => {
+    const s = d.data();
+    if (!s.leaguePoints26 || s.leaguePoints26 <= 0) return;
+    players.push({
+      uid: d.id,
+      league: s.league || '',
+      points: s.leaguePoints26,
+      rankPosition: typeof s.rankPosition === 'number' ? s.rankPosition : null,
+      rankTrend: s.rankTrend ?? 'flat',
     });
+  });
 
-    const date = new Date().toISOString();
-    const ops = []; // { uid, position, trend, move, historyDir | null }
+  const date = new Date().toISOString();
+  const ops = []; // { uid, position, trend, move, historyDir | null }
 
-    for (const tab of DIV_TABS) {
-      const ranked = players
-        .filter((p) => inDivision(p.league, tab))
-        .sort((a, b) => b.points - a.points);
-      ranked.forEach((p, i) => {
-        const position = i + 1;
-        const old = p.rankPosition;
-        if (old === position) return; // no change
-        const trend = old === null ? 'flat' : position < old ? 'up' : 'down';
-        const move = old === null ? 0 : Math.abs(old - position);
-        ops.push({ uid: p.uid, position, trend, move, historyDir: old === null ? null : trend });
-      });
-    }
+  for (const tab of DIV_TABS) {
+    const ranked = players.filter((p) => inDivision(p.league, tab)).sort((a, b) => b.points - a.points);
+    ranked.forEach((p, i) => {
+      const position = i + 1;
+      const old = p.rankPosition;
+      if (old === position) return; // no change
+      const trend = old === null ? 'flat' : position < old ? 'up' : 'down';
+      const move = old === null ? 0 : Math.abs(old - position);
+      ops.push({ uid: p.uid, position, trend, move, historyDir: old === null ? null : trend });
+    });
+  }
 
-    const active = new Set();
-    (await db().collection('event_participants').get()).forEach((d) => { const u = d.data().uid; if (u) active.add(u); });
-    const completed = await db().collection('matches').where('category', 'in', ['singles', 'doubles']).where('status', '==', 'complete').count().get();
-    // snake_case, matching every other site_stats doc — this one was the lone camelCase holdout.
-    const siteStats = { active_players: active.size, matches_organized: completed.data().count + 70, updated_at: date };
+  const active = new Set();
+  (await db().collection('event_participants').get()).forEach((d) => {
+    const u = d.data().uid;
+    if (u) active.add(u);
+  });
+  const completed = await db()
+    .collection('matches')
+    .where('category', 'in', ['singles', 'doubles'])
+    .where('status', '==', 'complete')
+    .count()
+    .get();
+  // snake_case, matching every other site_stats doc — this one was the lone camelCase holdout.
+  const siteStats = { active_players: active.size, matches_organized: completed.data().count + 70, updated_at: date };
 
-    for (let i = 0; i < ops.length; i += 400) {
-      const batch = db().batch();
-      for (const op of ops.slice(i, i + 400)) {
-        batch.set(db().collection('stats').doc(op.uid), { rankPosition: op.position, rankTrend: op.trend, rankMove: op.move, rankUpdatedAt: date }, { merge: true });
-        if (op.historyDir) {
-          batch.set(db().collection('ranking_history').doc(op.uid).collection('entries').doc(), { date, position: op.position, direction: op.historyDir });
-        }
+  for (let i = 0; i < ops.length; i += 400) {
+    const batch = db().batch();
+    for (const op of ops.slice(i, i + 400)) {
+      batch.set(
+        db().collection('stats').doc(op.uid),
+        { rankPosition: op.position, rankTrend: op.trend, rankMove: op.move, rankUpdatedAt: date },
+        { merge: true },
+      );
+      if (op.historyDir) {
+        batch.set(db().collection('ranking_history').doc(op.uid).collection('entries').doc(), {
+          date,
+          position: op.position,
+          direction: op.historyDir,
+        });
       }
-      await batch.commit();
     }
-    await db().collection('site_stats').doc('summary').set(siteStats, { merge: true });
-    logger.info(`weeklyRankSnapshot: ${ops.length} rank update(s), site_stats active_players=${siteStats.active_players} matches_organized=${siteStats.matches_organized}`);
-  },
-);
+    await batch.commit();
+  }
+  await db().collection('site_stats').doc('summary').set(siteStats, { merge: true });
+  logger.info(
+    `weeklyRankSnapshot: ${ops.length} rank update(s), site_stats active_players=${siteStats.active_players} matches_organized=${siteStats.matches_organized}`,
+  );
+});

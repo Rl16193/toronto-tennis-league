@@ -10,7 +10,9 @@ const readInitialTheme = (): Theme => {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === 'light' || stored === 'dark') return stored;
-  } catch { /* localStorage unavailable (private mode, etc.) */ }
+  } catch {
+    /* localStorage unavailable (private mode, etc.) */
+  }
   return 'dark'; // default for first-time visitors
 };
 
@@ -23,7 +25,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
-    try { localStorage.setItem(STORAGE_KEY, theme); } catch { /* best-effort */ }
+    try {
+      localStorage.setItem(STORAGE_KEY, theme);
+    } catch {
+      /* best-effort */
+    }
   }, [theme]);
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
