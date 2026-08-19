@@ -45,9 +45,11 @@ presentation state.
 - `npm run test:fixtures` starts temporary Auth/Firestore emulators and exercises the synthetic
   seed command; the full `npm run emulators` launcher retains conventional fixed ports for app
   development and adds the same local Java fallback.
-- `npm run verify` runs the local type, lint, format, documentation, unit, Functions, Rules,
-  Storage, fixture-smoke, build, generated-artifact freshness, and working-tree/committed-range
-  diff checks in one command.
+- `npm run verify` runs the local type, lint, format, documentation, unit, Functions unit and
+  emulator integration, Rules, Storage, fixture-smoke, isolated Chromium login/profile smoke,
+  build, generated-artifact freshness, and working-tree/committed-range diff checks in one command.
+  Run `npm run test:functions:integration` directly to debug reward, friendly, or tournament
+  callable/trigger boundaries; use `npm run test:e2e` for the browser boundary.
 
 ## Architecture freshness
 
@@ -75,10 +77,10 @@ The pinned source and update procedure remain in `docs/engineering/AGENT_SKILLS.
 - Functions remain JavaScript. Shared callable validation is centralized first; TypeScript
   migration should follow where integration coverage is strong.
 - Signup intentionally has a pre-auth email-existence check so secondary-email migration remains
-  usable. App Check/rate limiting for that enumeration surface requires an explicit client and
-  deployment decision; no credentials or production configuration are assumed here.
-- Browser E2E and callable/trigger integration coverage remain open. Rules, pure domain tests, and
-  helper-level Functions tests are the reliable local layer until an emulator-backed UI harness and
-  non-production Functions project are available.
+  usable. The callable requires App Check outside the Functions emulator; staging provider setup and
+  abuse-rate verification remain external environment gates.
+- Broader browser journeys remain open. The stable suite intentionally limits browser timing to
+  login/profile bootstrap; reward, friendly, tournament scoring, and advancement are exercised at
+  the callable/trigger emulator boundary instead of being duplicated in a brittle UI suite.
 - `npm audit` remains non-zero through transitive development tooling. Dependency upgrades need a
   separate compatibility review; this block does not use an automatic mass-fix.

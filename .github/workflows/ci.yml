@@ -53,5 +53,8 @@ jobs:
         working-directory: functions
         run: npm ci
 
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
       - name: Run repository quality gates
         run: npm run verify

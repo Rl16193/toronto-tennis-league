@@ -78,6 +78,8 @@ npm test              # Pure domain and data-contract tests
 npm run test:rules    # Firestore Rules suite in a temporary local emulator
 npm run test:storage  # Storage Rules suite in a temporary local emulator
 npm run test:fixtures # Synthetic Auth/Firestore seed smoke test in temporary emulators
+npm run test:functions:integration # Reward, friendly, and tournament callable/trigger emulator paths
+npm run test:e2e                  # Synthetic login/profile smoke through local emulators + Chromium
 npm run build         # Generates the programs CSV, then creates dist/
 npm run verify        # All local quality gates in one command
 npm run preview       # Serves the built dist/ locally
@@ -107,7 +109,7 @@ The remaining environment work is to establish:
 
 1. local Firebase emulators; **implemented for local and isolated test use**;
 2. an isolated staging project and explicit project selection;
-3. callable/trigger integration tests against a local Functions emulator;
+3. broader callable/trigger integration coverage beyond the implemented reward, friendly, and tournament gates;
 4. approval-gated production deployment documentation.
 
 ## Architecture and engineering guidance

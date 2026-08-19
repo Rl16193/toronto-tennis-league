@@ -40,10 +40,17 @@ export const appleProvider = new OAuthProvider('apple.com');
 
 const useFirebaseEmulators = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
 if (useFirebaseEmulators) {
-  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
-  connectFirestoreEmulator(db, '127.0.0.1', 8080);
-  connectFunctionsEmulator(functions, '127.0.0.1', 5001);
-  connectStorageEmulator(storage, '127.0.0.1', 9199);
+  const emulatorHost = import.meta.env.VITE_FIREBASE_EMULATOR_HOST || '127.0.0.1';
+  const emulatorPort = (name: string, fallback: number) => {
+    const parsed = Number(import.meta.env[name]);
+    return Number.isInteger(parsed) && parsed > 0 && parsed <= 65535 ? parsed : fallback;
+  };
+  connectAuthEmulator(auth, `http://${emulatorHost}:${emulatorPort('VITE_FIREBASE_AUTH_EMULATOR_PORT', 9099)}`, {
+    disableWarnings: true,
+  });
+  connectFirestoreEmulator(db, emulatorHost, emulatorPort('VITE_FIRESTORE_EMULATOR_PORT', 8080));
+  connectFunctionsEmulator(functions, emulatorHost, emulatorPort('VITE_FUNCTIONS_EMULATOR_PORT', 5001));
+  connectStorageEmulator(storage, emulatorHost, emulatorPort('VITE_FIREBASE_STORAGE_EMULATOR_PORT', 9199));
 }
 
 export const analyticsPromise = isSupported().then((supported) =>
@@ -53,5 +60,5 @@ export const analyticsPromise = isSupported().then((supported) =>
         // automatic page_view so first load isn't double-counted.
         config: { send_page_view: false, ...(import.meta.env.DEV ? { debug_mode: true } : {}) },
       })
-    : null
+    : null,
 );

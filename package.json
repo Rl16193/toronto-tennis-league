@@ -19,6 +19,7 @@
     "seed:emulator": "node tests/fixtures/seed-emulator.mjs",
     "test:fixtures": "node scripts/run-emulator-fixture-test.mjs",
     "test:functions:integration": "node scripts/run-functions-integration-test.mjs",
+    "test:e2e": "node scripts/run-browser-e2e.mjs",
     "hosting:deploy": "npm run build && node scripts/deploy-hosting.mjs deploy",
     "hosting:preview": "npm run build && node scripts/deploy-hosting.mjs preview",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
@@ -49,6 +50,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@firebase/rules-unit-testing": "^5.0.1",
+    "@playwright/test": "^1.55.0",
     "@tailwindcss/vite": "^4.2.4",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.14",

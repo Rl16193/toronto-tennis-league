@@ -51,10 +51,18 @@ export const Profile: React.FC = () => {
   // set on first render and never cleared — losing it (new device, cleared storage) just means
   // one more expanded visit, which is harmless.
   const [showTasks, setShowTasks] = useState(() => {
-    try { return localStorage.getItem(TASKS_SEEN_KEY) !== '1'; } catch { return true; }
+    try {
+      return localStorage.getItem(TASKS_SEEN_KEY) !== '1';
+    } catch {
+      return true;
+    }
   });
   useEffect(() => {
-    try { localStorage.setItem(TASKS_SEEN_KEY, '1'); } catch { /* private mode — stays expanded */ }
+    try {
+      localStorage.setItem(TASKS_SEEN_KEY, '1');
+    } catch {
+      /* private mode — stays expanded */
+    }
   }, []);
 
   const { toast: badgeToast, dismissToast } = useBadgeToast(progress, counters, progressLoaded);
@@ -62,12 +70,14 @@ export const Profile: React.FC = () => {
   // `setupComplete` is only ever written by a Cloud Function trigger, so someone who finished the
   // checklist stays unflagged until a match/photo/event happens to fire one. Deriving it from the
   // ticks themselves means the section disappears the moment the last task lands.
-  const initiationDone = !!progress?.setupComplete
-    || TASKS.every((t) => !!(progress as unknown as Record<string, unknown> | null)?.[t.id]);
+  const initiationDone =
+    !!progress?.setupComplete || TASKS.every((t) => !!(progress as unknown as Record<string, unknown> | null)?.[t.id]);
 
   const myCourts = useMemo(() => new Set(profile?.preferences.preferred_courts ?? []), [profile]);
 
-  useEffect(() => { document.title = 'My Profile · Racquets & Strings'; }, []);
+  useEffect(() => {
+    document.title = 'My Profile · Racquets & Strings';
+  }, []);
 
   // Full contact info for upcoming-match opponents (phone/email/whatsapp) — the match doc only
   // carries one flat contact string, so this looks up each opponent's real users/{id} doc to show
@@ -75,7 +85,9 @@ export const Profile: React.FC = () => {
   useEffect(() => {
     const ids = [...new Set(upcoming.map((o) => o.opponentId).filter(Boolean))].filter((id) => !opponentContacts[id]);
     if (ids.length === 0) return;
-    Promise.all(ids.map((id) => getDoc(doc(db, 'contacts', id)).then((s) => [id, s.data() as ContactData | undefined] as const)))
+    Promise.all(
+      ids.map((id) => getDoc(doc(db, 'contacts', id)).then((s) => [id, s.data() as ContactData | undefined] as const)),
+    )
       .then((entries) => {
         const found = entries.filter((e): e is [string, ContactData] => !!e[1]);
         if (found.length) setOpponentContacts((prev) => ({ ...prev, ...Object.fromEntries(found) }));
@@ -92,8 +104,14 @@ export const Profile: React.FC = () => {
     if (ids.length === 0) return;
     Promise.all(ids.map((id) => getDoc(doc(db, 'preferences', id)).then((s) => [id, s.data()] as const)))
       .then((entries) => {
-        setOpponentCourts((prev) => ({ ...prev, ...Object.fromEntries(entries.map(([id, d]) => [id, (d?.preferred_courts as string[]) || []])) }));
-        setOpponentAvailability((prev) => ({ ...prev, ...Object.fromEntries(entries.map(([id, d]) => [id, (d?.availability_tags as string[]) || []])) }));
+        setOpponentCourts((prev) => ({
+          ...prev,
+          ...Object.fromEntries(entries.map(([id, d]) => [id, (d?.preferred_courts as string[]) || []])),
+        }));
+        setOpponentAvailability((prev) => ({
+          ...prev,
+          ...Object.fromEntries(entries.map(([id, d]) => [id, (d?.availability_tags as string[]) || []])),
+        }));
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -106,7 +124,10 @@ export const Profile: React.FC = () => {
     if (ids.length === 0) return;
     Promise.all(ids.map((id) => getDoc(doc(db, 'stats', id)).then((s) => [id, s.data()] as const)))
       .then((entries) => {
-        setOpponentSkill((prev) => ({ ...prev, ...Object.fromEntries(entries.map(([id, d]) => [id, (d?.skill_level as number) || 0])) }));
+        setOpponentSkill((prev) => ({
+          ...prev,
+          ...Object.fromEntries(entries.map(([id, d]) => [id, (d?.skill_level as number) || 0])),
+        }));
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -138,30 +159,29 @@ export const Profile: React.FC = () => {
   // Last weekly snapshot's move, e.g. "▲ 3". No snapshot yet -> nothing to report.
   const rankMove = profile?.stats.rankMove ?? 0;
   const rankTrend = profile?.stats.rankTrend;
-  const rankLabel = !rankTrend || rankTrend === 'same' || rankMove === 0
-    ? '—'
-    : `${rankTrend === 'up' ? '▲' : '▼'} ${Math.abs(rankMove)}`;
+  const rankLabel =
+    !rankTrend || rankTrend === 'same' || rankMove === 0
+      ? '—'
+      : `${rankTrend === 'up' ? '▲' : '▼'} ${Math.abs(rankMove)}`;
 
   const recentMatches = useMemo(() => matches.slice(0, 5), [matches]);
 
   // Opponent stats for the upcoming rows, so they show the same tiles as the leaderboard. Same
   // single standings read the Leaderboard and Matches pages already use.
   const { rows: standingsRows } = useStandings();
-  const statsByUid = useMemo(
-    () => new Map(standingsRows.map((r) => [r.user_id, r])),
-    [standingsRows],
-  );
-
+  const statsByUid = useMemo(() => new Map(standingsRows.map((r) => [r.user_id, r])), [standingsRows]);
 
   useEffect(() => {
     if (!authLoading && !user) navigate('/login');
   }, [user, authLoading, navigate]);
 
-  const incompleteFields = profile ? [
-    !profile.user.name.trim() ? 'name' : null,
-    profile.preferences.preferred_courts.length === 0 ? 'preferred courts' : null,
-    profile.preferences.favourite_players.length === 0 ? 'favourite players' : null,
-  ].filter(Boolean) as string[] : [];
+  const incompleteFields = profile
+    ? ([
+        !profile.user.name.trim() ? 'name' : null,
+        profile.preferences.preferred_courts.length === 0 ? 'preferred courts' : null,
+        profile.preferences.favourite_players.length === 0 ? 'favourite players' : null,
+      ].filter(Boolean) as string[])
+    : [];
 
   if (authLoading) {
     return (
@@ -200,10 +220,12 @@ export const Profile: React.FC = () => {
           to do off the screen. */}
       <div className="flex items-center justify-center gap-2 flex-wrap">
         <Button variant="white" size="sm" onClick={() => setQuickAction('checkin')}>
-          <MapPin className="w-4 h-4 mr-1.5" />Court
+          <MapPin className="w-4 h-4 mr-1.5" />
+          Court
         </Button>
         <Button variant="clay" size="sm" onClick={() => setQuickAction('photo')}>
-          <Camera className="w-4 h-4 mr-1.5" />Report
+          <Camera className="w-4 h-4 mr-1.5" />
+          Report
         </Button>
       </div>
 
@@ -224,7 +246,11 @@ export const Profile: React.FC = () => {
             <Sparkles className="w-4 h-4 text-clay" />
             <span className="text-[11px] font-bold text-fg flex items-center gap-1">
               Stats
-              {showStats ? <ChevronUp className="w-3 h-3 text-fg/70" /> : <ChevronDown className="w-3 h-3 text-fg/70" />}
+              {showStats ? (
+                <ChevronUp className="w-3 h-3 text-fg/70" />
+              ) : (
+                <ChevronDown className="w-3 h-3 text-fg/70" />
+              )}
             </span>
           </button>
           <button
@@ -236,12 +262,19 @@ export const Profile: React.FC = () => {
             <RacquetIcon className="w-4 h-4 text-clay" />
             <span className="text-[11px] font-bold text-fg flex items-center gap-1">
               Upcoming
-              {showUpcoming ? <ChevronUp className="w-3 h-3 text-fg/70" /> : <ChevronDown className="w-3 h-3 text-fg/70" />}
+              {showUpcoming ? (
+                <ChevronUp className="w-3 h-3 text-fg/70" />
+              ) : (
+                <ChevronDown className="w-3 h-3 text-fg/70" />
+              )}
             </span>
           </button>
           {/* Leaderboard rather than Matches: Matches has its own bottom-nav tab, and the
               leaderboard no longer does. */}
-          <Link to="/leagues" className="rounded-2xl bg-fg/5 hover:border-clay/40 transition-colors py-3 flex flex-col items-center gap-1.5">
+          <Link
+            to="/leagues"
+            className="rounded-2xl bg-fg/5 hover:border-clay/40 transition-colors py-3 flex flex-col items-center gap-1.5"
+          >
             <Medal className="w-4 h-4 text-clay" />
             <span className="text-[11px] font-bold text-fg">Leaderboard</span>
           </Link>
@@ -255,9 +288,13 @@ export const Profile: React.FC = () => {
                 <p className="text-lg font-black text-fg">{streak ?? '—'}</p>
                 <p className="text-[9px] font-bold uppercase tracking-widest text-fg/70">Streak</p>
               </div>
-              <Link to="/marketplace" className="rounded-2xl bg-white/[0.04] py-3 block hover:bg-white/[0.07] transition-colors">
+              <Link
+                to="/marketplace"
+                className="rounded-2xl bg-white/[0.04] py-3 block hover:bg-white/[0.07] transition-colors"
+              >
                 <p className="text-lg font-black text-clay flex items-center justify-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5" />{rsPoints}
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {rsPoints}
                 </p>
                 <p className="text-[9px] font-bold uppercase tracking-widest text-fg/70">RS Points</p>
               </Link>
@@ -270,10 +307,17 @@ export const Profile: React.FC = () => {
                 <p className="text-[9px] font-bold uppercase tracking-widest text-fg/70">Matches</p>
               </div>
               <div className="rounded-2xl bg-white/[0.04] py-3">
-                <p className={`text-lg font-black ${rankTrend === 'up' ? 'text-badge-win' : rankTrend === 'down' ? 'text-badge-loss' : 'text-fg'}`}>{rankLabel}</p>
+                <p
+                  className={`text-lg font-black ${rankTrend === 'up' ? 'text-badge-win' : rankTrend === 'down' ? 'text-badge-loss' : 'text-fg'}`}
+                >
+                  {rankLabel}
+                </p>
                 <p className="text-[9px] font-bold uppercase tracking-widest text-fg/70">Rank Move</p>
               </div>
-              <Link to="/history" className="rounded-2xl bg-white/[0.04] py-3 block hover:bg-white/[0.07] transition-colors">
+              <Link
+                to="/history"
+                className="rounded-2xl bg-white/[0.04] py-3 block hover:bg-white/[0.07] transition-colors"
+              >
                 {/* h-7 is text-lg's line-height. The other tiles get that height from their text;
                     this one holds only a 16px icon, so without it the row collapsed and pulled the
                     label 12px above the labels beside it. Any icon-only tile needs the same. */}
@@ -291,7 +335,9 @@ export const Profile: React.FC = () => {
               <div className="divide-y divide-white/5 rounded-2xl overflow-hidden">
                 {recentMatches.map((m) => (
                   <div key={m.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                    <span className={`shrink-0 w-5 text-[11px] font-black ${m.won ? 'text-badge-win' : 'text-badge-loss'}`}>
+                    <span
+                      className={`shrink-0 w-5 text-[11px] font-black ${m.won ? 'text-badge-win' : 'text-badge-loss'}`}
+                    >
                       {m.won ? 'W' : 'L'}
                     </span>
                     <span className="min-w-0 flex-1 text-sm font-semibold text-fg truncate">
@@ -311,89 +357,99 @@ export const Profile: React.FC = () => {
         {upcoming.length > 0 && (
           <div>
             {showUpcoming && (
-            <div className="divide-y divide-white/5 rounded-2xl overflow-hidden">
-              {upcoming.slice(0, 8).map((o, i) => {
-                const skill = o.opponentId ? opponentSkill[o.opponentId] : undefined;
-                // Same-page destination the row's own group (Matches.tsx / Tournament) uses for
-                // Schedule/Score — keeps this row a launch point into the real action instead of
-                // duplicating the scheduling/scoring logic here.
-                const scoreHref = o.source === 'tournament'
-                  ? `/matches?mode=tournament&event=${o.eventId}`
-                  : `/matches?mode=${o.source === 'rally' ? 'friendlies' : 'challenges'}`;
-                const stat = o.opponentId ? statsByUid.get(o.opponentId) : undefined;
-                const contactFull = o.opponentId ? opponentContacts[o.opponentId] : undefined;
-                const phone = contactFull?.phone || (o.opponentContact.includes('@') ? undefined : o.opponentContact);
-                const email = contactFull?.email || (o.opponentContact.includes('@') ? o.opponentContact : undefined);
-                const hasContact = !!(phone || email || contactFull?.whatsapp_contact);
-                return (
-                  <motion.div key={o.id} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}>
-                  <PlayerCard
-                    id={o.id}
-                    name={formatPlayerName(o.opponentName)}
-                    nameHref={o.opponentId ? `/players/${o.opponentId}` : undefined}
-                    subtitle={skill ? `Skill ${skill} · ${skillBand(skill)}` : undefined}
-                    // Source reads as one letter on the name line: T tournament, C challenge,
-                    // R friendly (rally). It was a word-pill on its own row under the name, which
-                    // cost a whole line per row to say something a letter says.
-                    nameBadge={<SourceLetter source={o.source} />}
-                    open={expandedOpponent === o.id}
-                    onToggle={() => setExpandedOpponent((cur) => (cur === o.id ? null : o.id))}
-                    // Exactly four cells: Schedule, Tags, P/G Won %, Rank Move. The volume figures
-                    // (P/G Played, Matches Played, Matches Won) belong on the leaderboard, not on
-                    // a row whose job is "how do I reach this person and what are they like".
-                    // Schedule and Tags carry no title — their contents already say what they are.
-                    stats={[
-                      {
-                        // Schedule sits in the tile Contact used to hold, and Contact moved into
-                        // the action row — same pairing as the tournament rows.
-                        label: '',
-                        value: o.source === 'tournament'
-                          ? <Link to={scoreHref} className={pillButtonCls('sm', 'clay')}>Schedule</Link>
-                          : <span className="text-[11px] text-fg/70">—</span>,
-                      },
-                      {
-                        // Kept from the old row rather than dropped — court overlap and
-                        // availability are the whole point of the nearby/availability signals.
-                        label: '',
-                        value: (
-                          <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                            <NearbyPill show={sharesCourt(opponentCourts[o.opponentId], myCourts)} />
-                            <AvailabilityPills tags={opponentAvailability[o.opponentId]} />
-                          </div>
-                        ),
-                      },
-                      { label: 'P/G Won %', value: stat ? pgWinPct(stat) : '—' },
-                      { label: 'Rank Move', value: stat ? <RankMove t={stat.rankTrend} move={stat.rankMove} /> : '—' },
-                    ]}
-                    actionClassName="w-auto"
-                    action={(
-                    <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto no-scrollbar justify-end">
-                      {/* Score is the same orange pill everywhere in the app. It used to render as
+              <div className="divide-y divide-white/5 rounded-2xl overflow-hidden">
+                {upcoming.slice(0, 8).map((o, i) => {
+                  const skill = o.opponentId ? opponentSkill[o.opponentId] : undefined;
+                  // Same-page destination the row's own group (Matches.tsx / Tournament) uses for
+                  // Schedule/Score — keeps this row a launch point into the real action instead of
+                  // duplicating the scheduling/scoring logic here.
+                  const scoreHref =
+                    o.source === 'tournament'
+                      ? `/matches?mode=tournament&event=${o.eventId}`
+                      : `/matches?mode=${o.source === 'rally' ? 'friendlies' : 'challenges'}`;
+                  const stat = o.opponentId ? statsByUid.get(o.opponentId) : undefined;
+                  const contactFull = o.opponentId ? opponentContacts[o.opponentId] : undefined;
+                  const phone = contactFull?.phone || (o.opponentContact.includes('@') ? undefined : o.opponentContact);
+                  const email = contactFull?.email || (o.opponentContact.includes('@') ? o.opponentContact : undefined);
+                  const hasContact = !!(phone || email || contactFull?.whatsapp_contact);
+                  return (
+                    <motion.div key={o.id} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}>
+                      <PlayerCard
+                        id={o.id}
+                        name={formatPlayerName(o.opponentName)}
+                        nameHref={o.opponentId ? `/players/${o.opponentId}` : undefined}
+                        subtitle={skill ? `Skill ${skill} · ${skillBand(skill)}` : undefined}
+                        // Source reads as one letter on the name line: T tournament, C challenge,
+                        // R friendly (rally). It was a word-pill on its own row under the name, which
+                        // cost a whole line per row to say something a letter says.
+                        nameBadge={<SourceLetter source={o.source} />}
+                        open={expandedOpponent === o.id}
+                        onToggle={() => setExpandedOpponent((cur) => (cur === o.id ? null : o.id))}
+                        // Exactly four cells: Schedule, Tags, P/G Won %, Rank Move. The volume figures
+                        // (P/G Played, Matches Played, Matches Won) belong on the leaderboard, not on
+                        // a row whose job is "how do I reach this person and what are they like".
+                        // Schedule and Tags carry no title — their contents already say what they are.
+                        stats={[
+                          {
+                            // Schedule sits in the tile Contact used to hold, and Contact moved into
+                            // the action row — same pairing as the tournament rows.
+                            label: '',
+                            value:
+                              o.source === 'tournament' ? (
+                                <Link to={scoreHref} className={pillButtonCls('sm', 'clay')}>
+                                  Schedule
+                                </Link>
+                              ) : (
+                                <span className="text-[11px] text-fg/70">—</span>
+                              ),
+                          },
+                          {
+                            // Kept from the old row rather than dropped — court overlap and
+                            // availability are the whole point of the nearby/availability signals.
+                            label: '',
+                            value: (
+                              <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                <NearbyPill show={sharesCourt(opponentCourts[o.opponentId], myCourts)} />
+                                <AvailabilityPills tags={opponentAvailability[o.opponentId]} />
+                              </div>
+                            ),
+                          },
+                          { label: 'P/G Won %', value: stat ? pgWinPct(stat) : '—' },
+                          {
+                            label: 'Rank Move',
+                            value: stat ? <RankMove t={stat.rankTrend} move={stat.rankMove} /> : '—',
+                          },
+                        ]}
+                        actionClassName="w-auto"
+                        action={
+                          <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto no-scrollbar justify-end">
+                            {/* Score is the same orange pill everywhere in the app. It used to render as
                           a white `Button` here for non-tournament rows and an orange pill for
                           tournament ones, so two rows in the same list looked like different
                           controls. */}
-                      {hasContact && (
-                        <ContactOpponentButton
-                          name={o.opponentName}
-                          phone={phone}
-                          email={email}
-                          whatsappContact={contactFull?.whatsapp_contact}
-                          whatsappSameAsPhone={contactFull?.whatsapp_same_as_phone}
-                          preferred={contactFull?.preferred_mode_of_contact}
-                          variant="white"
-                          size="sm"
-                        />
-                      )}
-                      <Link to={scoreHref} className={pillButtonCls('sm', 'clay')}>
-                        <RacquetIcon className="w-3.5 h-3.5" />Score
-                      </Link>
-                    </div>
-                    )}
-                  />
-                  </motion.div>
-                );
-              })}
-            </div>
+                            {hasContact && (
+                              <ContactOpponentButton
+                                name={o.opponentName}
+                                phone={phone}
+                                email={email}
+                                whatsappContact={contactFull?.whatsapp_contact}
+                                whatsappSameAsPhone={contactFull?.whatsapp_same_as_phone}
+                                preferred={contactFull?.preferred_mode_of_contact}
+                                variant="white"
+                                size="sm"
+                              />
+                            )}
+                            <Link to={scoreHref} className={pillButtonCls('sm', 'clay')}>
+                              <RacquetIcon className="w-3.5 h-3.5" />
+                              Score
+                            </Link>
+                          </div>
+                        }
+                      />
+                    </motion.div>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
@@ -411,9 +467,11 @@ export const Profile: React.FC = () => {
               className="w-full flex items-center justify-between mb-2 group"
             >
               <span className="text-[11px] font-bold uppercase tracking-widest text-fg/70">Tasks</span>
-              {showTasks
-                ? <ChevronUp className="w-3.5 h-3.5 text-fg/70 group-hover:text-fg/70 transition-colors" />
-                : <ChevronDown className="w-3.5 h-3.5 text-fg/70 group-hover:text-fg/70 transition-colors" />}
+              {showTasks ? (
+                <ChevronUp className="w-3.5 h-3.5 text-fg/70 group-hover:text-fg/70 transition-colors" />
+              ) : (
+                <ChevronDown className="w-3.5 h-3.5 text-fg/70 group-hover:text-fg/70 transition-colors" />
+              )}
             </button>
             {showTasks && (
               <div className="divide-y divide-white/5 rounded-2xl overflow-hidden px-3.5">
@@ -421,8 +479,14 @@ export const Profile: React.FC = () => {
                   const done = !!(progress as unknown as Record<string, unknown> | null)?.[t.id];
                   return (
                     <div key={t.id} className="flex items-center gap-2.5 py-2.5">
-                      <span className={`w-4 h-4 shrink-0 rounded-full border ${done ? 'bg-clay border-clay' : 'border-fg/20'}`} />
-                      <span className={`text-sm flex-1 min-w-0 truncate ${done ? 'text-fg/70 line-through' : 'text-fg'}`}>{t.title}</span>
+                      <span
+                        className={`w-4 h-4 shrink-0 rounded-full border ${done ? 'bg-clay border-clay' : 'border-fg/20'}`}
+                      />
+                      <span
+                        className={`text-sm flex-1 min-w-0 truncate ${done ? 'text-fg/70 line-through' : 'text-fg'}`}
+                      >
+                        {t.title}
+                      </span>
                     </div>
                   );
                 })}
@@ -432,7 +496,13 @@ export const Profile: React.FC = () => {
         )}
       </div>
 
-      <ProfileInfo actions={actions} updateLoading={updateLoading} message={message} progress={progress} counters={counters} />
+      <ProfileInfo
+        actions={actions}
+        updateLoading={updateLoading}
+        message={message}
+        progress={progress}
+        counters={counters}
+      />
 
       {quickAction === 'checkin' && <CheckInModal onClose={() => setQuickAction(null)} />}
       {quickAction === 'photo' && <PhotoSubmitModal onClose={() => setQuickAction(null)} />}
@@ -441,108 +511,121 @@ export const Profile: React.FC = () => {
 
       {eventsLoading ? (
         <div className="h-48 bg-tennis-surface/30 rounded-3xl md:rounded-[2.5rem] animate-pulse" />
-      ) : (() => {
-            const parseMayKey = (val: unknown): string | null => {
-              if (typeof val === 'string') return val.startsWith('May') ? val : null;
-              if (typeof val !== 'object' || val === null) return null;
-              let d: Date | null = null;
-              const obj = val as Record<string, unknown>;
-              if (typeof obj['toDate'] === 'function') d = (obj['toDate'] as () => Date)();
-              else if (typeof obj['seconds'] === 'number') d = new Date(obj['seconds'] * 1000);
-              if (!d) return null;
-              return d.getFullYear() === 2026 && d.getMonth() === 4 ? `May ${d.getDate()}, 2026` : null;
-            };
+      ) : (
+        (() => {
+          const parseMayKey = (val: unknown): string | null => {
+            if (typeof val === 'string') return val.startsWith('May') ? val : null;
+            if (typeof val !== 'object' || val === null) return null;
+            let d: Date | null = null;
+            const obj = val as Record<string, unknown>;
+            if (typeof obj['toDate'] === 'function') d = (obj['toDate'] as () => Date)();
+            else if (typeof obj['seconds'] === 'number') d = new Date(obj['seconds'] * 1000);
+            if (!d) return null;
+            return d.getFullYear() === 2026 && d.getMonth() === 4 ? `May ${d.getDate()}, 2026` : null;
+          };
 
-            const tournamentEvent = joinedEvents.find(
-              (e) => e.type === 'tournament' || e.title.toLowerCase().includes('tournament')
-            );
-            const matchdaysEvent = joinedEvents.find(
-              (e) => e.title.toLowerCase().includes('weekend matchdays')
-            );
+          const tournamentEvent = joinedEvents.find(
+            (e) => e.type === 'tournament' || (e.title ?? '').toLowerCase().includes('tournament'),
+          );
+          const matchdaysEvent = joinedEvents.find((e) => (e.title ?? '').toLowerCase().includes('weekend matchdays'));
 
-            if (!tournamentEvent && !matchdaysEvent) return null;
+          if (!tournamentEvent && !matchdaysEvent) return null;
 
-            const participantId = tournamentEvent?.participantId ?? matchdaysEvent?.participantId;
+          const participantId = tournamentEvent?.participantId ?? matchdaysEvent?.participantId;
 
-            const savedDates = new Set<string>();
-            joinedEvents.forEach((e) => {
-              const dateselected = (e as unknown as Record<string, unknown>)['dateselected'];
-              (Array.isArray(dateselected) ? dateselected : []).forEach((v: unknown) => {
-                const k = parseMayKey(v);
-                if (k) savedDates.add(k);
-              });
+          const savedDates = new Set<string>();
+          joinedEvents.forEach((e) => {
+            const dateselected = (e as unknown as Record<string, unknown>)['dateselected'];
+            (Array.isArray(dateselected) ? dateselected : []).forEach((v: unknown) => {
+              const k = parseMayKey(v);
+              if (k) savedDates.add(k);
             });
+          });
 
-            const tournamentStartKey = tournamentEvent?.start_date ? parseMayKey(tournamentEvent.start_date) : null;
-            const isDateSelected = (day: number) => savedDates.has(`May ${day}, 2026`);
-            const isDefaultDate = (day: number) =>
-              !!tournamentStartKey && tournamentStartKey === `May ${day}, 2026` && !savedDates.has(tournamentStartKey);
-            const isPast = (day: number) => {
-              const now = new Date();
-              return new Date(2026, 4, day) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            };
+          const tournamentStartKey = tournamentEvent?.start_date ? parseMayKey(tournamentEvent.start_date) : null;
+          const isDateSelected = (day: number) => savedDates.has(`May ${day}, 2026`);
+          const isDefaultDate = (day: number) =>
+            !!tournamentStartKey && tournamentStartKey === `May ${day}, 2026` && !savedDates.has(tournamentStartKey);
+          const isPast = (day: number) => {
+            const now = new Date();
+            return new Date(2026, 4, day) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          };
 
-            const handleToggleDate = async (day: number) => {
-              if (!participantId || isPast(day)) return;
-              const dateKey = `May ${day}, 2026`;
-              const current = new Set(savedDates);
-              if (current.has(dateKey)) current.delete(dateKey); else current.add(dateKey);
-              await actions.updateEventDates(participantId, [...current]);
-            };
+          const handleToggleDate = async (day: number) => {
+            if (!participantId || isPast(day)) return;
+            const dateKey = `May ${day}, 2026`;
+            const current = new Set(savedDates);
+            if (current.has(dateKey)) current.delete(dateKey);
+            else current.add(dateKey);
+            await actions.updateEventDates(participantId, [...current]);
+          };
 
-            const calendarDays: number[] = [];
-            for (let day = 9; day <= 31; day++) calendarDays.push(day);
+          const calendarDays: number[] = [];
+          for (let day = 9; day <= 31; day++) calendarDays.push(day);
 
-            return (
-              <div className="bg-tennis-surface/30 rounded-3xl md:rounded-[2.5rem] shadow-xl p-4 md:p-8">
-                <h2 className="text-xl md:text-2xl font-bold text-fg mb-1">Events Calendar</h2>
-                <p className="text-fg/70 text-sm mb-1">Mark availability during the tournament</p>
-                <p className="text-fg/70 text-xs mb-4">May 9 – May 31, 2026</p>
-                <div className="grid grid-cols-7 gap-2">
-                  {['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((d) => (
-                    <div key={d} className="text-fg/70 text-xs font-medium text-center py-1">{d}</div>
-                  ))}
-                  {calendarDays.map((day) => {
-                    const selected = isDateSelected(day);
-                    const deflt = isDefaultDate(day);
-                    const past = isPast(day);
-                    return (
-                      <motion.button
-                        key={day}
-                        disabled={past || !participantId}
-                        onClick={() => handleToggleDate(day)}
-                        whileTap={past || !participantId ? undefined : tapScale.whileTap}
-                        transition={tapScale.transition}
-                        className={`p-2 text-xs rounded-lg transition-colors ${
-                          // text-white, not text-fg: the fill is always clay, so in light theme
-                          // text-fg would put dark green on orange. Same rule as a filled button.
-                          selected ? 'bg-clay text-white font-bold'
-                            : deflt ? 'border border-clay/60 text-clay font-semibold hover:bg-clay/20 cursor-pointer'
-                            : past ? 'text-fg/70 bg-fg/5 opacity-50 cursor-not-allowed'
-                            : participantId ? 'text-fg bg-fg/5 hover:bg-fg/10 cursor-pointer'
-                            : 'text-fg/70 bg-fg/5'
-                        }`}
-                      >
-                        {day}
-                      </motion.button>
-                    );
-                  })}
-                </div>
-                {savedDates.size > 0 && (
-                  <div className="mt-4 pt-4 border-t border-fg/5">
-                    <p className="text-fg/70 text-xs">Selected: {[...savedDates].sort().join(', ')}</p>
+          return (
+            <div className="bg-tennis-surface/30 rounded-3xl md:rounded-[2.5rem] shadow-xl p-4 md:p-8">
+              <h2 className="text-xl md:text-2xl font-bold text-fg mb-1">Events Calendar</h2>
+              <p className="text-fg/70 text-sm mb-1">Mark availability during the tournament</p>
+              <p className="text-fg/70 text-xs mb-4">May 9 – May 31, 2026</p>
+              <div className="grid grid-cols-7 gap-2">
+                {['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((d) => (
+                  <div key={d} className="text-fg/70 text-xs font-medium text-center py-1">
+                    {d}
                   </div>
-                )}
+                ))}
+                {calendarDays.map((day) => {
+                  const selected = isDateSelected(day);
+                  const deflt = isDefaultDate(day);
+                  const past = isPast(day);
+                  return (
+                    <motion.button
+                      key={day}
+                      disabled={past || !participantId}
+                      onClick={() => handleToggleDate(day)}
+                      whileTap={past || !participantId ? undefined : tapScale.whileTap}
+                      transition={tapScale.transition}
+                      className={`p-2 text-xs rounded-lg transition-colors ${
+                        // text-white, not text-fg: the fill is always clay, so in light theme
+                        // text-fg would put dark green on orange. Same rule as a filled button.
+                        selected
+                          ? 'bg-clay text-white font-bold'
+                          : deflt
+                            ? 'border border-clay/60 text-clay font-semibold hover:bg-clay/20 cursor-pointer'
+                            : past
+                              ? 'text-fg/70 bg-fg/5 opacity-50 cursor-not-allowed'
+                              : participantId
+                                ? 'text-fg bg-fg/5 hover:bg-fg/10 cursor-pointer'
+                                : 'text-fg/70 bg-fg/5'
+                      }`}
+                    >
+                      {day}
+                    </motion.button>
+                  );
+                })}
               </div>
-            );
-      })()}
+              {savedDates.size > 0 && (
+                <div className="mt-4 pt-4 border-t border-fg/5">
+                  <p className="text-fg/70 text-xs">Selected: {[...savedDates].sort().join(', ')}</p>
+                </div>
+              )}
+            </div>
+          );
+        })()
+      )}
 
       {/* Site links relocated here from the removed global footer. */}
       <div className="pt-6 mt-2 border-t border-fg/5">
         <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-fg/70">
-          <Link to="/about" className="hover:text-clay transition-colors">About Us</Link>
-          <Link to="/terms" className="hover:text-clay transition-colors">Terms of Service</Link>
-          <Link to="/privacy" className="hover:text-clay transition-colors">Privacy Policy</Link>
+          <Link to="/about" className="hover:text-clay transition-colors">
+            About Us
+          </Link>
+          <Link to="/terms" className="hover:text-clay transition-colors">
+            Terms of Service
+          </Link>
+          <Link to="/privacy" className="hover:text-clay transition-colors">
+            Privacy Policy
+          </Link>
           <ContactLink />
           <InstagramLink />
         </div>

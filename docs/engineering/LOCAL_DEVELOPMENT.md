@@ -95,6 +95,8 @@ npm --prefix functions test    # Functions helper unit tests
 npm run test:rules             # Firestore Rules, temporary emulator
 npm run test:storage           # Storage Rules, temporary emulator
 npm run test:fixtures          # real Auth/Firestore seed boundary, temporary emulators
+npm run test:functions:integration # reward, friendly, and tournament Functions emulator paths
+npm run test:e2e                  # synthetic browser login/profile smoke on isolated emulator ports
 npm run typecheck
 npm run lint
 npm run format:check           # changed/new first-party files, except generated/vendor paths
@@ -103,9 +105,10 @@ npm run build
 npm run verify                 # every reliable repository-local gate above
 ```
 
-The repository does not yet claim a stable browser E2E command. `test:fixtures` is the nearest
-deterministic integration layer for startup and seeding. Add any future browser suite to
-`npm run verify` only after it starts reliably against isolated emulators and terminates cleanly.
+`test:e2e` starts isolated Auth, Firestore, Functions, and Storage emulator ports, seeds synthetic
+accounts/documents, starts Vite, and runs a one-worker Chromium login/profile smoke. It terminates
+the local processes after success or failure. Critical reward, friendly, and tournament mutations
+remain covered at the more deterministic callable/trigger boundary by `test:functions:integration`.
 
 ## Find the system contracts
 
