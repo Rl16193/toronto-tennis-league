@@ -27,4 +27,4 @@ Adopt a PWA-first path after environment and authorization stabilization. The ex
 - Are push notifications a product requirement or only email/in-app notifications?
 - What offline actions, if any, may be queued safely?
 
-Last verified source SHA: `323fc37`.
+Last verified source SHA: `27e7ea2`.

@@ -36,4 +36,4 @@ Everyone remains a Member. Organizer, Provider, and Admin stack on top of member
 - Provider access is inferred from preference fields and is not consistently represented as a role boundary.
 - Admin SDK functions bypass Firestore Rules, so trigger/callable authorization and input validation need separate tests.
 
-Last verified source SHA: `323fc37`.
+Last verified source SHA: `27e7ea2`.

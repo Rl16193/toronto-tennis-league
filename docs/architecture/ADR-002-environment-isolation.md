@@ -26,4 +26,4 @@ claim deployed staging isolation.
 
 Evidence: `.firebaserc`, `firebase.json`, `package.json`, `src/lib/firebase.ts`. Open: authorized staging project ID, CI secret storage, database location/edition, and backup schedule.
 
-Last verified source SHA: `308e94c`.
+Last verified source SHA: `27e7ea2`.
