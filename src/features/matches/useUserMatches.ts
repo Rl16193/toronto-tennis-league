@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import type { TournamentMatch } from '../tournament/types';
+import { normalizeTournamentMatch } from '../../lib/firestoreNormalization';
 
 // A user's completed matches, newest first, from their perspective (their games first).
 // Shared by the History page's "My Matches", the Profile "Recent Matches" block, and the Home
@@ -79,7 +79,8 @@ export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: 
           const category = raw.category as string | undefined;
 
           if (isTournamentMatch(category)) {
-            const m = { id: d.id, ...raw } as TournamentMatch;
+            const m = normalizeTournamentMatch(d.id, { match_id: d.id, ...raw });
+            if (!m) return;
             const iAmP1First = m.player_1_uid === uid;
             // Upcoming = not yet completed / no score submitted, against a real opponent.
             if (m.status !== 'complete') {

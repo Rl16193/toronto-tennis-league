@@ -11,9 +11,9 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
   "findings": [
     {
       "check": "Scoring authority",
-      "severity": "major",
-      "issue": "Tournament client code writes leaguePoints26 and related match/stat updates while Cloud Functions also award task and friendly-match points. Organizer authorization permits the tournament client path, so scoring integrity is not owned by one server-side authority.",
-      "recommendation": "Move tournament result confirmation and all league-point mutations behind callable or trigger-backed Functions. Keep client writes limited to permitted submissions and organizer intent records; make the server validate the result, event, participants, and idempotency key."
+      "severity": "resolved-source",
+      "issue": "Tournament clients submit result intent to an idempotent callable; the server validates authority, participants, scores, state, advancement, statistics, and point deltas transactionally.",
+      "recommendation": "Re-run the callable and Rules integration suites in staging before any production deployment approval."
     },
     {
       "check": "Role authorization",
@@ -36,8 +36,8 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
     {
       "check": "Rules and environment validation",
       "severity": "moderate",
-      "issue": "Firebase emulator configuration and Firestore/Storage Rules harnesses now run locally with Java 21, but callable/trigger integration authorization coverage is incomplete and staging isolation is not established. The dependency audit remains non-zero and was not mass-fixed.",
-      "recommendation": "Run the seeded emulator suite locally, extend Functions tests around callable authorization and idempotency, and establish a non-production Firebase project before production deployment work resumes."
+      "issue": "Firebase emulator configuration and Firestore/Storage Rules, callable/trigger integration, fixtures, and browser journeys run locally with Java 21, but staging isolation is not established. The dependency audit remains non-zero and was not mass-fixed.",
+      "recommendation": "Re-run the local suite in an authorized non-production Firebase project before production deployment work resumes."
     },
     {
       "check": "Pre-auth signup lookup",
@@ -74,9 +74,9 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
   disputed coupons cannot bypass review, operator notes are bounded, and touched log identifiers are hashed.
 - A tracked-file scan was performed for common credential patterns. It found no private key, service-account credential, or Resend secret in application files; the vendored gstack renderer includes an upstream Firebase client key, which is not a service credential. The scan did not prove that secrets are absent from Git history, deployment configuration, or third-party systems.
 - `npm run verify` passes locally with strict typecheck, ESLint, tracked-file formatting, docs
-  freshness, Functions syntax, 32 root unit tests, 25 Functions unit tests, 29 Firestore Rules
+  freshness, Functions syntax, 32 root unit tests, 26 Functions unit tests, 29 Firestore Rules
   tests, 5 Storage Rules tests, 10 Functions emulator integration tests, a synthetic fixture smoke
-  (4 Auth users and 25 documents), 2 Hosting-backed Chromium tests, generated-CSV freshness, and
+  (4 Auth users and 31 documents), 5 Hosting-backed Chromium tests, generated-CSV freshness, and
   the production build. Existing lint, CSS-target, chunk-size, and dependency-audit warnings remain.
 
 ## Required gates before production changes

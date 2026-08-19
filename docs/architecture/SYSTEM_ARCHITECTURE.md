@@ -40,8 +40,9 @@ temporary emulator configurations; this proves the checked-in rules contract, no
 
 ## Risks and open questions
 
-- The default Firebase project is production-sensitive and no staging project is represented in the checkout.
-- `hosting:preview` is not automatically a non-production Firebase project; it inherits the active CLI project unless overridden.
+- `.firebaserc` carries only the local `rands-local` alias. Staging and production remain external approvals because this checkout does not ship an authorized non-local deployment target.
+- `hosting:preview` and `hosting:deploy` are wrapper-gated, require an explicit `FIREBASE_DEPLOY_PROJECT_ID`, and pass `--project` directly. They do not inherit a default CLI project from this repository.
 - Google Sheets, BigQuery, Resend, and image moderation require credentials/configuration not present in this checkout.
-- Callable/trigger integration coverage is still incomplete even though Firestore and Storage
-  Rules harnesses are checked in and exercised locally.
+- Local emulator coverage includes Firestore and Storage Rules, callable/trigger integration,
+  synthetic fixtures, and focused Hosting-backed browser journeys. Equivalent staging behavior
+  remains unverified until an authorized non-production Firebase project is provided.

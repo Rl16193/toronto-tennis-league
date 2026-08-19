@@ -8,6 +8,7 @@ import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useUserMatches } from '../features/matches/useUserMatches';
 import { getEventDate } from './tournament/utils';
+import { normalizeEvent, normalizeTournamentMatch } from '../lib/firestoreNormalization';
 
 type PastEvent = { id: string; title: string; when: Date | null };
 
@@ -35,15 +36,15 @@ export const History: React.FC = () => {
       .then(([eventsSnap, finalsSnap]) => {
         if (cancelled) return;
         const completedIds = new Set(
-          finalsSnap.docs.filter((d) => d.data().winner_uid).map((d) => d.data().event_id as string),
+          finalsSnap.docs
+            .map((d) => normalizeTournamentMatch(d.id, d.data()))
+            .filter((match) => match?.winner_uid)
+            .map((match) => match!.event_id),
         );
         const rows = eventsSnap.docs
           .filter((d) => completedIds.has(d.id))
-          .map((d) => ({
-            id: d.id,
-            title: (d.data().title as string) || 'Tournament',
-            when: getEventDate(d.data() as Record<string, unknown>),
-          }))
+          .map((d) => normalizeEvent(d.id, d.data()))
+          .map((event) => ({ id: event.id, title: event.title || 'Tournament', when: getEventDate(event) }))
           .sort((a, b) => (b.when?.getTime() ?? 0) - (a.when?.getTime() ?? 0));
         setPastEvents(rows);
       })

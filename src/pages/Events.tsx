@@ -5,6 +5,7 @@ import { ChevronRight, Plus, Trophy } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 
 import { db } from '../lib/firebase';
+import { normalizeEvent, normalizeTournamentMatch } from '../lib/firestoreNormalization';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
 import { Fab } from '../components/Fab';
@@ -89,16 +90,20 @@ export const Events: React.FC = () => {
     ])
       .then(([eventsSnap, finalsSnap]) => {
         const completedIds = new Set(
-          finalsSnap.docs.filter((d) => d.data().winner_uid).map((d) => d.data().event_id as string),
+          finalsSnap.docs
+            .map((d) => normalizeTournamentMatch(d.id, d.data()))
+            .filter((match) => match?.winner_uid)
+            .map((match) => match!.event_id),
         );
         setCompletedEvents(
           eventsSnap.docs
             .filter((d) => completedIds.has(d.id))
-            .map((d) => ({
-              id: d.id,
-              title: (d.data().title as string) || 'Tournament',
-              type: (d.data().type as string) || '',
-              when: getEventDate(d.data() as Record<string, unknown>),
+            .map((d) => normalizeEvent(d.id, d.data()))
+            .map((event) => ({
+              id: event.id,
+              title: event.title || 'Tournament',
+              type: event.type,
+              when: getEventDate(event),
             }))
             .sort((a, b) => (b.when?.getTime() ?? 0) - (a.when?.getTime() ?? 0)),
         );

@@ -28,7 +28,7 @@ const freePorts = async (count) => {
 };
 
 const main = async () => {
-  const [authPort, firestorePort, functionsPort] = await freePorts(3);
+  const [authPort, firestorePort, functionsPort, hubPort, loggingPort, eventarcPort, tasksPort] = await freePorts(7);
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'rands-functions-integration-'));
   const sourceDir = path.join(tempDir, 'functions');
   const configPath = path.join(tempDir, 'firebase.json');
@@ -61,6 +61,10 @@ const main = async () => {
           auth: { host: '127.0.0.1', port: authPort },
           firestore: { host: '127.0.0.1', port: firestorePort },
           functions: { host: '127.0.0.1', port: functionsPort },
+          hub: { host: '127.0.0.1', port: hubPort },
+          logging: { host: '127.0.0.1', port: loggingPort },
+          eventarc: { host: '127.0.0.1', port: eventarcPort },
+          tasks: { host: '127.0.0.1', port: tasksPort },
           ui: { enabled: false },
         },
       },

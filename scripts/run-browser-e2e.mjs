@@ -83,7 +83,17 @@ const inner = async () => {
 const outer = async () => {
   const firebase = executable('firebase');
   if (!existsSync(firebase)) throw new Error('Firebase CLI is missing. Run npm ci.');
-  const [authPort, firestorePort, functionsPort, storagePort, hostingPort] = await freePorts(5);
+  const [
+    authPort,
+    firestorePort,
+    functionsPort,
+    storagePort,
+    hostingPort,
+    hubPort,
+    loggingPort,
+    eventarcPort,
+    tasksPort,
+  ] = await freePorts(9);
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'rands-browser-e2e-'));
   const configPath = path.join(tempDir, 'firebase.json');
   const functionsDir = path.join(tempDir, 'functions');
@@ -152,6 +162,10 @@ const outer = async () => {
           functions: { host: '127.0.0.1', port: functionsPort },
           storage: { host: '127.0.0.1', port: storagePort },
           hosting: { host: '127.0.0.1', port: hostingPort },
+          hub: { host: '127.0.0.1', port: hubPort },
+          logging: { host: '127.0.0.1', port: loggingPort },
+          eventarc: { host: '127.0.0.1', port: eventarcPort },
+          tasks: { host: '127.0.0.1', port: tasksPort },
           ui: { enabled: false },
         },
       },

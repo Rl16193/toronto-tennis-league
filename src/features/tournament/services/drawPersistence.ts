@@ -7,15 +7,14 @@ export type ByeAdvance = { nextMatchId: string; slot: 'player_1' | 'player_2'; p
 
 export const persistDrawDocuments = async (documents: DrawDocument[], advances: ByeAdvance[]) => {
   const batch = writeBatch(db);
-  documents.forEach((item) => batch.set(doc(db, 'matches', item.id), item.data, { merge: true }));
-  await batch.commit();
-  if (!advances.length) return;
-  const advanceBatch = writeBatch(db);
+  const drawData = new Map(documents.map((item) => [item.id, { ...item.data }]));
   advances.forEach(({ nextMatchId, slot, player }) =>
-    advanceBatch.update(doc(db, 'matches', nextMatchId), {
+    drawData.set(nextMatchId, {
+      ...(drawData.get(nextMatchId) ?? {}),
       [`${slot}_name`]: player.name,
       [`${slot}_uid`]: player.uid,
     }),
   );
-  await advanceBatch.commit();
+  drawData.forEach((data, id) => batch.set(doc(db, 'matches', id), data, { merge: true }));
+  await batch.commit();
 };
