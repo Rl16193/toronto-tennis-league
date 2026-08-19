@@ -2045,6 +2045,18 @@ export const useTournament = (eventIdOverride?: string) => {
         removedUids = prevPlayers
           .filter((p) => p.uid && !realNewPlayers.some((np) => np.uid === p.uid))
           .map((p) => p.uid);
+        const completedRemoval = matches.some(
+          (match) =>
+            match.status === 'complete' &&
+            removedUids.some((uid) => match.player_1_uid === uid || match.player_2_uid === uid),
+        );
+        if (completedRemoval) {
+          setMessage({
+            type: 'error',
+            text: 'Cannot remove this player: a completed match must remain in the event history.',
+          });
+          return;
+        }
         removedUids.forEach((uid) => manuallyUnplacedIdsRef.current.add(uid));
 
         const existingIds = new Set<string>();
@@ -2115,8 +2127,8 @@ export const useTournament = (eventIdOverride?: string) => {
         }
       }
 
-      // Purge the player from the WHOLE event, not just this group — any match doc still listing
-      // them (another RR group, a sibling skill draw, the knockout) is deleted, played or not.
+      // Purge an unplayed player from the WHOLE event, not just this group — completed history is
+      // rejected above, so only pending match documents can reach this cleanup.
       // One leftover doc keeps reconstructing their name on the group card and lets the
       // late-joiner effect re-seat them the moment they look "unplaced but registered".
       if (removedUids.length) {

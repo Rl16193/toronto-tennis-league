@@ -368,10 +368,9 @@ export const Signup: React.FC = () => {
       track('signup_step', { step_number: 3, step_name: 'preferences', action: 'complete' });
       track('complete_profile', { method: 'email' });
       setPhase('done');
-    } catch {
-      // Write failed — still show the success screen; the user can finish from /profile.
-      track('complete_profile', { method: 'email' });
-      setPhase('done');
+    } catch (err) {
+      console.error('Profile completion failed:', err);
+      setError('We could not save your profile. Please try again; your entries are still here.');
     } finally {
       setLoading(false);
     }

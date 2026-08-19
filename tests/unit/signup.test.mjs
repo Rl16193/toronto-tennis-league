@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { isNameValid, validateCompletion, validatePassword } from '../../src/features/signup/signupForm.ts';
 import { buildSignupProfileDocuments } from '../../src/features/signup/signupProfileDocuments.ts';
@@ -43,4 +44,10 @@ test('signup profile projections preserve league semantics and keep private cont
   assert.equal(docs.contact.email, 'member@example.com');
   assert.equal('email' in docs.user, false);
   assert.equal('event_creator' in docs.preferences, false);
+});
+
+test('signup route does not report completion when profile persistence fails', async () => {
+  const source = await readFile(new URL('../../src/pages/Signup.tsx', import.meta.url), 'utf8');
+  assert.match(source, /We could not save your profile\. Please try again; your entries are still here\./);
+  assert.doesNotMatch(source, /catch[\s\S]{0,500}setPhase\(['"]done['"]\)/);
 });

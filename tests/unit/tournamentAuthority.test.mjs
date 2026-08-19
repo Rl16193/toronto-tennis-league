@@ -8,4 +8,6 @@ test('tournament route cannot mutate protected statistics directly', async () =>
   assert.doesNotMatch(source, /(?:setDoc|updateDoc)\(doc\(db, ['"]stats['"]/);
   assert.doesNotMatch(source, /batch\.set\(doc\(db, ['"]stats['"]/);
   assert.doesNotMatch(source, /leaguePoints26\s*:/);
+  assert.match(source, /completedRemoval/);
+  assert.match(source, /a completed match must remain in the event history/);
 });

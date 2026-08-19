@@ -23,8 +23,10 @@ const VARIANTS = {
     check: false,
     score: 'border-t border-fg/10 px-2 py-0.5 text-[10px] text-fg/70 font-mono tracking-wide',
     winner: 'border-t border-fg/10 px-2 py-1 text-xs font-black text-clay',
-    creatorBtn: 'w-full border-t border-fg/10 px-2 py-1 text-[10px] text-fg/70 hover:text-clay transition-colors text-center leading-tight',
-    playerBtn: 'w-full border-t border-fg/10 px-2 py-1 text-[10px] text-fg/70 hover:text-clay transition-colors text-center leading-tight',
+    creatorBtn:
+      'w-full border-t border-fg/10 px-2 py-1 text-[10px] text-fg/70 hover:text-clay transition-colors text-center leading-tight',
+    playerBtn:
+      'w-full border-t border-fg/10 px-2 py-1 text-[10px] text-fg/70 hover:text-clay transition-colors text-center leading-tight',
     submitted: 'w-full border-t border-fg/10 px-2 py-1 text-[10px] text-badge-win text-center leading-tight',
   },
   // Mobile: roomier, with 44px touch targets.
@@ -36,8 +38,10 @@ const VARIANTS = {
     check: true,
     score: 'border-t border-fg/10 px-3 py-1 text-[11px] text-fg/70 font-mono tracking-wide',
     winner: 'border-t border-fg/10 px-3 py-1.5 text-xs font-black text-clay',
-    creatorBtn: 'w-full border-t border-fg/10 px-3 py-2 text-xs font-bold text-fg/70 hover:text-clay transition-colors text-center bg-fg/[0.03]',
-    playerBtn: 'w-full border-t border-fg/10 px-3 py-2 text-xs font-bold text-clay transition-colors text-center bg-clay/10',
+    creatorBtn:
+      'w-full border-t border-fg/10 px-3 py-2 text-xs font-bold text-fg/70 hover:text-clay transition-colors text-center bg-fg/[0.03]',
+    playerBtn:
+      'w-full border-t border-fg/10 px-3 py-2 text-xs font-bold text-clay transition-colors text-center bg-clay/10',
     submitted: 'w-full border-t border-fg/10 px-3 py-2 text-xs text-badge-win text-center',
   },
 } as const;
@@ -53,8 +57,16 @@ type PlayerSelectProps = {
   onRemovePlayer?: (uid: string) => void;
 };
 
-export const PlayerSelect: React.FC<PlayerSelectProps> = ({ matchId, slot, currentUserId, currentName, players, onSelect, onRemovePlayer }) => {
-  const selectValue = currentName === PLAYER_LOADING ? PLAYER_LOADING : (currentUserId || '');
+export const PlayerSelect: React.FC<PlayerSelectProps> = ({
+  matchId,
+  slot,
+  currentUserId,
+  currentName,
+  players,
+  onSelect,
+  onRemovePlayer,
+}) => {
+  const selectValue = currentName === PLAYER_LOADING ? PLAYER_LOADING : currentUserId || '';
   return (
     <div className="h-8 border-b border-fg/10 flex items-center px-1 bg-clay/10">
       <select
@@ -63,7 +75,7 @@ export const PlayerSelect: React.FC<PlayerSelectProps> = ({ matchId, slot, curre
           if (e.target.value === PLAYER_LOADING) {
             onSelect(matchId, slot, { uid: '', name: PLAYER_LOADING, participantId: '' });
           } else {
-            const p = e.target.value ? players.find((p) => p.uid === e.target.value) ?? null : null;
+            const p = e.target.value ? (players.find((p) => p.uid === e.target.value) ?? null) : null;
             onSelect(matchId, slot, p);
           }
         }}
@@ -72,7 +84,9 @@ export const PlayerSelect: React.FC<PlayerSelectProps> = ({ matchId, slot, curre
         <option value="">{BYE}</option>
         <option value={PLAYER_LOADING}>{PLAYER_LOADING}</option>
         {players.map((p) => (
-          <option key={p.uid} value={p.uid}>{p.name}</option>
+          <option key={p.uid} value={p.uid}>
+            {p.name}
+          </option>
         ))}
       </select>
       {/* Removing takes the player out of the whole draw; the slot falls back to Player Loading so
@@ -83,7 +97,11 @@ export const PlayerSelect: React.FC<PlayerSelectProps> = ({ matchId, slot, curre
           aria-label={`Remove ${currentName} from the draw`}
           title="Remove from draw"
           onClick={() => {
-            if (window.confirm(`Remove ${currentName} from this draw?\n\nThey stay registered for the event and keep any matches they've already played.`)) {
+            if (
+              window.confirm(
+                `Remove ${currentName} from this event draw?\n\nThis unregisters them and deletes pending matches. Players with completed matches cannot be removed.`,
+              )
+            ) {
               onRemovePlayer(currentUserId);
             }
           }}
@@ -111,16 +129,28 @@ type Props = {
 };
 
 export const MatchCard: React.FC<Props> = ({
-  match, variant, isFinal, editMode, editPlayers = [], onEditPlayer, onRemovePlayer,
-  isCreator, onSubmitScore, submittableMatchIds, pendingMatchIds,
+  match,
+  variant,
+  isFinal,
+  editMode,
+  editPlayers = [],
+  onEditPlayer,
+  onRemovePlayer,
+  isCreator,
+  onSubmitScore,
+  submittableMatchIds,
+  pendingMatchIds,
 }) => {
   const v = VARIANTS[variant];
-  const {
-    isEditable, scoreText, showDot, showCreatorSubmit, showPlayerSubmit, alreadySubmitted,
-  } = getMatchDisplayFlags(match, {
-    editMode, hasEditHandler: !!onEditPlayer, isCreator, hasSubmitHandler: !!onSubmitScore,
-    submittableMatchIds, pendingMatchIds,
-  });
+  const { isEditable, scoreText, showDot, showCreatorSubmit, showPlayerSubmit, alreadySubmitted } =
+    getMatchDisplayFlags(match, {
+      editMode,
+      hasEditHandler: !!onEditPlayer,
+      isCreator,
+      hasSubmitHandler: !!onSubmitScore,
+      submittableMatchIds,
+      pendingMatchIds,
+    });
 
   return (
     <div className={v.card}>
@@ -168,15 +198,14 @@ export const MatchCard: React.FC<Props> = ({
         </button>
       )}
 
-      {showPlayerSubmit && (
-        alreadySubmitted ? (
+      {showPlayerSubmit &&
+        (alreadySubmitted ? (
           <div className={v.submitted}>Submitted ✓ awaiting confirmation</div>
         ) : (
           <button type="button" onClick={() => onSubmitScore!(match)} className={v.playerBtn}>
             Submit score
           </button>
-        )
-      )}
+        ))}
     </div>
   );
 };
