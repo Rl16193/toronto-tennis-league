@@ -48,12 +48,12 @@ available.
 
 Architecture and review claims use these levels independently:
 
-| Level | Evidence this repository can provide | Claim it cannot provide |
-| --- | --- | --- |
-| Local verification | Clean install, static checks, unit tests, emulator Rules/Functions tests, synthetic fixtures, and local browser checks | Deployed configuration or production data shape |
-| Source-level security | Reviewed Rules, Functions authorization/validation, migration guards, and positive/negative tests at one source SHA | That the reviewed source is deployed |
-| Staging verification | Explicitly identified isolated Firebase project, deployed reviewed source, synthetic/scrubbed data, and recorded smoke/recovery evidence | Production parity without a separate comparison |
-| Production deployment | Explicit approval, selected production project, deploy receipt, post-deploy checks, and recovery evidence | Inferred success from local or staging PASS |
+| Level                 | Evidence this repository can provide                                                                                                     | Claim it cannot provide                         |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Local verification    | Clean install, static checks, unit tests, emulator Rules/Functions tests, synthetic fixtures, and local browser checks                   | Deployed configuration or production data shape |
+| Source-level security | Reviewed Rules, Functions authorization/validation, migration guards, and positive/negative tests at one source SHA                      | That the reviewed source is deployed            |
+| Staging verification  | Explicitly identified isolated Firebase project, deployed reviewed source, synthetic/scrubbed data, and recorded smoke/recovery evidence | Production parity without a separate comparison |
+| Production deployment | Explicit approval, selected production project, deploy receipt, post-deploy checks, and recovery evidence                                | Inferred success from local or staging PASS     |
 
 A repository-local review may PASS while staging or production remains an external gate. Review
 reports must name the source SHA and evidence level instead of collapsing those claims into one

@@ -8,13 +8,13 @@ Firebase Auth supplies identity. Firestore Rules are the effective client author
 
 ## Current permission layers
 
-| Layer | What it proves | What it does not prove |
-| --- | --- | --- |
-| UI role/view selection | Which experience the user sees | Backend authority or privilege |
-| Firebase Auth UID | Which account made the request | Organizer/provider/admin role |
-| Ownership checks | The document belongs to the caller | Broader operational authority |
-| Connection/listing markers | A specific contact-sharing reason exists | Arbitrary access to other data |
-| Firestore Rules | Whether a client read/write is allowed | Admin SDK trigger correctness |
+| Layer                      | What it proves                                | What it does not prove               |
+| -------------------------- | --------------------------------------------- | ------------------------------------ |
+| UI role/view selection     | Which experience the user sees                | Backend authority or privilege       |
+| Firebase Auth UID          | Which account made the request                | Organizer/provider/admin role        |
+| Ownership checks           | The document belongs to the caller            | Broader operational authority        |
+| Connection/listing markers | A specific contact-sharing reason exists      | Arbitrary access to other data       |
+| Firestore Rules            | Whether a client read/write is allowed        | Admin SDK trigger correctness        |
 | Callable/trigger Functions | Server-controlled transitions and projections | That the UI will call them correctly |
 
 ## Important current controls

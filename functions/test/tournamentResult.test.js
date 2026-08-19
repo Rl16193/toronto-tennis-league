@@ -32,11 +32,7 @@ test('stored results produce exact inverse deltas for reset and cancellation', (
     set_2_player_2: 2,
     status: 'complete',
   };
-  const reversed = mergeStatDeltas(
-    new Map(),
-    statDeltasForResult(stored, storedTournamentResult(stored)),
-    -1,
-  );
+  const reversed = mergeStatDeltas(new Map(), statDeltasForResult(stored, storedTournamentResult(stored)), -1);
   assert.equal(reversed.get('player-a').leaguePoints26, -3);
   assert.equal(reversed.get('player-a').wins, -1);
   assert.equal(reversed.get('player-b').leaguePoints26, -1);

@@ -63,91 +63,110 @@ Object.assign(exports, require('./zoneMoves'));
 // Likelihood levels we treat as unsafe.
 const UNSAFE = new Set(['LIKELY', 'VERY_LIKELY']);
 
-exports.moderateUploadedImage = onObjectFinalized(
-  { region: 'us-east1', memory: '256MiB' },
-  async (event) => {
-    const filePath = event.data.name || '';
-    const isSuggestion = filePath.startsWith('court_suggestions/');
-    const isReport = filePath.startsWith('court_reports/');
-    const isAvatar = filePath.startsWith('avatars/');
-    const isListing = filePath.startsWith('listings/');
-    if (!isSuggestion && !isReport && !isAvatar && !isListing) return;
+exports.moderateUploadedImage = onObjectFinalized({ region: 'us-east1', memory: '256MiB' }, async (event) => {
+  const filePath = event.data.name || '';
+  const isSuggestion = filePath.startsWith('court_suggestions/');
+  const isReport = filePath.startsWith('court_reports/');
+  const isAvatar = filePath.startsWith('avatars/');
+  const isListing = filePath.startsWith('listings/');
+  if (!isSuggestion && !isReport && !isAvatar && !isListing) return;
 
-    if (!visionClient) {
-      visionClient = new vision.ImageAnnotatorClient();
+  if (!visionClient) {
+    visionClient = new vision.ImageAnnotatorClient();
+  }
+
+  const bucketName = event.data.bucket;
+  let unsafe;
+  try {
+    const [result] = await visionClient.safeSearchDetection(`gs://${bucketName}/${filePath}`);
+    const s = result.safeSearchAnnotation || {};
+    unsafe = UNSAFE.has(s.adult) || UNSAFE.has(s.violence) || UNSAFE.has(s.racy);
+    logger.info('SafeSearch result', {
+      file: safeId(filePath),
+      adult: s.adult,
+      violence: s.violence,
+      racy: s.racy,
+      unsafe,
+    });
+  } catch (err) {
+    logger.error('SafeSearch failed', err);
+    return;
+  }
+
+  if (isSuggestion) {
+    // Legacy "Suggest an Improvement" docs were folded into the consolidated `courts`
+    // collection (type 'condition'); match them by their single image_path field.
+    const snap = await admin.firestore().collection('courts').where('image_path', '==', filePath).limit(1).get();
+    if (unsafe) {
+      await admin
+        .storage()
+        .bucket(bucketName)
+        .file(filePath)
+        .delete()
+        .catch((e) => logger.error('delete failed', e));
+      if (!snap.empty)
+        await snap.docs[0].ref.update({ image_status: 'rejected', image_path: admin.firestore.FieldValue.delete() });
+    } else if (!snap.empty) {
+      await snap.docs[0].ref.update({ image_status: 'ok' });
     }
+    return;
+  }
 
-    const bucketName = event.data.bucket;
-    let unsafe;
-    try {
-      const [result] = await visionClient.safeSearchDetection(`gs://${bucketName}/${filePath}`);
-      const s = result.safeSearchAnnotation || {};
-      unsafe = UNSAFE.has(s.adult) || UNSAFE.has(s.violence) || UNSAFE.has(s.racy);
-      logger.info('SafeSearch result', {
-        file: safeId(filePath), adult: s.adult, violence: s.violence, racy: s.racy, unsafe,
-      });
-    } catch (err) {
-      logger.error('SafeSearch failed', err);
-      return;
-    }
-
-    if (isSuggestion) {
-      // Legacy "Suggest an Improvement" docs were folded into the consolidated `courts`
-      // collection (type 'condition'); match them by their single image_path field.
-      const snap = await admin.firestore()
-        .collection('courts')
-        .where('image_path', '==', filePath)
-        .limit(1)
-        .get();
-      if (unsafe) {
-        await admin.storage().bucket(bucketName).file(filePath).delete().catch((e) => logger.error('delete failed', e));
-        if (!snap.empty) await snap.docs[0].ref.update({ image_status: 'rejected', image_path: admin.firestore.FieldValue.delete() });
-      } else if (!snap.empty) {
-        await snap.docs[0].ref.update({ image_status: 'ok' });
+  if (isReport) {
+    // A report can carry multiple photos (photo_paths array). The note is the substantive
+    // content now (photos are optional evidence) — an unsafe photo just gets pulled from the
+    // report, it no longer rejects the whole thing (points already awarded on the note stand).
+    const snap = await admin
+      .firestore()
+      .collection('courts')
+      .where('photo_paths', 'array-contains', filePath)
+      .limit(1)
+      .get();
+    if (unsafe) {
+      await admin
+        .storage()
+        .bucket(bucketName)
+        .file(filePath)
+        .delete()
+        .catch((e) => logger.error('delete failed', e));
+      if (!snap.empty) {
+        await snap.docs[0].ref.update({
+          photo_paths: admin.firestore.FieldValue.arrayRemove(filePath),
+          photo_moderation_note: 'A photo on this report was removed by our automatic image check.',
+        });
       }
-      return;
     }
+    return;
+  }
 
-    if (isReport) {
-      // A report can carry multiple photos (photo_paths array). The note is the substantive
-      // content now (photos are optional evidence) — an unsafe photo just gets pulled from the
-      // report, it no longer rejects the whole thing (points already awarded on the note stand).
-      const snap = await admin.firestore()
-        .collection('courts')
+  if (isListing) {
+    // Marketplace photos are optional decoration on a listing whose text carries the offer,
+    // so an unsafe image is pulled from the listing rather than deleting the whole post.
+    if (unsafe) {
+      await admin
+        .storage()
+        .bucket(bucketName)
+        .file(filePath)
+        .delete()
+        .catch((e) => logger.error('delete failed', e));
+      const snap = await admin
+        .firestore()
+        .collection('listings')
         .where('photo_paths', 'array-contains', filePath)
         .limit(1)
         .get();
-      if (unsafe) {
-        await admin.storage().bucket(bucketName).file(filePath).delete().catch((e) => logger.error('delete failed', e));
-        if (!snap.empty) {
-          await snap.docs[0].ref.update({
-            photo_paths: admin.firestore.FieldValue.arrayRemove(filePath),
-            photo_moderation_note: 'A photo on this report was removed by our automatic image check.',
-          });
-        }
+      if (!snap.empty) {
+        await snap.docs[0].ref.update({
+          photo_paths: admin.firestore.FieldValue.arrayRemove(filePath),
+          photo_moderation_note: 'A photo on this listing was removed by our automatic image check.',
+        });
       }
-      return;
-    }
-
-    if (isListing) {
-      // Marketplace photos are optional decoration on a listing whose text carries the offer,
-      // so an unsafe image is pulled from the listing rather than deleting the whole post.
-      if (unsafe) {
-        await admin.storage().bucket(bucketName).file(filePath).delete().catch((e) => logger.error('delete failed', e));
-        const snap = await admin.firestore()
-          .collection('listings')
-          .where('photo_paths', 'array-contains', filePath)
-          .limit(1)
-          .get();
-        if (!snap.empty) {
-          await snap.docs[0].ref.update({
-            photo_paths: admin.firestore.FieldValue.arrayRemove(filePath),
-            photo_moderation_note: 'A photo on this listing was removed by our automatic image check.',
-          });
-        }
-        const uid = filePath.split('/')[1];
-        if (uid) {
-          await admin.firestore().collection('notifications').add({
+      const uid = filePath.split('/')[1];
+      if (uid) {
+        await admin
+          .firestore()
+          .collection('notifications')
+          .add({
             uid: uid,
             type: 'photo_removed',
             title: 'A listing photo was removed',
@@ -155,18 +174,31 @@ exports.moderateUploadedImage = onObjectFinalized(
             link: '/marketplace',
             read: false,
             created_at: new Date().toISOString(),
-          }).catch((e) => logger.error('notify failed', e));
-        }
+          })
+          .catch((e) => logger.error('notify failed', e));
       }
-      return;
     }
+    return;
+  }
 
-    if (unsafe) {
-      const uid = filePath.split('/')[1];
-      await admin.storage().bucket(bucketName).file(filePath).delete().catch((e) => logger.error('delete failed', e));
-      if (uid) {
-        await admin.firestore().doc(`users/${uid}`).update({ avatar: '' }).catch((e) => logger.error('avatar clear failed', e));
-        await admin.firestore().collection('notifications').add({
+  if (unsafe) {
+    const uid = filePath.split('/')[1];
+    await admin
+      .storage()
+      .bucket(bucketName)
+      .file(filePath)
+      .delete()
+      .catch((e) => logger.error('delete failed', e));
+    if (uid) {
+      await admin
+        .firestore()
+        .doc(`users/${uid}`)
+        .update({ avatar: '' })
+        .catch((e) => logger.error('avatar clear failed', e));
+      await admin
+        .firestore()
+        .collection('notifications')
+        .add({
           uid: uid,
           type: 'photo_removed',
           title: 'Your profile photo was removed',
@@ -174,11 +206,11 @@ exports.moderateUploadedImage = onObjectFinalized(
           link: '/profile',
           read: false,
           created_at: new Date().toISOString(),
-        }).catch((e) => logger.error('notify failed', e));
-      }
+        })
+        .catch((e) => logger.error('notify failed', e));
     }
-  },
-);
+  }
+});
 
 exports.sendWelcomeEmail = onDocumentUpdated(
   { document: 'users/{uid}', region: 'us-central1', secrets: [resendApiKey] },
@@ -214,7 +246,6 @@ exports.sendWelcomeEmail = onDocumentUpdated(
   },
 );
 
-
 // ─── Google Sheets Weekly Sync (Saturdays, midnight America/Toronto) ──────
 const SPREADSHEET_ID = '1RpEowUk-fN08Y-zpZwIWL5XVbDESc7L_ZYRoUcbHkvI';
 
@@ -226,17 +257,38 @@ const COLLECTION_MAP = [
   // to a spreadsheet whose sharing lives outside this repo — a deliberate omission.
   { collection: 'users', sheetTab: 'Players', fields: ['name', 'avatar'] },
   {
-    collection: 'matches', sheetTab: 'Matches',
+    collection: 'matches',
+    sheetTab: 'Matches',
     fields: [
-      'player_1_name', 'player_2_name',
-      'set_1_player_1', 'set_1_player_2', 'set_2_player_1', 'set_2_player_2', 'set_3_player_1', 'set_3_player_2',
-      'status', 'round',
+      'player_1_name',
+      'player_2_name',
+      'set_1_player_1',
+      'set_1_player_2',
+      'set_2_player_1',
+      'set_2_player_2',
+      'set_3_player_1',
+      'set_3_player_2',
+      'status',
+      'round',
     ],
     where: ['category', 'in', ['singles', 'doubles']],
   },
   {
-    collection: 'matches', sheetTab: 'Challenges',
-    fields: ['player_1_name', 'player_2_name', 'winner_name', 'set_1_player_1', 'set_1_player_2', 'set_2_player_1', 'set_2_player_2', 'set_3_player_1', 'set_3_player_2', 'status', 'division'],
+    collection: 'matches',
+    sheetTab: 'Challenges',
+    fields: [
+      'player_1_name',
+      'player_2_name',
+      'winner_name',
+      'set_1_player_1',
+      'set_1_player_2',
+      'set_2_player_1',
+      'set_2_player_2',
+      'set_3_player_1',
+      'set_3_player_2',
+      'status',
+      'division',
+    ],
     where: ['category', '==', 'challenge'],
   },
 ];
@@ -244,72 +296,71 @@ const COLLECTION_MAP = [
 exports.syncFirestoreAndSheets = onSchedule(
   { schedule: '0 0 * * 6', timeZone: 'America/Toronto', region: 'us-central1' },
   async (_event) => {
-  const { google } = require('googleapis');
+    const { google } = require('googleapis');
 
-  const auth = new google.auth.GoogleAuth({
-    keyFile: path.join(__dirname, 'service-account-key-gs.json'),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-  const sheets = google.sheets({ version: 'v4', auth });
-
-  // Ensure every configured tab exists first. A missing tab makes values.update fail with
-  // "Unable to parse range: <Tab>!A1" — the HTTP 500 the Cloud Scheduler job was hitting — and
-  // because it throws on the first collection, nothing else syncs either. Creating any absent
-  // tabs up front makes the sync self-healing if a tab is renamed or deleted.
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
-  const existingTabs = new Set((meta.data.sheets || []).map((s) => s.properties.title));
-  const missingTabs = [...new Set(COLLECTION_MAP.map((c) => c.sheetTab))].filter((t) => !existingTabs.has(t));
-  if (missingTabs.length > 0) {
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
-      resource: { requests: missingTabs.map((title) => ({ addSheet: { properties: { title } } })) },
+    const auth = new google.auth.GoogleAuth({
+      keyFile: path.join(__dirname, 'service-account-key-gs.json'),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
-    logger.info(`Created missing sheet tab(s): ${missingTabs.join(', ')}.`);
-  }
+    const sheets = google.sheets({ version: 'v4', auth });
 
-  for (const config of COLLECTION_MAP) {
-    const { collection, sheetTab, fields, where: wh } = config;
-    // Isolate each collection so one bad tab/collection can't fail the whole scheduled job.
-    try {
-
-    // 1. FIRESTORE -> GOOGLE SHEETS
-    let collRef = admin.firestore().collection(collection);
-    if (wh) {
-      collRef = collRef.where(...wh);
-    }
-    const snapshot = await collRef.get();
-    const rows = [['Document ID', ...fields.map((f) => f.toUpperCase())]];
-
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      const rowData = [doc.id];
-
-      fields.forEach((field) => {
-        let value = data[field] || '';
-        // Render image-URL fields (avatar/photo/image) as an inline image in the sheet.
-        if (/(image|avatar|photo)/i.test(field) && value) {
-          value = `=IMAGE("${value}")`;
-        }
-        rowData.push(value);
+    // Ensure every configured tab exists first. A missing tab makes values.update fail with
+    // "Unable to parse range: <Tab>!A1" — the HTTP 500 the Cloud Scheduler job was hitting — and
+    // because it throws on the first collection, nothing else syncs either. Creating any absent
+    // tabs up front makes the sync self-healing if a tab is renamed or deleted.
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+    const existingTabs = new Set((meta.data.sheets || []).map((s) => s.properties.title));
+    const missingTabs = [...new Set(COLLECTION_MAP.map((c) => c.sheetTab))].filter((t) => !existingTabs.has(t));
+    if (missingTabs.length > 0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: { requests: missingTabs.map((title) => ({ addSheet: { properties: { title } } })) },
       });
-
-      rows.push(rowData);
-    });
-
-    // Export-only: clear the tab first so rows for deleted docs don't linger, then write fresh.
-    await sheets.spreadsheets.values.clear({ spreadsheetId: SPREADSHEET_ID, range: `${sheetTab}!A:Z` });
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetTab}!A1`,
-      valueInputOption: 'USER_ENTERED',
-      resource: { values: rows },
-    });
-
-    logger.info(`Exported ${snapshot.size} doc(s) from "${collection}" to sheet tab "${sheetTab}".`);
-
-    } catch (err) {
-      // Log and move on — a single collection's failure shouldn't 500 the whole job.
-      logger.error(`Sync failed for collection "${collection}" / tab "${sheetTab}":`, err);
+      logger.info(`Created missing sheet tab(s): ${missingTabs.join(', ')}.`);
     }
-  }
-});
+
+    for (const config of COLLECTION_MAP) {
+      const { collection, sheetTab, fields, where: wh } = config;
+      // Isolate each collection so one bad tab/collection can't fail the whole scheduled job.
+      try {
+        // 1. FIRESTORE -> GOOGLE SHEETS
+        let collRef = admin.firestore().collection(collection);
+        if (wh) {
+          collRef = collRef.where(...wh);
+        }
+        const snapshot = await collRef.get();
+        const rows = [['Document ID', ...fields.map((f) => f.toUpperCase())]];
+
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const rowData = [doc.id];
+
+          fields.forEach((field) => {
+            let value = data[field] || '';
+            // Render image-URL fields (avatar/photo/image) as an inline image in the sheet.
+            if (/(image|avatar|photo)/i.test(field) && value) {
+              value = `=IMAGE("${value}")`;
+            }
+            rowData.push(value);
+          });
+
+          rows.push(rowData);
+        });
+
+        // Export-only: clear the tab first so rows for deleted docs don't linger, then write fresh.
+        await sheets.spreadsheets.values.clear({ spreadsheetId: SPREADSHEET_ID, range: `${sheetTab}!A:Z` });
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheetTab}!A1`,
+          valueInputOption: 'USER_ENTERED',
+          resource: { values: rows },
+        });
+
+        logger.info(`Exported ${snapshot.size} doc(s) from "${collection}" to sheet tab "${sheetTab}".`);
+      } catch (err) {
+        // Log and move on — a single collection's failure shouldn't 500 the whole job.
+        logger.error(`Sync failed for collection "${collection}" / tab "${sheetTab}":`, err);
+      }
+    }
+  },
+);
