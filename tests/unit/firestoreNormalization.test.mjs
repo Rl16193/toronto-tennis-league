@@ -44,9 +44,14 @@ test('match normalization bounds invalid primitives to safe runtime defaults', (
 });
 
 test('profile normalization does not grant role flags or trust malformed arrays', () => {
-  const preferences = normalizeUserPreferences({ event_creator: 'true', preferred_courts: ['A', 1] });
+  const preferences = normalizeUserPreferences({
+    event_creator: 'true',
+    preferred_courts: ['A', 1],
+    preferred_zone: { trim: 'not callable' },
+  });
   assert.equal(preferences.event_creator, false);
   assert.deepEqual(preferences.preferred_courts, ['A']);
+  assert.equal(preferences.preferred_zone, '');
   const stats = normalizeUserStats({ skill_level: '5', wins: Number.NaN });
   assert.equal(stats.skill_level, 2);
   assert.equal(stats.wins, 0);

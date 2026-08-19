@@ -1212,13 +1212,14 @@ export const useTournament = (eventIdOverride?: string) => {
                 chunk(uids, 30).map((c) => getDocs(query(collection(db, 'preferences'), where(documentId(), 'in', c)))),
               );
         prefSnaps.forEach((s) =>
-          s.forEach((d) =>
+          s.forEach((d) => {
+            const preference = normalizeUserPreferences(d.data());
             prefs.set(d.id, {
-              courts: (d.data().preferred_courts ?? []) as string[],
-              zone: (d.data().preferred_zone ?? '') as string,
-              manual: d.data().preferred_zone_manual === true,
-            }),
-          ),
+              courts: preference.preferred_courts,
+              zone: preference.preferred_zone,
+              manual: preference.preferred_zone_manual === true,
+            });
+          }),
         );
         const configById = new Map(myEvents.map((e) => [e.id, resolveZoneConfig(e.zone_draw_config)]));
 
