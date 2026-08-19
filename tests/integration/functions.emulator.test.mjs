@@ -320,6 +320,29 @@ test('tournament result rejects a non-owner and an unrelated winner', { skip: !t
 });
 
 test(
+  'tournament result rejects a missing advancement target without applying stats',
+  { skip: !tournamentAvailable },
+  async () => {
+    const owner = await session('tournament-missing-target-owner');
+    await seedTournament(owner.uid, 'p1', 'p2');
+    await db.doc('matches/m3').delete();
+    const rejected = await call('applyTournamentResult', owner.token, {
+      matchId: 'm1',
+      winnerUid: 'p1',
+      scores: [
+        [6, 4],
+        [6, 2],
+        [0, 0],
+      ],
+    });
+    assert.equal(rejected.status, 400, JSON.stringify(rejected.body));
+    assert.equal(rejected.body.error.status, 'FAILED_PRECONDITION');
+    assert.equal((await db.doc('matches/m1').get()).data().status, 'pending');
+    assert.equal((await db.doc('stats/p1').get()).exists, false);
+  },
+);
+
+test(
   'tournament result accepts organizer_ids assignments and rejects non-bracket matches',
   { skip: !tournamentAvailable },
   async () => {

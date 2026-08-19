@@ -149,9 +149,15 @@ exports.applyTournamentResult = onCall({ region: REGION }, async (request) => {
           .where('match_id', '==', match.next_match_id);
         const nextSnap = await tx.get(nextQuery);
         const candidate = nextSnap.docs.find((doc) => sameDraw(doc.data(), match));
-        if (candidate) {
+        if (!candidate) {
+          throw new HttpsError('failed-precondition', 'Advancement target does not exist in this draw.');
+        }
+        {
           nextRef = candidate.ref;
           const nextMatch = candidate.data();
+          if (nextMatch.status === 'complete') {
+            throw new HttpsError('failed-precondition', 'Advancement target is already complete.');
+          }
           nextSlot = match.next_slot;
           if (nextSlot !== 'player_1' && nextSlot !== 'player_2') {
             const siblingsQuery = db()

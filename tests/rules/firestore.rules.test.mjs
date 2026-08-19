@@ -47,6 +47,15 @@ describe('Firestore authorization boundaries', () => {
       }),
     );
 
+    await assertFails(
+      setDoc(doc(db, 'users/public-leak'), {
+        uid: 'member-a',
+        name: 'Leaky Profile',
+        event_creator: true,
+        email: 'private@example.invalid',
+      }),
+    );
+
     await assertSucceeds(
       setDoc(doc(db, 'preferences/member-a'), {
         uid: 'member-a',
@@ -96,6 +105,32 @@ describe('Firestore authorization boundaries', () => {
         created_at: '2026-01-01T00:00:00.000Z',
       }),
     );
+  });
+
+  test('public profiles reject private fields and participant managers cannot rewrite identity', async () => {
+    const ownerDb = dbFor('member-a');
+    await assertFails(
+      setDoc(doc(ownerDb, 'users/member-a'), {
+        uid: 'member-a',
+        name: 'Member A',
+        created_at: '2026-01-01',
+        email: 'private@example.invalid',
+      }),
+    );
+    await seedDoc('users/member-a', { uid: 'member-a', name: 'Member A', created_at: '2026-01-01' });
+    await assertFails(updateDoc(doc(ownerDb, 'users/member-a'), { email_notifications: true }));
+
+    await seedDoc('events/event-a', { creator_id: 'manager-a' });
+    await seedDoc('events/event-b', { creator_id: 'manager-b' });
+    await seedDoc('event_participants/participant-a', {
+      uid: 'member-a',
+      event_id: 'event-a',
+      created_at: '2026-01-01',
+      user_name: 'Member A',
+    });
+    const managerDb = dbFor('manager-a');
+    await assertFails(updateDoc(doc(managerDb, 'event_participants/participant-a'), { event_id: 'event-b' }));
+    await assertFails(updateDoc(doc(managerDb, 'event_participants/participant-a'), { uid: 'manager-a' }));
   });
 
   test('a member cannot self-assign event_creator on preferences', async () => {

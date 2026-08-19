@@ -149,8 +149,18 @@ service cloud.firestore {
     // ===============================================================
     match /users/{userId} {
       allow read: if true;
-      allow create: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly([
+          'uid', 'name', 'avatar', 'bio', 'profile_details_visible', 'display_badges',
+          'created_at', 'lastActive', 'isVerified', 'welcomeEmailSent'
+        ]) &&
+        (!request.resource.data.keys().hasAny(['uid']) || request.resource.data.uid == userId);
       allow update: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly([
+          'uid', 'name', 'avatar', 'bio', 'profile_details_visible', 'display_badges',
+          'created_at', 'lastActive', 'isVerified', 'welcomeEmailSent'
+        ]) &&
+        (!request.resource.data.keys().hasAny(['uid']) || request.resource.data.uid == userId) &&
         !request.resource.data.diff(resource.data).affectedKeys()
           .hasAny(['secondary_email', 'created_at']) &&
         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['welcomeEmailSent'])
@@ -293,7 +303,11 @@ service cloud.firestore {
 
       allow update: if isAuthenticated() &&
         (
-          isManagerOfEvent(resource.data.event_id) ||
+          (
+            isManagerOfEvent(resource.data.event_id) &&
+            request.resource.data.event_id == resource.data.event_id &&
+            request.resource.data.uid == resource.data.uid
+          ) ||
           (
             resource.data.uid == request.auth.uid &&
             request.resource.data.event_id == resource.data.event_id &&
