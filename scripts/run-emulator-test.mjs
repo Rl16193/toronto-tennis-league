@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const service = process.argv[2];
 const testFiles = {
-  firestore: 'tests/rules/firestore.rules.test.mjs',
+  firestore: 'tests/rules/firestore*.test.mjs',
   storage: 'tests/rules/storage.rules.test.mjs',
 };
 
@@ -78,7 +78,7 @@ const main = async () => {
       service,
       '--project',
       'rands-local',
-      `node --test ${testFiles[service]}`,
+      `node --test --test-concurrency=1 ${testFiles[service]}`,
     ],
     { cwd: root, env, stdio: 'inherit' },
   );
