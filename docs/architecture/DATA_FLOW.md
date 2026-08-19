@@ -56,9 +56,9 @@ Evidence: `functions/lib/notify.js`, `functions/lib/constants.js`, `src/features
 
 ## Target state, risks, and open questions
 
-- Tournament result application now has one server-authoritative transaction. Legacy score reset,
-  draw cancellation, and manually awarded Round Robin group bonuses still need reconciliation with
-  the final Rules policy before those organizer workflows can be considered fully consolidated.
+- Tournament result application now has one server-authoritative transaction. The browser refuses
+  completed-result reset/cancellation and Round Robin bonus mutations rather than retaining a
+  second points authority; those controls can be re-enabled only through bounded server operations.
 - Target: run the same flows against emulators, then staging, with seed data and rules/function integration tests.
 - Open: confirm deployed trigger versions and whether historical documents contain all fields assumed by current readers.
 

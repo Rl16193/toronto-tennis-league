@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  addDoc, arrayUnion, collection, doc, documentId, getDocs, increment, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
+  addDoc, arrayUnion, collection, doc, documentId, getDocs, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -12,7 +12,7 @@ import {
   deriveRRConfig, generateGroupPairings, selectGroupWinners, sharedBand, sharedZone,
 } from './rrGeneration';
 import {
-  BYE, NO_SHOW_POINTS, PLAYER_LOADING, matchAward, skillBand,
+  BYE, PLAYER_LOADING, skillBand,
   buildMatchFields, buildPlayerList, buildZoneAwareDrawConfigs, deleteKey, fallbackTemplate, filterParticipantsForDraw, resolveZoneConfig,
   formatPlayerName, getDrawKey, getDrawSize, getEventDate,
   isTournamentStarted, normalizeTemplateMatches, zoneBucketFor, effectiveZone,
@@ -30,14 +30,8 @@ import { applyTournamentResult } from '../../features/tournament/services/tourna
 // normal state, but the merge below shouldn't drop the contact details over it.
 const EMPTY_MEMBER: UserData = { name: '', created_at: '' };
 
-// Per-player RR group bonus. Paid only by handleAwardGroupBonus, reversed by reverseRRBonusesInto —
-// one constant so the two can't drift.
-const RR_GROUP_BONUS = 5;
-
 // Hard ceiling on an RR group. Guards the manual paths — the only way anyone is seated now.
 export const RR_GROUP_MAX = 5;
-
-// Scoring rules live in `matchAward` (utils.ts), shared with computeGroupStandings.
 
 export const useTournament = (eventIdOverride?: string) => {
   const { user, profile, loading: authLoading } = useAuth();
@@ -1331,69 +1325,6 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  // Reverse the stats one completed match awarded — the exact inverse of the first-confirmation
-  // increments in `updateMatchWithSubmission` — so cancelling a draw restores the leaderboard.
-  // (RR group-completion bonuses are reversed separately by `reverseRRBonusesInto`.)
-  const reverseMatchStatsInto = (batch: ReturnType<typeof writeBatch>, m: TournamentMatch, partnerUidByCaptain: Map<string, string> = new Map()) => {
-    if (m.status !== 'complete') return;
-    // No show first: it has no winner_uid, so the guard below would skip it and leave both
-    // players holding a point from a match that's being deleted.
-    if (m.no_show) {
-      [m.player_1_uid, m.player_2_uid].filter(Boolean).forEach((uid) => {
-        batch.set(doc(db, 'stats', uid), { leaguePoints26: increment(-NO_SHOW_POINTS) }, { merge: true });
-      });
-      return;
-    }
-    if (!m.winner_uid) return;
-    const { loserPts, winnerPts, isFinal, winnerPointsApply } = matchAward(m);
-    const winnerUid = m.winner_uid;
-    const loserUid = winnerUid === m.player_1_uid ? m.player_2_uid : m.player_1_uid;
-    // Reverses a stat increment for the uid AND its doubles partner (if any).
-    const reverseStat = (uid: string, delta: Record<string, unknown>) => {
-      batch.set(doc(db, 'stats', uid), delta, { merge: true });
-      const partnerUid = partnerUidByCaptain.get(uid);
-      if (partnerUid && partnerUid !== uid) batch.set(doc(db, 'stats', partnerUid), delta, { merge: true });
-    };
-    const p1G = (m.set_1_player_1 ?? 0) + (m.set_2_player_1 ?? 0) + (m.set_3_player_1 ?? 0);
-    const p2G = (m.set_1_player_2 ?? 0) + (m.set_2_player_2 ?? 0) + (m.set_3_player_2 ?? 0);
-    const total = p1G + p2G;
-    const winnerIsP1 = winnerUid === m.player_1_uid;
-    if (winnerUid) {
-      reverseStat(winnerUid, {
-        matchesPlayed: increment(-1),
-        wins: increment(-1),
-        pointswon: increment(-(winnerIsP1 ? p1G : p2G)),
-        totalPointsPlayed: increment(-total),
-        ...(winnerPointsApply ? { leaguePoints26: increment(-winnerPts) } : {}),
-        ...(isFinal ? { tournamentsPlayed: increment(-1) } : {}),
-      });
-    }
-    if (loserUid) {
-      reverseStat(loserUid, {
-        matchesPlayed: increment(-1),
-        loses: increment(-1),
-        leaguePoints26: increment(-loserPts),
-        tournamentsPlayed: increment(-1),
-        pointswon: increment(-(winnerIsP1 ? p2G : p1G)),
-        totalPointsPlayed: increment(-total),
-      });
-    }
-  };
-
-  // Reverse the leaguePoints26 group bonus for every RR group the organizer awarded one to.
-  const reverseRRBonusesInto = (batch: ReturnType<typeof writeBatch>, groupMatches: TournamentMatch[]) => {
-    for (const gi of [...new Set(groupMatches.map((m) => m.rr_group ?? 0))]) {
-      const ms = groupMatches.filter((m) => (m.rr_group ?? 0) === gi);
-      // The stamp is the ONLY proof of payment — a complete group whose bonus was never awarded
-      // must not be deducted, or players lose points they never received.
-      if (ms.length === 0 || !ms.some((m) => m.rr_group_bonus_v2)) continue;
-      const standings = computeGroupStandings(ms);
-      standings.forEach((row) => {
-        if (row.userId) batch.set(doc(db, 'stats', row.userId), { leaguePoints26: increment(-RR_GROUP_BONUS) }, { merge: true });
-      });
-    }
-  };
-
   const handleResetDraw = async () => {
     if (!isCreator || !currentDraw || currentMatches.length === 0) return;
 
@@ -1403,15 +1334,15 @@ export const useTournament = (eventIdOverride?: string) => {
     const warn = completed.length > 0
       ? `Cancel all matches for ${currentDraw.label}?\n\nAll matches will be deleted and the stats from ${completed.length} completed match${completed.length > 1 ? 'es' : ''} will be reset. This cannot be undone.`
       : `Cancel all matches for ${currentDraw.label}? This will clear the draw and return to preview mode.`;
+    if (completed.length > 0) {
+      setMessage({ type: 'error', text: 'Completed draws cannot be cancelled from the browser because result reversals are server-authoritative.' });
+      return;
+    }
     if (!window.confirm(warn)) return;
     setResettingDraw(true);
     setMessage(null);
     try {
       const batch = writeBatch(db);
-      const partnerUidByCaptain = new Map(participants
-        .filter((p) => p.uid && p.partner_uid)
-        .map((p) => [p.uid!, p.partner_uid!]));
-      completed.forEach((m) => reverseMatchStatsInto(batch, m, partnerUidByCaptain));
       currentMatches.forEach((m) => batch.delete(doc(db, 'matches', m.id)));
       await batch.commit();
       setEditMode(false);
@@ -1619,70 +1550,10 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  /**
-   * Organizer-only: send ONE completed match back to unplayed.
-   *
-   * Until now the only way to undo a score was Cancel Matches, which deletes the entire draw and
-   * reverses every completed match in it. This reverses exactly the stats this one match awarded —
-   * `reverseMatchStatsInto` already covers walkovers, no-shows and doubles partner credits — and
-   * pulls the advanced winner back out of the next round.
-   *
-   * It deliberately does NOT touch the RR group bonus: that is the organizer's own switch, and
-   * silently flipping it here would take 5 points off players over an unrelated correction. Turn
-   * it off from the group card if the group should no longer count as finished.
-   */
+  // Result reversal must eventually use the same server transaction boundary as application.
   const handleResetMatchScore = async (match: TournamentMatch) => {
     if (!isCreator || match.status !== 'complete') return;
-    if (!window.confirm(
-      `Reset the score for ${formatPlayerName(match.player_1_name)} vs ${formatPlayerName(match.player_2_name)}?`
-      + '\n\nThe recorded result and the points it awarded are removed, and the match goes back to unplayed.',
-    )) return;
-    try {
-      const batch = writeBatch(db);
-      const partnerUidByCaptain = new Map(participants
-        .filter((p) => p.uid && p.partner_uid)
-        .map((p) => [p.uid!, p.partner_uid!]));
-      reverseMatchStatsInto(batch, match, partnerUidByCaptain);
-      batch.update(doc(db, 'matches', match.id), {
-        status: 'pending',
-        winner_uid: '', winner_name: '',
-        set_1_player_1: 0, set_1_player_2: 0,
-        set_2_player_1: 0, set_2_player_2: 0,
-        set_3_player_1: 0, set_3_player_2: 0,
-        walkover: false,
-        no_show: false,
-      });
-
-      // Un-advance the winner. Same draw-matching rules as advancement (bracket and zone
-      // normalized), and never touch a next-round match that has ALREADY been played — that
-      // result belongs to whoever played it, whatever we think of this one.
-      if (match.next_match_id && match.winner_uid) {
-        const sameDraw = (m: TournamentMatch) =>
-          (m.bracket ?? null) === (match.bracket ?? null) &&
-          m.tournament_choice === match.tournament_choice &&
-          m.division === match.division &&
-          m.skill_group === match.skill_group &&
-          (m.zone ?? null) === (match.zone ?? null);
-        const next = matches.find((m) => sameDraw(m) && m.match_id === match.next_match_id);
-        if (next && next.status !== 'complete') {
-          const slot = next.player_1_uid === match.winner_uid ? 'player_1'
-            : next.player_2_uid === match.winner_uid ? 'player_2' : null;
-          if (slot) {
-            batch.update(doc(db, 'matches', next.id), {
-              [`${slot}_name`]: PLAYER_LOADING,
-              [`${slot}_uid`]: '',
-            });
-          }
-        }
-      }
-
-      await batch.commit();
-      setScoreForm(null);
-      setMessage({ type: 'success', text: 'Score reset — the match is unplayed again.' });
-    } catch (err) {
-      console.error('Reset match score failed:', err);
-      setMessage({ type: 'error', text: 'Could not reset the score. Please try again.' });
-    }
+    setMessage({ type: 'error', text: 'Completed results cannot be reset from the browser because points and advancement are server-authoritative.' });
   };
 
   const handleRejectSubmission = async (sub: ScoreSubmissionDoc) => {
@@ -2125,35 +1996,10 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  // Organizer's Group Bonus switch: pays every player in one RR group `RR_GROUP_BONUS`, or takes it
-  // back. This is the ONLY way the bonus moves — scoring a group's last match awards nothing.
-  // `rr_group_bonus_v2` on every match in the group IS the switch's state: it makes the payout
-  // idempotent, and `reverseRRBonusesInto` reads it to know whether a reset owes a deduction.
-  const handleSetGroupBonus = async (rrGroup: number, award: boolean) => {
-    if (!isCreator || !event || !currentDraw) return;
-    const groupMatches = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === rrGroup);
-    if (groupMatches.length === 0) return;
-    // Already in the requested state — nothing to pay or refund.
-    if (groupMatches.some((m) => m.rr_group_bonus_v2) === award) return;
-    const recipients = computeGroupStandings(groupMatches).filter((r) => r.userId);
-    if (recipients.length === 0) return;
-    const pending = groupMatches.filter((m) => m.status !== 'complete').length;
-    if (!window.confirm(award
-      ? `Award ${RR_GROUP_BONUS} points to all ${recipients.length} players in this group?`
-        + (pending > 0 ? `\n\n${pending} match${pending > 1 ? 'es are' : ' is'} still unplayed.` : '')
-      : `Take the ${RR_GROUP_BONUS}-point bonus back from all ${recipients.length} players in this group?`,
-    )) return;
-    try {
-      const batch = writeBatch(db);
-      const delta = award ? RR_GROUP_BONUS : -RR_GROUP_BONUS;
-      recipients.forEach((row) => batch.set(doc(db, 'stats', row.userId), { leaguePoints26: increment(delta) }, { merge: true }));
-      groupMatches.forEach((m) => batch.set(doc(db, 'matches', m.id), { rr_group_bonus_v2: award }, { merge: true }));
-      await batch.commit();
-      setMessage({ type: 'success', text: award ? `Group bonus awarded to ${recipients.length} players.` : 'Group bonus taken back.' });
-    } catch (err) {
-      console.error('RR group bonus failed:', err);
-      setMessage({ type: 'error', text: 'Could not update the group bonus.' });
-    }
+  // Bonus point mutation stays disabled until its own bounded server operation is available.
+  const handleSetGroupBonus = async (_rrGroup: number, _award: boolean) => {
+    if (!isCreator) return;
+    setMessage({ type: 'error', text: 'Round Robin point bonuses are unavailable until the server-authoritative award operation is enabled.' });
   };
 
   // ── Match scheduling ──────────────────────────────────────────────────────
@@ -2383,15 +2229,15 @@ export const useTournament = (eventIdOverride?: string) => {
     const warn = completed.length > 0
       ? `Cancel the Round Robin draw?\n\nAll ${currentMatches.length} matches will be deleted and the stats from ${completed.length} completed match${completed.length > 1 ? 'es' : ''} will be reset. This cannot be undone.`
       : 'Cancel the Round Robin draw? This will clear all group and knockout matches.';
+    const hasPaidBonus = currentMatches.some((m) => m.rr_group_bonus_v2);
+    if (completed.length > 0 || hasPaidBonus) {
+      setMessage({ type: 'error', text: 'Played or bonus-paid draws cannot be cancelled from the browser because reversals are server-authoritative.' });
+      return;
+    }
     if (!window.confirm(warn)) return;
     setResettingDraw(true);
     try {
       const batch = writeBatch(db);
-      const partnerUidByCaptain = new Map(participants
-        .filter((p) => p.uid && p.partner_uid)
-        .map((p) => [p.uid!, p.partner_uid!]));
-      completed.forEach((m) => reverseMatchStatsInto(batch, m, partnerUidByCaptain));
-      reverseRRBonusesInto(batch, currentMatches.filter((m) => m.format === 'rr' && m.round === 'RR'));
       currentMatches.forEach((m) => batch.delete(doc(db, 'matches', m.id)));
       await batch.commit();
       setEditMode(false);

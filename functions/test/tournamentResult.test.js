@@ -1,7 +1,13 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 
-const { normalizeTournamentResult, tournamentAward, statDeltasForResult } = require('../lib/tournamentResult');
+const {
+  mergeStatDeltas,
+  normalizeTournamentResult,
+  statDeltasForResult,
+  storedTournamentResult,
+  tournamentAward,
+} = require('../lib/tournamentResult');
 
 const match = {
   event_id: 'event-1',
@@ -15,6 +21,27 @@ const match = {
   player_2_uid: 'player-b',
   player_2_name: 'Player B',
 };
+
+test('stored results produce exact inverse deltas for reset and cancellation', () => {
+  const stored = {
+    ...match,
+    winner_uid: 'player-a',
+    set_1_player_1: 6,
+    set_1_player_2: 4,
+    set_2_player_1: 6,
+    set_2_player_2: 2,
+    status: 'complete',
+  };
+  const reversed = mergeStatDeltas(
+    new Map(),
+    statDeltasForResult(stored, storedTournamentResult(stored)),
+    -1,
+  );
+  assert.equal(reversed.get('player-a').leaguePoints26, -3);
+  assert.equal(reversed.get('player-a').wins, -1);
+  assert.equal(reversed.get('player-b').leaguePoints26, -1);
+  assert.equal(reversed.get('player-b').tournamentsPlayed, -1);
+});
 
 test('normalizes a bounded result whose winner belongs to the match', () => {
   const result = normalizeTournamentResult(

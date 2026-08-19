@@ -153,11 +153,33 @@ function scoreFieldPatch(scores) {
   );
 }
 
+function storedTournamentResult(match) {
+  return {
+    winnerUid: match.winner_uid || '',
+    scores: SCORE_FIELDS.map(([p1, p2]) => [match[p1] ?? 0, match[p2] ?? 0]),
+    noShow: match.no_show === true,
+    walkover: match.walkover === true,
+    court: typeof match.court === 'string' ? match.court : '',
+  };
+}
+
+function mergeStatDeltas(target, source, multiplier = 1) {
+  for (const [uid, delta] of source) {
+    const adjusted = Object.fromEntries(
+      Object.entries(delta).map(([key, value]) => [key, typeof value === 'number' ? value * multiplier : value]),
+    );
+    addDelta(target, uid, adjusted);
+  }
+  return target;
+}
+
 module.exports = {
   MAX_GAME_SCORE,
   TournamentResultError,
+  mergeStatDeltas,
   normalizeTournamentResult,
   scoreFieldPatch,
   statDeltasForResult,
+  storedTournamentResult,
   tournamentAward,
 };

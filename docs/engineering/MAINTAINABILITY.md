@@ -69,9 +69,9 @@ The pinned source and update procedure remain in `docs/engineering/AGENT_SKILLS.
 
 - Some route hooks still mix Firestore subscriptions and presentation state; extract only when a
   repository boundary centralizes paths, normalization, or transaction behavior.
-- Tournament result application is Function-authoritative. Legacy reset/cancellation reversal and
-  the manual Round Robin group-bonus writer remain separate cleanup work and must stay visible in
-  the security review rather than being hidden behind broad Rules exceptions.
+- Tournament result application is Function-authoritative. Completed-result reset/cancellation and
+  manual Round Robin group bonuses are deliberately disabled in the browser until bounded server
+  operations exist; pending, points-free draw cancellation remains available.
 - Functions remain JavaScript. Shared callable validation is centralized first; TypeScript
   migration should follow where integration coverage is strong.
 - Signup intentionally has a pre-auth email-existence check so secondary-email migration remains
