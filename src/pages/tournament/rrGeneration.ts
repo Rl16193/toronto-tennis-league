@@ -1,5 +1,11 @@
 import { DrawConfig, RRConfig, RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
-import { BYE, PLAYER_LOADING, fallbackTemplate, matchAward, skillBand } from './utils';
+import { generateGroupPairings, splitEvenly } from '../../features/tournament/domain/roundRobin';
+import { matchAward } from '../../features/tournament/domain/scoring';
+import { BYE, PLAYER_LOADING, fallbackTemplate, skillBand } from './utils';
+
+// Compatibility exports keep existing callers stable while new code imports pure domain rules
+// directly from src/features/tournament/domain.
+export { generateGroupPairings, splitEvenly };
 
 // ── Zone-tier group formation ─────────────────────────────────────────────────
 
@@ -8,19 +14,8 @@ export type ZoneTierGroup = {
   players: TournamentPlayer[];
 };
 
-/**
- * Split `n` players into balanced groups of 3–5: g = ceil(n/5), sizes differ by at most 1,
- * larger first. 5→[5] · 6→[3,3] · 7→[4,3] · 8→[4,4] · 9→[5,4] · 10→[5,5] · 11→[4,4,3] · 12→[4,4,4].
- * n<3 returns one group of n.
- */
-export function splitEvenly(n: number): number[] {
-  if (n <= 0) return [];
-  const g = Math.max(1, Math.ceil(n / 5));
-  const base = Math.floor(n / g);
-  const rem = n % g;
-  return Array.from({ length: g }, (_, i) => (i < rem ? base + 1 : base));
-}
-
+// Group sizing and pairing are imported pure primitives; this module composes them with
+// tournament-specific player grouping and Firestore write-object construction.
 // Band display order (strongest first) so groups read Masters → Challengers → Beginners.
 const BAND_ORDER: Record<string, number> = { Masters: 0, Challengers: 1, Beginners: 2 };
 
@@ -135,32 +130,6 @@ export function buildZoneTierGroups(
     label: autoLabel(i, sharedBand(g.players, bandOf), sharedZone(g.players, zoneOf)),
     players: g.players,
   }));
-}
-
-/** Circle-method round-robin: all unique [i, j] pairings (i < j). n=4 → 6 pairs; n=5 → 10. */
-export function generateGroupPairings(n: number): [number, number][] {
-  if (n < 2) return [];
-  const pairs: [number, number][] = [];
-
-  // Pad to even count; ghost player = -1 (a bye slot)
-  const padded = n % 2 === 0 ? n : n + 1;
-  const arr = Array.from({ length: padded }, (_, i) => (i < n ? i : -1));
-
-  for (let r = 0; r < padded - 1; r++) {
-    for (let i = 0; i < padded / 2; i++) {
-      const p1 = arr[i];
-      const p2 = arr[padded - 1 - i];
-      if (p1 !== -1 && p2 !== -1) {
-        pairs.push([Math.min(p1, p2), Math.max(p1, p2)]);
-      }
-    }
-    // Rotate: keep arr[0] fixed, rotate arr[1..padded-1]
-    const last = arr[padded - 1];
-    for (let i = padded - 1; i > 1; i--) arr[i] = arr[i - 1];
-    arr[1] = last;
-  }
-
-  return pairs;
 }
 
 /**

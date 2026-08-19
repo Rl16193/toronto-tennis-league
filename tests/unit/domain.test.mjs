@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSafeGroupRewrite, computeGroupStandings, generateGroupPairings, splitEvenly } from '../../src/pages/tournament/rrGeneration.ts';
-import { matchAward, setFieldsFrom } from '../../src/pages/tournament/utils.ts';
+import { buildSafeGroupRewrite, computeGroupStandings } from '../../src/pages/tournament/rrGeneration.ts';
+import { generateGroupPairings, splitEvenly } from '../../src/features/tournament/domain/roundRobin.ts';
+import { matchAward, setFieldsFrom } from '../../src/features/tournament/domain/scoring.ts';
 
 const player = (uid, name = uid) => ({ uid, name, skillLevel: 3 });
 

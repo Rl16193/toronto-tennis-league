@@ -4,6 +4,10 @@ import { EMAIL_REGEX } from '../../utils/emailRegex';
 import { DrawConfig, SkillGroup, SKILL_GROUP_ORDER, TemplateMatch, TournamentMatch, TournamentPlayer, UNASSIGNED_ZONE_ID, ZoneBucket, ZoneDrawConfig } from './types';
 import { ZONE_NAMES } from '../../utils/zones';
 
+// Compatibility exports keep existing page/feature consumers stable while the pure rules live in
+// the feature domain boundary.
+export { matchAward, NO_SHOW_POINTS, setFieldsFrom } from '../../features/tournament/domain/scoring';
+
 // Format a scheduled match date+slot as e.g. "Jul 4th, 6pm". Shared by the bracket and
 // round-robin opponent panels and the schedule controls so they read identically.
 export const formatScheduledDate = (d?: string, slot?: string) => {
@@ -30,52 +34,6 @@ export const formatSetScores = (m: ScoredSets): string => {
     [m.set_3_player_1 ?? 0, m.set_3_player_2 ?? 0],
   ];
   return pairs.filter(([a, b]) => a > 0 || b > 0).map(([a, b]) => `${a}-${b}`).join('  ');
-};
-
-/**
- * Absolute player_1/player_2 set fields from ordered [p1, p2] pairs — the one score shape every
- * result uses, tournament or not. Unused sets are written 0 so a re-score leaves no stale set.
- */
-export const setFieldsFrom = (pairs: [number, number][]) => ({
-  set_1_player_1: pairs[0]?.[0] ?? 0, set_1_player_2: pairs[0]?.[1] ?? 0,
-  set_2_player_1: pairs[1]?.[0] ?? 0, set_2_player_2: pairs[1]?.[1] ?? 0,
-  set_3_player_1: pairs[2]?.[0] ?? 0, set_3_player_2: pairs[2]?.[1] ?? 0,
-});
-
-/** Paid to BOTH players of a group match the organizer marks a no show. */
-export const NO_SHOW_POINTS = 1;
-
-/**
- * What one match awards, and to whom — the single source of truth for match scoring, read by both
- * the stats writer (useTournament) and the group table (computeGroupStandings).
- * Rules and history: CLAUDE.md, "Stats data flow".
- */
-export const matchAward = (m: Pick<TournamentMatch,
-  'format' | 'round' | 'no_show' | 'winner_uid' | 'player_1_uid' | 'player_2_uid'>) => {
-  const isRRGroupStage = m.format === 'rr' && m.round === 'RR';
-  const isFinal = m.round === 'F';
-
-  // Must be tested first — a no show has no winner, so every branch below mis-handles it.
-  if (m.no_show) {
-    return {
-      noShow: true, isRRGroupStage, isFinal,
-      winnerUid: null as string | null, loserUid: null as string | null,
-      winnerPts: NO_SHOW_POINTS, loserPts: NO_SHOW_POINTS, winnerPointsApply: true,
-    };
-  }
-
-  const LOSER_PTS: Record<string, number> = { R32: 1, R16: 2, QF: 3, RR: 1, SF: 5, F: 10 };
-  const winnerUid = m.winner_uid || null;
-  const loserUid = winnerUid
-    ? (winnerUid === m.player_1_uid ? m.player_2_uid : m.player_1_uid) || null
-    : null;
-  return {
-    noShow: false, isRRGroupStage, isFinal, winnerUid, loserUid,
-    winnerPts: isRRGroupStage ? 3 : 20,
-    loserPts: LOSER_PTS[m.round] ?? 1,
-    // RR group winners score live; a knockout winner only scores by taking the final.
-    winnerPointsApply: isFinal || isRRGroupStage,
-  };
 };
 
 export const PLAYER_LOADING = 'Player Loading';
