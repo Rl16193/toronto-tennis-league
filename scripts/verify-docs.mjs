@@ -49,6 +49,7 @@ const documentationRequirements = [
   {
     paths: [
       'src/features/signup',
+      'src/features/courts',
       'src/features/events/services',
       'src/features/matches',
       'src/features/tournament',
@@ -60,6 +61,21 @@ const documentationRequirements = [
     paths: ['scripts/migrations'],
     docs: [
       'docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md',
+      'docs/engineering/MAINTAINABILITY.md',
+      'docs/runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md',
+    ],
+  },
+  {
+    paths: [
+      'scripts/backfill-contacts.mjs',
+      'scripts/delete-stale-docs.mjs',
+      'scripts/set-stringer.mjs',
+      'scripts/seed-rewards.mjs',
+      'scripts/snapshot-ranks.mjs',
+    ],
+    docs: [
+      'docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md',
+      'docs/engineering/SECURITY_BASELINE.md',
       'docs/engineering/MAINTAINABILITY.md',
       'docs/runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md',
     ],
@@ -76,7 +92,8 @@ const changedFiles = () => {
         .filter(Boolean)
         .forEach((file) => names.add(file));
     } catch {
-      // A shallow checkout may not have the comparison base; the fallback below still checks docs.
+      // The fallback below is useful for a clean local checkout, but CI must use full history so
+      // an unavailable comparison cannot silently disable architecture-sensitive review checks.
     }
   };
   addGitNames(['diff', '--name-only', `${base}...HEAD`]);
@@ -88,8 +105,11 @@ const changedFiles = () => {
     return execFileSync('git', ['diff', '--name-only', 'HEAD~1...HEAD'], { cwd: root, encoding: 'utf8' })
       .split('\n')
       .filter(Boolean);
-  } catch {
-    return [];
+  } catch (error) {
+    throw new Error(
+      'Could not determine changed files for docs:verify. Use a full Git checkout or set ARCHITECTURE_BASE_SHA.',
+      { cause: error },
+    );
   }
 };
 

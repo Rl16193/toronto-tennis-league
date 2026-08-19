@@ -24,6 +24,10 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v6
+        with:
+          # docs:verify compares the change set to the branch tip; full history keeps that check
+          # fail-closed instead of silently skipping architecture-sensitive mappings.
+          fetch-depth: 0
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v7

@@ -48,6 +48,8 @@ npm run dev
 ```
 
 The Vite server uses port `3000`; the full Emulator Suite uses the ports declared in `firebase.json`.
+The emulator scripts explicitly select the synthetic `rands-local` project and do not use the
+production alias in `.firebaserc`.
 Firestore and Storage Rules test commands use temporary emulator configurations and select an
 available local port, which avoids collisions with unrelated services. Java is still required by
 the Firestore Emulator Suite. The repository pins `firebase-tools` and invokes the local binary;
@@ -79,7 +81,7 @@ Project architecture and security validation gaps are tracked in [docs/engineeri
 
 ## Firebase and deployment safety
 
-`.firebaserc` currently names `toronto-tennis-league`, which is production-sensitive. Routine development and QA must not use that project. `hosting:deploy` and `hosting:preview` now require `FIREBASE_DEPLOY_PROJECT_ID`; production also requires two explicit approval environment variables. Do not run a production action from this checkout without an approved environment plan or a bare Firebase deploy command.
+`.firebaserc` currently names `toronto-tennis-league`, which is production-sensitive. Routine development and QA must not use that project. `hosting:deploy` and `hosting:preview` now require `FIREBASE_DEPLOY_PROJECT_ID`; production also requires two explicit approval environment variables. Do not run a production action from this checkout without an approved environment plan. Do not run a bare Firebase deploy command; use the explicit-project, approval-gated workflow.
 
 For an isolated staging project, use the project ID supplied by the environment owner:
 
@@ -89,11 +91,11 @@ FIREBASE_DEPLOY_PROJECT_ID=<staging-project-id> npm run hosting:preview
 
 The guard script is `scripts/deploy-hosting.mjs`. It never infers the deployment project from `.firebaserc`.
 
-The next environment work is to establish:
+The remaining environment work is to establish:
 
 1. local Firebase emulators; **implemented in this commit**;
 2. an isolated staging project and explicit project selection;
-3. rules/Functions tests;
+3. callable/trigger integration tests against a local Functions emulator;
 4. approval-gated production deployment documentation.
 
 ## Architecture and engineering guidance

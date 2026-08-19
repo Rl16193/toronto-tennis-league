@@ -10,7 +10,7 @@ The checkout contains one Firebase project alias:
 default -> toronto-tennis-league
 ```
 
-`firebase.json` configures Firestore rules/indexes, Storage rules, Functions, Hosting, and local emulator ports. The checkout still has no staging project. The root package has local emulator, synthetic seed, `hosting:deploy`, and `hosting:preview` commands; Hosting commands require an explicit project decision because the CLI’s active project is production-sensitive. `firebase-tools` is pinned in root `devDependencies` and invoked from `node_modules/.bin`.
+`firebase.json` configures Firestore rules/indexes, Storage rules, Functions, Hosting, and local emulator ports. The checkout still has no staging project. The root package has local emulator, synthetic seed, `hosting:deploy`, and `hosting:preview` commands; emulator commands explicitly select `rands-local`, while Hosting commands require an explicit project decision because the CLI’s active project is production-sensitive. `firebase-tools` is pinned in root `devDependencies` and invoked from `node_modules/.bin`.
 
 ## Current delivery path
 

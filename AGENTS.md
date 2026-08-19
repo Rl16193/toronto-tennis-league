@@ -32,7 +32,11 @@
 ```bash
 npm ci
 npm run dev       # Vite on port 3000
-npm run lint      # TypeScript no-emit check
+npm run typecheck # TypeScript strict no-emit check
+npm run lint      # ESLint source, scripts, tests, and Functions checks
+npm run format:check
+npm run docs:verify
+npm run verify    # all configured local quality gates
 npm run build     # generates programs CSV, then Vite build
 npm test          # pure tournament/domain tests
 npm run preview
@@ -46,7 +50,10 @@ cd functions && npm test # pure Functions helper tests
 
 The root and Functions packages now have pure unit-test commands. Emulator wiring and initial Firestore/Storage Rules harnesses exist, but local execution still requires Java and callable/trigger integration coverage remains incomplete. Treat staging and full authorization coverage as stabilization work, not as completed capabilities.
 
-GitHub CI is defined at `.github/workflows/ci.yml` and runs dependency installation, typecheck, build, root domain tests, Firestore and Storage Rules tests, Functions unit tests, Functions syntax checks, and whitespace checks. It does not deploy or access Firebase.
+GitHub CI is defined at `.github/workflows/ci.yml` and runs dependency installation followed by
+`npm run verify`, including typecheck, ESLint, formatting, documentation freshness, root and
+Functions tests, Firestore and Storage Rules tests, Functions syntax checks, build, and whitespace
+checks. It does not deploy or access Firebase.
 
 ## Architecture pointers
 
