@@ -12,7 +12,8 @@
  * The `applied` stamp is written in the same transaction as the payout and checked first.
  * `status === 'confirmed'` is NOT proof of payment — the same defect already bit the RR +5 bonus.
  *
- * Deploy: firebase deploy --only functions:onFriendlyConfirmedAwardPoints
+ * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+ * do not use a bare Firebase deploy command from this checkout.
  */
 
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
@@ -20,6 +21,7 @@ const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 
 const { REGION } = require('./lib/constants');
+const { safeId } = require('./lib/logging');
 const db = () => admin.firestore();
 
 const WINNER_POINTS = 2;
@@ -70,7 +72,11 @@ exports.onFriendlyConfirmedAwardPoints = onDocumentUpdated(
 
         tx.set(ref, { applied: true, applied_at: new Date().toISOString() }, { merge: true });
       });
-      logger.info('friendlyPoints: paid', { id: event.params.id, winnerId, loserId });
+      logger.info('friendlyPoints: paid', {
+        id: safeId(event.params.id),
+        winner: safeId(winnerId),
+        loser: safeId(loserId),
+      });
     } catch (err) {
       logger.error('friendlyPoints: payout failed', { id: event.params.id, err: String(err) });
     }

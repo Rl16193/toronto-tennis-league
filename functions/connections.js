@@ -10,13 +10,15 @@
  * every contact read starts failing.
  *
  * Connections are permanent: revoking on match completion would strand people mid-arrangement.
- * Deploy: firebase deploy --only functions:onMatchConnection
+ * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+ * do not use a bare Firebase deploy command from this checkout.
  */
 const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 
 const { REGION } = require('./lib/constants');
+const { safeId } = require('./lib/logging');
 const db = () => admin.firestore();
 
 /** Order-independent pair id. Must match pairId() in firestore.rules exactly. */
@@ -34,7 +36,7 @@ async function linkPlayers(a, b, reason) {
     return true;
   } catch (err) {
     if (err.code === 6 || err.code === 'already-exists') return false; // already linked
-    logger.error('linkPlayers failed', { a, b, reason, err: err.message });
+    logger.error('linkPlayers failed', { a: safeId(a), b: safeId(b), reason, err: err.message });
     return false;
   }
 }
@@ -59,7 +61,7 @@ exports.onListingContact = onDocumentWritten(
 
     if (remaining.empty) {
       await ref.delete().catch(() => { /* already gone */ });
-      logger.info('public_contacts cleared', { uid });
+      logger.info('public_contacts cleared', { uid: safeId(uid) });
       return;
     }
     await ref.set({ uid, reason: 'listing', updated_at: new Date().toISOString() });
@@ -88,7 +90,7 @@ exports.onMatchConnection = onDocumentWritten(
       // anyone could harvest a phone number by firing off a challenge nobody answers.
       if (after.status !== 'accepted') return;
       if (await linkPlayers(a, b, after.category)) {
-        logger.info('connection created', { pair: pairId(a, b), reason: after.category });
+        logger.info('connection created', { pair: safeId(pairId(a, b)), reason: after.category });
       }
       return;
     }
@@ -96,7 +98,7 @@ exports.onMatchConnection = onDocumentWritten(
     // Tournament fixture: both slots filled with real players. PLAYER_LOADING placeholders carry
     // no uid, so they never reach here.
     if (await linkPlayers(a, b, 'tournament')) {
-      logger.info('connection created', { pair: pairId(a, b), reason: 'tournament' });
+      logger.info('connection created', { pair: safeId(pairId(a, b)), reason: 'tournament' });
     }
   },
 );

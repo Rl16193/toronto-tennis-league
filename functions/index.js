@@ -14,6 +14,7 @@ const path = require('path');
 const { LINK, buildWelcomeEmail } = require('./lib/emailTemplates');
 const { htmlToText } = require('./lib/htmlToText');
 const { EMAIL_FROM, EMAIL_REPLY_TO } = require('./lib/constants');
+const { safeId } = require('./lib/logging');
 
 admin.initializeApp();
 
@@ -74,12 +75,14 @@ exports.moderateUploadedImage = onObjectFinalized(
     }
 
     const bucketName = event.data.bucket;
-    let unsafe = false;
+    let unsafe;
     try {
       const [result] = await visionClient.safeSearchDetection(`gs://${bucketName}/${filePath}`);
       const s = result.safeSearchAnnotation || {};
       unsafe = UNSAFE.has(s.adult) || UNSAFE.has(s.violence) || UNSAFE.has(s.racy);
-      logger.info('SafeSearch result', { filePath, adult: s.adult, violence: s.violence, racy: s.racy, unsafe });
+      logger.info('SafeSearch result', {
+        file: safeId(filePath), adult: s.adult, violence: s.violence, racy: s.racy, unsafe,
+      });
     } catch (err) {
       logger.error('SafeSearch failed', err);
       return;
@@ -201,7 +204,7 @@ exports.sendWelcomeEmail = onDocumentUpdated(
         text: htmlToText(welcomeHtml),
         headers: { 'List-Unsubscribe': `<${LINK.profile}>` },
       });
-      logger.info('Welcome email sent', { email });
+      logger.info('Welcome email sent', { recipient: safeId(email.trim().toLowerCase()) });
     } catch (err) {
       logger.error('Failed to send welcome email:', err);
     }
@@ -237,7 +240,7 @@ const COLLECTION_MAP = [
 
 exports.syncFirestoreAndSheets = onSchedule(
   { schedule: '0 0 * * 6', timeZone: 'America/Toronto', region: 'us-central1' },
-  async (event) => {
+  async (_event) => {
   const { google } = require('googleapis');
 
   const auth = new google.auth.GoogleAuth({
@@ -260,8 +263,6 @@ exports.syncFirestoreAndSheets = onSchedule(
     });
     logger.info(`Created missing sheet tab(s): ${missingTabs.join(', ')}.`);
   }
-
-  const { where: fWhere } = require('firebase-admin/firestore');
 
   for (const config of COLLECTION_MAP) {
     const { collection, sheetTab, fields, where: wh } = config;

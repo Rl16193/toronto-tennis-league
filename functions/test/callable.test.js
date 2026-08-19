@@ -53,3 +53,10 @@ test('coupon and optional string helpers normalize input without changing empty 
   assert.equal(optionalTrimmedString('  note here  '), 'note here');
   assert.equal(optionalTrimmedString(null), '');
 });
+
+test('optional strings reject oversized operator notes', () => {
+  assert.throws(
+    () => optionalTrimmedString('x'.repeat(11), { maxLength: 10 }),
+    (error) => error instanceof HttpsError && error.code === 'invalid-argument',
+  );
+});

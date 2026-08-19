@@ -17,13 +17,15 @@
  * So this trigger's only job is the notification in case 1. Removing the player was the wrong
  * model and is deliberately absent: a player is never pulled out of matches that already exist.
  *
- * Deploy with: firebase deploy --only functions:onZoneChanged
+ * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+ * do not use a bare Firebase deploy command from this checkout.
  */
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const { notify } = require('./lib/notify');
 const { REGION } = require('./lib/constants');
+const { safeId } = require('./lib/logging');
 
 const db = () => admin.firestore();
 
@@ -94,10 +96,12 @@ exports.onZoneChanged = onDocumentUpdated(
           body: `${row.user_name || 'A player'} moved to ${after.preferred_zone}. They stay in their current matches; place them in the new zone's draw when you're ready.`,
           link: `/tournament?event=${row.event_id}`,
         });
-        logger.info(`Zone move: ${uid} → ${after.preferred_zone} in ${row.event_id}; organizer notified`);
+        logger.info('Zone move notification sent', {
+          member: safeId(uid), zone: after.preferred_zone, event: row.event_id,
+        });
       } catch (err) {
         // One event's failure must not stop the others.
-        logger.error(`Zone move notice failed for ${uid} in ${row.event_id}:`, err);
+        logger.error('Zone move notice failed', { member: safeId(uid), event: row.event_id, err });
       }
     }
   },

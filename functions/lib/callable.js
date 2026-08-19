@@ -22,8 +22,13 @@ function requireTrimmedString(value, message, { maxLength } = {}) {
   return trimmed;
 }
 
-function optionalTrimmedString(value) {
-  return typeof value === 'string' ? value.trim() : '';
+function optionalTrimmedString(value, { maxLength } = {}) {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (typeof maxLength === 'number' && trimmed.length > maxLength) {
+    throw new HttpsError('invalid-argument', 'Text is too long.');
+  }
+  return trimmed;
 }
 
 function normalizeCouponCode(value) {

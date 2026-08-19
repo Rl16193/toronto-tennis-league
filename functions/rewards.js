@@ -9,7 +9,8 @@
  * twice. Coupon codes ARE the redemption doc id, so uniqueness comes from create-if-absent
  * semantics rather than a query — no race window.
  *
- * Deploy: firebase deploy --only functions
+ * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+ * do not run a bare `firebase deploy` from this production-sensitive checkout.
  */
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { logger } = require('firebase-functions');
@@ -23,9 +24,12 @@ const {
 } = require('./lib/callable');
 const { earnedRsPoints } = require('./lib/points');
 const { notify, organizerUids } = require('./lib/notify');
+const { assertCouponStatus } = require('./lib/redemptionState');
+const { safeId } = require('./lib/logging');
 
 const db = () => admin.firestore();
 const nowISO = () => new Date().toISOString();
+const REDEMPTION_NOTE_MAX_LENGTH = 500;
 
 // Ambiguous glyphs (0/O, 1/I) left out so a code read aloud or off a phone screen can't be
 // mistyped at the counter.
@@ -139,7 +143,12 @@ exports.redeemReward = onCall({ region: REGION }, async (request) => {
       });
 
       if (result === null) continue; // collided, try another code
-      logger.info(`Redemption ${code} — ${uid} spent ${cost} on ${rewardId}`);
+      logger.info('Redemption created', {
+        redemption: safeId(code),
+        actor: safeId(uid),
+        reward: safeId(rewardId),
+        points: cost,
+      });
       return { code, redemption: result };
     } catch (err) {
       if (err instanceof HttpsError) throw err;
@@ -168,8 +177,7 @@ exports.markCouponUsed = onCall({ region: REGION }, async (request) => {
     if (!organizer && d.stringer_id !== myProviderId) {
       throw new HttpsError('permission-denied', 'That coupon isn’t for your shop.');
     }
-    if (d.status === 'used') throw new HttpsError('failed-precondition', 'That coupon was already used.');
-    if (d.status === 'cancelled') throw new HttpsError('failed-precondition', 'That coupon was cancelled.');
+    assertCouponStatus(d.status, 'use');
 
     tx.update(ref, { status: 'used', used_at: nowISO(), used_by: uid });
     return d;
@@ -191,7 +199,7 @@ exports.markCouponUsed = onCall({ region: REGION }, async (request) => {
 exports.flagCoupon = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
   const code = normalizeCouponCode(request.data && request.data.code);
-  const note = optionalTrimmedString(request.data && request.data.note);
+  const note = optionalTrimmedString(request.data && request.data.note, { maxLength: REDEMPTION_NOTE_MAX_LENGTH });
 
   const [organizer, myProviderId] = await Promise.all([isOrganizer(uid), providerIdFor(uid)]);
   const ref = db().doc(`redemptions/${code}`);
@@ -203,7 +211,7 @@ exports.flagCoupon = onCall({ region: REGION }, async (request) => {
     if (!organizer && d.stringer_id !== myProviderId) {
       throw new HttpsError('permission-denied', 'That coupon isn’t for your shop.');
     }
-    if (d.status === 'cancelled') throw new HttpsError('failed-precondition', 'That coupon was cancelled.');
+    assertCouponStatus(d.status, 'flag');
     tx.update(ref, {
       status: 'flagged',
       flagged_at: nowISO(),
@@ -230,7 +238,7 @@ exports.flagCoupon = onCall({ region: REGION }, async (request) => {
 exports.requestCancellation = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
   const code = normalizeCouponCode(request.data && request.data.code);
-  const reason = optionalTrimmedString(request.data && request.data.reason);
+  const reason = optionalTrimmedString(request.data && request.data.reason, { maxLength: REDEMPTION_NOTE_MAX_LENGTH });
 
   const ref = db().doc(`redemptions/${code}`);
   const redemption = await db().runTransaction(async (tx) => {
@@ -238,9 +246,7 @@ exports.requestCancellation = onCall({ region: REGION }, async (request) => {
     if (!snap.exists) throw new HttpsError('not-found', 'No coupon with that code.');
     const d = snap.data();
     if (d.uid !== uid) throw new HttpsError('permission-denied', 'That isn’t your coupon.');
-    if (d.status === 'used') throw new HttpsError('failed-precondition', 'That coupon has already been used.');
-    if (d.status === 'cancelled') throw new HttpsError('failed-precondition', 'That coupon is already cancelled.');
-    if (d.status === 'cancel_requested') throw new HttpsError('failed-precondition', 'A cancellation is already pending.');
+    assertCouponStatus(d.status, 'cancelRequest');
     tx.update(ref, {
       status: 'cancel_requested',
       cancel_requested_at: nowISO(),
@@ -270,16 +276,15 @@ exports.reviewRedemption = onCall({ region: REGION }, async (request) => {
 
   const code = normalizeCouponCode(request.data && request.data.code);
   const approve = request.data && request.data.approve === true;
-  const note = optionalTrimmedString(request.data && request.data.note);
+  const note = optionalTrimmedString(request.data && request.data.note, { maxLength: REDEMPTION_NOTE_MAX_LENGTH });
 
   const ref = db().doc(`redemptions/${code}`);
   const redemption = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'No coupon with that code.');
     const d = snap.data();
-    if (d.status === 'cancelled') throw new HttpsError('failed-precondition', 'That coupon is already cancelled.');
-
     if (!approve) {
+      assertCouponStatus(d.status, 'reviewDecline');
       // Declined — the coupon goes back to being spendable at the counter.
       tx.update(ref, {
         status: 'active',
@@ -289,6 +294,8 @@ exports.reviewRedemption = onCall({ region: REGION }, async (request) => {
       });
       return d;
     }
+
+    assertCouponStatus(d.status, 'reviewApprove');
 
     // Approved — refund. Read the spend counter inside the same transaction.
     const spentRef = db().doc(`offers/${d.uid}`);
