@@ -13,10 +13,9 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 
 ## Completed evidence
 
-Entries below the current-state update preserve historical observations from earlier stabilization
-passes. When an older entry says that Java, emulator tests, or Rules documentation were missing, it
-describes that earlier checkpoint; the dated maintainability update and current verifier output are
-the authoritative state for this branch.
+Entries below preserve historical observations from earlier stabilization passes. Current state is
+defined by the repository verifier and the linked architecture, security, and local-development
+documents; older entries are not current capability claims.
 
 | Commit    | Issue / root cause                                                                                                  | Files or evidence                                                                                            | Validation                                                                                                                                     | Remaining risk                                                                                                                    |
 | --------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -37,8 +36,8 @@ the authoritative state for this branch.
 
 1. Define explicit staging project selection and complete non-production smoke validation.
 2. Add recovery runbook validation against a non-production copy.
-3. Expand Functions integration coverage around callable authorization and idempotency.
-4. Consolidate role authorization and tournament scoring behind server-authoritative paths.
+3. Define an explicit, consent-based preference projection before enabling cross-member discovery.
+4. Triage dependency audit warnings without broad or unsafe upgrades.
 
 ## Deployment guard evidence
 
@@ -52,21 +51,21 @@ the authoritative state for this branch.
 
 - `npm ci` completed for root and Functions dependencies.
 - `npm run lint` passed.
-- `npm test` passed with 6 pure tournament/domain tests.
-- `cd functions && npm test` passed with 4 pure Functions helper tests.
+- `npm test` passes 35 root unit tests.
+- `cd functions && npm test` passes 27 Functions unit tests.
 - `npm run build` passed; it emits the generated programs CSV and Vite `dist/` output.
 - Architecture diagrams are now six Mermaid Markdown files under `docs/architecture/diagrams/`; the former HTML/SVG pairs and project-local diagram skill were removed.
-- Emulator configuration is present and the CLI was invoked with synthetic project ID `rands-local`; startup was previously blocked by the host’s missing Java runtime (`java -version` exit 1). A later rules-test invocation also hung during CLI package resolution and was stopped without connecting to Firebase.
-- Initial Firestore Rules tests cover preference role self-assignment, contact ownership/privacy, server-only connection markers, task point minting, member stats point writes, UID substitution on member stats, and admin metric access. They are wired into `npm run test:rules` and CI but have not passed locally because the emulator prerequisite is unresolved.
+- Emulator configuration is exercised only with synthetic project ID `rands-local`; local Java 21 and isolated-port launchers are documented and verified.
+- Firestore Rules pass 29 tests and Storage Rules pass 5 tests. Synthetic fixture smoke testing seeds 4 Auth users and 32 Firestore documents.
 - The `stats/{uid}` Rules boundary now preserves the document UID on member create/update; TypeScript, test-file syntax, and whitespace checks passed.
 - Member preference writes now allow only documented self-service fields; provider identifiers and role flags remain super-admin-only. The test covers safe preference updates, role-field injection, and UID substitution.
 - GitHub Actions run `32211081070` passed the final CI job: Java setup, web dependencies, typecheck, build, root domain tests, Firestore and Storage Rules tests, Functions dependencies/unit tests/syntax, and whitespace checks.
 - The synthetic fixture module covers member, organizer, provider, multi-role, profile/contact, event/RR draft, match, task/reward, marketplace, notification, court, and aggregate documents. Production project IDs are rejected before emulator initialization.
 - Storage reads are now explicit: LandingPage, Gallery, avatars, and listings are public; report/suggestion paths require authentication and owner scope. Anonymous report writes remain limited to the `court_reports/anon/` prefix.
 - Email delivery is environment-gated: emulator delivery is blocked, non-production delivery requires `EMAIL_DELIVERY_ENABLED=true` plus an exact `EMAIL_ALLOWED_RECIPIENTS` entry, and production delivery is recognized only by the production project ID. Resend/DNS status remains unverified.
-- Final gstack review pass over the `dev-anuj` history found no unresolved data-safety, race, shell-injection, enum, testing, maintainability, security, or performance findings. Retro lesson: keep environment guards and deterministic fixtures as pure helpers so they stay testable without credentials or external Firebase state.
+- Functions emulator integration passes 11 tests, and the browser suite passes 5 local-emulator journeys covering login, signup bootstrap, event join, tournament result application, and advancement.
 - `npm audit --json` could not refresh in the original validation environment because the npm registry DNS lookup failed; install-time audit warnings remain untriaged.
-- Firebase Rules emulator tests remain unverified locally because Java/CLI resolution is unresolved; no production Firebase command was run.
+- No production Firebase command was run. Staging, backup recovery, provider configuration, and production deployment remain explicit external gates.
 
 ## Handoff rule
 
@@ -80,12 +79,12 @@ Every later stabilization issue should add its evidence, validation, commit, and
 - TypeScript full `strict` mode, no-implicit-return, and no-fallthrough checks pass. The legacy
   `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` migration remains open.
 - The local Rules wrappers select temporary ports and use the installed Java 21 runtime. The
-  Firestore suite passes 16 tests and the Storage suite passes 4 tests locally; this is source/rules
+  Firestore suite passes 29 tests and the Storage suite passes 5 tests locally; this is source/rules
   evidence, not deployed Firebase evidence. The isolated fixture smoke test also starts temporary
   Auth/Firestore emulators and exercises the synthetic seed command.
 - The full `npm run emulators` launcher keeps the conventional `firebase.json` ports for app
-  development and adds the local Java 21 fallback. A port conflict still requires stopping the
-  conflicting service or using the temporary-port test commands.
+  development and adds the local Java 21 fallback. Alternate local ports are supported through a
+  local ignored Firebase config plus matching Vite and Admin emulator host variables.
 - The local seed command defines four synthetic Auth users alongside the Firestore fixture set and
   refuses non-local Auth targets. Emulator credentials are stored only in the synthetic fixture file.
 - Tournament scoring/Round Robin primitives, signup validation, event participant access, and the

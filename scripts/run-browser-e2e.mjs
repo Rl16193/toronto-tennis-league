@@ -123,9 +123,9 @@ const outer = async () => {
     VITE_FUNCTIONS_EMULATOR_PORT: String(functionsPort),
     VITE_FIREBASE_STORAGE_EMULATOR_PORT: String(storagePort),
   };
-  const buildCode = await run(executable('vite'), ['build'], { env: buildEnv });
+  const buildDir = path.join(tempDir, 'dist');
+  const buildCode = await run(executable('vite'), ['build', '--outDir', buildDir, '--emptyOutDir'], { env: buildEnv });
   if (buildCode !== 0) throw new Error('Browser emulator build failed.');
-  await symlink(path.join(root, 'dist'), path.join(tempDir, 'dist'));
   await writeFile(
     path.join(functionsDir, 'index.js'),
     [
@@ -185,7 +185,8 @@ const outer = async () => {
     RANDS_E2E_STORAGE_PORT: String(storagePort),
     PLAYWRIGHT_BASE_URL: `http://127.0.0.1:${hostingPort}`,
     RANDS_E2E_SIGNUP_LOOKUP_URL: `http://127.0.0.1:${functionsPort}/rands-local/us-central1/checkSignupEmail`,
-    RANDS_E2E_EVIDENCE_DIR: process.env.RANDS_E2E_EVIDENCE_DIR || path.join(root, 'test-results', 'browser-evidence'),
+    RANDS_E2E_EVIDENCE_DIR: process.env.RANDS_E2E_EVIDENCE_DIR || path.join(tempDir, 'browser-evidence'),
+    RANDS_E2E_OUTPUT_DIR: path.join(tempDir, 'playwright-results'),
     GCLOUD_PROJECT: 'rands-local',
     GOOGLE_CLOUD_PROJECT: 'rands-local',
     PATH: existsSync(path.join(homebrewJava, 'bin', 'java'))
