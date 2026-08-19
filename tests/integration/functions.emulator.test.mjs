@@ -167,8 +167,9 @@ test('friendly confirmation pays once across a replayed transition', async () =>
     set_2_player_2: 2,
     set_3_player_1: 0,
     set_3_player_2: 0,
+    reported_by: loserId,
   });
-  await ref.update({ status: 'confirmed' });
+  await ref.update({ status: 'confirmed', confirmed_by: winnerId });
   await waitFor(
     async () => (await ref.get()).data(),
     (value) => value?.applied === true,
@@ -176,7 +177,7 @@ test('friendly confirmation pays once across a replayed transition', async () =>
   assert.equal((await db.doc(`stats/${winnerId}`).get()).data().leaguePoints26, 2);
   assert.equal((await db.doc(`stats/${loserId}`).get()).data().leaguePoints26, 1);
   await ref.update({ status: 'reported' });
-  await ref.update({ status: 'confirmed' });
+  await ref.update({ status: 'confirmed', confirmed_by: winnerId });
   await new Promise((resolve) => setTimeout(resolve, 750));
   assert.equal((await db.doc(`stats/${winnerId}`).get()).data().leaguePoints26, 2);
   assert.equal((await db.doc(`stats/${loserId}`).get()).data().leaguePoints26, 1);
@@ -198,8 +199,9 @@ test('friendly confirmation refuses an unrelated winner', async () => {
     set_2_player_2: 2,
     set_3_player_1: 0,
     set_3_player_2: 0,
+    reported_by: playerTwo,
   });
-  await ref.update({ status: 'confirmed' });
+  await ref.update({ status: 'confirmed', confirmed_by: playerOne });
   await new Promise((resolve) => setTimeout(resolve, 750));
   assert.equal((await ref.get()).data().applied, undefined);
   assert.equal((await db.doc(`stats/${playerOne}`).get()).exists, false);

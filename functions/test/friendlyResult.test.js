@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { isValidFriendlyResult, winnerFor } = require('../lib/friendlyResult');
+const { isValidFriendlyResult, isValidFriendlyTransition, winnerFor } = require('../lib/friendlyResult');
 
 const valid = {
   player_1_uid: 'member-a',
@@ -32,4 +32,25 @@ test('legacy claimed winner remains supported when the current field is absent',
   const legacy = { ...valid, winner_uid: undefined, claimed_winner_uid: 'member-b' };
   assert.equal(isValidFriendlyResult(legacy), true);
   assert.equal(winnerFor(legacy), 'member-b');
+});
+
+test('friendly payout requires a genuine second-party reported-to-confirmed transition', () => {
+  const before = {
+    ...valid,
+    category: 'rally',
+    event_id: 'event-a',
+    status: 'reported',
+    reported_by: 'member-a',
+  };
+  const after = {
+    ...before,
+    status: 'confirmed',
+    confirmed_by: 'member-b',
+  };
+
+  assert.equal(isValidFriendlyTransition(before, after), true);
+  assert.equal(isValidFriendlyTransition({ ...before, category: 'singles' }, after), false);
+  assert.equal(isValidFriendlyTransition(before, { ...after, player_2_uid: 'outsider' }), false);
+  assert.equal(isValidFriendlyTransition(before, { ...after, confirmed_by: 'member-a' }), false);
+  assert.equal(isValidFriendlyTransition({ ...before, status: 'scheduled' }, after), false);
 });

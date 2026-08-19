@@ -1,6 +1,7 @@
 const nodeCrypto = require('node:crypto');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { FieldValue } = require('firebase-admin/firestore');
 
 const { REGION } = require('./lib/constants');
 const { requireAuth, requireTrimmedString } = require('./lib/callable');
@@ -205,7 +206,7 @@ exports.applyTournamentResult = onCall({ region: REGION }, async (request) => {
         const increments = Object.fromEntries(
           Object.entries(delta).map(([key, value]) => [
             key,
-            typeof value === 'number' ? admin.firestore.FieldValue.increment(value) : value,
+            typeof value === 'number' ? FieldValue.increment(value) : value,
           ]),
         );
         tx.set(db().collection('stats').doc(uid), increments, { merge: true });

@@ -418,6 +418,7 @@ service cloud.firestore {
             isSuperAdmin()
           ) &&
           request.resource.data.status in ['confirmed', 'disputed'] &&
+          request.resource.data.confirmed_by == request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys()
             // `completed_at` is stamped here too — a confirm is the moment a friendly becomes a
             // played result. Omitting it rejected every confirm, which is the payout transition.
@@ -432,6 +433,11 @@ service cloud.firestore {
         (
           'event_id' in resource.data &&
           isManagerOfEvent(resource.data.event_id) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'event_id', 'category', 'tournament_choice',
+            'player_1_uid', 'player_2_uid', 'player_1_partner_uid', 'player_2_partner_uid',
+            'source_match_id', 'source_submission_id'
+          ]) &&
           (
             !(resource.data.category in ['singles', 'doubles'] &&
               resource.data.tournament_choice in ['Singles', 'Doubles']) ||

@@ -29,4 +29,22 @@ const isValidFriendlyResult = (match) => {
   );
 };
 
-module.exports = { SCORE_FIELDS, winnerFor, isValidFriendlyResult };
+const isValidFriendlyTransition = (before, after) => {
+  const confirmer = after.confirmed_by;
+  return Boolean(
+    before.category === 'rally' &&
+    after.category === 'rally' &&
+    before.status === 'reported' &&
+    after.status === 'confirmed' &&
+    before.event_id === after.event_id &&
+    before.player_1_uid === after.player_1_uid &&
+    before.player_2_uid === after.player_2_uid &&
+    before.reported_by &&
+    confirmer &&
+    confirmer !== before.reported_by &&
+    [after.player_1_uid, after.player_2_uid].includes(confirmer) &&
+    isValidFriendlyResult(after),
+  );
+};
+
+module.exports = { SCORE_FIELDS, winnerFor, isValidFriendlyResult, isValidFriendlyTransition };

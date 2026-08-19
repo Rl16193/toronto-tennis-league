@@ -22,7 +22,7 @@ const admin = require('firebase-admin');
 
 const { REGION } = require('./lib/constants');
 const { safeId } = require('./lib/logging');
-const { isValidFriendlyResult, winnerFor } = require('./lib/friendlyResult');
+const { isValidFriendlyTransition, winnerFor } = require('./lib/friendlyResult');
 const db = () => admin.firestore();
 
 const WINNER_POINTS = 2;
@@ -33,8 +33,14 @@ exports.onFriendlyConfirmedAwardPoints = onDocumentUpdated(
   async (event) => {
     const before = event.data?.before.data() || {};
     const after = event.data?.after.data() || {};
-    if (after.category !== 'rally') return;
-    if (before.status === 'confirmed' || after.status !== 'confirmed') return;
+    if (!isValidFriendlyTransition(before, after)) {
+      if (after.category === 'rally' && after.status === 'confirmed') {
+        logger.warn('friendlyPoints: invalid confirmation transition, skipping payout', {
+          id: safeId(event.params.id),
+        });
+      }
+      return;
+    }
 
     // `winner_uid` is the current field; `claimed_winner_uid` is what rallies used before results
     // were normalised to the tournament shape. Reading both means this keeps paying whichever
@@ -42,10 +48,6 @@ exports.onFriendlyConfirmedAwardPoints = onDocumentUpdated(
     const winnerId = winnerFor(after);
     const p1 = after.player_1_uid;
     const p2 = after.player_2_uid;
-    if (!isValidFriendlyResult(after)) {
-      logger.warn('friendlyPoints: invalid result, skipping payout', { id: safeId(event.params.id) });
-      return;
-    }
     const loserId = winnerId === p1 ? p2 : p1;
     if (loserId === winnerId) return;
 

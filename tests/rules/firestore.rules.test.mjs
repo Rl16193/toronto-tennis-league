@@ -509,6 +509,18 @@ describe('Firestore authorization boundaries', () => {
       }),
     );
 
+    await assertFails(
+      updateDoc(doc(dbFor('organizer-a'), 'matches/tournament-a'), {
+        category: 'rally',
+        player_1_uid: 'organizer-a',
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(dbFor('organizer-a'), 'matches/tournament-a'), {
+        event_id: 'unrelated-event',
+      }),
+    );
+
     await assertSucceeds(
       setDoc(doc(dbFor('member-a'), 'matches/submission-a'), {
         id: 'submission-a',
