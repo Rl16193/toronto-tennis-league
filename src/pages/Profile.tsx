@@ -26,6 +26,7 @@ import { NearbyPill } from '../components/NearbyPill';
 import { AvailabilityPills } from '../components/AvailabilityPills';
 import { Toast } from '../components/Toast';
 import { useBadgeToast } from '../features/tasks/useBadgeToast';
+import { normalizeContactData, normalizeUserPreferences, normalizeUserStats } from '../lib/firestoreNormalization';
 
 // Marks that this browser has already been shown the Initiation checklist expanded once.
 const TASKS_SEEN_KEY = 'rs-profile-tasks-seen';
@@ -86,7 +87,11 @@ export const Profile: React.FC = () => {
     const ids = [...new Set(upcoming.map((o) => o.opponentId).filter(Boolean))].filter((id) => !opponentContacts[id]);
     if (ids.length === 0) return;
     Promise.all(
-      ids.map((id) => getDoc(doc(db, 'contacts', id)).then((s) => [id, s.data() as ContactData | undefined] as const)),
+      ids.map((id) =>
+        getDoc(doc(db, 'contacts', id)).then(
+          (s) => [id, s.exists() ? normalizeContactData(s.data()) : undefined] as const,
+        ),
+      ),
     )
       .then((entries) => {
         const found = entries.filter((e): e is [string, ContactData] => !!e[1]);
@@ -102,15 +107,21 @@ export const Profile: React.FC = () => {
   useEffect(() => {
     const ids = [...new Set(upcoming.map((o) => o.opponentId).filter(Boolean))].filter((id) => !(id in opponentCourts));
     if (ids.length === 0) return;
-    Promise.all(ids.map((id) => getDoc(doc(db, 'preferences', id)).then((s) => [id, s.data()] as const)))
+    Promise.all(
+      ids.map((id) =>
+        getDoc(doc(db, 'preferences', id)).then(
+          (s) => [id, s.exists() ? normalizeUserPreferences(s.data()) : null] as const,
+        ),
+      ),
+    )
       .then((entries) => {
         setOpponentCourts((prev) => ({
           ...prev,
-          ...Object.fromEntries(entries.map(([id, d]) => [id, (d?.preferred_courts as string[]) || []])),
+          ...Object.fromEntries(entries.map(([id, d]) => [id, d?.preferred_courts ?? []])),
         }));
         setOpponentAvailability((prev) => ({
           ...prev,
-          ...Object.fromEntries(entries.map(([id, d]) => [id, (d?.availability_tags as string[]) || []])),
+          ...Object.fromEntries(entries.map(([id, d]) => [id, d?.availability_tags ?? []])),
         }));
       })
       .catch(() => {});
@@ -122,11 +133,15 @@ export const Profile: React.FC = () => {
   useEffect(() => {
     const ids = [...new Set(upcoming.map((o) => o.opponentId).filter(Boolean))].filter((id) => !(id in opponentSkill));
     if (ids.length === 0) return;
-    Promise.all(ids.map((id) => getDoc(doc(db, 'stats', id)).then((s) => [id, s.data()] as const)))
+    Promise.all(
+      ids.map((id) =>
+        getDoc(doc(db, 'stats', id)).then((s) => [id, s.exists() ? normalizeUserStats(s.data()) : null] as const),
+      ),
+    )
       .then((entries) => {
         setOpponentSkill((prev) => ({
           ...prev,
-          ...Object.fromEntries(entries.map(([id, d]) => [id, (d?.skill_level as number) || 0])),
+          ...Object.fromEntries(entries.map(([id, d]) => [id, d?.skill_level ?? 0])),
         }));
       })
       .catch(() => {});

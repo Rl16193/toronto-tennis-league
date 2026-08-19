@@ -3,6 +3,7 @@ import { db } from '../../../lib/firebase';
 import {
   normalizeEvent,
   normalizeEventParticipant,
+  normalizeScoreSubmission,
   normalizeTournamentMatch,
 } from '../../../lib/firestoreNormalization';
 import type { EventParticipant, TennisEvent } from '../../../types';
@@ -43,7 +44,8 @@ export const subscribeScoreSubmissions = (
     (snapshot) =>
       onValue(
         snapshot.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }) as ScoreSubmissionDoc)
+          .map((doc) => normalizeScoreSubmission(doc.id, doc.data()))
+          .filter((item): item is ScoreSubmissionDoc => item !== null)
           .filter((item) => !item.resolved),
       ),
     onError,

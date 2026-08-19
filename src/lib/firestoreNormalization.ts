@@ -1,5 +1,5 @@
 import type { ContactData, EventParticipant, TennisEvent, UserData, UserPreferences, UserStats } from '../types';
-import type { TournamentMatch } from '../features/tournament/types';
+import type { ScoreSubmissionDoc, TournamentMatch } from '../pages/tournament/types';
 import { resolveZoneConfig } from '../features/tournament/domain/placement';
 
 type UnknownRecord = Record<string, unknown>;
@@ -154,5 +154,43 @@ export const normalizeContactData = (value: unknown): ContactData => {
     preferred_mode_of_contact: strings(data.preferred_mode_of_contact).filter(
       (method): method is 'email' | 'text' | 'whatsapp' => ['email', 'text', 'whatsapp'].includes(method),
     ),
+  };
+};
+
+export const normalizeScoreSubmission = (id: string, value: unknown): ScoreSubmissionDoc | null => {
+  const data = record(value);
+  if (data.category !== 'score_submission') return null;
+  const eventId = string(data.event_id).trim();
+  const matchId = string(data.match_id).trim();
+  const submittedBy = string(data.submitted_by).trim();
+  if (!eventId || !matchId || !submittedBy) return null;
+  const resolved = ['confirmed', 'rejected', 'superseded'].includes(string(data.resolved))
+    ? (data.resolved as ScoreSubmissionDoc['resolved'])
+    : undefined;
+  return {
+    id,
+    category: 'score_submission',
+    event_id: eventId,
+    match_id: matchId,
+    match_round: string(data.match_round),
+    draw_label: string(data.draw_label),
+    player_1_name: string(data.player_1_name),
+    player_2_name: string(data.player_2_name),
+    submitted_by: submittedBy,
+    submitted_by_name: string(data.submitted_by_name),
+    claimed_winner_name: string(data.claimed_winner_name),
+    claimed_winner_uid: string(data.claimed_winner_uid),
+    set_1_player_1: number(data.set_1_player_1),
+    set_1_player_2: number(data.set_1_player_2),
+    set_2_player_1: number(data.set_2_player_1),
+    set_2_player_2: number(data.set_2_player_2),
+    set_3_player_1: number(data.set_3_player_1),
+    set_3_player_2: number(data.set_3_player_2),
+    is_walkover: boolean(data.is_walkover),
+    created_at: string(data.created_at),
+    ...(string(data.court) ? { court: string(data.court) } : {}),
+    ...(resolved ? { resolved } : {}),
+    ...(string(data.resolved_at) ? { resolved_at: string(data.resolved_at) } : {}),
+    ...(string(data.resolved_by) ? { resolved_by: string(data.resolved_by) } : {}),
   };
 };

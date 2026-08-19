@@ -1108,7 +1108,8 @@ export const useTournament = (eventIdOverride?: string) => {
       (snap) =>
         setScheduleRequests(
           snap.docs
-            .map((d) => ({ id: d.id, ...d.data() }) as TournamentMatch)
+            .map((d) => normalizeTournamentMatch(d.id, d.data()))
+            .filter((m): m is TournamentMatch => m !== null)
             .filter((m) => m.status !== 'complete' && mine.has(m.event_id))
             .map((m) => ({ ...m, event_title: mine.get(m.event_id) ?? '' })),
         ),
