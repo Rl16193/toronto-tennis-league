@@ -185,6 +185,7 @@ const outer = async () => {
     RANDS_E2E_STORAGE_PORT: String(storagePort),
     PLAYWRIGHT_BASE_URL: `http://127.0.0.1:${hostingPort}`,
     RANDS_E2E_SIGNUP_LOOKUP_URL: `http://127.0.0.1:${functionsPort}/rands-local/us-central1/checkSignupEmail`,
+    RANDS_E2E_EVIDENCE_DIR: process.env.RANDS_E2E_EVIDENCE_DIR || path.join(root, 'test-results', 'browser-evidence'),
     GCLOUD_PROJECT: 'rands-local',
     GOOGLE_CLOUD_PROJECT: 'rands-local',
     PATH: existsSync(path.join(homebrewJava, 'bin', 'java'))

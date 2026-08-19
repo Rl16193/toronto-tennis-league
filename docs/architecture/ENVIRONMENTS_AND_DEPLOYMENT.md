@@ -15,9 +15,9 @@ local -> rands-local
 The full-suite launcher preflights every configured emulator port and names conflicts before
 Firebase starts. It accepts only `--config <local-file>` as an optional argument and continues to
 force `rands-local`. An ignored `firebase.local.json` with alternate ports supports Firebase CLI,
-Admin SDK, and isolated emulator work. The browser client currently connects to the conventional
-Auth, Firestore, Functions, and Storage ports in `src/lib/firebase.ts`, so full application work
-must either keep those ports or deliberately update the client boundary in a reviewed change.
+Admin SDK, and isolated emulator work. For a complete browser workflow on alternate ports, mirror
+the chosen Auth, Firestore, Functions, and Storage ports with the documented
+`VITE_*_EMULATOR_PORT` values in `.env.local`; Hosting and Emulator UI ports need no Vite override.
 
 The executable deployment guard is intentionally Hosting-only. This code-only checkout does not
 provide a full Rules/Storage/Functions release command because no authorized staging project or
