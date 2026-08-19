@@ -22,6 +22,7 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 | `fe6ae63` | Hosting scripts could inherit the production-sensitive `.firebaserc` project. | `scripts/deploy-hosting.mjs`, `package.json`, `README.md` | Missing-project and production-without-approval guard paths both refused safely; no deploy ran. | Authorized staging project and production approval workflow remain external gates. |
 | `d636fb3` | Separate HTML/SVG diagram artifacts were difficult to view and maintain. | `docs/architecture/diagrams/*.md`, architecture links, skill inventory | Six Mermaid Markdown files, one block each; no HTML/SVG references remain. | Mermaid rendering depends on the Markdown viewer; no separate export is maintained. |
 | Current | Provider role fields were writable by the member owner even though redemptions access trusts them. | `firestore.rules`, `tests/rules/firestore.rules.test.mjs` | TypeScript, Rules test syntax, and diff checks passed; emulator startup reached the missing-Java failure. | Rules assertions still need a Java-enabled emulator run. |
+| Current | GitHub CI failed at `Firestore Rules tests` because the workflow did not provision Java for the Firestore emulator. | `.github/workflows/ci.yml` | Public run `32209659003` confirmed typecheck/build passed and Rules tests failed; the workflow now provisions Temurin Java 21 before the test. | The pushed correction must be confirmed by the next GitHub Actions run. |
 
 ## Current issue queue
 
@@ -37,7 +38,7 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 
 ## CI evidence
 
-`.github/workflows/ci.yml` now runs on `dev-anuj` pushes and pull requests. It installs Node.js 22, runs `npm ci`, `npm run lint`, `npm run build`, installs Functions dependencies, checks Functions JavaScript syntax, and runs `git diff --check`. It intentionally does not deploy, authenticate to Firebase, or claim that rules/emulator tests exist.
+`.github/workflows/ci.yml` now runs on `dev-anuj` pushes and pull requests. It installs Node.js 22 and Temurin Java 21, runs `npm ci`, `npm run lint`, `npm run build`, runs the Firestore Rules suite, installs Functions dependencies, checks Functions JavaScript syntax, and runs `git diff --check`. It intentionally does not deploy or authenticate to Firebase.
 
 ## Validation record
 
