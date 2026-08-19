@@ -42,7 +42,7 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
     {
       "check": "Tracked secrets",
       "severity": "minor",
-      "issue": "The tracked-file scan found no concrete secret values. Runtime credentials such as RESEND_API_KEY are referenced by name and must remain environment-provided; repository history and external CI secrets were not exhaustively audited here.",
+      "issue": "The tracked-file scan found no private key, service-account credential, or Resend secret. A vendored gstack renderer contains a Firebase client API key from its upstream build; client keys are not service credentials, but the artifact should remain separately reviewed from application secrets. Repository history and external CI secrets were not exhaustively audited here.",
       "recommendation": "Keep credentials outside the repository, add secret scanning to CI, and review repository history plus Firebase/GitHub secret stores before any production handoff."
     }
   ]
@@ -55,7 +55,7 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
 - Storage writes are authenticated and type/size constrained for named prefixes. The current source permits public reads only for LandingPage, Gallery, avatars, and listings; report/suggestion reads are owner/authentication constrained.
 - `src/pages/tournament/useTournament.ts` contains direct `stats` writes for tournament points; Functions contain separate task/friendly-point award logic.
 - Pure domain coverage now exercises Round Robin grouping/pairings, standings, scoring awards, safe rewrites, and the server reward-point calculator. Functions integration tests against the Admin SDK and callable runtime remain open.
-- A tracked-file scan was performed for common credential patterns. It did not prove that secrets are absent from Git history, deployment configuration, or third-party systems.
+- A tracked-file scan was performed for common credential patterns. It found no private key, service-account credential, or Resend secret in application files; the vendored gstack renderer includes an upstream Firebase client key, which is not a service credential. The scan did not prove that secrets are absent from Git history, deployment configuration, or third-party systems.
 - `npm run lint`, `npm test`, `cd functions && npm test`, and `npm run build` pass locally. GitHub Actions run `32211081070` passed the complete CI job, including Java setup, both Rules suites, root domain tests, and Functions unit tests. Local Rules emulator execution remains blocked by the macOS Java prerequisite. `npm audit --json` could not refresh because `registry.npmjs.org` did not resolve from this environment.
 
 ## Required gates before production changes
