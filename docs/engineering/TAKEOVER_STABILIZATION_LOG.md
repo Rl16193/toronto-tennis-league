@@ -27,6 +27,10 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 4. Add GitHub CI for typecheck, build, rules tests, Functions tests, and security checks.
 5. Consolidate role authorization and tournament scoring behind server-authoritative paths.
 
+## CI evidence
+
+`.github/workflows/ci.yml` now runs on `dev-anuj` pushes and pull requests. It installs Node.js 22, runs `npm ci`, `npm run lint`, `npm run build`, installs Functions dependencies, checks Functions JavaScript syntax, and runs `git diff --check`. It intentionally does not deploy, authenticate to Firebase, or claim that rules/emulator tests exist.
+
 ## Validation record
 
 - `npm ci` completed for root and Functions dependencies.

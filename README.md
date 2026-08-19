@@ -47,6 +47,8 @@ npm run dev
 
 The Vite server uses port `3000`; the emulator UI uses port `4000`. Local Auth, Firestore, Functions, Storage, and Hosting use the ports declared in `firebase.json`. Firestore emulator startup requires Java; the current validation machine does not have a Java runtime, so emulator execution remains blocked until that prerequisite is installed. Rules tests and seeded fixtures are still pending, so an emulator running is not by itself evidence of complete QA.
 
+GitHub CI runs on pushes and pull requests targeting `dev-anuj`. It currently checks the root typecheck/build and Functions JavaScript syntax; it does not deploy or connect to Firebase.
+
 ## Validation commands
 
 ```bash

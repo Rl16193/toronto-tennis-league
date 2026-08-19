@@ -35,9 +35,12 @@ npm run dev       # Vite on port 3000
 npm run lint      # TypeScript no-emit check
 npm run build     # generates programs CSV, then Vite build
 npm run preview
+npm run emulators # local Firebase suite; requires Java for Firestore
 ```
 
-There is currently no root test script, Functions test script, emulator configuration, or staging configuration. Treat those as stabilization work, not as completed capabilities.
+There is currently no root test script, Functions test script, emulator-backed rules harness, or staging configuration. Emulator wiring exists, but execution still requires Java and fixtures/tests are not yet configured. Treat rules tests and staging as stabilization work, not as completed capabilities.
+
+GitHub CI is defined at `.github/workflows/ci.yml` and currently runs the verified typecheck, build, Functions dependency install, Functions syntax check, and whitespace check. It does not deploy or access Firebase.
 
 ## Architecture pointers
 

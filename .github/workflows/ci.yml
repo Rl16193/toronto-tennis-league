@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - dev-anuj
+  pull_request:
+    branches:
+      - dev-anuj
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Typecheck, build, and Functions syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.x'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run lint
+
+      - name: Build web application
+        run: npm run build
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Check Functions JavaScript syntax
+        working-directory: functions
+        shell: bash
+        run: |
+          find . -path '*/node_modules' -prune -o -type f -name '*.js' -print0 \
+            | xargs -0 -n1 node --check
+
+      - name: Check patch whitespace
+        run: git diff --check
