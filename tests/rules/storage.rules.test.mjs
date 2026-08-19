@@ -11,13 +11,17 @@ import {
 const here = dirname(fileURLToPath(import.meta.url));
 const rules = await readFile(resolve(here, '../../storage.rules'), 'utf8');
 const bucket = 'gs://rands-local.appspot.com';
+const storageHost = (process.env.STORAGE_EMULATOR_HOST || '127.0.0.1')
+  .replace(/^https?:\/\//, '')
+  .replace(/:\d+$/, '');
+const storagePort = Number(process.env.STORAGE_EMULATOR_PORT || 9199);
 
 let testEnv;
 
 before(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: 'rands-local',
-    storage: { host: '127.0.0.1', port: 9199, rules },
+    storage: { host: storageHost, port: storagePort, rules },
   });
 });
 
