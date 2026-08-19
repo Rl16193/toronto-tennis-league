@@ -5,8 +5,7 @@ import {
   signInWithEmailAndPassword, sendPasswordResetEmail,
   linkWithCredential, type OAuthCredential,
 } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { auth, db, setAuthPersistence } from '../lib/firebase';
+import { auth, setAuthPersistence } from '../lib/firebase';
 import { track } from '../lib/analytics';
 import { useAuth } from '../context/AuthContext';
 import { SELECTABLE_SKILL_LEVELS } from '../utils/skillLevels';
@@ -20,7 +19,7 @@ import {
   Eye, EyeOff, Chrome, Apple, X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UserData, UserStats, UserPreferences } from '../types';
+import { UserPreferences } from '../types';
 import mailcheck from 'mailcheck';
 import { defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts, getCourtSuggestions, mergeCourtOptions } from '../features/signup/utils/courtSearch';
 import { getZoneWithBorderCheck, zoneFromCourts } from '../utils/zones';
@@ -29,6 +28,7 @@ import { getSignupErrorMessage, signupEmailRegex, emailExistsForSignup } from '.
 import { isNameValid, validateCompletion, validatePassword } from '../features/signup/signupForm';
 import { getAuthErrorMessage } from '../features/auth/authMessages';
 import { useAppleSignIn, useGoogleSignIn } from '../features/auth/useOAuthSignIn';
+import { persistSignupProfile } from '../features/signup/profilePersistence';
 
 type AuthPhase = 'email' | 'login' | 'account' | 'preferences' | 'done';
 type EmailSuggestion = { full: string };
@@ -313,27 +313,19 @@ export const Signup: React.FC = () => {
     try {
       const u = auth.currentUser!;
       await updateProfile(u, { displayName: formData.name });
-      await setDoc(doc(db, 'users', u.uid), { name: formData.name }, { merge: true });
-      // Contact details go to `contacts`, never `users` — that collection is world-readable.
-      await setDoc(doc(db, 'contacts', u.uid), {
+      await persistSignupProfile({
+        uid: u.uid,
         email: u.email || formData.email || '',
+        name: formData.name,
         phone: formData.phone,
-        // WhatsApp is no longer asked at signup — it's on the Profile page, where the
-        // "Same as phone number" control already lives. Giving a phone number here IS the
-        // consent to be contacted; members refine the channel later.
-        contactable: !!formData.phone,
-        updated_at: new Date().toISOString(),
-      }, { merge: true });
-      const ageCategory = formData.retiredPro ? ' Retired Pro' : formData.juniors ? ' Juniors' : '';
-      const leagueValue = formData.league ? `${formData.league}${ageCategory}` : '';
-      await setDoc(doc(db, 'stats', u.uid), { name: formData.name, skill_level: formData.skillLevel, ...(leagueValue ? { league: leagueValue } : {}) }, { merge: true });
-      await setDoc(doc(db, 'preferences', u.uid), {
-        preferred_courts: formData.preferredCourts,
-        // Favourite players moved to the Profile page — signup no longer asks. profileBootstrap
-        // already defaults this to [], so it isn't written here at all.
-        preferred_zone: formData.preferredZone,
-        scheduling_preference: formData.schedulingPreference,
-      }, { merge: true });
+        skillLevel: formData.skillLevel,
+        league: formData.league,
+        retiredPro: formData.retiredPro,
+        juniors: formData.juniors,
+        preferredCourts: formData.preferredCourts,
+        preferredZone: formData.preferredZone,
+        schedulingPreference: formData.schedulingPreference,
+      });
       await refreshProfile(u);
       track('signup_step', { step_number: 3, step_name: 'preferences', action: 'complete' });
       track('complete_profile', { method: 'email' });
