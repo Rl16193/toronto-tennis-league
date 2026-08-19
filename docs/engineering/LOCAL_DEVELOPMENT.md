@@ -99,6 +99,17 @@ VITE_FIREBASE_STORAGE_EMULATOR_PORT=19199
 
 Replace the example values with the ports selected in `firebase.local.json`. The CLI configuration
 also controls Hosting and Emulator UI ports; those do not need Vite variables.
+Before running the seed command against that full suite, export the Admin SDK emulator hosts using
+the same Auth and Firestore ports (these are local endpoints, not credentials):
+
+```bash
+export FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:19099
+export FIRESTORE_EMULATOR_HOST=127.0.0.1:18080
+npm run seed:emulator
+```
+
+Replace the example ports with the values in `firebase.local.json`. The seed command still refuses
+any project other than `rands-local` and any non-local Auth host.
 
 Rules tests and fixture smoke tests already allocate isolated temporary ports, so they do not need
 the alternate full-suite config.

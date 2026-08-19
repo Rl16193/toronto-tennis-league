@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
+import { normalizeEventParticipant } from '../../../lib/firestoreNormalization';
 import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent } from '../../../types';
 import {
@@ -72,12 +73,11 @@ export function useEvents() {
     const q = query(collection(db, 'event_participants'), where('uid', '==', user.uid));
     return onSnapshot(q, (snap) => {
       setJoinedRegistrations(
-        snap.docs.map((d) => {
-          const data = d.data();
-          return {
-            eventId: data.event_id,
-            tournamentChoice: (data.tournament_choice || '') as JoinedRegistration['tournamentChoice'],
-          };
+        snap.docs.flatMap((d) => {
+          const participant = normalizeEventParticipant(d.id, d.data());
+          return participant
+            ? [{ eventId: participant.event_id, tournamentChoice: participant.tournament_choice ?? '' }]
+            : [];
         }),
       );
     });

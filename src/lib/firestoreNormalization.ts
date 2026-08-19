@@ -12,6 +12,14 @@ const number = (value: unknown, fallback = 0) =>
 const boolean = (value: unknown, fallback = false) => (typeof value === 'boolean' ? value : fallback);
 const strings = (value: unknown) =>
   Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+const optionalString = (value: unknown) => (typeof value === 'string' ? value : undefined);
+const optionalNumber = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
+const dateValue = (value: unknown): TennisEvent['date'] => {
+  if (typeof value === 'string') return value;
+  const candidate = record(value);
+  if (typeof candidate.seconds !== 'number') return undefined;
+  return { seconds: candidate.seconds, nanoseconds: number(candidate.nanoseconds) };
+};
 
 export const normalizeEvent = (id: string, value: unknown): TennisEvent => {
   const data = record(value);
@@ -29,12 +37,37 @@ export const normalizeEvent = (id: string, value: unknown): TennisEvent => {
   );
 
   return {
-    ...(data as Omit<TennisEvent, 'id' | 'title' | 'type' | 'location' | 'image' | 'zone_draw_config'>),
     id,
     title: string(data.title),
     type: string(data.type),
     location: string(data.location),
     image: string(data.image),
+    creator_id: optionalString(data.creator_id),
+    date: dateValue(data.date),
+    start_date: dateValue(data.start_date),
+    end_date: dateValue(data.end_date),
+    startDate: dateValue(data.startDate),
+    endDate: dateValue(data.endDate),
+    join_last_date: dateValue(data.join_last_date),
+    recurring_weekly: boolean(data.recurring_weekly),
+    recurring: typeof data.recurring === 'boolean' || typeof data.recurring === 'string' ? data.recurring : undefined,
+    day: typeof data.day === 'string' ? data.day : strings(data.day),
+    time: optionalString(data.time),
+    skill_level: optionalString(data.skill_level),
+    about: optionalString(data.about),
+    description: optionalString(data.description),
+    organizer: optionalString(data.organizer),
+    round_deadlines: Object.fromEntries(
+      Object.entries(record(data.round_deadlines)).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string',
+      ),
+    ),
+    tournament_format:
+      data.tournament_format === 'rr' ? 'rr' : data.tournament_format === 'knockout' ? 'knockout' : undefined,
+    tournament_choice:
+      data.tournament_choice === 'Singles' || data.tournament_choice === 'Doubles' ? data.tournament_choice : undefined,
+    hide_seniors: boolean(data.hide_seniors),
+    hide_beginners: boolean(data.hide_beginners),
     zone_draw_config: resolveZoneConfig({
       enabled: typeof rawConfig.enabled === 'boolean' ? rawConfig.enabled : true,
       buckets,
@@ -53,7 +86,6 @@ export const normalizeEventParticipant = (id: string, value: unknown): EventPart
   const tournamentChoice =
     data.tournament_choice === 'Singles' || data.tournament_choice === 'Doubles' ? data.tournament_choice : undefined;
   return {
-    ...(data as Partial<EventParticipant>),
     id,
     uid,
     event_id: eventId,
@@ -63,6 +95,22 @@ export const normalizeEventParticipant = (id: string, value: unknown): EventPart
     ...(tournamentChoice ? { tournament_choice: tournamentChoice } : {}),
     ...(typeof data.skill === 'number' && Number.isFinite(data.skill) ? { skill: data.skill } : { skill: undefined }),
     ...(Array.isArray(data.dateselected) ? { dateselected: strings(data.dateselected) } : { dateselected: undefined }),
+    ...(data.division === "Men's" || data.division === "Women's" || data.division === 'Mixed Doubles'
+      ? { division: data.division }
+      : {}),
+    doubles: optionalString(data.doubles),
+    ...(data.partner_in_app === 'yes' || data.partner_in_app === 'no' || data.partner_in_app === ''
+      ? { partner_in_app: data.partner_in_app }
+      : {}),
+    partner_uid: optionalString(data.partner_uid),
+    ...(data.skill_group === 'Retired Pro' ? { skill_group: 'Retired Pro' as const } : {}),
+    req_zone_change: boolean(data.req_zone_change),
+    new_zone: optionalString(data.new_zone),
+    removal: boolean(data.removal),
+    removal_at: optionalString(data.removal_at),
+    zone_override: optionalString(data.zone_override),
+    merged_zone: boolean(data.merged_zone),
+    merged_into: optionalString(data.merged_into),
   };
 };
 
@@ -73,9 +121,12 @@ export const normalizeTournamentMatch = (id: string, value: unknown): Tournament
   if (!eventId || !matchId) return null;
   const choice = data.tournament_choice === 'Doubles' ? 'Doubles' : 'Singles';
   const status = data.status === 'complete' ? 'complete' : 'pending';
+  const category = ['singles', 'doubles', 'rally', 'challenge', 'score_submission'].includes(string(data.category))
+    ? (data.category as TournamentMatch['category'])
+    : undefined;
   return {
-    ...(data as Partial<TournamentMatch>),
     id,
+    category,
     event_id: eventId,
     match_id: matchId,
     tournament_choice: choice,
@@ -94,15 +145,54 @@ export const normalizeTournamentMatch = (id: string, value: unknown): Tournament
     player_2_uid: string(data.player_2_uid),
     status,
     started: boolean(data.started),
+    zone: optionalString(data.zone),
+    winner_name: optionalString(data.winner_name),
+    winner_uid: optionalString(data.winner_uid),
+    set_1_player_1: optionalNumber(data.set_1_player_1),
+    set_1_player_2: optionalNumber(data.set_1_player_2),
+    set_2_player_1: optionalNumber(data.set_2_player_1),
+    set_2_player_2: optionalNumber(data.set_2_player_2),
+    set_3_player_1: optionalNumber(data.set_3_player_1),
+    set_3_player_2: optionalNumber(data.set_3_player_2),
+    next_match_id: optionalString(data.next_match_id),
+    next_slot:
+      data.next_slot === 'player_1' || data.next_slot === 'player_2' || data.next_slot === ''
+        ? data.next_slot
+        : undefined,
+    bracket: typeof data.bracket === 'string' || data.bracket === null ? data.bracket : undefined,
+    created_at: optionalString(data.created_at),
+    completed_at: optionalString(data.completed_at),
+    score_edited_at: optionalString(data.score_edited_at),
+    format: data.format === 'rr' || data.format === 'bracket' ? data.format : undefined,
+    rr_group: optionalNumber(data.rr_group),
+    rr_round: optionalNumber(data.rr_round),
+    rr_advancement_count: optionalNumber(data.rr_advancement_count),
+    rr_group_label: optionalString(data.rr_group_label),
+    rr_label_custom: boolean(data.rr_label_custom),
+    rr_group_bonus_v2: boolean(data.rr_group_bonus_v2),
+    walkover: boolean(data.walkover),
+    no_show: boolean(data.no_show),
+    court: optionalString(data.court),
+    schedule_status:
+      data.schedule_status === 'scheduled'
+        ? 'scheduled'
+        : data.schedule_status === 'unscheduled'
+          ? 'unscheduled'
+          : undefined,
+    proposed_date: optionalString(data.proposed_date),
+    proposed_slot: data.proposed_slot === 'AM' || data.proposed_slot === 'PM' ? data.proposed_slot : undefined,
+    schedule_requested: boolean(data.schedule_requested),
   };
 };
 
 export const normalizeUserData = (value: unknown): UserData => {
   const data = record(value);
   return {
-    ...(data as Partial<UserData>),
     name: string(data.name),
     created_at: string(data.created_at),
+    avatar: optionalString(data.avatar),
+    bio: optionalString(data.bio),
+    profile_details_visible: boolean(data.profile_details_visible),
     ...(Array.isArray(data.display_badges) ? { display_badges: strings(data.display_badges).slice(0, 3) } : {}),
   };
 };
@@ -113,7 +203,6 @@ export const normalizeUserStats = (value: unknown): UserStats => {
     ? (data.tournament_preference as UserStats['tournament_preference'])
     : 'Challengers';
   return {
-    ...(data as Partial<UserStats>),
     name: string(data.name),
     skill_level: number(data.skill_level, 2),
     tournament_preference: preference,
@@ -125,6 +214,11 @@ export const normalizeUserStats = (value: unknown): UserStats => {
     league: string(data.league),
     pointswon: number(data.pointswon),
     totalPointsPlayed: number(data.totalPointsPlayed),
+    rankPosition: optionalNumber(data.rankPosition),
+    rankTrend: ['up', 'down', 'same'].includes(string(data.rankTrend))
+      ? (data.rankTrend as UserStats['rankTrend'])
+      : undefined,
+    rankMove: optionalNumber(data.rankMove),
   };
 };
 
@@ -135,12 +229,15 @@ export const normalizeUserPreferences = (value: unknown): UserPreferences => {
       ? 'Tell me more about matchdays'
       : 'I will schedule matches on my own';
   return {
-    ...(data as Partial<UserPreferences>),
     preferred_courts: strings(data.preferred_courts),
     favourite_players: strings(data.favourite_players),
     scheduling_preference: scheduling,
     event_creator: data.event_creator === true,
     preferred_zone: string(data.preferred_zone),
+    preferred_zone_manual: boolean(data.preferred_zone_manual),
+    email_notifications: typeof data.email_notifications === 'boolean' ? data.email_notifications : undefined,
+    stringer: data.stringer === true,
+    stringer_id: optionalString(data.stringer_id),
     ...(Array.isArray(data.availability_tags) ? { availability_tags: strings(data.availability_tags) } : {}),
   };
 };
@@ -148,12 +245,16 @@ export const normalizeUserPreferences = (value: unknown): UserPreferences => {
 export const normalizeContactData = (value: unknown): ContactData => {
   const data = record(value);
   return {
-    ...(data as Partial<ContactData>),
     email: string(data.email),
     phone: string(data.phone),
     preferred_mode_of_contact: strings(data.preferred_mode_of_contact).filter(
       (method): method is 'email' | 'text' | 'whatsapp' => ['email', 'text', 'whatsapp'].includes(method),
     ),
+    secondary_email: optionalString(data.secondary_email),
+    whatsapp_contact: optionalString(data.whatsapp_contact),
+    whatsapp_same_as_phone: boolean(data.whatsapp_same_as_phone),
+    contactable: data.contactable !== false,
+    updated_at: optionalString(data.updated_at),
   };
 };
 
