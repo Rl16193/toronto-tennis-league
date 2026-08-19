@@ -5,15 +5,29 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // Bare `allow` blocks only match their own path segment, not descendants — this wildcard
-    // is required for reads to actually cascade to every object (avatars, court suggestion
-    // photos, gallery, etc).
-    match /{allPaths=**} {
+    // Public assets used by the landing page and gallery. Keep this list explicit so a future
+    // private object does not inherit public readability merely because it shares the bucket.
+    match /LandingPage/{fileName} {
+      allow read: if true;
+    }
+
+    match /Gallery/{fileName} {
+      allow read: if true;
+    }
+
+    // Profile and marketplace images are intentionally public because their Firestore records
+    // are public; writes remain owner-only below.
+    match /avatars/{userId}/{fileName} {
+      allow read: if true;
+    }
+
+    match /listings/{userId}/{fileName} {
       allow read: if true;
     }
 
     // "Suggest an Improvement" photos: signed-in owner only, images under 5 MB.
     match /court_suggestions/{userId}/{fileName} {
+      allow read: if request.auth != null && request.auth.uid == userId;
       allow write: if request.auth != null
         && request.auth.uid == userId
         && request.resource.contentType.matches('image/.*')
@@ -31,6 +45,7 @@ service firebase.storage {
     // Tasks tab "Submit a Photo" (condition / waiting board / queue): signed-in owner only,
     // images under 5 MB.
     match /court_reports/{userId}/{fileName} {
+      allow read: if request.auth != null && request.auth.uid == userId;
       allow write: if request.auth != null
         && request.auth.uid == userId
         && request.resource.contentType.matches('image/.*')
@@ -49,6 +64,7 @@ service firebase.storage {
     // Anonymous "Report" photos (logged-out reporters) land under the fixed `anon/` prefix.
     // No auth required, still image-only and size-capped to limit abuse.
     match /court_reports/anon/{fileName} {
+      allow read: if request.auth != null;
       allow write: if request.resource.contentType.matches('image/.*')
         && request.resource.size < 5 * 1024 * 1024;
     }

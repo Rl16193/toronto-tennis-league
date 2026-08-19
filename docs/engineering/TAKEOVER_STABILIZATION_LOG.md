@@ -24,6 +24,7 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 | Current | Provider role fields were writable by the member owner even though redemptions access trusts them. | `firestore.rules`, `tests/rules/firestore.rules.test.mjs` | TypeScript, Rules test syntax, and diff checks passed; emulator startup reached the missing-Java failure. | Rules assertions still need a Java-enabled emulator run. |
 | `e84d0f6` | GitHub CI failed at `Firestore Rules tests` because the workflow did not provision Java for the Firestore emulator. | `.github/workflows/ci.yml` | Public run `32209659003` confirmed typecheck/build passed and Rules tests failed; run `32210015729` passed after Temurin Java 21 was added. | Local macOS Rules execution still needs a Java runtime. |
 | Current | Emulator wiring had no reusable synthetic dataset or safe seed command. | `tests/fixtures/local-fixtures.mjs`, `tests/fixtures/seed-emulator.mjs`, package scripts, README | 25 fixture documents validated; seed command refuses any project other than `rands-local`. | Emulator must be running and local Java remains required for full smoke execution. |
+| Current | Storage Rules had a public catch-all read and no CI test coverage. | `storage.rules`, `tests/rules/storage.rules.test.mjs`, package scripts, `.github/workflows/ci.yml` | Storage test syntax and diff checks pass; local emulator startup is blocked by missing Java. | GitHub run must confirm the new Storage suite before treating the source fix as validated. |
 
 ## Current issue queue
 
@@ -53,6 +54,7 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 - Member preference writes now allow only documented self-service fields; provider identifiers and role flags remain super-admin-only. The test covers safe preference updates, role-field injection, and UID substitution.
 - GitHub Actions run `32210015729` passed the complete validation job: Java setup, web dependencies, typecheck, build, Firestore Rules tests, Functions dependencies, Functions syntax, and whitespace checks.
 - The synthetic fixture module covers member, organizer, provider, multi-role, profile/contact, event/RR draft, match, task/reward, marketplace, notification, court, and aggregate documents. Production project IDs are rejected before emulator initialization.
+- Storage reads are now explicit: LandingPage, Gallery, avatars, and listings are public; report/suggestion paths require authentication and owner scope. Anonymous report writes remain limited to the `court_reports/anon/` prefix.
 - `npm audit --json` could not refresh in the original validation environment because the npm registry DNS lookup failed; install-time audit warnings remain untriaged.
 - Firebase Rules emulator tests remain unverified locally because Java/CLI resolution is unresolved; no production Firebase command was run.
 

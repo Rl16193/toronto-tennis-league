@@ -11,6 +11,7 @@
     "dev:emulator": "npx -y firebase-tools@latest emulators:start --only auth,firestore,functions,storage,hosting",
     "emulators": "npx -y firebase-tools@latest emulators:start --only auth,firestore,functions,storage,hosting",
     "test:rules": "npx -y firebase-tools@latest emulators:exec --only firestore --project rands-local \"node --test tests/rules/firestore.rules.test.mjs\"",
+    "test:storage": "npx -y firebase-tools@latest emulators:exec --only storage --project rands-local \"node --test tests/rules/storage.rules.test.mjs\"",
     "seed:emulator": "node tests/fixtures/seed-emulator.mjs",
     "hosting:deploy": "npm run build && node scripts/deploy-hosting.mjs deploy",
     "hosting:preview": "npm run build && node scripts/deploy-hosting.mjs preview",

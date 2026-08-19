@@ -24,8 +24,8 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
     {
       "check": "Storage read exposure",
       "severity": "moderate",
-      "issue": "storage.rules allows public reads through match /{allPaths=**}. Any future object placed in the bucket inherits public readability, including paths that may later contain private material.",
-      "recommendation": "Allow public reads only for intentionally public prefixes and require authentication or signed URLs for private/user-generated paths. Add emulator tests for every storage prefix before changing the rule."
+      "issue": "The prior source rule allowed public reads through match /{allPaths=**}. The current checkout now names public prefixes explicitly and restricts report/suggestion reads, but deployed Rules remain unverified.",
+      "recommendation": "Run the Storage Rules suite in CI and staging, then deploy only the reviewed source after confirming the intended public prefixes."
     },
     {
       "check": "Firestore data exposure",
@@ -52,14 +52,14 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
 ## Evidence and limits
 
 - Firestore field-level restrictions exist for contacts, tasks, notifications, connections, public contacts, offers, redemptions, and archive paths.
-- Storage writes are authenticated and type/size constrained for named prefixes, but the catch-all read rule remains public.
+- Storage writes are authenticated and type/size constrained for named prefixes. The current source permits public reads only for LandingPage, Gallery, avatars, and listings; report/suggestion reads are owner/authentication constrained.
 - `src/pages/tournament/useTournament.ts` contains direct `stats` writes for tournament points; Functions contain separate task/friendly-point award logic.
 - A tracked-file scan was performed for common credential patterns. It did not prove that secrets are absent from Git history, deployment configuration, or third-party systems.
-- `npm run lint` and `npm run build` pass locally. GitHub Actions run `32210015729` passed the Firestore Rules suite after provisioning Java 21. Local Rules execution remains blocked by the macOS Java prerequisite. `npm audit --json` could not refresh because `registry.npmjs.org` did not resolve from this environment.
+- `npm run lint` and `npm run build` pass locally. GitHub Actions run `32210015729` passed the Firestore Rules suite after provisioning Java 21. Storage Rules syntax is locally checked, while local Storage emulator execution remains blocked by the macOS Java prerequisite. `npm audit --json` could not refresh because `registry.npmjs.org` did not resolve from this environment.
 
 ## Required gates before production changes
 
-1. Run the seeded emulator suite locally and expand Rules coverage, including Storage.
+1. Run the seeded emulator suite locally and review the Storage Rules suite in staging.
 2. Define the authoritative server-side scoring and role model.
 3. Narrow public Firestore/Storage reads and prove the intended public projection contract.
 4. Re-run dependency and secret scans with network access, then review findings before deployment approval.

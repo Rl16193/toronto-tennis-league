@@ -50,6 +50,9 @@ jobs:
       - name: Firestore Rules tests
         run: npm run test:rules
 
+      - name: Storage Rules tests
+        run: npm run test:storage
+
       - name: Install Functions dependencies
         working-directory: functions
         run: npm ci
