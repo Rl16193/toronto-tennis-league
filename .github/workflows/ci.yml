@@ -47,6 +47,9 @@ jobs:
       - name: Build web application
         run: npm run build
 
+      - name: Domain unit tests
+        run: npm test
+
       - name: Firestore Rules tests
         run: npm run test:rules
 
@@ -56,6 +59,10 @@ jobs:
       - name: Install Functions dependencies
         working-directory: functions
         run: npm ci
+
+      - name: Functions unit tests
+        working-directory: functions
+        run: npm test
 
       - name: Check Functions JavaScript syntax
         working-directory: functions
