@@ -246,7 +246,8 @@ describe('expanded Firestore authorization matrix', () => {
     await seedDoc('matches/official-match-a', {
       id: 'official-match-a',
       event_id: 'event-a',
-      category: 'tournament',
+      category: 'singles',
+      tournament_choice: 'Singles',
       player_1_uid: 'member-a',
       player_2_uid: 'member-b',
       status: 'scheduled',

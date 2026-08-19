@@ -26,7 +26,9 @@ function sameDraw(left, right) {
 function isEventOrganizer(event, uid) {
   return (
     event.creator_id === uid ||
-    [event.assigned_organizer_uids, event.organizer_uids].some((value) => Array.isArray(value) && value.includes(uid))
+    [event.organizer_ids, event.assigned_organizer_uids, event.organizer_uids].some(
+      (value) => Array.isArray(value) && value.includes(uid),
+    )
   );
 }
 
@@ -68,7 +70,11 @@ exports.applyTournamentResult = onCall({ region: REGION }, async (request) => {
       const matchSnap = await tx.get(matchRef);
       if (!matchSnap.exists) throw new HttpsError('not-found', 'Match not found.');
       const match = matchSnap.data();
-      if (!match.event_id || match.category === 'score_submission') {
+      if (
+        !match.event_id ||
+        !['singles', 'doubles'].includes(match.category) ||
+        !['Singles', 'Doubles'].includes(match.tournament_choice)
+      ) {
         throw new HttpsError('invalid-argument', 'Target must be an official tournament match.');
       }
 

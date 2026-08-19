@@ -1671,6 +1671,8 @@ export const useTournament = (eventIdOverride?: string) => {
           match_id: match.id,
           match_round: match.round,
           draw_label: currentDraw?.label ?? '',
+          player_1_uid: match.player_1_uid,
+          player_2_uid: match.player_2_uid,
           player_1_name: match.player_1_name,
           player_2_name: match.player_2_name,
           submitted_by: user.uid,

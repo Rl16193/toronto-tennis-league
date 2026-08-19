@@ -133,7 +133,8 @@ service cloud.firestore {
       let official = get(officialPath).data;
       return result.match_id is string &&
         exists(officialPath) &&
-        official.category == 'tournament' &&
+        official.category in ['singles', 'doubles'] &&
+        official.tournament_choice in ['Singles', 'Doubles'] &&
         official.status in ['scheduled', 'pending', 'open'] &&
         (request.auth.uid == official.player_1_uid || request.auth.uid == official.player_2_uid) &&
         result.player_1_uid == official.player_1_uid &&
@@ -332,7 +333,13 @@ service cloud.firestore {
           request.resource.data.submitted_by == request.auth.uid &&
           isValidTournamentScoreSubmission(request.resource.data)
         ) ||
-        ('event_id' in request.resource.data && isManagerOfEvent(request.resource.data.event_id))
+        (
+          'event_id' in request.resource.data &&
+          isManagerOfEvent(request.resource.data.event_id) &&
+          request.resource.data.category in ['singles', 'doubles'] &&
+          request.resource.data.tournament_choice in ['Singles', 'Doubles'] &&
+          request.resource.data.status == 'pending'
+        )
       );
 
       allow update: if isAuthenticated() && (
@@ -410,7 +417,8 @@ service cloud.firestore {
           'event_id' in resource.data &&
           isManagerOfEvent(resource.data.event_id) &&
           (
-            resource.data.category != 'tournament' ||
+            !(resource.data.category in ['singles', 'doubles'] &&
+              resource.data.tournament_choice in ['Singles', 'Doubles']) ||
             !request.resource.data.diff(resource.data).affectedKeys().hasAny([
               'status', 'winner_uid', 'winner_name',
               'set_1_player_1', 'set_1_player_2', 'set_2_player_1', 'set_2_player_2',
@@ -436,7 +444,9 @@ service cloud.firestore {
         (
           'event_id' in resource.data &&
           isManagerOfEvent(resource.data.event_id) &&
-          (resource.data.category != 'tournament' || resource.data.status != 'complete')
+          (!(resource.data.category in ['singles', 'doubles'] &&
+             resource.data.tournament_choice in ['Singles', 'Doubles']) ||
+           resource.data.status != 'complete')
         )
       );
     }

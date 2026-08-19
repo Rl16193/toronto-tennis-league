@@ -269,3 +269,43 @@ test('tournament result rejects a non-owner and an unrelated winner', { skip: !t
   assert.equal(invalidWinner.body.error.status, 'INVALID_ARGUMENT');
   assert.equal((await db.doc('matches/m1').get()).data().status, 'pending');
 });
+
+test(
+  'tournament result accepts organizer_ids assignments and rejects non-bracket matches',
+  { skip: !tournamentAvailable },
+  async () => {
+    const assigned = await session('tournament-assigned');
+    await seedTournament('different-owner', 'p1', 'p2');
+    await db.doc('events/e1').update({ organizer_ids: [assigned.uid] });
+
+    const applied = await call('applyTournamentResult', assigned.token, {
+      matchId: 'm1',
+      winnerUid: 'p1',
+      scores: [
+        [6, 4],
+        [6, 2],
+        [0, 0],
+      ],
+      submissionId: 'result-1',
+    });
+    assert.equal(applied.status, 200, JSON.stringify(applied.body));
+
+    await db.doc('matches/not-bracket').set({
+      event_id: 'e1',
+      category: 'challenge',
+      status: 'pending',
+      player_1_uid: 'p1',
+      player_2_uid: 'p2',
+    });
+    const rejected = await call('applyTournamentResult', assigned.token, {
+      matchId: 'not-bracket',
+      winnerUid: 'p1',
+      scores: [
+        [6, 4],
+        [6, 2],
+        [0, 0],
+      ],
+    });
+    assert.equal(rejected.status, 400, JSON.stringify(rejected.body));
+  },
+);

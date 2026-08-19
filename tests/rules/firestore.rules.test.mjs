@@ -440,7 +440,8 @@ describe('Firestore authorization boundaries', () => {
     await seedDoc('matches/tournament-a', {
       id: 'tournament-a',
       event_id: 'synthetic-event',
-      category: 'tournament',
+      category: 'singles',
+      tournament_choice: 'Singles',
       player_1_uid: 'member-a',
       player_2_uid: 'member-b',
       status: 'scheduled',
