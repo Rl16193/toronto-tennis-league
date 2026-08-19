@@ -59,7 +59,13 @@ Evidence: `functions/lib/notify.js`, `functions/lib/constants.js`, `src/features
 - Tournament result application now has one server-authoritative transaction. The browser refuses
   completed-result reset/cancellation and Round Robin bonus mutations rather than retaining a
   second points authority; those controls can be re-enabled only through bounded server operations.
+- Accepted result flow: the client submits result intent; an idempotent callable or server trigger
+  validates caller authentication, event ownership/assignment, match identity and current state,
+  both participants, winner membership, bounded set scores, distinct no-show/walkover semantics,
+  advancement target, and exact stats/points deltas before one transaction applies the outcome.
+- Established scoring values do not change as part of moving authority. Compatibility reads may
+  support historical match shapes, but clients may not use compatibility as a protected write path.
 - Target: run the same flows against emulators, then staging, with seed data and rules/function integration tests.
 - Open: confirm deployed trigger versions and whether historical documents contain all fields assumed by current readers.
 
-Last verified source SHA: `6ac2b3c`.
+Last verified source SHA: `e960dae`.

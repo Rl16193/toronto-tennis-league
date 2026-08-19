@@ -32,6 +32,12 @@ developer -> npm build -> dist -> explicitly selected Firebase Hosting project
 
 This is not yet a safe promotion pipeline. A Hosting preview channel is a Hosting feature inside the selected Firebase project; it is not proof of a separate staging database or isolated Functions/Storage resources.
 
+Repository-local PASS means the reviewed source and reliable local/emulator gates pass at one SHA.
+It does not promote that SHA, confirm deployed Rules/Functions, prove staging parity, or authorize a
+production operation. Staging PASS requires evidence from the explicitly named isolated project;
+production PASS requires a separate approval, deploy receipt, post-deploy validation, and recovery
+evidence.
+
 ## Target delivery path
 
 ```text
@@ -57,4 +63,4 @@ No backup/export configuration, restore drill, or staging project alias was foun
 - Local CLI evidence: root `devDependencies.firebase-tools` is pinned to `15.27.0`; emulator and Hosting scripts use that repository-local binary.
 - Open: identify the authorized staging project, Firebase database location/edition, CI secret strategy, and production deploy approver.
 
-Last verified source SHA: `6ac2b3c`.
+Last verified source SHA: `e960dae`.

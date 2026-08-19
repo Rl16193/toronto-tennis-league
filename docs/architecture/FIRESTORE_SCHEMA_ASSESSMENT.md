@@ -28,8 +28,19 @@ The schema is a mature, consolidated application model with explicit privacy rul
 1. Define typed schemas and field sensitivity for each collection.
 2. Add emulator rules tests covering create/update bypasses, ownership, roles, contacts, Storage, and server-only paths.
 3. Consolidate points-moving writes into Functions or a tested server transaction path.
-4. Replace global event-creator checks with claims plus event ownership and explicit admin override.
+4. Replace global event-creator checks with an authoritative assignment source plus event ownership;
+   keep explicit admin override separate from the event-workflow role.
 5. Establish scheduled Firestore export/restore runbooks and verify them against a non-production project.
+
+## Compatibility transformation contract
+
+Separating public preference projections or introducing event assignments may require transforming
+production-shaped documents. Repository work may add compatibility reads, a dry-run migration,
+explicit staging/production instructions, and rollback documentation only; it must not execute the
+migration. The migration must preserve stable document IDs, omit private fields from public
+projections, be idempotent, and fail closed when ownership cannot be derived. Rollback must remove
+only migration-created fields/documents and restore legacy state only from a verified export. The
+archive namespace is not a rollback source.
 
 ## Open questions
 
@@ -38,4 +49,4 @@ The schema is a mature, consolidated application model with explicit privacy rul
 - Is `group_lessons` intended to be public-readable or authenticated-readable?
 - Which Firestore database location/edition and backup policies are currently deployed?
 
-Last verified source SHA: `6ac2b3c`.
+Last verified source SHA: `e960dae`.
