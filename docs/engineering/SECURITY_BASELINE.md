@@ -56,7 +56,7 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
 - `src/pages/tournament/useTournament.ts` contains direct `stats` writes for tournament points; Functions contain separate task/friendly-point award logic.
 - Pure domain coverage now exercises Round Robin grouping/pairings, standings, scoring awards, safe rewrites, and the server reward-point calculator. Functions integration tests against the Admin SDK and callable runtime remain open.
 - A tracked-file scan was performed for common credential patterns. It did not prove that secrets are absent from Git history, deployment configuration, or third-party systems.
-- `npm run lint`, `npm test`, `cd functions && npm test`, and `npm run build` pass locally. GitHub Actions run `32210506773` passed the Storage Rules suite after provisioning Java 21. Local Rules emulator execution remains blocked by the macOS Java prerequisite. `npm audit --json` could not refresh because `registry.npmjs.org` did not resolve from this environment.
+- `npm run lint`, `npm test`, `cd functions && npm test`, and `npm run build` pass locally. GitHub Actions run `32211081070` passed the complete CI job, including Java setup, both Rules suites, root domain tests, and Functions unit tests. Local Rules emulator execution remains blocked by the macOS Java prerequisite. `npm audit --json` could not refresh because `registry.npmjs.org` did not resolve from this environment.
 
 ## Required gates before production changes
 

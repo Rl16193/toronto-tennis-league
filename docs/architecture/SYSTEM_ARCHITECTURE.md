@@ -41,4 +41,4 @@ Preserve the same product topology while adding explicit environment selection, 
 - Google Sheets, BigQuery, Resend, and image moderation require credentials/configuration not present in this checkout.
 - There is no checked-in rules-test harness or CI workflow proving the authorization contract.
 
-Last verified source SHA: `29690a3812a1391bf5a471b7efa7dc41d610c146`.
+Last verified source SHA: `846dee90323dbd32d556e9254586cd7f9ebc03c7`.

@@ -22,4 +22,4 @@ The current app uses a hardcoded super-admin UID, `preferences.event_creator`, a
 
 Evidence: `firestore.rules`, `functions/lib/notify.js`, `src/context/AuthContext.tsx`, and `src` role/view usage. The current foundation keeps role fields server-owned in Rules and protects non-production email delivery. Open: choose claims versus a role registry, define bootstrap/recovery, and migrate legacy `event_creator` safely.
 
-Last verified source SHA: `29690a3812a1391bf5a471b7efa7dc41d610c146`.
+Last verified source SHA: `846dee90323dbd32d556e9254586cd7f9ebc03c7`.

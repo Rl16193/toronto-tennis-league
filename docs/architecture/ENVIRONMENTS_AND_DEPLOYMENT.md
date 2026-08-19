@@ -43,4 +43,4 @@ No backup/export configuration, restore drill, or staging project alias was foun
 - Risk: generic CLI commands can target `toronto-tennis-league`.
 - Open: identify the authorized staging project, Firebase database location/edition, CI secret strategy, and production deploy approver.
 
-Last verified source SHA: `29690a3812a1391bf5a471b7efa7dc41d610c146`.
+Last verified source SHA: `846dee90323dbd32d556e9254586cd7f9ebc03c7`.

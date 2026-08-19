@@ -38,4 +38,4 @@ The schema is a mature, consolidated application model with explicit privacy rul
 - Is `group_lessons` intended to be public-readable or authenticated-readable?
 - Which Firestore database location/edition and backup policies are currently deployed?
 
-Last verified source SHA: `29690a3812a1391bf5a471b7efa7dc41d610c146`.
+Last verified source SHA: `846dee90323dbd32d556e9254586cd7f9ebc03c7`.
