@@ -18,9 +18,17 @@ const freePort = () =>
       server.close((error) => (error ? reject(error) : resolve(address.port)));
     });
   });
+const freePorts = async (count) => {
+  const ports = [];
+  while (ports.length < count) {
+    const port = await freePort();
+    if (!ports.includes(port)) ports.push(port);
+  }
+  return ports;
+};
 
 const main = async () => {
-  const [authPort, firestorePort, functionsPort] = await Promise.all([freePort(), freePort(), freePort()]);
+  const [authPort, firestorePort, functionsPort] = await freePorts(3);
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'rands-functions-integration-'));
   const sourceDir = path.join(tempDir, 'functions');
   const configPath = path.join(tempDir, 'firebase.json');

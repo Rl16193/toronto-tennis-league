@@ -22,6 +22,14 @@ const freePort = () =>
       server.close((error) => (error ? reject(error) : resolve(address.port)));
     });
   });
+const freePorts = async (count) => {
+  const ports = [];
+  while (ports.length < count) {
+    const port = await freePort();
+    if (!ports.includes(port)) ports.push(port);
+  }
+  return ports;
+};
 
 const waitForHttp = async (url, child, timeoutMs = 30_000) => {
   const deadline = Date.now() + timeoutMs;
@@ -91,12 +99,7 @@ const inner = async () => {
 const outer = async () => {
   const firebase = executable('firebase');
   if (!existsSync(firebase)) throw new Error('Firebase CLI is missing. Run npm ci.');
-  const [authPort, firestorePort, functionsPort, storagePort] = await Promise.all([
-    freePort(),
-    freePort(),
-    freePort(),
-    freePort(),
-  ]);
+  const [authPort, firestorePort, functionsPort, storagePort] = await freePorts(4);
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'rands-browser-e2e-'));
   const configPath = path.join(tempDir, 'firebase.json');
   const functionsDir = path.join(tempDir, 'functions');
