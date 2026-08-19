@@ -19,6 +19,11 @@ import {
 } from './utils';
 import { CONSOLIDATED_DOUBLES_DRAW, VISIBLE_DRAWS, buildMergedSkillDraw } from './drawConfigs';
 import { PLAYER_LOADING_SENTINEL } from './AddPlayerPanel';
+import {
+  normalizeEvent,
+  normalizeEventParticipant,
+  normalizeTournamentMatch,
+} from '../../lib/firestoreNormalization';
 
 // Stand-in for a contacts doc whose matching users doc is missing — a data anomaly rather than a
 // normal state, but the merge below shouldn't drop the contact details over it.
@@ -185,7 +190,7 @@ export const useTournament = (eventIdOverride?: string) => {
       try {
         const eventsSnap = await getDocs(collection(db, 'events'));
         const tournamentEvents = eventsSnap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as TennisEvent))
+          .map((d) => normalizeEvent(d.id, d.data()))
           // League Ladder events have no draw — ladder matches are a match type surfaced in
           // Matches/Challenges instead, so they don't belong on the Tournament page at all.
           .filter((e) => e.type?.toLowerCase().includes('tournament'))
@@ -224,7 +229,9 @@ export const useTournament = (eventIdOverride?: string) => {
     return onSnapshot(
       query(collection(db, 'event_participants'), where('event_id', '==', event.id)),
       (snap) => {
-        setParticipants(snap.docs.map((d) => ({ id: d.id, ...d.data() } as EventParticipant)));
+        setParticipants(snap.docs
+          .map((d) => normalizeEventParticipant(d.id, d.data()))
+          .filter((participant): participant is EventParticipant => participant !== null));
         setParticipantsReady(true);
       },
     );
@@ -235,7 +242,9 @@ export const useTournament = (eventIdOverride?: string) => {
     return onSnapshot(
       query(collection(db, 'matches'), where('event_id', '==', event.id), where('category', 'in', ['singles', 'doubles'])),
       (snap) => {
-        const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentMatch));
+        const loaded = snap.docs
+          .map((d) => normalizeTournamentMatch(d.id, d.data()))
+          .filter((match): match is TournamentMatch => match !== null);
         setMatches(loaded);
         setMatchesReady(true);
       },
@@ -1011,7 +1020,8 @@ export const useTournament = (eventIdOverride?: string) => {
         type Draw = { tc: string; division: string; band: string; zone: string; done: boolean; seats: Set<string> };
         const drawsByEvent = new Map<string, Map<string, Draw>>();
         mSnaps.forEach((s) => s.forEach((d) => {
-          const m = d.data() as TournamentMatch;
+          const m = normalizeTournamentMatch(d.id, d.data());
+          if (!m) return;
           if (m.category !== 'singles' && m.category !== 'doubles') return;
           const draws = drawsByEvent.get(m.event_id) ?? new Map<string, Draw>();
           const zone = effectiveZone(m.zone);
@@ -1029,7 +1039,8 @@ export const useTournament = (eventIdOverride?: string) => {
         const candidates: EventParticipant[] = [];
         const seen = new Set<string>();
         pSnaps.forEach((s) => s.forEach((d) => {
-          const p = { id: d.id, ...d.data() } as EventParticipant;
+          const p = normalizeEventParticipant(d.id, d.data());
+          if (!p) return;
           const key = `${p.event_id}|${p.uid}`;
           if (!p.uid || p.removal || seen.has(key)) return;
           seen.add(key);

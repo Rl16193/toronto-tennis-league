@@ -49,15 +49,16 @@ export const zoneBucketFor = (
   preferredZone: string | undefined,
   zoneConfig: ZoneDrawConfig | undefined,
 ): string | undefined => {
-  if (!zoneConfig?.enabled) return undefined;
-  const merges = zoneConfig.merges ?? {};
+  const resolved = resolveZoneConfig(zoneConfig);
+  if (!resolved.enabled) return undefined;
+  const merges = resolved.merges ?? {};
   const zone = (preferredZone || '').trim();
-  const all = zoneConfig.buckets.length ? zoneConfig.buckets : DEFAULT_ZONE_BUCKETS;
+  const all = resolved.buckets;
   const bucket = zone ? all.find((b) => b.zones.includes(zone)) : undefined;
   if (bucket) return resolveMergedZone(bucket.id, merges);
   const fallback = all.find((b) => b.zones.includes(DEFAULT_ZONE));
   if (fallback) return resolveMergedZone(fallback.id, merges);
-  return zoneConfig.includeUnassigned ? UNASSIGNED_ZONE_ID : undefined;
+  return resolved.includeUnassigned ? UNASSIGNED_ZONE_ID : undefined;
 };
 
 /** A missing zone is the Downtown-Midtown bucket used by pre-zone draws. */

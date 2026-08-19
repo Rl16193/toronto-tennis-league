@@ -4,7 +4,13 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firest
 import { auth, db } from '../lib/firebase';
 import { setAnalyticsUser, clearAnalyticsUser } from '../lib/analytics';
 import { emptyContacts, ensureUserProfileDocuments } from '../lib/profileBootstrap';
-import { ContactData, UserProfile, UserData, UserStats, UserPreferences } from '../types';
+import { ContactData, UserProfile } from '../types';
+import {
+  normalizeContactData,
+  normalizeUserData,
+  normalizeUserPreferences,
+  normalizeUserStats,
+} from '../lib/firestoreNormalization';
 
 interface AuthContextType {
   user: User | null;
@@ -63,11 +69,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setProfile(null);
         setProfileError('Your preferences document is missing from Firestore.');
       } else {
-        const userData = userDataDoc.data() as UserData;
+        const userData = normalizeUserData(userDataDoc.data());
         // Deliberately NOT part of the existence checks above: legacy accounts have no contacts
         // doc until the backfill runs, and treating that as fatal would lock them out entirely.
         const contacts: ContactData = contactsDoc.exists()
-          ? { ...emptyContacts(), ...(contactsDoc.data() as ContactData) }
+          ? { ...emptyContacts(), ...normalizeContactData(contactsDoc.data()) }
           : emptyContacts();
 
         // Keep the stored email in step with the auth record. Lives on contacts now, not users.
@@ -76,12 +82,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             doc(db, 'contacts', activeUser.uid),
             { email: activeUser.email, updated_at: new Date().toISOString() },
             { merge: true },
-          ).catch(() => { /* non-fatal; the next sign-in retries */ });
+          ).catch(() => {
+            /* non-fatal; the next sign-in retries */
+          });
           contacts.email = activeUser.email;
         }
 
-        const stats = statsDoc.data() as UserStats;
-        const preferences = preferencesDoc.data() as UserPreferences;
+        const stats = normalizeUserStats(statsDoc.data());
+        const preferences = normalizeUserPreferences(preferencesDoc.data());
         setProfile({
           id: activeUser.uid,
           user: userData,
@@ -107,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     } catch (error) {
-      console.error("Error fetching user profile:", error);
+      console.error('Error fetching user profile:', error);
       setProfile(null);
       setProfileError(error instanceof Error ? error.message : 'Unable to read profile data from Firestore.');
     }

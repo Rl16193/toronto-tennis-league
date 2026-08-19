@@ -3,6 +3,7 @@ import { getDownloadURL, ref } from 'firebase/storage';
 import { db, storage } from '../../../lib/firebase';
 import { TennisEvent } from '../../../types';
 import { sortEventsByStartDate } from '../../../utils/eventDates';
+import { normalizeEvent } from '../../../lib/firestoreNormalization';
 
 export type DisplayEvent = TennisEvent & {
   imagePath?: string;
@@ -42,7 +43,7 @@ export const EVENT_TYPE_OPTIONS = ['Tournament', 'League Ladder', 'Meetup', 'Spe
 export const fetchEvents = async () => {
   const snapshot = await getDocs(collection(db, 'events'));
   const eventsData = snapshot.docs.map((eventDoc) => {
-    const event = { id: eventDoc.id, ...eventDoc.data() } as TennisEvent;
+    const event = normalizeEvent(eventDoc.id, eventDoc.data());
     const rawImage = event.image || '';
 
     return {
@@ -71,7 +72,8 @@ export const validateEventForm = (eventForm: EventFormState) => {
   if (!eventForm.startDate) return 'Please choose a start date.';
   if (!eventForm.endDate) return 'Please choose an end date.';
   if (eventForm.endDate < eventForm.startDate) return 'End date must be on or after the start date.';
-  if (eventForm.joinLastDate && eventForm.joinLastDate > eventForm.endDate) return 'Join last date must be on or before the end date.';
+  if (eventForm.joinLastDate && eventForm.joinLastDate > eventForm.endDate)
+    return 'Join last date must be on or before the end date.';
   if (!eventForm.time.trim()) return 'Please enter the event time.';
   return '';
 };
