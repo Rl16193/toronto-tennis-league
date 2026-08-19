@@ -45,6 +45,9 @@ Object.assign(exports, require('./courtCounts'));
 // contacts collection from the browser.
 Object.assign(exports, require('./accountLookup'));
 
+// Server-authoritative tournament results, statistics, points, and advancement.
+Object.assign(exports, require('./tournamentResults'));
+
 // Opponent connections — gates who may read whose contacts/{uid} doc.
 Object.assign(exports, require('./connections'));
 
