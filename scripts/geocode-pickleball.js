@@ -8,7 +8,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
 // ── Mirrors CourtMap.tsx constants ──────────────────────────────────────────
 
@@ -204,7 +204,7 @@ async function geocodeQuery(location) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-const csvPath = path.join(__dirname, '../public/Tennis Courts Facilities - 4326.csv');
+const csvPath = path.join(scriptDir, '../public/Tennis Courts Facilities - 4326.csv');
 const csvText = readFileSync(csvPath, 'utf8');
 const courts = parseCourts(csvText);
 

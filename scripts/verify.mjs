@@ -30,6 +30,12 @@ console.log('\n=== diff check ===');
 const diffCheck = spawnSync('git', ['diff', '--check'], { stdio: 'inherit' });
 if (diffCheck.error || diffCheck.status !== 0) failures.push('git diff --check');
 
+console.log('\n=== generated artifact freshness ===');
+const generatedCheck = spawnSync('git', ['diff', '--exit-code', 'HEAD', '--', 'public/programs-tennis.csv'], {
+  stdio: 'inherit',
+});
+if (generatedCheck.error || generatedCheck.status !== 0) failures.push('generated artifact freshness');
+
 if (failures.length) {
   console.error(`\nverify failed: ${failures.join(', ')}`);
   process.exitCode = 1;

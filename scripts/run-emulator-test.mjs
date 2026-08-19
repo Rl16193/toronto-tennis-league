@@ -67,12 +67,10 @@ const main = async () => {
     env.STORAGE_EMULATOR_PORT = String(port);
   }
 
-  const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+  const command = path.join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'firebase.cmd' : 'firebase');
   const child = spawn(
     command,
     [
-      '-y',
-      'firebase-tools@latest',
       'emulators:exec',
       '--config',
       configPath,

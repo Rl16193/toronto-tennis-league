@@ -39,4 +39,66 @@ export default tseslint.config(
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
+  {
+    files: ['scripts/**/*.mjs', 'tests/**/*.mjs'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
+    rules: {
+      'no-console': 'off',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', caughtErrors: 'none', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', caughtErrors: 'none', varsIgnorePattern: '^_' },
+      ],
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
+    files: ['scripts/**/*.js'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
+    rules: {
+      'no-console': 'off',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', caughtErrors: 'none', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', caughtErrors: 'none', varsIgnorePattern: '^_' },
+      ],
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
+    files: ['scripts/**/*.cjs'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+      sourceType: 'commonjs',
+    },
+    rules: {
+      'no-console': 'off',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', caughtErrors: 'none', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', caughtErrors: 'none', varsIgnorePattern: '^_' },
+      ],
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+  {
+    files: ['functions/**/*.js'],
+    languageOptions: {
+      globals: globals.node,
+      sourceType: 'commonjs',
+    },
+    rules: {
+      'no-console': 'off',
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', caughtErrors: 'none', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', caughtErrors: 'none', varsIgnorePattern: '^_' },
+      ],
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
 );

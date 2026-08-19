@@ -1,4 +1,8 @@
 import { spawnSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const PRODUCTION_PROJECT = 'toronto-tennis-league';
 const mode = process.argv[2] ?? 'deploy';
@@ -26,11 +30,12 @@ if (projectId === PRODUCTION_PROJECT && (!productionApproval || !productionConfi
 }
 
 const args = mode === 'preview'
-  ? ['-y', 'firebase-tools@latest', 'hosting:channel:deploy', 'preview', '--project', projectId]
-  : ['-y', 'firebase-tools@latest', 'deploy', '--only', 'hosting', '--project', projectId];
+  ? ['hosting:channel:deploy', 'preview', '--project', projectId]
+  : ['deploy', '--only', 'hosting', '--project', projectId];
 
 console.log(`Running Firebase Hosting ${mode} for explicitly selected project ${projectId}.`);
-const result = spawnSync('npx', args, { stdio: 'inherit' });
+const firebaseBinary = path.join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'firebase.cmd' : 'firebase');
+const result = spawnSync(firebaseBinary, args, { cwd: root, stdio: 'inherit' });
 if (result.error) {
   console.error(`Firebase CLI could not be started: ${result.error.message}`);
   process.exit(1);
