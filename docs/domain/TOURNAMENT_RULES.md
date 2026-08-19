@@ -20,10 +20,13 @@ already played a match in their current group cannot be moved out of that group.
 
 ## Removal from a draw
 
-**Rule:** Removing a player purges their leftover match documents and participant record in the
-whole event, and records the withdrawal in the relevant Round Robin draft.
+**Rule:** A player with any completed match in the event cannot be removed. Otherwise removal
+purges their pending match documents and participant record in the whole event, and records the
+withdrawal in the relevant Round Robin draft.
 
 **Why:** One stale match or participant document can cause a later refresh to re-seat the player.
+Completed matches remain immutable history because removing their participant would orphan an
+authoritative result, points, and statistics.
 
 **Important exception:** A sibling draw's withdrawal list is updated with an array union because
 that draw is not loaded in the current client.

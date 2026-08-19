@@ -77,13 +77,13 @@ not deploy or connect to Firebase.
 ```bash
 npm run typecheck     # Full TypeScript strict check, no emit
 npm run lint          # ESLint source, scripts, tests, and Functions checks
-npm run format:check  # Changed/new first-party files; generated and vendored paths excluded
+npm run format:check  # Every tracked first-party file; generated and vendored paths excluded
 npm test              # Pure domain and data-contract tests
 npm run test:rules    # Firestore Rules suite in a temporary local emulator
 npm run test:storage  # Storage Rules suite in a temporary local emulator
 npm run test:fixtures # Synthetic Auth/Firestore seed smoke test in temporary emulators
 npm run test:functions:integration # Reward, friendly, and tournament callable/trigger emulator paths
-npm run test:e2e                  # Synthetic login/profile smoke through local emulators + Chromium
+npm run test:e2e                  # Synthetic signup, login, event join, and tournament score journeys
 npm run build         # Generates the programs CSV, then creates dist/
 npm run verify        # All local quality gates in one command
 npm run preview       # Serves the built dist/ locally

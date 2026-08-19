@@ -101,10 +101,10 @@ npm run test:rules             # Firestore Rules, temporary emulator
 npm run test:storage           # Storage Rules, temporary emulator
 npm run test:fixtures          # real Auth/Firestore seed boundary, temporary emulators
 npm run test:functions:integration # reward, friendly, and tournament Functions emulator paths
-npm run test:e2e                  # Hosting-backed browser/login/profile smoke on isolated emulator ports
+npm run test:e2e                  # Hosting, signup/profile, event join, and tournament score journeys
 npm run typecheck
 npm run lint
-npm run format:check           # changed/new first-party files, except generated/vendor paths
+npm run format:check           # every tracked first-party file, except generated/vendor paths
 npm run docs:verify
 npm run build
 npm run verify                 # every reliable repository-local gate above
@@ -112,9 +112,10 @@ npm run verify                 # every reliable repository-local gate above
 
 `test:e2e` starts isolated Auth, Firestore, Functions, and Storage emulator ports, seeds synthetic
 accounts/documents, builds the browser bundle against those endpoints, starts the Firebase Hosting
-emulator, and runs one-worker Chromium Hosting and login/profile smoke tests. It terminates
-the local processes after success or failure. Critical reward, friendly, and tournament mutations
-remain covered at the more deterministic callable/trigger boundary by `test:functions:integration`.
+emulator, and runs one-worker Chromium Hosting, signup/profile, event-join, and organizer
+score/advancement journeys. It terminates the local processes after success or failure. Critical
+reward, friendly, and tournament mutations also remain covered at the callable/trigger boundary by
+`test:functions:integration`.
 
 ## Find the system contracts
 

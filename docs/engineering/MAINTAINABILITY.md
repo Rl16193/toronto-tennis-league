@@ -37,8 +37,9 @@ presentation state.
 - `npm run lint` runs ESLint over first-party React/TypeScript source, scripts, tests, and Functions.
   Existing warnings for legacy hook dependency choices, explicit `any`, and unused legacy values
   remain visible; new errors fail the command.
-- `npm run format:check` checks the maintained slices and new tooling files. The legacy source tree
-  is intentionally not mass-reformatted in a behavior refactor.
+- `npm run format:check` checks every tracked first-party file. Generated and vendored paths are
+  excluded explicitly; new source files cannot fall outside the gate. A one-time repository-wide
+  mechanical normalization was reviewed separately from behavior changes.
 - `npm run test:rules` and `npm run test:storage` select temporary emulator ports and use local
   OpenJDK when it is installed outside the default PATH. The repository pins `firebase-tools` so
   the emulator wrapper does not download an unbounded CLI version at execution time.
@@ -46,7 +47,7 @@ presentation state.
   seed command; the full `npm run emulators` launcher retains conventional fixed ports for app
   development and adds the same local Java fallback.
 - `npm run verify` runs the local type, lint, format, documentation, unit, Functions unit and
-  emulator integration, Rules, Storage, fixture-smoke, isolated Chromium login/profile smoke,
+  emulator integration, Rules, Storage, fixture-smoke, isolated Chromium user journeys,
   build, generated-artifact freshness, and working-tree/committed-range diff checks in one command.
   Run `npm run test:functions:integration` directly to debug reward, friendly, or tournament
   callable/trigger boundaries; use `npm run test:e2e` for the browser boundary.
