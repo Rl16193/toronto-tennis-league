@@ -26,10 +26,12 @@ import { defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts, ge
 import { getZoneWithBorderCheck, zoneFromCourts } from '../utils/zones';
 import { formatPhone } from '../utils/formatPhone';
 import { getSignupErrorMessage, signupEmailRegex, emailExistsForSignup } from '../features/signup/signupValidation';
+import { isNameValid, validateCompletion, validatePassword } from '../features/signup/signupForm';
 import { getAuthErrorMessage } from '../features/auth/authMessages';
 import { useAppleSignIn, useGoogleSignIn } from '../features/auth/useOAuthSignIn';
 
 type AuthPhase = 'email' | 'login' | 'account' | 'preferences' | 'done';
+type EmailSuggestion = { full: string };
 
 // Wordmark used in place of the logo image on every auth phase.
 const BrandMark: React.FC = () => (
@@ -66,7 +68,7 @@ export const Signup: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
-  const [emailSuggestion, setEmailSuggestion] = useState<any>(null);
+  const [emailSuggestion, setEmailSuggestion] = useState<EmailSuggestion | null>(null);
   const [courtOptions, setCourtOptions] = useState<string[]>(defaultCourtOptions);
   const [courtCoordsMap, setCourtCoordsMap] = useState<Map<string, { lat: number; lng: number }>>(new Map());
   const [showPassword, setShowPassword] = useState(false);
@@ -120,7 +122,7 @@ export const Signup: React.FC = () => {
     preferredCourts: [] as string[],
     customCourtEntry: '',
     organizer: false,
-    schedulingPreference: 'I will schedule matches on my own' as any,
+    schedulingPreference: 'I will schedule matches on my own' as UserPreferences['scheduling_preference'],
     preferredZone: '',
     pendingZoneChoice: null as { primary: string; adjacent: string } | null,
   });
@@ -183,39 +185,6 @@ export const Signup: React.FC = () => {
 
   // Account step now collects only the password (email already entered; name/phone come after
   // verification, in the completion step).
-  const validatePassword = () => {
-    const newErrors: Record<string, string> = {};
-    const sequential = '1234567890abcdefghijklmnopqrstuvwxyz';
-    if (
-      formData.password.length < 6 ||
-      formData.password.length > 80 ||
-      formData.password.trim().length < 3 ||
-      sequential.includes(formData.password.toLowerCase())
-    ) {
-      newErrors.password = 'Password should be between 6-80 characters and non-sequential.';
-    }
-    if (formData.confirmPassword !== formData.password) {
-      newErrors.confirmPassword = 'Passwords do not match';
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const isNameValid = () =>
-    formData.name.trim().length >= 3 &&
-    formData.name.length <= 80 &&
-    !/\d/.test(formData.name);
-
-  const validateCompletion = () => {
-    const newErrors: Record<string, string> = {};
-    if (formData.name.trim().length < 3 || formData.name.length > 80) newErrors.name = 'Name must be 3-80 characters';
-    if (/\d/.test(formData.name)) newErrors.name = 'Name cannot contain numbers';
-    const rawPhone = formData.phone.replace(/\D/g, '');
-    if (rawPhone.length > 0 && rawPhone.length !== 10) newErrors.phone = 'Phone number must be exactly 10 digits';
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
   // Email gate: decide between login (existing) and account creation (new)
   const handleEmailContinue = async () => {
     const trimmedEmail = formData.email.trim();
@@ -337,7 +306,9 @@ export const Signup: React.FC = () => {
   };
 
   const handleCompleteProfile = async () => {
-    if (!validateCompletion()) return;
+    const completionErrors = validateCompletion(formData.name, formData.phone);
+    setErrors(completionErrors);
+    if (Object.keys(completionErrors).length > 0) return;
     setLoading(true);
     try {
       const u = auth.currentUser!;
@@ -377,7 +348,9 @@ export const Signup: React.FC = () => {
   };
 
   const handleAccountContinue = async () => {
-    if (validatePassword()) await handleCreateAccount();
+    const passwordErrors = validatePassword(formData.password, formData.confirmPassword);
+    setErrors(passwordErrors);
+    if (Object.keys(passwordErrors).length === 0) await handleCreateAccount();
   };
 
   const goToEmailPhase = () => {
@@ -853,7 +826,7 @@ export const Signup: React.FC = () => {
                       error={errors.name}
                       required
                     />
-                    {formData.name && !isNameValid() && !errors.name && (
+                    {formData.name && !isNameValid(formData.name) && !errors.name && (
                       <p className="text-xs text-badge-loss mt-1 ml-1">Name must be 3–80 letters, no numbers.</p>
                     )}
                   </div>
@@ -1085,7 +1058,7 @@ export const Signup: React.FC = () => {
           {/* One screen now, so no Back/Next shuttle — just the single finishing action. */}
           {phase === 'preferences' && (
             <div className="flex justify-center items-center mt-4 pt-8 border-t border-fg/5">
-              <Button onClick={handleCompleteProfile} isLoading={loading} disabled={!isNameValid()}>
+              <Button onClick={handleCompleteProfile} isLoading={loading} disabled={!isNameValid(formData.name)}>
                 Complete Profile
                 <CheckCircle2 className="ml-2 w-5 h-5" />
               </Button>
