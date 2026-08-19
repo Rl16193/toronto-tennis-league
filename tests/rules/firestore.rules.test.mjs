@@ -221,6 +221,29 @@ describe('Firestore authorization boundaries', () => {
     }));
   });
 
+  test('organizer stats compatibility writes stay schema-bound and use bounded point deltas', async () => {
+    await seedDoc('preferences/organizer-a', {
+      uid: 'organizer-a',
+      event_creator: true,
+    });
+    await seedDoc('stats/member-a', {
+      uid: 'member-a',
+      name: 'Member A',
+      leaguePoints26: 10,
+      wins: 1,
+      loses: 1,
+      matchesPlayed: 2,
+      tournamentsPlayed: 1,
+    });
+    const organizerDb = dbFor('organizer-a');
+    const stats = doc(organizerDb, 'stats/member-a');
+
+    await assertFails(updateDoc(stats, { uid: 'organizer-a' }));
+    await assertFails(updateDoc(stats, { private_note: 'not a stats field' }));
+    await assertFails(updateDoc(stats, { leaguePoints26: 999 }));
+    await assertSucceeds(updateDoc(stats, { leaguePoints26: 15, league: "Men's" }));
+  });
+
   test('admin metrics are not readable by a normal member', async () => {
     const memberDb = dbFor('member-a');
     const adminDb = dbFor('7PvfzNtDmsOq5GLMieId7QRT7wH3');
@@ -331,6 +354,79 @@ describe('Firestore authorization boundaries', () => {
       submitted_by: 'member-a',
       match_id: 'tournament-a',
       status: 'open',
+    }));
+  });
+
+  test('friendly reports bind the reporter and winner to the match players', async () => {
+    await seedDoc('matches/rally-a', {
+      id: 'rally-a',
+      category: 'rally',
+      player_1_uid: 'member-a',
+      player_2_uid: 'member-b',
+      status: 'accepted',
+    });
+
+    const validReport = {
+      status: 'reported',
+      winner_uid: 'member-a',
+      winner_name: 'Member A',
+      set_1_player_1: 6,
+      set_1_player_2: 4,
+      set_2_player_1: 6,
+      set_2_player_2: 2,
+      set_3_player_1: 0,
+      set_3_player_2: 0,
+      reported_by: 'member-a',
+      reported_at: '2026-08-19T00:00:00.000Z',
+    };
+
+    await assertFails(updateDoc(doc(dbFor('member-a'), 'matches/rally-a'), {
+      ...validReport,
+      reported_by: 'member-b',
+    }));
+    await assertFails(updateDoc(doc(dbFor('member-a'), 'matches/rally-a'), {
+      ...validReport,
+      winner_uid: 'outsider',
+    }));
+    await assertFails(updateDoc(doc(dbFor('member-a'), 'matches/rally-a'), {
+      ...validReport,
+      set_1_player_1: 8,
+    }));
+
+    await assertSucceeds(updateDoc(doc(dbFor('member-a'), 'matches/rally-a'), validReport));
+    await assertFails(updateDoc(doc(dbFor('member-a'), 'matches/rally-a'), { status: 'confirmed' }));
+    await assertSucceeds(updateDoc(doc(dbFor('member-b'), 'matches/rally-a'), {
+      status: 'confirmed',
+      confirmed_by: 'member-b',
+      confirmed_at: '2026-08-19T00:01:00.000Z',
+      completed_at: '2026-08-19T00:01:00.000Z',
+    }));
+  });
+
+  test('round-robin drafts are readable but writable only by the event creator', async () => {
+    await seedDoc('events/synthetic-event', {
+      id: 'synthetic-event',
+      creator_id: 'organizer-a',
+      title: 'Synthetic Event',
+    });
+    await seedDoc('preferences/organizer-a', {
+      uid: 'organizer-a',
+      event_creator: true,
+    });
+
+    const draft = doc(dbFor('organizer-a'), 'events/synthetic-event/rr_drafts/draw-a');
+    await assertSucceeds(setDoc(draft, {
+      event_id: 'synthetic-event',
+      draw_key: 'draw-a',
+      status: 'draft',
+      groups: [],
+    }));
+    await assertSucceeds(getDoc(doc(dbFor('member-a'), 'events/synthetic-event/rr_drafts/draw-a')));
+    await assertFails(setDoc(doc(dbFor('member-a'), 'events/synthetic-event/rr_drafts/draw-b'), {
+      event_id: 'synthetic-event',
+      draw_key: 'draw-b',
+      status: 'draft',
+      groups: [],
     }));
   });
 

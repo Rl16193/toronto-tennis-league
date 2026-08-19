@@ -32,11 +32,11 @@ marker when a migration may be resumed safely.
 
 ## Legacy Admin scripts
 
-The older operational scripts in `scripts/` use the same guard now:
-`backfill-contacts.mjs`, `delete-stale-docs.mjs`, `set-stringer.mjs`, `seed-rewards.mjs`, and
-`snapshot-ranks.mjs` require `--project <id>` and `--key <service-account.json>`, default to
-dry-run, and require `--apply` for writes. Production additionally requires the confirmation
-triple above. Do not restore direct `firebase-admin` initialization in an operational script.
+The older operational scripts in `scripts/` use the same guard now. This includes contact,
+cleanup, provider, reward, rank, connection, doubles, setup, zone, repair, and season-restore
+scripts. Each requires `--project <id>` and `--key <service-account.json>`, defaults to dry-run,
+and requires `--apply` for writes. Production additionally requires the confirmation triple
+above. Do not restore direct `firebase-admin` initialization in an operational script.
 
 ## Rollback
 

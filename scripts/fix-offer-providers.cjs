@@ -8,52 +8,54 @@
  * - Removes the partner_id field from all offer docs
  *
  * Usage:
- *   node scripts/fix-offer-providers.cjs --key serviceAccount.json [--dry-run]
+ *   node scripts/fix-offer-providers.cjs --project rands-staging --key serviceAccount.json
+ *   node scripts/fix-offer-providers.cjs --project rands-staging --key serviceAccount.json --apply
+ *
+ * Dry-run is the default. Production additionally requires the migration confirmation triple.
  */
 
 const admin = require('firebase-admin');
+const { createMigrationDb, parseMigrationArgs } = require('./migrations/lib/cli.mjs');
 
 const args = process.argv.slice(2);
-const DRY_RUN = args.includes('--dry-run');
-const keyFile = args.find((_, i, a) => a[i - 1] === '--key');
+const options = parseMigrationArgs(args);
+if (options.help) {
+  console.log('Usage: node scripts/fix-offer-providers.cjs --project <id> --key <serviceAccount.json> [--apply]');
+  process.exit(0);
+}
+const DRY_RUN = options.dryRun;
 
-if (!keyFile) {
-  console.error('Usage: node scripts/fix-offer-providers.cjs --key serviceAccount.json [--dry-run]');
+const db = createMigrationDb(options);
+if (!db) {
+  console.error('Could not initialize the migration database.');
   process.exit(1);
 }
 
-admin.initializeApp({ credential: admin.credential.cert(keyFile) });
-const db = admin.firestore();
-
 // ─── Provider UID map ────────────────────────────────────────────────────
 const PROVIDER_UIDS = {
-  'yujin':                'yT3GrDq3bwMGdqHVnGMGjUDXrXx2',
-  'forty-forty tennis':   'yT3GrDq3bwMGdqHVnGMGjUDXrXx2',
-  'karan tiwari':         'FYjN50oiPQVseJt0UzD3G9oP6WG3',
-  'tivoryx':              'FYjN50oiPQVseJt0UzD3G9oP6WG3',
-  'archie':               'kVloaSUaNPfWqv1NtdW6Xj4YDOP2',
-  'pandemic tennis':      'pandemic-tennis',
+  yujin: 'yT3GrDq3bwMGdqHVnGMGjUDXrXx2',
+  'forty-forty tennis': 'yT3GrDq3bwMGdqHVnGMGjUDXrXx2',
+  'karan tiwari': 'FYjN50oiPQVseJt0UzD3G9oP6WG3',
+  tivoryx: 'FYjN50oiPQVseJt0UzD3G9oP6WG3',
+  archie: 'kVloaSUaNPfWqv1NtdW6Xj4YDOP2',
+  'pandemic tennis': 'pandemic-tennis',
 };
 
 // Display names per provider UID
 const DISPLAY_NAMES = {
-  'yT3GrDq3bwMGdqHVnGMGjUDXrXx2': 'Forty-Forty Tennis',
-  'FYjN50oiPQVseJt0UzD3G9oP6WG3': 'Tivoryx',
-  'kVloaSUaNPfWqv1NtdW6Xj4YDOP2': 'Archie',
-  'pandemic-tennis':               'Pandemic Tennis',
+  yT3GrDq3bwMGdqHVnGMGjUDXrXx2: 'Forty-Forty Tennis',
+  FYjN50oiPQVseJt0UzD3G9oP6WG3: 'Tivoryx',
+  kVloaSUaNPfWqv1NtdW6Xj4YDOP2: 'Archie',
+  'pandemic-tennis': 'Pandemic Tennis',
 };
 
 async function main() {
   console.log(`Fixing offer providers ${DRY_RUN ? '(DRY RUN)' : '(LIVE)'}\n`);
 
   const updates = [];
-  const removals = [];
-  const partnerIdRemovals = [];
 
   // 1. Read all offer docs
-  const offersSnap = await db.collection('tasks')
-    .where('type', '==', 'offer')
-    .get();
+  const offersSnap = await db.collection('tasks').where('type', '==', 'offer').get();
   console.log(`Found ${offersSnap.size} offer docs\n`);
 
   for (const doc of offersSnap.docs) {
@@ -95,9 +97,7 @@ async function main() {
   }
 
   // 3. Check if Pandemic Tennis offer exists, create if not
-  const pandemicExists = offersSnap.docs.some(
-    (d) => (d.data().uid === 'pandemic-tennis'),
-  );
+  const pandemicExists = offersSnap.docs.some((d) => d.data().uid === 'pandemic-tennis');
   if (!pandemicExists) {
     const pandemicDoc = {
       type: 'offer',

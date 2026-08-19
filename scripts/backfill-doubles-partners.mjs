@@ -5,25 +5,22 @@
  * skips any match that already carries it. Safe to re-run at any time.
  *
  * Usage:
- *   node scripts/backfill-doubles-partners.mjs --key serviceAccount.json --dry-run
- *   node scripts/backfill-doubles-partners.mjs --key serviceAccount.json
+ *   node scripts/backfill-doubles-partners.mjs --project rands-staging --key serviceAccount.json
+ *   node scripts/backfill-doubles-partners.mjs --project rands-staging --key serviceAccount.json --apply
+ *
+ * Dry-run is the default. Production additionally requires the migration confirmation triple.
  */
 import admin from 'firebase-admin';
-import fs from 'fs';
-import path from 'path';
+import { createMigrationDb, parseMigrationArgs } from './migrations/lib/cli.mjs';
 
-const args = process.argv;
-const dryRun = args.includes('--dry-run');
-const keyIdx = args.indexOf('--key');
-if (keyIdx === -1 || !args[keyIdx + 1]) {
-  console.error('Usage: node scripts/backfill-doubles-partners.mjs --key <serviceAccount.json> [--dry-run]');
-  process.exit(1);
+const args = process.argv.slice(2);
+const options = parseMigrationArgs(args);
+if (options.help) {
+  console.log('Usage: node scripts/backfill-doubles-partners.mjs --project <id> --key <serviceAccount.json> [--apply]');
+  process.exit(0);
 }
-const keyPath = path.resolve(args[keyIdx + 1]);
-if (!fs.existsSync(keyPath)) { console.error(`Key not found: ${keyPath}`); process.exit(1); }
-
-admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(keyPath, 'utf8'))) });
-const db = admin.firestore();
+const dryRun = options.dryRun;
+const db = createMigrationDb(options);
 
 // The same point table used by computeMatchPoints in useTournament.ts.
 // RR group-stage: winner 3 / loser 1. Non-RR knockout: winner 20 / loser varies by round.
@@ -39,7 +36,11 @@ const computePoints = (match) => {
 };
 
 // Normalise a name for fuzzy partner matching — same logic as normalizeForMatch in utils.ts.
-const normalise = (s = '') => s.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+const normalise = (s = '') =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
 
 // Firestore caps a batch at 500 writes.
 const commitInChunks = async (items, apply) => {
@@ -52,7 +53,8 @@ const commitInChunks = async (items, apply) => {
 
 const run = async () => {
   // 1. Every completed doubles match not yet stamped.
-  const matchesSnap = await db.collection('matches')
+  const matchesSnap = await db
+    .collection('matches')
     .where('category', '==', 'doubles')
     .where('status', '==', 'complete')
     .get();
@@ -61,9 +63,14 @@ const run = async () => {
     .map((d) => ({ id: d.id, ref: d.ref, ...d.data() }))
     .filter((m) => (m.winner_uid || m.winner_user_id) && !m.doubles_partner_pts_v2);
 
-  console.log(`${matchesSnap.size} total completed doubles matches · ${matches.length} ${dryRun ? 'would be ' : ''}processed\n`);
+  console.log(
+    `${matchesSnap.size} total completed doubles matches · ${matches.length} ${dryRun ? 'would be ' : ''}processed\n`,
+  );
 
-  if (matches.length === 0) { console.log('Nothing to do.'); process.exit(0); }
+  if (matches.length === 0) {
+    console.log('Nothing to do.');
+    process.exit(0);
+  }
 
   // 2. Resolve partner_uid for every involved player across all affected events.
   const eventIds = [...new Set(matches.map((m) => m.event_id))];
@@ -118,15 +125,28 @@ const run = async () => {
     const total = p1G + p2G;
     const winnerIsP1 = winnerUid === player1Uid;
 
-    const credit = (uid, { wins: w, loses: l, leaguePoints26: lp, tournamentsPlayed: tp, pointswon: pw, totalPointsPlayed: tp2 }) => {
-      increments.push({ uid, match: m, wins: w, loses: l, leaguePoints26: lp, tournamentsPlayed: tp, pointswon: pw, totalPointsPlayed: tp2 });
+    const credit = (
+      uid,
+      { wins: w, loses: l, leaguePoints26: lp, tournamentsPlayed: tp, pointswon: pw, totalPointsPlayed: tp2 },
+    ) => {
+      increments.push({
+        uid,
+        match: m,
+        wins: w,
+        loses: l,
+        leaguePoints26: lp,
+        tournamentsPlayed: tp,
+        pointswon: pw,
+        totalPointsPlayed: tp2,
+      });
     };
 
     // Winner's partner.
     const winnerPartner = captainToPartner.get(winnerUid);
     if (winnerPartner && winnerPartner !== winnerUid) {
       credit(winnerPartner, {
-        wins: 1, loses: 0,
+        wins: 1,
+        loses: 0,
         leaguePoints26: winnerPointsApply ? winnerPts : 0,
         tournamentsPlayed: isFinal ? 1 : 0,
         pointswon: winnerIsP1 ? p1G : p2G,
@@ -138,7 +158,8 @@ const run = async () => {
     const loserPartner = captainToPartner.get(loserUid);
     if (loserPartner && loserPartner !== loserUid) {
       credit(loserPartner, {
-        wins: 0, loses: 1,
+        wins: 0,
+        loses: 1,
         leaguePoints26: loserPts,
         tournamentsPlayed: 1,
         pointswon: winnerIsP1 ? p2G : p1G,
@@ -155,7 +176,17 @@ const run = async () => {
   // Group by stats uid so every player gets one batch.set with all their deltas summed.
   const byUid = new Map();
   increments.forEach((inc) => {
-    if (!byUid.has(inc.uid)) byUid.set(inc.uid, { uid: inc.uid, matchesPlayed: 0, wins: 0, loses: 0, leaguePoints26: 0, tournamentsPlayed: 0, pointswon: 0, totalPointsPlayed: 0 });
+    if (!byUid.has(inc.uid))
+      byUid.set(inc.uid, {
+        uid: inc.uid,
+        matchesPlayed: 0,
+        wins: 0,
+        loses: 0,
+        leaguePoints26: 0,
+        tournamentsPlayed: 0,
+        pointswon: 0,
+        totalPointsPlayed: 0,
+      });
     const acc = byUid.get(inc.uid);
     acc.matchesPlayed += 1;
     acc.wins += inc.wins;
@@ -177,15 +208,19 @@ const run = async () => {
   if (!dryRun) {
     await commitInChunks([...byUid.values()], (batch, row) => {
       const { uid, ...delta } = row;
-      batch.set(db.doc(`stats/${uid}`), {
-        matchesPlayed: admin.firestore.FieldValue.increment(delta.matchesPlayed),
-        wins: admin.firestore.FieldValue.increment(delta.wins),
-        loses: admin.firestore.FieldValue.increment(delta.loses),
-        leaguePoints26: admin.firestore.FieldValue.increment(delta.leaguePoints26),
-        tournamentsPlayed: admin.firestore.FieldValue.increment(delta.tournamentsPlayed),
-        pointswon: admin.firestore.FieldValue.increment(delta.pointswon),
-        totalPointsPlayed: admin.firestore.FieldValue.increment(delta.totalPointsPlayed),
-      }, { merge: true });
+      batch.set(
+        db.doc(`stats/${uid}`),
+        {
+          matchesPlayed: admin.firestore.FieldValue.increment(delta.matchesPlayed),
+          wins: admin.firestore.FieldValue.increment(delta.wins),
+          loses: admin.firestore.FieldValue.increment(delta.loses),
+          leaguePoints26: admin.firestore.FieldValue.increment(delta.leaguePoints26),
+          tournamentsPlayed: admin.firestore.FieldValue.increment(delta.tournamentsPlayed),
+          pointswon: admin.firestore.FieldValue.increment(delta.pointswon),
+          totalPointsPlayed: admin.firestore.FieldValue.increment(delta.totalPointsPlayed),
+        },
+        { merge: true },
+      );
     });
 
     // Stamp every processed match so a re-run skips them. Each match gets its own batch
@@ -199,4 +234,7 @@ const run = async () => {
   process.exit(0);
 };
 
-run().catch((err) => { console.error(err); process.exit(1); });
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

@@ -60,6 +60,30 @@ service cloud.firestore {
       ];
     }
 
+    // The legacy tournament UI still writes result counters from an organizer session. Keep that
+    // compatibility path schema-bound and reject arbitrary fields or UID substitution while the
+    // longer-term server-authoritative scoring migration remains a product decision.
+    function organizerStatsFields() {
+      return [
+        'uid', 'name', 'league', 'skill_level', 'tournament_preference',
+        'leaguePoints25', 'leaguePoints26', 'wins', 'loses', 'matchesPlayed',
+        'tournamentsPlayed', 'pointswon', 'totalPointsPlayed',
+      ];
+    }
+
+    function initialLeaguePointsAreBounded(data) {
+      return !('leaguePoints26' in data) || data.leaguePoints26 in [0, 1, 2, 3, 5, 10, 20];
+    }
+
+    function leaguePointDeltaIsBounded() {
+      let before = resource.data.get('leaguePoints26', 0);
+      let after = request.resource.data.get('leaguePoints26', before);
+      return after == before || after == before + 1 || after == before + 2 || after == before + 3 ||
+        after == before + 5 || after == before + 10 || after == before + 20 ||
+        after == before - 1 || after == before - 2 || after == before - 3 ||
+        after == before - 5 || after == before - 10 || after == before - 20;
+    }
+
     // Order-independent id for a pair of players. MUST match pairId() in functions/connections.js
     // exactly — the trigger writes the doc, this recomputes the same name to look it up.
     function pairId(a, b) {
@@ -99,6 +123,25 @@ service cloud.firestore {
           isGlobalEventCreator() ||
           get(/databases/$(database)/documents/events/$(eventId)).data.creator_id == request.auth.uid
         );
+    }
+
+    // Friendly/challenge result fields are client-submitted before a second party confirms them.
+    // Restrict the winner and score shape here so a forged report cannot become a redeemable
+    // payout. The Functions trigger repeats the check for Admin SDK/imported legacy writes.
+    function reportedWinnerIsPlayer(result) {
+      let winner = result.get('winner_uid', result.get('claimed_winner_uid', ''));
+      return winner == result.player_1_uid || winner == result.player_2_uid;
+    }
+
+    function boundedScore(result, field) {
+      return !(field in result) ||
+        (result[field] is number && result[field] >= 0 && result[field] <= 7 && result[field] == int(result[field]));
+    }
+
+    function reportedScoresAreBounded(result) {
+      return boundedScore(result, 'set_1_player_1') && boundedScore(result, 'set_1_player_2') &&
+        boundedScore(result, 'set_2_player_1') && boundedScore(result, 'set_2_player_2') &&
+        boundedScore(result, 'set_3_player_1') && boundedScore(result, 'set_3_player_2');
     }
 
     // ===============================================================
@@ -144,7 +187,10 @@ service cloud.firestore {
     // ===============================================================
     match /stats/{userId} {
       allow read: if true;
-      allow create: if isGlobalEventCreator() ||
+      allow create: if (isGlobalEventCreator() &&
+          request.resource.data.keys().hasOnly(organizerStatsFields()) &&
+          request.resource.data.get('uid', userId) == userId &&
+          initialLeaguePointsAreBounded(request.resource.data)) ||
         (isOwner(userId) &&
           request.resource.data.get('uid', userId) == userId &&
           request.resource.data.leaguePoints26 == 0 &&
@@ -152,7 +198,10 @@ service cloud.firestore {
           request.resource.data.loses == 0 &&
           request.resource.data.matchesPlayed == 0 &&
           request.resource.data.tournamentsPlayed == 0);
-      allow update: if isGlobalEventCreator() ||
+      allow update: if (isGlobalEventCreator() &&
+          request.resource.data.get('uid', userId) == userId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(organizerStatsFields()) &&
+          leaguePointDeltaIsBounded()) ||
         (isOwner(userId) &&
           request.resource.data.get('uid', userId) == userId &&
           request.resource.data.diff(resource.data).affectedKeys()
@@ -299,7 +348,10 @@ service cloud.firestore {
           resource.data.category == 'challenge' &&
           resource.data.status == 'accepted' &&
           (request.auth.uid == resource.data.player_1_uid || request.auth.uid == resource.data.player_2_uid) &&
+          request.resource.data.reported_by == request.auth.uid &&
           request.resource.data.status == 'reported' &&
+          reportedWinnerIsPlayer(request.resource.data) &&
+          reportedScoresAreBounded(request.resource.data) &&
           request.resource.data.diff(resource.data).affectedKeys()
             // Result fields are the tournament shape; the claimed_*/score_line trio is legacy and
             // stays only until the hosting build that stopped writing them is out.
@@ -314,7 +366,10 @@ service cloud.firestore {
           resource.data.category == 'rally' &&
           resource.data.status == 'accepted' &&
           (request.auth.uid == resource.data.player_1_uid || request.auth.uid == resource.data.player_2_uid) &&
+          request.resource.data.reported_by == request.auth.uid &&
           request.resource.data.status == 'reported' &&
+          reportedWinnerIsPlayer(request.resource.data) &&
+          reportedScoresAreBounded(request.resource.data) &&
           request.resource.data.diff(resource.data).affectedKeys()
             // Result fields are the tournament shape; the claimed_*/score_line trio is legacy and
             // stays only until the hosting build that stopped writing them is out.

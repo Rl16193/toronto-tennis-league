@@ -22,6 +22,7 @@ const admin = require('firebase-admin');
 
 const { REGION } = require('./lib/constants');
 const { safeId } = require('./lib/logging');
+const { isValidFriendlyResult, winnerFor } = require('./lib/friendlyResult');
 const db = () => admin.firestore();
 
 const WINNER_POINTS = 2;
@@ -38,11 +39,11 @@ exports.onFriendlyConfirmedAwardPoints = onDocumentUpdated(
     // `winner_uid` is the current field; `claimed_winner_uid` is what rallies used before results
     // were normalised to the tournament shape. Reading both means this keeps paying whichever
     // order hosting and functions happen to deploy in, and for rows written either way.
-    const winnerId = after.winner_uid || after.claimed_winner_uid;
+    const winnerId = winnerFor(after);
     const p1 = after.player_1_uid;
     const p2 = after.player_2_uid;
-    if (!winnerId || !p1 || !p2) {
-      logger.warn('friendlyPoints: missing uids, skipping', { id: event.params.id });
+    if (!isValidFriendlyResult(after)) {
+      logger.warn('friendlyPoints: invalid result, skipping payout', { id: safeId(event.params.id) });
       return;
     }
     const loserId = winnerId === p1 ? p2 : p1;

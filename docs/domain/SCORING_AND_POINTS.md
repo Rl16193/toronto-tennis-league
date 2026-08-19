@@ -33,3 +33,19 @@ when its game fields are zero.
 
 **Regression test:** `tests/unit/domain.test.mjs`; client counter-minting protections in
 `tests/rules/firestore.rules.test.mjs`.
+
+## Friendly result confirmation
+
+**Rule:** A rally report must identify the authenticated reporter, name one of the two match
+players as winner, and use bounded integer set scores. Points are paid only after a different party
+confirms the report.
+
+**Why:** A client-visible result is untrusted input; accepting an arbitrary winner or self-confirmed
+report would mint redeemable points.
+
+**Important exception:** Legacy `claimed_winner_uid` documents remain readable by the Functions
+trigger while older records are being retired.
+
+**Code:** `firestore.rules`, `functions/lib/friendlyResult.js`, `functions/friendlyPoints.js`.
+
+**Regression test:** `tests/rules/firestore.rules.test.mjs` and `functions/test/friendlyResult.test.js`.

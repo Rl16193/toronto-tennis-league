@@ -11,36 +11,44 @@
  * Requires Node >=22.6 (native TypeScript stripping for the zones.ts import).
  *
  * Usage:
- *   node scripts/backfill-zone-change-requests.mjs --key serviceAccount.json --event <eventId> --dry-run
- *   node scripts/backfill-zone-change-requests.mjs --key serviceAccount.json --event <eventId>
+ *   node scripts/backfill-zone-change-requests.mjs --project rands-staging --key serviceAccount.json --event <eventId>
+ *   node scripts/backfill-zone-change-requests.mjs --project rands-staging --key serviceAccount.json --event <eventId> --apply
+ *
+ * Dry-run is the default. Production additionally requires the migration confirmation triple.
  */
 
-import admin from 'firebase-admin';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { zoneFromCourts } from '../src/utils/zones.ts';
 import { extractCourtsWithCoords } from '../src/features/signup/utils/courtSearch.ts';
+import { createMigrationDb, parseMigrationArgs } from './migrations/lib/cli.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dryRun = process.argv.includes('--dry-run');
+const args = process.argv.slice(2);
+const options = parseMigrationArgs(args);
+if (options.help) {
+  console.log(
+    'Usage: node scripts/backfill-zone-change-requests.mjs --project <id> --key <serviceAccount.json> --event <eventId> [--apply]',
+  );
+  process.exit(0);
+}
+const dryRun = options.dryRun;
 const TARGET_ZONE = 'Downtown - Midtown';
 
 const arg = (name) => {
-  const i = process.argv.indexOf(name);
-  return i === -1 ? null : process.argv[i + 1];
+  const i = args.indexOf(name);
+  return i === -1 ? null : args[i + 1];
 };
 
-const keyPath = arg('--key');
 const eventId = arg('--event');
-if (!keyPath || !eventId) {
-  console.error('Usage: node scripts/backfill-zone-change-requests.mjs --key serviceAccount.json --event <eventId> [--dry-run]');
+if (!eventId) {
+  console.error(
+    'Usage: node scripts/backfill-zone-change-requests.mjs --project <id> --key <serviceAccount.json> --event <eventId> [--apply]',
+  );
   process.exit(1);
 }
-if (!fs.existsSync(path.resolve(keyPath))) { console.error(`Key not found: ${keyPath}`); process.exit(1); }
-
-admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(path.resolve(keyPath), 'utf8'))) });
-const db = admin.firestore();
+const db = createMigrationDb(options);
 
 async function main() {
   console.log(dryRun ? '🔍 DRY RUN — no writes\n' : '✏️  LIVE RUN — writing to Firestore\n');
@@ -78,17 +86,28 @@ async function main() {
     // Prefer the stored zone; fall back to deriving it from their preferred courts.
     const prefSnap = await db.collection('preferences').doc(p.uid).get();
     const prefs = prefSnap.data() || {};
-    const zone = (prefs.preferred_zone || '').trim()
-      || zoneFromCourts(Array.isArray(prefs.preferred_courts) ? prefs.preferred_courts : [], courtCoords);
+    const zone =
+      (prefs.preferred_zone || '').trim() ||
+      zoneFromCourts(Array.isArray(prefs.preferred_courts) ? prefs.preferred_courts : [], courtCoords);
 
-    if (!zone) { noZone.push(name); continue; }
-    if (zone === TARGET_ZONE) { alreadyDowntown.push(name); continue; }
+    if (!zone) {
+      noZone.push(name);
+      continue;
+    }
+    if (zone === TARGET_ZONE) {
+      alreadyDowntown.push(name);
+      continue;
+    }
 
     flagged.push({ name, zone });
     if (!dryRun) {
       batch.update(doc.ref, { req_zone_change: true, new_zone: TARGET_ZONE });
       pending++;
-      if (pending === 400) { await batch.commit(); batch = db.batch(); pending = 0; }
+      if (pending === 400) {
+        await batch.commit();
+        batch = db.batch();
+        pending = 0;
+      }
     }
   }
   if (!dryRun && pending > 0) await batch.commit();
@@ -102,8 +121,13 @@ async function main() {
   console.log(`No zone resolvable — untouched (${noZone.length})`);
   noZone.forEach((n) => console.log(`  ${n}`));
 
-  console.log(`\nSUMMARY: ${flagged.length} flagged · ${alreadyDowntown.length} already correct · ${noZone.length} unknown`);
+  console.log(
+    `\nSUMMARY: ${flagged.length} flagged · ${alreadyDowntown.length} already correct · ${noZone.length} unknown`,
+  );
   if (dryRun) console.log('(dry run — nothing written)');
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

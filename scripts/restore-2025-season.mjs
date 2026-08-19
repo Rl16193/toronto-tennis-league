@@ -7,12 +7,12 @@
  * Idempotent: anyone who already has `leaguePoints25` is skipped, so a re-run can't double-count.
  *
  * Usage:
- *   node scripts/restore-2025-season.mjs --key serviceAccount.json --dry-run
- *   node scripts/restore-2025-season.mjs --key serviceAccount.json
+ *   node scripts/restore-2025-season.mjs --project rands-staging --key serviceAccount.json
+ *   node scripts/restore-2025-season.mjs --project rands-staging --key serviceAccount.json --apply
+ *
+ * Dry-run is the default. Production additionally requires the migration confirmation triple.
  */
-import admin from 'firebase-admin';
-import fs from 'fs';
-import path from 'path';
+import { createMigrationDb, parseMigrationArgs } from './migrations/lib/cli.mjs';
 
 // Columns as supplied: tournamentsPlayed, matchesPlayed, wins, loses, pointswon,
 // totalPointsPlayed, (win% derived), leaguePoints25, (points-per-match derived).
@@ -43,18 +43,14 @@ const SEASON_2025 = [
   },
 ];
 
-const args = process.argv;
-const dryRun = args.includes('--dry-run');
-const keyIdx = args.indexOf('--key');
-if (keyIdx === -1 || !args[keyIdx + 1]) {
-  console.error('Usage: node scripts/restore-2025-season.mjs --key <serviceAccount.json> [--dry-run]');
-  process.exit(1);
+const args = process.argv.slice(2);
+const options = parseMigrationArgs(args);
+if (options.help) {
+  console.log('Usage: node scripts/restore-2025-season.mjs --project <id> --key <serviceAccount.json> [--apply]');
+  process.exit(0);
 }
-const keyPath = path.resolve(args[keyIdx + 1]);
-if (!fs.existsSync(keyPath)) { console.error(`Key not found: ${keyPath}`); process.exit(1); }
-
-admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(keyPath, 'utf8'))) });
-const db = admin.firestore();
+const dryRun = options.dryRun;
+const db = createMigrationDb(options);
 
 const run = async () => {
   const batch = db.batch();
@@ -63,7 +59,10 @@ const run = async () => {
   for (const p of SEASON_2025) {
     const ref = db.doc(`stats/${p.uid}`);
     const snap = await ref.get();
-    if (!snap.exists) { console.log(`SKIP  ${p.name} — no stats doc`); continue; }
+    if (!snap.exists) {
+      console.log(`SKIP  ${p.name} — no stats doc`);
+      continue;
+    }
     const cur = snap.data();
 
     if (cur.leaguePoints25 !== undefined) {
@@ -87,8 +86,12 @@ const run = async () => {
     console.log(`${dryRun ? '[dry-run] ' : ''}${p.name}`);
     console.log(`    leaguePoints25            -> ${p.leaguePoints25}   (leaguePoints26 stays ${n('leaguePoints26')})`);
     console.log(`    matchesPlayed  ${n('matchesPlayed')} + ${p.matchesPlayed} -> ${update.matchesPlayed}`);
-    console.log(`    wins           ${n('wins')} + ${p.wins} -> ${update.wins}      loses ${n('loses')} + ${p.loses} -> ${update.loses}`);
-    console.log(`    pointswon      ${n('pointswon')} + ${p.pointswon} -> ${update.pointswon}   of ${update.totalPointsPlayed}`);
+    console.log(
+      `    wins           ${n('wins')} + ${p.wins} -> ${update.wins}      loses ${n('loses')} + ${p.loses} -> ${update.loses}`,
+    );
+    console.log(
+      `    pointswon      ${n('pointswon')} + ${p.pointswon} -> ${update.pointswon}   of ${update.totalPointsPlayed}`,
+    );
     if (update.league) console.log(`    league (was blank)        -> ${update.league}`);
 
     batch.set(ref, update, { merge: true });
@@ -100,4 +103,7 @@ const run = async () => {
   process.exit(0);
 };
 
-run().catch((err) => { console.error(err); process.exit(1); });
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

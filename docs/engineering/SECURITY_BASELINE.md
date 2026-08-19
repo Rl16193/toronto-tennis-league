@@ -58,12 +58,15 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
 ## Evidence and limits
 
 - Firestore field-level restrictions exist for contacts, tasks, notifications, connections, public contacts, offers, redemptions, and archive paths.
+- The legacy organizer stats compatibility path now has a schema allowlist, UID-preservation check,
+  and bounded league-point deltas; full server-authoritative tournament scoring remains an explicit
+  future product/architecture decision.
 - Storage writes are authenticated and type/size constrained for named prefixes. The current source permits public reads only for LandingPage, Gallery, avatars, and listings; report/suggestion reads are owner/authentication constrained.
 - `src/pages/tournament/useTournament.ts` contains direct `stats` writes for tournament points; Functions contain separate task/friendly-point award logic.
 - Pure domain coverage now exercises Round Robin grouping/pairings, standings, scoring awards, safe rewrites, and the server reward-point calculator. Functions integration tests against the Admin SDK and callable runtime remain open.
 - Reward callable state transitions are explicit: only pending cancellation review can refund, disputed coupons cannot bypass review, operator notes are bounded, and operational identifiers are hashed in the touched logs. Full callable/trigger integration tests remain open.
 - A tracked-file scan was performed for common credential patterns. It found no private key, service-account credential, or Resend secret in application files; the vendored gstack renderer includes an upstream Firebase client key, which is not a service credential. The scan did not prove that secrets are absent from Git history, deployment configuration, or third-party systems.
-- `npm run verify` passes locally with strict typecheck, ESLint over source/scripts/tests/Functions, maintained-slice formatting, docs freshness, Functions syntax and 12 Functions unit tests, 15 root unit tests, 13 Firestore Rules tests, 3 Storage Rules tests, generated-CSV freshness, and the production build. The build still reports existing CSS-target and large-chunk warnings. `npm audit` reports non-zero dependency findings; no broad upgrade or automatic fix was applied.
+- `npm run verify` passes locally with strict typecheck, ESLint over source/scripts/tests/Functions, maintained-slice formatting, docs freshness, Functions syntax and 19 Functions unit tests, 19 root unit tests, 15 Firestore Rules tests, 4 Storage Rules tests, generated-CSV freshness, and the production build. The build still reports existing CSS-target and large-chunk warnings. `npm audit` reports non-zero dependency findings; no broad upgrade or automatic fix was applied.
 
 ## Required gates before production changes
 

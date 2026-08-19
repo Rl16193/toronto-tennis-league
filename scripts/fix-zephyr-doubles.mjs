@@ -9,32 +9,31 @@
  * HARD-SCOPED to one event id — the similar rows in "The Summer Gauntlet - Doubles" are left alone.
  *
  * Usage:
- *   node scripts/fix-zephyr-doubles.mjs --key serviceAccount.json --dry-run
- *   node scripts/fix-zephyr-doubles.mjs --key serviceAccount.json
+ *   node scripts/fix-zephyr-doubles.mjs --project rands-staging --key serviceAccount.json
+ *   node scripts/fix-zephyr-doubles.mjs --project rands-staging --key serviceAccount.json --apply
+ *
+ * Dry-run is the default. Production additionally requires the migration confirmation triple.
  */
-import admin from 'firebase-admin';
-import fs from 'fs';
-import path from 'path';
+import { createMigrationDb, parseMigrationArgs } from './migrations/lib/cli.mjs';
 
 const EVENT_ID = 'Yu8QDT9ZgDQdpuqTN0iW';
 const EXPECTED_TITLE = 'Zephyr Open 2026 Doubles';
 
-const args = process.argv;
-const dryRun = args.includes('--dry-run');
-const keyIdx = args.indexOf('--key');
-if (keyIdx === -1 || !args[keyIdx + 1]) {
-  console.error('Usage: node scripts/fix-zephyr-doubles.mjs --key <serviceAccount.json> [--dry-run]');
-  process.exit(1);
+const args = process.argv.slice(2);
+const options = parseMigrationArgs(args);
+if (options.help) {
+  console.log('Usage: node scripts/fix-zephyr-doubles.mjs --project <id> --key <serviceAccount.json> [--apply]');
+  process.exit(0);
 }
-const keyPath = path.resolve(args[keyIdx + 1]);
-if (!fs.existsSync(keyPath)) { console.error(`Key not found: ${keyPath}`); process.exit(1); }
-
-admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(keyPath, 'utf8'))) });
-const db = admin.firestore();
+const dryRun = options.dryRun;
+const db = createMigrationDb(options);
 
 const run = async () => {
   const eventSnap = await db.doc(`events/${EVENT_ID}`).get();
-  if (!eventSnap.exists) { console.error(`Event ${EVENT_ID} not found.`); process.exit(1); }
+  if (!eventSnap.exists) {
+    console.error(`Event ${EVENT_ID} not found.`);
+    process.exit(1);
+  }
   const event = eventSnap.data();
 
   // Guard against running this against the wrong event after a copy/paste.
@@ -43,7 +42,9 @@ const run = async () => {
     process.exit(1);
   }
   if (event.tournament_choice !== 'Doubles') {
-    console.error(`Refusing to run: event.tournament_choice is ${JSON.stringify(event.tournament_choice)}, not "Doubles".`);
+    console.error(
+      `Refusing to run: event.tournament_choice is ${JSON.stringify(event.tournament_choice)}, not "Doubles".`,
+    );
     process.exit(1);
   }
 
@@ -53,12 +54,17 @@ const run = async () => {
 
   snap.docs.forEach((d) => {
     const p = d.data();
-    if (p.tournament_choice === 'Doubles') { alreadyDoubles += 1; return; }
+    if (p.tournament_choice === 'Doubles') {
+      alreadyDoubles += 1;
+      return;
+    }
     todo.push({ id: d.id, name: p.user_name || '(no name)', from: p.tournament_choice, division: p.division });
   });
 
   todo.forEach((t) => {
-    console.log(`${dryRun ? '[dry-run] ' : ''}${t.name.padEnd(20)} ${JSON.stringify(t.from)} -> "Doubles"   (division ${JSON.stringify(t.division)} kept)`);
+    console.log(
+      `${dryRun ? '[dry-run] ' : ''}${t.name.padEnd(20)} ${JSON.stringify(t.from)} -> "Doubles"   (division ${JSON.stringify(t.division)} kept)`,
+    );
   });
 
   if (!dryRun && todo.length) {
@@ -71,8 +77,13 @@ const run = async () => {
     await batch.commit();
   }
 
-  console.log(`\n${snap.size} registration(s) on "${event.title}" · ${alreadyDoubles} already Doubles · ${todo.length} ${dryRun ? 'would be ' : ''}converted.`);
+  console.log(
+    `\n${snap.size} registration(s) on "${event.title}" · ${alreadyDoubles} already Doubles · ${todo.length} ${dryRun ? 'would be ' : ''}converted.`,
+  );
   process.exit(0);
 };
 
-run().catch((err) => { console.error(err); process.exit(1); });
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

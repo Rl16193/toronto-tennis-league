@@ -68,7 +68,14 @@ const documentationRequirements = [
   {
     paths: [
       'scripts/backfill-contacts.mjs',
+      'scripts/backfill-connections.mjs',
+      'scripts/backfill-doubles-partners.mjs',
+      'scripts/backfill-setup-complete.mjs',
+      'scripts/backfill-zone-change-requests.mjs',
       'scripts/delete-stale-docs.mjs',
+      'scripts/fix-offer-providers.cjs',
+      'scripts/fix-zephyr-doubles.mjs',
+      'scripts/restore-2025-season.mjs',
       'scripts/set-stringer.mjs',
       'scripts/seed-rewards.mjs',
       'scripts/snapshot-ranks.mjs',
