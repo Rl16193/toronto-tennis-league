@@ -135,6 +135,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isGlobalEventCreator() ||
         (isOwner(userId) &&
+          request.resource.data.get('uid', userId) == userId &&
           request.resource.data.leaguePoints26 == 0 &&
           request.resource.data.wins == 0 &&
           request.resource.data.loses == 0 &&
@@ -142,6 +143,7 @@ service cloud.firestore {
           request.resource.data.tournamentsPlayed == 0);
       allow update: if isGlobalEventCreator() ||
         (isOwner(userId) &&
+          request.resource.data.get('uid', userId) == userId &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['skill_level', 'tournament_preference', 'name', 'uid', 'league']));
       allow delete: if false;

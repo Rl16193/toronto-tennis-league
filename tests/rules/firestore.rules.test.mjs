@@ -94,6 +94,29 @@ describe('Firestore authorization boundaries', () => {
     await assertFails(updateDoc(stats, { leaguePoints26: 1 }));
   });
 
+  test('member-owned stats cannot substitute another UID', async () => {
+    const db = dbFor('member-a');
+    const stats = doc(db, 'stats/member-a');
+
+    await assertSucceeds(setDoc(stats, {
+      uid: 'member-a',
+      leaguePoints26: 0,
+      wins: 0,
+      loses: 0,
+      matchesPlayed: 0,
+      tournamentsPlayed: 0,
+    }));
+    await assertFails(updateDoc(stats, { uid: 'other-member' }));
+    await assertFails(setDoc(doc(db, 'stats/other-member'), {
+      uid: 'member-a',
+      leaguePoints26: 0,
+      wins: 0,
+      loses: 0,
+      matchesPlayed: 0,
+      tournamentsPlayed: 0,
+    }));
+  });
+
   test('admin metrics are not readable by a normal member', async () => {
     const memberDb = dbFor('member-a');
     const adminDb = dbFor('7PvfzNtDmsOq5GLMieId7QRT7wH3');

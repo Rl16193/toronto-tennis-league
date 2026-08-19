@@ -18,13 +18,16 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 | `345f382` | Future Codex sessions lacked durable project and skill routing. | `AGENTS.md`, `skills-lock.json`, `.agents/skills/` | Installation and lock hashes reviewed. | Upstream skill updates require deliberate review. |
 | `5057d5e` | Architecture knowledge was distributed across source without a current-state record. | `docs/architecture/` Markdown and ADRs | Source, rules, Functions, Firebase config, and package manifests inspected. | Deployed Firebase state and staging isolation remain unverified. |
 | `087411d` | Technical visuals and security findings were not available as durable project artifacts. | Branded editable diagrams, SVG exports, `SECURITY_BASELINE.md`, skill inventory updates | All six HTML/SVG pairs checked; SVG XML validation passed; security review recorded. | PNG export needs the Playwright Python runtime; emulator rules tests are not configured. |
+| `230a291` | Rules authorization had no repeatable local harness. | `tests/rules/firestore.rules.test.mjs`, `package.json`, `.github/workflows/ci.yml` | Harness syntax, CI YAML, and lint checks passed; emulator execution still needs the Java prerequisite. | Coverage is initial and Functions authorization tests are still absent. |
+| `fe6ae63` | Hosting scripts could inherit the production-sensitive `.firebaserc` project. | `scripts/deploy-hosting.mjs`, `package.json`, `README.md` | Missing-project and production-without-approval guard paths both refused safely; no deploy ran. | Authorized staging project and production approval workflow remain external gates. |
+| `d636fb3` | Separate HTML/SVG diagram artifacts were difficult to view and maintain. | `docs/architecture/diagrams/*.md`, architecture links, skill inventory | Six Mermaid Markdown files, one block each; no HTML/SVG references remain. | Mermaid rendering depends on the Markdown viewer; no separate export is maintained. |
 
 ## Current issue queue
 
-1. Add local Firebase Emulator Suite configuration and seeded rules tests.
-2. Define explicit staging project selection and prevent routine commands from defaulting to production.
-3. Add recovery runbook and distinguish code-verifiable backup tooling from console-only controls.
-4. Add GitHub CI for typecheck, build, rules tests, Functions tests, and security checks.
+1. Install/authorize the local Java prerequisite and execute the Rules harness.
+2. Define explicit staging project selection and complete non-production smoke validation.
+3. Add recovery runbook validation against a non-production copy.
+4. Expand CI with Functions authorization tests and security checks.
 5. Consolidate role authorization and tournament scoring behind server-authoritative paths.
 
 ## Deployment guard evidence
@@ -40,12 +43,12 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 - `npm ci` completed for root and Functions dependencies.
 - `npm run lint` passed.
 - `npm run build` passed; it emits the generated programs CSV and Vite `dist/` output.
-- All committed diagram SVGs passed `xmllint --noout`.
-- All committed diagram HTML files contain one SVG and match their SVG export geometry/content.
-- Emulator configuration is present and the CLI was invoked with synthetic project ID `rands-local`; startup was blocked by the host’s missing Java runtime (`java -version` exit 1).
-- Initial Firestore Rules tests cover preference role self-assignment, contact ownership/privacy, server-only connection markers, task point minting, member stats point writes, and admin metric access. They are wired into `npm run test:rules` and CI but could not execute locally until Java is installed.
+- Architecture diagrams are now six Mermaid Markdown files under `docs/architecture/diagrams/`; the former HTML/SVG pairs and project-local diagram skill were removed.
+- Emulator configuration is present and the CLI was invoked with synthetic project ID `rands-local`; startup was previously blocked by the host’s missing Java runtime (`java -version` exit 1). A later rules-test invocation also hung during CLI package resolution and was stopped without connecting to Firebase.
+- Initial Firestore Rules tests cover preference role self-assignment, contact ownership/privacy, server-only connection markers, task point minting, member stats point writes, UID substitution on member stats, and admin metric access. They are wired into `npm run test:rules` and CI but have not passed locally because the emulator prerequisite is unresolved.
+- The `stats/{uid}` Rules boundary now preserves the document UID on member create/update; TypeScript, test-file syntax, and whitespace checks passed.
 - `npm audit --json` could not refresh in the original validation environment because the npm registry DNS lookup failed; install-time audit warnings remain untriaged.
-- Firebase rules emulator tests were not run because no emulator/test harness is currently configured.
+- Firebase Rules emulator tests remain unverified locally because Java/CLI resolution is unresolved; no production Firebase command was run.
 
 ## Handoff rule
 
