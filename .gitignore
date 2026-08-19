@@ -6,6 +6,12 @@ coverage/
 .env*
 !.env.example
 serviceAccount.json
+functions/.runtimeconfig.json
+functions/.secret.local
+serviceAccount*.json
+*.pem
+*.p12
+*.key
 
 .DS_Store
 *.log
@@ -13,6 +19,9 @@ serviceAccount.json
 .vscode/
 .idea/
 *.local
+firebase-debug.log
+playwright-report/
+test-results/
 
 # Local data-analysis tooling & Firestore dumps (contains user PII — never commit)
 analysis/
