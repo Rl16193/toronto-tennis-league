@@ -30,8 +30,12 @@ git checkout dev-anuj
 npm ci
 cd functions && npm ci
 cd ..
+npx playwright install chromium
 cp .env.example .env.local
 ```
+
+On Linux CI or a fresh Linux workstation, use `npx playwright install --with-deps chromium` when
+system browser libraries are not already installed.
 
 The template defaults to local emulators with a synthetic `rands-local` project ID. Vite exposes only variables prefixed with `VITE_`; do not place service-account credentials, Resend secrets, or other private keys in this file. The Functions `RESEND_API_KEY` is a server-managed Firebase secret, not a client environment variable.
 

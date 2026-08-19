@@ -22,8 +22,13 @@ From a clean checkout of `dev-anuj`, install both dependency sets from their loc
 ```bash
 npm ci
 npm --prefix functions ci
+npx playwright install chromium
 cp .env.example .env.local
 ```
+
+On Linux, use `npx playwright install --with-deps chromium` if the host does not already provide
+Playwright's system browser dependencies. This browser install is required because `npm run verify`
+includes the isolated Chromium smoke suite.
 
 Keep `VITE_USE_FIREBASE_EMULATORS=true` and `VITE_FIREBASE_PROJECT_ID=rands-local` in
 `.env.local`. The template contains local placeholders, not deployable credentials. Never add a
