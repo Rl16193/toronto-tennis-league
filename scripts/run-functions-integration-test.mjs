@@ -45,6 +45,7 @@ const main = async () => {
       'admin.initializeApp();',
       `Object.assign(exports, require(${JSON.stringify(path.join(root, 'functions', 'rewards.js'))}));`,
       `Object.assign(exports, require(${JSON.stringify(path.join(root, 'functions', 'friendlyPoints.js'))}));`,
+      `Object.assign(exports, require(${JSON.stringify(path.join(root, 'functions', 'accountLookup.js'))}));`,
       ...(existsSync(path.join(root, 'functions', 'tournamentResults.js'))
         ? [`Object.assign(exports, require(${JSON.stringify(path.join(root, 'functions', 'tournamentResults.js'))}));`]
         : []),

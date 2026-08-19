@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import assert from 'node:assert/strict';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, beforeEach, describe, test } from 'node:test';
@@ -300,8 +301,16 @@ describe('Firestore authorization boundaries', () => {
     await assertFails(getDoc(doc(dbFor('organizer-a'), 'contacts/member-a')));
     await assertFails(getDoc(doc(dbFor('member-c'), 'contacts/member-a')));
 
-    await seedDoc('public_contacts/member-a', { uid: 'member-a' });
-    await assertSucceeds(getDoc(doc(dbFor('member-c'), 'contacts/member-a')));
+    await seedDoc('public_contacts/member-a', {
+      uid: 'member-a',
+      email: 'member-a@example.invalid',
+      phone: '+14165550100',
+      preferred_mode_of_contact: 'email',
+    });
+    await assertFails(getDoc(doc(dbFor('member-c'), 'contacts/member-a')));
+    const projected = await assertSucceeds(getDoc(doc(dbFor('member-c'), 'public_contacts/member-a')));
+    assert.equal(projected.data().email, 'member-a@example.invalid');
+    assert.equal(projected.data().secondary_email, undefined);
     await assertFails(getDoc(doc(anonDb(), 'contacts/member-a')));
   });
 

@@ -21,6 +21,15 @@ const { REGION } = require('./lib/constants');
 const { safeId } = require('./lib/logging');
 const db = () => admin.firestore();
 
+const publicContactFields = (contact = {}) => ({
+  email: contact.email || '',
+  phone: contact.phone || '',
+  preferred_mode_of_contact: contact.preferred_mode_of_contact || '',
+  whatsapp_contact: contact.whatsapp_contact || '',
+  whatsapp_same_as_phone: contact.whatsapp_same_as_phone === true,
+  contactable: contact.contactable !== false,
+});
+
 /** Order-independent pair id. Must match pairId() in firestore.rules exactly. */
 const pairId = (a, b) => (a < b ? `${a}__${b}` : `${b}__${a}`);
 
@@ -67,8 +76,26 @@ exports.onListingContact = onDocumentWritten({ document: 'listings/{id}', region
     logger.info('public_contacts cleared', { uid: safeId(uid) });
     return;
   }
-  await ref.set({ uid, reason: 'listing', updated_at: new Date().toISOString() });
+  const contact = await db().collection('contacts').doc(uid).get();
+  await ref.set({
+    uid,
+    reason: 'listing',
+    ...publicContactFields(contact.data()),
+    updated_at: new Date().toISOString(),
+  });
 });
+
+/** Keep an existing listing projection current without copying private account metadata. */
+exports.onContactProjection = onDocumentWritten({ document: 'contacts/{uid}', region: REGION }, async (event) => {
+  const ref = db().collection('public_contacts').doc(event.params.uid);
+  const marker = await ref.get();
+  if (!marker.exists) return;
+  const after = event.data?.after?.data();
+  if (!after) return ref.delete();
+  await ref.set({ ...publicContactFields(after), updated_at: new Date().toISOString() }, { merge: true });
+});
+
+exports.publicContactFields = publicContactFields;
 
 /**
  * `onDocumentWritten`, not created/updated separately: a tournament match arrives already

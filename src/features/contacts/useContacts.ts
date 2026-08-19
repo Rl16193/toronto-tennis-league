@@ -37,6 +37,7 @@ export function useContacts(userIds: string[]): Record<string, ContactData> {
     Promise.all(
       missing.map((id) =>
         getDoc(doc(db, 'contacts', id))
+          .catch(() => getDoc(doc(db, 'public_contacts', id)))
           .then((s) => [id, s.exists() ? normalizeContactData(s.data()) : undefined] as const)
           .catch(() => [id, undefined] as const),
       ),

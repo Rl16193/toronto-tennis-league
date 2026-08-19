@@ -79,6 +79,16 @@ test('protected callables reject anonymous requests at the emulator wrapper', as
   }
 });
 
+test('signup lookup throttles repeated pre-auth enumeration', async () => {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const result = await call('checkSignupEmail', undefined, { email: `lookup-${attempt}@example.invalid` });
+    assert.equal(result.status, 200);
+    assert.equal(result.body.result.exists, false);
+  }
+  const blocked = await call('checkSignupEmail', undefined, { email: 'lookup-blocked@example.invalid' });
+  assert.equal(blocked.body.error.status, 'RESOURCE_EXHAUSTED');
+});
+
 test('redemption rejects insufficient balance and duplicate open coupons', async () => {
   const player = await session('reward-player');
   const rewardId = `reward-${crypto.randomUUID()}`;

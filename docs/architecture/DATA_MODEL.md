@@ -25,7 +25,7 @@ Diagram: [Firestore data model](diagrams/firestore-data-model.md).
 | `offers/{uid}`                          | Reward balance/catalog projection                       | Owner or super-admin read; server-only write                                                  |
 | `redemptions/{code}`                    | Reward redemption lifecycle                             | Owner/provider/admin read; server-only write                                                  |
 | `listings/{id}`                         | Member marketplace listings                             | Public read; owner create/delete; owner or super-admin update                                 |
-| `public_contacts/{uid}`                 | Listing contact-access marker                           | Authenticated read; server-only write                                                         |
+| `public_contacts/{uid}`                 | Listing-safe contact projection                         | Authenticated read; server-only allowlisted projection write                                  |
 | `connections/{pair}`                    | Opponent/contact-access relationship                    | Participant read; server-only write                                                           |
 | `notifications/{id}`                    | Per-user in-app notifications                           | Recipient read/update/delete; server-only create                                              |
 | `group_lessons/{month}`                 | Monthly roster projection                               | Public read; server-only write                                                                |

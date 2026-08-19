@@ -183,8 +183,7 @@ service cloud.firestore {
     match /contacts/{userId} {
       allow read: if isOwner(userId) ||
         isConnectedTo(userId) ||
-        isSuperAdmin() ||
-        (isAuthenticated() && (isOrganizerAccount(userId) || hasPublicContact(userId)));
+        isSuperAdmin();
       allow create: if isOwner(userId) &&
         request.resource.data.keys().hasOnly(ownerContactFields());
       allow update: if isOwner(userId) &&
@@ -428,6 +427,9 @@ service cloud.firestore {
         // slots, and schedule status remain event-manager controlled by the branch below.
         (
           (request.auth.uid == resource.data.player_1_uid || request.auth.uid == resource.data.player_2_uid) &&
+          resource.data.category in ['singles', 'doubles'] &&
+          resource.data.tournament_choice in ['Singles', 'Doubles'] &&
+          resource.data.status != 'complete' &&
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['schedule_requested']) &&
           request.resource.data.schedule_requested == true
@@ -612,8 +614,8 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Marker: "this person has a live marketplace listing, so a buyer may contact them."
-    // Written only by the onListingContact trigger.
+    // Deliberate listing-contact projection. It contains only contact-channel fields and never
+    // account-recovery metadata such as contacts.secondary_email.
     match /public_contacts/{userId} {
       allow read: if isAuthenticated();
       allow write: if false;

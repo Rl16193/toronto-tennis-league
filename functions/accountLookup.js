@@ -15,7 +15,8 @@
  * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
  * do not use a bare Firebase deploy command from this checkout.
  */
-const { onCall } = require('firebase-functions/v2/https');
+const nodeCrypto = require('node:crypto');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const { REGION } = require('./lib/constants');
 const { requireTrimmedString } = require('./lib/callable');
@@ -23,8 +24,36 @@ const { requireTrimmedString } = require('./lib/callable');
 const db = () => admin.firestore();
 
 const enforceAppCheck = process.env.FUNCTIONS_EMULATOR !== 'true';
+const LOOKUP_WINDOW_MS = 60_000;
+const LOOKUP_LIMIT = 30;
+
+const lookupActorKey = (request) => {
+  const forwarded = request.rawRequest?.headers?.['x-forwarded-for'];
+  const source = String(Array.isArray(forwarded) ? forwarded[0] : forwarded || request.rawRequest?.ip || 'unknown')
+    .split(',')[0]
+    .trim();
+  return nodeCrypto.createHash('sha256').update(source).digest('hex').slice(0, 32);
+};
+
+const enforceLookupRateLimit = async (request, now = Date.now()) => {
+  const ref = db().collection('_account_lookup_rate_limits').doc(lookupActorKey(request));
+  await db().runTransaction(async (tx) => {
+    const snapshot = await tx.get(ref);
+    const prior = snapshot.data() || {};
+    const windowStart = Number(prior.window_start_ms) || 0;
+    const inWindow = now - windowStart < LOOKUP_WINDOW_MS;
+    const count = inWindow ? Number(prior.count) || 0 : 0;
+    if (count >= LOOKUP_LIMIT) throw new HttpsError('resource-exhausted', 'Please wait before checking another email.');
+    tx.set(ref, {
+      window_start_ms: inWindow ? windowStart : now,
+      count: count + 1,
+      expires_at: admin.firestore.Timestamp.fromMillis(now + LOOKUP_WINDOW_MS * 2),
+    });
+  });
+};
 
 exports.checkSignupEmail = onCall({ region: REGION, enforceAppCheck }, async (request) => {
+  await enforceLookupRateLimit(request);
   const email = requireTrimmedString(request.data && request.data.email, 'An email address is required.', {
     maxLength: 320,
   });
