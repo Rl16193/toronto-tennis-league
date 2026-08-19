@@ -36,8 +36,8 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
     {
       "check": "Rules and environment validation",
       "severity": "moderate",
-      "issue": "Firebase emulator configuration and an initial Firestore Rules harness now exist, but local macOS execution still needs Java, Functions authorization coverage is absent, and staging isolation is not established. npm audit refresh was also blocked by registry DNS resolution in this environment.",
-      "recommendation": "Run the seeded emulator suite locally, add Functions unit tests for authorization and idempotency, and establish a non-production Firebase project before production deployment work resumes."
+      "issue": "Firebase emulator configuration and initial Firestore/Storage Rules harnesses now exist, but local macOS execution still needs Java, callable/trigger integration authorization coverage is incomplete, and staging isolation is not established. npm audit refresh was also blocked by registry DNS resolution in this environment.",
+      "recommendation": "Run the seeded emulator suite locally, extend Functions tests around callable authorization and idempotency, and establish a non-production Firebase project before production deployment work resumes."
     },
     {
       "check": "Tracked secrets",
@@ -54,8 +54,9 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
 - Firestore field-level restrictions exist for contacts, tasks, notifications, connections, public contacts, offers, redemptions, and archive paths.
 - Storage writes are authenticated and type/size constrained for named prefixes. The current source permits public reads only for LandingPage, Gallery, avatars, and listings; report/suggestion reads are owner/authentication constrained.
 - `src/pages/tournament/useTournament.ts` contains direct `stats` writes for tournament points; Functions contain separate task/friendly-point award logic.
+- Pure domain coverage now exercises Round Robin grouping/pairings, standings, scoring awards, safe rewrites, and the server reward-point calculator. Functions integration tests against the Admin SDK and callable runtime remain open.
 - A tracked-file scan was performed for common credential patterns. It did not prove that secrets are absent from Git history, deployment configuration, or third-party systems.
-- `npm run lint` and `npm run build` pass locally. GitHub Actions run `32210015729` passed the Firestore Rules suite after provisioning Java 21. Storage Rules syntax is locally checked, while local Storage emulator execution remains blocked by the macOS Java prerequisite. `npm audit --json` could not refresh because `registry.npmjs.org` did not resolve from this environment.
+- `npm run lint`, `npm test`, `cd functions && npm test`, and `npm run build` pass locally. GitHub Actions run `32210506773` passed the Storage Rules suite after provisioning Java 21. Local Rules emulator execution remains blocked by the macOS Java prerequisite. `npm audit --json` could not refresh because `registry.npmjs.org` did not resolve from this environment.
 
 ## Required gates before production changes
 

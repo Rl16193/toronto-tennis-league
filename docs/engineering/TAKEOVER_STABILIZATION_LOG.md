@@ -24,14 +24,16 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 | Current | Provider role fields were writable by the member owner even though redemptions access trusts them. | `firestore.rules`, `tests/rules/firestore.rules.test.mjs` | TypeScript, Rules test syntax, and diff checks passed; emulator startup reached the missing-Java failure. | Rules assertions still need a Java-enabled emulator run. |
 | `e84d0f6` | GitHub CI failed at `Firestore Rules tests` because the workflow did not provision Java for the Firestore emulator. | `.github/workflows/ci.yml` | Public run `32209659003` confirmed typecheck/build passed and Rules tests failed; run `32210015729` passed after Temurin Java 21 was added. | Local macOS Rules execution still needs a Java runtime. |
 | Current | Emulator wiring had no reusable synthetic dataset or safe seed command. | `tests/fixtures/local-fixtures.mjs`, `tests/fixtures/seed-emulator.mjs`, package scripts, README | 25 fixture documents validated; seed command refuses any project other than `rands-local`. | Emulator must be running and local Java remains required for full smoke execution. |
-| Current | Storage Rules had a public catch-all read and no CI test coverage. | `storage.rules`, `tests/rules/storage.rules.test.mjs`, package scripts, `.github/workflows/ci.yml` | Storage test syntax and diff checks pass; local emulator startup is blocked by missing Java. | GitHub run must confirm the new Storage suite before treating the source fix as validated. |
+| `0e4d311` | Storage Rules had a public catch-all read and no CI test coverage. | `storage.rules`, `tests/rules/storage.rules.test.mjs`, package scripts, `.github/workflows/ci.yml` | Public run `32210506773` passed the Storage Rules suite; local emulator startup is still blocked by missing Java. | Deployed Storage Rules and intended public projection remain unverified until a non-production Firebase environment is available. |
+| `8f85777` | The repository had no repeatable root or Functions unit-test command for high-value business logic. | `tests/unit/domain.test.mjs`, `functions/test/domain.test.js`, package manifests, `.github/workflows/ci.yml` | 6 root domain tests and 4 Functions tests pass locally; typecheck and diff checks pass. | Callable/trigger integration tests and broader Rules matrix remain open. |
+| `4372baa` | Notification email delivery had no explicit local/staging boundary. | `functions/lib/emailDelivery.js`, `functions/lib/notify.js`, `docs/runbooks/RESEND_DOMAIN_VERIFICATION.md` | 4 email-policy tests pass; emulators are blocked from sending and non-production requires an exact allowlist. | Resend/DNS verification and authorized staging configuration remain external gates. |
 
 ## Current issue queue
 
 1. Install/authorize the local Java prerequisite and execute the Rules harness.
 2. Define explicit staging project selection and complete non-production smoke validation.
 3. Add recovery runbook validation against a non-production copy.
-4. Expand CI with Functions authorization tests and security checks.
+4. Expand Functions integration coverage around callable authorization and idempotency.
 5. Consolidate role authorization and tournament scoring behind server-authoritative paths.
 
 ## Deployment guard evidence
@@ -40,21 +42,24 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 
 ## CI evidence
 
-`.github/workflows/ci.yml` now runs on `dev-anuj` pushes and pull requests. It installs Node.js 22 and Temurin Java 21, runs `npm ci`, `npm run lint`, `npm run build`, runs the Firestore Rules suite, installs Functions dependencies, checks Functions JavaScript syntax, and runs `git diff --check`. It intentionally does not deploy or authenticate to Firebase.
+`.github/workflows/ci.yml` now runs on `dev-anuj` pushes and pull requests. It installs Node.js 22 and Temurin Java 21, runs `npm ci`, `npm run lint`, `npm run build`, root domain tests, Firestore and Storage Rules suites, Functions dependencies and unit tests, Functions syntax checks, and `git diff --check`. It intentionally does not deploy or authenticate to Firebase.
 
 ## Validation record
 
 - `npm ci` completed for root and Functions dependencies.
 - `npm run lint` passed.
+- `npm test` passed with 6 pure tournament/domain tests.
+- `cd functions && npm test` passed with 4 pure Functions helper tests.
 - `npm run build` passed; it emits the generated programs CSV and Vite `dist/` output.
 - Architecture diagrams are now six Mermaid Markdown files under `docs/architecture/diagrams/`; the former HTML/SVG pairs and project-local diagram skill were removed.
 - Emulator configuration is present and the CLI was invoked with synthetic project ID `rands-local`; startup was previously blocked by the host’s missing Java runtime (`java -version` exit 1). A later rules-test invocation also hung during CLI package resolution and was stopped without connecting to Firebase.
 - Initial Firestore Rules tests cover preference role self-assignment, contact ownership/privacy, server-only connection markers, task point minting, member stats point writes, UID substitution on member stats, and admin metric access. They are wired into `npm run test:rules` and CI but have not passed locally because the emulator prerequisite is unresolved.
 - The `stats/{uid}` Rules boundary now preserves the document UID on member create/update; TypeScript, test-file syntax, and whitespace checks passed.
 - Member preference writes now allow only documented self-service fields; provider identifiers and role flags remain super-admin-only. The test covers safe preference updates, role-field injection, and UID substitution.
-- GitHub Actions run `32210015729` passed the complete validation job: Java setup, web dependencies, typecheck, build, Firestore Rules tests, Functions dependencies, Functions syntax, and whitespace checks.
+- GitHub Actions run `32210015729` passed the complete pre-Storage validation job: Java setup, web dependencies, typecheck, build, Firestore Rules tests, Functions dependencies, Functions syntax, and whitespace checks. Run `32210506773` passed the Storage Rules suite as well.
 - The synthetic fixture module covers member, organizer, provider, multi-role, profile/contact, event/RR draft, match, task/reward, marketplace, notification, court, and aggregate documents. Production project IDs are rejected before emulator initialization.
 - Storage reads are now explicit: LandingPage, Gallery, avatars, and listings are public; report/suggestion paths require authentication and owner scope. Anonymous report writes remain limited to the `court_reports/anon/` prefix.
+- Email delivery is environment-gated: emulator delivery is blocked, non-production delivery requires `EMAIL_DELIVERY_ENABLED=true` plus an exact `EMAIL_ALLOWED_RECIPIENTS` entry, and production delivery is recognized only by the production project ID. Resend/DNS status remains unverified.
 - `npm audit --json` could not refresh in the original validation environment because the npm registry DNS lookup failed; install-time audit warnings remain untriaged.
 - Firebase Rules emulator tests remain unverified locally because Java/CLI resolution is unresolved; no production Firebase command was run.
 

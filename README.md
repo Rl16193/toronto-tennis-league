@@ -57,14 +57,16 @@ GitHub CI runs on pushes and pull requests targeting `dev-anuj`. It currently ch
 
 ```bash
 npm run lint       # TypeScript no-emit check
+npm test            # pure tournament/domain tests
 npm run build      # Generates the programs CSV, then creates dist/
 npm run preview    # Serves the built dist/ locally
 npm run seed:emulator # Seeds synthetic local Firestore data; emulator must be running
 npm run test:rules # Firestore Rules tests; requires Java and the emulator
 npm run test:storage # Cloud Storage Rules tests; requires Java and the emulator
+cd functions && npm test # pure Functions helper tests
 ```
 
-Functions currently have no package test script. Project architecture and security validation gaps are tracked in [docs/engineering/SECURITY_BASELINE.md](docs/engineering/SECURITY_BASELINE.md).
+Project architecture and security validation gaps are tracked in [docs/engineering/SECURITY_BASELINE.md](docs/engineering/SECURITY_BASELINE.md). Email delivery safety and DNS verification steps are tracked in [docs/runbooks/RESEND_DOMAIN_VERIFICATION.md](docs/runbooks/RESEND_DOMAIN_VERIFICATION.md).
 
 ## Firebase and deployment safety
 
