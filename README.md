@@ -37,6 +37,9 @@ The template defaults to local emulators with a synthetic `rands-local` project 
 
 ## Local development
 
+The full fresh-checkout walkthrough, local credentials, alternate-port workflow, test matrix, and
+environment claim boundaries live in [Local development and verification](docs/engineering/LOCAL_DEVELOPMENT.md).
+
 Start the Emulator Suite in one terminal and the Vite app in another:
 
 ```bash
@@ -70,7 +73,7 @@ not deploy or connect to Firebase.
 ```bash
 npm run typecheck     # Full TypeScript strict check, no emit
 npm run lint          # ESLint source, scripts, tests, and Functions checks
-npm run format:check  # Maintained-slice formatting check
+npm run format:check  # Changed/new first-party files; generated and vendored paths excluded
 npm test              # Pure domain and data-contract tests
 npm run test:rules    # Firestore Rules suite in a temporary local emulator
 npm run test:storage  # Storage Rules suite in a temporary local emulator
@@ -116,6 +119,7 @@ The remaining environment work is to establish:
 - [Authorization model](docs/architecture/AUTHORIZATION_MODEL.md)
 - [Environment and delivery boundaries](docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md)
 - [Agent skills inventory](docs/engineering/AGENT_SKILLS.md)
+- [Local development and verification](docs/engineering/LOCAL_DEVELOPMENT.md)
 - [Maintainability map and quality commands](docs/engineering/MAINTAINABILITY.md)
 - [Security baseline](docs/engineering/SECURITY_BASELINE.md)
 - [Takeover stabilization log](docs/engineering/TAKEOVER_STABILIZATION_LOG.md)

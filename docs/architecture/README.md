@@ -22,19 +22,20 @@ maintainability dependency map and quality-command contract live in
 13. [Scoring and points](../domain/SCORING_AND_POINTS.md)
 14. [Contact privacy](../domain/CONTACT_PRIVACY.md)
 15. [Rewards rules](../domain/REWARDS_RULES.md)
+16. [Local development and verification](../engineering/LOCAL_DEVELOPMENT.md)
 
 ## Diagram index
 
 The diagrams are intentionally plain Markdown with Mermaid blocks so they render directly in GitHub, code review, and Markdown viewers without opening separate HTML/SVG files.
 
-| Diagram | Markdown |
-| --- | --- |
-| Current system architecture | [Open Markdown diagram](diagrams/current-system-architecture.md) |
+| Diagram                           | Markdown                                                               |
+| --------------------------------- | ---------------------------------------------------------------------- |
+| Current system architecture       | [Open Markdown diagram](diagrams/current-system-architecture.md)       |
 | Target safe delivery architecture | [Open Markdown diagram](diagrams/target-safe-delivery-architecture.md) |
-| Firestore data model | [Open Markdown diagram](diagrams/firestore-data-model.md) |
-| Core data flow | [Open Markdown diagram](diagrams/core-data-flow.md) |
-| Authorization boundaries | [Open Markdown diagram](diagrams/authorization-boundaries.md) |
-| Current vs target modernization | [Open Markdown diagram](diagrams/modernization-before-after.md) |
+| Firestore data model              | [Open Markdown diagram](diagrams/firestore-data-model.md)              |
+| Core data flow                    | [Open Markdown diagram](diagrams/core-data-flow.md)                    |
+| Authorization boundaries          | [Open Markdown diagram](diagrams/authorization-boundaries.md)          |
+| Current vs target modernization   | [Open Markdown diagram](diagrams/modernization-before-after.md)        |
 
 ## Evidence convention
 

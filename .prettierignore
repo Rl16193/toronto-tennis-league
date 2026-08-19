@@ -4,4 +4,6 @@ functions/node_modules/
 .agents/skills/
 coverage/
 public/programs-tennis.csv
+package-lock.json
+functions/package-lock.json
 *.min.js

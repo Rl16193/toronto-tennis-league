@@ -17,6 +17,7 @@ const requiredDocs = [
   'docs/engineering/AGENT_SKILLS.md',
   'docs/engineering/MAINTAINABILITY.md',
   'docs/engineering/SECURITY_BASELINE.md',
+  'docs/engineering/LOCAL_DEVELOPMENT.md',
   'docs/runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md',
   'docs/domain/TOURNAMENT_RULES.md',
   'docs/domain/ROUND_ROBIN_RULES.md',
