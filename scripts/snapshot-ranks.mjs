@@ -10,26 +10,23 @@
  * Idempotent: a run with no rank changes writes nothing. Admin SDK bypasses the stats owner rule.
  *
  * Usage:
- *   node scripts/snapshot-ranks.mjs --key serviceAccount.json
- *   node scripts/snapshot-ranks.mjs --key serviceAccount.json --dry-run
+ *   node scripts/snapshot-ranks.mjs --project rands-staging --key serviceAccount.json
+ *   node scripts/snapshot-ranks.mjs --project rands-staging --key serviceAccount.json --apply
+ *
+ * Dry-run is the default. Production additionally requires the migration confirmation triple.
  *
  * The division filter mirrors src/features/leagues/useStandings.ts — keep them in sync.
  */
-import admin from 'firebase-admin';
-import fs from 'fs';
-import path from 'path';
+import { createMigrationDb, parseMigrationArgs } from './migrations/lib/cli.mjs';
 
-const dryRun = process.argv.includes('--dry-run');
-const keyArgIndex = process.argv.indexOf('--key');
-if (keyArgIndex === -1 || !process.argv[keyArgIndex + 1]) {
-  console.error('Usage: node scripts/snapshot-ranks.mjs --key path/to/serviceAccount.json [--dry-run]');
-  process.exit(1);
+const args = process.argv.slice(2);
+const options = parseMigrationArgs(args);
+if (options.help) {
+  console.log('Usage: node scripts/snapshot-ranks.mjs --project <id> --key <serviceAccount.json> [--apply]');
+  process.exit(0);
 }
-const keyPath = path.resolve(process.argv[keyArgIndex + 1]);
-if (!fs.existsSync(keyPath)) { console.error(`Key not found: ${keyPath}`); process.exit(1); }
-
-admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(keyPath, 'utf8'))) });
-const db = admin.firestore();
+const dryRun = options.dryRun;
+const db = createMigrationDb(options);
 
 // Mirror of inDivision() in src/features/leagues/useStandings.ts.
 const DIV_TABS = ['mens', 'womens', 'doubles'];
@@ -61,9 +58,7 @@ async function main() {
   const ops = []; // { uid, position, trend, move, historyDir | null }
 
   for (const tab of DIV_TABS) {
-    const ranked = players
-      .filter((p) => inDivision(p.league, tab))
-      .sort((a, b) => b.points - a.points);
+    const ranked = players.filter((p) => inDivision(p.league, tab)).sort((a, b) => b.points - a.points);
     ranked.forEach((p, i) => {
       const position = i + 1;
       const old = p.rankPosition;
@@ -76,7 +71,9 @@ async function main() {
 
   console.log(`${ops.length} rank change(s) of ${players.length} ranked players`);
   for (const op of ops.slice(0, 20)) {
-    console.log(`  ${op.uid.slice(0, 8)} → #${op.position} (${op.trend} ${op.move})${op.historyDir ? '' : ' [baseline]'}`);
+    console.log(
+      `  ${op.uid.slice(0, 8)} → #${op.position} (${op.trend} ${op.move})${op.historyDir ? '' : ' [baseline]'}`,
+    );
   }
   if (ops.length > 20) console.log(`  … +${ops.length - 20} more`);
 
@@ -98,14 +95,25 @@ async function main() {
   const siteStats = { activePlayers: active.size, matchesOrganized: completedCount + 70, updatedAt: date };
   console.log(`site_stats → activePlayers=${siteStats.activePlayers}, matchesOrganized=${siteStats.matchesOrganized}`);
 
-  if (dryRun) { console.log('\n(dry run — no writes)'); process.exit(0); }
+  if (dryRun) {
+    console.log('\n(dry run — no writes)');
+    process.exit(0);
+  }
 
   for (let i = 0; i < ops.length; i += 400) {
     const batch = db.batch();
     for (const op of ops.slice(i, i + 400)) {
-      batch.set(db.collection('stats').doc(op.uid), { rankPosition: op.position, rankTrend: op.trend, rankMove: op.move, rankUpdatedAt: date }, { merge: true });
+      batch.set(
+        db.collection('stats').doc(op.uid),
+        { rankPosition: op.position, rankTrend: op.trend, rankMove: op.move, rankUpdatedAt: date },
+        { merge: true },
+      );
       if (op.historyDir) {
-        batch.set(db.collection('ranking_history').doc(op.uid).collection('entries').doc(), { date, position: op.position, direction: op.historyDir });
+        batch.set(db.collection('ranking_history').doc(op.uid).collection('entries').doc(), {
+          date,
+          position: op.position,
+          direction: op.historyDir,
+        });
       }
     }
     await batch.commit();
@@ -115,4 +123,7 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

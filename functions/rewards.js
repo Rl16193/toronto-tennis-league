@@ -7,7 +7,7 @@
  * Everything that moves points runs here — the client cannot write `offers/*` or `redemptions/*`
  * at all. Each callable does its read-modify-write in a transaction so a double-tap can't redeem
  * twice. Coupon codes ARE the redemption doc id, so uniqueness comes from create-if-absent
- * semantics rather than a query — no race window.
+ * semantics. A deterministic per-user/per-offer lock also closes the duplicate-offer race.
  *
  * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
  * do not run a bare `firebase deploy` from this production-sensitive checkout.
@@ -26,10 +26,17 @@ const { earnedRsPoints } = require('./lib/points');
 const { notify, organizerUids } = require('./lib/notify');
 const { assertCouponStatus } = require('./lib/redemptionState');
 const { safeId } = require('./lib/logging');
+const {
+  OPEN_REDEMPTION_STATUSES,
+  assertRedemptionLockAvailable,
+  lockIdFor,
+  writeRedemptionLock,
+} = require('./lib/redemptionLock');
 
 const db = () => admin.firestore();
 const nowISO = () => new Date().toISOString();
 const REDEMPTION_NOTE_MAX_LENGTH = 500;
+const redemptionLockRef = (uid, rewardId) => db().doc(`redemption_locks/${lockIdFor(uid, rewardId)}`);
 
 // Ambiguous glyphs (0/O, 1/I) left out so a code read aloud or off a phone screen can't be
 // mistyped at the counter.
@@ -92,17 +99,17 @@ exports.redeemReward = onCall({ region: REGION }, async (request) => {
   // One open coupon per offer, so a stringer's list doesn't fill with duplicates. Two equality
   // filters only (status is filtered in memory) — adding a third would want a composite index,
   // and this project ships no firestore.indexes.json.
-  const OPEN = ['active', 'flagged', 'cancel_requested'];
   const forOffer = await db().collection('redemptions')
     .where('uid', '==', uid)
     .where('reward_id', '==', rewardId)
     .get();
-  if (forOffer.docs.some((d) => OPEN.includes(d.data().status))) {
+  if (forOffer.docs.some((d) => OPEN_REDEMPTION_STATUSES.includes(d.data().status))) {
     throw new HttpsError('already-exists', 'You already have an open coupon for this offer.');
   }
 
   const userSnap = await db().doc(`users/${uid}`).get();
   const userName = userSnap.exists ? (userSnap.data().name || '') : '';
+  const lockRef = redemptionLockRef(uid, rewardId);
 
   // Retry on the (vanishingly unlikely) case of a code collision.
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -112,6 +119,8 @@ exports.redeemReward = onCall({ region: REGION }, async (request) => {
       const result = await db().runTransaction(async (tx) => {
         const existing = await tx.get(redemptionRef);
         if (existing.exists) return null; // collision — caller retries with a new code
+
+        await assertRedemptionLockAvailable(tx, lockRef);
 
         const { earned, spent, balance } = await readBalance(tx, uid);
         if (balance < cost) {
@@ -132,6 +141,13 @@ exports.redeemReward = onCall({ region: REGION }, async (request) => {
           status: 'active',
           created_at: nowISO(),
         };
+        writeRedemptionLock(tx, lockRef, {
+          uid,
+          reward_id: rewardId,
+          code,
+          status: 'active',
+          updated_at: nowISO(),
+        });
         tx.set(redemptionRef, redemption);
         tx.set(db().doc(`offers/${uid}`), {
           uid: uid,
@@ -180,6 +196,13 @@ exports.markCouponUsed = onCall({ region: REGION }, async (request) => {
     assertCouponStatus(d.status, 'use');
 
     tx.update(ref, { status: 'used', used_at: nowISO(), used_by: uid });
+    tx.set(redemptionLockRef(d.uid, d.reward_id), {
+      uid: d.uid,
+      reward_id: d.reward_id,
+      code,
+      status: 'used',
+      updated_at: nowISO(),
+    }, { merge: true });
     return d;
   });
 
@@ -218,6 +241,13 @@ exports.flagCoupon = onCall({ region: REGION }, async (request) => {
       flagged_by: uid,
       ...(note ? { flag_note: note } : {}),
     });
+    tx.set(redemptionLockRef(d.uid, d.reward_id), {
+      uid: d.uid,
+      reward_id: d.reward_id,
+      code,
+      status: 'flagged',
+      updated_at: nowISO(),
+    }, { merge: true });
     return d;
   });
 
@@ -252,6 +282,13 @@ exports.requestCancellation = onCall({ region: REGION }, async (request) => {
       cancel_requested_at: nowISO(),
       ...(reason ? { cancel_reason: reason } : {}),
     });
+    tx.set(redemptionLockRef(d.uid, d.reward_id), {
+      uid: d.uid,
+      reward_id: d.reward_id,
+      code,
+      status: 'cancel_requested',
+      updated_at: nowISO(),
+    }, { merge: true });
     return d;
   });
 
@@ -292,6 +329,13 @@ exports.reviewRedemption = onCall({ region: REGION }, async (request) => {
         reviewed_by: uid,
         ...(note ? { reviewer_note: note } : {}),
       });
+      tx.set(redemptionLockRef(d.uid, d.reward_id), {
+        uid: d.uid,
+        reward_id: d.reward_id,
+        code,
+        status: 'active',
+        updated_at: nowISO(),
+      }, { merge: true });
       return d;
     }
 
@@ -310,6 +354,13 @@ exports.reviewRedemption = onCall({ region: REGION }, async (request) => {
       reviewed_by: uid,
       ...(note ? { reviewer_note: note } : {}),
     });
+    tx.set(redemptionLockRef(d.uid, d.reward_id), {
+      uid: d.uid,
+      reward_id: d.reward_id,
+      code,
+      status: 'cancelled',
+      updated_at: nowISO(),
+    }, { merge: true });
     tx.set(spentRef, {
       uid: d.uid,
       pointsSpent: Math.max(0, spent - cost),

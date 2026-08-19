@@ -17,14 +17,16 @@ points already spent in `offers/{uid}`. Redeeming does not mutate the earning co
 ## Coupon ownership and idempotency
 
 **Rule:** Redemption, use, flagging, cancellation, and review are callable Function workflows.
-Each state transition is transaction-backed; a player can have only one open coupon for an offer.
+Each state transition is transaction-backed; a deterministic per-user/per-offer lock sentinel
+ensures that a player can have only one open coupon for an offer, even when two redemptions race.
 
 **Why:** The browser is an untrusted caller and a double tap must not spend points twice.
 
 **Important exception:** A stringer may act only on coupons for that provider; organizers have the
 separate review path.
 
-**Code:** `functions/rewards.js`, `functions/lib/callable.js`, `firestore.rules`.
+**Code:** `functions/rewards.js`, `functions/lib/redemptionLock.js`, `functions/lib/callable.js`,
+`firestore.rules`.
 
 **Regression test:** Rules tests cover client write protections; callable integration against the
 Functions emulator remains a future stabilization item.

@@ -20,30 +20,31 @@
  *
  * PRODUCTION HAS NO BACKUPS. Run --dry-run first and read the list.
  *
- *   node scripts/delete-stale-docs.mjs --key serviceAccount.json --dry-run
- *   node scripts/delete-stale-docs.mjs --key serviceAccount.json
+ *   node scripts/delete-stale-docs.mjs --project rands-staging --key serviceAccount.json
+ *   node scripts/delete-stale-docs.mjs --project rands-staging --key serviceAccount.json --apply
  *
  * Add --archive-only or --offers-only to do one group at a time.
+ * Dry-run is the default; production additionally requires the migration confirmation triple.
  */
-import admin from 'firebase-admin';
-import fs from 'fs';
-import path from 'path';
+import { createMigrationDb, parseMigrationArgs } from './migrations/lib/cli.mjs';
 
 const args = process.argv.slice(2);
-const dryRun = args.includes('--dry-run');
+const options = parseMigrationArgs(args);
+if (options.help) {
+  console.log(
+    'Usage: node scripts/delete-stale-docs.mjs --project <id> --key <serviceAccount.json> [--apply] [--archive-only|--offers-only]',
+  );
+  process.exit(0);
+}
+const dryRun = options.dryRun;
 const archiveOnly = args.includes('--archive-only');
 const offersOnly = args.includes('--offers-only');
 
-const keyIdx = args.indexOf('--key');
-if (keyIdx === -1 || !args[keyIdx + 1]) {
-  console.error('Usage: node scripts/delete-stale-docs.mjs --key serviceAccount.json [--dry-run] [--archive-only|--offers-only]');
+if (archiveOnly && offersOnly) {
+  console.error('Choose only one of --archive-only or --offers-only.');
   process.exit(1);
 }
-const keyPath = path.resolve(args[keyIdx + 1]);
-if (!fs.existsSync(keyPath)) { console.error(`Key not found: ${keyPath}`); process.exit(1); }
-
-admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(keyPath, 'utf8'))) });
-const db = admin.firestore();
+const db = createMigrationDb(options);
 
 const tag = dryRun ? '[dry-run] ' : '';
 let planned = 0;
@@ -100,5 +101,5 @@ if (!archiveOnly) {
 }
 
 console.log(`\n${dryRun ? 'Would delete' : 'Deleted'} ${dryRun ? planned : deleted} document(s).`);
-if (dryRun) console.log('Re-run without --dry-run to apply.');
+if (dryRun) console.log('Re-run with --apply to apply.');
 process.exit(0);

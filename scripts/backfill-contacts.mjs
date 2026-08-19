@@ -12,34 +12,44 @@
  * the checkbox existed. Members with no phone get false.
  *
  * Usage:
- *   node scripts/backfill-contacts.mjs --key serviceAccount.json --copy --dry-run
- *   node scripts/backfill-contacts.mjs --key serviceAccount.json --copy
- *   node scripts/backfill-contacts.mjs --key serviceAccount.json --strip --dry-run
- *   node scripts/backfill-contacts.mjs --key serviceAccount.json --strip
+ *   node scripts/backfill-contacts.mjs --project rands-staging --key serviceAccount.json --copy
+ *   node scripts/backfill-contacts.mjs --project rands-staging --key serviceAccount.json --copy --apply
+ *   node scripts/backfill-contacts.mjs --project rands-staging --key serviceAccount.json --strip
+ *   node scripts/backfill-contacts.mjs --project rands-staging --key serviceAccount.json --strip --apply
+ *
+ * The shared migration contract makes dry-run the default and requires an explicit project.
+ * Production additionally requires the documented confirmation triple.
  */
 import admin from 'firebase-admin';
-import fs from 'fs';
-import path from 'path';
+import { createMigrationDb, parseMigrationArgs } from './migrations/lib/cli.mjs';
 
-const args = process.argv;
-const dryRun = args.includes('--dry-run');
+const args = process.argv.slice(2);
+const options = parseMigrationArgs(args);
+if (options.help) {
+  console.log(
+    'Usage: node scripts/backfill-contacts.mjs --project <id> --key <serviceAccount.json> (--copy | --strip) [--apply]',
+  );
+  process.exit(0);
+}
+const dryRun = options.dryRun;
 const doCopy = args.includes('--copy');
 const doStrip = args.includes('--strip');
 
-const keyIdx = args.indexOf('--key');
-if (keyIdx === -1 || !args[keyIdx + 1] || (!doCopy && !doStrip) || (doCopy && doStrip)) {
-  console.error('Usage: node scripts/backfill-contacts.mjs --key <serviceAccount.json> (--copy | --strip) [--dry-run]');
+if ((!doCopy && !doStrip) || (doCopy && doStrip)) {
+  console.error(
+    'Usage: node scripts/backfill-contacts.mjs --project <id> --key <serviceAccount.json> (--copy | --strip) [--apply]',
+  );
   process.exit(1);
 }
-const keyPath = path.resolve(args[keyIdx + 1]);
-if (!fs.existsSync(keyPath)) { console.error(`Key not found: ${keyPath}`); process.exit(1); }
-
-admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(keyPath, 'utf8'))) });
-const db = admin.firestore();
+const db = createMigrationDb(options);
 
 const PII_FIELDS = [
-  'email', 'secondary_email', 'phone', 'preferred_mode_of_contact',
-  'whatsapp_contact', 'whatsapp_same_as_phone',
+  'email',
+  'secondary_email',
+  'phone',
+  'preferred_mode_of_contact',
+  'whatsapp_contact',
+  'whatsapp_same_as_phone',
 ];
 
 // Firestore caps a batch at 500 writes.
@@ -59,10 +69,15 @@ const copyPhase = async () => {
   snap.docs.forEach((d) => {
     const u = d.data();
     const hasPii = PII_FIELDS.some((f) => u[f] !== undefined);
-    if (!hasPii) { skipped += 1; return; }
+    if (!hasPii) {
+      skipped += 1;
+      return;
+    }
 
     const contacts = { updated_at: new Date().toISOString() };
-    PII_FIELDS.forEach((f) => { if (u[f] !== undefined) contacts[f] = u[f]; });
+    PII_FIELDS.forEach((f) => {
+      if (u[f] !== undefined) contacts[f] = u[f];
+    });
     // Defaults so the doc matches what the client writes for a new account.
     if (contacts.email === undefined) contacts.email = '';
     if (contacts.phone === undefined) contacts.phone = '';
@@ -82,14 +97,13 @@ const copyPhase = async () => {
   }
 
   const consenting = todo.filter((t) => t.contacts.contactable).length;
-  console.log(`\n${snap.size} user(s) scanned · ${skipped} with no contact fields · ${todo.length} ${dryRun ? 'would be ' : ''}written · ${consenting} marked contactable.`);
+  console.log(
+    `\n${snap.size} user(s) scanned · ${skipped} with no contact fields · ${todo.length} ${dryRun ? 'would be ' : ''}written · ${consenting} marked contactable.`,
+  );
 };
 
 const stripPhase = async () => {
-  const [usersSnap, contactsSnap] = await Promise.all([
-    db.collection('users').get(),
-    db.collection('contacts').get(),
-  ]);
+  const [usersSnap, contactsSnap] = await Promise.all([db.collection('users').get(), db.collection('contacts').get()]);
   const haveContacts = new Set(contactsSnap.docs.map((d) => d.id));
 
   const todo = [];
@@ -100,7 +114,10 @@ const stripPhase = async () => {
     const present = PII_FIELDS.filter((f) => u[f] !== undefined);
     if (present.length === 0) return;
     // Never strip a user whose contacts doc is missing — that would destroy the only copy.
-    if (!haveContacts.has(d.id)) { unsafe.push({ id: d.id, name: u.name || '(no name)' }); return; }
+    if (!haveContacts.has(d.id)) {
+      unsafe.push({ id: d.id, name: u.name || '(no name)' });
+      return;
+    }
     todo.push({ id: d.id, name: u.name || '(no name)', present });
   });
 
@@ -118,19 +135,27 @@ const stripPhase = async () => {
     const del = admin.firestore.FieldValue.delete();
     await commitInChunks(todo, (batch, t) => {
       const patch = {};
-      t.present.forEach((f) => { patch[f] = del; });
+      t.present.forEach((f) => {
+        patch[f] = del;
+      });
       batch.update(db.doc(`users/${t.id}`), patch);
     });
   }
 
-  console.log(`\n${usersSnap.size} user(s) scanned · ${todo.length} ${dryRun ? 'would be ' : ''}stripped · ${unsafe.length} skipped as unsafe.`);
+  console.log(
+    `\n${usersSnap.size} user(s) scanned · ${todo.length} ${dryRun ? 'would be ' : ''}stripped · ${unsafe.length} skipped as unsafe.`,
+  );
   if (unsafe.length) process.exitCode = 1;
 };
 
 const run = async () => {
   console.log(`Phase: ${doCopy ? 'COPY users → contacts' : 'STRIP PII from users'}${dryRun ? '  (dry run)' : ''}\n`);
-  if (doCopy) await copyPhase(); else await stripPhase();
+  if (doCopy) await copyPhase();
+  else await stripPhase();
   process.exit(process.exitCode ?? 0);
 };
 
-run().catch((err) => { console.error(err); process.exit(1); });
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

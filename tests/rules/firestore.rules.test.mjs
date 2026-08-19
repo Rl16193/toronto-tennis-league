@@ -359,5 +359,10 @@ describe('Firestore authorization boundaries', () => {
     await assertSucceeds(getDoc(doc(dbFor('provider-a'), 'redemptions/SYNTHETIC-001')));
     await assertFails(getDoc(doc(dbFor('member-b'), 'redemptions/SYNTHETIC-001')));
     await assertFails(updateDoc(doc(dbFor('provider-a'), 'redemptions/SYNTHETIC-001'), { status: 'used' }));
+    await assertFails(setDoc(doc(dbFor('member-a'), 'redemption_locks/synthetic-lock'), {
+      uid: 'member-a',
+      reward_id: 'synthetic-offer',
+      status: 'active',
+    }));
   });
 });

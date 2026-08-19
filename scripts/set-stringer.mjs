@@ -10,33 +10,39 @@
  * offers. Marking used / flagging still runs through the Cloud Functions in functions/rewards.js.
  *
  * Usage:
- *   node scripts/set-stringer.mjs --key serviceAccount.json --list            # find accounts
- *   node scripts/set-stringer.mjs --key serviceAccount.json --uid <uid> --id karan --dry-run
- *   node scripts/set-stringer.mjs --key serviceAccount.json --uid <uid> --id karan
- *   node scripts/set-stringer.mjs --key serviceAccount.json --uid <uid> --remove
+ *   node scripts/set-stringer.mjs --project rands-staging --key serviceAccount.json --list
+ *   node scripts/set-stringer.mjs --project rands-staging --key serviceAccount.json --uid <uid> --id karan
+ *   node scripts/set-stringer.mjs --project rands-staging --key serviceAccount.json --uid <uid> --id karan --apply
+ *   node scripts/set-stringer.mjs --project rands-staging --key serviceAccount.json --uid <uid> --remove --apply
+ *
+ * Dry-run is the default. Production additionally requires the migration confirmation triple.
  */
 import admin from 'firebase-admin';
-import fs from 'fs';
-import path from 'path';
+import { createMigrationDb, parseMigrationArgs } from './migrations/lib/cli.mjs';
 
+const cliArgs = process.argv.slice(2);
 const arg = (name) => {
-  const i = process.argv.indexOf(`--${name}`);
-  return i === -1 ? null : process.argv[i + 1] ?? true;
+  const i = cliArgs.indexOf(`--${name}`);
+  return i === -1 ? null : (cliArgs[i + 1] ?? true);
 };
-const dryRun = process.argv.includes('--dry-run');
-const list = process.argv.includes('--list');
-const remove = process.argv.includes('--remove');
+const options = parseMigrationArgs(cliArgs);
+if (options.help) {
+  console.log(
+    'Usage: node scripts/set-stringer.mjs --project <id> --key <serviceAccount.json> [--list | --uid <uid> --id <stringerId>] [--remove] [--apply]',
+  );
+  process.exit(0);
+}
+const dryRun = options.dryRun;
+const list = cliArgs.includes('--list');
+const remove = cliArgs.includes('--remove');
 
-const keyPath = arg('key');
-if (!keyPath || keyPath === true) {
-  console.error('Usage: node scripts/set-stringer.mjs --key serviceAccount.json [--list | --uid <uid> --id <stringerId>] [--dry-run] [--remove]');
+if (!list && !arg('uid')) {
+  console.error(
+    'Usage: node scripts/set-stringer.mjs --project <id> --key <serviceAccount.json> [--list | --uid <uid> --id <stringerId>] [--remove] [--apply]',
+  );
   process.exit(1);
 }
-const resolved = path.resolve(keyPath);
-if (!fs.existsSync(resolved)) { console.error(`Key not found: ${resolved}`); process.exit(1); }
-
-admin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(resolved, 'utf8'))) });
-const db = admin.firestore();
+const db = createMigrationDb(options);
 
 const run = async () => {
   // --list: search accounts by name/email so you can copy the right uid.
@@ -66,33 +72,42 @@ const run = async () => {
   }
 
   const uid = arg('uid');
-  if (!uid || uid === true) { console.error('Missing --uid. Run with --list to find one.'); process.exit(1); }
+  if (!uid || uid === true) {
+    console.error('Missing --uid. Run with --list to find one.');
+    process.exit(1);
+  }
 
   const userSnap = await db.doc(`users/${uid}`).get();
-  if (!userSnap.exists) { console.error(`No users/${uid} — check the uid.`); process.exit(1); }
+  if (!userSnap.exists) {
+    console.error(`No users/${uid} — check the uid.`);
+    process.exit(1);
+  }
   const name = userSnap.data().name || '(no name)';
 
   if (remove) {
     console.log(`${dryRun ? '[dry-run] ' : ''}Clearing provider role from ${name} (${uid})`);
     if (!dryRun) {
-      await db.doc(`preferences/${uid}`).set({
-        stringer: false,
-        stringer_id: admin.firestore.FieldValue.delete(),
-        coach: false,
-        coach_id: admin.firestore.FieldValue.delete(),
-      }, { merge: true });
+      await db.doc(`preferences/${uid}`).set(
+        {
+          stringer: false,
+          stringer_id: admin.firestore.FieldValue.delete(),
+          coach: false,
+          coach_id: admin.firestore.FieldValue.delete(),
+        },
+        { merge: true },
+      );
     }
     process.exit(0);
   }
 
   const id = arg('id');
-  if (!id || id === true) { console.error('Missing --id (e.g. karan, fortyforty, pandemic, archie).'); process.exit(1); }
+  if (!id || id === true) {
+    console.error('Missing --id (e.g. karan, fortyforty, pandemic, archie).');
+    process.exit(1);
+  }
 
   // Warn if the id matches no catalog entry — a typo here silently shows them nothing.
-  const offers = await db.collection('tasks')
-    .where('type', '==', 'offer')
-    .where('provider_id', '==', id)
-    .get();
+  const offers = await db.collection('tasks').where('type', '==', 'offer').where('provider_id', '==', id).get();
   if (offers.empty) {
     console.warn(`Warning: no offers found with provider_id "${id}". Seed the catalog first, or check the spelling.`);
   } else {
@@ -103,16 +118,13 @@ const run = async () => {
   // stringer (the two use different preference fields).
   const roleArg = arg('role');
   const category = offers.empty ? null : offers.docs[0].data().category;
-  const role = roleArg && roleArg !== true ? String(roleArg)
-    : category === 'coaching' ? 'coach' : 'stringer';
+  const role = roleArg && roleArg !== true ? String(roleArg) : category === 'coaching' ? 'coach' : 'stringer';
   if (role !== 'coach' && role !== 'stringer') {
     console.error(`--role must be "coach" or "stringer", got "${role}".`);
     process.exit(1);
   }
 
-  const payload = role === 'coach'
-    ? { coach: true, coach_id: id }
-    : { stringer: true, stringer_id: id };
+  const payload = role === 'coach' ? { coach: true, coach_id: id } : { stringer: true, stringer_id: id };
 
   console.log(`${dryRun ? '[dry-run] ' : ''}Setting ${name} (${uid}) → ${role} "${id}"`);
   if (!dryRun) {
@@ -122,4 +134,7 @@ const run = async () => {
   process.exit(0);
 };
 
-run().catch((err) => { console.error(err); process.exit(1); });
+run().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

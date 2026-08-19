@@ -30,6 +30,14 @@ bounded and idempotent. For each document, increment `scanned`, then `eligible`,
 Admin SDK transactions or batches with a clear maximum batch size, and record a deterministic
 marker when a migration may be resumed safely.
 
+## Legacy Admin scripts
+
+The older operational scripts in `scripts/` use the same guard now:
+`backfill-contacts.mjs`, `delete-stale-docs.mjs`, `set-stringer.mjs`, `seed-rewards.mjs`, and
+`snapshot-ranks.mjs` require `--project <id>` and `--key <service-account.json>`, default to
+dry-run, and require `--apply` for writes. Production additionally requires the confirmation
+triple above. Do not restore direct `firebase-admin` initialization in an operational script.
+
 ## Rollback
 
 Every migration must document whether rollback is possible. Prefer additive or reversible writes.

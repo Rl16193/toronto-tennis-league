@@ -453,6 +453,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // The per-user/per-offer sentinel is written only by the Admin SDK transaction that issues
+    // or closes a coupon. Keep it explicit so adding a broad collection rule later cannot expose
+    // the concurrency guard to clients.
+    match /redemption_locks/{lockId} {
+      allow read, write: if false;
+    }
+
     // ===============================================================
     // Marketplace Listings
     // ===============================================================
