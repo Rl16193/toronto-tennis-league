@@ -42,10 +42,14 @@ Start the Emulator Suite in one terminal and the Vite app in another:
 
 ```bash
 npm run emulators
+# in a second terminal, after the emulator suite is ready:
+npm run seed:emulator
 npm run dev
 ```
 
 The Vite server uses port `3000`; the emulator UI uses port `4000`. Local Auth, Firestore, Functions, Storage, and Hosting use the ports declared in `firebase.json`. Firestore emulator startup requires Java; the current validation machine does not have a Java runtime, so emulator execution remains blocked until that prerequisite is installed. Once Java is available, run `npm run test:rules` for the initial rules suite.
+
+`npm run seed:emulator` writes only deterministic synthetic data to the local Firestore emulator (`rands-local`) and refuses any other project ID. The fixture set covers member, organizer, provider, multi-role, event, Round Robin draft, match, task/reward, marketplace, notification, court, and aggregate paths.
 
 GitHub CI runs on pushes and pull requests targeting `dev-anuj`. It currently checks the root typecheck/build and Functions JavaScript syntax; it does not deploy or connect to Firebase.
 
@@ -55,6 +59,7 @@ GitHub CI runs on pushes and pull requests targeting `dev-anuj`. It currently ch
 npm run lint       # TypeScript no-emit check
 npm run build      # Generates the programs CSV, then creates dist/
 npm run preview    # Serves the built dist/ locally
+npm run seed:emulator # Seeds synthetic local Firestore data; emulator must be running
 npm run test:rules # Firestore Rules tests; requires Java and the emulator
 ```
 

@@ -10,7 +10,7 @@ The checkout contains one Firebase project alias:
 default -> toronto-tennis-league
 ```
 
-`firebase.json` configures Firestore rules/indexes, Storage rules, Functions, and Hosting. It does not define an emulator suite or a staging project. The root package has `hosting:deploy` and `hosting:preview` commands, but both require an explicit project decision because the CLI’s active project is production-sensitive.
+`firebase.json` configures Firestore rules/indexes, Storage rules, Functions, Hosting, and local emulator ports. The checkout still has no staging project. The root package has local emulator, synthetic seed, `hosting:deploy`, and `hosting:preview` commands; Hosting commands require an explicit project decision because the CLI’s active project is production-sensitive.
 
 ## Current delivery path
 

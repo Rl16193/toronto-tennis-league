@@ -7,7 +7,7 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
 ```json
 {
   "score": 3,
-  "summary": "The repository has meaningful field-level Firestore protections and server-only collections, but the public-read surface, hard-coded/global organizer authority, split scoring authorities, and missing emulator rule tests keep the current baseline at moderate risk.",
+  "summary": "The repository has meaningful field-level Firestore protections, server-only collections, and an emulator-backed Rules harness, but the public-read surface, hard-coded/global organizer authority, split scoring authorities, and incomplete coverage keep the current baseline at moderate risk.",
   "findings": [
     {
       "check": "Scoring authority",
@@ -36,8 +36,8 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
     {
       "check": "Rules and environment validation",
       "severity": "moderate",
-      "issue": "The repository has no configured Firebase emulator block or rules/functions test harness, and staging isolation is not established. npm audit refresh was also blocked by registry DNS resolution in this environment.",
-      "recommendation": "Add local emulator configuration, seeded rules tests, Functions unit tests for authorization and idempotency, and a non-production Firebase project before production deployment work resumes."
+      "issue": "Firebase emulator configuration and an initial Firestore Rules harness now exist, but local macOS execution still needs Java, Functions authorization coverage is absent, and staging isolation is not established. npm audit refresh was also blocked by registry DNS resolution in this environment.",
+      "recommendation": "Run the seeded emulator suite locally, add Functions unit tests for authorization and idempotency, and establish a non-production Firebase project before production deployment work resumes."
     },
     {
       "check": "Tracked secrets",
@@ -55,11 +55,11 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
 - Storage writes are authenticated and type/size constrained for named prefixes, but the catch-all read rule remains public.
 - `src/pages/tournament/useTournament.ts` contains direct `stats` writes for tournament points; Functions contain separate task/friendly-point award logic.
 - A tracked-file scan was performed for common credential patterns. It did not prove that secrets are absent from Git history, deployment configuration, or third-party systems.
-- `npm run lint` and `npm run build` passed at the current baseline. Rules emulator tests were not run because no emulator/test harness is configured. `npm audit --json` could not refresh because `registry.npmjs.org` did not resolve from this environment.
+- `npm run lint` and `npm run build` pass locally. GitHub Actions run `32210015729` passed the Firestore Rules suite after provisioning Java 21. Local Rules execution remains blocked by the macOS Java prerequisite. `npm audit --json` could not refresh because `registry.npmjs.org` did not resolve from this environment.
 
 ## Required gates before production changes
 
-1. Establish a staging Firebase project and emulator-backed rules tests.
+1. Run the seeded emulator suite locally and expand Rules coverage, including Storage.
 2. Define the authoritative server-side scoring and role model.
 3. Narrow public Firestore/Storage reads and prove the intended public projection contract.
 4. Re-run dependency and secret scans with network access, then review findings before deployment approval.

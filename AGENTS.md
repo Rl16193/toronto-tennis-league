@@ -35,7 +35,9 @@ npm run dev       # Vite on port 3000
 npm run lint      # TypeScript no-emit check
 npm run build     # generates programs CSV, then Vite build
 npm run preview
+npm run dev:emulator # local Auth/Firestore/Functions/Storage/Hosting suite
 npm run emulators # local Firebase suite; requires Java for Firestore
+npm run seed:emulator # synthetic Firestore fixtures; emulator must already be running
 npm run test:rules # Firestore Rules tests through a temporary local emulator
 ```
 
