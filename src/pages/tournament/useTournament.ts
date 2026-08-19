@@ -24,6 +24,7 @@ import {
   normalizeEventParticipant,
   normalizeTournamentMatch,
 } from '../../lib/firestoreNormalization';
+import { applyTournamentResult } from '../../features/tournament/services/tournamentResultService';
 
 // Stand-in for a contacts doc whose matching users doc is missing — a data anomaly rather than a
 // normal state, but the merge below shouldn't drop the contact details over it.
@@ -1258,227 +1259,25 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  const updateMatchWithSubmission = async (match: TournamentMatch, submission: ScoreSubmission, isWalkover?: boolean, isNoShow?: boolean) => {
-    // No show: neither player played, so the only thing that moves is NO_SHOW_POINTS to each.
-    // No winner, no games, no matchesPlayed — a match nobody played must not dilute a win rate.
-    // Nothing to advance either, which is why this is RR group stage only.
-    if (isNoShow) {
-      const batch = writeBatch(db);
-      batch.update(doc(db, 'matches', match.id), {
-        winner_name: '', winner_uid: '',
-        set_1_player_1: 0, set_1_player_2: 0,
-        set_2_player_1: 0, set_2_player_2: 0,
-        set_3_player_1: 0, set_3_player_2: 0,
-        status: 'complete',
-        no_show: true,
-        walkover: false,
-        ...(match.status !== 'complete'
-          ? { completed_at: new Date().toISOString() }
-          : { score_edited_at: new Date().toISOString() }),
-        ...(submission.court ? { court: submission.court } : {}),
-      });
-      const matchLeague = match.tournament_choice === 'Doubles' ? 'Doubles' : match.division;
-      [match.player_1_uid, match.player_2_uid].filter(Boolean).forEach((uid) => {
-        batch.set(doc(db, 'stats', uid), { leaguePoints26: increment(NO_SHOW_POINTS), league: matchLeague }, { merge: true });
-      });
-      await batch.commit();
-      return { needsManual: false };
-    }
-
-    const batch = writeBatch(db);
-    batch.update(doc(db, 'matches', match.id), {
-      winner_name: submission.claimed_winner_name,
-      winner_uid: submission.claimed_winner_uid,
-      set_1_player_1: submission.set_1_player_1, set_1_player_2: submission.set_1_player_2,
-      set_2_player_1: submission.set_2_player_1, set_2_player_2: submission.set_2_player_2,
-      set_3_player_1: submission.set_3_player_1, set_3_player_2: submission.set_3_player_2,
-      status: 'complete',
-      // completed_at stays pinned to first scoring — re-editing a complete match used to
-      // overwrite it with "now", corrupting anything sorted by it. Edits stamp score_edited_at.
-      ...(match.status !== 'complete'
-        ? { completed_at: new Date().toISOString() }
-        : { score_edited_at: new Date().toISOString() }),
-      ...(isWalkover ? { walkover: true } : {}),
-      ...(submission.court ? { court: submission.court } : {}),
-      // Marks this match as scored under the "RR winners score live" formula. Written for the
-      // one-off points correction pass (since run, script deleted) to skip matches the live app
-      // had already scored; kept as a provenance marker for any future correction pass.
-      ...(match.format === 'rr' && match.round === 'RR' ? { rr_winner_pts_v2: true } : {}),
-    });
-
-    // Update player stats + league points
-    {
-      const { loserPts, winnerPts, isFinal, winnerPointsApply } = matchAward(match);
-      const matchLeague = match.tournament_choice === 'Doubles' ? 'Doubles' : match.division;
-      // Doubles partner uid map — captain uid → their partner's uid. Both captains' partners
-      // receive the same stats credit as the captain (games, matches, league points).
-      const partnerUidByCaptain = match.tournament_choice === 'Doubles'
-        ? new Map(participants
-            .filter((p) => p.uid && p.partner_uid)
-            .map((p) => [p.uid!, p.partner_uid!]))
-        : new Map<string, string>();
-      const winnerUid = submission.claimed_winner_uid;
-      const loserUid = winnerUid === match.player_1_uid ? match.player_2_uid : match.player_1_uid;
-
-      // Games won per player (set scores are absolute: player_1/2 = match positions)
-      const newP1G = (submission.set_1_player_1 ?? 0) + (submission.set_2_player_1 ?? 0) + (submission.set_3_player_1 ?? 0);
-      const newP2G = (submission.set_1_player_2 ?? 0) + (submission.set_2_player_2 ?? 0) + (submission.set_3_player_2 ?? 0);
-      const newTotal = newP1G + newP2G;
-      const winnerIsP1 = winnerUid === match.player_1_uid;
-
-      const statUidsFor = (uid: string) => {
-        if (!uid) return [];
-        const partnerUid = partnerUidByCaptain.get(uid);
-        return partnerUid && partnerUid !== uid ? [uid, partnerUid] : [uid];
-      };
-
-      if (match.status !== 'complete') {
-        // First confirmation — apply all increments. Doubles partners get the same result as
-        // their captain, so the leaderboard reflects individual player totals.
-        statUidsFor(winnerUid).forEach((uid) => {
-          batch.set(doc(db, 'stats', uid), {
-            matchesPlayed: increment(1),
-            wins: increment(1),
-            league: matchLeague,
-            pointswon: increment(winnerIsP1 ? newP1G : newP2G),
-            totalPointsPlayed: increment(newTotal),
-            ...(winnerPointsApply ? { leaguePoints26: increment(winnerPts) } : {}),
-            ...(isFinal ? { tournamentsPlayed: increment(1) } : {}),
-          }, { merge: true });
-        });
-        statUidsFor(loserUid).forEach((uid) => {
-          batch.set(doc(db, 'stats', uid), {
-            matchesPlayed: increment(1),
-            loses: increment(1),
-            leaguePoints26: increment(loserPts),
-            tournamentsPlayed: increment(1),
-            league: matchLeague,
-            pointswon: increment(winnerIsP1 ? newP2G : newP1G),
-            totalPointsPlayed: increment(newTotal),
-          }, { merge: true });
-        });
-      } else {
-        // Re-entry (edit score) — compute per-player delta (new − old) and apply
-        const oldWinnerUid = match.winner_uid ?? '';
-        const oldP1G = (match.set_1_player_1 ?? 0) + (match.set_2_player_1 ?? 0) + (match.set_3_player_1 ?? 0);
-        const oldP2G = (match.set_1_player_2 ?? 0) + (match.set_2_player_2 ?? 0) + (match.set_3_player_2 ?? 0);
-        const oldTotal = oldP1G + oldP2G;
-
-        const applyPlayerDelta = (uid: string, isP1: boolean) => {
-          if (!uid) return;
-          const wasWinner = oldWinnerUid === uid;
-          const isWinner = winnerUid === uid;
-          const oldGames = isP1 ? oldP1G : oldP2G;
-          const newGames = isP1 ? newP1G : newP2G;
-
-          const delta: Record<string, unknown> = {};
-          if (isWinner !== wasWinner) {
-            delta.wins = increment(isWinner ? 1 : -1);
-            delta.loses = increment(isWinner ? -1 : 1);
-          }
-          const oldPts = wasWinner ? (winnerPointsApply ? winnerPts : 0) : loserPts;
-          const newPts = isWinner ? (winnerPointsApply ? winnerPts : 0) : loserPts;
-          if (newPts !== oldPts) delta.leaguePoints26 = increment(newPts - oldPts);
-
-          // tournamentsPlayed credit: losers always get +1; final winner also gets +1
-          const oldTC = (!wasWinner ? 1 : 0) + (wasWinner && isFinal ? 1 : 0);
-          const newTC = (!isWinner ? 1 : 0) + (isWinner && isFinal ? 1 : 0);
-          if (newTC !== oldTC) delta.tournamentsPlayed = increment(newTC - oldTC);
-
-          if (newGames !== oldGames) delta.pointswon = increment(newGames - oldGames);
-          if (newTotal !== oldTotal) delta.totalPointsPlayed = increment(newTotal - oldTotal);
-
-          if (Object.keys(delta).length > 0) {
-            delta.league = matchLeague;
-            batch.set(doc(db, 'stats', uid), delta, { merge: true });
-          }
-        };
-
-        applyPlayerDelta(match.player_1_uid, true);
-        applyPlayerDelta(match.player_2_uid, false);
-
-        // Doubles partner delta — same score/match delta the captain received, applied to the
-        // partner via the participant-linked partner_uid.
-        const applyPartnerDelta = (captainUid: string, isP1: boolean) => {
-          const partnerUid = partnerUidByCaptain.get(captainUid);
-          if (!partnerUid || partnerUid === captainUid) return;
-          const wasCaptainWinner = oldWinnerUid === captainUid;
-          const isCaptainWinner = winnerUid === captainUid;
-
-          const partnerDelta: Record<string, unknown> = {};
-          if (isCaptainWinner !== wasCaptainWinner) {
-            partnerDelta.wins = increment(isCaptainWinner ? 1 : -1);
-            partnerDelta.loses = increment(isCaptainWinner ? -1 : 1);
-          }
-          const oldPartnerPts = wasCaptainWinner ? (winnerPointsApply ? winnerPts : 0) : loserPts;
-          const newPartnerPts = isCaptainWinner ? (winnerPointsApply ? winnerPts : 0) : loserPts;
-          if (newPartnerPts !== oldPartnerPts) partnerDelta.leaguePoints26 = increment(newPartnerPts - oldPartnerPts);
-
-          const oldPartnerTC = (!wasCaptainWinner ? 1 : 0) + (wasCaptainWinner && isFinal ? 1 : 0);
-          const newPartnerTC = (!isCaptainWinner ? 1 : 0) + (isCaptainWinner && isFinal ? 1 : 0);
-          if (newPartnerTC !== oldPartnerTC) partnerDelta.tournamentsPlayed = increment(newPartnerTC - oldPartnerTC);
-
-          const oldPartnerGames = isP1 ? oldP1G : oldP2G;
-          const newPartnerGames = isP1 ? newP1G : newP2G;
-          if (newPartnerGames !== oldPartnerGames) partnerDelta.pointswon = increment(newPartnerGames - oldPartnerGames);
-          if (newTotal !== oldTotal) partnerDelta.totalPointsPlayed = increment(newTotal - oldTotal);
-
-          if (Object.keys(partnerDelta).length > 0) {
-            partnerDelta.league = matchLeague;
-            batch.set(doc(db, 'stats', partnerUid), partnerDelta, { merge: true });
-          }
-        };
-
-        applyPartnerDelta(match.player_1_uid, true);
-        applyPartnerDelta(match.player_2_uid, false);
-      }
-    }
-
-    await batch.commit();
-
-    // No RR group bonus here: it is awarded by the organizer's "Group Bonus" button
-    // (handleAwardGroupBonus), never automatically on the last match completing.
-
-    // Best-effort, AFTER the result is committed, so a missing next-match doc can never roll back
-    // the recorded winner, scores, or stats. Resolve the next match from loaded state (real doc
-    // id) rather than reconstructing it from the draw key, which breaks for merged/regenerated
-    // draws. Returns whether the winner still needs manual placement.
-    if (!match.next_match_id) return { needsManual: false };
-
-    // Normalize bracket and zone so undefined and null compare equal (legacy docs).
-    // `zone` is essential: template ids (M1, M5…) repeat across zone draws, so without it
-    // `matches.find` could overwrite a real player's slot in the OTHER zone, silently.
-    const sameDraw = (m: TournamentMatch) =>
-      (m.bracket ?? null) === (match.bracket ?? null) &&
-      m.tournament_choice === match.tournament_choice &&
-      m.division === match.division &&
-      m.skill_group === match.skill_group &&
-      (m.zone ?? null) === (match.zone ?? null);
-    const nextMatch = matches.find((m) => sameDraw(m) && m.match_id === match.next_match_id);
-    if (!nextMatch) {
-      console.error('Winner recorded, but the next match could not be found in loaded state.');
-      return { needsManual: true };
-    }
-    // Slot: stored next_slot, else inferred from sibling ordering (legacy docs).
-    let slot = match.next_slot as 'player_1' | 'player_2' | '' | undefined;
-    if (!slot) {
-      const siblings = matches
-        .filter((m) => sameDraw(m) && m.next_match_id === match.next_match_id)
-        .sort((a, b) => a.position - b.position);
-      const idx = siblings.findIndex((m) => m.id === match.id);
-      slot = idx <= 0 ? 'player_1' : 'player_2';
-    }
-    try {
-      await updateDoc(doc(db, 'matches', nextMatch.id), {
-        [`${slot}_name`]: submission.claimed_winner_name,
-        [`${slot}_uid`]: submission.claimed_winner_uid,
-      });
-      return { needsManual: false };
-    } catch (err) {
-      console.error('Winner recorded, but advancing to the next match failed:', err);
-      return { needsManual: true };
-    }
-  };
+  const updateMatchWithSubmission = async (
+    match: TournamentMatch,
+    submission: ScoreSubmission,
+    isWalkover?: boolean,
+    isNoShow?: boolean,
+    submissionId?: string,
+  ) => applyTournamentResult({
+    matchId: match.id,
+    winnerUid: submission.claimed_winner_uid || undefined,
+    scores: [
+      [submission.set_1_player_1, submission.set_1_player_2],
+      [submission.set_2_player_1, submission.set_2_player_2],
+      [submission.set_3_player_1, submission.set_3_player_2],
+    ],
+    walkover: isWalkover === true,
+    noShow: isNoShow === true,
+    court: submission.court,
+    submissionId,
+  });
 
   // ── Action handlers ───────────────────────────────────────────────────────
 
@@ -1808,8 +1607,7 @@ export const useTournament = (eventIdOverride?: string) => {
       ...(sub.court ? { court: sub.court } : {}),
     };
     try {
-      const { needsManual } = await updateMatchWithSubmission(match, submission, sub.is_walkover);
-      await updateDoc(doc(db, 'matches', sub.id), resolvedStamp('confirmed'));
+      const { needsManual } = await updateMatchWithSubmission(match, submission, sub.is_walkover, false, sub.id);
       setMessage(
         needsManual
           ? { type: 'error', text: 'Score confirmed, but the winner could not be auto-advanced. Use Edit Draw to place them manually.' }
