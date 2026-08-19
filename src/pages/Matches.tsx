@@ -34,89 +34,25 @@ import { AvailabilityModal } from '../features/profile/components/AvailabilityMo
 import { sharesCourt } from '../utils/courtOverlap';
 import { NearbyPill } from '../components/NearbyPill';
 import { AvailabilityPills } from '../components/AvailabilityPills';
-
-type Mode = 'tournament' | 'friendlies' | 'challenges';
+import {
+  ALLOCATION_ORDER, POOL_SIZE, RAND_SLOTS_PER_WEEK, loadRandState, refreshPool, saveRandState,
+  seededRand, weekKey, type Mode, type PlayerFilter, type RandState,
+} from '../features/matches/matchPool';
 
 // `isReadyForMatches` now lives in features/leagues/useChallengeRules so the Leaderboard's
 // Challenge button gates on exactly the same rule (see the import above).
-
-// ── Per-slot randomizer (both tabs): 12 category slots, each with its own dice. A weekly budget of
-// 2 slots may go "randomized"; re-rolls are then free, originals kept. Same boundary the pool
-// refresh rolls over on — both reset Thursday 8:00am local, not on a calendar week.
-const RAND_SLOTS_PER_WEEK = 2;
-const CYCLE_ANCHOR = new Date(2024, 0, 4, 8, 0, 0, 0).getTime(); // a Thursday, 8:00am local
-const CYCLE_MS = 7 * 24 * 60 * 60 * 1000;
-const weekKey = () => `cycle-${Math.floor((Date.now() - CYCLE_ANCHOR) / CYCLE_MS)}`;
-const randStoreKey = (uid: string, mode: Mode) => `matches_rand_${mode}_${uid}_${weekKey()}`;
-type RandState = { slots: number[]; overrides: Record<number, string> };
-const loadRandState = (uid: string, mode: Mode): RandState => {
-  try { const raw = localStorage.getItem(randStoreKey(uid, mode)); if (raw) return JSON.parse(raw) as RandState; }
-  catch { /* ignore */ }
-  return { slots: [], overrides: {} };
-};
-const saveRandState = (uid: string, mode: Mode, s: RandState) => {
-  try { localStorage.setItem(randStoreKey(uid, mode), JSON.stringify(s)); } catch { /* ignore */ }
-};
-
-// ── Weekly pool refresh: anyone shown last cycle who never got a Challenge/Rally from the viewer
-// is dropped this cycle, so the same untouched names don't sit there forever. Not permanent — one
-// quiet cycle makes them eligible again. `skipUids` is decided once per cycle (from the PRIOR
-// cycle's shown list) and persisted, so it stays stable across reloads within the cycle.
-// How many players each filter shows.
-const POOL_SIZE = 10;
-
-const seenStoreKey = (uid: string, mode: Mode) => `matches_seen_${mode}_${uid}`;
-type SeenRecord = { cycle: string; shownUids: string[]; skipUids: string[] };
-const loadSeen = (uid: string, mode: Mode): SeenRecord | null => {
-  try { const raw = localStorage.getItem(seenStoreKey(uid, mode)); if (raw) return JSON.parse(raw) as SeenRecord; }
-  catch { /* ignore */ }
-  return null;
-};
-const saveSeen = (uid: string, mode: Mode, rec: SeenRecord) => {
-  try { localStorage.setItem(seenStoreKey(uid, mode), JSON.stringify(rec)); } catch { /* ignore */ }
-};
-const refreshPool = (uid: string, mode: Mode, extended: LeagueRow[], requestedIds: Set<string>): LeagueRow[] => {
-  const cycle = weekKey();
-  const stored = loadSeen(uid, mode);
-  const skipUids = stored && stored.cycle === cycle
-    ? new Set(stored.skipUids)
-    : new Set((stored?.shownUids ?? []).filter((id) => !requestedIds.has(id)));
-  const filtered = skipUids.size > 0 ? extended.filter((r) => !skipUids.has(r.user_id)) : extended;
-  const top = filtered.slice(0, POOL_SIZE);
-  if (!stored || stored.cycle !== cycle) {
-    saveSeen(uid, mode, { cycle, shownUids: top.map((r) => r.user_id), skipUids: [...skipUids] });
-  }
-  return top;
-};
-
-// Deterministic pseudo-random in [0,1) from a string seed — used to give the Friendlies pool a
-// stable-for-the-week tiebreak among equally-active players (so the 12 shown can rotate weekly
-// without jittering on every reload).
-const seededRand = (seed: string): number => {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
-  return (h >>> 0) / 4294967296;
-};
 
 // One "Matches" hub: Friendlies (non-competitive) and Challenges (competitive) tabs.
 //
 // Four explicit filters, not an automatic tier waterfall — "why is this person on my list?" needs
 // an answer the player can see. The BASE POOL differs per tab: Challenges is locked to the
 // viewer's league (points only mean something within a division); Friendlies is cross-league.
-type PlayerFilter = 'nearby' | 'new' | 'played' | 'rematch';
 const PLAYER_FILTERS: { value: PlayerFilter; label: string }[] = [
   { value: 'new', label: 'New' },
   { value: 'played', label: 'Most matches' },
   { value: 'nearby', label: 'Nearby' },
   { value: 'rematch', label: 'Re-Match' },
 ];
-
-// Each person is claimed by exactly ONE of the first three filters, so browsing all three shows up
-// to 30 different names instead of the same faces. Re-Match is exempt — it's a fact about them,
-// not a bucket.
-// Allocation order is by how constrained each pool is, NOT display order: Nearby has the smallest
-// candidate set, so it picks first or ends up empty; Most matches picks last and can always fill.
-const ALLOCATION_ORDER: Exclude<PlayerFilter, 'rematch'>[] = ['nearby', 'new', 'played'];
 
 // RallyRow was removed with the separate open-requests list — a rally's state now lives in
 // the player's own row (see the stats cell below).
