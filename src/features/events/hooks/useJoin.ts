@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addDoc, arrayUnion, collection, getDocs, query, updateDoc, doc, where } from 'firebase/firestore';
-import { db, analyticsPromise } from '../../../lib/firebase';
+import { analyticsPromise } from '../../../lib/firebase';
 import { logEvent } from 'firebase/analytics';
-import { TennisEvent } from '../../../types';
 import { TournamentMatch } from '../../../pages/tournament/types';
 import { BYE, PLAYER_LOADING, parseDateValue, zoneBucketFor } from '../../../pages/tournament/utils';
 import { isTournamentEvent, isSeasonOpener, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
 import { isSeniorsLeague } from '../../../utils/skillLevels';
 import { DisplayEvent } from '../services/eventService';
+import { assignPlayerToMatchSlot, createEventParticipant, loadTournamentMatches } from '../services/eventRepository';
+import type { EventParticipantWrite } from '../services/eventParticipant';
 import { INITIAL_JOIN_FORM, JoinFormState, SlotResult } from '../types';
 
 interface Params {
@@ -56,10 +56,10 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
 
     let cancelled = false;
     setLoadingMatches(true);
-    getDocs(query(collection(db, 'matches'), where('event_id', '==', selectedEvent.id), where('category', 'in', ['singles', 'doubles'])))
-      .then((snap) => {
+    loadTournamentMatches(selectedEvent.id)
+      .then((matches) => {
         if (cancelled) return;
-        setTournamentMatches(snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentMatch)));
+        setTournamentMatches(matches);
       })
       .finally(() => { if (!cancelled) setLoadingMatches(false); });
     return () => { cancelled = true; };
@@ -176,13 +176,14 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
       if (isWeekendMatchdaysEvent(selectedEvent) && !hasJoinedAnyTournament()) { setJoinError('Please join a tournament before joining matchdays.'); return; }
       setJoining(true);
       try {
-        await addDoc(collection(db, 'event_participants'), {
+        const participant: EventParticipantWrite = {
           uid: user.uid, user_name: participantName,
           event_id: selectedEvent.id, event_name: selectedEvent.title,
           tournament_choice: '', doubles: '', partner_in_app: '',
           skill: Number(profile?.stats.skill_level || 0), dateselected: [],
           created_at: new Date().toISOString(),
-        });
+        };
+        await createEventParticipant(participant);
         trackJoin();
         setSelectedEvent(null);
       } catch { setJoinError('Could not join the event right now. Please try again.'); }
@@ -221,7 +222,7 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
         return [];
       })();
 
-      await addDoc(collection(db, 'event_participants'), {
+      const participant: EventParticipantWrite = {
         uid: user.uid, user_name: participantName,
         event_id: selectedEvent.id, event_name: selectedEvent.title,
         tournament_choice: choice, division: joinForm.division,
@@ -231,7 +232,8 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
         partner_uid: choice === 'Doubles' ? joinForm.partnerUid : '',
         skill: slotStatus?.skillOverride ?? (choice === 'Singles' ? Number(profile?.stats.skill_level || 0) : Number(joinForm.combinedSkill || 3)),
         dateselected, created_at: new Date().toISOString(),
-      });
+      };
+      await createEventParticipant(participant);
       trackJoin();
 
       // Best-effort: seating a player into a match slot is organizer-only (Firestore
@@ -239,10 +241,7 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
       // them via the draw — the registration above has already succeeded.
       if (slotStatus?.match && slotStatus.slot) {
         try {
-          await updateDoc(doc(db, 'matches', slotStatus.match.id), {
-            [`${slotStatus.slot}_name`]: participantName,
-            [`${slotStatus.slot}_uid`]: user.uid,
-          });
+          await assignPlayerToMatchSlot(slotStatus.match.id, slotStatus.slot, { uid: user.uid, name: participantName });
         } catch (err) {
           // Expected for ordinary players (organizer-only by rules) — but it also fires when an
           // ORGANIZER joins their own event and the write genuinely fails, in which case they'd
