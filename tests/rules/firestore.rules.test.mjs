@@ -498,6 +498,24 @@ describe('Firestore authorization boundaries', () => {
         winner_uid: 'member-a',
       }),
     );
+    await assertSucceeds(
+      updateDoc(doc(dbFor('member-a'), 'matches/tournament-a'), {
+        schedule_requested: true,
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(dbFor('member-a'), 'matches/tournament-a'), {
+        schedule_status: 'scheduled',
+        proposed_date: '2026-09-01',
+        proposed_slot: 'PM',
+        proposed_by: 'organizer-a',
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(dbFor('member-a'), 'matches/tournament-a'), {
+        schedule_requested: false,
+      }),
+    );
 
     await assertFails(
       updateDoc(doc(dbFor('organizer-a'), 'matches/tournament-a'), {

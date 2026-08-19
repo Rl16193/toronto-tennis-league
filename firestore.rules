@@ -424,11 +424,13 @@ service cloud.firestore {
             // played result. Omitting it rejected every confirm, which is the payout transition.
             .hasOnly(['status', 'confirmed_at', 'confirmed_by', 'completed_at'])
         ) ||
-        // Either player proposes / confirms a match time.
+        // A player may only ask the event manager to schedule the match. Authoritative dates,
+        // slots, and schedule status remain event-manager controlled by the branch below.
         (
           (request.auth.uid == resource.data.player_1_uid || request.auth.uid == resource.data.player_2_uid) &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['schedule_status', 'proposed_date', 'proposed_slot', 'proposed_by', 'schedule_requested'])
+            .hasOnly(['schedule_requested']) &&
+          request.resource.data.schedule_requested == true
         ) ||
         (
           'event_id' in resource.data &&
