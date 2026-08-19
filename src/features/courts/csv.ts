@@ -1,4 +1,4 @@
-import { parseCsvLine } from '../signup/utils/courtSearch';
+import { parseCsvLine } from '../../utils/csv';
 import { getZone } from '../../utils/zones';
 import type { CsvCourt } from './types';
 

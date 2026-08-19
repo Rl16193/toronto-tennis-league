@@ -17,7 +17,6 @@ This repository is technical project documentation and application source. The c
 
 - Node.js 22 and npm
 - A Java runtime on `PATH` for the Firestore Emulator Suite
-- Access to a non-production Firebase configuration for local development
 - Git access to `tbtctennis/Racquets-And-Strings`
 
 The Functions package declares Node.js 22. Use that runtime for both root and Functions dependency installation to avoid version drift.
@@ -55,7 +54,7 @@ available local port, which avoids collisions with unrelated services. Java is s
 the Firestore Emulator Suite. The repository pins `firebase-tools` and invokes the local binary;
 it does not download an unbounded CLI version during tests.
 
-`npm run seed:emulator` writes only deterministic synthetic data to the local Firestore emulator (`rands-local`) and refuses any other project ID. The fixture set covers member, organizer, provider, multi-role, event, Round Robin draft, match, task/reward, marketplace, notification, court, and aggregate paths.
+`npm run seed:emulator` writes only deterministic synthetic Auth users and Firestore data to the local emulators (`rands-local`) and refuses any other project ID or non-local Auth host. The fixture set covers member, organizer, provider, multi-role, event, Round Robin draft, match, task/reward, marketplace, notification, court, and aggregate paths. The seeded sign-in accounts use the `.invalid` emails and passwords listed in `tests/fixtures/local-fixtures.mjs`; they are local-only credentials.
 
 GitHub CI runs on pushes and pull requests targeting `dev-anuj`, installs Node 22 and Java 21, and
 runs the same `npm run verify` quality gates plus a separate Functions dependency install. It does
@@ -89,7 +88,7 @@ For an isolated staging project, use the project ID supplied by the environment 
 FIREBASE_DEPLOY_PROJECT_ID=<staging-project-id> npm run hosting:preview
 ```
 
-The guard script is `scripts/deploy-hosting.mjs`. It never infers the deployment project from `.firebaserc`.
+The guard script is `scripts/deploy-hosting.mjs`. It never infers the deployment project from `.firebaserc`. It covers Hosting only; Rules, Storage, and Functions promotion remain separate approval-gated operational work because this checkout has no authorized staging project.
 
 The remaining environment work is to establish:
 

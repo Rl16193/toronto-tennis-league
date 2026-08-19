@@ -13,6 +13,11 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 
 ## Completed evidence
 
+Entries below the current-state update preserve historical observations from earlier stabilization
+passes. When an older entry says that Java, emulator tests, or Rules documentation were missing, it
+describes that earlier checkpoint; the dated maintainability update and current verifier output are
+the authoritative state for this branch.
+
 | Commit | Issue / root cause | Files or evidence | Validation | Remaining risk |
 | --- | --- | --- | --- | --- |
 | `345f382` | Future Codex sessions lacked durable project and skill routing. | `AGENTS.md`, `skills-lock.json`, `.agents/skills/` | Installation and lock hashes reviewed. | Upstream skill updates require deliberate review. |
@@ -23,7 +28,7 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 | `d636fb3` | Separate HTML/SVG diagram artifacts were difficult to view and maintain. | `docs/architecture/diagrams/*.md`, architecture links, skill inventory | Six Mermaid Markdown files, one block each; no HTML/SVG references remain. | Mermaid rendering depends on the Markdown viewer; no separate export is maintained. |
 | Current | Provider role fields were writable by the member owner even though redemptions access trusts them. | `firestore.rules`, `tests/rules/firestore.rules.test.mjs` | TypeScript, Rules test syntax, and diff checks passed; emulator startup reached the missing-Java failure. | Rules assertions still need a Java-enabled emulator run. |
 | `e84d0f6` | GitHub CI failed at `Firestore Rules tests` because the workflow did not provision Java for the Firestore emulator. | `.github/workflows/ci.yml` | Public run `32209659003` confirmed typecheck/build passed and Rules tests failed; run `32210015729` passed after Temurin Java 21 was added. | Local macOS Rules execution still needs a Java runtime. |
-| Current | Emulator wiring had no reusable synthetic dataset or safe seed command. | `tests/fixtures/local-fixtures.mjs`, `tests/fixtures/seed-emulator.mjs`, package scripts, README | 25 fixture documents validated; seed command refuses any project other than `rands-local`. | Emulator must be running and local Java remains required for full smoke execution. |
+| Current | Emulator wiring had no reusable synthetic dataset or safe seed command. | `tests/fixtures/local-fixtures.mjs`, `tests/fixtures/seed-emulator.mjs`, package scripts, README | 25 Firestore documents and 4 Auth fixtures are defined; seed command refuses any project other than `rands-local` and any non-local Auth host. | Emulator suite must be running for seeding. |
 | `0e4d311` | Storage Rules had a public catch-all read and no CI test coverage. | `storage.rules`, `tests/rules/storage.rules.test.mjs`, package scripts, `.github/workflows/ci.yml` | Public run `32210506773` passed the Storage Rules suite; local emulator startup is still blocked by missing Java. | Deployed Storage Rules and intended public projection remain unverified until a non-production Firebase environment is available. |
 | `8f85777` | The repository had no repeatable root or Functions unit-test command for high-value business logic. | `tests/unit/domain.test.mjs`, `functions/test/domain.test.js`, package manifests, `.github/workflows/ci.yml` | 6 root domain tests and 4 Functions tests pass locally; typecheck and diff checks pass. | Callable/trigger integration tests and broader Rules matrix remain open. |
 | `4372baa` | Notification email delivery had no explicit local/staging boundary. | `functions/lib/emailDelivery.js`, `functions/lib/notify.js`, `docs/runbooks/RESEND_DOMAIN_VERIFICATION.md` | 4 email-policy tests pass; emulators are blocked from sending and non-production requires an exact allowlist. | Resend/DNS verification and authorized staging configuration remain external gates. |
@@ -78,6 +83,8 @@ Every later stabilization issue should add its evidence, validation, commit, and
 - The local Rules wrappers select temporary ports and use the installed Java 21 runtime. The
   Firestore suite passes 13 tests and the Storage suite passes 3 tests locally; this is source/rules
   evidence, not deployed Firebase evidence.
+- The local seed command defines four synthetic Auth users alongside the Firestore fixture set and
+  refuses non-local Auth targets. Emulator credentials are stored only in the synthetic fixture file.
 - Tournament scoring/Round Robin primitives, signup validation, event participant access, and the
   Matches weekly pool now have smaller tested boundaries. The migration framework defaults to
   dry-run and requires an explicit project.

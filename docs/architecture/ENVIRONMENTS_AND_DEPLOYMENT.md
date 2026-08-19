@@ -12,10 +12,15 @@ default -> toronto-tennis-league
 
 `firebase.json` configures Firestore rules/indexes, Storage rules, Functions, Hosting, and local emulator ports. The checkout still has no staging project. The root package has local emulator, synthetic seed, `hosting:deploy`, and `hosting:preview` commands; emulator commands explicitly select `rands-local`, while Hosting commands require an explicit project decision because the CLI’s active project is production-sensitive. `firebase-tools` is pinned in root `devDependencies` and invoked from `node_modules/.bin`.
 
+The executable deployment guard is intentionally Hosting-only. This code-only checkout does not
+provide a full Rules/Storage/Functions release command because no authorized staging project or
+production change window is configured. Those surfaces remain external approval gates; adding a
+wrapper without a real target would make a false safety promise.
+
 ## Current delivery path
 
 ```text
-developer -> npm build -> dist -> Firebase Hosting project selected by CLI
+developer -> npm build -> dist -> explicitly selected Firebase Hosting project
 ```
 
 This is not yet a safe promotion pipeline. A Hosting preview channel is a Hosting feature inside the selected Firebase project; it is not proof of a separate staging database or isolated Functions/Storage resources.

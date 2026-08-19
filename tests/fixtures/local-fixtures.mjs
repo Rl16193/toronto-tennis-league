@@ -1,5 +1,12 @@
 // Synthetic-only Firestore fixtures for local emulator smoke tests.
 // Never replace these values with production exports or real member contact data.
+export const LOCAL_AUTH_FIXTURES = [
+  { uid: 'member-a', email: 'member-a@example.invalid', password: 'local-member-a-123!', displayName: 'Synthetic Member' },
+  { uid: 'organizer-a', email: 'organizer-a@example.invalid', password: 'local-organizer-a-123!', displayName: 'Synthetic Organizer' },
+  { uid: 'provider-a', email: 'provider-a@example.invalid', password: 'local-provider-a-123!', displayName: 'Synthetic Provider' },
+  { uid: 'multi-role-a', email: 'multi-role-a@example.invalid', password: 'local-multi-role-a-123!', displayName: 'Synthetic Multi-role User' },
+];
+
 export const LOCAL_FIXTURES = [
   { path: 'users/member-a', data: { uid: 'member-a', name: 'Synthetic Member', avatar: '', created_at: '2026-01-01T00:00:00.000Z' } },
   { path: 'users/organizer-a', data: { uid: 'organizer-a', name: 'Synthetic Organizer', avatar: '', created_at: '2026-01-01T00:00:00.000Z' } },

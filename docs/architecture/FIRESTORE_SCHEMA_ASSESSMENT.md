@@ -20,7 +20,7 @@ The schema is a mature, consolidated application model with explicit privacy rul
 | Major | Global event-creator privilege is broader than the target organizer model. | `isGlobalEventCreator()` grants event and operational write power based on a preference flag rather than event ownership. |
 | Moderate | Rules validation is uneven across collections. | Some paths enforce types and sizes while broad public/profile/activity writes rely on application validation or field allowlists only. |
 | Moderate | Public-read collections need an explicit field-sensitivity contract. | `users`, `stats`, `preferences`, `tasks`, `site_stats`, `group_lessons`, and `listings` are readable broadly; public documents must not accumulate private fields. |
-| Moderate | No repository rules-test harness or backup/recovery procedure is checked in. | Authorization and recovery readiness cannot be regression-tested or demonstrated from the checkout. |
+| Moderate | Rules harnesses and a backup/recovery runbook are checked in, but recovery has not been exercised against a non-production copy. | Authorization is regression-tested locally; operational recovery readiness still depends on an external staging project and restore drill. |
 | Minor | Query/index behavior is partly implicit. | The index file has two documented collection-group indexes; query changes should be validated against emulator/staging rather than relying on comments. |
 
 ## Target state

@@ -67,4 +67,21 @@ describe('Cloud Storage authorization boundaries', () => {
     await assertSucceeds(storage.ref('court_reports/anon/report.png').putString('report', 'raw', { contentType: 'image/png' }));
     await assertFails(storage.ref('court_reports/member-a/unauthorized.png').putString('report', 'raw', { contentType: 'image/png' }));
   });
+
+  test('owned uploads require image content and the five megabyte limit', async () => {
+    const owner = testEnv.authenticatedContext('member-a');
+    const other = testEnv.authenticatedContext('member-b');
+
+    await assertFails(owner.storage(bucket).ref('avatars/member-a/not-an-image.txt').putString('text', 'raw', {
+      contentType: 'text/plain',
+    }));
+    await assertFails(other.storage(bucket).ref('avatars/member-a/not-owned.png').putString('image', 'raw', {
+      contentType: 'image/png',
+    }));
+    await assertFails(owner.storage(bucket).ref('court_reports/member-a/too-large.png').putString(
+      'x'.repeat(5 * 1024 * 1024),
+      'raw',
+      { contentType: 'image/png' },
+    ));
+  });
 });

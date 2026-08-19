@@ -1,6 +1,6 @@
 # ADR-002: Make environment selection explicit
 
-- Status: accepted target direction; implementation pending
+- Status: accepted; local implementation complete, staging provisioning pending
 - Date: 2026-08-18
 
 ## Decision
@@ -9,12 +9,16 @@ Local development and QA must use emulators first, then a separately named stagi
 
 ## Context
 
-The current checkout has one `.firebaserc` default alias and no emulator or staging configuration. Generic deploy commands therefore have a credible path to production, and the repository cannot prove that QA is isolated.
+The checkout retains one production-sensitive `.firebaserc` alias, but local emulator commands now
+select the synthetic `rands-local` project explicitly. Hosting operations require an explicit target
+and approval guard. A staging project is still external to this repository, so the checkout cannot
+claim deployed staging isolation.
 
 ## Consequences
 
 - Environment configuration and deploy guards become part of the repository contract.
 - Rules/functions tests can run without production credentials.
+- Synthetic Auth and Firestore fixtures make local smoke setup repeatable without a Firebase project.
 - Production operations require a separately documented, reviewable gate.
 - A staging project and recovery workflow must be provisioned outside this code-only change before promotion claims can be made.
 
@@ -22,4 +26,4 @@ The current checkout has one `.firebaserc` default alias and no emulator or stag
 
 Evidence: `.firebaserc`, `firebase.json`, `package.json`, `src/lib/firebase.ts`. Open: authorized staging project ID, CI secret storage, database location/edition, and backup schedule.
 
-Last verified source SHA: `323fc37`.
+Last verified source SHA: `308e94c`.
