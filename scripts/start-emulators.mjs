@@ -45,10 +45,24 @@ const child = spawn(
   { cwd: root, env, stdio: 'inherit' },
 );
 
+const forwardSignal = (signal) => {
+  if (!child.killed) child.kill(signal);
+};
+const onSigint = () => forwardSignal('SIGINT');
+const onSigterm = () => forwardSignal('SIGTERM');
+process.once('SIGINT', onSigint);
+process.once('SIGTERM', onSigterm);
+const removeSignalHandlers = () => {
+  process.removeListener('SIGINT', onSigint);
+  process.removeListener('SIGTERM', onSigterm);
+};
+
 child.once('error', (error) => {
+  removeSignalHandlers();
   console.error(error.message);
   process.exitCode = 1;
 });
 child.once('exit', (code, signal) => {
-  process.exitCode = code ?? (signal ? 1 : 0);
+  removeSignalHandlers();
+  process.exitCode = code ?? (signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : signal ? 1 : 0);
 });

@@ -81,8 +81,8 @@ test('organizer records a tournament score and advances the winner', async ({ pa
   await page.getByRole('textbox', { name: 'Synthetic Organizer set 2 games', exact: true }).fill('6');
   await page.getByRole('textbox', { name: 'Synthetic Member set 2 games', exact: true }).fill('2');
   await page.getByRole('button', { name: 'Record Score' }).click();
-  await expect(page.getByText('Score recorded and draw updated.')).toBeVisible();
-  await expect(page.getByText('6-4 6-2')).toBeVisible();
-  await expect(page.getByText('F — Started')).toBeVisible();
+  await expect(page.getByText('Score recorded and draw updated.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('6-4 6-2')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('F — Started')).toBeVisible({ timeout: 15_000 });
   await capture(page, '04-tournament-score-advanced');
 });

@@ -78,7 +78,7 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
 - `npm run verify` passes locally with strict typecheck, ESLint, tracked-file formatting, docs
   freshness, Functions syntax, 33 root unit tests, 26 Functions unit tests, 29 Firestore Rules
   tests, 5 Storage Rules tests, 11 Functions emulator integration tests, a synthetic fixture smoke
-  (4 Auth users and 31 documents), 5 Hosting-backed Chromium tests, generated-CSV freshness, and
+  (4 Auth users and 32 documents), 5 Hosting-backed Chromium tests, generated-CSV freshness, and
   the production build. Existing lint, CSS-target, chunk-size, and dependency-audit warnings remain.
 
 ## Required gates before production changes

@@ -194,6 +194,20 @@ export const LOCAL_FIXTURES = [
     },
   },
   {
+    path: 'event_participants/e2e-finalist',
+    data: {
+      id: 'e2e-finalist',
+      event_id: 'e2e-tournament',
+      uid: 'multi-role-a',
+      name: 'Synthetic Multi Role',
+      tournament_choice: 'Singles',
+      division: "Men's",
+      skill_group: 'Challengers',
+      removal: false,
+      created_at: '2026-01-01T00:00:00.000Z',
+    },
+  },
+  {
     path: 'matches/match-a',
     data: {
       id: 'match-a',
@@ -244,8 +258,8 @@ export const LOCAL_FIXTURES = [
       position: 0,
       player_1_uid: '',
       player_1_name: '',
-      player_2_uid: '',
-      player_2_name: '',
+      player_2_uid: 'multi-role-a',
+      player_2_name: 'Synthetic Multi Role',
       status: 'pending',
     },
   },
