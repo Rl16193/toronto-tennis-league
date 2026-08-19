@@ -29,7 +29,7 @@ const WINNER_POINTS = 2;
 const LOSER_POINTS = 1;
 
 exports.onFriendlyConfirmedAwardPoints = onDocumentUpdated(
-  { document: 'matches/{id}', region: REGION },
+  { document: 'matches/{id}', region: REGION, retry: true },
   async (event) => {
     const before = event.data?.before.data() || {};
     const after = event.data?.after.data() || {};
