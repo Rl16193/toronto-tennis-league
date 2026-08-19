@@ -126,6 +126,23 @@ service cloud.firestore {
         boundedScore(result, 'set_3_player_1') && boundedScore(result, 'set_3_player_2');
     }
 
+    // Score-submission documents are untrusted intent. Bind every submission to the existing
+    // official match so outsiders cannot name an arbitrary match, participants, or winner.
+    function isValidTournamentScoreSubmission(result) {
+      let officialPath = /databases/$(database)/documents/matches/$(result.match_id);
+      let official = get(officialPath).data;
+      return result.match_id is string &&
+        exists(officialPath) &&
+        official.category == 'tournament' &&
+        official.status in ['scheduled', 'pending', 'open'] &&
+        (request.auth.uid == official.player_1_uid || request.auth.uid == official.player_2_uid) &&
+        result.player_1_uid == official.player_1_uid &&
+        result.player_2_uid == official.player_2_uid &&
+        result.event_id == official.event_id &&
+        reportedWinnerIsPlayer(result) &&
+        reportedScoresAreBounded(result);
+    }
+
     // ===============================================================
     // Users Collection
     // ===============================================================
@@ -313,7 +330,7 @@ service cloud.firestore {
         (
           request.resource.data.category == 'score_submission' &&
           request.resource.data.submitted_by == request.auth.uid &&
-          request.resource.data.match_id is string
+          isValidTournamentScoreSubmission(request.resource.data)
         ) ||
         ('event_id' in request.resource.data && isManagerOfEvent(request.resource.data.event_id))
       );
@@ -389,7 +406,19 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['schedule_status', 'proposed_date', 'proposed_slot', 'proposed_by', 'schedule_requested'])
         ) ||
-        ('event_id' in resource.data && isManagerOfEvent(resource.data.event_id))
+        (
+          'event_id' in resource.data &&
+          isManagerOfEvent(resource.data.event_id) &&
+          (
+            resource.data.category != 'tournament' ||
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'status', 'winner_uid', 'winner_name',
+              'set_1_player_1', 'set_1_player_2', 'set_2_player_1', 'set_2_player_2',
+              'set_3_player_1', 'set_3_player_2', 'walkover', 'no_show',
+              'completed_at', 'applied_at', 'result_hash'
+            ])
+          )
+        )
       );
 
       allow delete: if isAuthenticated() && (
@@ -404,7 +433,11 @@ service cloud.firestore {
           resource.data.category == 'score_submission' &&
           request.auth.uid == resource.data.submitted_by
         ) ||
-        ('event_id' in resource.data && isManagerOfEvent(resource.data.event_id))
+        (
+          'event_id' in resource.data &&
+          isManagerOfEvent(resource.data.event_id) &&
+          (resource.data.category != 'tournament' || resource.data.status != 'complete')
+        )
       );
     }
 

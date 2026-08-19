@@ -2,11 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, beforeEach, describe, test } from 'node:test';
-import {
-  assertFails,
-  assertSucceeds,
-  initializeTestEnvironment,
-} from '@firebase/rules-unit-testing';
+import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -42,52 +38,64 @@ describe('Firestore authorization boundaries', () => {
   test('profile bootstrap can create the expected owner-scoped documents but not protected fields', async () => {
     const db = dbFor('member-a');
 
-    await assertSucceeds(setDoc(doc(db, 'users/member-a'), {
-      uid: 'member-a',
-      name: 'Member A',
-      avatar: '',
-      created_at: '2026-01-01T00:00:00.000Z',
-    }));
+    await assertSucceeds(
+      setDoc(doc(db, 'users/member-a'), {
+        uid: 'member-a',
+        name: 'Member A',
+        avatar: '',
+        created_at: '2026-01-01T00:00:00.000Z',
+      }),
+    );
 
-    await assertSucceeds(setDoc(doc(db, 'preferences/member-a'), {
-      uid: 'member-a',
-      event_creator: false,
-      preferred_courts: ['synthetic-court'],
-      preferred_zone: 'north',
-      email_notifications: true,
-    }));
+    await assertSucceeds(
+      setDoc(doc(db, 'preferences/member-a'), {
+        uid: 'member-a',
+        event_creator: false,
+        preferred_courts: ['synthetic-court'],
+        preferred_zone: 'north',
+        email_notifications: true,
+      }),
+    );
 
-    await assertSucceeds(setDoc(doc(db, 'stats/member-a'), {
-      uid: 'member-a',
-      name: 'Member A',
-      leaguePoints26: 0,
-      wins: 0,
-      loses: 0,
-      matchesPlayed: 0,
-      tournamentsPlayed: 0,
-    }));
+    await assertSucceeds(
+      setDoc(doc(db, 'stats/member-a'), {
+        uid: 'member-a',
+        name: 'Member A',
+        leaguePoints26: 0,
+        wins: 0,
+        loses: 0,
+        matchesPlayed: 0,
+        tournamentsPlayed: 0,
+      }),
+    );
 
-    await assertSucceeds(setDoc(doc(db, 'tasks/member-a'), {
-      uid: 'member-a',
-      name: 'Member A',
-      profileComplete: true,
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    }));
+    await assertSucceeds(
+      setDoc(doc(db, 'tasks/member-a'), {
+        uid: 'member-a',
+        name: 'Member A',
+        profileComplete: true,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      }),
+    );
 
-    await assertSucceeds(setDoc(doc(db, 'contacts/member-a'), {
-      email: 'member-a@example.invalid',
-      phone: '+14165550100',
-      preferred_mode_of_contact: 'email',
-      contactable: true,
-      updated_at: '2026-01-01T00:00:00.000Z',
-    }));
+    await assertSucceeds(
+      setDoc(doc(db, 'contacts/member-a'), {
+        email: 'member-a@example.invalid',
+        phone: '+14165550100',
+        preferred_mode_of_contact: 'email',
+        contactable: true,
+        updated_at: '2026-01-01T00:00:00.000Z',
+      }),
+    );
 
-    await assertFails(setDoc(doc(db, 'users/member-b'), {
-      uid: 'member-b',
-      name: 'Member B',
-      avatar: '',
-      created_at: '2026-01-01T00:00:00.000Z',
-    }));
+    await assertFails(
+      setDoc(doc(db, 'users/member-b'), {
+        uid: 'member-b',
+        name: 'Member B',
+        avatar: '',
+        created_at: '2026-01-01T00:00:00.000Z',
+      }),
+    );
   });
 
   test('a member cannot self-assign event_creator on preferences', async () => {
@@ -122,37 +130,56 @@ describe('Firestore authorization boundaries', () => {
     await assertFails(getDocs(collection(dbFor('member-b'), 'preferences')));
     await assertFails(getDoc(doc(anonDb(), 'public_preferences/member-a')));
     await assertFails(getDoc(doc(dbFor('member-b'), 'public_preferences/member-a')));
-    await assertFails(setDoc(doc(dbFor('member-a'), 'public_preferences/member-a'), {
-      uid: 'member-a',
-      event_creator: true,
-    }));
+    await assertFails(
+      setDoc(doc(dbFor('member-a'), 'public_preferences/member-a'), {
+        uid: 'member-a',
+        event_creator: true,
+      }),
+    );
   });
 
   test('event_creator is scoped to owned or explicitly assigned events', async () => {
     await seedDoc('preferences/organizer-a', { uid: 'organizer-a', event_creator: true });
     await seedDoc('preferences/organizer-b', { uid: 'organizer-b', event_creator: true });
     await seedDoc('events/owned-a', {
-      id: 'owned-a', creator_id: 'organizer-a', organizer_ids: ['organizer-b'], title: 'Owned A',
+      id: 'owned-a',
+      creator_id: 'organizer-a',
+      organizer_ids: ['organizer-b'],
+      title: 'Owned A',
     });
     await seedDoc('events/owned-b', {
-      id: 'owned-b', creator_id: 'organizer-b', title: 'Owned B',
+      id: 'owned-b',
+      creator_id: 'organizer-b',
+      title: 'Owned B',
     });
 
     await assertSucceeds(updateDoc(doc(dbFor('organizer-a'), 'events/owned-a'), { title: 'Updated' }));
     await assertSucceeds(updateDoc(doc(dbFor('organizer-b'), 'events/owned-a'), { title: 'Assigned update' }));
-    await assertFails(updateDoc(doc(dbFor('organizer-b'), 'events/owned-a'), {
-      organizer_ids: ['organizer-b', 'member-a'],
-    }));
-    await assertSucceeds(updateDoc(doc(dbFor('organizer-a'), 'events/owned-a'), {
-      organizer_ids: ['organizer-b', 'member-a'],
-    }));
+    await assertFails(
+      updateDoc(doc(dbFor('organizer-b'), 'events/owned-a'), {
+        organizer_ids: ['organizer-b', 'member-a'],
+      }),
+    );
+    await assertSucceeds(
+      updateDoc(doc(dbFor('organizer-a'), 'events/owned-a'), {
+        organizer_ids: ['organizer-b', 'member-a'],
+      }),
+    );
     await assertFails(updateDoc(doc(dbFor('organizer-a'), 'events/owned-b'), { title: 'Cross-event update' }));
-    await assertSucceeds(setDoc(doc(dbFor('organizer-a'), 'events/new-a'), {
-      id: 'new-a', creator_id: 'organizer-a', title: 'New A',
-    }));
-    await assertFails(setDoc(doc(dbFor('organizer-a'), 'events/forged-owner'), {
-      id: 'forged-owner', creator_id: 'organizer-b', title: 'Forged',
-    }));
+    await assertSucceeds(
+      setDoc(doc(dbFor('organizer-a'), 'events/new-a'), {
+        id: 'new-a',
+        creator_id: 'organizer-a',
+        title: 'New A',
+      }),
+    );
+    await assertFails(
+      setDoc(doc(dbFor('organizer-a'), 'events/forged-owner'), {
+        id: 'forged-owner',
+        creator_id: 'organizer-b',
+        title: 'Forged',
+      }),
+    );
   });
 
   test('event_creator cannot use event role for rewards, economics, metrics, or task moderation', async () => {
@@ -172,16 +199,20 @@ describe('Firestore authorization boundaries', () => {
   test('member preference creation rejects role and UID fields', async () => {
     const db = dbFor('member-a');
 
-    await assertFails(setDoc(doc(db, 'preferences/member-a'), {
-      uid: 'member-a',
-      event_creator: false,
-      stringer: true,
-      stringer_id: 'provider-a',
-    }));
-    await assertFails(setDoc(doc(db, 'preferences/member-a'), {
-      uid: 'other-member',
-      event_creator: false,
-    }));
+    await assertFails(
+      setDoc(doc(db, 'preferences/member-a'), {
+        uid: 'member-a',
+        event_creator: false,
+        stringer: true,
+        stringer_id: 'provider-a',
+      }),
+    );
+    await assertFails(
+      setDoc(doc(db, 'preferences/member-a'), {
+        uid: 'other-member',
+        event_creator: false,
+      }),
+    );
   });
 
   test('contact documents require owner writes and protected reads', async () => {
@@ -232,22 +263,26 @@ describe('Firestore authorization boundaries', () => {
   test('clients cannot create server-maintained connection markers', async () => {
     const db = dbFor('member-a');
 
-    await assertFails(setDoc(doc(db, 'connections/member-a__member-b'), {
-      uids: ['member-a', 'member-b'],
-      reason: 'test',
-    }));
+    await assertFails(
+      setDoc(doc(db, 'connections/member-a__member-b'), {
+        uids: ['member-a', 'member-b'],
+        reason: 'test',
+      }),
+    );
   });
 
   test('task owners can write allowlisted progress but cannot mint points', async () => {
     const db = dbFor('member-a');
     const tasks = doc(db, 'tasks/member-a');
 
-    await assertSucceeds(setDoc(tasks, {
-      uid: 'member-a',
-      name: 'Member A',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-      profileComplete: true,
-    }));
+    await assertSucceeds(
+      setDoc(tasks, {
+        uid: 'member-a',
+        name: 'Member A',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        profileComplete: true,
+      }),
+    );
     await assertFails(updateDoc(tasks, { bonusPoints: 99 }));
   });
 
@@ -255,14 +290,16 @@ describe('Firestore authorization boundaries', () => {
     const db = dbFor('member-a');
     const stats = doc(db, 'stats/member-a');
 
-    await assertSucceeds(setDoc(stats, {
-      uid: 'member-a',
-      leaguePoints26: 0,
-      wins: 0,
-      loses: 0,
-      matchesPlayed: 0,
-      tournamentsPlayed: 0,
-    }));
+    await assertSucceeds(
+      setDoc(stats, {
+        uid: 'member-a',
+        leaguePoints26: 0,
+        wins: 0,
+        loses: 0,
+        matchesPlayed: 0,
+        tournamentsPlayed: 0,
+      }),
+    );
     await assertFails(updateDoc(stats, { leaguePoints26: 1 }));
   });
 
@@ -270,23 +307,27 @@ describe('Firestore authorization boundaries', () => {
     const db = dbFor('member-a');
     const stats = doc(db, 'stats/member-a');
 
-    await assertSucceeds(setDoc(stats, {
-      uid: 'member-a',
-      leaguePoints26: 0,
-      wins: 0,
-      loses: 0,
-      matchesPlayed: 0,
-      tournamentsPlayed: 0,
-    }));
+    await assertSucceeds(
+      setDoc(stats, {
+        uid: 'member-a',
+        leaguePoints26: 0,
+        wins: 0,
+        loses: 0,
+        matchesPlayed: 0,
+        tournamentsPlayed: 0,
+      }),
+    );
     await assertFails(updateDoc(stats, { uid: 'other-member' }));
-    await assertFails(setDoc(doc(db, 'stats/other-member'), {
-      uid: 'member-a',
-      leaguePoints26: 0,
-      wins: 0,
-      loses: 0,
-      matchesPlayed: 0,
-      tournamentsPlayed: 0,
-    }));
+    await assertFails(
+      setDoc(doc(db, 'stats/other-member'), {
+        uid: 'member-a',
+        leaguePoints26: 0,
+        wins: 0,
+        loses: 0,
+        matchesPlayed: 0,
+        tournamentsPlayed: 0,
+      }),
+    );
   });
 
   test('organizers cannot directly apply protected statistics or points', async () => {
@@ -339,38 +380,48 @@ describe('Firestore authorization boundaries', () => {
     const otherDb = dbFor('member-b');
     const organizerDb = dbFor('organizer-a');
 
-    await assertSucceeds(setDoc(doc(memberDb, 'event_participants/join-a'), {
-      id: 'join-a',
-      event_id: 'synthetic-event',
-      uid: 'member-a',
-      created_at: '2026-01-01T00:00:00.000Z',
-      tournament_choice: 'Singles',
-      division: "Men's",
-    }));
+    await assertSucceeds(
+      setDoc(doc(memberDb, 'event_participants/join-a'), {
+        id: 'join-a',
+        event_id: 'synthetic-event',
+        uid: 'member-a',
+        created_at: '2026-01-01T00:00:00.000Z',
+        tournament_choice: 'Singles',
+        division: "Men's",
+      }),
+    );
 
-    await assertSucceeds(updateDoc(doc(memberDb, 'event_participants/join-a'), {
-      dateselected: ['2026-08-19'],
-      skill: 3,
-    }));
+    await assertSucceeds(
+      updateDoc(doc(memberDb, 'event_participants/join-a'), {
+        dateselected: ['2026-08-19'],
+        skill: 3,
+      }),
+    );
 
-    await assertFails(setDoc(doc(otherDb, 'event_participants/join-b'), {
-      id: 'join-b',
-      event_id: 'synthetic-event',
-      uid: 'member-a',
-      created_at: '2026-01-01T00:00:00.000Z',
-    }));
+    await assertFails(
+      setDoc(doc(otherDb, 'event_participants/join-b'), {
+        id: 'join-b',
+        event_id: 'synthetic-event',
+        uid: 'member-a',
+        created_at: '2026-01-01T00:00:00.000Z',
+      }),
+    );
 
-    await assertFails(updateDoc(doc(memberDb, 'event_participants/join-a'), {
-      tournament_choice: 'Doubles',
-    }));
+    await assertFails(
+      updateDoc(doc(memberDb, 'event_participants/join-a'), {
+        tournament_choice: 'Doubles',
+      }),
+    );
 
-    await assertSucceeds(setDoc(doc(organizerDb, 'event_participants/join-c'), {
-      id: 'join-c',
-      event_id: 'synthetic-event',
-      uid: 'member-b',
-      created_at: '2026-01-01T00:00:00.000Z',
-      division: "Men's",
-    }));
+    await assertSucceeds(
+      setDoc(doc(organizerDb, 'event_participants/join-c'), {
+        id: 'join-c',
+        event_id: 'synthetic-event',
+        uid: 'member-b',
+        created_at: '2026-01-01T00:00:00.000Z',
+        division: "Men's",
+      }),
+    );
   });
 
   test('tournament matches stay organizer-controlled while player-authored score submissions remain self-scoped', async () => {
@@ -395,34 +446,50 @@ describe('Firestore authorization boundaries', () => {
       status: 'scheduled',
     });
 
-    await assertFails(updateDoc(doc(dbFor('member-a'), 'matches/tournament-a'), {
-      status: 'reported',
-      winner_uid: 'member-a',
-    }));
+    await assertFails(
+      updateDoc(doc(dbFor('member-a'), 'matches/tournament-a'), {
+        status: 'reported',
+        winner_uid: 'member-a',
+      }),
+    );
 
-    await assertSucceeds(updateDoc(doc(dbFor('organizer-a'), 'matches/tournament-a'), {
-      status: 'reported',
-      winner_uid: 'member-a',
-      winner_name: 'Member A',
-      set_1_player_1: 6,
-      set_1_player_2: 4,
-    }));
+    await assertFails(
+      updateDoc(doc(dbFor('organizer-a'), 'matches/tournament-a'), {
+        status: 'reported',
+        winner_uid: 'member-a',
+        winner_name: 'Member A',
+        set_1_player_1: 6,
+        set_1_player_2: 4,
+      }),
+    );
 
-    await assertSucceeds(setDoc(doc(dbFor('member-a'), 'matches/submission-a'), {
-      id: 'submission-a',
-      category: 'score_submission',
-      submitted_by: 'member-a',
-      match_id: 'tournament-a',
-      status: 'open',
-    }));
+    await assertSucceeds(
+      setDoc(doc(dbFor('member-a'), 'matches/submission-a'), {
+        id: 'submission-a',
+        category: 'score_submission',
+        event_id: 'synthetic-event',
+        submitted_by: 'member-a',
+        match_id: 'tournament-a',
+        status: 'open',
+        player_1_uid: 'member-a',
+        player_2_uid: 'member-b',
+        claimed_winner_uid: 'member-a',
+        set_1_player_1: 6,
+        set_1_player_2: 4,
+        set_2_player_1: 6,
+        set_2_player_2: 3,
+      }),
+    );
 
-    await assertFails(setDoc(doc(dbFor('member-b'), 'matches/submission-b'), {
-      id: 'submission-b',
-      category: 'score_submission',
-      submitted_by: 'member-a',
-      match_id: 'tournament-a',
-      status: 'open',
-    }));
+    await assertFails(
+      setDoc(doc(dbFor('member-b'), 'matches/submission-b'), {
+        id: 'submission-b',
+        category: 'score_submission',
+        submitted_by: 'member-a',
+        match_id: 'tournament-a',
+        status: 'open',
+      }),
+    );
   });
 
   test('friendly reports bind the reporter and winner to the match players', async () => {
@@ -448,27 +515,35 @@ describe('Firestore authorization boundaries', () => {
       reported_at: '2026-08-19T00:00:00.000Z',
     };
 
-    await assertFails(updateDoc(doc(dbFor('member-a'), 'matches/rally-a'), {
-      ...validReport,
-      reported_by: 'member-b',
-    }));
-    await assertFails(updateDoc(doc(dbFor('member-a'), 'matches/rally-a'), {
-      ...validReport,
-      winner_uid: 'outsider',
-    }));
-    await assertFails(updateDoc(doc(dbFor('member-a'), 'matches/rally-a'), {
-      ...validReport,
-      set_1_player_1: 8,
-    }));
+    await assertFails(
+      updateDoc(doc(dbFor('member-a'), 'matches/rally-a'), {
+        ...validReport,
+        reported_by: 'member-b',
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(dbFor('member-a'), 'matches/rally-a'), {
+        ...validReport,
+        winner_uid: 'outsider',
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(dbFor('member-a'), 'matches/rally-a'), {
+        ...validReport,
+        set_1_player_1: 8,
+      }),
+    );
 
     await assertSucceeds(updateDoc(doc(dbFor('member-a'), 'matches/rally-a'), validReport));
     await assertFails(updateDoc(doc(dbFor('member-a'), 'matches/rally-a'), { status: 'confirmed' }));
-    await assertSucceeds(updateDoc(doc(dbFor('member-b'), 'matches/rally-a'), {
-      status: 'confirmed',
-      confirmed_by: 'member-b',
-      confirmed_at: '2026-08-19T00:01:00.000Z',
-      completed_at: '2026-08-19T00:01:00.000Z',
-    }));
+    await assertSucceeds(
+      updateDoc(doc(dbFor('member-b'), 'matches/rally-a'), {
+        status: 'confirmed',
+        confirmed_by: 'member-b',
+        confirmed_at: '2026-08-19T00:01:00.000Z',
+        completed_at: '2026-08-19T00:01:00.000Z',
+      }),
+    );
   });
 
   test('round-robin drafts are readable but writable only by the event creator', async () => {
@@ -483,19 +558,23 @@ describe('Firestore authorization boundaries', () => {
     });
 
     const draft = doc(dbFor('organizer-a'), 'events/synthetic-event/rr_drafts/draw-a');
-    await assertSucceeds(setDoc(draft, {
-      event_id: 'synthetic-event',
-      draw_key: 'draw-a',
-      status: 'draft',
-      groups: [],
-    }));
+    await assertSucceeds(
+      setDoc(draft, {
+        event_id: 'synthetic-event',
+        draw_key: 'draw-a',
+        status: 'draft',
+        groups: [],
+      }),
+    );
     await assertSucceeds(getDoc(doc(dbFor('member-a'), 'events/synthetic-event/rr_drafts/draw-a')));
-    await assertFails(setDoc(doc(dbFor('member-a'), 'events/synthetic-event/rr_drafts/draw-b'), {
-      event_id: 'synthetic-event',
-      draw_key: 'draw-b',
-      status: 'draft',
-      groups: [],
-    }));
+    await assertFails(
+      setDoc(doc(dbFor('member-a'), 'events/synthetic-event/rr_drafts/draw-b'), {
+        event_id: 'synthetic-event',
+        draw_key: 'draw-b',
+        status: 'draft',
+        groups: [],
+      }),
+    );
   });
 
   test('redemptions are readable by the player and the assigned provider but not unrelated members', async () => {
@@ -523,10 +602,12 @@ describe('Firestore authorization boundaries', () => {
     await assertSucceeds(getDoc(doc(dbFor('provider-a'), 'redemptions/SYNTHETIC-001')));
     await assertFails(getDoc(doc(dbFor('member-b'), 'redemptions/SYNTHETIC-001')));
     await assertFails(updateDoc(doc(dbFor('provider-a'), 'redemptions/SYNTHETIC-001'), { status: 'used' }));
-    await assertFails(setDoc(doc(dbFor('member-a'), 'redemption_locks/synthetic-lock'), {
-      uid: 'member-a',
-      reward_id: 'synthetic-offer',
-      status: 'active',
-    }));
+    await assertFails(
+      setDoc(doc(dbFor('member-a'), 'redemption_locks/synthetic-lock'), {
+        uid: 'member-a',
+        reward_id: 'synthetic-offer',
+        status: 'active',
+      }),
+    );
   });
 });
