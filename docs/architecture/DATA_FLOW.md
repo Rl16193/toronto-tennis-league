@@ -17,11 +17,16 @@ Evidence: `src/context/AuthContext.tsx`, `src/lib/profileBootstrap.ts`, `src/fea
 1. The member reads public `events` and creates an `event_participants` document.
 2. An organizer reads participants and writes event/draw configuration or a nested RR draft.
 3. Draw generation creates or updates `matches`; the connection trigger can link real player pairs.
-4. Players report scores through the match state machine; notifications Functions react to submissions and transitions.
-5. Functions award points for server-observed match transitions, while tournament code still contains direct `stats` writes for some score/advancement paths.
+4. Players create untrusted score submissions; an event owner or explicitly assigned organizer
+   confirms a result through the `applyTournamentResult` callable.
+5. The callable re-reads the event, match, participants, and optional submission, then atomically
+   records the bounded score, idempotency marker, established statistics/points deltas, and valid
+   next-round advancement. No-show and walkover remain distinct result types.
 6. History and rankings read the resulting `matches`, `stats`, and `ranking_history` projections.
 
-Evidence: `src/features/events/hooks/useJoin.ts`, `src/pages/tournament/useTournament.ts`, `src/pages/tournament/rrGeneration.ts`, `functions/notifications.js`, `functions/taskPoints.js`, `functions/friendlyPoints.js`.
+Evidence: `src/features/events/hooks/useJoin.ts`, `src/pages/tournament/useTournament.ts`,
+`src/features/tournament/services/tournamentResultService.ts`, `functions/tournamentResults.js`,
+`functions/lib/tournamentResult.js`, `src/pages/tournament/rrGeneration.ts`.
 
 ## 3. Tasks, points, rewards, and redemption
 
@@ -51,8 +56,9 @@ Evidence: `functions/lib/notify.js`, `functions/lib/constants.js`, `src/features
 
 ## Target state, risks, and open questions
 
-- Target: all points-moving writes should have one server-authoritative path and rules tests should prove clients cannot mint counters.
-- Current risk: tournament-specific direct `stats` writes create a second authority path beside trigger-based awards.
+- Tournament result application now has one server-authoritative transaction. Legacy score reset,
+  draw cancellation, and manually awarded Round Robin group bonuses still need reconciliation with
+  the final Rules policy before those organizer workflows can be considered fully consolidated.
 - Target: run the same flows against emulators, then staging, with seed data and rules/function integration tests.
 - Open: confirm deployed trigger versions and whether historical documents contain all fields assumed by current readers.
 
