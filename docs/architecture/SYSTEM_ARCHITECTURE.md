@@ -45,5 +45,3 @@ temporary emulator configurations; this proves the checked-in rules contract, no
 - Google Sheets, BigQuery, Resend, and image moderation require credentials/configuration not present in this checkout.
 - Callable/trigger integration coverage is still incomplete even though Firestore and Storage
   Rules harnesses are checked in and exercised locally.
-
-Last verified source SHA: `6ac2b3c`.

@@ -48,5 +48,3 @@ archive namespace is not a rollback source.
 - Which public profile fields are intentionally searchable by logged-out visitors?
 - Is `group_lessons` intended to be public-readable or authenticated-readable?
 - Which Firestore database location/edition and backup policies are currently deployed?
-
-Last verified source SHA: `e960dae`.

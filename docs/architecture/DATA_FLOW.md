@@ -67,5 +67,3 @@ Evidence: `functions/lib/notify.js`, `functions/lib/constants.js`, `src/features
   support historical match shapes, but clients may not use compatibility as a protected write path.
 - Target: run the same flows against emulators, then staging, with seed data and rules/function integration tests.
 - Open: confirm deployed trigger versions and whether historical documents contain all fields assumed by current readers.
-
-Last verified source SHA: `e960dae`.

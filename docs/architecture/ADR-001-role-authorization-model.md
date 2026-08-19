@@ -57,5 +57,3 @@ role/view usage. Open until verified at an integrated source SHA: the authoritat
 representation, legacy compatibility window, and bounded migration implementation. External gates:
 an authorized staging project, migration rehearsal, production backup evidence, and production
 approval.
-
-Last verified source SHA: `e960dae`.
