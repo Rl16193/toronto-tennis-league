@@ -184,15 +184,16 @@ flowchart TD
 
 ### Start here by question
 
-| Founder question                     | Document                                                                                                    | What it explains                                                                        |
-| ------------------------------------ | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| What was delivered and what remains? | [Takeover stabilization log](../engineering/TAKEOVER_STABILIZATION_LOG.md)                                  | Chronological delivery evidence, validation history, safety boundaries, and open gates. |
-| How is the system organized?         | [Architecture index](../architecture/README.md)                                                             | The map for architecture, data, authorization, environments, and diagrams.              |
-| What protects sensitive workflows?   | [Security baseline](../engineering/SECURITY_BASELINE.md)                                                    | Source-level controls, verified boundaries, limitations, and external validation.       |
-| Who can do what?                     | [Authorization model](../architecture/AUTHORIZATION_MODEL.md)                                               | Member, event-manager, administrator, and server permissions.                           |
-| Can a new engineer run it safely?    | [Local development guide](../engineering/LOCAL_DEVELOPMENT.md)                                              | Install, emulators, synthetic data, tests, browser flow, ports, and safety.             |
-| What can be deployed?                | [Environments and deployment](../architecture/ENVIRONMENTS_AND_DEPLOYMENT.md)                               | Local, source-review, staging, and production evidence are kept distinct.               |
-| What are the core product rules?     | [Tournament rules](../domain/TOURNAMENT_RULES.md) and [scoring and points](../domain/SCORING_AND_POINTS.md) | Established tournament, scoring, no-show, walkover, and points behavior.                |
+| Founder question                         | Document                                                                                                    | What it explains                                                                        |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| What was delivered and what remains?     | [Takeover stabilization log](../engineering/TAKEOVER_STABILIZATION_LOG.md)                                  | Chronological delivery evidence, validation history, safety boundaries, and open gates. |
+| How did the repository structure change? | [File structure comparison](./FILE_STRUCTURE_COMPARISON.md)                                                 | Version 0 and `dev-anuj` trees, file counts, new boundaries, and tooling changes.       |
+| How is the system organized?             | [Architecture index](../architecture/README.md)                                                             | The map for architecture, data, authorization, environments, and diagrams.              |
+| What protects sensitive workflows?       | [Security baseline](../engineering/SECURITY_BASELINE.md)                                                    | Source-level controls, verified boundaries, limitations, and external validation.       |
+| Who can do what?                         | [Authorization model](../architecture/AUTHORIZATION_MODEL.md)                                               | Member, event-manager, administrator, and server permissions.                           |
+| Can a new engineer run it safely?        | [Local development guide](../engineering/LOCAL_DEVELOPMENT.md)                                              | Install, emulators, synthetic data, tests, browser flow, ports, and safety.             |
+| What can be deployed?                    | [Environments and deployment](../architecture/ENVIRONMENTS_AND_DEPLOYMENT.md)                               | Local, source-review, staging, and production evidence are kept distinct.               |
+| What are the core product rules?         | [Tournament rules](../domain/TOURNAMENT_RULES.md) and [scoring and points](../domain/SCORING_AND_POINTS.md) | Established tournament, scoring, no-show, walkover, and points behavior.                |
 
 ### Architecture and decisions
 
