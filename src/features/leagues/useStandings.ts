@@ -1,26 +1,12 @@
 import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import type { LeagueRow } from './types';
+
+export type { LeagueRow } from './types';
 
 // Shared leaderboard model + loader, consumed by the Leagues page and the Home landing
 // league section so both read the same public `stats` data (no drift).
-
-export type LeagueRow = {
-  user_id: string;
-  name: string;
-  skill_level: number;
-  tournamentsPlayed: number;
-  matchesPlayed: number;
-  wins: number;
-  loses: number;
-  leaguePoints26: number;
-  league: string;
-  pointswon: number;
-  totalPointsPlayed: number;
-  rankTrend: 'up' | 'down' | 'flat';
-  rankMove: number; // places climbed/fallen since the last snapshot (0 for flat/baseline)
-
-};
 
 // Points-or-games win rate. Shared because every player row in the app now shows this same tile —
 // leaderboard, challenges, friendlies, upcoming matches and the RR groups.

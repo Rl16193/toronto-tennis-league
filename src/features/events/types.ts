@@ -17,7 +17,7 @@ export type JoinedRegistration = {
 
 export type SlotResult = {
   status: 'available' | 'fallback' | 'full';
-  match?: import('../../pages/tournament/types').TournamentMatch;
+  match?: import('../tournament/types').TournamentMatch;
   slot?: 'player_1' | 'player_2';
   skillOverride: number;
   intendedGroup?: string;

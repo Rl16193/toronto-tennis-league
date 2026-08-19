@@ -1,4 +1,4 @@
-import type { LeagueRow } from '../leagues/useStandings';
+import type { LeagueRow } from '../leagues/types';
 
 export type Mode = 'tournament' | 'friendlies' | 'challenges';
 export type PlayerFilter = 'nearby' | 'new' | 'played' | 'rematch';

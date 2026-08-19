@@ -1,6 +1,6 @@
 import { addDoc, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
-import type { TournamentMatch } from '../../../pages/tournament/types';
+import type { TournamentMatch } from '../../tournament/types';
 import { buildEventParticipantData, type EventParticipantWrite } from './eventParticipant';
 
 /** Firestore boundary for event registration and the tournament-slot lookup used by the join flow. */

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { analyticsPromise } from '../../../lib/firebase';
 import { logEvent } from 'firebase/analytics';
-import { TournamentMatch } from '../../../pages/tournament/types';
+import { TournamentMatch } from '../../tournament/types';
 import { BYE, PLAYER_LOADING, parseDateValue, zoneBucketFor } from '../../../pages/tournament/utils';
 import { isTournamentEvent, isSeasonOpener, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
 import { isSeniorsLeague } from '../../../utils/skillLevels';

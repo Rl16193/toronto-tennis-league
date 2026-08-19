@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import type { TournamentMatch } from '../../pages/tournament/types';
+import type { TournamentMatch } from '../tournament/types';
 
 // A user's completed matches, newest first, from their perspective (their games first).
 // Shared by the History page's "My Matches", the Profile "Recent Matches" block, and the Home
