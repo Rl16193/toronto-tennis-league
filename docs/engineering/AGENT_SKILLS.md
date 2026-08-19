@@ -22,15 +22,10 @@ Source: `firebase/agent-skills` on GitHub. These are existing project-local skil
 | `firebase-security-rules-auditor` | Adversarial Firestore rules review | Every rules change and security audit |
 | `xcode-project-setup` | Firebase iOS project configuration | Future mobile setup only |
 
-## Diagram Design
+## Architecture diagrams
 
-- Source: `anujraja/diagram-design`, requested user fork.
-- Local path: `.agents/skills/diagram-design/`.
-- Skill entry point: `.agents/skills/diagram-design/SKILL.md`.
-- Upstream HEAD observed at installation: `da45d4a79a76dc0742c8554b7eabe551db100701`.
-- Installer lock hash: `02bce599218f974d17a6b36c07b6246eec7e4dfa791cb1c158bc3bc61fb7becf`.
-- Use for architecture, data model, data flow, authorization, delivery, and modernization diagrams. Preserve editable HTML plus SVG/PNG exports where tooling permits.
-- The shared style guide is customized from `https://www.racquetsandstrings.ca/` and records the detected palette, typography, contrast checks, and source date.
+- Canonical format: Mermaid fenced blocks in `docs/architecture/diagrams/*.md`.
+- Rendered HTML/SVG exports and the project-local diagram-generation skill are intentionally not part of the project workflow.
 
 ## gstack
 

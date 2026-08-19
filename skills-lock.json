@@ -1,12 +1,6 @@
 {
   "version": 1,
   "skills": {
-    "diagram-design": {
-      "source": "anujraja/diagram-design",
-      "sourceType": "github",
-      "skillPath": "skills/diagram-design/SKILL.md",
-      "computedHash": "02bce599218f974d17a6b36c07b6246eec7e4dfa791cb1c158bc3bc61fb7becf"
-    },
     "firebase-ai-logic-basics": {
       "source": "firebase/agent-skills",
       "sourceType": "github",

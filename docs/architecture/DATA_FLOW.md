@@ -1,6 +1,6 @@
 # Core data flows
 
-Visual: [core data flow](diagrams/core-data-flow.html) · [SVG export](diagrams/core-data-flow.svg).
+Diagram: [core data flow](diagrams/core-data-flow.md).
 
 ## 1. Signup, login, and profile bootstrap
 

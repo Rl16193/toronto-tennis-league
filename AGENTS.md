@@ -52,7 +52,7 @@ GitHub CI is defined at `.github/workflows/ci.yml` and currently runs the verifi
 
 ## Skill routing
 
-- Technical diagrams and architecture visuals → `.agents/skills/diagram-design/SKILL.md`.
+- Architecture diagrams are maintained as Mermaid Markdown under `docs/architecture/diagrams/`.
 - Firebase/Auth/Firestore/Hosting/rules work → the relevant existing `.agents/skills/firebase-*` skill; use `firebase-security-rules-auditor` for rules review.
 - Architecture planning → `.agents/skills/gstack/plan-eng-review/SKILL.md`.
 - Bug investigation → `.agents/skills/gstack/investigate/SKILL.md`.

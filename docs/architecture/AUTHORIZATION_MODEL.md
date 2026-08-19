@@ -1,6 +1,6 @@
 # Authorization and role model
 
-Visual: [authorization boundaries](diagrams/authorization-boundaries.html) · [SVG export](diagrams/authorization-boundaries.svg).
+Diagram: [authorization boundaries](diagrams/authorization-boundaries.md).
 
 ## Current state
 

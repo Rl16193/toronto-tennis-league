@@ -1,6 +1,6 @@
 # Environments and deployment
 
-Visuals: [target safe delivery architecture](diagrams/target-safe-delivery-architecture.html) · [modernization before/after](diagrams/modernization-before-after.html) · [SVG exports](diagrams/target-safe-delivery-architecture.svg), [modernization-before-after.svg](diagrams/modernization-before-after.svg).
+Diagrams: [target safe delivery architecture](diagrams/target-safe-delivery-architecture.md) · [modernization before/after](diagrams/modernization-before-after.md).
 
 ## Current state
 
