@@ -34,6 +34,7 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 - `npm run build` passed; it emits the generated programs CSV and Vite `dist/` output.
 - All committed diagram SVGs passed `xmllint --noout`.
 - All committed diagram HTML files contain one SVG and match their SVG export geometry/content.
+- Emulator configuration is present and the CLI was invoked with synthetic project ID `rands-local`; startup was blocked by the host’s missing Java runtime (`java -version` exit 1).
 - `npm audit --json` could not refresh in the original validation environment because the npm registry DNS lookup failed; install-time audit warnings remain untriaged.
 - Firebase rules emulator tests were not run because no emulator/test harness is currently configured.
 

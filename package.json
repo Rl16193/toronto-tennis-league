@@ -8,6 +8,7 @@
     "build": "node scripts/build-programs-csv.mjs && vite build",
     "build:programs": "node scripts/build-programs-csv.mjs",
     "preview": "vite preview",
+    "emulators": "npx -y firebase-tools@latest emulators:start --only auth,firestore,functions,storage,hosting",
     "hosting:deploy": "npm run build && npx firebase-tools deploy --only hosting",
     "hosting:preview": "npm run build && npx firebase-tools hosting:channel:deploy preview",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",

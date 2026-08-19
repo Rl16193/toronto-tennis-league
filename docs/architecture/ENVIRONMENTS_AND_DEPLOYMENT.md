@@ -35,7 +35,7 @@ Production should be explicit, separately selected, and protected by a deploy gu
 
 ## Recovery readiness
 
-No backup/export configuration, restore drill, staging project alias, or recovery runbook was found in the checkout. Treat production recovery as an open operational gate. Do not run destructive migrations until an export/restore procedure has been tested against a non-production copy.
+No backup/export configuration, restore drill, or staging project alias was found in the checkout. The operational procedure is documented in [Firestore backup and recovery](../runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md). Treat production recovery as an open operational gate. Do not run destructive migrations until an export/restore procedure has been tested against a non-production copy.
 
 ## Evidence, risks, and open questions
 

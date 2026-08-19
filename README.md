@@ -16,6 +16,7 @@ This repository is technical project documentation and application source. The c
 ## Prerequisites
 
 - Node.js 22 and npm
+- A Java runtime on `PATH` for the Firestore Emulator Suite
 - Access to a non-production Firebase configuration for local development
 - Git access to `tbtctennis/Racquets-And-Strings`
 
@@ -33,15 +34,18 @@ cd ..
 cp .env.example .env.local
 ```
 
-Fill `.env.local` with the Firebase Web configuration for a non-production project. Vite exposes only variables prefixed with `VITE_`; do not place service-account credentials, Resend secrets, or other private keys in this file. The Functions `RESEND_API_KEY` is a server-managed Firebase secret, not a client environment variable.
+The template defaults to local emulators with a synthetic `rands-local` project ID. Vite exposes only variables prefixed with `VITE_`; do not place service-account credentials, Resend secrets, or other private keys in this file. The Functions `RESEND_API_KEY` is a server-managed Firebase secret, not a client environment variable.
 
 ## Local development
 
+Start the Emulator Suite in one terminal and the Vite app in another:
+
 ```bash
+npm run emulators
 npm run dev
 ```
 
-The Vite server uses port `3000`. The current checkout does not yet contain Firebase Emulator Suite configuration or a rules test harness, so do not assume `firebase emulators:start` is a safe or complete workflow until the environment-isolation work is finished.
+The Vite server uses port `3000`; the emulator UI uses port `4000`. Local Auth, Firestore, Functions, Storage, and Hosting use the ports declared in `firebase.json`. Firestore emulator startup requires Java; the current validation machine does not have a Java runtime, so emulator execution remains blocked until that prerequisite is installed. Rules tests and seeded fixtures are still pending, so an emulator running is not by itself evidence of complete QA.
 
 ## Validation commands
 
@@ -59,7 +63,7 @@ Functions currently have no package test script. Project architecture and securi
 
 The next environment work is to establish:
 
-1. local Firebase emulators;
+1. local Firebase emulators; **implemented in this commit**;
 2. an isolated staging project and explicit project selection;
 3. rules/Functions tests;
 4. approval-gated production deployment documentation.
@@ -75,6 +79,7 @@ The next environment work is to establish:
 - [Agent skills inventory](docs/engineering/AGENT_SKILLS.md)
 - [Security baseline](docs/engineering/SECURITY_BASELINE.md)
 - [Takeover stabilization log](docs/engineering/TAKEOVER_STABILIZATION_LOG.md)
+- [Firestore backup and recovery runbook](docs/runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md)
 
 Use the project-local skills under `.agents/skills/` for Firebase work, architecture diagrams, security review, investigation, QA, and documentation. Keep commits issue-sized and push completed work only to `origin/dev-anuj`.
 
