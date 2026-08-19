@@ -49,6 +49,17 @@ service cloud.firestore {
       ];
     }
 
+    // Member-editable preferences only. Role flags and provider identifiers are assigned by the
+    // super-admin service path; allowing them through the owner update rule would let a member
+    // self-identify as a provider and pass isProviderFor() checks on redemptions.
+    function ownerPreferenceFields() {
+      return [
+        'uid', 'preferred_courts', 'favourite_players',
+        'scheduling_preference', 'event_creator', 'preferred_zone',
+        'preferred_zone_manual', 'email_notifications', 'availability_tags',
+      ];
+    }
+
     // Order-independent id for a pair of players. MUST match pairId() in functions/connections.js
     // exactly — the trigger writes the doc, this recomputes the same name to look it up.
     function pairId(a, b) {
@@ -154,10 +165,19 @@ service cloud.firestore {
     // ===============================================================
     match /preferences/{userId} {
       allow read: if true;
-      allow create: if isOwner(userId) && request.resource.data.event_creator == false;
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly(ownerPreferenceFields()) &&
+        request.resource.data.get('uid', userId) == userId &&
+        request.resource.data.event_creator == false;
       allow update: if isSuperAdmin() ||
         (isOwner(userId) &&
-          request.resource.data.event_creator == resource.data.event_creator);
+          request.resource.data.get('uid', userId) == userId &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly([
+              'uid', 'preferred_courts', 'favourite_players',
+              'scheduling_preference', 'preferred_zone', 'preferred_zone_manual',
+              'email_notifications', 'availability_tags'
+            ]));
       allow delete: if false;
     }
 

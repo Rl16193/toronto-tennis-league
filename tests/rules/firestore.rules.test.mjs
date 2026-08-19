@@ -37,7 +37,25 @@ describe('Firestore authorization boundaries', () => {
     const preferences = doc(db, 'preferences/member-a');
 
     await assertSucceeds(setDoc(preferences, { uid: 'member-a', event_creator: false }));
+    await assertSucceeds(updateDoc(preferences, { preferred_zone: 'north' }));
     await assertFails(updateDoc(preferences, { event_creator: true }));
+    await assertFails(updateDoc(preferences, { stringer: true, stringer_id: 'provider-a' }));
+    await assertFails(updateDoc(preferences, { coach: true, coach_id: 'coach-a' }));
+  });
+
+  test('member preference creation rejects role and UID fields', async () => {
+    const db = dbFor('member-a');
+
+    await assertFails(setDoc(doc(db, 'preferences/member-a'), {
+      uid: 'member-a',
+      event_creator: false,
+      stringer: true,
+      stringer_id: 'provider-a',
+    }));
+    await assertFails(setDoc(doc(db, 'preferences/member-a'), {
+      uid: 'other-member',
+      event_creator: false,
+    }));
   });
 
   test('contact documents require owner writes and protected reads', async () => {

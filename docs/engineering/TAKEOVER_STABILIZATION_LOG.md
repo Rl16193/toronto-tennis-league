@@ -21,6 +21,7 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 | `230a291` | Rules authorization had no repeatable local harness. | `tests/rules/firestore.rules.test.mjs`, `package.json`, `.github/workflows/ci.yml` | Harness syntax, CI YAML, and lint checks passed; emulator execution still needs the Java prerequisite. | Coverage is initial and Functions authorization tests are still absent. |
 | `fe6ae63` | Hosting scripts could inherit the production-sensitive `.firebaserc` project. | `scripts/deploy-hosting.mjs`, `package.json`, `README.md` | Missing-project and production-without-approval guard paths both refused safely; no deploy ran. | Authorized staging project and production approval workflow remain external gates. |
 | `d636fb3` | Separate HTML/SVG diagram artifacts were difficult to view and maintain. | `docs/architecture/diagrams/*.md`, architecture links, skill inventory | Six Mermaid Markdown files, one block each; no HTML/SVG references remain. | Mermaid rendering depends on the Markdown viewer; no separate export is maintained. |
+| Current | Provider role fields were writable by the member owner even though redemptions access trusts them. | `firestore.rules`, `tests/rules/firestore.rules.test.mjs` | TypeScript, Rules test syntax, and diff checks passed; emulator startup reached the missing-Java failure. | Rules assertions still need a Java-enabled emulator run. |
 
 ## Current issue queue
 
@@ -47,6 +48,7 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 - Emulator configuration is present and the CLI was invoked with synthetic project ID `rands-local`; startup was previously blocked by the host’s missing Java runtime (`java -version` exit 1). A later rules-test invocation also hung during CLI package resolution and was stopped without connecting to Firebase.
 - Initial Firestore Rules tests cover preference role self-assignment, contact ownership/privacy, server-only connection markers, task point minting, member stats point writes, UID substitution on member stats, and admin metric access. They are wired into `npm run test:rules` and CI but have not passed locally because the emulator prerequisite is unresolved.
 - The `stats/{uid}` Rules boundary now preserves the document UID on member create/update; TypeScript, test-file syntax, and whitespace checks passed.
+- Member preference writes now allow only documented self-service fields; provider identifiers and role flags remain super-admin-only. The test covers safe preference updates, role-field injection, and UID substitution.
 - `npm audit --json` could not refresh in the original validation environment because the npm registry DNS lookup failed; install-time audit warnings remain untriaged.
 - Firebase Rules emulator tests remain unverified locally because Java/CLI resolution is unresolved; no production Firebase command was run.
 
