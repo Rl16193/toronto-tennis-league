@@ -10,7 +10,7 @@ The checkout contains one Firebase project alias:
 default -> toronto-tennis-league
 ```
 
-`firebase.json` configures Firestore rules/indexes, Storage rules, Functions, Hosting, and local emulator ports. The checkout still has no staging project. The root package has local emulator, synthetic seed, `hosting:deploy`, and `hosting:preview` commands; Hosting commands require an explicit project decision because the CLI’s active project is production-sensitive.
+`firebase.json` configures Firestore rules/indexes, Storage rules, Functions, Hosting, and local emulator ports. The checkout still has no staging project. The root package has local emulator, synthetic seed, `hosting:deploy`, and `hosting:preview` commands; Hosting commands require an explicit project decision because the CLI’s active project is production-sensitive. `firebase-tools` is pinned in root `devDependencies` and invoked from `node_modules/.bin`.
 
 ## Current delivery path
 
@@ -31,7 +31,7 @@ developer
   -> production project
 ```
 
-Production should be explicit, separately selected, and protected by a deploy guard. Staging and local environment variables must never silently reuse production credentials.
+Production should be explicit, separately selected, and protected by a deploy guard. Staging and local environment variables must never silently reuse production credentials. Do not run a bare Firebase CLI deploy from this checkout; use an explicit-project, approval-gated workflow and review the affected rules/Functions first.
 
 ## Recovery readiness
 
@@ -41,6 +41,7 @@ No backup/export configuration, restore drill, or staging project alias was foun
 
 - Evidence: `.firebaserc`, `firebase.json`, `package.json`, `src/lib/firebase.ts`, `.gitignore`.
 - Risk: generic CLI commands can target `toronto-tennis-league`.
+- Local CLI evidence: root `devDependencies.firebase-tools` is pinned to `15.27.0`; emulator and Hosting scripts use that repository-local binary.
 - Open: identify the authorized staging project, Firebase database location/edition, CI secret strategy, and production deploy approver.
 
 Last verified source SHA: `846dee90323dbd32d556e9254586cd7f9ebc03c7`.

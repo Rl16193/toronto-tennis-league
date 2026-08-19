@@ -10,7 +10,8 @@
  * Deliberately minimal surface. It confirms whether an address is taken (which a signup form
  * reveals anyway by failing) and nothing else — no names, no uids, no other fields.
  *
- * Deploy with: firebase deploy --only functions
+ * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+ * do not use a bare Firebase deploy command from this checkout.
  */
 const { onCall } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');

@@ -5,7 +5,8 @@
  * clicking (and so players can't write into each other's feeds — see firestore.rules).
  * Firestore triggers cover things that happen; scheduled jobs cover time-based reminders.
  *
- * Deploy with: firebase deploy --only functions
+ * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+ * do not use a bare Firebase deploy command from this checkout.
  */
 const { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');

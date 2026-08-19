@@ -2,7 +2,7 @@
  * Shared notification writer. Lives outside index.js/notifications.js/taskPoints.js on purpose:
  * those files are re-exported wholesale via `Object.assign(exports, require('./x'))`, and the
  * Firebase CLI expects every export it finds to be a Cloud Function — a plain helper function
- * mixed in there would break `firebase deploy`.
+ * mixed in there would break the Firebase deployment bundle.
  */
 const { logger } = require('firebase-functions');
 const { defineSecret } = require('firebase-functions/params');

@@ -2,7 +2,7 @@
  * Shared constants for the Cloud Functions. Lives in lib/ for the same reason notify.js does:
  * index.js/notifications.js/taskPoints.js are re-exported wholesale via
  * `Object.assign(exports, require('./x'))`, and the Firebase CLI expects every export it finds
- * there to be a Cloud Function — a plain constant mixed in would break `firebase deploy`.
+ * there to be a Cloud Function — a plain constant mixed in would break the Firebase deployment bundle.
  */
 
 // Scheduling/formatting timezone for every scheduled function and day-key calculation.

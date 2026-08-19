@@ -28,3 +28,21 @@ separate review path.
 
 **Regression test:** Rules tests cover client write protections; callable integration against the
 Functions emulator remains a future stabilization item.
+
+## Coupon state transitions
+
+**Rule:** `active` may become `used`, `flagged`, or `cancel_requested`. A `flagged` coupon may be
+marked `used` by the provider/organizer or returned to `active` by an organizer. Only
+`cancel_requested` may be approved into `cancelled` and refunded; declining either review state
+returns it to `active`. `used` and `cancelled` are terminal for those workflows.
+
+**Why:** A coupon that is under dispute or cancellation review must not be redeemed through an
+alternate path, and a used coupon must never be reactivated and reused.
+
+**Important exception:** Provider notes, cancellation reasons, and reviewer notes are optional but
+are capped at 500 characters at the callable boundary.
+
+**Code:** `functions/lib/redemptionState.js`, `functions/rewards.js`.
+
+**Regression test:** `functions/test/redemptionState.test.js` and the bounded-string cases in
+`functions/test/callable.test.js`.

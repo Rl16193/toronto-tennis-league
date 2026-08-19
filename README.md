@@ -50,7 +50,8 @@ npm run dev
 The Vite server uses port `3000`; the full Emulator Suite uses the ports declared in `firebase.json`.
 Firestore and Storage Rules test commands use temporary emulator configurations and select an
 available local port, which avoids collisions with unrelated services. Java is still required by
-the Firestore Emulator Suite.
+the Firestore Emulator Suite. The repository pins `firebase-tools` and invokes the local binary;
+it does not download an unbounded CLI version during tests.
 
 `npm run seed:emulator` writes only deterministic synthetic data to the local Firestore emulator (`rands-local`) and refuses any other project ID. The fixture set covers member, organizer, provider, multi-role, event, Round Robin draft, match, task/reward, marketplace, notification, court, and aggregate paths.
 
@@ -62,7 +63,7 @@ not deploy or connect to Firebase.
 
 ```bash
 npm run typecheck     # Full TypeScript strict check, no emit
-npm run lint          # ESLint React/TypeScript checks
+npm run lint          # ESLint source, scripts, tests, and Functions checks
 npm run format:check  # Maintained-slice formatting check
 npm test              # Pure domain and data-contract tests
 npm run test:rules    # Firestore Rules suite in a temporary local emulator
@@ -78,7 +79,7 @@ Project architecture and security validation gaps are tracked in [docs/engineeri
 
 ## Firebase and deployment safety
 
-`.firebaserc` currently names `toronto-tennis-league`, which is production-sensitive. Routine development and QA must not use that project. `hosting:deploy` and `hosting:preview` now require `FIREBASE_DEPLOY_PROJECT_ID`; production also requires two explicit approval environment variables. Do not run a production action from this checkout without an approved environment plan.
+`.firebaserc` currently names `toronto-tennis-league`, which is production-sensitive. Routine development and QA must not use that project. `hosting:deploy` and `hosting:preview` now require `FIREBASE_DEPLOY_PROJECT_ID`; production also requires two explicit approval environment variables. Do not run a production action from this checkout without an approved environment plan or a bare Firebase deploy command.
 
 For an isolated staging project, use the project ID supplied by the environment owner:
 

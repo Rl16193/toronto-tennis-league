@@ -13,7 +13,8 @@
 // the raw keys means that matching logic stays in exactly one place — the client maps a few
 // hundred distinct strings, instead of iterating every user.
 //
-// Requires deploy: `firebase deploy --only functions:aggregateCourtCounts`
+// Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+// do not use a bare Firebase deploy command from this checkout.
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions');

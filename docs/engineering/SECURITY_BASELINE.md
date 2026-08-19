@@ -40,6 +40,12 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
       "recommendation": "Run the seeded emulator suite locally, extend Functions tests around callable authorization and idempotency, and establish a non-production Firebase project before production deployment work resumes."
     },
     {
+      "check": "Pre-auth signup lookup",
+      "severity": "moderate",
+      "issue": "The signup flow intentionally exposes whether a submitted email is present in primary or secondary contact records before authentication so duplicate and account-merge handling can work. The callable returns only booleans, but App Check and rate limiting are not configured in this checkout.",
+      "recommendation": "Choose and configure an abuse-control policy (App Check, rate limiting, or a less enumerable signup flow) with the client and environment owner before treating this endpoint as production-hardened."
+    },
+    {
       "check": "Tracked secrets",
       "severity": "minor",
       "issue": "The tracked-file scan found no private key, service-account credential, or Resend secret. A vendored gstack renderer contains a Firebase client API key from its upstream build; client keys are not service credentials, but the artifact should remain separately reviewed from application secrets. Repository history and external CI secrets were not exhaustively audited here.",
@@ -55,8 +61,9 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
 - Storage writes are authenticated and type/size constrained for named prefixes. The current source permits public reads only for LandingPage, Gallery, avatars, and listings; report/suggestion reads are owner/authentication constrained.
 - `src/pages/tournament/useTournament.ts` contains direct `stats` writes for tournament points; Functions contain separate task/friendly-point award logic.
 - Pure domain coverage now exercises Round Robin grouping/pairings, standings, scoring awards, safe rewrites, and the server reward-point calculator. Functions integration tests against the Admin SDK and callable runtime remain open.
+- Reward callable state transitions are explicit: only pending cancellation review can refund, disputed coupons cannot bypass review, operator notes are bounded, and operational identifiers are hashed in the touched logs. Full callable/trigger integration tests remain open.
 - A tracked-file scan was performed for common credential patterns. It found no private key, service-account credential, or Resend secret in application files; the vendored gstack renderer includes an upstream Firebase client key, which is not a service credential. The scan did not prove that secrets are absent from Git history, deployment configuration, or third-party systems.
-- `npm run verify` passes locally with strict typecheck, ESLint, maintained-slice formatting, docs freshness, Functions syntax and unit tests, 15 root unit tests, 13 Firestore Rules tests, 3 Storage Rules tests, and the production build. The build still reports existing CSS-target and large-chunk warnings. `npm audit` reports non-zero dependency findings; no broad upgrade or automatic fix was applied.
+- `npm run verify` passes locally with strict typecheck, ESLint over source/scripts/tests/Functions, maintained-slice formatting, docs freshness, Functions syntax and 12 Functions unit tests, 15 root unit tests, 13 Firestore Rules tests, 3 Storage Rules tests, generated-CSV freshness, and the production build. The build still reports existing CSS-target and large-chunk warnings. `npm audit` reports non-zero dependency findings; no broad upgrade or automatic fix was applied.
 
 ## Required gates before production changes
 

@@ -9,10 +9,11 @@
  * ORDER MATTERS — deploy the rules LAST, or the gate goes live before the connections exist and
  * every contact read fails for everyone:
  *
- *   1. firebase deploy --only functions:onMatchConnection,functions:onListingContact
+ *   1. Deploy the reviewed Functions using the explicit-project, approval-gated workflow in
+ *      docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md.
  *   2. node scripts/backfill-connections.mjs --key serviceAccount.json --dry-run
  *      node scripts/backfill-connections.mjs --key serviceAccount.json
- *   3. firebase deploy --only firestore:rules
+ *   3. Deploy the reviewed Rules using the same explicit-project, approval-gated workflow.
  *   4. node scripts/backfill-connections.mjs --key serviceAccount.json --strip --dry-run
  *      node scripts/backfill-connections.mjs --key serviceAccount.json --strip
  */

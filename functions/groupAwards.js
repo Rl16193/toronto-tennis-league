@@ -9,7 +9,8 @@
  *
  * courts.json is the server-side courtKey → zone roster, GENERATED FROM
  * public/Tennis Courts Facilities - 4326.csv. Regenerate it if the CSV changes.
- * Deploy: firebase deploy --only functions
+ * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+ * do not use a bare Firebase deploy command from this checkout.
  */
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
@@ -68,7 +69,7 @@ const AWARD_LABELS = {
   zone_sweep: 'Full Zone Sweep',
 };
 
-async function payGroupAward(awardId, { type, key, pointsEach, recipients, allowTopUp = false }) {
+async function payGroupAward(awardId, { type, key: _key, pointsEach, recipients, allowTopUp = false }) {
   const clean = recipients.filter((r) => r && r.uid);
   if (clean.length === 0) return false;
   const nowISO = new Date().toISOString();

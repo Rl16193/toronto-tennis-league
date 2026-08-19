@@ -16,6 +16,8 @@ callers stable while further persistence extraction can happen without a rewrite
 validation is similarly isolated in `src/features/signup/signupForm.ts`. Event registration and
 tournament-slot lookup now use `src/features/events/services/eventRepository.ts`, with the document
 shape tested independently in `eventParticipant.ts`.
+Shared tournament-match and leaderboard row types now live under feature-owned type modules rather
+than making data-access code import from a page or hook.
 
 ## Quality commands
 
@@ -23,21 +25,24 @@ shape tested independently in `eventParticipant.ts`.
 - The root `tsconfig.json` enables full TypeScript `strict` mode plus no-implicit-return and
   no-fallthrough checks. `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` remain
   intentionally deferred because they require a broad legacy data-model migration.
-- `npm run lint` runs ESLint over first-party React/TypeScript source. Existing warnings for legacy
-  hook dependency choices and explicit `any` remain visible; new errors fail the command.
+- `npm run lint` runs ESLint over first-party React/TypeScript source, scripts, tests, and Functions.
+  Existing warnings for legacy hook dependency choices, explicit `any`, and unused legacy values
+  remain visible; new errors fail the command.
 - `npm run format:check` checks the maintained slices and new tooling files. The legacy source tree
   is intentionally not mass-reformatted in a behavior refactor.
 - `npm run test:rules` and `npm run test:storage` select temporary emulator ports and use local
-  OpenJDK when it is installed outside the default PATH.
+  OpenJDK when it is installed outside the default PATH. The repository pins `firebase-tools` so
+  the emulator wrapper does not download an unbounded CLI version at execution time.
 - `npm run verify` runs the local type, lint, format, documentation, unit, Functions, Rules,
-  Storage, build, and diff checks in one command.
+  Storage, build, generated-artifact freshness, and diff checks in one command.
 
 ## Architecture freshness
 
-`npm run docs:verify` checks required architecture/runbook documents and fails when an
-architecture-sensitive change set has no documentation review. The sensitive list is intentionally
-small: Firebase project/rules configuration, callable authorization primitives, tournament domain
-rules, and migration tooling. Expand the list when a new durable boundary is introduced.
+`npm run docs:verify` checks the primary architecture, domain, security, engineering, and recovery
+documents and fails when a mapped architecture-sensitive change set has no directly relevant
+documentation review. The mapping covers Firebase configuration/rules, callable and reward
+boundaries, tournament/data-access modules, and migration tooling. Expand it when a new durable
+boundary is introduced.
 
 ## Vendor boundary
 
@@ -55,3 +60,11 @@ The pinned source and update procedure remain in `docs/engineering/AGENT_SKILLS.
   deliberate product/data decision before consolidation.
 - Functions remain JavaScript. Shared callable validation is centralized first; TypeScript
   migration should follow where integration coverage is strong.
+- Signup intentionally has a pre-auth email-existence check so secondary-email migration remains
+  usable. App Check/rate limiting for that enumeration surface requires an explicit client and
+  deployment decision; no credentials or production configuration are assumed here.
+- Browser E2E and callable/trigger integration coverage remain open. Rules, pure domain tests, and
+  helper-level Functions tests are the reliable local layer until an emulator-backed UI harness and
+  non-production Functions project are available.
+- `npm audit` remains non-zero through transitive development tooling. Dependency upgrades need a
+  separate compatibility review; this block does not use an automatic mass-fix.
