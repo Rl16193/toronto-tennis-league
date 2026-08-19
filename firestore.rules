@@ -197,12 +197,21 @@ service cloud.firestore {
     match /stats/{userId} {
       allow read: if true;
       allow create: if isOwner(userId) &&
+          request.resource.data.keys().hasOnly([
+            'uid', 'name', 'skill_level', 'tournament_preference', 'league',
+            'leaguePoints26', 'wins', 'loses', 'matchesPlayed', 'tournamentsPlayed'
+          ]) &&
           request.resource.data.get('uid', userId) == userId &&
-          request.resource.data.leaguePoints26 == 0 &&
-          request.resource.data.wins == 0 &&
-          request.resource.data.loses == 0 &&
-          request.resource.data.matchesPlayed == 0 &&
-          request.resource.data.tournamentsPlayed == 0;
+          request.resource.data.get('leaguePoints26', 0) == 0 &&
+          request.resource.data.get('wins', 0) == 0 &&
+          request.resource.data.get('loses', 0) == 0 &&
+          request.resource.data.get('matchesPlayed', 0) == 0 &&
+          request.resource.data.get('tournamentsPlayed', 0) == 0 &&
+          request.resource.data.get('name', '') is string &&
+          request.resource.data.get('skill_level', 2) is number &&
+          request.resource.data.get('league', '') is string &&
+          request.resource.data.get('tournament_preference', 'Challengers') in
+            ['Beginners', 'Challengers', 'Masters'];
       allow update: if isOwner(userId) &&
           request.resource.data.get('uid', userId) == userId &&
           request.resource.data.diff(resource.data).affectedKeys()

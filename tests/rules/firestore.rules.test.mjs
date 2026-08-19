@@ -355,6 +355,15 @@ describe('Firestore authorization boundaries', () => {
       }),
     );
     await assertFails(updateDoc(stats, { leaguePoints26: 1 }));
+    await assertFails(
+      setDoc(doc(dbFor('other-member'), 'stats/other-member'), {
+        uid: 'other-member',
+        name: 'Forged Member',
+        skill_level: 2,
+        pointswon: 999,
+        rankPosition: 1,
+      }),
+    );
   });
 
   test('member-owned stats cannot substitute another UID', async () => {
