@@ -10,7 +10,7 @@ const admin = require('firebase-admin');
 const { Resend } = require('resend');
 const { htmlToText } = require('./htmlToText');
 const { LINK } = require('./emailTemplates');
-const { EMAIL_FROM, EMAIL_REPLY_TO } = require('./constants');
+const { EMAIL_FROM, EMAIL_REPLY_TO, SUPER_ADMIN_UID } = require('./constants');
 const { emailDeliveryDecision } = require('./emailDelivery');
 
 const db = () => admin.firestore();
@@ -34,11 +34,10 @@ async function notify(recipients, payload) {
   await batch.commit().catch((e) => logger.error('notify failed', e));
 }
 
-// All uids with organizer rights (super admin is handled separately client-side; this covers
-// every account with preferences.event_creator === true).
-async function organizerUids() {
-  const snap = await db().collection('preferences').where('event_creator', '==', true).get();
-  return snap.docs.map((d) => d.id);
+// Reward/task review is a global administrative capability. Event creators are deliberately not
+// recipients: their authority is scoped to events they own or are assigned to.
+async function adminUids() {
+  return [SUPER_ADMIN_UID];
 }
 
 // Best-effort email alongside a notify() call — looks up the recipient's address on `users` and
@@ -66,11 +65,14 @@ async function sendEmail(uid, subject, html) {
       emulator: process.env.FUNCTIONS_EMULATOR === 'true',
       enabled: process.env.EMAIL_DELIVERY_ENABLED === 'true',
       allowlist: (process.env.EMAIL_ALLOWED_RECIPIENTS || '')
-        .split(',').map((value) => value.trim()).filter(Boolean),
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
     });
     if (!decision.deliver) {
       logger.info('sendEmail skipped by environment delivery policy', {
-        projectId: projectId || '(unset)', reason: decision.reason,
+        projectId: projectId || '(unset)',
+        reason: decision.reason,
       });
       return;
     }
@@ -102,4 +104,4 @@ async function sendEmailOnce(uid, dedupeKey, subject, html) {
   await sendEmail(uid, subject, html);
 }
 
-module.exports = { notify, organizerUids, sendEmail, sendEmailOnce, resendApiKey };
+module.exports = { notify, adminUids, sendEmail, sendEmailOnce, resendApiKey };

@@ -22,6 +22,8 @@ Firebase Auth supplies identity. Firestore Rules are the effective client author
 - Contacts are not globally readable; event creators do not gain unrelated contact access.
 - `connections` and `public_contacts` are write-denied to clients.
 - `offers`, protected stats/reward fields, `redemptions`, `group_lessons`, aggregate stats, ranking history, and notifications creation are server-controlled.
+- Reward redemption review is limited to the super-admin bootstrap; event creators cannot review,
+  use, flag, or receive global coupon notifications unless they separately own the provider record.
 - Private preferences are owner/super-admin readable. `public_preferences` is reserved deny-all.
 - Match updates use state- and participant-specific field allowlists.
 - Storage writes require an owner UID for member paths and image/type/size constraints; anonymous court reports use a fixed anonymous prefix.
@@ -37,5 +39,3 @@ Everyone remains a Member. Organizer, Provider, and Admin stack on top of member
 - The hardcoded super-admin UID is operationally brittle and requires a documented bootstrap/recovery process.
 - Provider access is inferred from preference fields and is not consistently represented as a role boundary.
 - Admin SDK functions bypass Firestore Rules, so trigger/callable authorization and input validation need separate tests.
-
-Last verified source SHA: `6ac2b3c`.

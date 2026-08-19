@@ -60,6 +60,8 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
 - Firestore field-level restrictions exist for contacts, tasks, notifications, connections, public contacts, offers, redemptions, private preferences, and archive paths.
 - `event_creator` is event-workflow-only. It no longer grants direct stats/points, offer economics,
   admin metrics, unrelated contacts, listing moderation, mailing-list administration, or task-claim review.
+- Reward callables require a validated active `type: offer` catalog document. Coupon use/flagging is
+  provider-owned or super-admin-only; review and global reward notifications are super-admin-only.
 - `public_preferences` is deny-all. Existing cross-member preference decoration falls back to
   missing data until an event-scoped or explicitly consented projection is approved.
 - Storage writes are authenticated and type/size constrained for named prefixes. The current source permits public reads only for LandingPage, Gallery, avatars, and listings; report/suggestion reads are owner/authentication constrained.

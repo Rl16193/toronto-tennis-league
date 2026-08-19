@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, beforeEach, test } from 'node:test';
 import { deleteApp, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -17,13 +18,17 @@ const db = getFirestore(app);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const tournamentAvailable = existsSync(path.join(root, 'functions', 'tournamentResults.js'));
 
-const session = async (label) => {
-  const response = await fetch(`http://${authHost}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=local`, {
+const session = async (label, uid) => {
+  const email = `${label}-${crypto.randomUUID()}@example.test`;
+  const password = 'local-test-password';
+  if (uid) await getAuth(app).createUser({ uid, email, password });
+  const operation = uid ? 'signInWithPassword' : 'signUp';
+  const response = await fetch(`http://${authHost}/identitytoolkit.googleapis.com/v1/accounts:${operation}?key=local`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      email: `${label}-${crypto.randomUUID()}@example.test`,
-      password: 'local-test-password',
+      email,
+      password,
       returnSecureToken: true,
     }),
   });
@@ -32,9 +37,11 @@ const session = async (label) => {
   return { uid: body.localId, token: body.idToken };
 };
 const call = async (name, token, data) => {
+  const headers = { 'content-type': 'application/json' };
+  if (token) headers.authorization = `Bearer ${token}`;
   const response = await fetch(`http://${functionsHost}/${projectId}/us-central1/${name}`, {
     method: 'POST',
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    headers,
     body: JSON.stringify({ data }),
   });
   return { status: response.status, body: await response.json() };
@@ -59,11 +66,31 @@ const waitFor = async (read, predicate) => {
 beforeEach(clear);
 after(() => deleteApp(app));
 
+test('protected callables reject anonymous requests at the emulator wrapper', async () => {
+  for (const [name, data] of [
+    ['redeemReward', { rewardId: 'missing' }],
+    ['requestCancellation', { code: 'RS-TEST-AA' }],
+    ['reviewRedemption', { code: 'RS-TEST-AA', approve: true }],
+    ['applyTournamentResult', { matchId: 'missing', scores: [] }],
+  ]) {
+    const response = await call(name, null, data);
+    assert.equal(response.status, 401, `${name}: ${JSON.stringify(response.body)}`);
+    assert.equal(response.body.error.status, 'UNAUTHENTICATED');
+  }
+});
+
 test('redemption rejects insufficient balance and duplicate open coupons', async () => {
   const player = await session('reward-player');
   const rewardId = `reward-${crypto.randomUUID()}`;
   await Promise.all([
-    db.doc(`tasks/${rewardId}`).set({ active: true, offer: 'Test restring', points_cost: 30 }),
+    db.doc(`tasks/${rewardId}`).set({
+      type: 'offer',
+      active: true,
+      offer: 'Test restring',
+      points_cost: 30,
+      provider_id: 'provider-a',
+      provider_name: 'Provider A',
+    }),
     db.doc(`users/${player.uid}`).set({ name: 'Reward Player' }),
     db.doc(`stats/${player.uid}`).set({ leaguePoints26: 20 }),
   ]);
@@ -82,20 +109,42 @@ test('redemption rejects insufficient balance and duplicate open coupons', async
   assert.equal((await db.collection('redemptions').get()).size, 1);
 });
 
+test('redemption rejects non-offer task documents', async () => {
+  const player = await session('non-offer-player');
+  const rewardId = `progress-${crypto.randomUUID()}`;
+  await Promise.all([
+    db.doc(`tasks/${rewardId}`).set({ active: true, offer: 'Bogus task', points_cost: 1 }),
+    db.doc(`stats/${player.uid}`).set({ leaguePoints26: 50 }),
+  ]);
+  const response = await call('redeemReward', player.token, { rewardId });
+  assert.equal(response.status, 400);
+  assert.equal(response.body.error.status, 'FAILED_PRECONDITION');
+  assert.equal((await db.collection('redemptions').get()).empty, true);
+});
+
 test('approved cancellation refunds points and releases the lock', async () => {
   const player = await session('refund-player');
-  const organizer = await session('refund-organizer');
+  const administrator = await session('refund-administrator', '7PvfzNtDmsOq5GLMieId7QRT7wH3');
+  const eventCreator = await session('refund-event-creator');
   const rewardId = `reward-${crypto.randomUUID()}`;
   await Promise.all([
-    db.doc(`tasks/${rewardId}`).set({ active: true, offer: 'Test grip', points_cost: 25 }),
+    db.doc(`tasks/${rewardId}`).set({
+      type: 'offer',
+      active: true,
+      offer: 'Test grip',
+      points_cost: 25,
+      provider_id: 'provider-a',
+      provider_name: 'Provider A',
+    }),
     db.doc(`users/${player.uid}`).set({ name: 'Refund Player' }),
     db.doc(`stats/${player.uid}`).set({ leaguePoints26: 50 }),
-    db.doc(`preferences/${organizer.uid}`).set({ event_creator: true }),
+    db.doc(`preferences/${eventCreator.uid}`).set({ event_creator: true }),
   ]);
   const redeemed = await call('redeemReward', player.token, { rewardId });
   const code = redeemed.body.result.code;
   assert.equal((await call('requestCancellation', player.token, { code })).status, 200);
-  assert.equal((await call('reviewRedemption', organizer.token, { code, approve: true })).status, 200);
+  assert.equal((await call('reviewRedemption', eventCreator.token, { code, approve: true })).status, 403);
+  assert.equal((await call('reviewRedemption', administrator.token, { code, approve: true })).status, 200);
   assert.equal((await db.doc(`redemptions/${code}`).get()).data().status, 'cancelled');
   assert.equal((await db.doc(`offers/${player.uid}`).get()).data().pointsSpent, 0);
   assert.equal((await call('redeemReward', player.token, { rewardId })).status, 200);

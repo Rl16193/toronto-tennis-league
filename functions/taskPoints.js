@@ -13,7 +13,7 @@
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
-const { notify, organizerUids } = require('./lib/notify');
+const { notify, adminUids } = require('./lib/notify');
 const ROSTER = require('./courts.json'); // { [courtKey]: zoneName } — see groupAwards.js header
 
 const { TZ, REGION } = require('./lib/constants');
@@ -21,14 +21,19 @@ const db = () => admin.firestore();
 
 // Same normalization as src/utils/courtKey.ts — keep in sync.
 const courtKeySlug = (name) =>
-  String(name).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  String(name)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 
 // Same YYYYMMDD format as src/features/tasks/checkinService.ts's torontoDayKey().
 function torontoDay(iso) {
   const d = iso ? new Date(iso) : new Date();
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' })
-      .formatToParts(d).map((p) => [p.type, p.value]),
+      .formatToParts(d)
+      .map((p) => [p.type, p.value]),
   );
   return `${parts.year}${parts.month}${parts.day}`;
 }
@@ -45,13 +50,31 @@ async function checkInFromMatch(uid, name, courtName, whenISO) {
   const now = whenISO || new Date().toISOString();
   const base = { uid, user_name: name || '', court_key: courtKey, court_name: courtName, zone, dist_m: 0 };
 
-  await db().doc(`courts/${uid}_${courtKey}`).create({
-    ...base, type: 'check-in', visit_type: 'Tournament', lat: 0, lng: 0, created_at: now,
-  }).catch(() => { /* already checked in at this court — fine, one-per-player-per-court */ });
+  await db()
+    .doc(`courts/${uid}_${courtKey}`)
+    .create({
+      ...base,
+      type: 'check-in',
+      visit_type: 'Tournament',
+      lat: 0,
+      lng: 0,
+      created_at: now,
+    })
+    .catch(() => {
+      /* already checked in at this court — fine, one-per-player-per-court */
+    });
 
-  await db().doc(`courts/${uid}_${courtKey}_${torontoDay(now)}`).set({
-    ...base, type: 'attendance', match_type: 'Tournament', lat: 0, lng: 0, day: torontoDay(now), created_at: now,
-  });
+  await db()
+    .doc(`courts/${uid}_${courtKey}_${torontoDay(now)}`)
+    .set({
+      ...base,
+      type: 'attendance',
+      match_type: 'Tournament',
+      lat: 0,
+      lng: 0,
+      day: torontoDay(now),
+      created_at: now,
+    });
 }
 
 // Tier catalogue + Initiation checklist now live in lib/points.js, shared with rewards.js
@@ -90,12 +113,13 @@ async function recordPlayResult(uid, name, { source, won, whenISO }) {
       update.monthsActive = months.size;
     }
 
-    const touched = source === 'tournament'
-      ? ['matchesPlayed', 'bestStreak', 'monthsActive']
-      : ['challengesPlayed', 'challengesWon', 'bestStreak', 'monthsActive'];
+    const touched =
+      source === 'tournament'
+        ? ['matchesPlayed', 'bestStreak', 'monthsActive']
+        : ['challengesPlayed', 'challengesWon', 'bestStreak', 'monthsActive'];
     for (const tier of ALL_TIERS) {
       if (!touched.includes(tier.counter) || data[tier.id]) continue;
-      const val = update[tier.counter] !== undefined ? update[tier.counter] : (data[tier.counter] || 0);
+      const val = update[tier.counter] !== undefined ? update[tier.counter] : data[tier.counter] || 0;
       if (val >= tier.need) update[tier.id] = true;
     }
 
@@ -144,7 +168,7 @@ async function markInitiationTask(uid, name, taskId) {
 async function notifyOrganizersOfQueue(link) {
   const [claims, organizers] = await Promise.all([
     db().collection('task_claims').where('status', '==', 'pending').get(),
-    organizerUids(),
+    adminUids(),
   ]);
   if (claims.size === 0) return;
   await notify(organizers, {
@@ -161,7 +185,10 @@ async function notifyOrganizersOfQueue(link) {
 // Shared by both result triggers below: records the play result for both participants, then
 // (if a court was recorded) checks them both in — same two-pass order both triggers used.
 async function awardPairPoints(after, { source, uidA, nameA, uidB, nameB, wonUid, whenISO }) {
-  const pairs = [[uidA, nameA], [uidB, nameB]].filter(([uid]) => uid);
+  const pairs = [
+    [uidA, nameA],
+    [uidB, nameB],
+  ].filter(([uid]) => uid);
   for (const [uid, name] of pairs) {
     await recordPlayResult(uid, name || '', { source, won: wonUid === uid, whenISO });
   }
@@ -186,8 +213,10 @@ exports.onMatchCompletedAwardPoints = onDocumentUpdated(
     if (after.set_1_player_1 == null || after.set_1_player_2 == null) return;
     await awardPairPoints(after, {
       source: 'tournament',
-      uidA: after.player_1_uid, nameA: after.player_1_name,
-      uidB: after.player_2_uid, nameB: after.player_2_name,
+      uidA: after.player_1_uid,
+      nameA: after.player_1_name,
+      uidB: after.player_2_uid,
+      nameB: after.player_2_name,
       wonUid: after.winner_uid,
       whenISO: after.completed_at || new Date().toISOString(),
     });
@@ -204,8 +233,10 @@ exports.onLadderConfirmedAwardPoints = onDocumentUpdated(
     if (before.status === 'confirmed' || after.status !== 'confirmed') return;
     await awardPairPoints(after, {
       source: 'ladder',
-      uidA: after.player_1_uid, nameA: after.player_1_name,
-      uidB: after.player_2_uid, nameB: after.player_2_name,
+      uidA: after.player_1_uid,
+      nameA: after.player_1_name,
+      uidB: after.player_2_uid,
+      nameB: after.player_2_name,
       // New field first, legacy second — see friendlyPoints.js for why both are read.
       wonUid: after.winner_uid || after.claimed_winner_uid,
       whenISO: after.completed_at || after.confirmed_at || new Date().toISOString(),
@@ -233,10 +264,7 @@ exports.onEventJoinedAwardPoints = onDocumentCreated(
  */
 async function awardZoneCompleteIfDone(uid, name, visitedCourtKey) {
   const progressRef = db().collection('tasks').doc(uid);
-  const [progressSnap, prefsSnap] = await Promise.all([
-    progressRef.get(),
-    db().doc(`preferences/${uid}`).get(),
-  ]);
+  const [progressSnap, prefsSnap] = await Promise.all([progressRef.get(), db().doc(`preferences/${uid}`).get()]);
   // Already earned — bumpCounterAndAward would keep incrementing the counter past 1.
   if (progressSnap.exists && progressSnap.data().zoneComplete) return;
 
@@ -248,7 +276,13 @@ async function awardZoneCompleteIfDone(uid, name, visitedCourtKey) {
 
   // `courts` also holds attendance + photo reports — narrow to the once-forever passport docs.
   const visits = await db().collection('courts').where('uid', '==', uid).get();
-  const visited = new Set(visits.docs.map((d) => d.data()).filter((d) => d.type === 'check-in').map((d) => d.court_key).filter(Boolean));
+  const visited = new Set(
+    visits.docs
+      .map((d) => d.data())
+      .filter((d) => d.type === 'check-in')
+      .map((d) => d.court_key)
+      .filter(Boolean),
+  );
   if (!zoneKeys.every((k) => visited.has(k))) return;
 
   await bumpCounterAndAward(uid, name, 'zoneComplete', 1, undefined);
@@ -256,104 +290,97 @@ async function awardZoneCompleteIfDone(uid, name, visitedCourtKey) {
 
 // Court check-in — one stamp per (player, court); courtsVisited + Traveler tiers. The `courts`
 // collection also receives attendance and photo-report docs, so gate on the 'check-in' type.
-exports.onCourtVisitAwardPoints = onDocumentCreated(
-  { document: 'courts/{id}', region: REGION },
-  async (event) => {
-    const v = event.data?.data();
-    if (!v?.uid || v.type !== 'check-in') return;
-    await bumpCounterAndAward(v.uid, v.user_name || '', 'courtsVisited', 1, 'courtVisit');
-    await awardZoneCompleteIfDone(v.uid, v.user_name || '', v.court_key)
-      .catch((e) => logger.error('zoneComplete check failed', e));
-    // Community-wide coverage tally (no auto "everyone gets 50" yet — see README note below).
-    await db().doc('site_stats/court_coverage').set(
+exports.onCourtVisitAwardPoints = onDocumentCreated({ document: 'courts/{id}', region: REGION }, async (event) => {
+  const v = event.data?.data();
+  if (!v?.uid || v.type !== 'check-in') return;
+  await bumpCounterAndAward(v.uid, v.user_name || '', 'courtsVisited', 1, 'courtVisit');
+  await awardZoneCompleteIfDone(v.uid, v.user_name || '', v.court_key).catch((e) =>
+    logger.error('zoneComplete check failed', e),
+  );
+  // Community-wide coverage tally (no auto "everyone gets 50" yet — see README note below).
+  await db()
+    .doc('site_stats/court_coverage')
+    .set(
       { visited_keys: admin.firestore.FieldValue.arrayUnion(v.court_key), updated_at: new Date().toISOString() },
       { merge: true },
-    ).catch((e) => logger.error('court_coverage update failed', e));
-  },
-);
+    )
+    .catch((e) => logger.error('court_coverage update failed', e));
+});
 
 // "Submit a Photo" reports auto-approve at creation, so award immediately. Anonymous reports
 // (uid: 'no_account') earn nothing. The trigger is on the consolidated `courts` collection, so
 // non-report docs (check-in / attendance) are filtered out by the type gate.
-exports.onPhotoReportAwardPoints = onDocumentCreated(
-  { document: 'courts/{id}', region: REGION },
-  async (event) => {
-    const r = event.data?.data();
-    if (!r?.uid || r.uid === 'no_account') return;
-    if (r.type === 'waiting_board') {
-      await bumpCounterAndAward(r.uid, r.user_name || '', 'boardPhotos', 1, 'waitingBoard');
-    } else if (r.type === 'queue') {
-      await bumpCounterAndAward(r.uid, r.user_name || '', 'queueUpdates', 1, 'queuePhoto');
-    } else if (r.type === 'condition') {
-      // The only type the unified "Submit a Photo" flow writes today. Same counter the legacy
-      // text-only suggestion flow used.
-      await bumpCounterAndAward(r.uid, r.user_name || '', 'suggestions', 1, 'courtSuggestion');
-    }
-  },
-);
+exports.onPhotoReportAwardPoints = onDocumentCreated({ document: 'courts/{id}', region: REGION }, async (event) => {
+  const r = event.data?.data();
+  if (!r?.uid || r.uid === 'no_account') return;
+  if (r.type === 'waiting_board') {
+    await bumpCounterAndAward(r.uid, r.user_name || '', 'boardPhotos', 1, 'waitingBoard');
+  } else if (r.type === 'queue') {
+    await bumpCounterAndAward(r.uid, r.user_name || '', 'queueUpdates', 1, 'queuePhoto');
+  } else if (r.type === 'condition') {
+    // The only type the unified "Submit a Photo" flow writes today. Same counter the legacy
+    // text-only suggestion flow used.
+    await bumpCounterAndAward(r.uid, r.user_name || '', 'suggestions', 1, 'courtSuggestion');
+  }
+});
 
 // Volunteer / Ambassador / Host claims.
-exports.onClaimReviewed = onDocumentUpdated(
-  { document: 'task_claims/{id}', region: REGION },
-  async (event) => {
-    const before = event.data?.before.data() || {};
-    const after = event.data?.after.data() || {};
-    if (before.status !== 'pending') return;
-    const claimRef = event.data.after.ref;
+exports.onClaimReviewed = onDocumentUpdated({ document: 'task_claims/{id}', region: REGION }, async (event) => {
+  const before = event.data?.before.data() || {};
+  const after = event.data?.after.data() || {};
+  if (before.status !== 'pending') return;
+  const claimRef = event.data.after.ref;
 
-    if (after.status === 'approved') {
-      if (after.type === 'volunteer') {
-        await bumpCounterAndAward(after.uid, after.user_name || '', 'volunteerEvents', 1, undefined);
-      } else if (after.type === 'host') {
-        await bumpCounterAndAward(after.uid, after.user_name || '', 'meetups', 1, undefined);
-      } else if (after.type === 'ambassador') {
-        // Authoritative "one inviter per member" check — the client's pre-check is only UX.
-        const dupe = await db().collection('task_claims')
-          .where('type', '==', 'ambassador')
-          .where('invitee_id', '==', after.invitee_id)
-          .where('status', '==', 'approved')
-          .get();
-        const other = dupe.docs.find((d) => d.id !== claimRef.id);
-        if (other) {
-          await claimRef.update({
-            status: 'rejected',
-            reviewer_note: 'Already claimed by another member.',
-            reviewed_at: new Date().toISOString(),
-          });
-          await notify(after.uid, {
-            type: 'claim_rejected',
-            title: `${after.invitee_name || 'That player'} was already claimed by someone else`,
-            link: '/tasks',
-          });
-          return;
-        }
-        await bumpCounterAndAward(after.uid, after.user_name || '', 'invites', 1, undefined);
+  if (after.status === 'approved') {
+    if (after.type === 'volunteer') {
+      await bumpCounterAndAward(after.uid, after.user_name || '', 'volunteerEvents', 1, undefined);
+    } else if (after.type === 'host') {
+      await bumpCounterAndAward(after.uid, after.user_name || '', 'meetups', 1, undefined);
+    } else if (after.type === 'ambassador') {
+      // Authoritative "one inviter per member" check — the client's pre-check is only UX.
+      const dupe = await db()
+        .collection('task_claims')
+        .where('type', '==', 'ambassador')
+        .where('invitee_id', '==', after.invitee_id)
+        .where('status', '==', 'approved')
+        .get();
+      const other = dupe.docs.find((d) => d.id !== claimRef.id);
+      if (other) {
+        await claimRef.update({
+          status: 'rejected',
+          reviewer_note: 'Already claimed by another member.',
+          reviewed_at: new Date().toISOString(),
+        });
+        await notify(after.uid, {
+          type: 'claim_rejected',
+          title: `${after.invitee_name || 'That player'} was already claimed by someone else`,
+          link: '/tasks',
+        });
+        return;
       }
-      await notify(after.uid, {
-        type: 'claim_approved',
-        title: 'Your task was approved',
-        body: after.event_title || after.invitee_name || after.meetup_title || '',
-        link: '/tasks',
-      });
-    } else if (after.status === 'rejected') {
-      await notify(after.uid, {
-        type: 'claim_rejected',
-        title: 'Your task wasn’t approved',
-        body: after.reviewer_note || '',
-        link: '/tasks',
-      });
+      await bumpCounterAndAward(after.uid, after.user_name || '', 'invites', 1, undefined);
     }
-  },
-);
+    await notify(after.uid, {
+      type: 'claim_approved',
+      title: 'Your task was approved',
+      body: after.event_title || after.invitee_name || after.meetup_title || '',
+      link: '/tasks',
+    });
+  } else if (after.status === 'rejected') {
+    await notify(after.uid, {
+      type: 'claim_rejected',
+      title: 'Your task wasn’t approved',
+      body: after.reviewer_note || '',
+      link: '/tasks',
+    });
+  }
+});
 
 // Organizer digest — fires whenever a claim needs approval. Totals only (never names); the link
 // opens the review queue.
-exports.onTaskClaimCreated = onDocumentCreated(
-  { document: 'task_claims/{id}', region: REGION },
-  async () => {
-    await notifyOrganizersOfQueue('/tasks?review=claims');
-  },
-);
+exports.onTaskClaimCreated = onDocumentCreated({ document: 'task_claims/{id}', region: REGION }, async () => {
+  await notifyOrganizersOfQueue('/tasks?review=claims');
+});
 
 /**
  * TODO: the "everyone gets 50 when every Toronto court is visited" award is NOT auto-granted.

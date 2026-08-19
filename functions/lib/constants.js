@@ -10,6 +10,7 @@ const TZ = 'America/Toronto';
 
 // Deployment region for every trigger.
 const REGION = 'us-central1';
+const SUPER_ADMIN_UID = '7PvfzNtDmsOq5GLMieId7QRT7wH3';
 
 // Outgoing address for every email. `notifications@` is a real Hostinger mailbox, not a black
 // hole — the old `noreply@` was unroutable, which reads badly to spam filters and to people.
@@ -28,4 +29,4 @@ const INSTAGRAM = 'https://www.instagram.com/racqnstringstoronto';
 const WHATSAPP = 'https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX';
 const FAQ = 'https://docs.google.com/document/d/17lyP5f62iuXRIiwDtrcn4EZo6vnx0jbr87kxdkEIzYY/edit?tab=t.0';
 
-module.exports = { TZ, REGION, EMAIL_FROM, EMAIL_REPLY_TO, SITE, INSTAGRAM, WHATSAPP, FAQ };
+module.exports = { TZ, REGION, SUPER_ADMIN_UID, EMAIL_FROM, EMAIL_REPLY_TO, SITE, INSTAGRAM, WHATSAPP, FAQ };

@@ -15,15 +15,10 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
-const { REGION, TZ } = require('./lib/constants');
-const {
-  normalizeCouponCode,
-  optionalTrimmedString,
-  requireAuth,
-  requireTrimmedString,
-} = require('./lib/callable');
+const { REGION, SUPER_ADMIN_UID, TZ } = require('./lib/constants');
+const { normalizeCouponCode, optionalTrimmedString, requireAuth, requireTrimmedString } = require('./lib/callable');
 const { earnedRsPoints } = require('./lib/points');
-const { notify, organizerUids } = require('./lib/notify');
+const { notify, adminUids } = require('./lib/notify');
 const { assertCouponStatus } = require('./lib/redemptionState');
 const { safeId } = require('./lib/logging');
 const {
@@ -42,15 +37,12 @@ const redemptionLockRef = (uid, rewardId) => db().doc(`redemption_locks/${lockId
 // mistyped at the counter.
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const randomCode = () => {
-  const pick = (n) => Array.from({ length: n }, () =>
-    CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join('');
+  const pick = (n) =>
+    Array.from({ length: n }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join('');
   return `RS-${pick(4)}-${pick(2)}`;
 };
 
-async function isOrganizer(uid) {
-  const snap = await db().doc(`preferences/${uid}`).get();
-  return snap.exists && snap.data().event_creator === true;
-}
+const isRewardAdmin = (uid) => uid === SUPER_ADMIN_UID;
 
 // A stringer or coach is a normal account with `stringer_id` / `coach_id` on their preferences
 // doc naming the catalog entry they own. Same role-flag shape as `event_creator`.
@@ -70,11 +62,10 @@ async function readBalance(tx, uid) {
     tx.get(db().doc(`tasks/${uid}`)),
     tx.get(db().doc(`offers/${uid}`)),
   ]);
-  const league = statsSnap.exists && typeof statsSnap.data().leaguePoints26 === 'number'
-    ? statsSnap.data().leaguePoints26 : 0;
+  const league =
+    statsSnap.exists && typeof statsSnap.data().leaguePoints26 === 'number' ? statsSnap.data().leaguePoints26 : 0;
   const rs = earnedRsPoints(progressSnap.exists ? progressSnap.data() : null);
-  const spent = spentSnap.exists && typeof spentSnap.data().pointsSpent === 'number'
-    ? spentSnap.data().pointsSpent : 0;
+  const spent = spentSnap.exists && typeof spentSnap.data().pointsSpent === 'number' ? spentSnap.data().pointsSpent : 0;
   const earned = Math.max(0, Math.round(league + rs));
   return { earned, spent, balance: earned - spent };
 }
@@ -93,13 +84,26 @@ exports.redeemReward = onCall({ region: REGION }, async (request) => {
   const rewardSnap = await db().doc(`tasks/${rewardId}`).get();
   if (!rewardSnap.exists) throw new HttpsError('not-found', 'That reward no longer exists.');
   const reward = rewardSnap.data();
-  if (reward.active === false) throw new HttpsError('failed-precondition', 'That reward is no longer available.');
-  const cost = typeof reward.points_cost === 'number' ? reward.points_cost : 25;
+  const validOffer =
+    reward.type === 'offer' &&
+    reward.active === true &&
+    typeof reward.provider_id === 'string' &&
+    reward.provider_id.trim() !== '' &&
+    typeof reward.provider_name === 'string' &&
+    reward.provider_name.trim() !== '' &&
+    typeof reward.offer === 'string' &&
+    reward.offer.trim() !== '' &&
+    Number.isInteger(reward.points_cost) &&
+    reward.points_cost > 0 &&
+    reward.points_cost <= 10_000;
+  if (!validOffer) throw new HttpsError('failed-precondition', 'That reward is no longer available.');
+  const cost = reward.points_cost;
 
   // One open coupon per offer, so a stringer's list doesn't fill with duplicates. Two equality
   // filters only (status is filtered in memory) — adding a third would want a composite index,
   // and this project ships no firestore.indexes.json.
-  const forOffer = await db().collection('redemptions')
+  const forOffer = await db()
+    .collection('redemptions')
     .where('uid', '==', uid)
     .where('reward_id', '==', rewardId)
     .get();
@@ -108,7 +112,7 @@ exports.redeemReward = onCall({ region: REGION }, async (request) => {
   }
 
   const userSnap = await db().doc(`users/${uid}`).get();
-  const userName = userSnap.exists ? (userSnap.data().name || '') : '';
+  const userName = userSnap.exists ? userSnap.data().name || '' : '';
   const lockRef = redemptionLockRef(uid, rewardId);
 
   // Retry on the (vanishingly unlikely) case of a code collision.
@@ -124,8 +128,7 @@ exports.redeemReward = onCall({ region: REGION }, async (request) => {
 
         const { earned, spent, balance } = await readBalance(tx, uid);
         if (balance < cost) {
-          throw new HttpsError('failed-precondition',
-            `You need ${cost} points to redeem this — you have ${balance}.`);
+          throw new HttpsError('failed-precondition', `You need ${cost} points to redeem this — you have ${balance}.`);
         }
 
         const redemption = {
@@ -149,12 +152,16 @@ exports.redeemReward = onCall({ region: REGION }, async (request) => {
           updated_at: nowISO(),
         });
         tx.set(redemptionRef, redemption);
-        tx.set(db().doc(`offers/${uid}`), {
-          uid: uid,
-          pointsSpent: spent + cost,
-          lastEarnedSnapshot: earned,
-          updated_at: nowISO(),
-        }, { merge: true });
+        tx.set(
+          db().doc(`offers/${uid}`),
+          {
+            uid: uid,
+            pointsSpent: spent + cost,
+            lastEarnedSnapshot: earned,
+            updated_at: nowISO(),
+          },
+          { merge: true },
+        );
         return redemption;
       });
 
@@ -182,7 +189,7 @@ exports.markCouponUsed = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
   const code = normalizeCouponCode(request.data && request.data.code);
 
-  const [organizer, myProviderId] = await Promise.all([isOrganizer(uid), providerIdFor(uid)]);
+  const myProviderId = await providerIdFor(uid);
   const ref = db().doc(`redemptions/${code}`);
 
   const redemption = await db().runTransaction(async (tx) => {
@@ -190,19 +197,23 @@ exports.markCouponUsed = onCall({ region: REGION }, async (request) => {
     if (!snap.exists) throw new HttpsError('not-found', 'No coupon with that code.');
     const d = snap.data();
 
-    if (!organizer && d.stringer_id !== myProviderId) {
+    if (!isRewardAdmin(uid) && d.stringer_id !== myProviderId) {
       throw new HttpsError('permission-denied', 'That coupon isn’t for your shop.');
     }
     assertCouponStatus(d.status, 'use');
 
     tx.update(ref, { status: 'used', used_at: nowISO(), used_by: uid });
-    tx.set(redemptionLockRef(d.uid, d.reward_id), {
-      uid: d.uid,
-      reward_id: d.reward_id,
-      code,
-      status: 'used',
-      updated_at: nowISO(),
-    }, { merge: true });
+    tx.set(
+      redemptionLockRef(d.uid, d.reward_id),
+      {
+        uid: d.uid,
+        reward_id: d.reward_id,
+        code,
+        status: 'used',
+        updated_at: nowISO(),
+      },
+      { merge: true },
+    );
     return d;
   });
 
@@ -211,7 +222,9 @@ exports.markCouponUsed = onCall({ region: REGION }, async (request) => {
     title: 'Reward redeemed',
     body: `${redemption.offer} at ${redemption.stringer_name} is marked as used.`,
     link: '/marketplace',
-  }).catch(() => { /* notification is best-effort */ });
+  }).catch(() => {
+    /* notification is best-effort */
+  });
 
   return { ok: true };
 });
@@ -224,14 +237,14 @@ exports.flagCoupon = onCall({ region: REGION }, async (request) => {
   const code = normalizeCouponCode(request.data && request.data.code);
   const note = optionalTrimmedString(request.data && request.data.note, { maxLength: REDEMPTION_NOTE_MAX_LENGTH });
 
-  const [organizer, myProviderId] = await Promise.all([isOrganizer(uid), providerIdFor(uid)]);
+  const myProviderId = await providerIdFor(uid);
   const ref = db().doc(`redemptions/${code}`);
 
   const redemption = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'No coupon with that code.');
     const d = snap.data();
-    if (!organizer && d.stringer_id !== myProviderId) {
+    if (!isRewardAdmin(uid) && d.stringer_id !== myProviderId) {
       throw new HttpsError('permission-denied', 'That coupon isn’t for your shop.');
     }
     assertCouponStatus(d.status, 'flag');
@@ -241,23 +254,29 @@ exports.flagCoupon = onCall({ region: REGION }, async (request) => {
       flagged_by: uid,
       ...(note ? { flag_note: note } : {}),
     });
-    tx.set(redemptionLockRef(d.uid, d.reward_id), {
-      uid: d.uid,
-      reward_id: d.reward_id,
-      code,
-      status: 'flagged',
-      updated_at: nowISO(),
-    }, { merge: true });
+    tx.set(
+      redemptionLockRef(d.uid, d.reward_id),
+      {
+        uid: d.uid,
+        reward_id: d.reward_id,
+        code,
+        status: 'flagged',
+        updated_at: nowISO(),
+      },
+      { merge: true },
+    );
     return d;
   });
 
-  const organizers = await organizerUids().catch(() => []);
-  await notify(organizers, {
+  const admins = await adminUids();
+  await notify(admins, {
     type: 'reward_flagged',
     title: 'Coupon flagged',
     body: `${redemption.stringer_name} flagged ${code} (${redemption.user_name}).`,
     link: '/tasks?review=claims',
-  }).catch(() => { /* best-effort */ });
+  }).catch(() => {
+    /* best-effort */
+  });
 
   return { ok: true };
 });
@@ -282,23 +301,29 @@ exports.requestCancellation = onCall({ region: REGION }, async (request) => {
       cancel_requested_at: nowISO(),
       ...(reason ? { cancel_reason: reason } : {}),
     });
-    tx.set(redemptionLockRef(d.uid, d.reward_id), {
-      uid: d.uid,
-      reward_id: d.reward_id,
-      code,
-      status: 'cancel_requested',
-      updated_at: nowISO(),
-    }, { merge: true });
+    tx.set(
+      redemptionLockRef(d.uid, d.reward_id),
+      {
+        uid: d.uid,
+        reward_id: d.reward_id,
+        code,
+        status: 'cancel_requested',
+        updated_at: nowISO(),
+      },
+      { merge: true },
+    );
     return d;
   });
 
-  const organizers = await organizerUids().catch(() => []);
-  await notify(organizers, {
+  const admins = await adminUids();
+  await notify(admins, {
     type: 'reward_cancel_requested',
     title: 'Cancellation requested',
     body: `${redemption.user_name} wants to cancel ${code} (${redemption.offer}).`,
     link: '/tasks?review=claims',
-  }).catch(() => { /* best-effort */ });
+  }).catch(() => {
+    /* best-effort */
+  });
 
   return { ok: true };
 });
@@ -309,7 +334,7 @@ exports.requestCancellation = onCall({ region: REGION }, async (request) => {
  */
 exports.reviewRedemption = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
-  if (!(await isOrganizer(uid))) throw new HttpsError('permission-denied', 'Organizers only.');
+  if (!isRewardAdmin(uid)) throw new HttpsError('permission-denied', 'Reward administrators only.');
 
   const code = normalizeCouponCode(request.data && request.data.code);
   const approve = request.data && request.data.approve === true;
@@ -329,13 +354,17 @@ exports.reviewRedemption = onCall({ region: REGION }, async (request) => {
         reviewed_by: uid,
         ...(note ? { reviewer_note: note } : {}),
       });
-      tx.set(redemptionLockRef(d.uid, d.reward_id), {
-        uid: d.uid,
-        reward_id: d.reward_id,
-        code,
-        status: 'active',
-        updated_at: nowISO(),
-      }, { merge: true });
+      tx.set(
+        redemptionLockRef(d.uid, d.reward_id),
+        {
+          uid: d.uid,
+          reward_id: d.reward_id,
+          code,
+          status: 'active',
+          updated_at: nowISO(),
+        },
+        { merge: true },
+      );
       return d;
     }
 
@@ -344,8 +373,8 @@ exports.reviewRedemption = onCall({ region: REGION }, async (request) => {
     // Approved — refund. Read the spend counter inside the same transaction.
     const spentRef = db().doc(`offers/${d.uid}`);
     const spentSnap = await tx.get(spentRef);
-    const spent = spentSnap.exists && typeof spentSnap.data().pointsSpent === 'number'
-      ? spentSnap.data().pointsSpent : 0;
+    const spent =
+      spentSnap.exists && typeof spentSnap.data().pointsSpent === 'number' ? spentSnap.data().pointsSpent : 0;
     const cost = typeof d.points_cost === 'number' ? d.points_cost : 25;
 
     tx.update(ref, {
@@ -354,18 +383,26 @@ exports.reviewRedemption = onCall({ region: REGION }, async (request) => {
       reviewed_by: uid,
       ...(note ? { reviewer_note: note } : {}),
     });
-    tx.set(redemptionLockRef(d.uid, d.reward_id), {
-      uid: d.uid,
-      reward_id: d.reward_id,
-      code,
-      status: 'cancelled',
-      updated_at: nowISO(),
-    }, { merge: true });
-    tx.set(spentRef, {
-      uid: d.uid,
-      pointsSpent: Math.max(0, spent - cost),
-      updated_at: nowISO(),
-    }, { merge: true });
+    tx.set(
+      redemptionLockRef(d.uid, d.reward_id),
+      {
+        uid: d.uid,
+        reward_id: d.reward_id,
+        code,
+        status: 'cancelled',
+        updated_at: nowISO(),
+      },
+      { merge: true },
+    );
+    tx.set(
+      spentRef,
+      {
+        uid: d.uid,
+        pointsSpent: Math.max(0, spent - cost),
+        updated_at: nowISO(),
+      },
+      { merge: true },
+    );
     return d;
   });
 
@@ -376,7 +413,9 @@ exports.reviewRedemption = onCall({ region: REGION }, async (request) => {
       ? `${redemption.points_cost} points are back in your balance.`
       : `Your coupon for ${redemption.offer} is still active.`,
     link: '/marketplace',
-  }).catch(() => { /* best-effort */ });
+  }).catch(() => {
+    /* best-effort */
+  });
 
   return { ok: true };
 });
@@ -388,7 +427,9 @@ exports.reviewRedemption = onCall({ region: REGION }, async (request) => {
 // currentMonthKey() in src/features/services/types.ts.
 function monthKey() {
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ, year: 'numeric', month: '2-digit',
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
   }).formatToParts(new Date());
   const get = (t) => (parts.find((p) => p.type === t) || {}).value || '';
   return `${get('year')}-${get('month')}`;
@@ -428,20 +469,26 @@ exports.joinGroupLesson = onCall({ region: REGION }, async (request) => {
     // Name and uid only. `group_lessons` is world-readable, so snapshotting phone/email here
     // handed every player's contact details to anyone, signed out, via one getDoc. The coach
     // resolves them from `contacts/{uid}` instead, which requires a sign-in.
-    const next = players.concat([{
-      uid: uid,
-      name: u.name || '',
-      joined_at: nowISO(),
-    }]);
+    const next = players.concat([
+      {
+        uid: uid,
+        name: u.name || '',
+        joined_at: nowISO(),
+      },
+    ]);
 
-    tx.set(ref, {
-      month,
-      coach_id: coach.provider_id || '',
-      coach_name: coach.provider_name || '',
-      capacity: GROUP_LESSON_CAPACITY,
-      players: next,
-      updated_at: nowISO(),
-    }, { merge: true });
+    tx.set(
+      ref,
+      {
+        month,
+        coach_id: coach.provider_id || '',
+        coach_name: coach.provider_name || '',
+        capacity: GROUP_LESSON_CAPACITY,
+        players: next,
+        updated_at: nowISO(),
+      },
+      { merge: true },
+    );
 
     return GROUP_LESSON_CAPACITY - next.length;
   });
