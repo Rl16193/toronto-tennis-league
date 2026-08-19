@@ -195,6 +195,16 @@ describe('Firestore authorization boundaries', () => {
         organizer_ids: ['organizer-b', 'member-a'],
       }),
     );
+    await assertFails(
+      updateDoc(doc(dbFor('organizer-b'), 'events/owned-a'), {
+        assigned_organizer_uids: ['organizer-b', 'member-a'],
+      }),
+    );
+    await assertFails(
+      updateDoc(doc(dbFor('organizer-b'), 'events/owned-a'), {
+        organizer_uids: ['organizer-b', 'member-a'],
+      }),
+    );
     await assertSucceeds(
       updateDoc(doc(dbFor('organizer-a'), 'events/owned-a'), {
         organizer_ids: ['organizer-b', 'member-a'],

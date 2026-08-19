@@ -25,6 +25,11 @@ const addFiles = (args, required = false) => {
   }
 };
 
+// The formatter gate is a first-party tracked-file gate, not merely a diff gate. Diff discovery
+// below keeps diagnostics focused in local workflows, while this enumeration guarantees an
+// up-to-date branch cannot silently check zero files in CI.
+addFiles(['ls-files', '-z'], true);
+
 const comparisonBase = process.env.ARCHITECTURE_BASE_SHA;
 let comparedCommit = false;
 if (comparisonBase) comparedCommit = addFiles(['diff', '--name-only', '-z', `${comparisonBase}...HEAD`]);

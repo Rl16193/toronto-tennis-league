@@ -65,15 +65,23 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
 - `public_preferences` is deny-all. Existing cross-member preference decoration falls back to
   missing data until an event-scoped or explicitly consented projection is approved.
 - Storage writes are authenticated and type/size constrained for named prefixes. The current source permits public reads only for LandingPage, Gallery, avatars, and listings; report/suggestion reads are owner/authentication constrained.
-- `src/pages/tournament/useTournament.ts` contains direct `stats` writes for tournament points; Functions contain separate task/friendly-point award logic.
-- Pure domain coverage now exercises Round Robin grouping/pairings, standings, scoring awards, safe rewrites, and the server reward-point calculator. Functions integration tests against the Admin SDK and callable runtime remain open.
-- Reward callable state transitions are explicit: only pending cancellation review can refund, disputed coupons cannot bypass review, operator notes are bounded, and operational identifiers are hashed in the touched logs. Full callable/trigger integration tests remain open.
+- Tournament result intent is applied by the idempotent `applyTournamentResult` callable. Clients
+  cannot write protected points/statistics; missing or occupied advancement targets fail closed.
+- Pure domain coverage exercises Round Robin grouping/pairings, standings, scoring awards, safe
+  rewrites, and reward calculations. Isolated Functions emulator tests cover authentication,
+  redemption/refund/idempotency, friendly payout, and tournament result/advancement boundaries.
+- Reward callable state transitions are explicit: only pending cancellation review can refund,
+  disputed coupons cannot bypass review, operator notes are bounded, and touched log identifiers are hashed.
 - A tracked-file scan was performed for common credential patterns. It found no private key, service-account credential, or Resend secret in application files; the vendored gstack renderer includes an upstream Firebase client key, which is not a service credential. The scan did not prove that secrets are absent from Git history, deployment configuration, or third-party systems.
-- `npm run verify` passes locally with strict typecheck, ESLint over source/scripts/tests/Functions, maintained-slice formatting, docs freshness, Functions syntax and 19 Functions unit tests, 19 root unit tests, 16 Firestore Rules tests, 4 Storage Rules tests, an isolated Auth/Firestore fixture smoke test, generated-CSV freshness, and the production build. The build still reports existing CSS-target and large-chunk warnings. `npm audit` reports non-zero dependency findings; no broad upgrade or automatic fix was applied.
+- `npm run verify` passes locally with strict typecheck, ESLint, tracked-file formatting, docs
+  freshness, Functions syntax, 32 root unit tests, 25 Functions unit tests, 29 Firestore Rules
+  tests, 5 Storage Rules tests, 10 Functions emulator integration tests, a synthetic fixture smoke
+  (4 Auth users and 25 documents), 2 Hosting-backed Chromium tests, generated-CSV freshness, and
+  the production build. Existing lint, CSS-target, chunk-size, and dependency-audit warnings remain.
 
 ## Required gates before production changes
 
-1. Run the seeded emulator suite locally and review the Storage Rules suite in staging.
-2. Define the authoritative server-side scoring and role model.
-3. Narrow public Firestore/Storage reads and prove the intended public projection contract.
-4. Re-run dependency and secret scans with network access, then review findings before deployment approval.
+1. Re-run the same gates in an authorized staging project and validate App Check/provider configuration.
+2. Approve a deliberate consent/event-scoped preference projection before enabling cross-member preference discovery.
+3. Re-run dependency and secret scans with network access, then review findings before deployment approval.
+4. Obtain explicit production approval, backup/recovery evidence, and a rollback plan; repository-local PASS is not deployment approval.

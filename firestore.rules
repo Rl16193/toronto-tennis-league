@@ -249,7 +249,9 @@ service cloud.firestore {
         request.resource.data.creator_id == resource.data.creator_id &&
         (
           isOwnerOfEvent(eventId) ||
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['organizer_ids'])
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'organizer_ids', 'assigned_organizer_uids', 'organizer_uids'
+          ])
         );
       allow delete: if false;
     }

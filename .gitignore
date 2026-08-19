@@ -19,6 +19,7 @@ serviceAccount*.json
 .vscode/
 .idea/
 *.local
+firebase.local.json
 firebase-debug.log
 playwright-report/
 test-results/

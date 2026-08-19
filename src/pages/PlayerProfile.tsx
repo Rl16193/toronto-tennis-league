@@ -7,17 +7,30 @@ import { fadeUp, staggerDelay } from '../lib/motion';
 import { db } from '../lib/firebase';
 import { Button } from '../components/Button';
 import { RacquetIcon } from '../components/RacquetIcon';
-import { ContactData, MemberInfo, TennisEvent, UserData, UserPreferences, UserStats } from '../types';
+import { MemberInfo, UserPreferences, UserStats } from '../types';
 import type { TournamentMatch } from './tournament/types';
 import { BadgeRow } from '../features/tasks/BadgeRow';
 import { useCommunityStandings } from '../features/tasks/useTasks';
 import { skillTier, leagueDivision, leagueAgeCategory } from '../utils/skillLevels';
 import { contactChannels, pillButtonCls } from '../components/ContactOpponentButton';
+import {
+  normalizeContactData,
+  normalizeEvent,
+  normalizeTournamentMatch,
+  normalizeUserData,
+  normalizeUserPreferences,
+  normalizeUserStats,
+} from '../lib/firestoreNormalization';
 
 // Furthest-round derivation for Best Finish / Best Result from a player's tournament matches.
 const ROUND_ORDER = ['R64', 'R32', 'R16', 'QF', 'SF', 'F'];
 const ROUND_LABEL: Record<string, string> = {
-  R64: 'Round of 64', R32: 'Round of 32', R16: 'Round of 16', QF: 'Quarterfinal', SF: 'Semifinal', F: 'Final',
+  R64: 'Round of 64',
+  R32: 'Round of 32',
+  R16: 'Round of 16',
+  QF: 'Quarterfinal',
+  SF: 'Semifinal',
+  F: 'Final',
 };
 
 const deriveResults = (mine: TournamentMatch[], uid: string) => {
@@ -29,7 +42,10 @@ const deriveResults = (mine: TournamentMatch[], uid: string) => {
   if (completed.length) {
     const firstWon = completed[0].winner_uid === uid;
     let n = 0;
-    for (const m of completed) { if ((m.winner_uid === uid) !== firstWon) break; n += 1; }
+    for (const m of completed) {
+      if ((m.winner_uid === uid) !== firstWon) break;
+      n += 1;
+    }
     streak = `${n}${firstWon ? 'W' : 'L'}`;
   }
 
@@ -52,7 +68,10 @@ const deriveResults = (mine: TournamentMatch[], uid: string) => {
 };
 
 const SectionLabel: React.FC<{ icon?: React.ReactNode; label: string }> = ({ icon, label }) => (
-  <span className="text-xs font-bold text-fg/70 uppercase tracking-widest flex items-center gap-1.5">{icon}{label}</span>
+  <span className="text-xs font-bold text-fg/70 uppercase tracking-widest flex items-center gap-1.5">
+    {icon}
+    {label}
+  </span>
 );
 
 const Pill: React.FC<{ label: string }> = ({ label }) => (
@@ -76,12 +95,17 @@ export const PlayerProfile: React.FC = () => {
   const { rows: communityRows } = useCommunityStandings();
   const rsPoints = userId ? (communityRows.find((r) => r.uid === userId)?.points ?? 0) : 0;
 
-  useEffect(() => { document.title = 'Player Profile · Racquets & Strings'; }, []);
+  useEffect(() => {
+    document.title = 'Player Profile · Racquets & Strings';
+  }, []);
 
   useEffect(() => {
     const loadPlayer = async () => {
       setLoading(true);
-      if (!userId) { setLoading(false); return; }
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
       try {
         // Contact details are a separate, sign-in-gated doc. A signed-out visitor still sees the
         // public card (name, badges, stats) — the contacts read just fails and resolves to null.
@@ -93,12 +117,15 @@ export const PlayerProfile: React.FC = () => {
         ]);
 
         const playerData = userDoc.exists()
-          ? { ...(userDoc.data() as UserData), ...(contactsDoc?.exists() ? (contactsDoc.data() as ContactData) : {}) }
+          ? {
+              ...normalizeUserData(userDoc.data()),
+              ...(contactsDoc?.exists() ? normalizeContactData(contactsDoc.data()) : {}),
+            }
           : null;
         setPlayer(playerData);
         if (playerData?.name) document.title = `${playerData.name} · Racquets & Strings`;
-        setStats(statsDoc.exists() ? (statsDoc.data() as UserStats) : null);
-        setPreferences(prefsDoc.exists() ? (prefsDoc.data() as UserPreferences) : null);
+        setStats(statsDoc.exists() ? normalizeUserStats(statsDoc.data()) : null);
+        setPreferences(prefsDoc.exists() ? normalizeUserPreferences(prefsDoc.data()) : null);
 
         // Derive Streak / Best Finish / Best Result from this player's tournament matches.
         try {
@@ -107,9 +134,14 @@ export const PlayerProfile: React.FC = () => {
             getDocs(query(collection(db, 'matches'), where('player_2_uid', '==', userId))),
           ]);
           const byId = new Map<string, TournamentMatch>();
-          [...m1.docs, ...m2.docs].forEach((d) => byId.set(d.id, { id: d.id, ...d.data() } as TournamentMatch));
+          [...m1.docs, ...m2.docs].forEach((d) => {
+            const match = normalizeTournamentMatch(d.id, d.data());
+            if (match) byId.set(d.id, match);
+          });
           setResults(deriveResults([...byId.values()], userId));
-        } catch { setResults({ streak: '—', bestFinish: '—', bestResult: '—' }); }
+        } catch {
+          setResults({ streak: '—', bestFinish: '—', bestResult: '—' });
+        }
 
         // Reset before resolving — otherwise a previous player's organizer can keep showing
         // if this player has no event/organizer to resolve (switching :userId doesn't remount).
@@ -117,7 +149,7 @@ export const PlayerProfile: React.FC = () => {
         if (eventId) {
           const eventDoc = await getDoc(doc(db, 'events', eventId));
           if (eventDoc.exists()) {
-            const eventData = eventDoc.data() as TennisEvent;
+            const eventData = normalizeEvent(eventDoc.id, eventDoc.data());
             if (eventData.creator_id) {
               const [creatorDoc, creatorContacts] = await Promise.all([
                 getDoc(doc(db, 'users', eventData.creator_id)),
@@ -125,8 +157,8 @@ export const PlayerProfile: React.FC = () => {
               ]);
               if (creatorDoc.exists()) {
                 setOrganizer({
-                  ...(creatorDoc.data() as UserData),
-                  ...(creatorContacts?.exists() ? (creatorContacts.data() as ContactData) : {}),
+                  ...normalizeUserData(creatorDoc.data()),
+                  ...(creatorContacts?.exists() ? normalizeContactData(creatorContacts.data()) : {}),
                 });
               }
             }
@@ -153,7 +185,9 @@ export const PlayerProfile: React.FC = () => {
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
         <h1 className="text-3xl font-black text-fg mb-3">Player Not Found</h1>
         <p className="text-fg mb-6">This player profile is not available.</p>
-        <Button variant="outline" onClick={() => navigate('/matches?mode=tournament')}>Back to Tournament</Button>
+        <Button variant="outline" onClick={() => navigate('/matches?mode=tournament')}>
+          Back to Tournament
+        </Button>
       </div>
     );
   }
@@ -183,7 +217,8 @@ export const PlayerProfile: React.FC = () => {
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-20 pt-8 space-y-4">
       <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="px-2">
-        <ArrowLeft className="w-4 h-4 mr-1.5" />Back
+        <ArrowLeft className="w-4 h-4 mr-1.5" />
+        Back
       </Button>
 
       {/* Profile Card — read-only mirror of ProfileInfo */}
@@ -192,18 +227,23 @@ export const PlayerProfile: React.FC = () => {
 
         <div className="flex flex-col items-center gap-4 pb-5 border-b border-fg/5">
           <div className="w-24 h-24 rounded-full bg-tennis-surface flex items-center justify-center overflow-hidden">
-            {player.avatar
-              ? <img src={player.avatar} alt={player.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              : <span className="text-4xl font-black text-fg">{initial}</span>}
+            {player.avatar ? (
+              <img
+                src={player.avatar}
+                alt={player.name}
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <span className="text-4xl font-black text-fg">{initial}</span>
+            )}
           </div>
         </div>
 
         <div className="divide-y divide-white/5">
           <div className="py-3">
             <SectionLabel label="Name" />
-            <p className="text-lg font-bold text-fg mt-0.5">
-              {player.name || '—'}
-            </p>
+            <p className="text-lg font-bold text-fg mt-0.5">{player.name || '—'}</p>
           </div>
 
           {/* Three channel buttons rather than the raw number/address printed on screen. The app
@@ -223,14 +263,15 @@ export const PlayerProfile: React.FC = () => {
                     rel="noopener noreferrer"
                     className={pillButtonCls('md', 'clay')}
                   >
-                    <c.icon className="w-3.5 h-3.5" />{c.label}
+                    <c.icon className="w-3.5 h-3.5" />
+                    {c.label}
                   </a>
                 ))}
               </div>
             ) : (
               <p className="text-sm text-fg/70 mt-0.5">
-                Contact details unlock once you have an accepted challenge or rally with this
-                player, or you are drawn against each other.
+                Contact details unlock once you have an accepted challenge or rally with this player, or you are drawn
+                against each other.
               </p>
             )}
           </div>
@@ -248,7 +289,9 @@ export const PlayerProfile: React.FC = () => {
               <div className="mt-1 flex items-center gap-2">
                 <span className="text-lg font-bold text-fg">NTRP {stats.skill_level}</span>
               </div>
-            ) : <p className="text-sm text-fg/70 mt-1">Not set.</p>}
+            ) : (
+              <p className="text-sm text-fg/70 mt-1">Not set.</p>
+            )}
           </div>
 
           <div className="py-3">
@@ -277,14 +320,22 @@ export const PlayerProfile: React.FC = () => {
           <div className="py-3">
             <SectionLabel icon={<MapPin className="w-3.5 h-3.5 text-clay" />} label="Courts" />
             <div className="mt-1 flex flex-wrap gap-1.5">
-              {courts.length > 0 ? courts.map((c) => <Pill key={c} label={c} />) : <span className="text-sm text-fg/70">None set.</span>}
+              {courts.length > 0 ? (
+                courts.map((c) => <Pill key={c} label={c} />)
+              ) : (
+                <span className="text-sm text-fg/70">None set.</span>
+              )}
             </div>
           </div>
 
           <div className="py-3">
             <SectionLabel icon={<Star className="w-3.5 h-3.5 text-clay" />} label="Favourites" />
             <div className="mt-1 flex flex-wrap gap-1.5">
-              {favourites.length > 0 ? favourites.map((p) => <Pill key={p} label={p} />) : <span className="text-sm text-fg/70">None set.</span>}
+              {favourites.length > 0 ? (
+                favourites.map((p) => <Pill key={p} label={p} />)
+              ) : (
+                <span className="text-sm text-fg/70">None set.</span>
+              )}
             </div>
           </div>
         </div>
@@ -293,11 +344,17 @@ export const PlayerProfile: React.FC = () => {
       {/* Match Stats — read-only mirror of ProfileStats */}
       <div className="bg-tennis-surface/30 rounded-[2.5rem] shadow-xl p-6">
         <h2 className="text-lg font-bold text-fg flex items-center mb-4">
-          <Star className="w-5 h-5 mr-2 text-clay" />Match Stats
+          <Star className="w-5 h-5 mr-2 text-clay" />
+          Match Stats
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {statTiles.map((t, i) => (
-            <motion.div key={t.label} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }} className="rounded-2xl bg-white/[0.03] px-3 py-4 text-center">
+            <motion.div
+              key={t.label}
+              {...fadeUp}
+              transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}
+              className="rounded-2xl bg-white/[0.03] px-3 py-4 text-center"
+            >
               <p className={`text-2xl font-black ${t.accent}`}>{t.value}</p>
               <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70 mt-1">{t.label}</p>
             </motion.div>

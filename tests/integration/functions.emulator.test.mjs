@@ -348,6 +348,17 @@ test(
   async () => {
     const assigned = await session('tournament-assigned');
     await seedTournament('different-owner', 'p1', 'p2');
+    await db.doc('events/e1').update({ assigned_organizer_uids: [assigned.uid] });
+    const legacyRejected = await call('applyTournamentResult', assigned.token, {
+      matchId: 'm1',
+      winnerUid: 'p1',
+      scores: [
+        [6, 4],
+        [6, 2],
+        [0, 0],
+      ],
+    });
+    assert.equal(legacyRejected.status, 403, JSON.stringify(legacyRejected.body));
     await db.doc('events/e1').update({ organizer_ids: [assigned.uid] });
 
     const applied = await call('applyTournamentResult', assigned.token, {

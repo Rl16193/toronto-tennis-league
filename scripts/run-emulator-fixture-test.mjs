@@ -21,6 +21,14 @@ const freePort = () =>
       server.close((error) => (error ? reject(error) : resolve(address.port)));
     });
   });
+const freePorts = async (count) => {
+  const ports = [];
+  while (ports.length < count) {
+    const port = await freePort();
+    if (!ports.includes(port)) ports.push(port);
+  }
+  return ports;
+};
 
 const withJavaOnPath = () => {
   const homebrewJava = '/opt/homebrew/opt/openjdk@21/bin';
@@ -32,8 +40,7 @@ const withJavaOnPath = () => {
 };
 
 const main = async () => {
-  const authPort = await freePort();
-  const firestorePort = await freePort();
+  const [authPort, firestorePort] = await freePorts(2);
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'rands-fixture-emulator-'));
   const configPath = path.join(tempDir, 'firebase.json');
   const config = {

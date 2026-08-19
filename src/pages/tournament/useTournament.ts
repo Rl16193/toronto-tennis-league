@@ -79,6 +79,14 @@ import {
   normalizeUserStats,
 } from '../../lib/firestoreNormalization';
 import { applyTournamentResult } from '../../features/tournament/services/tournamentResultService';
+import { buildScoreSubmissionIntent } from '../../features/tournament/domain/scoreSubmission';
+import { persistDrawDocuments, type ByeAdvance } from '../../features/tournament/services/drawPersistence';
+import {
+  loadTournamentEvents,
+  subscribeEventParticipants,
+  subscribeScoreSubmissions,
+  subscribeTournamentMatches,
+} from '../../features/tournament/services/tournamentSubscriptions';
 
 // Stand-in for a contacts doc whose matching users doc is missing — a data anomaly rather than a
 // normal state, but the merge below shouldn't drop the contact details over it.
@@ -255,9 +263,7 @@ export const useTournament = (eventIdOverride?: string) => {
     const load = async () => {
       setLoading(true);
       try {
-        const eventsSnap = await getDocs(collection(db, 'events'));
-        const tournamentEvents = eventsSnap.docs
-          .map((d) => normalizeEvent(d.id, d.data()))
+        const tournamentEvents = (await loadTournamentEvents())
           // League Ladder events have no draw — ladder matches are a match type surfaced in
           // Matches/Challenges instead, so they don't belong on the Tournament page at all.
           .filter((e) => e.type?.toLowerCase().includes('tournament'))
@@ -293,32 +299,18 @@ export const useTournament = (eventIdOverride?: string) => {
 
   useEffect(() => {
     if (!event) return;
-    return onSnapshot(query(collection(db, 'event_participants'), where('event_id', '==', event.id)), (snap) => {
-      setParticipants(
-        snap.docs
-          .map((d) => normalizeEventParticipant(d.id, d.data()))
-          .filter((participant): participant is EventParticipant => participant !== null),
-      );
+    return subscribeEventParticipants(event.id, (items) => {
+      setParticipants(items);
       setParticipantsReady(true);
     });
   }, [event]);
 
   useEffect(() => {
     if (!event) return;
-    return onSnapshot(
-      query(
-        collection(db, 'matches'),
-        where('event_id', '==', event.id),
-        where('category', 'in', ['singles', 'doubles']),
-      ),
-      (snap) => {
-        const loaded = snap.docs
-          .map((d) => normalizeTournamentMatch(d.id, d.data()))
-          .filter((match): match is TournamentMatch => match !== null);
-        setMatches(loaded);
-        setMatchesReady(true);
-      },
-    );
+    return subscribeTournamentMatches(event.id, (items) => {
+      setMatches(items);
+      setMatchesReady(true);
+    });
   }, [event]);
 
   // Auto-enable merge toggles from existing draw data. The merged PAIR isn't stored on the match
@@ -372,14 +364,7 @@ export const useTournament = (eventIdOverride?: string) => {
       setPendingSubmissions([]);
       return;
     }
-    return onSnapshot(
-      query(collection(db, 'matches'), where('category', '==', 'score_submission'), where('event_id', '==', event.id)),
-      (snap) =>
-        setPendingSubmissions(
-          snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ScoreSubmissionDoc).filter((s) => !s.resolved),
-        ),
-      () => setPendingSubmissions([]),
-    );
+    return subscribeScoreSubmissions(event.id, setPendingSubmissions, () => setPendingSubmissions([]));
   }, [event]);
 
   // Only submissions whose match still exists and is not yet scored are actionable.
@@ -1387,7 +1372,6 @@ export const useTournament = (eventIdOverride?: string) => {
       else slotMap.set(slotNum, player);
     });
 
-    const batch = writeBatch(db);
     const drawKey = getDrawKey(draw.tournamentChoice, draw.division, draw.skillGroup, draw.zone);
     const cfg = {
       eventId: event.id,
@@ -1398,19 +1382,20 @@ export const useTournament = (eventIdOverride?: string) => {
       drawsize,
       allMatches: templateMatches,
     };
-    templateMatches.forEach((tm, index) => {
-      batch.set(
-        doc(db, 'matches', `${event.id}_${drawKey}_${tm.match_id}`),
-        { ...buildMatchFields(tm, index, slotMap, cfg), bracket: null, started, created_at: new Date().toISOString() },
-        { merge: true },
-      );
-    });
-    await batch.commit();
+    const drawDocuments = templateMatches.map((tm, index) => ({
+      id: `${event.id}_${drawKey}_${tm.match_id}`,
+      data: {
+        ...buildMatchFields(tm, index, slotMap, cfg),
+        bracket: null,
+        started,
+        created_at: new Date().toISOString(),
+      },
+    }));
 
     // Auto-advance players who have a BYE opponent (empty slot in slotMap).
     // For each first-round match where one slot has a real player and the other is
     // an empty numbered slot, immediately stamp the real player into the next-round match.
-    const byeAdvances: Array<{ nextMatchId: string; slot: string; player: TournamentPlayer }> = [];
+    const byeAdvances: ByeAdvance[] = [];
     templateMatches.forEach((tm) => {
       if (!tm.next_match_id) return;
       const p1 = typeof tm.player_1 === 'number' ? (slotMap.get(tm.player_1) ?? null) : null;
@@ -1427,20 +1412,11 @@ export const useTournament = (eventIdOverride?: string) => {
       }
       byeAdvances.push({
         nextMatchId: `${event.id}_${drawKey}_${tm.next_match_id}`,
-        slot: nextSlot,
+        slot: nextSlot as 'player_1' | 'player_2',
         player: realPlayer,
       });
     });
-    if (byeAdvances.length > 0) {
-      const advBatch = writeBatch(db);
-      byeAdvances.forEach(({ nextMatchId, slot, player }) => {
-        advBatch.update(doc(db, 'matches', nextMatchId), {
-          [`${slot}_name`]: player.name,
-          [`${slot}_uid`]: player.uid,
-        });
-      });
-      await advBatch.commit();
-    }
+    await persistDrawDocuments(drawDocuments, byeAdvances);
   };
 
   const updateMatchWithSubmission = async (
@@ -1615,65 +1591,12 @@ export const useTournament = (eventIdOverride?: string) => {
     const isPlayerInMatch = user.uid === match.player_1_uid || user.uid === match.player_2_uid;
     if (!isCreator && !isPlayerInMatch) return;
 
-    // No Show is the ONE result with no winner, so it's the one case the blank-winner guard below
-    // must not reject. Organizer-only and RR group stage only — enforced here as well as in the
-    // UI, since the modal's checkbox is only chrome.
-    const isNoShow = !!scoreForm.noShow && isCreator && match.format === 'rr' && match.round === 'RR';
-
-    // Without this the match completes with winner_uid: '', which displays player 2 as winner,
-    // credits player 1 with a loss, awards nobody a win, and writes an empty uid into the next
-    // round. The ladder and friendly paths already guard this.
-    if (!isNoShow && !scoreForm.winnerUserId) {
-      setMessage({ type: 'error', text: 'Please choose who won the match.' });
+    const built = buildScoreSubmissionIntent(scoreForm, match, user.uid, isCreator);
+    if (!built.intent) {
+      setMessage({ type: 'error', text: built.error ?? 'Invalid score.' });
       return;
     }
-
-    const parsedSets = scoreForm.sets.map((s) => ({
-      mine: Number(s.mine || 0),
-      opponent: Number(s.opponent || 0),
-    }));
-    if (
-      parsedSets.some((s) => !Number.isInteger(s.mine) || !Number.isInteger(s.opponent) || s.mine < 0 || s.opponent < 0)
-    ) {
-      setMessage({ type: 'error', text: 'Scores must be non-negative whole numbers.' });
-      return;
-    }
-
-    // Map entered scores to absolute player_1/player_2 positions. The creator enters from
-    // player_1's perspective; a player enters from their own ("mine" = their own score).
-    const submitterIsP1 = isCreator ? true : user.uid === match.player_1_uid;
-    const p1Scores = parsedSets.map((s) => (submitterIsP1 ? s.mine : s.opponent));
-    const p2Scores = parsedSets.map((s) => (submitterIsP1 ? s.opponent : s.mine));
-
-    // A no-show has no winner and no games, whatever the form happened to hold.
-    const submission: ScoreSubmission = isNoShow
-      ? {
-          claimed_winner_name: '',
-          claimed_winner_uid: '',
-          set_1_player_1: 0,
-          set_1_player_2: 0,
-          set_2_player_1: 0,
-          set_2_player_2: 0,
-          set_3_player_1: 0,
-          set_3_player_2: 0,
-          ...(scoreForm.court.trim() ? { court: scoreForm.court.trim() } : {}),
-        }
-      : {
-          claimed_winner_name:
-            scoreForm.winnerUserId === match.player_1_uid ? match.player_1_name : match.player_2_name,
-          claimed_winner_uid: scoreForm.winnerUserId,
-          set_1_player_1: p1Scores[0],
-          set_1_player_2: p2Scores[0],
-          set_2_player_1: p1Scores[1],
-          set_2_player_2: p2Scores[1],
-          set_3_player_1: p1Scores[2],
-          set_3_player_2: p2Scores[2],
-          ...(scoreForm.court.trim() ? { court: scoreForm.court.trim() } : {}),
-        };
-
-    // A no-show is also all-zeros, so it must win this test — otherwise it'd be filed as a
-    // walkover and pay 3/1 to a winner that doesn't exist.
-    const isWalkover = !isNoShow && parsedSets.every((s) => s.mine === 0 && s.opponent === 0);
+    const { submission, isNoShow, isWalkover } = built.intent;
 
     // Player path → queue a pending submission for the creator to confirm.
     if (!isCreator) {

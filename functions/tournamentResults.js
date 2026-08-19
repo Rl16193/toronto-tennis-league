@@ -24,12 +24,7 @@ function sameDraw(left, right) {
 }
 
 function isEventOrganizer(event, uid) {
-  return (
-    event.creator_id === uid ||
-    [event.organizer_ids, event.assigned_organizer_uids, event.organizer_uids].some(
-      (value) => Array.isArray(value) && value.includes(uid),
-    )
-  );
+  return event.creator_id === uid || (Array.isArray(event.organizer_ids) && event.organizer_ids.includes(uid));
 }
 
 function resultHash(matchId, result) {
