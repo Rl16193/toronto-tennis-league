@@ -45,10 +45,17 @@ test('member joins a synthetic social event through the hosted application', asy
   await login(page, 'member-a@example.invalid', 'local-member-a-123!');
   await page.goto('/events');
   await page.getByRole('tab', { name: 'Socials' }).click();
-  await expect(page.getByText('Synthetic Social')).toBeVisible();
-  await page.getByRole('button', { name: 'Join Event' }).first().click();
-  await page.getByRole('button', { name: 'Join Event' }).last().click();
-  await expect(page.getByRole('button', { name: 'Joined' })).toBeVisible();
+  const socialCard = page
+    .getByRole('heading', { name: 'Synthetic Social' })
+    .locator('xpath=ancestor::div[contains(@class, "rounded-2xl")][1]');
+
+  await expect(socialCard).toContainText('Synthetic Social');
+  await socialCard.getByRole('button', { name: 'Join Event' }).click();
+
+  const joinDialog = page.getByRole('dialog', { name: 'Join Synthetic Social' });
+  await expect(joinDialog).toBeVisible();
+  await joinDialog.getByRole('button', { name: 'Join Event' }).click();
+  await expect(socialCard.getByRole('button', { name: 'Joined' })).toBeVisible();
 });
 
 test('organizer records a tournament score and advances the winner', async ({ page }) => {
