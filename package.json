@@ -10,8 +10,8 @@
     "preview": "vite preview",
     "emulators": "npx -y firebase-tools@latest emulators:start --only auth,firestore,functions,storage,hosting",
     "test:rules": "npx -y firebase-tools@latest emulators:exec --only firestore --project rands-local \"node --test tests/rules/firestore.rules.test.mjs\"",
-    "hosting:deploy": "npm run build && npx firebase-tools deploy --only hosting",
-    "hosting:preview": "npm run build && npx firebase-tools hosting:channel:deploy preview",
+    "hosting:deploy": "npm run build && node scripts/deploy-hosting.mjs deploy",
+    "hosting:preview": "npm run build && node scripts/deploy-hosting.mjs preview",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "lint": "tsc --noEmit"
   },

@@ -62,7 +62,15 @@ Functions currently have no package test script. Project architecture and securi
 
 ## Firebase and deployment safety
 
-`.firebaserc` currently names `toronto-tennis-league`, which is production-sensitive. Routine development and QA must not use that project. The existing `hosting:deploy` and `hosting:preview` scripts have not yet been environment-guarded; do not run them as part of local development or deploy to Firebase from this checkout without an explicit reviewed environment plan.
+`.firebaserc` currently names `toronto-tennis-league`, which is production-sensitive. Routine development and QA must not use that project. `hosting:deploy` and `hosting:preview` now require `FIREBASE_DEPLOY_PROJECT_ID`; production also requires two explicit approval environment variables. Do not run a production action from this checkout without an approved environment plan.
+
+For an isolated staging project, use the project ID supplied by the environment owner:
+
+```bash
+FIREBASE_DEPLOY_PROJECT_ID=<staging-project-id> npm run hosting:preview
+```
+
+The guard script is `scripts/deploy-hosting.mjs`. It never infers the deployment project from `.firebaserc`.
 
 The next environment work is to establish:
 
