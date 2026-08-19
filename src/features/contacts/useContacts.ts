@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { ContactData } from '../../types';
+import { normalizeContactData } from '../../lib/firestoreNormalization';
 
 /**
  * Resolves `contacts/{uid}` for a set of members, cached for the session.
@@ -33,17 +34,21 @@ export function useContacts(userIds: string[]): Record<string, ContactData> {
     if (missing.length === 0) return;
 
     let cancelled = false;
-    Promise.all(missing.map((id) =>
-      getDoc(doc(db, 'contacts', id))
-        .then((s) => [id, s.exists() ? (s.data() as ContactData) : undefined] as const)
-        .catch(() => [id, undefined] as const)))
-      .then((entries) => {
-        const found = entries.filter((e): e is [string, ContactData] => !!e[1]);
-        found.forEach(([id, c]) => cache.set(id, c));
-        if (cancelled || found.length === 0) return;
-        setContacts((prev) => ({ ...prev, ...Object.fromEntries(found) }));
-      });
-    return () => { cancelled = true; };
+    Promise.all(
+      missing.map((id) =>
+        getDoc(doc(db, 'contacts', id))
+          .then((s) => [id, s.exists() ? normalizeContactData(s.data()) : undefined] as const)
+          .catch(() => [id, undefined] as const),
+      ),
+    ).then((entries) => {
+      const found = entries.filter((e): e is [string, ContactData] => !!e[1]);
+      found.forEach(([id, c]) => cache.set(id, c));
+      if (cancelled || found.length === 0) return;
+      setContacts((prev) => ({ ...prev, ...Object.fromEntries(found) }));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [key]);
 
   return contacts;

@@ -4,12 +4,13 @@ import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent, EventParticipant } from '../../../types';
 import { resolveStorageUrl } from '../../events/services/eventService';
+import { normalizeEvent, normalizeEventParticipant } from '../../../lib/firestoreNormalization';
 
 export type JoinedEventCard = TennisEvent & { participantId: string; dateselected?: string[] };
 
 const FIRESTORE_IN_QUERY_LIMIT = 10;
 
-const chunkValues = <T,>(values: T[], chunkSize: number) => {
+const chunkValues = <T>(values: T[], chunkSize: number) => {
   const chunks: T[][] = [];
   for (let index = 0; index < values.length; index += chunkSize) {
     chunks.push(values.slice(index, index + chunkSize));
@@ -41,7 +42,9 @@ export const useProfileData = () => {
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const mine = ++generation;
       const isStale = () => cancelled || mine !== generation;
-      const participantData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventParticipant));
+      const participantData = snapshot.docs
+        .map((doc) => normalizeEventParticipant(doc.id, doc.data()))
+        .filter((participant): participant is EventParticipant => participant !== null);
 
       if (participantData.length === 0) {
         if (isStale()) return;
@@ -55,14 +58,14 @@ export const useProfileData = () => {
         const eventIdChunks = chunkValues(eventIds, FIRESTORE_IN_QUERY_LIMIT);
         const eventSnapshots = await Promise.all(
           eventIdChunks.map((eventIdsChunk) =>
-            getDocs(query(collection(db, 'events'), where(documentId(), 'in', eventIdsChunk)))
-          )
+            getDocs(query(collection(db, 'events'), where(documentId(), 'in', eventIdsChunk))),
+          ),
         );
 
         const eventMap = new Map<string, TennisEvent>();
         eventSnapshots.forEach((eventSnapshot) => {
           eventSnapshot.docs.forEach((eventDoc) => {
-            eventMap.set(eventDoc.id, { id: eventDoc.id, ...eventDoc.data() } as TennisEvent);
+            eventMap.set(eventDoc.id, normalizeEvent(eventDoc.id, eventDoc.data()));
           });
         });
 
@@ -79,21 +82,24 @@ export const useProfileData = () => {
               participantId: participant.id,
               dateselected: participant.dateselected || [],
             } as JoinedEventCard;
-          })
+          }),
         );
 
         if (isStale()) return;
         setJoinedEvents(joined.filter(Boolean) as JoinedEventCard[]);
       } catch (error) {
         if (isStale()) return;
-        console.error("Error fetching joined events:", error);
+        console.error('Error fetching joined events:', error);
         setJoinedEvents([]);
       } finally {
         if (!isStale()) setLoading(false);
       }
     });
 
-    return () => { cancelled = true; unsubscribe(); };
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
     // `user?.uid`, not `user`: AuthContext hands out a new User object on every token refresh,
     // which tore this listener down and re-opened it roughly hourly for no reason.
   }, [user?.uid]);

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { normalizeContactData } from '../../lib/firestoreNormalization';
 import { ContactData } from '../../types';
 import { MATCHES_COL, LADDER_COOLDOWN_DAYS, LADDER_ACTIVE_CHALLENGE_CAP, LadderChallenge } from './ladderService';
 
@@ -18,10 +19,13 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
     setChallenges([]);
     setChallengesReady(false);
     if (!eventId) return;
-    return onSnapshot(query(collection(db, MATCHES_COL), where('category', '==', 'challenge'), where('event_id', '==', eventId)), (snap) => {
-      setChallenges(snap.docs.map((d) => ({ id: d.id, ...d.data() } as LadderChallenge)));
-      setChallengesReady(true);
-    });
+    return onSnapshot(
+      query(collection(db, MATCHES_COL), where('category', '==', 'challenge'), where('event_id', '==', eventId)),
+      (snap) => {
+        setChallenges(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as LadderChallenge));
+        setChallengesReady(true);
+      },
+    );
   }, [eventId]);
 
   // Open (awaiting accept/decline) challenges only — same as Friendlies rallies, once accepted
@@ -54,9 +58,7 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
   // confirmed/rejected). No time-based reset — a slot frees up only once that challenge moves past
   // accepted (scored, confirmed, rejected) or is cancelled (cancelling deletes the doc).
   const activeChallengesUsed = useMemo(
-    () => challenges.filter(
-      (c) => c.player_1_uid === uid && (c.status === 'open' || c.status === 'accepted'),
-    ).length,
+    () => challenges.filter((c) => c.player_1_uid === uid && (c.status === 'open' || c.status === 'accepted')).length,
     [challenges, uid],
   );
   const activeChallengesLeft = Math.max(0, LADDER_ACTIVE_CHALLENGE_CAP - activeChallengesUsed);
@@ -70,9 +72,11 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
     // accepted. Without this, one denied read rejects the whole Promise.all and nobody's contact
     // resolves.
     Promise.all(
-      missing.map((id) => getDoc(doc(db, 'contacts', id))
-        .then((s) => [id, s.data() as ContactData | undefined] as const)
-        .catch(() => [id, undefined] as const)),
+      missing.map((id) =>
+        getDoc(doc(db, 'contacts', id))
+          .then((s) => [id, s.exists() ? normalizeContactData(s.data()) : undefined] as const)
+          .catch(() => [id, undefined] as const),
+      ),
     ).then((entries) => {
       const found = entries.filter((e) => !!e[1]) as [string, ContactData][];
       if (found.length) setContactMap((prev) => ({ ...prev, ...Object.fromEntries(found) }));
@@ -90,16 +94,25 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
           (c.player_1_uid === uid && c.player_2_uid === opponentId) ||
           (c.player_2_uid === uid && c.player_1_uid === opponentId),
       );
-      if (between.some((c) => c.status === 'open' || c.status === 'accepted' || c.status === 'reported')) return 'pending';
+      if (between.some((c) => c.status === 'open' || c.status === 'accepted' || c.status === 'reported'))
+        return 'pending';
       if (
-        between.some(
-          (c) => c.status === 'confirmed' && c.confirmed_at && new Date(c.confirmed_at).getTime() > cutoff,
-        )
+        between.some((c) => c.status === 'confirmed' && c.confirmed_at && new Date(c.confirmed_at).getTime() > cutoff)
       )
         return 'cooldown';
       return 'available';
     };
   }, [challenges, uid]);
 
-  return { challenges, challengesReady, myChallenges, incoming, reported, contactMap, stateWith, acceptedPartnerIds, activeChallengesLeft };
+  return {
+    challenges,
+    challengesReady,
+    myChallenges,
+    incoming,
+    reported,
+    contactMap,
+    stateWith,
+    acceptedPartnerIds,
+    activeChallengesLeft,
+  };
 }

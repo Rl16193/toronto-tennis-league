@@ -69,7 +69,15 @@ import {
 } from './utils';
 import { CONSOLIDATED_DOUBLES_DRAW, VISIBLE_DRAWS, buildMergedSkillDraw } from './drawConfigs';
 import { PLAYER_LOADING_SENTINEL } from './AddPlayerPanel';
-import { normalizeEvent, normalizeEventParticipant, normalizeTournamentMatch } from '../../lib/firestoreNormalization';
+import {
+  normalizeContactData,
+  normalizeEvent,
+  normalizeEventParticipant,
+  normalizeTournamentMatch,
+  normalizeUserData,
+  normalizeUserPreferences,
+  normalizeUserStats,
+} from '../../lib/firestoreNormalization';
 import { applyTournamentResult } from '../../features/tournament/services/tournamentResultService';
 
 // Stand-in for a contacts doc whose matching users doc is missing — a data anomaly rather than a
@@ -442,10 +450,10 @@ export const useTournament = (eventIdOverride?: string) => {
       ([usersSnap, contactsSnap]) => {
         const map: Record<string, MemberInfo> = {};
         usersSnap.docs.forEach((d) => {
-          map[d.id] = d.data() as UserData;
+          map[d.id] = normalizeUserData(d.data());
         });
         contactsSnap?.docs.forEach((d) => {
-          map[d.id] = { ...(map[d.id] ?? EMPTY_MEMBER), ...(d.data() as ContactData) };
+          map[d.id] = { ...(map[d.id] ?? EMPTY_MEMBER), ...normalizeContactData(d.data()) };
         });
         setAllUsers(map);
       },
@@ -462,7 +470,11 @@ export const useTournament = (eventIdOverride?: string) => {
     const missingStats = allIds.filter((id) => !statsMap[id]);
     if (missingUsers.length === 0 && missingStats.length === 0) return;
 
-    const fetchByIds = <T>(col: string, ids: string[]): Promise<Record<string, T>> => {
+    const fetchByIds = <T>(
+      col: string,
+      ids: string[],
+      normalize: (value: unknown) => T,
+    ): Promise<Record<string, T>> => {
       const chunks: string[][] = [];
       for (let i = 0; i < ids.length; i += 10) chunks.push(ids.slice(i, i + 10));
       return Promise.all(
@@ -471,7 +483,7 @@ export const useTournament = (eventIdOverride?: string) => {
         const out: Record<string, T> = {};
         snaps.forEach((snap) =>
           snap.forEach((d) => {
-            out[d.id] = d.data() as T;
+            out[d.id] = normalize(d.data());
           }),
         );
         return out;
@@ -479,12 +491,12 @@ export const useTournament = (eventIdOverride?: string) => {
     };
 
     Promise.all([
-      missingUsers.length ? fetchByIds<UserData>('users', missingUsers) : Promise.resolve({}),
-      missingStats.length ? fetchByIds<UserStats>('stats', missingStats) : Promise.resolve({}),
+      missingUsers.length ? fetchByIds('users', missingUsers, normalizeUserData) : Promise.resolve({}),
+      missingStats.length ? fetchByIds('stats', missingStats, normalizeUserStats) : Promise.resolve({}),
       // Contacts are a separate, sign-in-gated collection. Tolerate a failure (or a member with
       // no contacts doc yet) — the draw still renders, just without a Contact button.
       missingUsers.length
-        ? fetchByIds<ContactData>('contacts', missingUsers).catch(() => ({}) as Record<string, ContactData>)
+        ? fetchByIds('contacts', missingUsers, normalizeContactData).catch(() => ({}) as Record<string, ContactData>)
         : Promise.resolve({} as Record<string, ContactData>),
     ]).then(([userEntries, statsEntries, contactEntries]) => {
       const merged: Record<string, MemberInfo> = { ...userEntries };
@@ -521,9 +533,10 @@ export const useTournament = (eventIdOverride?: string) => {
       }
       snaps.forEach((snap) =>
         snap.forEach((d) => {
-          courtEntries[d.id] = (d.data().preferred_courts ?? []) as string[];
-          zoneEntries[d.id] = (d.data().preferred_zone ?? '') as string;
-          availabilityEntries[d.id] = (d.data().availability_tags ?? []) as string[];
+          const preferences = normalizeUserPreferences(d.data());
+          courtEntries[d.id] = preferences.preferred_courts;
+          zoneEntries[d.id] = preferences.preferred_zone;
+          availabilityEntries[d.id] = preferences.availability_tags ?? [];
         }),
       );
       setCourtsMap((prev) => ({ ...prev, ...courtEntries }));
@@ -1566,7 +1579,7 @@ export const useTournament = (eventIdOverride?: string) => {
         let skillLevel = statsMap[player.uid]?.skill_level ?? 0;
         if (!statsMap[player.uid]) {
           const statsSnap = await getDocs(query(collection(db, 'stats'), where('__name__', '==', player.uid)));
-          skillLevel = (statsSnap.docs[0]?.data() as UserStats | undefined)?.skill_level ?? 0;
+          skillLevel = statsSnap.docs[0] ? normalizeUserStats(statsSnap.docs[0].data()).skill_level : 0;
         }
         await addDoc(collection(db, 'event_participants'), {
           uid: player.uid,
@@ -1806,7 +1819,7 @@ export const useTournament = (eventIdOverride?: string) => {
       let skillLevel = statsMap[userId]?.skill_level ?? 0;
       if (!statsMap[userId]) {
         const statsSnap = await getDocs(query(collection(db, 'stats'), where('__name__', '==', userId)));
-        skillLevel = (statsSnap.docs[0]?.data() as UserStats | undefined)?.skill_level ?? 0;
+        skillLevel = statsSnap.docs[0] ? normalizeUserStats(statsSnap.docs[0].data()).skill_level : 0;
       }
       const division = divisionOverride ?? (currentDraw.division !== 'All' ? currentDraw.division : "Men's");
       await addDoc(collection(db, 'event_participants'), {
