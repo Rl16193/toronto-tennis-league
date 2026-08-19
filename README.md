@@ -45,7 +45,7 @@ npm run emulators
 npm run dev
 ```
 
-The Vite server uses port `3000`; the emulator UI uses port `4000`. Local Auth, Firestore, Functions, Storage, and Hosting use the ports declared in `firebase.json`. Firestore emulator startup requires Java; the current validation machine does not have a Java runtime, so emulator execution remains blocked until that prerequisite is installed. Rules tests and seeded fixtures are still pending, so an emulator running is not by itself evidence of complete QA.
+The Vite server uses port `3000`; the emulator UI uses port `4000`. Local Auth, Firestore, Functions, Storage, and Hosting use the ports declared in `firebase.json`. Firestore emulator startup requires Java; the current validation machine does not have a Java runtime, so emulator execution remains blocked until that prerequisite is installed. Once Java is available, run `npm run test:rules` for the initial rules suite.
 
 GitHub CI runs on pushes and pull requests targeting `dev-anuj`. It currently checks the root typecheck/build and Functions JavaScript syntax; it does not deploy or connect to Firebase.
 
@@ -55,6 +55,7 @@ GitHub CI runs on pushes and pull requests targeting `dev-anuj`. It currently ch
 npm run lint       # TypeScript no-emit check
 npm run build      # Generates the programs CSV, then creates dist/
 npm run preview    # Serves the built dist/ locally
+npm run test:rules # Firestore Rules tests; requires Java and the emulator
 ```
 
 Functions currently have no package test script. Project architecture and security validation gaps are tracked in [docs/engineering/SECURITY_BASELINE.md](docs/engineering/SECURITY_BASELINE.md).

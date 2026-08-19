@@ -39,6 +39,7 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 - All committed diagram SVGs passed `xmllint --noout`.
 - All committed diagram HTML files contain one SVG and match their SVG export geometry/content.
 - Emulator configuration is present and the CLI was invoked with synthetic project ID `rands-local`; startup was blocked by the host’s missing Java runtime (`java -version` exit 1).
+- Initial Firestore Rules tests cover preference role self-assignment, contact ownership/privacy, server-only connection markers, task point minting, member stats point writes, and admin metric access. They are wired into `npm run test:rules` and CI but could not execute locally until Java is installed.
 - `npm audit --json` could not refresh in the original validation environment because the npm registry DNS lookup failed; install-time audit warnings remain untriaged.
 - Firebase rules emulator tests were not run because no emulator/test harness is currently configured.
 

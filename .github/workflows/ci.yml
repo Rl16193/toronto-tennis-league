@@ -41,6 +41,9 @@ jobs:
       - name: Build web application
         run: npm run build
 
+      - name: Firestore Rules tests
+        run: npm run test:rules
+
       - name: Install Functions dependencies
         working-directory: functions
         run: npm ci
