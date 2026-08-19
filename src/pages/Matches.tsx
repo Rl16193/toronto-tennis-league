@@ -6,6 +6,7 @@ import { motion } from 'motion/react';
 import { fadeUp, staggerDelay, tapScale } from '../lib/motion';
 import { lazyWithRetry } from '../lib/lazyWithRetry';
 import { db } from '../lib/firebase';
+import { normalizeUserPreferences } from '../lib/firestoreNormalization';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -180,9 +181,10 @@ export const Matches: React.FC = () => {
         const availability: Record<string, string[]> = {};
         const zones: Record<string, string> = {};
         snap.docs.forEach((d) => {
-          courts[d.id] = (d.data().preferred_courts as string[]) || [];
-          availability[d.id] = (d.data().availability_tags as string[]) || [];
-          zones[d.id] = (d.data().preferred_zone as string) || '';
+          const preferences = normalizeUserPreferences(d.data());
+          courts[d.id] = preferences.preferred_courts;
+          availability[d.id] = preferences.availability_tags ?? [];
+          zones[d.id] = preferences.preferred_zone;
         });
         setCourtsByUid(courts);
         setAvailabilityByUid(availability);

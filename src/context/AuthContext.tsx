@@ -108,8 +108,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // them verified and trigger the one-shot welcome email (Cloud Function fires when
         // welcomeEmailSent flips false → true). Both flags are idempotent.
         const updates: Record<string, boolean> = {};
-        if (!(userData as { isVerified?: boolean }).isVerified) updates.isVerified = true;
-        if (!(userData as { welcomeEmailSent?: boolean }).welcomeEmailSent) updates.welcomeEmailSent = true;
+        if (!userData.isVerified) updates.isVerified = true;
+        if (!userData.welcomeEmailSent) updates.welcomeEmailSent = true;
         if (Object.keys(updates).length > 0) {
           updateDoc(doc(db, 'users', activeUser.uid), updates).catch(() => {});
         }

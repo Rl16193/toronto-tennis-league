@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   normalizeEvent,
   normalizeEventParticipant,
+  normalizeRoundRobinDraft,
   normalizeTournamentMatch,
   normalizeUserPreferences,
   normalizeUserStats,
@@ -55,4 +56,21 @@ test('profile normalization does not grant role flags or trust malformed arrays'
   const stats = normalizeUserStats({ skill_level: '5', wins: Number.NaN });
   assert.equal(stats.skill_level, 2);
   assert.equal(stats.wins, 0);
+});
+
+test('round-robin draft normalization rejects malformed nested values', () => {
+  assert.deepEqual(
+    normalizeRoundRobinDraft({
+      groups: [['member-a', 3], 'member-b,,member-c', { bad: true }],
+      custom: [true, 'true', false],
+      labels: ['Court 1', 3],
+      withdrawn: ['member-d', null],
+    }),
+    {
+      groups: [['member-a'], ['member-b', 'member-c'], []],
+      custom: [true, false],
+      customLabels: ['Court 1'],
+      withdrawn: ['member-d'],
+    },
+  );
 });

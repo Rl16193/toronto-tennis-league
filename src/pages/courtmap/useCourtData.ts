@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getDocs, getDoc, doc, collection } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { normalizeUserPreferences } from '../../lib/firestoreNormalization';
 import {
   parseCourts,
   parsePrograms,
@@ -138,7 +139,7 @@ export function useCourtData(): {
         const courtCountMap = new Map<string, number>();
         prefsSnap.forEach((d) => {
           const uid = d.id;
-          const preferred: string[] = d.data().preferred_courts || [];
+          const preferred = normalizeUserPreferences(d.data()).preferred_courts;
           if (!preferred.length) return;
           const points = statsMap.get(uid) ?? 0;
           const lastActive = lastActiveMap.get(uid) ?? 0;

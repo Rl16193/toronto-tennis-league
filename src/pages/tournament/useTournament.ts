@@ -87,6 +87,7 @@ import {
 import {
   loadTournamentEvents,
   subscribeEventParticipants,
+  subscribeRoundRobinDraft,
   subscribeScoreSubmissions,
   subscribeTournamentMatches,
 } from '../../features/tournament/services/tournamentSubscriptions';
@@ -809,28 +810,7 @@ export const useTournament = (eventIdOverride?: string) => {
       return;
     }
     const drawKey = currentDrawKey;
-    const unsub = onSnapshot(
-      doc(db, 'events', event.id, 'rr_drafts', drawKey),
-      (snap) => {
-        if (!snap.exists()) {
-          setRRDraft(null);
-          return;
-        }
-        const d = snap.data();
-        setRRDraft({
-          groups: Array.isArray(d.groups)
-            ? d.groups.map((g: unknown) =>
-                typeof g === 'string' ? g.split(',').filter(Boolean) : Array.isArray(g) ? g : [],
-              )
-            : [],
-          custom: Array.isArray(d.custom) ? d.custom : [],
-          customLabels: Array.isArray(d.labels) ? d.labels : [],
-          withdrawn: Array.isArray(d.withdrawn) ? d.withdrawn : [],
-        });
-      },
-      () => setRRDraft(null),
-    );
-    return () => unsub();
+    return subscribeRoundRobinDraft(event.id, drawKey, setRRDraft);
     // Depend on currentDrawKey itself, not its parts: the key includes zone, so listing only
     // choice/division/skillGroup meant switching zones kept the previous zone's draft loaded.
   }, [event?.id, currentDrawFormat, currentDrawKey]);

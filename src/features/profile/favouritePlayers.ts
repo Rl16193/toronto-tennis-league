@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { normalizeUserPreferences } from '../../lib/firestoreNormalization';
 import { leagueDivision } from '../../utils/skillLevels';
 
 /**
@@ -55,7 +56,7 @@ export function useFavouritePlayerOptions(enabled: boolean): FavouriteOptions {
         }
         const prefs: PrefDoc[] = prefSnap.docs.map((d) => ({
           id: d.id,
-          ...(d.data() as { favourite_players?: string[] }),
+          favourite_players: normalizeUserPreferences(d.data()).favourite_players,
         }));
         cache = {
           all: rank(prefs),

@@ -4,6 +4,13 @@ import { resolveZoneConfig } from '../features/tournament/domain/placement';
 
 type UnknownRecord = Record<string, unknown>;
 
+export type RoundRobinDraft = {
+  groups: string[][];
+  custom: boolean[];
+  customLabels: string[];
+  withdrawn: string[];
+};
+
 const record = (value: unknown): UnknownRecord =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as UnknownRecord) : {};
 const string = (value: unknown, fallback = '') => (typeof value === 'string' ? value : fallback);
@@ -12,6 +19,18 @@ const number = (value: unknown, fallback = 0) =>
 const boolean = (value: unknown, fallback = false) => (typeof value === 'boolean' ? value : fallback);
 const strings = (value: unknown) =>
   Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+
+export const normalizeRoundRobinDraft = (value: unknown): RoundRobinDraft => {
+  const data = record(value);
+  return {
+    groups: Array.isArray(data.groups)
+      ? data.groups.map((group) => (typeof group === 'string' ? group.split(',').filter(Boolean) : strings(group)))
+      : [],
+    custom: Array.isArray(data.custom) ? data.custom.filter((item): item is boolean => typeof item === 'boolean') : [],
+    customLabels: strings(data.labels),
+    withdrawn: strings(data.withdrawn),
+  };
+};
 const optionalString = (value: unknown) => (typeof value === 'string' ? value : undefined);
 const optionalNumber = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
 const dateValue = (value: unknown): TennisEvent['date'] => {
@@ -193,6 +212,8 @@ export const normalizeUserData = (value: unknown): UserData => {
     avatar: optionalString(data.avatar),
     bio: optionalString(data.bio),
     profile_details_visible: boolean(data.profile_details_visible),
+    isVerified: boolean(data.isVerified),
+    welcomeEmailSent: boolean(data.welcomeEmailSent),
     ...(Array.isArray(data.display_badges) ? { display_badges: strings(data.display_badges).slice(0, 3) } : {}),
   };
 };

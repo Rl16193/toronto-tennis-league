@@ -45,6 +45,8 @@ export interface UserData {
   // Up to 3 badge ids the player has chosen to show on their profile and beside their name.
   display_badges?: string[];
   created_at: string;
+  isVerified?: boolean;
+  welcomeEmailSent?: boolean;
 }
 
 // Collection: stats

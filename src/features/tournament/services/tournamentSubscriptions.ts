@@ -1,10 +1,12 @@
-import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import {
   normalizeEvent,
   normalizeEventParticipant,
+  normalizeRoundRobinDraft,
   normalizeScoreSubmission,
   normalizeTournamentMatch,
+  type RoundRobinDraft,
 } from '../../../lib/firestoreNormalization';
 import type { EventParticipant, TennisEvent } from '../../../types';
 import type { ScoreSubmissionDoc, TournamentMatch } from '../../../pages/tournament/types';
@@ -49,4 +51,15 @@ export const subscribeScoreSubmissions = (
           .filter((item) => !item.resolved),
       ),
     onError,
+  );
+
+export const subscribeRoundRobinDraft = (
+  eventId: string,
+  drawKey: string,
+  onValue: (draft: RoundRobinDraft | null) => void,
+) =>
+  onSnapshot(
+    doc(db, 'events', eventId, 'rr_drafts', drawKey),
+    (snapshot) => onValue(snapshot.exists() ? normalizeRoundRobinDraft(snapshot.data()) : null),
+    () => onValue(null),
   );
