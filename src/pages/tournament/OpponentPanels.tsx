@@ -3,13 +3,12 @@ import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { TournamentMatch, TournamentPlayer } from './types';
 import type { ContactMethod } from '../../types';
-import { formatPlayerName, formatScheduledDate, getScheduleState } from './utils';
+import { formatPlayerName, formatScheduledDate, getScheduleState, skillBand } from './utils';
 import { ScheduleControls, type ScheduleApi } from './TournamentElements';
 import { ContactOpponentButton, pillButtonCls } from '../../components/ContactOpponentButton';
 import { sharesCourt } from '../../utils/courtOverlap';
 import { NearbyPill } from '../../components/NearbyPill';
 import { AvailabilityPills } from '../../components/AvailabilityPills';
-import { skillBand } from './utils';
 
 // ─── Bracket: your matches + potential next-round opponents ──────────────────────
 

@@ -4,8 +4,7 @@ import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent } from '../../../types';
 import { isLadderEvent, isTopspinMeetupEvent, isTournamentEvent, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
-import { parseEndInstant, parseValidDate, sortEventsByStartDate } from '../../../utils/eventDates';
-import type { FirestoreDateLike } from '../../../utils/eventDates';
+import { parseEndInstant, parseValidDate, sortEventsByStartDate, type FirestoreDateLike } from '../../../utils/eventDates';
 import { DisplayEvent, fetchEvents, resolveStorageUrl } from '../services/eventService';
 import type { JoinedRegistration } from '../types';
 

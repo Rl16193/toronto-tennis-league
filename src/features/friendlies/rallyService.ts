@@ -182,7 +182,6 @@ export function useRallies() {
       if (entries.length) setContactMap((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
     };
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acceptedPartnerIds]);
 
   return { sent, received, loading, activePartnerIds, acceptedPartnerIds, rallyWith, contactMap };

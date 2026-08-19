@@ -418,7 +418,7 @@ export const Signup: React.FC = () => {
     } else {
       setFormData((prev) => ({ ...prev, preferredZone: primary, pendingZoneChoice: null }));
     }
-  }, [formData.preferredCourts, courtCoordsMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [formData.preferredCourts, courtCoordsMap]);
 
   const courtSuggestions = getCourtSuggestions(courtOptions, formData.preferredCourts, formData.customCourtEntry);
 

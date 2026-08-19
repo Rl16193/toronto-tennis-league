@@ -20,7 +20,7 @@ type Props = {
   scoreForm: ScoreForm;
   onChange: (form: ScoreForm) => void;
   onClose: () => void;
-  onSubmit: (e: React.FormEvent) => Promise<void> | void;
+  onSubmit: (e: React.FormEvent<HTMLFormElement>) => Promise<void> | void;
   isCreatorSubmit?: boolean;
   // Optional single checkbox rendered above the submit button — e.g. Tournament's "Also count as
   // a Challenge" option. Generic so any caller can attach one extra choice without a new modal.
@@ -61,7 +61,7 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
     return courts.filter((c) => c.toLowerCase().includes(q)).slice(0, 8);
   }, [courts, courtSearch]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submitting) return;
     setSubmitting(true);

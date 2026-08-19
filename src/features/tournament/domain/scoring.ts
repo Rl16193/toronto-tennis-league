@@ -21,9 +21,12 @@ export const NO_SHOW_POINTS = 1;
 
 /** Absolute player_1/player_2 score fields for tournament, ladder, and friendly results. */
 export const setFieldsFrom = (pairs: [number, number][]) => ({
-  set_1_player_1: pairs[0]?.[0] ?? 0, set_1_player_2: pairs[0]?.[1] ?? 0,
-  set_2_player_1: pairs[1]?.[0] ?? 0, set_2_player_2: pairs[1]?.[1] ?? 0,
-  set_3_player_1: pairs[2]?.[0] ?? 0, set_3_player_2: pairs[2]?.[1] ?? 0,
+  set_1_player_1: pairs[0]?.[0] ?? 0,
+  set_1_player_2: pairs[0]?.[1] ?? 0,
+  set_2_player_1: pairs[1]?.[0] ?? 0,
+  set_2_player_2: pairs[1]?.[1] ?? 0,
+  set_3_player_1: pairs[2]?.[0] ?? 0,
+  set_3_player_2: pairs[2]?.[1] ?? 0,
 });
 
 /**
@@ -39,19 +42,26 @@ export const matchAward = (m: ScoringMatch) => {
 
   if (m.no_show) {
     return {
-      noShow: true, isRRGroupStage, isFinal,
-      winnerUid: null as string | null, loserUid: null as string | null,
-      winnerPts: NO_SHOW_POINTS, loserPts: NO_SHOW_POINTS, winnerPointsApply: true,
+      noShow: true,
+      isRRGroupStage,
+      isFinal,
+      winnerUid: null as string | null,
+      loserUid: null as string | null,
+      winnerPts: NO_SHOW_POINTS,
+      loserPts: NO_SHOW_POINTS,
+      winnerPointsApply: true,
     };
   }
 
   const LOSER_PTS: Record<string, number> = { R32: 1, R16: 2, QF: 3, RR: 1, SF: 5, F: 10 };
   const winnerUid = m.winner_uid || null;
-  const loserUid = winnerUid
-    ? (winnerUid === m.player_1_uid ? m.player_2_uid : m.player_1_uid) || null
-    : null;
+  const loserUid = winnerUid ? (winnerUid === m.player_1_uid ? m.player_2_uid : m.player_1_uid) || null : null;
   return {
-    noShow: false, isRRGroupStage, isFinal, winnerUid, loserUid,
+    noShow: false,
+    isRRGroupStage,
+    isFinal,
+    winnerUid,
+    loserUid,
     winnerPts: isRRGroupStage ? 3 : 20,
     loserPts: LOSER_PTS[m.round] ?? 1,
     winnerPointsApply: isFinal || isRRGroupStage,

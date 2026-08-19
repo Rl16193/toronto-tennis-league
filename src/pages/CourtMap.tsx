@@ -1,13 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
-import MapGL, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-gl/maplibre';
-import type { MapRef } from 'react-map-gl/maplibre';
+import MapGL, { Marker, Popup, NavigationControl, Source, Layer, type MapRef } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Search, Loader2, X, Layers } from 'lucide-react';
 import { ZONE_NAMES, ZONE_COLORS, getZone, haversineKm, zoneOverlayGeoJSON } from '../utils/zones';
 
-import type { CourtWithCount, PickleballOnlyCourt, NearestCourt, NearestProgram, SuggestionItem } from './courtmap/courtMapUtils';
 import {
   TORONTO_CENTER,
   formatDist,
@@ -17,6 +15,7 @@ import {
   courtMarkerHtml, pickleballMarkerHtml, hasPublicHours,
   GENERIC_OSM_TYPES,
   locationGeoCache,
+  type CourtWithCount, type PickleballOnlyCourt, type NearestCourt, type NearestProgram, type SuggestionItem,
 } from './courtmap/courtMapUtils';
 import {
   Badge, CourtPopup, CourtResultsList, FilterSelect, MultiFilterSelect, PickleballBadges,

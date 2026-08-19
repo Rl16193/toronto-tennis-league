@@ -1,8 +1,11 @@
 {
-  "name": "react-example",
+  "name": "racquets-and-strings",
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "node scripts/build-programs-csv.mjs && vite build",
@@ -10,21 +13,25 @@
     "preview": "vite preview",
     "dev:emulator": "npx -y firebase-tools@latest emulators:start --only auth,firestore,functions,storage,hosting",
     "emulators": "npx -y firebase-tools@latest emulators:start --only auth,firestore,functions,storage,hosting",
-    "test:rules": "npx -y firebase-tools@latest emulators:exec --only firestore --project rands-local \"node --test tests/rules/firestore.rules.test.mjs\"",
-    "test:storage": "npx -y firebase-tools@latest emulators:exec --only storage --project rands-local \"node --test tests/rules/storage.rules.test.mjs\"",
+    "test:rules": "node scripts/run-emulator-test.mjs firestore",
+    "test:storage": "node scripts/run-emulator-test.mjs storage",
     "test": "node --import tsx --test tests/unit/*.test.mjs",
     "seed:emulator": "node tests/fixtures/seed-emulator.mjs",
     "hosting:deploy": "npm run build && node scripts/deploy-hosting.mjs deploy",
     "hosting:preview": "npm run build && node scripts/deploy-hosting.mjs preview",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "lint": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --report-unused-disable-directives",
+    "format": "prettier --write eslint.config.js .prettierrc.json src/features/signup/signupForm.ts src/features/tournament/domain/*.ts src/types/mailcheck.d.ts src/features/events/services/eventParticipant.ts src/features/events/services/eventRepository.ts src/features/matches/matchPool.ts functions/lib/callable.js functions/test/callable.test.js scripts/migrations/*.mjs scripts/migrations/lib/*.mjs scripts/check-functions-syntax.mjs scripts/run-emulator-test.mjs scripts/verify-docs.mjs scripts/verify.mjs tests/unit/migrations.test.mjs tests/unit/eventParticipant.test.mjs tests/unit/matchPool.test.mjs",
+    "format:check": "prettier --check eslint.config.js .prettierrc.json src/features/signup/signupForm.ts src/features/tournament/domain/*.ts src/types/mailcheck.d.ts src/features/events/services/eventParticipant.ts src/features/events/services/eventRepository.ts src/features/matches/matchPool.ts functions/lib/callable.js functions/test/callable.test.js scripts/migrations/*.mjs scripts/migrations/lib/*.mjs scripts/check-functions-syntax.mjs scripts/run-emulator-test.mjs scripts/verify-docs.mjs scripts/verify.mjs tests/unit/migrations.test.mjs tests/unit/eventParticipant.test.mjs tests/unit/matchPool.test.mjs",
+    "docs:verify": "node scripts/verify-docs.mjs",
+    "functions:syntax": "node scripts/check-functions-syntax.mjs",
+    "migrations:example": "node scripts/migrations/001-example.mjs",
+    "verify": "node scripts/verify.mjs"
   },
   "dependencies": {
     "@intl-tel-input/react": "^29.1.2",
-    "@tailwindcss/vite": "^4.2.4",
-    "@vitejs/plugin-react": "^5.0.4",
     "clsx": "^2.1.1",
-    "dotenv": "^17.2.3",
     "exifr": "^7.1.3",
     "firebase": "^12.17.1",
     "lucide-react": "^0.546.0",
@@ -35,19 +42,27 @@
     "react-dom": "^19.0.0",
     "react-map-gl": "^8.1.1",
     "react-router-dom": "^7.14.0",
-    "tailwind-merge": "^3.5.0",
-    "vite": "^6.2.0"
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@firebase/rules-unit-testing": "^5.0.1",
+    "@tailwindcss/vite": "^4.2.4",
+    "@vitejs/plugin-react": "^5.0.4",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.21",
+    "eslint": "10.8.1",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.4",
     "firebase-admin": "^13.10.0",
+    "globals": "17.11.0",
+    "prettier": "3.9.6",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
+    "typescript-eslint": "8.67.0",
     "vite": "^6.2.0"
   }
 }

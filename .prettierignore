@@ -1,0 +1,7 @@
+dist/
+node_modules/
+functions/node_modules/
+.agents/skills/
+coverage/
+public/programs-tennis.csv
+*.min.js

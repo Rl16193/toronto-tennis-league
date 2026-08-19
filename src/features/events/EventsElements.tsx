@@ -11,8 +11,8 @@ import { TennisEvent } from '../../types';
 import { isLadderEvent, isRecurringWeekly, isSeasonOpener, isTournamentEvent } from '../../utils/eventTypes';
 import {
   getEventEndDate, getEventStartDate, parseEndInstant, parseValidDate,
+  type FirestoreDateLike,
 } from '../../utils/eventDates';
-import type { FirestoreDateLike } from '../../utils/eventDates';
 import { DOUBLES_DIVISIONS } from '../../pages/tournament/types';
 import { JoinFormState, SlotResult } from './types';
 import {

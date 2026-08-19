@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Typecheck, build, and Functions syntax
+    name: Repository quality gates
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -41,35 +41,9 @@ jobs:
       - name: Install web dependencies
         run: npm ci
 
-      - name: Typecheck
-        run: npm run lint
-
-      - name: Build web application
-        run: npm run build
-
-      - name: Domain unit tests
-        run: npm test
-
-      - name: Firestore Rules tests
-        run: npm run test:rules
-
-      - name: Storage Rules tests
-        run: npm run test:storage
-
       - name: Install Functions dependencies
         working-directory: functions
         run: npm ci
 
-      - name: Functions unit tests
-        working-directory: functions
-        run: npm test
-
-      - name: Check Functions JavaScript syntax
-        working-directory: functions
-        shell: bash
-        run: |
-          find . -path '*/node_modules' -prune -o -type f -name '*.js' -print0 \
-            | xargs -0 -n1 node --check
-
-      - name: Check patch whitespace
-        run: git diff --check
+      - name: Run repository quality gates
+        run: npm run verify

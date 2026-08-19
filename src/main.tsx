@@ -1,5 +1,4 @@
-import { Component, StrictMode } from 'react';
-import type { ReactNode, ErrorInfo } from 'react';
+import { Component, StrictMode, type ErrorInfo, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';

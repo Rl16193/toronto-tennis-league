@@ -2091,7 +2091,7 @@ export const useTournament = (eventIdOverride?: string) => {
       return;
     }
 
-    let removedUids: string[] = [];
+    let removedUids: string[];
     // drawKey → uids to withdraw there too, for a removed player who also has leftover match
     // docs in a draw other than the one being edited (a sibling skill draw, most commonly).
     const extraWithdrawnByDrawKey = new Map<string, Set<string>>();
@@ -2350,7 +2350,13 @@ export const useTournament = (eventIdOverride?: string) => {
   // ── Match scheduling ──────────────────────────────────────────────────────
   // Players may write only the scheduling fields (Firestore rules carve-out); scores stay
   // organizer-only. Preview (ungenerated) matches have no doc, so they're guarded out.
-  const writeSchedule = async (matchId: string, patch: Record<string, unknown>, successText: string) => {
+  type SchedulePatch = {
+    schedule_requested?: boolean;
+    proposed_date?: string;
+    proposed_slot?: 'AM' | 'PM';
+    schedule_status?: string;
+  };
+  const writeSchedule = async (matchId: string, patch: SchedulePatch, successText: string) => {
     if (!matchId || matchId.startsWith('preview_')) return;
     try {
       await updateDoc(doc(db, 'matches', matchId), patch);

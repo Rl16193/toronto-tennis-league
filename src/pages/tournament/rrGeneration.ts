@@ -107,9 +107,7 @@ export function buildZoneTierGroups(
 
   // Fold lone-player groups into the smallest group that still has capacity (< 5 players),
   // same band preferred. If every other group is at 5 the solo group remains as-is.
-  let folded = true;
-  while (folded) {
-    folded = false;
+  while (true) {
     const sIdx = grouped.findIndex((g) => g.players.length === 1);
     if (sIdx === -1 || grouped.length <= 1) break;
     const solo = grouped[sIdx];
@@ -123,7 +121,6 @@ export function buildZoneTierGroups(
     if (!target) break;
     target.players.push(...solo.players);
     grouped.splice(sIdx, 1);
-    folded = true;
   }
 
   return grouped.map((g, i) => ({

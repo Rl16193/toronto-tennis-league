@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { Check, X, ChevronDown } from 'lucide-react';
 import { db } from '../../lib/firebase';
-import type { TaskClaim } from './claimService';
-import { reviewClaim } from './claimService';
+import { reviewClaim, type TaskClaim } from './claimService';
 import { usePendingRedemptionReviews } from '../services/useServices';
 import { markCouponUsed, reviewRedemption, serviceErrorMessage } from '../services/servicesApi';
 

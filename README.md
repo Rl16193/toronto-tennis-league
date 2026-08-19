@@ -47,23 +47,31 @@ npm run seed:emulator
 npm run dev
 ```
 
-The Vite server uses port `3000`; the emulator UI uses port `4000`. Local Auth, Firestore, Functions, Storage, and Hosting use the ports declared in `firebase.json`. Firestore emulator startup requires Java; the current validation machine does not have a Java runtime, so emulator execution remains blocked until that prerequisite is installed. Once Java is available, run `npm run test:rules` for the initial rules suite.
+The Vite server uses port `3000`; the full Emulator Suite uses the ports declared in `firebase.json`.
+Firestore and Storage Rules test commands use temporary emulator configurations and select an
+available local port, which avoids collisions with unrelated services. Java is still required by
+the Firestore Emulator Suite.
 
 `npm run seed:emulator` writes only deterministic synthetic data to the local Firestore emulator (`rands-local`) and refuses any other project ID. The fixture set covers member, organizer, provider, multi-role, event, Round Robin draft, match, task/reward, marketplace, notification, court, and aggregate paths.
 
-GitHub CI runs on pushes and pull requests targeting `dev-anuj`. It currently checks the root typecheck/build and Functions JavaScript syntax; it does not deploy or connect to Firebase.
+GitHub CI runs on pushes and pull requests targeting `dev-anuj`, installs Node 22 and Java 21, and
+runs the same `npm run verify` quality gates plus a separate Functions dependency install. It does
+not deploy or connect to Firebase.
 
 ## Validation commands
 
 ```bash
-npm run lint       # TypeScript no-emit check
-npm test            # pure tournament/domain tests
-npm run build      # Generates the programs CSV, then creates dist/
-npm run preview    # Serves the built dist/ locally
+npm run typecheck     # Full TypeScript strict check, no emit
+npm run lint          # ESLint React/TypeScript checks
+npm run format:check  # Maintained-slice formatting check
+npm test              # Pure domain and data-contract tests
+npm run test:rules    # Firestore Rules suite in a temporary local emulator
+npm run test:storage  # Storage Rules suite in a temporary local emulator
+npm run build         # Generates the programs CSV, then creates dist/
+npm run verify        # All local quality gates in one command
+npm run preview       # Serves the built dist/ locally
 npm run seed:emulator # Seeds synthetic local Firestore data; emulator must be running
-npm run test:rules # Firestore Rules tests; requires Java and the emulator
-npm run test:storage # Cloud Storage Rules tests; requires Java and the emulator
-cd functions && npm test # pure Functions helper tests
+cd functions && npm test # Pure Functions helper tests
 ```
 
 Project architecture and security validation gaps are tracked in [docs/engineering/SECURITY_BASELINE.md](docs/engineering/SECURITY_BASELINE.md). Email delivery safety and DNS verification steps are tracked in [docs/runbooks/RESEND_DOMAIN_VERIFICATION.md](docs/runbooks/RESEND_DOMAIN_VERIFICATION.md).
@@ -96,9 +104,11 @@ The next environment work is to establish:
 - [Authorization model](docs/architecture/AUTHORIZATION_MODEL.md)
 - [Environment and delivery boundaries](docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md)
 - [Agent skills inventory](docs/engineering/AGENT_SKILLS.md)
+- [Maintainability map and quality commands](docs/engineering/MAINTAINABILITY.md)
 - [Security baseline](docs/engineering/SECURITY_BASELINE.md)
 - [Takeover stabilization log](docs/engineering/TAKEOVER_STABILIZATION_LOG.md)
 - [Firestore backup and recovery runbook](docs/runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md)
+- [Domain rules](docs/domain/TOURNAMENT_RULES.md)
 
 Use the project-local skills under `.agents/skills/` for Firebase work, architecture diagrams, security review, investigation, QA, and documentation. Keep commits issue-sized and push completed work only to `origin/dev-anuj`.
 

@@ -25,7 +25,7 @@ type Props = {
   editMode: boolean;
   editPlayers: TournamentPlayer[];
   onEditPlayer: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
-  onSubmitScore: (match: TournamentMatch) => void;
+  onSubmitScore?: (match: TournamentMatch) => void;
   submittableMatchIds?: Set<string>;
   pendingMatchIds?: Set<string>;
   onSaveGroupEdit: (rrGroup: number, newPlayers: TournamentPlayer[]) => void;
@@ -83,7 +83,8 @@ const AddGroupForm: React.FC<{
   const toggle = (uid: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(uid) ? next.delete(uid) : next.add(uid);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
       return next;
     });
 

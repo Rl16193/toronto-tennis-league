@@ -1,5 +1,4 @@
-import { lazy } from 'react';
-import type { ComponentType, LazyExoticComponent } from 'react';
+import { lazy, type ComponentType, type LazyExoticComponent } from 'react';
 
 /**
  * Recovery for stale lazy chunks after a deploy.
@@ -42,12 +41,14 @@ export const isChunkLoadError = (error: unknown): boolean =>
  */
 export function reloadForStaleChunk(key = 'app'): boolean {
   const storageKey = RELOAD_KEY_PREFIX + key;
-  let last = 0;
-  try {
-    last = Number(sessionStorage.getItem(storageKey) || 0);
-  } catch {
-    return false;
-  }
+  const last = (() => {
+    try {
+      return Number(sessionStorage.getItem(storageKey) || 0);
+    } catch {
+      return null;
+    }
+  })();
+  if (last === null) return false;
   if (Number.isFinite(last) && Date.now() - last < RELOAD_COOLDOWN_MS) return false;
   try {
     sessionStorage.setItem(storageKey, String(Date.now()));
@@ -81,8 +82,8 @@ const ChunkLoadFailed: ComponentType = () => (
  *
  * `key` scopes the reload cooldown to this chunk; pass something stable and unique per import.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- mirrors React.lazy's own
-// constraint; narrowing it would reject any wrapped component that takes props.
+// Mirrors React.lazy's own constraint; narrowing it would reject any wrapped component that takes props.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function lazyWithRetry<T extends ComponentType<any>>(
   factory: () => Promise<{ default: T }>,
   key?: string,

@@ -26,5 +26,4 @@ export const validateCompletion = (name: string, phone: string): SignupFieldErro
   return errors;
 };
 
-export const isNameValid = (name: string) =>
-  name.trim().length >= 3 && name.length <= 80 && !/\d/.test(name);
+export const isNameValid = (name: string) => name.trim().length >= 3 && name.length <= 80 && !/\d/.test(name);

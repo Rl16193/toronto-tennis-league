@@ -104,7 +104,11 @@ export const Home: React.FC = () => {
         const resolved = urls.filter(Boolean);
         if (cancelled || resolved.length === 0) return;
         setSlides(resolved);
-        try { localStorage.setItem(SLIDESHOW_CACHE_KEY, JSON.stringify({ urls: resolved, savedAt: Date.now() })); } catch {}
+        try {
+          localStorage.setItem(SLIDESHOW_CACHE_KEY, JSON.stringify({ urls: resolved, savedAt: Date.now() }));
+        } catch {
+          // A full or restricted local cache should not prevent the slideshow from rendering.
+        }
       });
     return () => { cancelled = true; };
   }, []);

@@ -1,0 +1,2 @@
+# Agent tooling is tracked for reproducible local use, but is not first-party application code.
+.agents/skills/gstack/** linguist-vendored

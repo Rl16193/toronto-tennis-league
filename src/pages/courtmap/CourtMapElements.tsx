@@ -2,10 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Loader2 } from 'lucide-react';
 import { tapScale } from '../../lib/motion';
-import type {
-  CourtWithCount, NearestCourt, NearestProgram, PickleballEntry,
+import {
+  formatDateRange, formatDist, getProgramStatus, hasPublicHours,
+  type CourtWithCount, type NearestCourt, type NearestProgram, type PickleballEntry,
 } from './courtMapUtils';
-import { formatDateRange, formatDist, getProgramStatus, hasPublicHours } from './courtMapUtils';
 
 // Court Locator presentation: filter controls, badges, map popup, result lists.
 // Data loading lives in useCourtData.ts; parsing and geo helpers in courtMapUtils.ts.

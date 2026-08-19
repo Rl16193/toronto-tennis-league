@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { getDocs, getDoc, doc, collection } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import type { CourtWithCount, TennisProgram, PickleballOnlyCourt, CsvCourt } from './courtMapUtils';
-import { parseCourts, parsePrograms, getPickleballMappings, matchCourtName, NINETY_DAYS_MS } from './courtMapUtils';
+import {
+  parseCourts, parsePrograms, getPickleballMappings, matchCourtName, NINETY_DAYS_MS,
+  type CourtWithCount, type TennisProgram, type PickleballOnlyCourt, type CsvCourt,
+} from './courtMapUtils';
 
 // sessionStorage is ~5 MB per origin, so anything over this simply isn't cached (writing it would
 // just throw QuotaExceededError into the catch below). Both CSVs now fit comfortably: the raw
