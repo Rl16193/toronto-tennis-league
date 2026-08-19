@@ -18,6 +18,7 @@
 const nodeCrypto = require('node:crypto');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
+const { Timestamp } = require('firebase-admin/firestore');
 const { REGION } = require('./lib/constants');
 const { requireTrimmedString } = require('./lib/callable');
 
@@ -47,7 +48,7 @@ const enforceLookupRateLimit = async (request, now = Date.now()) => {
     tx.set(ref, {
       window_start_ms: inWindow ? windowStart : now,
       count: count + 1,
-      expires_at: admin.firestore.Timestamp.fromMillis(now + LOOKUP_WINDOW_MS * 2),
+      expires_at: Timestamp.fromMillis(now + LOOKUP_WINDOW_MS * 2),
     });
   });
 };

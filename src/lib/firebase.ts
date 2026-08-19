@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import { initializeAnalytics, isSupported } from 'firebase/analytics';
 import {
   browserLocalPersistence,
@@ -28,6 +29,15 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId || !firebaseConfig.appId
 }
 
 const app = initializeApp(firebaseConfig);
+const useFirebaseEmulators = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
+const appCheckSiteKey = import.meta.env.VITE_FIREBASE_APP_CHECK_SITE_KEY;
+export const appCheck =
+  !useFirebaseEmulators && appCheckSiteKey
+    ? initializeAppCheck(app, {
+        provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+        isTokenAutoRefreshEnabled: true,
+      })
+    : null;
 export const auth = getAuth(app);
 export const setAuthPersistence = (stayLoggedIn: boolean) =>
   setPersistence(auth, stayLoggedIn ? browserLocalPersistence : browserSessionPersistence);
@@ -38,7 +48,6 @@ export const functions = getFunctions(app, 'us-central1');
 export const googleProvider = new GoogleAuthProvider();
 export const appleProvider = new OAuthProvider('apple.com');
 
-const useFirebaseEmulators = import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
 if (useFirebaseEmulators) {
   const emulatorHost = import.meta.env.VITE_FIREBASE_EMULATOR_HOST || '127.0.0.1';
   const emulatorPort = (name: string, fallback: number) => {

@@ -33,6 +33,9 @@ includes the isolated Chromium smoke suite.
 Keep `VITE_USE_FIREBASE_EMULATORS=true` and `VITE_FIREBASE_PROJECT_ID=rands-local` in
 `.env.local`. The template contains local placeholders, not deployable credentials. Never add a
 service account, Resend key, production Firebase config, or real member data to this file.
+`VITE_FIREBASE_APP_CHECK_SITE_KEY` stays blank locally because the emulator bypass is explicit. An
+approved staging environment must supply its own reCAPTCHA Enterprise site key and verify App Check
+before pre-auth account lookup is considered operational.
 
 ## Start and seed the local application
 

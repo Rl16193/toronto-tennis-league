@@ -51,3 +51,11 @@ test('signup route does not report completion when profile persistence fails', a
   assert.match(source, /We could not save your profile\. Please try again; your entries are still here\./);
   assert.doesNotMatch(source, /catch[\s\S]{0,500}setPhase\(['"]done['"]\)/);
 });
+
+test('signup email lookup failures do not bypass the pre-auth abuse boundary', async () => {
+  const validation = await readFile(new URL('../../src/features/signup/signupValidation.ts', import.meta.url), 'utf8');
+  const route = await readFile(new URL('../../src/pages/Signup.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(validation, /catch[\s\S]{0,160}exists:\s*false/);
+  assert.match(route, /We could not securely verify this email\. Please try again\./);
+  assert.doesNotMatch(route, /Fail open/);
+});

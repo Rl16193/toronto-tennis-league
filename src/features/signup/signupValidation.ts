@@ -13,22 +13,20 @@ export { signupEmailRegex };
  * the very problem the contacts split fixes. Contact details now live in `contacts` behind a
  * sign-in, so the check goes through a callable that answers with booleans and nothing else.
  *
- * Fails OPEN, exactly as the old query did: if the lookup errors we let signup proceed rather than
- * blocking a legitimate new member on a transient network problem. The duplicate is then caught by
- * Firebase Auth itself, which rejects an already-registered address.
+ * Lookup failures block this step. Deployed calls require App Check, so failing open here would
+ * silently bypass the repository's pre-auth abuse boundary.
  */
 type EmailCheck = { exists: boolean; secondary: boolean };
 
 const check = async (email: string): Promise<EmailCheck> => {
   const normalized = email.trim();
   if (!normalized) return { exists: false, secondary: false };
-  try {
-    const fn = httpsCallable<{ email: string }, EmailCheck>(functions, 'checkSignupEmail');
-    const res = await fn({ email: normalized });
-    return res.data;
-  } catch {
-    return { exists: false, secondary: false };
+  const fn = httpsCallable<{ email: string }, EmailCheck>(functions, 'checkSignupEmail');
+  const res = await fn({ email: normalized });
+  if (typeof res.data?.exists !== 'boolean' || typeof res.data?.secondary !== 'boolean') {
+    throw new Error('Account lookup returned an invalid response.');
   }
+  return res.data;
 };
 
 export const emailExistsInProfiles = async (emailToCheck: string) => (await check(emailToCheck)).exists;
@@ -45,18 +43,9 @@ export const emailExistsForSignup = async (emailToCheck: string): Promise<'prima
   const normalizedEmail = emailToCheck.trim();
   if (!normalizedEmail || !signupEmailRegex.test(normalizedEmail)) return 'none';
 
-  try {
-    const [isPrimary, isSecondary] = await Promise.all([
-      emailExistsInProfiles(normalizedEmail),
-      secondaryEmailExistsInProfiles(normalizedEmail),
-    ]);
-    if (isPrimary) return 'primary';
-    if (isSecondary) return 'secondary';
-  } catch {
-    // Firestore query fails for unauthenticated users — fail open, let Firebase
-    // Auth catch duplicates at account creation
-    return 'none';
-  }
+  const lookup = await check(normalizedEmail);
+  if (lookup.exists) return 'primary';
+  if (lookup.secondary) return 'secondary';
 
   try {
     const methods = await fetchSignInMethodsForEmail(auth, normalizedEmail);

@@ -97,6 +97,23 @@ exports.onContactProjection = onDocumentWritten({ document: 'contacts/{uid}', re
 
 exports.publicContactFields = publicContactFields;
 
+const isActiveEventParticipant = (participant = {}) =>
+  participant.removal !== true &&
+  participant.active !== false &&
+  !['withdrawn', 'removed', 'inactive'].includes(String(participant.status || '').toLowerCase());
+
+async function hasActiveEventParticipant(eventId, uid) {
+  const snapshot = await db()
+    .collection('event_participants')
+    .where('event_id', '==', eventId)
+    .where('uid', '==', uid)
+    .limit(5)
+    .get();
+  return snapshot.docs.some((document) => isActiveEventParticipant(document.data()));
+}
+
+exports.isActiveEventParticipant = isActiveEventParticipant;
+
 /**
  * `onDocumentWritten`, not created/updated separately: a tournament match arrives already
  * populated (create) while a rally or challenge earns its connection later, on accept (update).
@@ -122,8 +139,19 @@ exports.onMatchConnection = onDocumentWritten({ document: 'matches/{id}', region
     return;
   }
 
-  // Tournament fixture: both slots filled with real players. PLAYER_LOADING placeholders carry
-  // no uid, so they never reach here.
+  // A client-created match must never manufacture durable contact access. Both players must
+  // already be active participants in the event represented by the tournament fixture.
+  if (!after.event_id) return;
+  const [aIsParticipant, bIsParticipant] = await Promise.all([
+    hasActiveEventParticipant(after.event_id, a),
+    hasActiveEventParticipant(after.event_id, b),
+  ]);
+  if (!aIsParticipant || !bIsParticipant) {
+    logger.warn('tournament connection rejected: inactive or unrelated participant', {
+      match: safeId(event.params.id),
+    });
+    return;
+  }
   if (await linkPlayers(a, b, 'tournament')) {
     logger.info('connection created', { pair: safeId(pairId(a, b)), reason: 'tournament' });
   }

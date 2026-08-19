@@ -243,10 +243,7 @@ export const Signup: React.FC = () => {
       }
       setPhase(result === 'primary' ? 'login' : 'account');
     } catch {
-      // Fail open → treat as new; Firebase Auth will catch a real duplicate at creation.
-      track('signup_step', { step_number: 1, step_name: 'email', action: 'complete' });
-      track('signup_step', { step_number: 2, step_name: 'account', action: 'enter' });
-      setPhase('account');
+      setError('We could not securely verify this email. Please try again.');
     } finally {
       setLoading(false);
     }
