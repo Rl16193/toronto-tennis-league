@@ -8,7 +8,9 @@
  * bypasses rules, and the callable returns only two booleans, never any member data.
  *
  * Deliberately minimal surface. It confirms whether an address is taken (which a signup form
- * reveals anyway by failing) and nothing else — no names, no uids, no other fields.
+ * reveals anyway by failing) and nothing else — no names, no uids, no other fields. Deployed
+ * instances require a valid App Check token so this cannot be scraped as an open callable.
+ * The Functions emulator bypasses App Check to keep synthetic local signup testing possible.
  *
  * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
  * do not use a bare Firebase deploy command from this checkout.
@@ -20,7 +22,9 @@ const { requireTrimmedString } = require('./lib/callable');
 
 const db = () => admin.firestore();
 
-exports.checkSignupEmail = onCall({ region: REGION }, async (request) => {
+const enforceAppCheck = process.env.FUNCTIONS_EMULATOR !== 'true';
+
+exports.checkSignupEmail = onCall({ region: REGION, enforceAppCheck }, async (request) => {
   const email = requireTrimmedString(request.data && request.data.email, 'An email address is required.', {
     maxLength: 320,
   });

@@ -17,12 +17,9 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == "7PvfzNtDmsOq5GLMieId7QRT7wH3";
     }
 
-    function isGlobalEventCreator() {
+    function hasEventCreatorRole() {
       return isAuthenticated() &&
-        (
-          isSuperAdmin() ||
-          get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.event_creator == true
-        );
+        get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.get('event_creator', false) == true;
     }
 
     // Task fields a player may write on their own tasks/{uid} doc. DELIBERATELY SHORT: a progress
@@ -60,30 +57,6 @@ service cloud.firestore {
       ];
     }
 
-    // The legacy tournament UI still writes result counters from an organizer session. Keep that
-    // compatibility path schema-bound and reject arbitrary fields or UID substitution while the
-    // longer-term server-authoritative scoring migration remains a product decision.
-    function organizerStatsFields() {
-      return [
-        'uid', 'name', 'league', 'skill_level', 'tournament_preference',
-        'leaguePoints25', 'leaguePoints26', 'wins', 'loses', 'matchesPlayed',
-        'tournamentsPlayed', 'pointswon', 'totalPointsPlayed',
-      ];
-    }
-
-    function initialLeaguePointsAreBounded(data) {
-      return !('leaguePoints26' in data) || data.leaguePoints26 in [0, 1, 2, 3, 5, 10, 20];
-    }
-
-    function leaguePointDeltaIsBounded() {
-      let before = resource.data.get('leaguePoints26', 0);
-      let after = request.resource.data.get('leaguePoints26', before);
-      return after == before || after == before + 1 || after == before + 2 || after == before + 3 ||
-        after == before + 5 || after == before + 10 || after == before + 20 ||
-        after == before - 1 || after == before - 2 || after == before - 3 ||
-        after == before - 5 || after == before - 10 || after == before - 20;
-    }
-
     // Order-independent id for a pair of players. MUST match pairId() in functions/connections.js
     // exactly — the trigger writes the doc, this recomputes the same name to look it up.
     function pairId(a, b) {
@@ -117,10 +90,19 @@ service cloud.firestore {
         );
     }
 
-    function isCreatorOfEvent(eventId) {
+    function isManagerOfEvent(eventId) {
       return isAuthenticated() &&
         (
-          isGlobalEventCreator() ||
+          isSuperAdmin() ||
+          get(/databases/$(database)/documents/events/$(eventId)).data.creator_id == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/events/$(eventId)).data.get('organizer_ids', [])
+        );
+    }
+
+    function isOwnerOfEvent(eventId) {
+      return isAuthenticated() &&
+        (
+          isSuperAdmin() ||
           get(/databases/$(database)/documents/events/$(eventId)).data.creator_id == request.auth.uid
         );
     }
@@ -173,7 +155,7 @@ service cloud.firestore {
     match /contacts/{userId} {
       allow read: if isOwner(userId) ||
         isConnectedTo(userId) ||
-        isGlobalEventCreator() ||
+        isSuperAdmin() ||
         (isAuthenticated() && (isOrganizerAccount(userId) || hasPublicContact(userId)));
       allow create: if isOwner(userId) &&
         request.resource.data.keys().hasOnly(ownerContactFields());
@@ -187,25 +169,17 @@ service cloud.firestore {
     // ===============================================================
     match /stats/{userId} {
       allow read: if true;
-      allow create: if (isGlobalEventCreator() &&
-          request.resource.data.keys().hasOnly(organizerStatsFields()) &&
-          request.resource.data.get('uid', userId) == userId &&
-          initialLeaguePointsAreBounded(request.resource.data)) ||
-        (isOwner(userId) &&
+      allow create: if isOwner(userId) &&
           request.resource.data.get('uid', userId) == userId &&
           request.resource.data.leaguePoints26 == 0 &&
           request.resource.data.wins == 0 &&
           request.resource.data.loses == 0 &&
           request.resource.data.matchesPlayed == 0 &&
-          request.resource.data.tournamentsPlayed == 0);
-      allow update: if (isGlobalEventCreator() &&
-          request.resource.data.get('uid', userId) == userId &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(organizerStatsFields()) &&
-          leaguePointDeltaIsBounded()) ||
-        (isOwner(userId) &&
+          request.resource.data.tournamentsPlayed == 0;
+      allow update: if isOwner(userId) &&
           request.resource.data.get('uid', userId) == userId &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['skill_level', 'tournament_preference', 'name', 'uid', 'league']));
+            .hasOnly(['skill_level', 'tournament_preference', 'name', 'uid', 'league']);
       allow delete: if false;
     }
 
@@ -213,7 +187,7 @@ service cloud.firestore {
     // Preferences Collection
     // ===============================================================
     match /preferences/{userId} {
-      allow read: if true;
+      allow read: if isOwner(userId) || isSuperAdmin();
       allow create: if isOwner(userId) &&
         request.resource.data.keys().hasOnly(ownerPreferenceFields()) &&
         request.resource.data.get('uid', userId) == userId &&
@@ -230,12 +204,25 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Reserved projection boundary. Keep closed until product owners approve an explicit
+    // field-level disclosure/consent contract and a server projection is deployed.
+    match /public_preferences/{userId} {
+      allow read, write: if false;
+    }
+
     // ===============================================================
     // Events Collection
     // ===============================================================
     match /events/{eventId} {
       allow read: if true;
-      allow create, update: if isGlobalEventCreator();
+      allow create: if hasEventCreatorRole() &&
+        request.resource.data.creator_id == request.auth.uid;
+      allow update: if isManagerOfEvent(eventId) &&
+        request.resource.data.creator_id == resource.data.creator_id &&
+        (
+          isOwnerOfEvent(eventId) ||
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['organizer_ids'])
+        );
       allow delete: if false;
     }
 
@@ -254,7 +241,7 @@ service cloud.firestore {
     // aggregateAdminMetrics.
     // ===============================================================
     match /admin_stats/{docId} {
-      allow read: if isGlobalEventCreator();
+      allow read: if isSuperAdmin();
       allow write: if false;
     }
 
@@ -265,12 +252,10 @@ service cloud.firestore {
     // ===============================================================
     match /tasks/{docId} {
       allow read: if true;
-      allow create: if isGlobalEventCreator() ||
-        (docId == request.auth.uid &&
-          request.resource.data.keys().hasOnly(ownerTaskFields()));
-      allow update: if isGlobalEventCreator() ||
-        (docId == request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(ownerTaskFields()));
+      allow create: if docId == request.auth.uid &&
+        request.resource.data.keys().hasOnly(ownerTaskFields());
+      allow update: if docId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(ownerTaskFields());
       allow delete: if false;
     }
 
@@ -283,14 +268,14 @@ service cloud.firestore {
       allow create: if isAuthenticated() &&
         (
           request.resource.data.uid == request.auth.uid ||
-          isCreatorOfEvent(request.resource.data.event_id)
+          isManagerOfEvent(request.resource.data.event_id)
         ) &&
         request.resource.data.event_id is string &&
         request.resource.data.created_at is string;
 
       allow update: if isAuthenticated() &&
         (
-          isCreatorOfEvent(resource.data.event_id) ||
+          isManagerOfEvent(resource.data.event_id) ||
           (
             resource.data.uid == request.auth.uid &&
             request.resource.data.event_id == resource.data.event_id &&
@@ -306,13 +291,13 @@ service cloud.firestore {
         );
 
       allow delete: if isAuthenticated() &&
-        (resource.data.uid == request.auth.uid || isCreatorOfEvent(resource.data.event_id));
+        (resource.data.uid == request.auth.uid || isManagerOfEvent(resource.data.event_id));
     }
 
     // ===============================================================
     // Matches (NEW)
     // ===============================================================
-    // A rally carries no event_id, so every isCreatorOfEvent() call here is guarded by an
+    // A rally carries no event_id, so every isManagerOfEvent() call here is guarded by an
     // existence check — reading a missing field would error and deny the whole request.
     match /matches/{matchId} {
       allow read: if isAuthenticated();
@@ -330,7 +315,7 @@ service cloud.firestore {
           request.resource.data.submitted_by == request.auth.uid &&
           request.resource.data.match_id is string
         ) ||
-        ('event_id' in request.resource.data && isCreatorOfEvent(request.resource.data.event_id))
+        ('event_id' in request.resource.data && isManagerOfEvent(request.resource.data.event_id))
       );
 
       allow update: if isAuthenticated() && (
@@ -390,7 +375,7 @@ service cloud.firestore {
           (
             request.auth.uid == resource.data.player_1_uid ||
             request.auth.uid == resource.data.player_2_uid ||
-            isGlobalEventCreator()
+            isSuperAdmin()
           ) &&
           request.resource.data.status in ['confirmed', 'disputed'] &&
           request.resource.data.diff(resource.data).affectedKeys()
@@ -404,7 +389,7 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['schedule_status', 'proposed_date', 'proposed_slot', 'proposed_by', 'schedule_requested'])
         ) ||
-        ('event_id' in resource.data && isCreatorOfEvent(resource.data.event_id))
+        ('event_id' in resource.data && isManagerOfEvent(resource.data.event_id))
       );
 
       allow delete: if isAuthenticated() && (
@@ -419,7 +404,7 @@ service cloud.firestore {
           resource.data.category == 'score_submission' &&
           request.auth.uid == resource.data.submitted_by
         ) ||
-        ('event_id' in resource.data && isCreatorOfEvent(resource.data.event_id))
+        ('event_id' in resource.data && isManagerOfEvent(resource.data.event_id))
       );
     }
 
@@ -472,7 +457,7 @@ service cloud.firestore {
         request.resource.data.email is string &&
         request.resource.data.email.size() > 0 &&
         request.resource.data.email.size() < 320;
-      allow read, update, delete: if isGlobalEventCreator();
+      allow read, update, delete: if isSuperAdmin();
     }
 
     // ===============================================================
@@ -491,7 +476,7 @@ service cloud.firestore {
     // Offers (NEW)
     // ===============================================================
     match /offers/{userId} {
-      allow read: if isOwner(userId) || isGlobalEventCreator();
+      allow read: if isOwner(userId) || isSuperAdmin();
       allow write: if false;
     }
 
@@ -501,7 +486,7 @@ service cloud.firestore {
     match /redemptions/{code} {
       allow read: if isAuthenticated() &&
         (
-          isGlobalEventCreator() ||
+          isSuperAdmin() ||
           resource.data.uid == request.auth.uid ||
           isProviderFor(resource.data.stringer_id)
         );
@@ -524,7 +509,7 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.status == 'available'
         && request.resource.data.kind in ['rent', 'sell'];
-      allow update: if (isOwner(resource.data.uid) || isGlobalEventCreator())
+      allow update: if (isOwner(resource.data.uid) || isSuperAdmin())
         && request.resource.data.uid == resource.data.uid;
       allow delete: if isOwner(resource.data.uid);
     }
@@ -538,7 +523,7 @@ service cloud.firestore {
         request.resource.data.uid == request.auth.uid &&
         request.resource.data.type in ['volunteer', 'ambassador', 'host'] &&
         request.resource.data.status == 'pending';
-      allow update: if isGlobalEventCreator();
+      allow update: if isSuperAdmin();
       allow delete: if false;
     }
 
@@ -583,7 +568,7 @@ service cloud.firestore {
     // onSnapshot error path just sets the draft to null.
     match /events/{eventId}/rr_drafts/{drawKey} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isCreatorOfEvent(eventId);
+      allow write: if isAuthenticated() && isManagerOfEvent(eventId);
     }
 
   }

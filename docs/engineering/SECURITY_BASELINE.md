@@ -6,8 +6,8 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
 
 ```json
 {
-  "score": 3,
-  "summary": "The repository has meaningful field-level Firestore protections, server-only collections, and an emulator-backed Rules harness, but the public-read surface, hard-coded/global organizer authority, split scoring authorities, and incomplete coverage keep the current baseline at moderate risk.",
+  "score": 4,
+  "summary": "Repository-local Rules separate event-workflow authority from global administration, deny direct protected reward/stat mutations, and close private preference enumeration. Server scoring integration and staging verification remain separate gates.",
   "findings": [
     {
       "check": "Scoring authority",
@@ -18,8 +18,8 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
     {
       "check": "Role authorization",
       "severity": "major",
-      "issue": "Global organizer access is derived from preferences.event_creator plus a hard-coded super-admin UID. The same global role controls event writes and several administrative collections, which is broader than event-owner scope and couples authorization to mutable profile data.",
-      "recommendation": "Replace the hard-coded/global preference check with custom claims or a server-managed role document, then enforce event-owner scope for event data and separate admin capabilities into explicit roles."
+      "issue": "event_creator now permits event creation only; event mutations are owner/explicit-assignee scoped. The hard-coded super-admin UID remains an operational bootstrap dependency.",
+      "recommendation": "Move the remaining super-admin bootstrap to a recoverable server-managed role registry or custom claim before production role administration changes."
     },
     {
       "check": "Storage read exposure",
@@ -30,8 +30,8 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
     {
       "check": "Firestore data exposure",
       "severity": "moderate",
-      "issue": "Several collections, including users, stats, preferences, tasks, listings, site_stats, group_lessons, and ranking history, are world-readable. This may be intentional for public rankings or listings, but the policy is broad and depends on document shape remaining safe.",
-      "recommendation": "Split public projection documents from private profile/progress documents, document the public field contract, and add rules tests proving that private fields cannot be queried or exposed through these collections."
+      "issue": "preferences are owner/super-admin readable and public_preferences is reserved deny-all. Cross-member preference decorations fail closed until a product-approved disclosure contract exists.",
+      "recommendation": "Design an event-scoped or explicitly consented projection before restoring preference discovery. Never publish availability, notifications, scheduling, or role/provider fields."
     },
     {
       "check": "Rules and environment validation",
@@ -42,8 +42,8 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
     {
       "check": "Pre-auth signup lookup",
       "severity": "moderate",
-      "issue": "The signup flow intentionally exposes whether a submitted email is present in primary or secondary contact records before authentication so duplicate and account-merge handling can work. The callable returns only booleans, but App Check and rate limiting are not configured in this checkout.",
-      "recommendation": "Choose and configure an abuse-control policy (App Check, rate limiting, or a less enumerable signup flow) with the client and environment owner before treating this endpoint as production-hardened."
+      "issue": "The signup flow intentionally returns whether an email exists. The deployed callable now requires App Check and returns only booleans; the local Functions emulator bypasses App Check for synthetic tests.",
+      "recommendation": "Verify the web App Check provider and enforcement metrics in staging before production deployment; add throttling if abuse telemetry warrants it."
     },
     {
       "check": "Tracked secrets",
@@ -57,10 +57,11 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
 
 ## Evidence and limits
 
-- Firestore field-level restrictions exist for contacts, tasks, notifications, connections, public contacts, offers, redemptions, and archive paths.
-- The legacy organizer stats compatibility path now has a schema allowlist, UID-preservation check,
-  and bounded league-point deltas; full server-authoritative tournament scoring remains an explicit
-  future product/architecture decision.
+- Firestore field-level restrictions exist for contacts, tasks, notifications, connections, public contacts, offers, redemptions, private preferences, and archive paths.
+- `event_creator` is event-workflow-only. It no longer grants direct stats/points, offer economics,
+  admin metrics, unrelated contacts, listing moderation, mailing-list administration, or task-claim review.
+- `public_preferences` is deny-all. Existing cross-member preference decoration falls back to
+  missing data until an event-scoped or explicitly consented projection is approved.
 - Storage writes are authenticated and type/size constrained for named prefixes. The current source permits public reads only for LandingPage, Gallery, avatars, and listings; report/suggestion reads are owner/authentication constrained.
 - `src/pages/tournament/useTournament.ts` contains direct `stats` writes for tournament points; Functions contain separate task/friendly-point award logic.
 - Pure domain coverage now exercises Round Robin grouping/pairings, standings, scoring awards, safe rewrites, and the server reward-point calculator. Functions integration tests against the Admin SDK and callable runtime remain open.

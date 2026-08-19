@@ -7,7 +7,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const rules = await readFile(resolve(here, '../../firestore.rules'), 'utf8');
@@ -101,6 +101,74 @@ describe('Firestore authorization boundaries', () => {
     await assertFails(updateDoc(preferences, { coach: true, coach_id: 'coach-a' }));
   });
 
+  test('private preferences are owner-only and public projections cannot expose private or role fields', async () => {
+    await seedDoc('preferences/member-a', {
+      uid: 'member-a',
+      event_creator: false,
+      preferred_courts: ['synthetic-court'],
+      preferred_zone: 'north',
+      availability_tags: ['weekday-evenings'],
+      email_notifications: false,
+    });
+    await seedDoc('public_preferences/member-a', {
+      uid: 'member-a',
+      preferred_courts: ['synthetic-court'],
+      preferred_zone: 'north',
+    });
+
+    await assertSucceeds(getDoc(doc(dbFor('member-a'), 'preferences/member-a')));
+    await assertFails(getDoc(doc(dbFor('member-b'), 'preferences/member-a')));
+    await assertFails(getDoc(doc(anonDb(), 'preferences/member-a')));
+    await assertFails(getDocs(collection(dbFor('member-b'), 'preferences')));
+    await assertFails(getDoc(doc(anonDb(), 'public_preferences/member-a')));
+    await assertFails(getDoc(doc(dbFor('member-b'), 'public_preferences/member-a')));
+    await assertFails(setDoc(doc(dbFor('member-a'), 'public_preferences/member-a'), {
+      uid: 'member-a',
+      event_creator: true,
+    }));
+  });
+
+  test('event_creator is scoped to owned or explicitly assigned events', async () => {
+    await seedDoc('preferences/organizer-a', { uid: 'organizer-a', event_creator: true });
+    await seedDoc('preferences/organizer-b', { uid: 'organizer-b', event_creator: true });
+    await seedDoc('events/owned-a', {
+      id: 'owned-a', creator_id: 'organizer-a', organizer_ids: ['organizer-b'], title: 'Owned A',
+    });
+    await seedDoc('events/owned-b', {
+      id: 'owned-b', creator_id: 'organizer-b', title: 'Owned B',
+    });
+
+    await assertSucceeds(updateDoc(doc(dbFor('organizer-a'), 'events/owned-a'), { title: 'Updated' }));
+    await assertSucceeds(updateDoc(doc(dbFor('organizer-b'), 'events/owned-a'), { title: 'Assigned update' }));
+    await assertFails(updateDoc(doc(dbFor('organizer-b'), 'events/owned-a'), {
+      organizer_ids: ['organizer-b', 'member-a'],
+    }));
+    await assertSucceeds(updateDoc(doc(dbFor('organizer-a'), 'events/owned-a'), {
+      organizer_ids: ['organizer-b', 'member-a'],
+    }));
+    await assertFails(updateDoc(doc(dbFor('organizer-a'), 'events/owned-b'), { title: 'Cross-event update' }));
+    await assertSucceeds(setDoc(doc(dbFor('organizer-a'), 'events/new-a'), {
+      id: 'new-a', creator_id: 'organizer-a', title: 'New A',
+    }));
+    await assertFails(setDoc(doc(dbFor('organizer-a'), 'events/forged-owner'), {
+      id: 'forged-owner', creator_id: 'organizer-b', title: 'Forged',
+    }));
+  });
+
+  test('event_creator cannot use event role for rewards, economics, metrics, or task moderation', async () => {
+    await seedDoc('preferences/organizer-a', { uid: 'organizer-a', event_creator: true });
+    await seedDoc('tasks/member-a', { uid: 'member-a', profileComplete: true, bonusPoints: 0 });
+    await seedDoc('offers/member-a', { uid: 'member-a', pointsSpent: 0 });
+    await seedDoc('admin_stats/current', { members: 10 });
+    await seedDoc('task_claims/claim-a', { uid: 'member-a', type: 'host', status: 'pending' });
+
+    await assertFails(updateDoc(doc(dbFor('organizer-a'), 'tasks/member-a'), { bonusPoints: 100 }));
+    await assertFails(updateDoc(doc(dbFor('organizer-a'), 'offers/member-a'), { pointsSpent: -100 }));
+    await assertFails(getDoc(doc(dbFor('organizer-a'), 'offers/member-a')));
+    await assertFails(getDoc(doc(dbFor('organizer-a'), 'admin_stats/current')));
+    await assertFails(updateDoc(doc(dbFor('organizer-a'), 'task_claims/claim-a'), { status: 'approved' }));
+  });
+
   test('member preference creation rejects role and UID fields', async () => {
     const db = dbFor('member-a');
 
@@ -133,7 +201,7 @@ describe('Firestore authorization boundaries', () => {
     await assertFails(updateDoc(doc(otherDb, 'contacts/owner-a'), { phone: '+14165550101' }));
   });
 
-  test('contacts become readable to a connected opponent, organizer, and public listing viewers only', async () => {
+  test('contacts become readable to a connected opponent and public listing viewers, not an unrelated organizer', async () => {
     await seedDoc('preferences/organizer-a', {
       uid: 'organizer-a',
       event_creator: true,
@@ -153,7 +221,7 @@ describe('Firestore authorization boundaries', () => {
     });
 
     await assertSucceeds(getDoc(doc(dbFor('member-b'), 'contacts/member-a')));
-    await assertSucceeds(getDoc(doc(dbFor('organizer-a'), 'contacts/member-a')));
+    await assertFails(getDoc(doc(dbFor('organizer-a'), 'contacts/member-a')));
     await assertFails(getDoc(doc(dbFor('member-c'), 'contacts/member-a')));
 
     await seedDoc('public_contacts/member-a', { uid: 'member-a' });
@@ -221,7 +289,7 @@ describe('Firestore authorization boundaries', () => {
     }));
   });
 
-  test('organizer stats compatibility writes stay schema-bound and use bounded point deltas', async () => {
+  test('organizers cannot directly apply protected statistics or points', async () => {
     await seedDoc('preferences/organizer-a', {
       uid: 'organizer-a',
       event_creator: true,
@@ -241,7 +309,7 @@ describe('Firestore authorization boundaries', () => {
     await assertFails(updateDoc(stats, { uid: 'organizer-a' }));
     await assertFails(updateDoc(stats, { private_note: 'not a stats field' }));
     await assertFails(updateDoc(stats, { leaguePoints26: 999 }));
-    await assertSucceeds(updateDoc(stats, { leaguePoints26: 15, league: "Men's" }));
+    await assertFails(updateDoc(stats, { leaguePoints26: 15, league: "Men's" }));
   });
 
   test('admin metrics are not readable by a normal member', async () => {

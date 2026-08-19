@@ -47,6 +47,11 @@ Run only against an isolated non-production project populated with synthetic or 
 
 ## Open engineering work
 
+`preferences/{uid}` is private and `public_preferences/{uid}` is deny-all. Do not backfill a
+preference projection: existing records do not prove consent. A future migration must first define
+the exact fields, audience, consent source, deletion behavior, staging validation, and rollback.
+Rollback must delete projections without changing private source documents.
+
 - Add an isolated staging alias and environment-specific Firebase CLI commands.
 - Add synthetic fixtures and a repeatable restore validation script.
 - Document data retention and PII handling requirements before exporting any real dataset.
