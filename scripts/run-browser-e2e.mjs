@@ -45,6 +45,24 @@ const waitForHttp = async (url, timeoutMs = 30_000) => {
   throw new Error(`Timed out waiting for ${url}.`);
 };
 
+const waitForCallable = async (url, timeoutMs = 30_000) => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ data: { email: 'readiness@example.invalid' } }),
+      });
+      if (response.status < 500) return;
+    } catch {
+      // The callable container is still starting; retry until the bounded deadline.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`Timed out waiting for callable ${url}.`);
+};
+
 const run = (command, args, options = {}) =>
   new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd: root, stdio: 'inherit', ...options });
@@ -57,6 +75,7 @@ const inner = async () => {
   if (seedCode !== 0) throw new Error('Synthetic emulator seeding failed.');
 
   await waitForHttp(process.env.PLAYWRIGHT_BASE_URL);
+  await waitForCallable(process.env.RANDS_E2E_SIGNUP_LOOKUP_URL);
   const code = await run(executable('playwright'), ['test'], { env: process.env });
   if (code !== 0) throw new Error('Playwright browser smoke failed.');
 };
@@ -150,6 +169,7 @@ const outer = async () => {
     RANDS_E2E_FUNCTIONS_PORT: String(functionsPort),
     RANDS_E2E_STORAGE_PORT: String(storagePort),
     PLAYWRIGHT_BASE_URL: `http://127.0.0.1:${hostingPort}`,
+    RANDS_E2E_SIGNUP_LOOKUP_URL: `http://127.0.0.1:${functionsPort}/rands-local/us-central1/checkSignupEmail`,
     GCLOUD_PROJECT: 'rands-local',
     GOOGLE_CLOUD_PROJECT: 'rands-local',
     PATH: existsSync(path.join(homebrewJava, 'bin', 'java'))
