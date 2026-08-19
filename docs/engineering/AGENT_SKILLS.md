@@ -2,7 +2,8 @@
 
 This inventory records the skills discoverable from this repository. The lock file is the machine-readable installation record; this document explains routing and provenance without copying third-party skill contents.
 
-Last verified against commit `29690a3812a1391bf5a471b7efa7dc41d610c146` plus the uncommitted project-local skill installation.
+Last verified against the current `dev-anuj` application checkout plus the pinned project-local
+skill installation.
 
 ## Firebase Agent Skills
 
@@ -36,6 +37,10 @@ Source: `firebase/agent-skills` on GitHub. These are existing project-local skil
 - Installer lock hash for the root router: `845bbc368b6878914a53e28b60ff9be7aa2eabd689f6514842b159b46544982a`.
 - The project-local copy includes the upstream router and subskills. Available workflows include `autoplan`, `plan-ceo-review`, `plan-eng-review`, `plan-devex-review`, `review`, `investigate`, `cso`, `qa`, `qa-only`, `document-generate`, `document-release`, `retro`, `careful`, `guard`, and `freeze`, plus the upstream suite’s other specialized skills. Inspect the matching nested `SKILL.md` before use.
 - Do not invoke gstack workflows that merge to `main`, deploy production, or rewrite history. In this project, “ship” means a reviewed commit pushed to `origin/dev-anuj` only.
+
+The gstack tree is third-party vendored tooling, not application source. Keep its upstream revision
+and `skills-lock.json` hash synchronized when updating it; do not silently edit the vendored copy
+to fix application findings.
 
 ## Project-specific skill
 

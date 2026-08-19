@@ -36,7 +36,7 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
     {
       "check": "Rules and environment validation",
       "severity": "moderate",
-      "issue": "Firebase emulator configuration and initial Firestore/Storage Rules harnesses now exist, but local macOS execution still needs Java, callable/trigger integration authorization coverage is incomplete, and staging isolation is not established. npm audit refresh was also blocked by registry DNS resolution in this environment.",
+      "issue": "Firebase emulator configuration and Firestore/Storage Rules harnesses now run locally with Java 21, but callable/trigger integration authorization coverage is incomplete and staging isolation is not established. The dependency audit remains non-zero and was not mass-fixed.",
       "recommendation": "Run the seeded emulator suite locally, extend Functions tests around callable authorization and idempotency, and establish a non-production Firebase project before production deployment work resumes."
     },
     {
@@ -56,7 +56,7 @@ This is a code-derived baseline for the current `dev-anuj` checkout. It is a rev
 - `src/pages/tournament/useTournament.ts` contains direct `stats` writes for tournament points; Functions contain separate task/friendly-point award logic.
 - Pure domain coverage now exercises Round Robin grouping/pairings, standings, scoring awards, safe rewrites, and the server reward-point calculator. Functions integration tests against the Admin SDK and callable runtime remain open.
 - A tracked-file scan was performed for common credential patterns. It found no private key, service-account credential, or Resend secret in application files; the vendored gstack renderer includes an upstream Firebase client key, which is not a service credential. The scan did not prove that secrets are absent from Git history, deployment configuration, or third-party systems.
-- `npm run lint`, `npm test`, `cd functions && npm test`, and `npm run build` pass locally. GitHub Actions run `32211081070` passed the complete CI job, including Java setup, both Rules suites, root domain tests, and Functions unit tests. Local Rules emulator execution remains blocked by the macOS Java prerequisite. `npm audit --json` could not refresh because `registry.npmjs.org` did not resolve from this environment.
+- `npm run verify` passes locally with strict typecheck, ESLint, maintained-slice formatting, docs freshness, Functions syntax and unit tests, 15 root unit tests, 13 Firestore Rules tests, 3 Storage Rules tests, and the production build. The build still reports existing CSS-target and large-chunk warnings. `npm audit` reports non-zero dependency findings; no broad upgrade or automatic fix was applied.
 
 ## Required gates before production changes
 

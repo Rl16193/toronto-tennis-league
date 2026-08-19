@@ -67,3 +67,20 @@ Technical evidence record for the Racquets & Strings engineering takeover. This 
 ## Handoff rule
 
 Every later stabilization issue should add its evidence, validation, commit, and remaining risk here. Keep the record technical and avoid claiming external console, staging, production, backup, device, or deployment outcomes without direct evidence.
+
+## Maintainability upgrade update — 2026-08-19
+
+- The root package now exposes separate `typecheck`, real `lint`, `format:check`, `docs:verify`,
+  `functions:syntax`, and `verify` commands. CI calls the same `npm run verify` entry point after
+  installing the root and Functions packages.
+- TypeScript full `strict` mode, no-implicit-return, and no-fallthrough checks pass. The legacy
+  `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` migration remains open.
+- The local Rules wrappers select temporary ports and use the installed Java 21 runtime. The
+  Firestore suite passes 13 tests and the Storage suite passes 3 tests locally; this is source/rules
+  evidence, not deployed Firebase evidence.
+- Tournament scoring/Round Robin primitives, signup validation, event participant access, and the
+  Matches weekly pool now have smaller tested boundaries. The migration framework defaults to
+  dry-run and requires an explicit project.
+- The native mutating parallel runner did not create isolated worktrees and was stopped before
+  further changes. Reviewed bounded changes were retained and integrated by the coordinator on
+  `dev-anuj`; no temporary branch was pushed.

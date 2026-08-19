@@ -24,7 +24,11 @@ The current deployment region is `us-central1`; scheduled functions format dates
 
 ## Target state
 
-Preserve the same product topology while adding explicit environment selection, local emulator configuration, rules tests, CI gates, and a staging project. Privileged data mutations should converge on Functions or server-controlled workflows; the browser should remain an untrusted caller even when UI role state says Organizer or Admin.
+Preserve the same product topology while adding explicit environment selection, local emulator
+configuration, rules tests, CI gates, and a staging project. Privileged data mutations should
+converge on Functions or server-controlled workflows; the browser should remain an untrusted
+caller even when UI role state says Organizer or Admin. The local rules suites now run through
+temporary emulator configurations; this proves the checked-in rules contract, not deployed state.
 
 ## Evidence
 
@@ -39,6 +43,7 @@ Preserve the same product topology while adding explicit environment selection, 
 - The default Firebase project is production-sensitive and no staging project is represented in the checkout.
 - `hosting:preview` is not automatically a non-production Firebase project; it inherits the active CLI project unless overridden.
 - Google Sheets, BigQuery, Resend, and image moderation require credentials/configuration not present in this checkout.
-- There is no checked-in rules-test harness or CI workflow proving the authorization contract.
+- Callable/trigger integration coverage is still incomplete even though Firestore and Storage
+  Rules harnesses are checked in and exercised locally.
 
-Last verified source SHA: `846dee90323dbd32d556e9254586cd7f9ebc03c7`.
+Last verified source SHA: `c6f45fd` (the pre-documentation maintainability source tip).
