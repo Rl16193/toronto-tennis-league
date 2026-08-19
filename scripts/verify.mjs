@@ -12,6 +12,7 @@ const checks = [
   ['Firestore Rules tests', ['run', 'test:rules']],
   ['Storage Rules tests', ['run', 'test:storage']],
   ['emulator fixture smoke', ['run', 'test:fixtures']],
+  ['Functions emulator integration tests', ['run', 'test:functions:integration']],
   ['production build', ['run', 'build']],
 ];
 

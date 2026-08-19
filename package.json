@@ -18,6 +18,7 @@
     "test": "node --import tsx --test tests/unit/*.test.mjs",
     "seed:emulator": "node tests/fixtures/seed-emulator.mjs",
     "test:fixtures": "node scripts/run-emulator-fixture-test.mjs",
+    "test:functions:integration": "node scripts/run-functions-integration-test.mjs",
     "hosting:deploy": "npm run build && node scripts/deploy-hosting.mjs deploy",
     "hosting:preview": "npm run build && node scripts/deploy-hosting.mjs preview",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
