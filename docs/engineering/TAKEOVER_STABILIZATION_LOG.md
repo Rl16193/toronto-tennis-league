@@ -71,6 +71,10 @@ documents; older entries are not current capability claims.
 
 Every later stabilization issue should add its evidence, validation, commit, and remaining risk here. Keep the record technical and avoid claiming external console, staging, production, backup, device, or deployment outcomes without direct evidence.
 
+A human-in-the-loop handoff was provided to the development team so the next validation cycle can
+resume from the documented branch, commit, safety boundaries, completed checks, and open external
+gates without relying on conversational context.
+
 ## Maintainability upgrade update — 2026-08-19
 
 - The root package now exposes separate `typecheck`, real `lint`, `format:check`, `docs:verify`,
