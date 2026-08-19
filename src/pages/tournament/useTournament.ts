@@ -79,7 +79,11 @@ import {
 } from '../../lib/firestoreNormalization';
 import { applyTournamentResult } from '../../features/tournament/services/tournamentResultService';
 import { buildScoreSubmissionIntent } from '../../features/tournament/domain/scoreSubmission';
-import { persistDrawDocuments, type ByeAdvance } from '../../features/tournament/services/drawPersistence';
+import {
+  createTournamentWriteBatch,
+  persistDrawDocuments,
+  type ByeAdvance,
+} from '../../features/tournament/services/tournamentPersistence';
 import {
   loadTournamentEvents,
   subscribeEventParticipants,
@@ -87,7 +91,6 @@ import {
   subscribeTournamentMatches,
 } from '../../features/tournament/services/tournamentSubscriptions';
 import { createEventParticipant } from '../../features/events/services/eventRepository';
-import { createTournamentWriteBatch } from '../../features/tournament/services/tournamentPersistence';
 
 // Stand-in for a contacts doc whose matching users doc is missing — a data anomaly rather than a
 // normal state, but the merge below shouldn't drop the contact details over it.

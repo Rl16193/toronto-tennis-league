@@ -1,5 +1,9 @@
 import { doc, writeBatch, type DocumentData, type SetOptions, type UpdateData } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
+import type { TournamentPlayer } from '../../../pages/tournament/types';
+
+export type DrawDocument = { id: string; data: Record<string, unknown> };
+export type ByeAdvance = { nextMatchId: string; slot: 'player_1' | 'player_2'; player: TournamentPlayer };
 
 /** Central Firestore write boundary for draw, participant-placement, and RR draft persistence. */
 export const createTournamentWriteBatch = () => {
@@ -18,4 +22,18 @@ export const createTournamentWriteBatch = () => {
         : batch.set(doc(db, 'events', eventId, 'rr_drafts', drawKey), data),
     commit: () => batch.commit(),
   };
+};
+
+export const persistDrawDocuments = async (documents: DrawDocument[], advances: ByeAdvance[]) => {
+  const batch = createTournamentWriteBatch();
+  const drawData = new Map(documents.map((item) => [item.id, { ...item.data }]));
+  advances.forEach(({ nextMatchId, slot, player }) =>
+    drawData.set(nextMatchId, {
+      ...(drawData.get(nextMatchId) ?? {}),
+      [`${slot}_name`]: player.name,
+      [`${slot}_uid`]: player.uid,
+    }),
+  );
+  drawData.forEach((data, id) => batch.setMatch(id, data, { merge: true }));
+  await batch.commit();
 };

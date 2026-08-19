@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { analyticsPromise } from '../../../lib/firebase';
 import { logEvent } from 'firebase/analytics';
 import { BYE, PLAYER_LOADING, TournamentMatch } from '../../tournament/types';
-import { zoneBucketFor } from '../../tournament/domain/placement';
+import { resolveZoneConfig, zoneBucketFor } from '../../tournament/domain/placement';
 import { isTournamentEvent, isSeasonOpener, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
 import { isSeniorsLeague } from '../../../utils/skillLevels';
 import { parseValidDate, type FirestoreDateLike } from '../../../utils/eventDates';
@@ -102,8 +102,8 @@ export function useJoin({
 
     // With zones on, a late joiner may only take a slot in THEIR zone's bracket — the whole point
     // of splitting by zone is that you don't get sent across the city. Zones off: no restriction.
-    const zoneCfg = selectedEvent.zone_draw_config;
-    const myZone = zoneCfg?.enabled ? zoneBucketFor(profile?.preferences?.preferred_zone, zoneCfg) : undefined;
+    const zoneCfg = resolveZoneConfig(selectedEvent.zone_draw_config);
+    const myZone = zoneBucketFor(profile?.preferences?.preferred_zone, zoneCfg);
 
     // Match a draw slot — `div` is what the user selected; also accept 'All' in Firestore
     // (consolidated/merged draws store division as 'All' rather than the specific gender).
