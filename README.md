@@ -55,8 +55,9 @@ npm run dev
 
 The Vite server uses port `3000`; the full Emulator Suite uses the ports declared in `firebase.json`.
 The launcher adds the repository's Java 21 Homebrew path when it is available. If a standard
-emulator port is occupied, use the temporary-port test commands below or stop the conflicting
-local service before starting the full app suite.
+emulator port is occupied, the local-development guide documents the supported `firebase.local.json`
+and matching `VITE_*_EMULATOR_PORT` overrides for a complete alternate-port app workflow. The
+temporary-port test commands below remain the quickest option when only verification is needed.
 The emulator scripts explicitly select the synthetic `rands-local` project and do not use the
 production alias in `.firebaserc`.
 Firestore and Storage Rules test commands use temporary emulator configurations and select an

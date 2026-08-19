@@ -1,4 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
+
+const evidenceDir = process.env.RANDS_E2E_EVIDENCE_DIR;
+const capture = async (page: Page, name: string) => {
+  if (!evidenceDir) return;
+  await mkdir(evidenceDir, { recursive: true });
+  await page.screenshot({ path: path.join(evidenceDir, `${name}.png`), fullPage: true });
+};
 
 const login = async (page: Page, email: string, password: string) => {
   await page.goto('/login');
@@ -25,6 +34,7 @@ test('synthetic member can sign in and load the seeded profile boundary', async 
   await expect(page).toHaveTitle('My Profile · Racquets & Strings');
   await expect(page.getByText('Synthetic Member', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('Profile incomplete')).toBeVisible();
+  await capture(page, '01-seeded-profile');
 });
 
 test('new member signs up and persists the profile bootstrap', async ({ page }) => {
@@ -39,6 +49,7 @@ test('new member signs up and persists the profile bootstrap', async ({ page }) 
   await page.getByPlaceholder('Roger Federer').fill('Synthetic Signup');
   await page.getByRole('button', { name: 'Complete Profile' }).click();
   await expect(page.getByText('Thank you for joining the league')).toBeVisible();
+  await capture(page, '02-signup-complete');
 });
 
 test('member joins a synthetic social event through the hosted application', async ({ page }) => {
@@ -56,6 +67,7 @@ test('member joins a synthetic social event through the hosted application', asy
   await expect(joinDialog).toBeVisible();
   await joinDialog.getByRole('button', { name: 'Join Event' }).click();
   await expect(socialCard.getByRole('button', { name: 'Joined' })).toBeVisible();
+  await capture(page, '03-social-event-joined');
 });
 
 test('organizer records a tournament score and advances the winner', async ({ page }) => {
@@ -72,4 +84,5 @@ test('organizer records a tournament score and advances the winner', async ({ pa
   await expect(page.getByText('Score recorded and draw updated.')).toBeVisible();
   await expect(page.getByText('6-4 6-2')).toBeVisible();
   await expect(page.getByText('F — Started')).toBeVisible();
+  await capture(page, '04-tournament-score-advanced');
 });

@@ -81,11 +81,21 @@ cp firebase.json firebase.local.json
 npm run emulators -- --config firebase.local.json
 ```
 
-`*.local` is ignored by Git. An alternate config changes local ports only; the launcher still
-forces `rands-local` and rejects arbitrary launcher flags. The current browser client uses the
-standard Auth, Firestore, Functions, and Storage ports from `src/lib/firebase.ts`. Use alternate
-ports for Firebase CLI/Admin SDK work; stop the conflicting process when running the complete web
-application unless a reviewed change also makes the client ports configurable.
+`firebase.local.json` is ignored by Git. An alternate config changes local ports only; the launcher
+still forces `rands-local` and rejects arbitrary launcher flags. To run the browser application
+against those ports, put the matching overrides in `.env.local` before starting Vite:
+
+```dotenv
+VITE_USE_FIREBASE_EMULATORS=true
+VITE_FIREBASE_EMULATOR_HOST=127.0.0.1
+VITE_FIREBASE_AUTH_EMULATOR_PORT=19099
+VITE_FIRESTORE_EMULATOR_PORT=18080
+VITE_FUNCTIONS_EMULATOR_PORT=15001
+VITE_FIREBASE_STORAGE_EMULATOR_PORT=19199
+```
+
+Replace the example values with the ports selected in `firebase.local.json`. The CLI configuration
+also controls Hosting and Emulator UI ports; those do not need Vite variables.
 
 Rules tests and fixture smoke tests already allocate isolated temporary ports, so they do not need
 the alternate full-suite config.
