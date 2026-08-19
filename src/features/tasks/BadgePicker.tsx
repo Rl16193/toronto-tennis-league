@@ -3,7 +3,7 @@ import { AnimatePresence } from 'motion/react';
 import { Button } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
 import { BADGES, BADGE_PILL_CLASS, MAX_DISPLAY_BADGES, earnedBadges } from './badges';
-import { Counters } from './useTasks';
+import type { Counters } from './taskCatalog';
 import { TaskProgress } from '../../types';
 
 // Profile section: shows the badges the player chose to feature, with an Edit button that opens

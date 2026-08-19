@@ -7,7 +7,7 @@ import { Input } from '../../components/Input';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { loadCourtList } from './courtList';
-import type { CsvCourt } from '../../pages/courtmap/courtMapUtils';
+import type { CsvCourt } from '../courts/types';
 import { MAX_PHOTOS, ReportType, submitPhotoReport } from './photoReportService';
 
 const TYPE_OPTIONS: { id: ReportType; label: string }[] = [

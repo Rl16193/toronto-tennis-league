@@ -13,7 +13,7 @@ import {
   getEventEndDate, getEventStartDate, parseEndInstant, parseValidDate,
   type FirestoreDateLike,
 } from '../../utils/eventDates';
-import { DOUBLES_DIVISIONS } from '../../pages/tournament/types';
+import { DOUBLES_DIVISIONS } from '../tournament/types';
 import { JoinFormState, SlotResult } from './types';
 import {
   DisplayEvent, EVENT_SKILL_OPTIONS, EVENT_TYPE_OPTIONS, EventFormState,

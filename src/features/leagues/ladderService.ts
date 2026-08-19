@@ -8,7 +8,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { setFieldsFrom } from '../../pages/tournament/utils';
+import { setFieldsFrom } from '../tournament/domain/scoring';
 
 // League Ladder challenge loop: an organizer-confirmed head-to-head. On confirm the winner gains
 // +3 leaguePoints26 and the loser loses 3 (floored at 0). Challenges live in the shared `matches`
@@ -199,4 +199,3 @@ export async function confirmChallenge(ch: LadderChallenge): Promise<void> {
     }, { merge: true });
   });
 }
-

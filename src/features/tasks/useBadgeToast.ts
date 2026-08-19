@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { TaskProgress } from '../../types';
 import { earnedBadges } from './badges';
-import type { Counters } from './useTasks';
+import type { Counters } from './taskCatalog';
 
 const SEEN_KEY = 'rs-seen-badges';
 

@@ -1,6 +1,8 @@
 import type { SkillGroup, TournamentMatch } from '../../features/tournament/types';
 
 export type { MatchStatus, SkillGroup, TournamentFormat, TournamentMatch } from '../../features/tournament/types';
+export { BYE, DOUBLES_DIVISIONS, PLAYER_LOADING, UNASSIGNED_ZONE_ID } from '../../features/tournament/types';
+export type { ZoneBucket, ZoneDrawConfig } from '../../features/tournament/types';
 
 export type DrawTab = 'mens' | 'womens' | 'doubles';
 // 'Retired Pro' is age-based (55+, chosen at join time via participant.skill_group), not derived
@@ -10,32 +12,6 @@ export type DrawTab = 'mens' | 'womens' | 'doubles';
 export const MATCHES_COL = 'matches';
 export const SKILL_GROUP_ORDER: readonly SkillGroup[] = ['Beginners', 'Challengers', 'Masters'];
 export type SkillMergePair = 'Beginners+Challengers' | 'Challengers+Masters' | 'Beginners+Challengers+Masters';
-
-// Divisions a doubles event can be joined in — shared by the join sheet and the creator's
-// add-player panel so the two lists can't drift apart.
-export const DOUBLES_DIVISIONS = ["Men's", "Women's", 'Mixed Doubles'] as const;
-
-// A zone "bucket" is one or more real zones (see src/utils/zones.ts's ZONE_NAMES) grouped under
-// one label — a single unmerged zone has `zones: [thatZoneName]`. Mirrors TennisEvent's
-// `zone_draw_config` field shape (src/types.ts).
-export type ZoneBucket = { id: string; label: string; zones: string[] };
-/**
- * Zones are ALWAYS on — `enabled` is legacy and ignored by `resolveZoneConfig`, which is the only
- * thing that should read this. A tournament can't turn zones off. A zone is either running on its
- * own, or MERGED into another zone: its players play in the target's draws and it produces none of
- * its own. Merging is per-source and reversible, so the target can unmerge one source at a time.
- */
-export type ZoneDrawConfig = {
-  enabled: boolean;
-  buckets: ZoneBucket[];
-  includeUnassigned: boolean;
-  reallocatedAt?: string;
-  /** sourceBucketId → targetBucketId. A source in here produces no draws of its own. */
-  merges?: Record<string, string>;
-};
-// Reserved id for players with no preferred_zone set — always available as a bucket when
-// includeUnassigned is true, regardless of what the creator picked for real zones.
-export const UNASSIGNED_ZONE_ID = 'unassigned';
 
 export type TemplateMatch = {
   match_id: string;

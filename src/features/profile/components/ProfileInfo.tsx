@@ -17,11 +17,11 @@ import {
 import { zoneFromCourts, ZONE_NAMES } from '../../../utils/zones';
 import { Sheet } from '../../../components/Sheet';
 import { formatPhone } from '../../../utils/formatPhone';
-import { skillBand } from '../../../pages/tournament/utils';
+import { skillBand } from '../../tournament/domain/placement';
 import { getFavouritePlayerSuggestions, useFavouritePlayerOptions } from '../favouritePlayers';
 import { BadgePicker } from '../../tasks/BadgePicker';
 import { BADGE_PILL_CLASS } from '../../tasks/badges';
-import { Counters } from '../../tasks/useTasks';
+import type { Counters } from '../../tasks/taskCatalog';
 import { ContactMethod, TaskProgress } from '../../../types';
 
 type Actions = {

@@ -1,4 +1,5 @@
-import { parseCourts, type CsvCourt } from '../../pages/courtmap/courtMapUtils';
+import { parseCourts } from '../courts/csv';
+import type { CsvCourt } from '../courts/types';
 
 // Lightweight courts loader for the Tasks features (check-in, photo submission) — just the
 // parsed CSV, no Firestore player-count enrichment (that's CourtMap's job). Shares the same

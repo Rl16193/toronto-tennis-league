@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { ContactData } from '../../types';
-import { setFieldsFrom } from '../../pages/tournament/utils';
+import { setFieldsFrom } from '../tournament/domain/scoring';
 
 // Rallies — friendly-match requests, modelled on the ladder-challenge loop. The recipient accepts
 // or declines; either player then reports the score, and a SECOND party (the other player, or an

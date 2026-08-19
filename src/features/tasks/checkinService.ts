@@ -3,7 +3,7 @@ import { db } from '../../lib/firebase';
 import { haversineKm } from '../../utils/zones';
 import { courtKey } from '../../utils/courtKey';
 import { loadCourtList } from './courtList';
-import type { CsvCourt } from '../../pages/courtmap/courtMapUtils';
+import type { CsvCourt } from '../courts/types';
 
 // Court check-in ("passport"): the player must be physically near a court to stamp it. Location
 // is only ever requested when this flow is actively used (never on page load).

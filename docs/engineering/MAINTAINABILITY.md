@@ -17,7 +17,11 @@ validation is similarly isolated in `src/features/signup/signupForm.ts`. Event r
 tournament-slot lookup now use `src/features/events/services/eventRepository.ts`, with the document
 shape tested independently in `eventParticipant.ts`.
 Shared tournament-match and leaderboard row types now live under feature-owned type modules rather
-than making data-access code import from a page or hook.
+than making data-access code import from a page or hook. Tournament placement, zone normalization,
+and skill-band rules are likewise owned by `src/features/tournament/domain/placement.ts`; page
+modules retain compatibility exports only. Parsed court records are owned by
+`src/features/courts/`, so check-in and photo-report features do not import court types from the
+CourtMap page.
 
 ## Quality commands
 

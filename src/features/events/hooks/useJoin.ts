@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { analyticsPromise } from '../../../lib/firebase';
 import { logEvent } from 'firebase/analytics';
-import { TournamentMatch } from '../../tournament/types';
-import { BYE, PLAYER_LOADING, parseDateValue, zoneBucketFor } from '../../../pages/tournament/utils';
+import { BYE, PLAYER_LOADING, TournamentMatch } from '../../tournament/types';
+import { zoneBucketFor } from '../../tournament/domain/placement';
 import { isTournamentEvent, isSeasonOpener, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
 import { isSeniorsLeague } from '../../../utils/skillLevels';
+import { parseValidDate, type FirestoreDateLike } from '../../../utils/eventDates';
 import { DisplayEvent } from '../services/eventService';
 import { assignPlayerToMatchSlot, createEventParticipant, loadTournamentMatches } from '../services/eventRepository';
 import type { EventParticipantWrite } from '../services/eventParticipant';
@@ -216,7 +217,7 @@ export function useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournam
       const dateselected = (() => {
         if (isWeekend) return joinForm.dateselected;
         if (isSeasonOpener(selectedEvent)) {
-          const d = parseDateValue(selectedEvent.start_date || selectedEvent.startDate || selectedEvent.date);
+          const d = parseValidDate((selectedEvent.start_date || selectedEvent.startDate || selectedEvent.date) as FirestoreDateLike);
           return d ? [`May ${d.getDate()}, ${d.getFullYear()}`] : [];
         }
         return [];

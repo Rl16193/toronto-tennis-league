@@ -1,8 +1,8 @@
 import { EventParticipant, MemberInfo, UserData, UserStats } from '../../types';
 import { parseValidDate, type FirestoreDateLike } from '../../utils/eventDates';
 import { EMAIL_REGEX } from '../../utils/emailRegex';
-import { DrawConfig, SkillGroup, SKILL_GROUP_ORDER, TemplateMatch, TournamentMatch, TournamentPlayer, UNASSIGNED_ZONE_ID, ZoneBucket, ZoneDrawConfig } from './types';
-import { ZONE_NAMES } from '../../utils/zones';
+import { BYE, DrawConfig, PLAYER_LOADING, SkillGroup, SKILL_GROUP_ORDER, TemplateMatch, TournamentMatch, TournamentPlayer, UNASSIGNED_ZONE_ID, ZoneDrawConfig } from './types';
+import { isDefaultZone, skillBand as tournamentSkillBand, zoneBucketFor } from '../../features/tournament/domain/placement';
 
 // Compatibility exports keep existing page/feature consumers stable while the pure rules live in
 // the feature domain boundary.
@@ -36,8 +36,11 @@ export const formatSetScores = (m: ScoredSets): string => {
   return pairs.filter(([a, b]) => a > 0 || b > 0).map(([a, b]) => `${a}-${b}`).join('  ');
 };
 
-export const PLAYER_LOADING = 'Player Loading';
-export const BYE = 'BYE';
+export { BYE, PLAYER_LOADING } from '../../features/tournament/types';
+export {
+  DEFAULT_ZONE, DEFAULT_ZONE_BUCKETS, effectiveZone, isDefaultZone, resolveMergedZone, resolveZoneConfig,
+  zoneBucketFor, zoneBucketId,
+} from '../../features/tournament/domain/placement';
 
 export type MatchDisplayFlags = {
   isPreview: boolean;
@@ -143,17 +146,6 @@ export const isTournamentStarted = (event: { startDate?: unknown; start_date?: u
   return !!start && start.getTime() <= Date.now();
 };
 
-/**
- * A draw or match with NO zone belongs to the default zone. Zones went live mid-event, so groups
- * generated before that carry no `zone` — they are Downtown-Midtown draws, not a fourth category.
- * Treating them separately put running groups outside the zone list and counted "N signed up"
- * twice. Everything that identifies or compares a draw goes through this.
- */
-export const effectiveZone = (zone?: string | null): string => zone || zoneBucketId(DEFAULT_ZONE);
-
-/** True for the default zone, including the zone-less pre-zone case. */
-export const isDefaultZone = (zone?: string | null): boolean => effectiveZone(zone) === zoneBucketId(DEFAULT_ZONE);
-
 // The default zone deliberately produces the SHORT, pre-zone key, so groups generated before
 // zones existed keep their document ids and stay reachable. Do not "fix" this asymmetry by always
 // appending the zone — that re-orphans every match already in the database.
@@ -180,70 +172,8 @@ export const buildZoneAwareDrawConfigs = (draws: DrawConfig[], zoneConfig: ZoneD
   });
 };
 
-// The zone everyone falls back to: players who never set preferred courts, players whose zone
-// isn't covered by any bucket, and players whose zone was merged into another for this tournament.
-export const DEFAULT_ZONE = 'Downtown - Midtown';
-
-// One bucket per real zone. Zones are a fixed dimension of every tournament now, not something a
-// creator opts into and hand-builds, so the bucket list is derived from ZONE_NAMES rather than
-// stored per event. A creator's only lever is merging a quiet zone into a neighbour.
-export const zoneBucketId = (zone: string) => zone.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
-export const DEFAULT_ZONE_BUCKETS: ZoneBucket[] = ZONE_NAMES.map((z) => ({
-  id: zoneBucketId(z),
-  label: z,
-  zones: [z],
-}));
-
-/** Follow a zone through merges to the one it plays in. Chains resolve; a cycle bails out. */
-export const resolveMergedZone = (bucketId: string, merges: Record<string, string> = {}): string => {
-  let current = bucketId;
-  const seen = new Set<string>([current]);
-  while (merges[current]) {
-    const next = merges[current];
-    if (seen.has(next)) break;
-    seen.add(next);
-    current = next;
-  }
-  return current;
-};
-
-/**
- * The zone config actually in force. Zone draws default to ON — an event that never configured
- * zones still gets the standard seven; an explicit `false` from Manage Draw is honoured.
- *
- * Every bucket is kept, including merged-away sources: a player whose zone was merged still has
- * to match a bucket before `zoneBucketFor` can redirect them. Sources are dropped later, in
- * `buildZoneAwareDrawConfigs`, which is what makes them produce no draws.
- */
-export const resolveZoneConfig = (cfg: ZoneDrawConfig | undefined): ZoneDrawConfig => ({
-  ...(cfg ?? { includeUnassigned: false }),
-  enabled: cfg?.enabled ?? true,
-  buckets: cfg?.buckets?.length ? cfg.buckets : DEFAULT_ZONE_BUCKETS,
-  includeUnassigned: cfg?.includeUnassigned ?? false,
-  merges: cfg?.merges ?? {},
-});
-
-// Which zone bucket a participant's `preferred_zone` falls into, given the event's zone config.
-// Never returns undefined once zones are on — an unmatched player goes to the bucket holding
-// DEFAULT_ZONE, falling back to the explicit Unassigned bucket only if no bucket covers it.
-export const zoneBucketFor = (preferredZone: string | undefined, zoneConfig: ZoneDrawConfig | undefined): string | undefined => {
-  if (!zoneConfig?.enabled) return undefined;
-  const merges = zoneConfig.merges ?? {};
-  const zone = (preferredZone || '').trim();
-  // Match against ALL buckets, not the resolved (merge-filtered) list — a player whose own zone
-  // was merged away still needs matching before being redirected to the target.
-  const all = zoneConfig.buckets.length ? zoneConfig.buckets : DEFAULT_ZONE_BUCKETS;
-  const bucket = zone ? all.find((b) => b.zones.includes(zone)) : undefined;
-  if (bucket) return resolveMergedZone(bucket.id, merges);
-  const fallback = all.find((b) => b.zones.includes(DEFAULT_ZONE));
-  if (fallback) return resolveMergedZone(fallback.id, merges);
-  return zoneConfig.includeUnassigned ? UNASSIGNED_ZONE_ID : undefined;
-};
-
-// Skill band used to sub-group players within a draw (the TOURNAMENT_OPTIONS tiers):
-// Beginners 2–2.5, Challengers 3–3.5, Masters 4–5.
-export const skillBand = (skill: number): 'Beginners' | 'Challengers' | 'Masters' =>
-  skill < 3 ? 'Beginners' : skill < 4 ? 'Challengers' : 'Masters';
+// Compatibility export: the shared skill-band rule is owned by the tournament feature domain.
+export const skillBand = tournamentSkillBand;
 
 // Derive the display state of a match's scheduling for a given viewer.
 export type ScheduleState = {

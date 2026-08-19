@@ -4,6 +4,26 @@ export type MatchStatus = 'pending' | 'complete';
 
 export type TournamentFormat = 'bracket' | 'rr';
 
+// Divisions a doubles event can be joined in. Kept with tournament-owned types so event and
+// tournament screens do not depend on one another for shared business data.
+export const DOUBLES_DIVISIONS = ["Men's", "Women's", 'Mixed Doubles'] as const;
+export const PLAYER_LOADING = 'Player Loading';
+export const BYE = 'BYE';
+
+// A zone bucket is one or more real zones grouped under one tournament draw label.
+export type ZoneBucket = { id: string; label: string; zones: string[] };
+
+export type ZoneDrawConfig = {
+  enabled: boolean;
+  buckets: ZoneBucket[];
+  includeUnassigned: boolean;
+  reallocatedAt?: string;
+  /** sourceBucketId -> targetBucketId. A source in here produces no draws of its own. */
+  merges?: Record<string, string>;
+};
+
+export const UNASSIGNED_ZONE_ID = 'unassigned';
+
 // No contact fields here — ContactOpponentButton resolves channels from `contacts` at display time.
 export type TournamentMatch = {
   id: string;
