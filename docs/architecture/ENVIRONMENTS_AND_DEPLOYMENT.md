@@ -50,4 +50,4 @@ No backup/export configuration, restore drill, or staging project alias was foun
 - Local CLI evidence: root `devDependencies.firebase-tools` is pinned to `15.27.0`; emulator and Hosting scripts use that repository-local binary.
 - Open: identify the authorized staging project, Firebase database location/edition, CI secret strategy, and production deploy approver.
 
-Last verified source SHA: `ce46599`.
+Last verified source SHA: `6ac2b3c`.
