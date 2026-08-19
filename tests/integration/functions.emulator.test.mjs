@@ -196,6 +196,20 @@ const seedTournament = async (ownerUid, playerOne, playerTwo) => {
       match_id: 'M3',
       position: 0,
     }),
+    db.doc('matches/result-1').set({
+      category: 'score_submission',
+      event_id: 'e1',
+      match_id: 'm1',
+      submitted_by: playerOne,
+      claimed_winner_uid: playerOne,
+      is_walkover: false,
+      set_1_player_1: 6,
+      set_1_player_2: 4,
+      set_2_player_1: 6,
+      set_2_player_2: 2,
+      set_3_player_1: 0,
+      set_3_player_2: 0,
+    }),
   ]);
 };
 
