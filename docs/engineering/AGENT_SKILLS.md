@@ -30,7 +30,7 @@ Source: `firebase/agent-skills` on GitHub. These are existing project-local skil
 - Upstream HEAD observed at installation: `da45d4a79a76dc0742c8554b7eabe551db100701`.
 - Installer lock hash: `02bce599218f974d17a6b36c07b6246eec7e4dfa791cb1c158bc3bc61fb7becf`.
 - Use for architecture, data model, data flow, authorization, delivery, and modernization diagrams. Preserve editable HTML plus SVG/PNG exports where tooling permits.
-- The skill’s style guide is still the shipped default. Before the first committed diagram, complete its style-gate decision and record the choice.
+- The shared style guide is customized from `https://www.racquetsandstrings.ca/` and records the detected palette, typography, contrast checks, and source date.
 
 ## gstack
 

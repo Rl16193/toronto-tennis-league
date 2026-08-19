@@ -4,6 +4,8 @@
 
 Firestore is a document model with several consolidated collections. The client and Functions use a shared `matches` collection distinguished by `category`, a shared `courts` collection distinguished by `type`, and a shared `tasks` collection containing progress, group-award, offer, and claim-related records. Tournament Round Robin drafts are nested under events.
 
+Visual: [Firestore data model](diagrams/firestore-data-model.html) · [SVG export](diagrams/firestore-data-model.svg).
+
 ## Collection and access map
 
 | Path | Main purpose | Current client access |

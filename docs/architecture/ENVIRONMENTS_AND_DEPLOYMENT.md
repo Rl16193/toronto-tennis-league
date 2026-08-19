@@ -1,5 +1,7 @@
 # Environments and deployment
 
+Visuals: [target safe delivery architecture](diagrams/target-safe-delivery-architecture.html) · [modernization before/after](diagrams/modernization-before-after.html) · [SVG exports](diagrams/target-safe-delivery-architecture.svg), [modernization-before-after.svg](diagrams/modernization-before-after.svg).
+
 ## Current state
 
 The checkout contains one Firebase project alias:

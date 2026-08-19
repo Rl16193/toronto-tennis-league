@@ -4,6 +4,8 @@
 
 The application is a Vite-built React web client hosted by Firebase Hosting. The browser uses Firebase Auth for identity, Firestore for application data, Storage for images, and regional Cloud Functions for server-authoritative workflows. The client also initializes GA4 Analytics when the browser supports it. Functions use Resend for email and have scheduled integrations with Google Sheets and BigQuery for operational metrics.
 
+Visual: [current system architecture](diagrams/current-system-architecture.html) · [SVG export](diagrams/current-system-architecture.svg).
+
 The current deployment region is `us-central1`; scheduled functions format dates in `America/Toronto`. Firebase configuration is supplied through `VITE_FIREBASE_*` environment variables, while `.firebaserc` selects `toronto-tennis-league` as the default project.
 
 ## Runtime boundaries

@@ -1,5 +1,7 @@
 # Core data flows
 
+Visual: [core data flow](diagrams/core-data-flow.html) · [SVG export](diagrams/core-data-flow.svg).
+
 ## 1. Signup, login, and profile bootstrap
 
 1. The browser starts Firebase Auth through the Signup page and provider helpers.

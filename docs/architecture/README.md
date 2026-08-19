@@ -16,17 +16,17 @@ This directory is the code-derived architecture record for Racquets & Strings. I
 
 ## Diagram index
 
-The committed visuals use the project-local `diagram-design` skill. Each source is standalone HTML with inline SVG; SVG and PNG are exported companions where the local export toolchain is available.
+The committed visuals use the project-local `diagram-design` skill. Each source is standalone HTML with inline SVG; SVG exports are committed. PNG export is pending because the skill's required Playwright Python package is unavailable in the bundled runtime.
 
 | Diagram | Source | Export status |
 | --- | --- | --- |
-| Current system architecture | [HTML](diagrams/current-system-architecture.html) · [SVG](diagrams/current-system-architecture.svg) · [PNG](diagrams/current-system-architecture.png) | Pending first diagram style-gate decision and export |
-| Target safe delivery architecture | [HTML](diagrams/target-safe-delivery-architecture.html) · [SVG](diagrams/target-safe-delivery-architecture.svg) · [PNG](diagrams/target-safe-delivery-architecture.png) | Pending style-gate decision and export |
-| Firestore data model | [HTML](diagrams/firestore-data-model.html) · [SVG](diagrams/firestore-data-model.svg) · [PNG](diagrams/firestore-data-model.png) | Pending style-gate decision and export |
-| Core data flow | [HTML](diagrams/core-data-flow.html) · [SVG](diagrams/core-data-flow.svg) · [PNG](diagrams/core-data-flow.png) | Pending style-gate decision and export |
-| Authorization boundaries | [HTML](diagrams/authorization-boundaries.html) · [SVG](diagrams/authorization-boundaries.svg) · [PNG](diagrams/authorization-boundaries.png) | Pending style-gate decision and export |
-| Current vs target modernization | [HTML](diagrams/modernization-before-after.html) · [SVG](diagrams/modernization-before-after.svg) · [PNG](diagrams/modernization-before-after.png) | Pending style-gate decision and export |
+| Current system architecture | [HTML](diagrams/current-system-architecture.html) · [SVG](diagrams/current-system-architecture.svg) | Complete; PNG blocked by the missing Playwright Python package |
+| Target safe delivery architecture | [HTML](diagrams/target-safe-delivery-architecture.html) · [SVG](diagrams/target-safe-delivery-architecture.svg) | Complete; PNG blocked by the same prerequisite |
+| Firestore data model | [HTML](diagrams/firestore-data-model.html) · [SVG](diagrams/firestore-data-model.svg) | Complete; PNG blocked by the same prerequisite |
+| Core data flow | [HTML](diagrams/core-data-flow.html) · [SVG](diagrams/core-data-flow.svg) | Complete; PNG blocked by the same prerequisite |
+| Authorization boundaries | [HTML](diagrams/authorization-boundaries.html) · [SVG](diagrams/authorization-boundaries.svg) | Complete; PNG blocked by the same prerequisite |
+| Current vs target modernization | [HTML](diagrams/modernization-before-after.html) · [SVG](diagrams/modernization-before-after.svg) | Complete; PNG blocked by the same prerequisite |
 
 ## Evidence convention
 
-Every document states current state, target state, evidence, risks, open questions, and the last verified source SHA. Claims about deployed Firebase state, physical devices, staging, backups, and production are intentionally left as unverified until exact evidence is available.
+Every document states current state, target state, evidence, risks, open questions, and the last verified source SHA. Claims about deployed Firebase state, physical devices, staging, backups, and production are intentionally left as unverified until exact evidence is available. The diagram skin is customized from the live site stylesheet after contrast checks.

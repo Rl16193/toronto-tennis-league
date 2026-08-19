@@ -2,7 +2,7 @@
 
 **The single source of truth for colors, typography, and tokens.** Every diagram draws from this — not from hex values inlined in other reference files. If you want to change the visual skin of Schematic, change this file.
 
-Default skin is a cool editorial palette — white-smoke paper, jet-black ink, atomic-tangerine accent, blue-slate muted. It's designed to look good out of the box; swap these values (or run [`onboarding.md`](onboarding.md)) and every new diagram inherits the new skin without touching any type-specific logic.
+The project skin is mapped from the Racquets & Strings production website: deep tennis green, light court-neutral paper, and clay orange. It preserves the schematic system's editorial hierarchy while matching the product. The source was fetched from `https://www.racquetsandstrings.ca/` on 2026-08-19; its stylesheet exposes the same semantic values in `--color-tennis-*` and `--color-clay`.
 
 To generate your own from a website URL, see [`onboarding.md`](onboarding.md).
 
@@ -16,18 +16,18 @@ Every token is referred to by **semantic role**, not by its hex value. Type refe
 
 | Role | Purpose | Default (light) | Default (dark) |
 |---|---|---|---|
-| `paper` | Page background, default node fill | `#f5f5f5` (white-smoke) | `#2d3142` (jet-black) |
-| `paper-2` | Diagram container bg, secondary fill | `#ececec` | `#393e53` |
-| `ink` | Primary text, primary stroke | `#2d3142` (jet-black) | `#f5f5f5` (white-smoke) |
-| `muted` | Secondary text, default arrow stroke | `#4f5d75` (blue-slate) | `#bfc0c0` (silver) |
-| `soft` | Sublabels, boundary labels | `#7a8399` | `#8e98ac` |
-| `rule` | Hairline borders | `rgba(45,49,66,0.12)` | `rgba(245,245,245,0.12)` |
-| `rule-solid` | Stronger borders, baselines | `#bfc0c0` (silver) | `rgba(191,192,192,0.25)` |
-| `accent` | Focal / 1–2 max per diagram | `#eb6c36` (atomic-tangerine) | `#f08a59` |
-| `accent-tint` | Fill for accent-bordered boxes | `rgba(235,108,54,0.08)` | `rgba(240,138,89,0.10)` |
-| `link` | HTTP/API calls, external arrows | `#2e5aa8` | `#6a95d8` |
+| `paper` | Page background, default node fill | `#EDEDE7` (site light neutral) | `#143D34` (site tennis green) |
+| `paper-2` | Diagram container bg, secondary fill | `#DEDED5` (site deep neutral) | `#0B3027` (site tennis deep) |
+| `ink` | Primary text, primary stroke | `#143D34` (site tennis green) | `#FFFFFF` |
+| `muted` | Secondary text, default arrow stroke | `#4F6A62` | `#B7CCC3` |
+| `soft` | Sublabels, boundary labels | `#6B8179` | `#8CA99E` |
+| `rule` | Hairline borders | `rgba(20,61,52,0.14)` | `rgba(237,237,231,0.14)` |
+| `rule-solid` | Stronger borders, baselines | `#B7CCC3` | `rgba(183,204,195,0.32)` |
+| `accent` | Focal / 1–2 max per diagram | `#FF6B35` (site clay) | `#FF8A5F` |
+| `accent-tint` | Fill for accent-bordered boxes | `rgba(255,107,53,0.10)` | `rgba(255,138,95,0.12)` |
+| `link` | HTTP/API calls, external arrows | `#2E6B58` | `#82B9A4` |
 
-> **Brand palette source:** this skin maps to a five-color brand palette — `jet-black #2d3142`, `silver #bfc0c0`, `white-smoke #f5f5f5`, `atomic-tangerine #eb6c36`, `blue-slate #4f5d75`. The `soft`, `rule`, and `link` tokens are derived (lighter slate, ink-at-opacity, and a saturated variant in the blue-slate hue family) to cover roles the brand palette doesn't name directly.
+> **Brand palette source:** this skin maps to the live site's explicit palette — `tennis-dark #143D34`, `tennis-deep #0B3027`, `light neutral #EDEDE7`, `deep neutral #DEDED5`, `clay #FF6B35`, and white foreground. The `muted`, `soft`, `rule`, and `link` tokens are derived for diagram readability and meet the onboarding contrast checks for their intended roles.
 
 > **Note:** The pre-baked example HTML files in `assets/` were built under an earlier skin. Regenerating them against the current `style-guide.md` is a v5.1 task. New diagrams the skill produces will use the tokens above.
 
@@ -74,7 +74,7 @@ A self-contained palette for the terminal-window primitive (see [primitive-termi
 | Role | Family | Size | Weight | Usage |
 |---|---|---|---|---|
 | `title` | Instrument Serif | 1.75rem | 400 | Page H1 |
-| `node-name` | Geist (sans) | 12px | 600 | Human-readable labels |
+| `node-name` | Montserrat | 12px | 600 | Human-readable labels; matches the site |
 | `sublabel` | Geist Mono | 9px | 400 | Port, protocol, URL, field type |
 | `eyebrow` | Geist Mono | 7–8px | 500, tracked 0.18em, uppercase | Type tags, axis labels |
 | `arrow-label` | Geist Mono | 8px | 400, tracked 0.06em | Arrow annotations |
@@ -83,7 +83,7 @@ A self-contained palette for the terminal-window primitive (see [primitive-termi
 ### Font stack
 
 ```html
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Montserrat:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 ```
 
 **Load-bearing rule:** Mono is for *technical* content (ports, commands, URLs, field types). Names go in Geist sans. Page title is Instrument Serif. Italic Instrument Serif is reserved for annotation callouts (see [primitive-annotation.md](primitive-annotation.md)). **Never JetBrains Mono** as a blanket "dev" font.

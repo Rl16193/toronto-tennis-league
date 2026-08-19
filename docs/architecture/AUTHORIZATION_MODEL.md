@@ -1,5 +1,7 @@
 # Authorization and role model
 
+Visual: [authorization boundaries](diagrams/authorization-boundaries.html) · [SVG export](diagrams/authorization-boundaries.svg).
+
 ## Current state
 
 Firebase Auth supplies identity. Firestore Rules are the effective client authorization boundary; React private routes only control navigation. The current elevated check is `isGlobalEventCreator()`, which accepts a hardcoded super-admin UID or `preferences/{uid}.event_creator == true`. Provider-like access is inferred from `preferences.stringer_id` or `preferences.coach_id`; it is not a general role claim system.
