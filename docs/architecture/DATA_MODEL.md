@@ -54,4 +54,4 @@ Keep stable document IDs and append-only activity records, but formalize field s
 - Many documents have application-level validation but not complete rules-level type/length validation.
 - The deployed schema and historical migration state were not available for this local audit; do not infer production document shape from one code path.
 
-Last verified source SHA: `8866f1b`.
+Last verified source SHA: `323fc37`.

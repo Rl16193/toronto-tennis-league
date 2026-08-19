@@ -56,4 +56,4 @@ Evidence: `functions/lib/notify.js`, `functions/lib/constants.js`, `src/features
 - Target: run the same flows against emulators, then staging, with seed data and rules/function integration tests.
 - Open: confirm deployed trigger versions and whether historical documents contain all fields assumed by current readers.
 
-Last verified source SHA: `8866f1b`.
+Last verified source SHA: `323fc37`.

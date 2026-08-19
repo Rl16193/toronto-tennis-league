@@ -46,4 +46,4 @@ temporary emulator configurations; this proves the checked-in rules contract, no
 - Callable/trigger integration coverage is still incomplete even though Firestore and Storage
   Rules harnesses are checked in and exercised locally.
 
-Last verified source SHA: `8866f1b`.
+Last verified source SHA: `323fc37`.

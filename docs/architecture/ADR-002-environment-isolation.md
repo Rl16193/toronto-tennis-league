@@ -22,4 +22,4 @@ The current checkout has one `.firebaserc` default alias and no emulator or stag
 
 Evidence: `.firebaserc`, `firebase.json`, `package.json`, `src/lib/firebase.ts`. Open: authorized staging project ID, CI secret storage, database location/edition, and backup schedule.
 
-Last verified source SHA: `8866f1b`.
+Last verified source SHA: `323fc37`.
