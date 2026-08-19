@@ -11,6 +11,7 @@ const { Resend } = require('resend');
 const { htmlToText } = require('./htmlToText');
 const { LINK } = require('./emailTemplates');
 const { EMAIL_FROM, EMAIL_REPLY_TO } = require('./constants');
+const { emailDeliveryDecision } = require('./emailDelivery');
 
 const db = () => admin.firestore();
 const resendApiKey = defineSecret('RESEND_API_KEY');
@@ -58,6 +59,21 @@ async function sendEmail(uid, subject, html) {
     const email = user.email;
     if (!email) return;
     if (prefsDoc.data()?.email_notifications === false) return;
+    const projectId = process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || '';
+    const decision = emailDeliveryDecision({
+      projectId,
+      recipient: email,
+      emulator: process.env.FUNCTIONS_EMULATOR === 'true',
+      enabled: process.env.EMAIL_DELIVERY_ENABLED === 'true',
+      allowlist: (process.env.EMAIL_ALLOWED_RECIPIENTS || '')
+        .split(',').map((value) => value.trim()).filter(Boolean),
+    });
+    if (!decision.deliver) {
+      logger.info('sendEmail skipped by environment delivery policy', {
+        projectId: projectId || '(unset)', reason: decision.reason,
+      });
+      return;
+    }
     // `html` may be a function of the recipient's user doc — lets a template greet by name
     // without the caller doing its own `users/{uid}` read (we already have it here).
     const body = typeof html === 'function' ? html(user) : html;
