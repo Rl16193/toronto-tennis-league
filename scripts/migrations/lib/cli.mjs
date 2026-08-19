@@ -16,13 +16,13 @@ const valueAfter = (argv, flag) => {
 export const usage = () =>
   [
     'Usage: node scripts/migrations/<migration>.mjs --project <id> [--key <service-account.json>]',
-    '       [--dry-run] [--apply] [--limit <n>] [--resume <document-id>]',
+    '       [--dry-run] [--apply] [--limit <n>] [--resume <document-id>] (supported migrations only)',
     '       production additionally requires --allow-production and',
     `       ALLOW_PRODUCTION_MIGRATION=true plus --confirm-production ${PRODUCTION_CONFIRMATION}`,
   ].join('\n');
 
 /** Parse the common safety contract before any Firebase client is initialized. */
-export const parseMigrationArgs = (argv = process.argv.slice(2)) => {
+export const parseMigrationArgs = (argv = process.argv.slice(2), { supportsPaging = false } = {}) => {
   if (argv.includes('--help')) return { help: true };
 
   const project = valueAfter(argv, '--project')?.trim();
@@ -36,6 +36,11 @@ export const parseMigrationArgs = (argv = process.argv.slice(2)) => {
   }
 
   const resume = valueAfter(argv, '--resume');
+  if (!supportsPaging && (limit !== null || resume !== null)) {
+    throw new Error(
+      '--limit/--resume are not supported by this migration; run a bounded migration that documents cursor handling.',
+    );
+  }
   const key = valueAfter(argv, '--key');
   const allowProduction = argv.includes('--allow-production');
   const confirmation = valueAfter(argv, '--confirm-production');

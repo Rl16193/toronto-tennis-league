@@ -12,7 +12,8 @@ This runbook separates repository-verifiable preparation from Firebase/GCP conso
 
 - No backup/export configuration, restore drill, staging project alias, or recovery script was found in the checkout.
 - `firebase.json` configures Firestore rules and indexes but no backup policy.
-- `.firebaserc` has only `default -> toronto-tennis-league`; this is not sufficient environment isolation.
+- `.firebaserc` has no production default and contains only `local -> rands-local`; this is safer
+  for routine CLI use, but it does not replace a staging project or a tested recovery workflow.
 - Firestore rules include an Admin SDK-only archive path, but that path is not a backup system and must not be treated as recovery evidence.
 
 ## Required authorized console work

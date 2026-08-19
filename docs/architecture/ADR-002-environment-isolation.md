@@ -9,10 +9,10 @@ Local development and QA must use emulators first, then a separately named stagi
 
 ## Context
 
-The checkout retains one production-sensitive `.firebaserc` alias, but local emulator commands now
-select the synthetic `rands-local` project explicitly. Hosting operations require an explicit target
-and approval guard. A staging project is still external to this repository, so the checkout cannot
-claim deployed staging isolation.
+The checkout retains no production `.firebaserc` default; it contains only a non-default `local ->
+rands-local` alias. Local emulator commands select the synthetic project explicitly. Hosting
+operations require an explicit target and approval guard. A staging project is still external to
+this repository, so the checkout cannot claim deployed staging isolation.
 
 ## Consequences
 

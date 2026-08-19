@@ -47,6 +47,9 @@ npm run dev
 ```
 
 The Vite server uses port `3000`; the full Emulator Suite uses the ports declared in `firebase.json`.
+The launcher adds the repository's Java 21 Homebrew path when it is available. If a standard
+emulator port is occupied, use the temporary-port test commands below or stop the conflicting
+local service before starting the full app suite.
 The emulator scripts explicitly select the synthetic `rands-local` project and do not use the
 production alias in `.firebaserc`.
 Firestore and Storage Rules test commands use temporary emulator configurations and select an
@@ -55,6 +58,8 @@ the Firestore Emulator Suite. The repository pins `firebase-tools` and invokes t
 it does not download an unbounded CLI version during tests.
 
 `npm run seed:emulator` writes only deterministic synthetic Auth users and Firestore data to the local emulators (`rands-local`) and refuses any other project ID or non-local Auth host. The fixture set covers member, organizer, provider, multi-role, event, Round Robin draft, match, task/reward, marketplace, notification, court, and aggregate paths. The seeded sign-in accounts use the `.invalid` emails and passwords listed in `tests/fixtures/local-fixtures.mjs`; they are local-only credentials.
+`npm run test:fixtures` starts an isolated temporary Auth/Firestore emulator pair and exercises the
+same seed command without using the fixed ports needed by the full local app suite.
 
 GitHub CI runs on pushes and pull requests targeting `dev-anuj`, installs Node 22 and Java 21, and
 runs the same `npm run verify` quality gates plus a separate Functions dependency install. It does
@@ -69,6 +74,7 @@ npm run format:check  # Maintained-slice formatting check
 npm test              # Pure domain and data-contract tests
 npm run test:rules    # Firestore Rules suite in a temporary local emulator
 npm run test:storage  # Storage Rules suite in a temporary local emulator
+npm run test:fixtures # Synthetic Auth/Firestore seed smoke test in temporary emulators
 npm run build         # Generates the programs CSV, then creates dist/
 npm run verify        # All local quality gates in one command
 npm run preview       # Serves the built dist/ locally
@@ -80,7 +86,11 @@ Project architecture and security validation gaps are tracked in [docs/engineeri
 
 ## Firebase and deployment safety
 
-`.firebaserc` currently names `toronto-tennis-league`, which is production-sensitive. Routine development and QA must not use that project. `hosting:deploy` and `hosting:preview` now require `FIREBASE_DEPLOY_PROJECT_ID`; production also requires two explicit approval environment variables. Do not run a production action from this checkout without an approved environment plan. Do not run a bare Firebase deploy command; use the explicit-project, approval-gated workflow.
+`.firebaserc` has no default project; it contains only the explicit `local -> rands-local` alias.
+The production-sensitive project is intentionally not an active CLI default. `hosting:deploy` and
+`hosting:preview` require `FIREBASE_DEPLOY_PROJECT_ID`; production also requires two explicit
+approval environment variables. Do not run a production action from this checkout without an
+approved environment plan. Use the explicit-project, approval-gated workflow for any deployment.
 
 For an isolated staging project, use the project ID supplied by the environment owner:
 
@@ -92,7 +102,7 @@ The guard script is `scripts/deploy-hosting.mjs`. It never infers the deployment
 
 The remaining environment work is to establish:
 
-1. local Firebase emulators; **implemented in this commit**;
+1. local Firebase emulators; **implemented for local and isolated test use**;
 2. an isolated staging project and explicit project selection;
 3. callable/trigger integration tests against a local Functions emulator;
 4. approval-gated production deployment documentation.

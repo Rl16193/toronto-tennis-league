@@ -37,8 +37,12 @@ CourtMap page.
 - `npm run test:rules` and `npm run test:storage` select temporary emulator ports and use local
   OpenJDK when it is installed outside the default PATH. The repository pins `firebase-tools` so
   the emulator wrapper does not download an unbounded CLI version at execution time.
+- `npm run test:fixtures` starts temporary Auth/Firestore emulators and exercises the synthetic
+  seed command; the full `npm run emulators` launcher retains conventional fixed ports for app
+  development and adds the same local Java fallback.
 - `npm run verify` runs the local type, lint, format, documentation, unit, Functions, Rules,
-  Storage, build, generated-artifact freshness, and diff checks in one command.
+  Storage, fixture-smoke, build, generated-artifact freshness, and working-tree/committed-range
+  diff checks in one command.
 
 ## Architecture freshness
 

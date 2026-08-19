@@ -17,17 +17,10 @@ test('migration arguments require an explicit project and default to dry-run', (
 
 test('migration arguments support bounded apply intent and resume cursors', () => {
   assert.deepEqual(
-    parseMigrationArgs([
-      '--project',
-      'rands-staging',
-      '--key',
-      'staging.json',
-      '--apply',
-      '--limit',
-      '20',
-      '--resume',
-      'user-100',
-    ]),
+    parseMigrationArgs(
+      ['--project', 'rands-staging', '--key', 'staging.json', '--apply', '--limit', '20', '--resume', 'user-100'],
+      { supportsPaging: true },
+    ),
     {
       project: 'rands-staging',
       key: 'staging.json',
@@ -37,6 +30,13 @@ test('migration arguments support bounded apply intent and resume cursors', () =
       resume: 'user-100',
       help: false,
     },
+  );
+});
+
+test('migration arguments reject paging flags unless the migration implements them', () => {
+  assert.throws(
+    () => parseMigrationArgs(['--project', 'rands-staging', '--limit', '20']),
+    /--limit\/--resume are not supported/,
   );
 });
 

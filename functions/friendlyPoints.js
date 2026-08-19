@@ -59,17 +59,25 @@ exports.onFriendlyConfirmedAwardPoints = onDocumentUpdated(
         // see an unpaid match and pay twice.
         if (snap.data().applied === true) return;
 
-        tx.set(db().collection('stats').doc(winnerId), {
-          leaguePoints26: admin.firestore.FieldValue.increment(WINNER_POINTS),
-          matchesPlayed: admin.firestore.FieldValue.increment(1),
-          wins: admin.firestore.FieldValue.increment(1),
-        }, { merge: true });
+        tx.set(
+          db().collection('stats').doc(winnerId),
+          {
+            leaguePoints26: admin.firestore.FieldValue.increment(WINNER_POINTS),
+            matchesPlayed: admin.firestore.FieldValue.increment(1),
+            wins: admin.firestore.FieldValue.increment(1),
+          },
+          { merge: true },
+        );
 
-        tx.set(db().collection('stats').doc(loserId), {
-          leaguePoints26: admin.firestore.FieldValue.increment(LOSER_POINTS),
-          matchesPlayed: admin.firestore.FieldValue.increment(1),
-          loses: admin.firestore.FieldValue.increment(1),
-        }, { merge: true });
+        tx.set(
+          db().collection('stats').doc(loserId),
+          {
+            leaguePoints26: admin.firestore.FieldValue.increment(LOSER_POINTS),
+            matchesPlayed: admin.firestore.FieldValue.increment(1),
+            loses: admin.firestore.FieldValue.increment(1),
+          },
+          { merge: true },
+        );
 
         tx.set(ref, { applied: true, applied_at: new Date().toISOString() }, { merge: true });
       });
@@ -79,7 +87,10 @@ exports.onFriendlyConfirmedAwardPoints = onDocumentUpdated(
         loser: safeId(loserId),
       });
     } catch (err) {
-      logger.error('friendlyPoints: payout failed', { id: event.params.id, err: String(err) });
+      logger.error('friendlyPoints: payout failed', { id: safeId(event.params.id), err: String(err) });
+      // Throw so the Firestore trigger retries and a confirmed match cannot remain silently
+      // unpaid. The transaction's applied marker keeps a successful retry idempotent.
+      throw err;
     }
   },
 );

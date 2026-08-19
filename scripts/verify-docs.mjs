@@ -27,7 +27,14 @@ const requiredDocs = [
 
 const documentationRequirements = [
   {
-    paths: ['firebase.json', '.firebaserc', 'scripts/run-emulator-test.mjs', 'scripts/deploy-hosting.mjs'],
+    paths: [
+      'firebase.json',
+      '.firebaserc',
+      'scripts/run-emulator-test.mjs',
+      'scripts/run-emulator-fixture-test.mjs',
+      'scripts/start-emulators.mjs',
+      'scripts/deploy-hosting.mjs',
+    ],
     docs: ['docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md', 'docs/architecture/SYSTEM_ARCHITECTURE.md'],
   },
   {

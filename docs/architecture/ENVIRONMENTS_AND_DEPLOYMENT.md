@@ -4,13 +4,13 @@ Diagrams: [target safe delivery architecture](diagrams/target-safe-delivery-arch
 
 ## Current state
 
-The checkout contains one Firebase project alias:
+The checkout contains one non-default local Firebase project alias:
 
 ```text
-default -> toronto-tennis-league
+local -> rands-local
 ```
 
-`firebase.json` configures Firestore rules/indexes, Storage rules, Functions, Hosting, and local emulator ports. The checkout still has no staging project. The root package has local emulator, synthetic seed, `hosting:deploy`, and `hosting:preview` commands; emulator commands explicitly select `rands-local`, while Hosting commands require an explicit project decision because the CLI’s active project is production-sensitive. `firebase-tools` is pinned in root `devDependencies` and invoked from `node_modules/.bin`.
+`firebase.json` configures Firestore rules/indexes, Storage rules, Functions, Hosting, and local emulator ports. The checkout still has no staging project. The production-sensitive project is not configured as a CLI default. The root package has local emulator, synthetic seed, `hosting:deploy`, and `hosting:preview` commands; emulator commands explicitly select `rands-local`, while Hosting commands require an explicit project decision. `firebase-tools` is pinned in root `devDependencies` and invoked from `node_modules/.bin`.
 
 The executable deployment guard is intentionally Hosting-only. This code-only checkout does not
 provide a full Rules/Storage/Functions release command because no authorized staging project or
@@ -45,7 +45,8 @@ No backup/export configuration, restore drill, or staging project alias was foun
 ## Evidence, risks, and open questions
 
 - Evidence: `.firebaserc`, `firebase.json`, `package.json`, `src/lib/firebase.ts`, `.gitignore`.
-- Risk: generic CLI commands can target `toronto-tennis-league`.
+- Risk: an operator can still explicitly target a production project; deployment wrappers retain
+  their separate project and approval checks.
 - Local CLI evidence: root `devDependencies.firebase-tools` is pinned to `15.27.0`; emulator and Hosting scripts use that repository-local binary.
 - Open: identify the authorized staging project, Firebase database location/edition, CI secret strategy, and production deploy approver.
 

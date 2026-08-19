@@ -6,21 +6,21 @@ The application is a Vite-built React web client hosted by Firebase Hosting. The
 
 Diagram: [current system architecture](diagrams/current-system-architecture.md).
 
-The current deployment region is `us-central1`; scheduled functions format dates in `America/Toronto`. Firebase configuration is supplied through `VITE_FIREBASE_*` environment variables, while `.firebaserc` selects `toronto-tennis-league` as the default project.
+The current deployment region is `us-central1`; scheduled functions format dates in `America/Toronto`. Firebase configuration is supplied through `VITE_FIREBASE_*` environment variables, while `.firebaserc` contains only a non-default `local -> rands-local` alias. Production must be selected explicitly through an approval-gated workflow.
 
 ## Runtime boundaries
 
-| Boundary | Current responsibility |
-| --- | --- |
-| Browser / React | Routing, presentation, form validation, user-initiated Firestore/Storage reads and permitted writes |
-| Firebase Auth | Authenticated identity and provider sign-in (Google and Apple providers are configured in the client) |
-| Firestore Rules | Client authorization, ownership, field-diff restrictions, and privacy gates |
-| Cloud Functions | Notifications, points/rewards, connections, moderation, scheduled aggregation, callable privileged workflows |
-| Storage Rules | Public reads plus constrained image writes; moderation trigger handles finalized objects |
-| Firebase Hosting | Static `dist` output and SPA fallback |
-| Resend | Outbound transactional email from Functions |
-| GA4 | Client analytics when supported |
-| Sheets / BigQuery | Scheduled operational metrics sinks used by `aggregateAdminMetrics` |
+| Boundary          | Current responsibility                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------------------ |
+| Browser / React   | Routing, presentation, form validation, user-initiated Firestore/Storage reads and permitted writes          |
+| Firebase Auth     | Authenticated identity and provider sign-in (Google and Apple providers are configured in the client)        |
+| Firestore Rules   | Client authorization, ownership, field-diff restrictions, and privacy gates                                  |
+| Cloud Functions   | Notifications, points/rewards, connections, moderation, scheduled aggregation, callable privileged workflows |
+| Storage Rules     | Public reads plus constrained image writes; moderation trigger handles finalized objects                     |
+| Firebase Hosting  | Static `dist` output and SPA fallback                                                                        |
+| Resend            | Outbound transactional email from Functions                                                                  |
+| GA4               | Client analytics when supported                                                                              |
+| Sheets / BigQuery | Scheduled operational metrics sinks used by `aggregateAdminMetrics`                                          |
 
 ## Target state
 

@@ -11,12 +11,14 @@
  * Dry-run is the default. Production additionally requires the migration confirmation triple.
  */
 import admin from 'firebase-admin';
-import { createMigrationDb, parseMigrationArgs } from './migrations/lib/cli.mjs';
+import { createMigrationDb, parseMigrationArgs, scanCollection } from './migrations/lib/cli.mjs';
 
 const args = process.argv.slice(2);
-const options = parseMigrationArgs(args);
+const options = parseMigrationArgs(args, { supportsPaging: true });
 if (options.help) {
-  console.log('Usage: node scripts/backfill-doubles-partners.mjs --project <id> --key <serviceAccount.json> [--apply]');
+  console.log(
+    'Usage: node scripts/backfill-doubles-partners.mjs --project <id> --key <serviceAccount.json> [--apply] [--limit <n>] [--resume <document-id>]',
+  );
   process.exit(0);
 }
 const dryRun = options.dryRun;
@@ -42,30 +44,22 @@ const normalise = (s = '') =>
     .replace(/[^a-z0-9]/g, '')
     .trim();
 
-// Firestore caps a batch at 500 writes.
-const commitInChunks = async (items, apply) => {
-  for (let i = 0; i < items.length; i += 400) {
-    const batch = db.batch();
-    items.slice(i, i + 400).forEach((item) => apply(batch, item));
-    await batch.commit();
-  }
-};
-
 const run = async () => {
-  // 1. Every completed doubles match not yet stamped.
-  const matchesSnap = await db
-    .collection('matches')
-    .where('category', '==', 'doubles')
-    .where('status', '==', 'complete')
-    .get();
+  // 1. Scan an ordered page so --limit and --resume are real safety controls rather than
+  // accepted-but-ignored flags. Filtering happens after the bounded document scan.
+  const matchesSnap = await scanCollection(db, 'matches', { limit: options.limit, resume: options.resume });
 
   const matches = matchesSnap.docs
     .map((d) => ({ id: d.id, ref: d.ref, ...d.data() }))
-    .filter((m) => (m.winner_uid || m.winner_user_id) && !m.doubles_partner_pts_v2);
+    .filter(
+      (m) =>
+        m.category === 'doubles' &&
+        m.status === 'complete' &&
+        (m.winner_uid || m.winner_user_id) &&
+        !m.doubles_partner_pts_v2,
+    );
 
-  console.log(
-    `${matchesSnap.size} total completed doubles matches · ${matches.length} ${dryRun ? 'would be ' : ''}processed\n`,
-  );
+  console.log(`${matchesSnap.size} matches scanned · ${matches.length} ${dryRun ? 'would be ' : ''}processed\n`);
 
   if (matches.length === 0) {
     console.log('Nothing to do.');
@@ -204,30 +198,57 @@ const run = async () => {
     console.log(`    leaguePoints26 +${inc.leaguePoints26}  matchesPlayed +1  wins +${inc.wins}  loses +${inc.loses}`);
   });
 
-  // 4. Write stats + stamp every processed match doc.
+  // 4. Credit each match and stamp that same match in one transaction. The marker and increments
+  // must be atomic: a crash between separate stats and match commits would double-credit a rerun.
   if (!dryRun) {
-    await commitInChunks([...byUid.values()], (batch, row) => {
-      const { uid, ...delta } = row;
-      batch.set(
-        db.doc(`stats/${uid}`),
-        {
-          matchesPlayed: admin.firestore.FieldValue.increment(delta.matchesPlayed),
-          wins: admin.firestore.FieldValue.increment(delta.wins),
-          loses: admin.firestore.FieldValue.increment(delta.loses),
-          leaguePoints26: admin.firestore.FieldValue.increment(delta.leaguePoints26),
-          tournamentsPlayed: admin.firestore.FieldValue.increment(delta.tournamentsPlayed),
-          pointswon: admin.firestore.FieldValue.increment(delta.pointswon),
-          totalPointsPlayed: admin.firestore.FieldValue.increment(delta.totalPointsPlayed),
-        },
-        { merge: true },
-      );
-    });
+    for (const match of matches) {
+      const matchIncrements = increments.filter((increment) => increment.match.id === match.id);
+      await db.runTransaction(async (transaction) => {
+        const current = await transaction.get(match.ref);
+        if (!current.exists || current.data()?.doubles_partner_pts_v2) return;
 
-    // Stamp every processed match so a re-run skips them. Each match gets its own batch
-    // because a Firestore batch can't exceed 500 ops and we're mixing stats + match writes.
-    await commitInChunks(matches, (batch, m) => {
-      batch.update(m.ref, { doubles_partner_pts_v2: true });
-    });
+        const matchDeltas = new Map();
+        for (const increment of matchIncrements) {
+          const delta = matchDeltas.get(increment.uid) ?? {
+            matchesPlayed: 0,
+            wins: 0,
+            loses: 0,
+            leaguePoints26: 0,
+            tournamentsPlayed: 0,
+            pointswon: 0,
+            totalPointsPlayed: 0,
+          };
+          delta.matchesPlayed += 1;
+          delta.wins += increment.wins;
+          delta.loses += increment.loses;
+          delta.leaguePoints26 += increment.leaguePoints26;
+          delta.tournamentsPlayed += increment.tournamentsPlayed;
+          delta.pointswon += increment.pointswon;
+          delta.totalPointsPlayed += increment.totalPointsPlayed;
+          matchDeltas.set(increment.uid, delta);
+        }
+
+        for (const [uid, delta] of matchDeltas) {
+          transaction.set(
+            db.doc(`stats/${uid}`),
+            {
+              matchesPlayed: admin.firestore.FieldValue.increment(delta.matchesPlayed),
+              wins: admin.firestore.FieldValue.increment(delta.wins),
+              loses: admin.firestore.FieldValue.increment(delta.loses),
+              leaguePoints26: admin.firestore.FieldValue.increment(delta.leaguePoints26),
+              tournamentsPlayed: admin.firestore.FieldValue.increment(delta.tournamentsPlayed),
+              pointswon: admin.firestore.FieldValue.increment(delta.pointswon),
+              totalPointsPlayed: admin.firestore.FieldValue.increment(delta.totalPointsPlayed),
+            },
+            { merge: true },
+          );
+        }
+        transaction.update(match.ref, {
+          doubles_partner_pts_v2: true,
+          doubles_partner_pts_v2_at: new Date().toISOString(),
+        });
+      });
+    }
   }
 
   console.log(`\n${byUid.size} player(s) ${dryRun ? 'would be ' : ''}credited from ${matches.length} match(es).`);

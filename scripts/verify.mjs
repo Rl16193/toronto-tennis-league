@@ -11,6 +11,7 @@ const checks = [
   ['Functions unit tests', ['--prefix', 'functions', 'test']],
   ['Firestore Rules tests', ['run', 'test:rules']],
   ['Storage Rules tests', ['run', 'test:storage']],
+  ['emulator fixture smoke', ['run', 'test:fixtures']],
   ['production build', ['run', 'build']],
 ];
 
@@ -27,8 +28,14 @@ for (const [label, args] of checks) {
 }
 
 console.log('\n=== diff check ===');
-const diffCheck = spawnSync('git', ['diff', '--check'], { stdio: 'inherit' });
-if (diffCheck.error || diffCheck.status !== 0) failures.push('git diff --check');
+const diffChecks = [['working tree', ['diff', '--check']]];
+const comparisonBase = process.env.ARCHITECTURE_BASE_SHA;
+if (comparisonBase) diffChecks.push(['committed change set', ['diff', '--check', `${comparisonBase}...HEAD`]]);
+for (const [label, args] of diffChecks) {
+  console.log(`-- ${label}`);
+  const diffCheck = spawnSync('git', args, { stdio: 'inherit' });
+  if (diffCheck.error || diffCheck.status !== 0) failures.push(`git diff --check (${label})`);
+}
 
 console.log('\n=== generated artifact freshness ===');
 const generatedCheck = spawnSync('git', ['diff', '--exit-code', 'HEAD', '--', 'public/programs-tennis.csv'], {

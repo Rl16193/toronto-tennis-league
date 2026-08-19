@@ -1,7 +1,8 @@
 import { emptyReport, parseMigrationArgs, printReport, usage } from './lib/cli.mjs';
 
 // Synthetic records make this executable example safe in every environment. Copy this file for
-// a real migration, replace the fixture scan with scanCollection(), and keep the same CLI guards.
+// A real migration should replace the fixture scan with scanCollection() and opt into bounded
+// cursor flags only after implementing and testing that scan.
 const FIXTURE = [
   { id: 'example-001', eligible: true },
   { id: 'example-002', eligible: false },
