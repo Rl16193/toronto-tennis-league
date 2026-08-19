@@ -31,10 +31,9 @@ const freePorts = async (count) => {
   return ports;
 };
 
-const waitForHttp = async (url, child, timeoutMs = 30_000) => {
+const waitForHttp = async (url, timeoutMs = 30_000) => {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`Vite exited before ${url} became ready.`);
     try {
       const response = await fetch(url);
       if (response.ok) return;
@@ -53,53 +52,19 @@ const run = (command, args, options = {}) =>
     child.once('exit', (code, signal) => resolve(code ?? (signal ? 1 : 0)));
   });
 
-const terminate = async (child) => {
-  if (!child || child.exitCode !== null) return;
-  child.kill('SIGTERM');
-  await Promise.race([
-    new Promise((resolve) => child.once('exit', resolve)),
-    new Promise((resolve) => setTimeout(resolve, 5_000)),
-  ]);
-  if (child.exitCode === null) child.kill('SIGKILL');
-};
-
 const inner = async () => {
   const seedCode = await run(process.execPath, ['tests/fixtures/seed-emulator.mjs'], { env: process.env });
   if (seedCode !== 0) throw new Error('Synthetic emulator seeding failed.');
 
-  const viteEnv = {
-    ...process.env,
-    VITE_FIREBASE_API_KEY: 'synthetic-api-key',
-    VITE_FIREBASE_AUTH_DOMAIN: 'rands-local.firebaseapp.com',
-    VITE_FIREBASE_PROJECT_ID: 'rands-local',
-    VITE_FIREBASE_STORAGE_BUCKET: 'rands-local.appspot.com',
-    VITE_FIREBASE_MESSAGING_SENDER_ID: '1234567890',
-    VITE_FIREBASE_APP_ID: '1:1234567890:web:synthetic',
-    VITE_USE_FIREBASE_EMULATORS: 'true',
-    VITE_FIREBASE_EMULATOR_HOST: '127.0.0.1',
-    VITE_FIREBASE_AUTH_EMULATOR_PORT: process.env.RANDS_E2E_AUTH_PORT,
-    VITE_FIRESTORE_EMULATOR_PORT: process.env.RANDS_E2E_FIRESTORE_PORT,
-    VITE_FUNCTIONS_EMULATOR_PORT: process.env.RANDS_E2E_FUNCTIONS_PORT,
-    VITE_FIREBASE_STORAGE_EMULATOR_PORT: process.env.RANDS_E2E_STORAGE_PORT,
-  };
-  const vite = spawn(executable('vite'), ['--port=3000', '--host=127.0.0.1'], {
-    cwd: root,
-    env: viteEnv,
-    stdio: 'inherit',
-  });
-  try {
-    await waitForHttp('http://127.0.0.1:3000', vite);
-    const code = await run(executable('playwright'), ['test'], { env: process.env });
-    if (code !== 0) throw new Error('Playwright browser smoke failed.');
-  } finally {
-    await terminate(vite);
-  }
+  await waitForHttp(process.env.PLAYWRIGHT_BASE_URL);
+  const code = await run(executable('playwright'), ['test'], { env: process.env });
+  if (code !== 0) throw new Error('Playwright browser smoke failed.');
 };
 
 const outer = async () => {
   const firebase = executable('firebase');
   if (!existsSync(firebase)) throw new Error('Firebase CLI is missing. Run npm ci.');
-  const [authPort, firestorePort, functionsPort, storagePort] = await freePorts(4);
+  const [authPort, firestorePort, functionsPort, storagePort, hostingPort] = await freePorts(5);
   const tempDir = await mkdtemp(path.join(os.tmpdir(), 'rands-browser-e2e-'));
   const configPath = path.join(tempDir, 'firebase.json');
   const functionsDir = path.join(tempDir, 'functions');
@@ -114,6 +79,24 @@ const outer = async () => {
       dependencies: { 'firebase-admin': '^13.10.0', 'firebase-functions': '^6.6.0' },
     })}\n`,
   );
+  const buildEnv = {
+    ...process.env,
+    VITE_FIREBASE_API_KEY: 'synthetic-api-key',
+    VITE_FIREBASE_AUTH_DOMAIN: 'rands-local.firebaseapp.com',
+    VITE_FIREBASE_PROJECT_ID: 'rands-local',
+    VITE_FIREBASE_STORAGE_BUCKET: 'rands-local.appspot.com',
+    VITE_FIREBASE_MESSAGING_SENDER_ID: '1234567890',
+    VITE_FIREBASE_APP_ID: '1:1234567890:web:synthetic',
+    VITE_USE_FIREBASE_EMULATORS: 'true',
+    VITE_FIREBASE_EMULATOR_HOST: '127.0.0.1',
+    VITE_FIREBASE_AUTH_EMULATOR_PORT: String(authPort),
+    VITE_FIRESTORE_EMULATOR_PORT: String(firestorePort),
+    VITE_FUNCTIONS_EMULATOR_PORT: String(functionsPort),
+    VITE_FIREBASE_STORAGE_EMULATOR_PORT: String(storagePort),
+  };
+  const buildCode = await run(executable('vite'), ['build'], { env: buildEnv });
+  if (buildCode !== 0) throw new Error('Browser emulator build failed.');
+  await symlink(path.join(root, 'dist'), path.join(tempDir, 'dist'));
   await writeFile(
     path.join(functionsDir, 'index.js'),
     [
@@ -129,11 +112,26 @@ const outer = async () => {
         functions: { source: 'functions' },
         firestore: { rules: path.join(root, 'firestore.rules') },
         storage: { rules: path.join(root, 'storage.rules') },
+        hosting: {
+          public: 'dist',
+          headers: [
+            {
+              source: '**',
+              headers: [
+                { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
+                { key: 'Cache-Control', value: 'no-cache' },
+              ],
+            },
+            { source: '/assets/**', headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }] },
+          ],
+          rewrites: [{ source: '**', destination: '/index.html' }],
+        },
         emulators: {
           auth: { host: '127.0.0.1', port: authPort },
           firestore: { host: '127.0.0.1', port: firestorePort },
           functions: { host: '127.0.0.1', port: functionsPort },
           storage: { host: '127.0.0.1', port: storagePort },
+          hosting: { host: '127.0.0.1', port: hostingPort },
           ui: { enabled: false },
         },
       },
@@ -151,6 +149,7 @@ const outer = async () => {
     RANDS_E2E_FIRESTORE_PORT: String(firestorePort),
     RANDS_E2E_FUNCTIONS_PORT: String(functionsPort),
     RANDS_E2E_STORAGE_PORT: String(storagePort),
+    PLAYWRIGHT_BASE_URL: `http://127.0.0.1:${hostingPort}`,
     GCLOUD_PROJECT: 'rands-local',
     GOOGLE_CLOUD_PROJECT: 'rands-local',
     PATH: existsSync(path.join(homebrewJava, 'bin', 'java'))
@@ -167,7 +166,7 @@ const outer = async () => {
         '--config',
         configPath,
         '--only',
-        'auth,firestore,functions,storage',
+        'auth,firestore,functions,storage,hosting',
         '--project',
         'rands-local',
         `${process.execPath} scripts/run-browser-e2e.mjs --inside-emulators`,

@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test';
 
+test('Hosting serves the SPA rewrite with repository security and cache headers', async ({ request }) => {
+  const response = await request.get('/login');
+  expect(response.ok()).toBe(true);
+  expect(response.headers()['cross-origin-opener-policy']).toBe('same-origin-allow-popups');
+  expect(response.headers()['cache-control']).toContain('no-cache');
+  await expect(response.text()).resolves.toContain('<div id="root">');
+});
+
 test('synthetic member can sign in and load the seeded profile boundary', async ({ page }) => {
   await page.goto('/login');
   await page.getByPlaceholder('roger@hotmail.com').fill('member-a@example.invalid');

@@ -79,7 +79,7 @@ The pinned source and update procedure remain in `docs/engineering/AGENT_SKILLS.
 - Signup intentionally has a pre-auth email-existence check so secondary-email migration remains
   usable. The callable requires App Check outside the Functions emulator; staging provider setup and
   abuse-rate verification remain external environment gates.
-- Broader browser journeys remain open. The stable suite intentionally limits browser timing to
+- Broader browser journeys remain open. The stable Hosting-emulator suite intentionally limits browser timing to
   login/profile bootstrap; reward, friendly, tournament scoring, and advancement are exercised at
   the callable/trigger emulator boundary instead of being duplicated in a brittle UI suite.
 - `npm audit` remains non-zero through transitive development tooling. Dependency upgrades need a

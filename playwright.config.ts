@@ -7,7 +7,7 @@ export default defineConfig({
   retries: 0,
   reporter: 'line',
   use: {
-    baseURL: 'http://127.0.0.1:3000',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5000',
     browserName: 'chromium',
     headless: true,
     trace: 'retain-on-failure',
