@@ -95,7 +95,7 @@ const outer = async () => {
       private: true,
       main: 'index.js',
       engines: { node: '22' },
-      dependencies: { 'firebase-admin': '^13.10.0', 'firebase-functions': '^6.6.0' },
+      dependencies: { 'firebase-admin': '12.7.0', 'firebase-functions': '7.3.2' },
     })}\n`,
   );
   const buildEnv = {
@@ -121,6 +121,7 @@ const outer = async () => {
     [
       "require('firebase-admin').initializeApp();",
       `Object.assign(exports, require(${JSON.stringify(path.join(root, 'functions', 'accountLookup.js'))}));`,
+      `Object.assign(exports, require(${JSON.stringify(path.join(root, 'functions', 'tournamentResults.js'))}));`,
       '',
     ].join('\n'),
   );
