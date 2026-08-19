@@ -15,6 +15,12 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const { REGION, TZ } = require('./lib/constants');
+const {
+  normalizeCouponCode,
+  optionalTrimmedString,
+  requireAuth,
+  requireTrimmedString,
+} = require('./lib/callable');
 const { earnedRsPoints } = require('./lib/points');
 const { notify, organizerUids } = require('./lib/notify');
 
@@ -29,14 +35,6 @@ const randomCode = () => {
     CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join('');
   return `RS-${pick(4)}-${pick(2)}`;
 };
-
-// ─── Shared helpers ─────────────────────────────────────────────────────────────────────────
-
-function requireAuth(request) {
-  const uid = request.auth && request.auth.uid;
-  if (!uid) throw new HttpsError('unauthenticated', 'Sign in to continue.');
-  return uid;
-}
 
 async function isOrganizer(uid) {
   const snap = await db().doc(`preferences/${uid}`).get();
@@ -79,10 +77,7 @@ async function readBalance(tx, uid) {
  */
 exports.redeemReward = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
-  const rewardId = request.data && request.data.rewardId;
-  if (typeof rewardId !== 'string' || !rewardId) {
-    throw new HttpsError('invalid-argument', 'Missing reward.');
-  }
+  const rewardId = requireTrimmedString(request.data && request.data.rewardId, 'Missing reward.');
 
   const rewardSnap = await db().doc(`tasks/${rewardId}`).get();
   if (!rewardSnap.exists) throw new HttpsError('not-found', 'That reward no longer exists.');
@@ -160,11 +155,10 @@ exports.redeemReward = onCall({ region: REGION }, async (request) => {
 /** Burns a coupon — the offer's stringer or an organizer. Transactional, so never used twice. */
 exports.markCouponUsed = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
-  const code = request.data && request.data.code;
-  if (typeof code !== 'string' || !code) throw new HttpsError('invalid-argument', 'Missing coupon code.');
+  const code = normalizeCouponCode(request.data && request.data.code);
 
   const [organizer, myProviderId] = await Promise.all([isOrganizer(uid), providerIdFor(uid)]);
-  const ref = db().doc(`redemptions/${code.trim().toUpperCase()}`);
+  const ref = db().doc(`redemptions/${code}`);
 
   const redemption = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -196,12 +190,11 @@ exports.markCouponUsed = onCall({ region: REGION }, async (request) => {
 /** Stringer flags a coupon for the organizer to look at — a no-show, a disputed code, etc. */
 exports.flagCoupon = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
-  const code = request.data && request.data.code;
-  const note = typeof (request.data && request.data.note) === 'string' ? request.data.note.trim() : '';
-  if (typeof code !== 'string' || !code) throw new HttpsError('invalid-argument', 'Missing coupon code.');
+  const code = normalizeCouponCode(request.data && request.data.code);
+  const note = optionalTrimmedString(request.data && request.data.note);
 
   const [organizer, myProviderId] = await Promise.all([isOrganizer(uid), providerIdFor(uid)]);
-  const ref = db().doc(`redemptions/${code.trim().toUpperCase()}`);
+  const ref = db().doc(`redemptions/${code}`);
 
   const redemption = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -236,11 +229,10 @@ exports.flagCoupon = onCall({ region: REGION }, async (request) => {
 /** Player asks for a redemption to be undone. Only possible while the coupon is unused. */
 exports.requestCancellation = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
-  const code = request.data && request.data.code;
-  const reason = typeof (request.data && request.data.reason) === 'string' ? request.data.reason.trim() : '';
-  if (typeof code !== 'string' || !code) throw new HttpsError('invalid-argument', 'Missing coupon code.');
+  const code = normalizeCouponCode(request.data && request.data.code);
+  const reason = optionalTrimmedString(request.data && request.data.reason);
 
-  const ref = db().doc(`redemptions/${code.trim().toUpperCase()}`);
+  const ref = db().doc(`redemptions/${code}`);
   const redemption = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'No coupon with that code.');
@@ -276,12 +268,11 @@ exports.reviewRedemption = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
   if (!(await isOrganizer(uid))) throw new HttpsError('permission-denied', 'Organizers only.');
 
-  const code = request.data && request.data.code;
+  const code = normalizeCouponCode(request.data && request.data.code);
   const approve = request.data && request.data.approve === true;
-  const note = typeof (request.data && request.data.note) === 'string' ? request.data.note.trim() : '';
-  if (typeof code !== 'string' || !code) throw new HttpsError('invalid-argument', 'Missing coupon code.');
+  const note = optionalTrimmedString(request.data && request.data.note);
 
-  const ref = db().doc(`redemptions/${code.trim().toUpperCase()}`);
+  const ref = db().doc(`redemptions/${code}`);
   const redemption = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'No coupon with that code.');
