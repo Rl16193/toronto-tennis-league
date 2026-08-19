@@ -11,7 +11,6 @@ import {
   setDoc,
   updateDoc,
   where,
-  writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -87,6 +86,8 @@ import {
   subscribeScoreSubmissions,
   subscribeTournamentMatches,
 } from '../../features/tournament/services/tournamentSubscriptions';
+import { createEventParticipant } from '../../features/events/services/eventRepository';
+import { createTournamentWriteBatch } from '../../features/tournament/services/tournamentPersistence';
 
 // Stand-in for a contacts doc whose matching users doc is missing — a data anomaly rather than a
 // normal state, but the merge below shouldn't drop the contact details over it.
@@ -1032,13 +1033,13 @@ export const useTournament = (eventIdOverride?: string) => {
         const drawKey = currentDrawKey;
         const advCount = rrConfig?.advancementCount ?? 1;
         const makePairings = (n: number): [number, number][] => (n >= 2 ? generateGroupPairings(n) : [[0, 1]]);
-        const batch = writeBatch(db);
+        const batch = createTournamentWriteBatch();
         for (const { gi, players } of groupsToFix) {
           const groupMs = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === gi);
           if (groupMs.some((m) => m.status === 'complete')) continue;
           const groupLabel = groupMs[0]?.rr_group_label ?? `Group ${String.fromCharCode(65 + gi)}`;
           const labelCustom = groupMs[0]?.rr_label_custom ?? false;
-          groupMs.forEach((m) => batch.delete(doc(db, 'matches', m.id)));
+          groupMs.forEach((m) => batch.deleteMatch(m.id));
           if (players.length > 0) {
             buildRRGroupMatchFields({
               eventId: event.id,
@@ -1051,7 +1052,7 @@ export const useTournament = (eventIdOverride?: string) => {
               pairings: makePairings(players.length),
               advancementCount: advCount,
               started,
-            }).forEach(({ docId, fields }) => batch.set(doc(db, 'matches', docId), fields));
+            }).forEach(({ docId, fields }) => batch.setMatch(docId, fields));
           }
         }
         await batch.commit();
@@ -1514,8 +1515,8 @@ export const useTournament = (eventIdOverride?: string) => {
     setResettingDraw(true);
     setMessage(null);
     try {
-      const batch = writeBatch(db);
-      currentMatches.forEach((m) => batch.delete(doc(db, 'matches', m.id)));
+      const batch = createTournamentWriteBatch();
+      currentMatches.forEach((m) => batch.deleteMatch(m.id));
       await batch.commit();
       setEditMode(false);
       setPreviewSlotOverrides((prev) => deleteKey(prev, currentDraw.label));
@@ -1558,14 +1559,17 @@ export const useTournament = (eventIdOverride?: string) => {
           const statsSnap = await getDocs(query(collection(db, 'stats'), where('__name__', '==', player.uid)));
           skillLevel = statsSnap.docs[0] ? normalizeUserStats(statsSnap.docs[0].data()).skill_level : 0;
         }
-        await addDoc(collection(db, 'event_participants'), {
+        await createEventParticipant({
           uid: player.uid,
           user_name: player.name,
           event_id: event.id,
           event_name: event.title,
           tournament_choice: currentDraw.tournamentChoice,
+          doubles: '',
+          partner_in_app: '',
           division: currentDraw.division !== 'All' ? currentDraw.division : "Men's",
           skill: skillLevel,
+          dateselected: [],
           created_at: new Date().toISOString(),
         });
       }
@@ -1721,14 +1725,17 @@ export const useTournament = (eventIdOverride?: string) => {
     if (userId === PLAYER_LOADING_SENTINEL) {
       const division = divisionOverride ?? (currentDraw.division !== 'All' ? currentDraw.division : "Men's");
       try {
-        await addDoc(collection(db, 'event_participants'), {
+        await createEventParticipant({
           uid: `__loading_${Date.now()}`,
           user_name: PLAYER_LOADING,
           event_id: event.id,
           event_name: event.title,
           tournament_choice: currentDraw.tournamentChoice,
+          doubles: '',
+          partner_in_app: '',
           division,
           skill: 0,
+          dateselected: [],
           created_at: new Date().toISOString(),
         });
         setMessage({ type: 'success', text: 'Player Loading placeholder added.' });
@@ -1746,15 +1753,17 @@ export const useTournament = (eventIdOverride?: string) => {
         skillLevel = statsSnap.docs[0] ? normalizeUserStats(statsSnap.docs[0].data()).skill_level : 0;
       }
       const division = divisionOverride ?? (currentDraw.division !== 'All' ? currentDraw.division : "Men's");
-      await addDoc(collection(db, 'event_participants'), {
+      await createEventParticipant({
         uid: userId,
         user_name: userData.name,
         event_id: event.id,
         event_name: event.title,
         tournament_choice: currentDraw.tournamentChoice,
+        doubles: partnerName ?? '',
+        partner_in_app: partnerName ? 'no' : '',
         division,
         skill: skillLevel,
-        ...(partnerName ? { doubles: partnerName, partner_in_app: 'no' } : {}),
+        dateselected: [],
         created_at: new Date().toISOString(),
       });
       // Re-adding a player clears any prior withdrawal so they can be grouped again.
@@ -1781,9 +1790,9 @@ export const useTournament = (eventIdOverride?: string) => {
     if (!isCreator || !event || !uid) return;
     try {
       const rows = participants.filter((p) => p.uid === uid);
-      const batch = writeBatch(db);
+      const batch = createTournamentWriteBatch();
       rows.forEach((p) =>
-        batch.update(doc(db, 'event_participants', p.id), {
+        batch.updateParticipant(p.id, {
           removal: true,
           removal_at: new Date().toISOString(),
         }),
@@ -1793,10 +1802,8 @@ export const useTournament = (eventIdOverride?: string) => {
       currentMatches
         .filter((m) => m.status !== 'complete')
         .forEach((m) => {
-          if (m.player_1_uid === uid)
-            batch.update(doc(db, 'matches', m.id), { player_1_uid: '', player_1_name: PLAYER_LOADING });
-          if (m.player_2_uid === uid)
-            batch.update(doc(db, 'matches', m.id), { player_2_uid: '', player_2_name: PLAYER_LOADING });
+          if (m.player_1_uid === uid) batch.updateMatch(m.id, { player_1_uid: '', player_1_name: PLAYER_LOADING });
+          if (m.player_2_uid === uid) batch.updateMatch(m.id, { player_2_uid: '', player_2_name: PLAYER_LOADING });
         });
       await batch.commit();
       // RR auto-placement would otherwise seat them again on the next pass.
@@ -1889,11 +1896,11 @@ export const useTournament = (eventIdOverride?: string) => {
       // computed preview), so the confirmed groups + names match the preview exactly.
       const groups = previewRRGroups;
       const labels = previewRRLabels;
-      const batch = writeBatch(db);
+      const batch = createTournamentWriteBatch();
       // Clear any existing RR docs for this draw first so re-generating can't leave
       // orphaned groups/matches behind (deterministic doc IDs only overwrite a matching
       // group+match index; fewer/smaller groups would otherwise strand the old docs).
-      currentMatches.filter((m) => m.format === 'rr').forEach((m) => batch.delete(doc(db, 'matches', m.id)));
+      currentMatches.filter((m) => m.format === 'rr').forEach((m) => batch.deleteMatch(m.id));
       groups.forEach((players, gi) => {
         const pairings = players.length >= 2 ? generateGroupPairings(players.length) : ([[0, 1]] as [number, number][]);
         buildRRGroupMatchFields({
@@ -1908,7 +1915,7 @@ export const useTournament = (eventIdOverride?: string) => {
           advancementCount: config.advancementCount,
           started,
         }).forEach(({ docId, fields }) => {
-          batch.set(doc(db, 'matches', docId), fields);
+          batch.setMatch(docId, fields);
         });
       });
       await batch.commit();
@@ -1958,12 +1965,12 @@ export const useTournament = (eventIdOverride?: string) => {
     // docs in a draw other than the one being edited (a sibling skill draw, most commonly).
     const extraWithdrawnByDrawKey = new Map<string, Set<string>>();
     try {
-      const batch = writeBatch(db);
+      const batch = createTournamentWriteBatch();
       const queuedDeleteIds = new Set<string>();
       const queueDelete = (id: string) => {
         if (queuedDeleteIds.has(id)) return;
         queuedDeleteIds.add(id);
-        batch.delete(doc(db, 'matches', id));
+        batch.deleteMatch(id);
       };
 
       {
@@ -2043,7 +2050,7 @@ export const useTournament = (eventIdOverride?: string) => {
           started,
         });
         rewrite.toDelete.forEach((id) => queueDelete(id));
-        rewrite.toWrite.forEach(({ docId, fields }) => batch.set(doc(db, 'matches', docId), fields));
+        rewrite.toWrite.forEach(({ docId, fields }) => batch.setMatch(docId, fields));
 
         for (const [srcGi, srcEdit] of srcEdits) {
           const srcMs = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === srcGi);
@@ -2060,7 +2067,7 @@ export const useTournament = (eventIdOverride?: string) => {
             started,
           });
           srcRewrite.toDelete.forEach((id) => queueDelete(id));
-          srcRewrite.toWrite.forEach(({ docId, fields }) => batch.set(doc(db, 'matches', docId), fields));
+          srcRewrite.toWrite.forEach(({ docId, fields }) => batch.setMatch(docId, fields));
         }
       }
 
@@ -2091,7 +2098,7 @@ export const useTournament = (eventIdOverride?: string) => {
       if (removedUids.length) {
         const removedSet = new Set(removedUids);
         participants.forEach((p) => {
-          if (removedSet.has(p.uid)) batch.delete(doc(db, 'event_participants', p.id));
+          if (removedSet.has(p.uid)) batch.deleteParticipant(p.id);
         });
       }
 
@@ -2101,8 +2108,9 @@ export const useTournament = (eventIdOverride?: string) => {
       // withdrawal was ever visible — persisting across a reload.
       if (removedUids.length) {
         const nextWithdrawn = [...new Set([...(rrDraft?.withdrawn ?? []), ...removedUids])];
-        batch.set(
-          doc(db, 'events', event.id, 'rr_drafts', rrDraftKey()),
+        batch.setRRDraft(
+          event.id,
+          rrDraftKey(),
           {
             event_id: event.id,
             draw_key: rrDraftKey(),
@@ -2115,8 +2123,9 @@ export const useTournament = (eventIdOverride?: string) => {
       // A different draw's rr_drafts doc isn't loaded client-side, so its existing withdrawn
       // list is unknown here — arrayUnion appends without needing (or risking clobbering) it.
       for (const [otherDrawKey, uids] of extraWithdrawnByDrawKey) {
-        batch.set(
-          doc(db, 'events', event.id, 'rr_drafts', otherDrawKey),
+        batch.setRRDraft(
+          event.id,
+          otherDrawKey,
           {
             event_id: event.id,
             draw_key: otherDrawKey,
@@ -2167,7 +2176,7 @@ export const useTournament = (eventIdOverride?: string) => {
     // 0 or 1 player → placeholder match so the empty/solo group remains visible.
     const pairings: [number, number][] = newPlayers.length >= 2 ? generateGroupPairings(newPlayers.length) : [[0, 1]];
     try {
-      const batch = writeBatch(db);
+      const batch = createTournamentWriteBatch();
       buildRRGroupMatchFields({
         eventId: event.id,
         drawKey,
@@ -2179,7 +2188,7 @@ export const useTournament = (eventIdOverride?: string) => {
         pairings,
         advancementCount: advCount,
         started,
-      }).forEach(({ docId, fields }) => batch.set(doc(db, 'matches', docId), fields));
+      }).forEach(({ docId, fields }) => batch.setMatch(docId, fields));
       await batch.commit();
       setMessage({ type: 'success', text: 'Group created.' });
     } catch (err) {
@@ -2212,10 +2221,8 @@ export const useTournament = (eventIdOverride?: string) => {
     const groupMatches = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === rrGroup);
     if (groupMatches.length === 0) return;
     try {
-      const batch = writeBatch(db);
-      groupMatches.forEach((m) =>
-        batch.update(doc(db, 'matches', m.id), { rr_group_label: trimmed, rr_label_custom: true }),
-      );
+      const batch = createTournamentWriteBatch();
+      groupMatches.forEach((m) => batch.updateMatch(m.id, { rr_group_label: trimmed, rr_label_custom: true }));
       await batch.commit();
       setMessage({ type: 'success', text: 'Group renamed.' });
     } catch (err) {
@@ -2357,18 +2364,16 @@ export const useTournament = (eventIdOverride?: string) => {
     }
 
     try {
-      const batch = writeBatch(db);
-      batch.update(doc(db, 'event_participants', participantId), {
+      const batch = createTournamentWriteBatch();
+      batch.updateParticipant(participantId, {
         zone_override: bucketId,
         req_zone_change: false,
       });
       // Vacate their unplayed slots so they actually leave the old zone's draw. Without this
       // they'd be routed to the new zone while still sitting in the old one's bracket.
       theirMatches.forEach((m) => {
-        if (m.player_1_uid === target.uid)
-          batch.update(doc(db, 'matches', m.id), { player_1_uid: '', player_1_name: PLAYER_LOADING });
-        if (m.player_2_uid === target.uid)
-          batch.update(doc(db, 'matches', m.id), { player_2_uid: '', player_2_name: PLAYER_LOADING });
+        if (m.player_1_uid === target.uid) batch.updateMatch(m.id, { player_1_uid: '', player_1_name: PLAYER_LOADING });
+        if (m.player_2_uid === target.uid) batch.updateMatch(m.id, { player_2_uid: '', player_2_name: PLAYER_LOADING });
       });
       await batch.commit();
       setMessage({
@@ -2404,9 +2409,9 @@ export const useTournament = (eventIdOverride?: string) => {
         (p) => (p.zone_override ?? zoneBucketFor(zoneMap[p.uid], zoneConfig)) === sourceId,
       );
       if (affected.length > 0) {
-        const batch = writeBatch(db);
+        const batch = createTournamentWriteBatch();
         affected.forEach((p) =>
-          batch.update(doc(db, 'event_participants', p.id), {
+          batch.updateParticipant(p.id, {
             merged_zone: true,
             merged_into: targetId,
           }),
@@ -2453,9 +2458,9 @@ export const useTournament = (eventIdOverride?: string) => {
           zoneBucketFor(zoneMap[p.uid], { ...zoneConfig, merges: {} }) === sourceId,
       );
       if (stamped.length > 0) {
-        const batch = writeBatch(db);
+        const batch = createTournamentWriteBatch();
         stamped.forEach((p) =>
-          batch.update(doc(db, 'event_participants', p.id), {
+          batch.updateParticipant(p.id, {
             merged_zone: false,
             merged_into: '',
           }),
@@ -2501,8 +2506,8 @@ export const useTournament = (eventIdOverride?: string) => {
     if (!window.confirm(warn)) return;
     setResettingDraw(true);
     try {
-      const batch = writeBatch(db);
-      currentMatches.forEach((m) => batch.delete(doc(db, 'matches', m.id)));
+      const batch = createTournamentWriteBatch();
+      currentMatches.forEach((m) => batch.deleteMatch(m.id));
       await batch.commit();
       setEditMode(false);
       setMessage({ type: 'success', text: 'Round Robin draw cancelled. Matches deleted and stats reset.' });
@@ -2537,9 +2542,9 @@ export const useTournament = (eventIdOverride?: string) => {
         drawsize: size,
         manualFill: true,
       });
-      const batch = writeBatch(db);
-      rrKnockoutMatches.forEach((m) => batch.delete(doc(db, 'matches', m.id)));
-      docs.forEach(({ docId, fields }) => batch.set(doc(db, 'matches', docId), fields));
+      const batch = createTournamentWriteBatch();
+      rrKnockoutMatches.forEach((m) => batch.deleteMatch(m.id));
+      docs.forEach(({ docId, fields }) => batch.setMatch(docId, fields));
       await batch.commit();
       setRRView('knockout');
     } catch (err) {

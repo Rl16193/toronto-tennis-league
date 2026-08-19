@@ -17,7 +17,15 @@ export const getRoundState = (roundMatches: TournamentMatch[]): 'preview' | 'loa
   // Any slot still waiting on a previous-round winner → Loading
   if (real.some((m) => isPlaceholder(m.player_1_name) || isPlaceholder(m.player_2_name))) return 'loading';
   // round is "started" once at least one match has both slots filled with real players
-  const anyReady = real.some((m) => m.player_1_name !== PLAYER_LOADING && m.player_2_name !== PLAYER_LOADING);
+  const anyReady = real.some(
+    (m) =>
+      !!m.player_1_name?.trim() &&
+      !!m.player_2_name?.trim() &&
+      m.player_1_name !== PLAYER_LOADING &&
+      m.player_2_name !== PLAYER_LOADING &&
+      !isPlaceholder(m.player_1_name) &&
+      !isPlaceholder(m.player_2_name),
+  );
   if (!anyReady) return 'preview';
   if (real.every((m) => !!m.winner_uid)) return 'finished';
   return 'started';
