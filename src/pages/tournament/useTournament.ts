@@ -834,9 +834,10 @@ export const useTournament = (eventIdOverride?: string) => {
 
   // Preview groups shown before any RR matches are generated. When the creator has saved a draft
   // arrangement, that (server-persisted) grouping is used; otherwise the SAME skill-first grouping
-  // as generation (buildZoneTierGroups). Withdrawn players are excluded either way.
+  // as generation (buildZoneTierGroups). Withdrawn players are excluded either way. Non-creators
+  // receive no preview at all so they cannot infer an unpublished draw from participant data.
   const previewRRGroups = useMemo<TournamentPlayer[][]>(() => {
-    if (currentDrawFormat !== 'rr' || currentMatches.length > 0) return [];
+    if (!isCreator || currentDrawFormat !== 'rr' || currentMatches.length > 0) return [];
     const available = currentDrawAllPlayers.filter((p) => !rrWithdrawn.has(p.uid));
     if (rrDraft && rrDraft.groups.length > 0) {
       const byId = new Map(available.map((p) => [p.uid, p]));
@@ -847,7 +848,16 @@ export const useTournament = (eventIdOverride?: string) => {
       skillMap[p.uid] = effectiveStatsMap[p.uid]?.skill_level ?? p.skillLevel ?? 0;
     }
     return buildZoneTierGroups(available, zoneMap, skillMap).map((g) => g.players);
-  }, [currentDrawFormat, currentMatches, currentDrawAllPlayers, effectiveStatsMap, zoneMap, rrDraft, rrWithdrawn]);
+  }, [
+    isCreator,
+    currentDrawFormat,
+    currentMatches,
+    currentDrawAllPlayers,
+    effectiveStatsMap,
+    zoneMap,
+    rrDraft,
+    rrWithdrawn,
+  ]);
 
   // Labels for the preview/draft groups (custom rename shown verbatim, else auto band/zone).
   const previewRRLabels = useMemo<string[]>(
