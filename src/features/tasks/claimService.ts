@@ -1,4 +1,5 @@
-import { addDoc, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
+import { addDoc, collection, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { fetchCompletedTournamentMatches } from './matchHistory';
 
@@ -69,20 +70,13 @@ export async function createHostClaim(
 const hasPlayedAMatch = async (uid: string): Promise<boolean> =>
   (await fetchCompletedTournamentMatches(uid)).length > 0;
 
-const alreadyClaimedByUser = async (uid: string, inviteeId: string): Promise<boolean> => {
-  const snap = await getDocs(
-    query(
-      collection(db, 'task_claims'),
-      where('uid', '==', uid),
-      where('type', '==', 'ambassador'),
-      where('invitee_id', '==', inviteeId),
-    ),
-  );
-  return snap.docs.some((d) => ['pending', 'approved'].includes(d.data().status));
-};
+// Reserved deterministic namespace: Firestore Rules mirror this exact prefix so simultaneous
+// claims for the same invitee compete for one document rather than creating duplicate pendings.
+export const ambassadorClaimId = (inviteeId: string): string => `ambassador_${inviteeId}`;
 
-// Client-side checks are a fast, friendly first pass — the administrator's approval is the real
-// gate, and the server enforces "one inviter per member" authoritatively at that point too.
+// Client-side eligibility is a friendly first pass. The deterministic document + Firestore Rules
+// enforce one active inviter per member at write time; the approval trigger retains its legacy
+// duplicate guard for older random-id claims.
 // Returns an error message on failure, or null on success.
 export async function createAmbassadorClaim(
   uid: string,
@@ -93,17 +87,22 @@ export async function createAmbassadorClaim(
   if (inviteeId === uid) return 'You can’t invite yourself.';
   const played = await hasPlayedAMatch(inviteeId);
   if (!played) return `${inviteeName} hasn’t played a match yet — you can claim this once they have.`;
-  const claimed = await alreadyClaimedByUser(uid, inviteeId);
-  if (claimed) return `You already claimed ${inviteeName}.`;
-  await addDoc(collection(db, 'task_claims'), {
-    type: 'ambassador',
-    uid: uid,
-    user_name: name,
-    invitee_id: inviteeId,
-    invitee_name: inviteeName,
-    status: 'pending',
-    created_at: new Date().toISOString(),
-  });
+  try {
+    await setDoc(doc(db, 'task_claims', ambassadorClaimId(inviteeId)), {
+      type: 'ambassador',
+      uid: uid,
+      user_name: name,
+      invitee_id: inviteeId,
+      invitee_name: inviteeName,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    if (error instanceof FirebaseError && error.code === 'permission-denied') {
+      return `${inviteeName} already has an active ambassador claim.`;
+    }
+    throw error;
+  }
   return null;
 }
 

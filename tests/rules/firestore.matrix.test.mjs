@@ -222,6 +222,50 @@ describe('expanded Firestore authorization matrix', () => {
     await assertFails(getDoc(doc(anonDb(), 'task_claims/claim-a')));
   });
 
+  test('ambassador claims allow only one active inviter per invitee', async () => {
+    const claimFor = (uid, userName) => ({
+      uid,
+      user_name: userName,
+      type: 'ambassador',
+      invitee_id: 'member-c',
+      invitee_name: 'Member C',
+      status: 'pending',
+      created_at: '2026-08-23T00:00:00.000Z',
+    });
+    const claimRef = doc(dbFor('member-a'), 'task_claims/ambassador_member-c');
+
+    await assertSucceeds(setDoc(claimRef, claimFor('member-a', 'Member A')));
+    await assertFails(
+      setDoc(doc(dbFor('member-b'), 'task_claims/ambassador_member-c'), claimFor('member-b', 'Member B')),
+    );
+    await assertFails(setDoc(doc(dbFor('member-b'), 'task_claims/random-id'), claimFor('member-b', 'Member B')));
+    await assertFails(
+      setDoc(doc(dbFor('member-a'), 'task_claims/ambassador_member-a'), {
+        ...claimFor('member-a', 'Member A'),
+        invitee_id: 'member-a',
+        invitee_name: 'Member A',
+      }),
+    );
+
+    await assertSucceeds(
+      updateDoc(doc(dbFor('7PvfzNtDmsOq5GLMieId7QRT7wH3'), 'task_claims/ambassador_member-c'), {
+        status: 'rejected',
+        reviewer_note: 'Synthetic rejection',
+      }),
+    );
+    await assertSucceeds(
+      setDoc(doc(dbFor('member-b'), 'task_claims/ambassador_member-c'), claimFor('member-b', 'Member B')),
+    );
+    await assertFails(setDoc(claimRef, claimFor('member-a', 'Member A')));
+    await assertFails(
+      setDoc(doc(dbFor('member-a'), 'task_claims/ambassador_reserved'), {
+        uid: 'member-a',
+        type: 'volunteer',
+        status: 'pending',
+      }),
+    );
+  });
+
   test('group lesson rosters are public projections with server-only writes', async () => {
     await seedDoc('group_lessons/2026-08', {
       month: '2026-08',

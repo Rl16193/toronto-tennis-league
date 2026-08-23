@@ -328,7 +328,14 @@ exports.onPhotoReportAwardPoints = onDocumentCreated({ document: 'courts/{id}', 
 exports.onClaimReviewed = onDocumentUpdated({ document: 'task_claims/{id}', region: REGION }, async (event) => {
   const before = event.data?.before.data() || {};
   const after = event.data?.after.data() || {};
-  if (before.status !== 'pending') return;
+  if (before.status !== 'pending') {
+    // Rejected ambassador slots are reusable. A resubmission is an update to the deterministic
+    // document, so the create trigger will not see it; notify the review queue from here instead.
+    if (before.status === 'rejected' && after.status === 'pending' && after.type === 'ambassador') {
+      await notifyAdminsOfQueue('/tasks?review=claims');
+    }
+    return;
+  }
   const claimRef = event.data.after.ref;
 
   if (after.status === 'approved') {
@@ -337,7 +344,8 @@ exports.onClaimReviewed = onDocumentUpdated({ document: 'task_claims/{id}', regi
     } else if (after.type === 'host') {
       await bumpCounterAndAward(after.uid, after.user_name || '', 'meetups', 1, undefined);
     } else if (after.type === 'ambassador') {
-      // Authoritative "one inviter per member" check — the client's pre-check is only UX.
+      // New claims use one deterministic document per invitee. Keep this approval-stage query as
+      // a compatibility guard for legacy random-id claims that predate that invariant.
       const dupe = await db()
         .collection('task_claims')
         .where('type', '==', 'ambassador')
