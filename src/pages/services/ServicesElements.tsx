@@ -885,7 +885,9 @@ const ProviderPanel: React.FC = () => {
                 </div>
               </div>
               {r.status === 'cancel_requested' && (
-                <p className="text-[11px] text-fg/70 mt-1.5">Player asked to cancel. An administrator is reviewing it.</p>
+                <p className="text-[11px] text-fg/70 mt-1.5">
+                  Player asked to cancel. An administrator is reviewing it.
+                </p>
               )}
             </div>
           ))}
