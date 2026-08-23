@@ -11,7 +11,7 @@ Diagram: [Firestore data model](diagrams/firestore-data-model.md).
 | Path                                    | Main purpose                                            | Current client access                                                                         |
 | --------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `users/{uid}`                           | Public profile identity/display data                    | Public read; owner create/update with protected fields                                        |
-| `contacts/{uid}`                        | Email, phone, WhatsApp contact data                     | Owner, connected opponent, organizer, or listing-mediated read; owner field-limited write     |
+| `contacts/{uid}`                        | Email, phone, WhatsApp contact data                     | Owner, connected opponent, or super-admin read; owner field-limited write                     |
 | `stats/{uid}`                           | League points, wins/losses, match counters              | Public read; owner may edit only safe profile-summary fields; protected stats are server-only |
 | `preferences/{uid}`                     | Private notification, availability, and preference data | Owner or super-admin read; owner-safe field writes; `event_creator` is not self-assignable    |
 | `events/{eventId}`                      | Events and tournament configuration                     | Public read; owner-scoped or explicitly assigned event-manager writes                         |
