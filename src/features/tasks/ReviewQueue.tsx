@@ -14,7 +14,7 @@ const CLAIM_LABEL: Record<TaskClaim['type'], string> = {
 
 type Section = 'claims' | 'coupons';
 
-// Organizer-only: volunteer/ambassador/host claims waiting for approval, plus reward coupons
+// Super-admin-only: volunteer/ambassador/host claims waiting for approval, plus reward coupons
 // that need a decision — a stringer flagged one, or a player asked to cancel one. Photo reports
 // ("Submit a Photo") no longer need review — they auto-approve at creation.
 export const ReviewQueue: React.FC<{ defaultOpen?: 'claims' | null }> = ({ defaultOpen }) => {

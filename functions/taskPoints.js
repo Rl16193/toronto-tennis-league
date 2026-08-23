@@ -163,15 +163,15 @@ async function markInitiationTask(uid, name, taskId) {
   await bumpCounterAndAward(uid, name, '__none__', 0, taskId);
 }
 
-// ─── Organizer digest: totals only, never names ─────────────────────────────
+// ─── Global-admin digest: totals only, never names ──────────────────────────
 // Photo reports no longer need review (they auto-approve at creation) — only claims do.
-async function notifyOrganizersOfQueue(link) {
-  const [claims, organizers] = await Promise.all([
+async function notifyAdminsOfQueue(link) {
+  const [claims, administrators] = await Promise.all([
     db().collection('task_claims').where('status', '==', 'pending').get(),
     adminUids(),
   ]);
   if (claims.size === 0) return;
-  await notify(organizers, {
+  await notify(administrators, {
     type: 'organizer_review_pending',
     title: `${claims.size} task${claims.size > 1 ? 's' : ''} need approval`,
     link,
@@ -376,10 +376,10 @@ exports.onClaimReviewed = onDocumentUpdated({ document: 'task_claims/{id}', regi
   }
 });
 
-// Organizer digest — fires whenever a claim needs approval. Totals only (never names); the link
+// Global-admin digest — fires whenever a claim needs approval. Totals only (never names); the link
 // opens the review queue.
 exports.onTaskClaimCreated = onDocumentCreated({ document: 'task_claims/{id}', region: REGION }, async () => {
-  await notifyOrganizersOfQueue('/tasks?review=claims');
+  await notifyAdminsOfQueue('/tasks?review=claims');
 });
 
 /**

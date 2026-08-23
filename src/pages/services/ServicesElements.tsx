@@ -806,7 +806,7 @@ const CouponCard: React.FC<{ r: Redemption; onCancel: (code: string) => void; bu
         )}
       </div>
       {r.status === 'cancel_requested' && (
-        <p className="text-[11px] text-fg/70 mt-2">Waiting on the organizer to review your cancellation.</p>
+        <p className="text-[11px] text-fg/70 mt-2">Waiting on the administrator to review your cancellation.</p>
       )}
     </div>
   );
@@ -883,7 +883,7 @@ const ProviderPanel: React.FC = () => {
                 </div>
               </div>
               {r.status === 'cancel_requested' && (
-                <p className="text-[11px] text-fg/70 mt-1.5">Player asked to cancel. An organizer is reviewing it.</p>
+                <p className="text-[11px] text-fg/70 mt-1.5">Player asked to cancel. An administrator is reviewing it.</p>
               )}
             </div>
           ))}

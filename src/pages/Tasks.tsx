@@ -30,6 +30,10 @@ import type { ClaimType } from '../features/tasks/claimService';
 import { Toast } from '../components/Toast';
 import { useBadgeToast } from '../features/tasks/useBadgeToast';
 
+// Global task/reward review is an administrative capability, not an event-organizer power.
+// Keep this aligned with firestore.rules and functions/lib/constants.js until roles move to claims.
+const SUPER_ADMIN_UID = '7PvfzNtDmsOq5GLMieId7QRT7wH3';
+
 // Tasks tab — the Community Member Initiation checklist plus every task category.
 // Each section is a dropdown; tasks award themselves as the underlying counters grow.
 // (Completing every task in a category is a "milestone" on the Leaderboard.)
@@ -51,7 +55,7 @@ export const Tasks: React.FC = () => {
   // Tournament points live on the stats doc as leaguePoints26 — the same field the Leaderboard
   // ranks on (see features/leagues/useStandings.ts), so the two surfaces can't disagree.
   const tournamentPoints = profile?.stats?.leaguePoints26 ?? 0;
-  const isOrganizer = profile?.preferences.event_creator === true;
+  const isSuperAdmin = user?.uid === SUPER_ADMIN_UID;
   const clearParams = () => setSearchParams({}, { replace: true });
 
   const checkinOpen = searchParams.get('checkin') === '1';
@@ -183,7 +187,7 @@ export const Tasks: React.FC = () => {
     <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
       <h1 className="sr-only">Tasks</h1>
 
-      {isOrganizer && <ReviewQueue defaultOpen={reviewOpen} />}
+      {isSuperAdmin && <ReviewQueue defaultOpen={reviewOpen} />}
 
       {/* Points summary — three headline metrics replacing the old progress bar. The bar tracked
           one number toward a moving threshold; these state where you actually stand. Buttons are

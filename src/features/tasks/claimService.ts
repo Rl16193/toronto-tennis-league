@@ -2,7 +2,7 @@ import { addDoc, collection, doc, getDocs, query, updateDoc, where } from 'fireb
 import { db } from '../../lib/firebase';
 import { fetchCompletedTournamentMatches } from './matchHistory';
 
-// Volunteer / Ambassador / Host all work the same way: a player submits a claim, an organizer
+// Volunteer / Ambassador / Host all work the same way: a player submits a claim, the global admin
 // approves or rejects it in the review queue, and only an approval awards the points.
 
 export type ClaimType = 'volunteer' | 'ambassador' | 'host';
@@ -76,7 +76,7 @@ const alreadyClaimed = async (inviteeId: string): Promise<boolean> => {
   return snap.docs.some((d) => ['pending', 'approved'].includes(d.data().status));
 };
 
-// Client-side checks are a fast, friendly first pass — the organizer's approval is the real
+// Client-side checks are a fast, friendly first pass — the administrator's approval is the real
 // gate, and the server enforces "one inviter per member" authoritatively at that point too.
 // Returns an error message on failure, or null on success.
 export async function createAmbassadorClaim(

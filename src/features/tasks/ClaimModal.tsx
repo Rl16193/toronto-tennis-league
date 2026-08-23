@@ -15,7 +15,7 @@ const TITLES: Record<ClaimType, string> = {
   host: 'Host a Meetup',
 };
 
-// Volunteer / Host / Ambassador all submit a claim that waits in the organizer's review queue —
+// Volunteer / Host / Ambassador all submit a claim that waits in the global admin review queue —
 // clicking the task never completes it outright, points land only once approved.
 export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({ type, onClose }) => {
   const { user, profile } = useAuth();
