@@ -19,6 +19,24 @@ const login = async (page: Page, email: string, password: string) => {
   await expect(page).toHaveURL(/\/profile$/);
 };
 
+type FirestoreRestDocument = {
+  name?: string;
+  fields?: Record<string, { stringValue?: string }>;
+};
+
+const listFirestoreDocuments = async (collectionName: string): Promise<FirestoreRestDocument[]> => {
+  const host = process.env.FIRESTORE_EMULATOR_HOST;
+  if (!host || !/^(localhost|127\.0\.0\.1):\d+$/.test(host)) {
+    throw new Error('Browser tests may inspect Firestore only through the local emulator.');
+  }
+  const response = await fetch(
+    `http://${host}/v1/projects/rands-local/databases/(default)/documents/${encodeURIComponent(collectionName)}?pageSize=1000`,
+  );
+  expect(response.ok).toBe(true);
+  const payload = (await response.json()) as { documents?: FirestoreRestDocument[] };
+  return payload.documents ?? [];
+};
+
 test('Hosting serves the SPA rewrite with repository security and cache headers', async ({ request }) => {
   const response = await request.get('/login');
   expect(response.ok()).toBe(true);
@@ -82,7 +100,56 @@ test('organizer records a tournament score and advances the winner', async ({ pa
   await page.getByRole('textbox', { name: 'Synthetic Member set 2 games', exact: true }).fill('2');
   await page.getByRole('button', { name: 'Record Score' }).click();
   await expect(page.getByText('Score recorded and draw updated.')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('6-4 6-2')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('6-4 6-2').first()).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('F — Started')).toBeVisible({ timeout: 15_000 });
   await capture(page, '04-tournament-score-advanced');
+});
+
+test('organizer creates an owned event without receiving global review authority', async ({ page }) => {
+  const title = `QA Organizer Event ${Date.now()}`;
+  await login(page, 'organizer-a@example.invalid', 'local-organizer-a-123!');
+
+  await page.goto('/tasks');
+  await expect(page.getByText('Needs your review')).toHaveCount(0);
+
+  await page.goto('/events');
+  await page.getByRole('button', { name: 'Add an event' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add an Event' });
+  await dialog.getByLabel('Title').fill(title);
+  await dialog.getByLabel('Location').fill('Synthetic QA Court');
+  await dialog.getByLabel('Start date').fill('2099-10-20');
+  await dialog.getByLabel('End date').fill('2099-10-21');
+  await dialog.getByLabel('Join by').fill('2099-10-19');
+  await dialog.getByLabel('About').fill('Synthetic organizer-owned event created by the browser test.');
+  await dialog.getByRole('button', { name: 'Add Event' }).click();
+
+  await expect(page.getByRole('heading', { name: title })).toBeVisible({ timeout: 15_000 });
+  const events = await listFirestoreDocuments('events');
+  const created = events.find((event) => event.fields?.title?.stringValue === title);
+  expect(created?.fields?.creator_id?.stringValue).toBe('organizer-a');
+  await capture(page, '05-organizer-event-created');
+});
+
+test('organizer generates a Round Robin draw and records a no-show result', async ({ page }) => {
+  await login(page, 'organizer-a@example.invalid', 'local-organizer-a-123!');
+  await page.goto('/matches?mode=tournament&event=e2e-round-robin');
+  await expect(page.getByText('Synthetic Round Robin')).toBeVisible();
+  await expect(page.getByText('3 signed up')).toBeVisible();
+  await page.getByRole('button', { name: 'Downtown - Midtown', exact: true }).click();
+  await page.getByRole('button', { name: /Challengers.*3\/8/ }).click();
+
+  await page.getByRole('button', { name: 'Manage Draw' }).click();
+  await page.getByRole('button', { name: 'Generate Matches' }).click();
+  await expect(page.getByText('Round Robin Setup')).toBeVisible();
+  await expect(page.getByText(/players registered/)).toHaveText('3 players registered');
+  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await expect(page.getByText('Round Robin draw generated: 1 group.')).toBeVisible({ timeout: 15_000 });
+
+  await page.getByRole('button', { name: 'Matches (3)' }).click();
+  await page.getByRole('button', { name: 'Score', exact: true }).last().click();
+  await page.getByLabel('Count As No Show').check();
+  await page.getByRole('button', { name: 'Record No Show' }).click();
+  await expect(page.getByText('Recorded as a no show — 1 point to each player.')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('No show · 1 pt each')).toBeVisible({ timeout: 15_000 });
+  await capture(page, '06-round-robin-no-show');
 });
