@@ -653,8 +653,10 @@ export const AddServiceForm: React.FC<{
 
 // ─── The Services tab ────────────────────────────────────────────────────────────────────────────
 
-// Only the app owner can add/edit the Services catalog — matches firestore.rules isSuperAdmin().
-const SUPER_ADMIN_UID = '7PvfzNtDmsOq5GLMieId7QRT7wH3';
+// Admin/provider operations remain backlog until a server-authoritative callable exists. The
+// checked-in Rules intentionally reject direct catalog and role writes, so no mutation controls
+// are exposed even to the legacy super-admin UID.
+const ADMIN_OFFER_MANAGEMENT_AVAILABLE = false;
 
 const money = (n: number | null | undefined) => (typeof n === 'number' ? `$${n % 1 === 0 ? n : n.toFixed(2)}` : '—');
 
@@ -905,7 +907,7 @@ export const ServicesTab: React.FC = () => {
   const [showAddService, setShowAddService] = useState(false);
   const [editingReward, setEditingReward] = useState<Reward | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const isSuperAdmin = user?.uid === SUPER_ADMIN_UID;
+  const canManageOffers = ADMIN_OFFER_MANAGEMENT_AVAILABLE;
   const providerAvatars = useProviderAvatars(rewards.map((r) => r.uid));
   const { balance, loading: balanceLoading } = useRedeemablePoints();
   const { redemptions } = useMyRedemptions();
@@ -1072,8 +1074,8 @@ export const ServicesTab: React.FC = () => {
                         alreadyOpen={openRewardIds.has(r.id)}
                         busy={busyId === r.id}
                         onRedeem={() => run(r.id, () => redeemReward({ rewardId: r.id }))}
-                        onEdit={isSuperAdmin ? () => setEditingReward(r) : undefined}
-                        onDelete={isSuperAdmin && deletingId !== r.id ? () => removeOffer(r) : undefined}
+                        onEdit={canManageOffers ? () => setEditingReward(r) : undefined}
+                        onDelete={canManageOffers && deletingId !== r.id ? () => removeOffer(r) : undefined}
                       />
                     ))}
                   </TreeGroup>
@@ -1084,7 +1086,7 @@ export const ServicesTab: React.FC = () => {
         </Tree>
       )}
 
-      {isSuperAdmin && (
+      {canManageOffers && (
         <Fab ariaLabel="Add a service" onClick={() => setShowAddService(true)}>
           <Plus className="w-6 h-6" />
         </Fab>
