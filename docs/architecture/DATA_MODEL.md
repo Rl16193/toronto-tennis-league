@@ -8,32 +8,32 @@ Diagram: [Firestore data model](diagrams/firestore-data-model.md).
 
 ## Collection and access map
 
-| Path                                    | Main purpose                                            | Current client access                                                                         |
-| --------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `users/{uid}`                           | Public profile identity/display data                    | Public read; owner create/update with protected fields                                        |
-| `contacts/{uid}`                        | Email, phone, WhatsApp contact data                     | Owner, connected opponent, or super-admin read; owner field-limited write                     |
-| `stats/{uid}`                           | League points, wins/losses, match counters              | Public read; owner may edit only safe profile-summary fields; protected stats are server-only |
-| `preferences/{uid}`                     | Private notification, availability, and preference data | Owner or super-admin read; owner-safe field writes; `event_creator` is not self-assignable    |
-| `events/{eventId}`                      | Events and tournament configuration                     | Public read; owner-scoped or explicitly assigned event-manager writes                         |
-| `events/{eventId}/rr_drafts/{drawKey}`  | Organizer Round Robin draft state                       | Event creator read/write; assigned-organizer co-management awaits stakeholder confirmation    |
-| `event_participants/{id}`               | Event membership, date, doubles/zone state              | Authenticated read; participant or event-scoped manager mutation                              |
-| `matches/{id}`                          | Tournament fixtures, rallies, challenges, submissions   | Authenticated read; state-specific player/creator mutations                                   |
-| `ranking_history/{uid}/entries/{id}`    | Historical ranking snapshots                            | Public read; server-only write                                                                |
-| `courts/{id}`                           | Check-ins, attendance, condition/queue/photo reports    | Authenticated read; constrained append-only creates; no update/delete                         |
-| `tasks/{id}`                            | Per-user progress and server award ledger               | Public read; only the owner may edit allowlisted progress fields                              |
-| `task_claims/{id}`                      | Volunteer/ambassador/host claims                        | Owner/admin read; pending create; ambassador ID locks one active invitee claim; admin review  |
-| `offers/{uid}`                          | Reward balance/catalog projection                       | Owner or super-admin read; server-only write                                                  |
-| `redemptions/{code}`                    | Reward redemption lifecycle                             | Owner/provider/admin read; server-only write                                                  |
-| `listings/{id}`                         | Member marketplace listings                             | Public read; owner create/delete; owner or super-admin update                                 |
-| `public_contacts/{uid}`                 | Listing-safe contact projection                         | Authenticated read; server-only allowlisted projection write                                  |
-| `connections/{pair}`                    | Opponent/contact-access relationship                    | Participant read; server-only write                                                           |
-| `notifications/{id}`                    | Per-user in-app notifications                           | Recipient read/update/delete; server-only create                                              |
-| `group_lessons/{month}`                 | Monthly roster projection                               | Public read; server-only write                                                                |
-| `group_lesson_contact_access/current`   | Expiring coach-to-roster contact authorization          | No direct client access; server-maintained and evaluated only by Rules                        |
-| `mailing_list/{id}`                     | Public signup capture                                   | Anonymous constrained create; super-admin read/manage                                         |
-| `site_stats/{id}`                       | Public site aggregates and group-award state            | Public read; server-only write                                                                |
-| `admin_stats/{id}`                      | Restricted operational metrics                          | Super-admin read; server-only write                                                           |
-| `_archive_database_consolidation/{...}` | Migration/archive namespace                             | Denied to clients                                                                             |
+| Path                                    | Main purpose                                            | Current client access                                                                           |
+| --------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `users/{uid}`                           | Public profile identity/display data                    | Public read; owner create/update with protected fields                                          |
+| `contacts/{uid}`                        | Email, phone, WhatsApp contact data                     | Owner, connected opponent, current lesson coach, or super-admin read; owner field-limited write |
+| `stats/{uid}`                           | League points, wins/losses, match counters              | Public read; owner may edit only safe profile-summary fields; protected stats are server-only   |
+| `preferences/{uid}`                     | Private notification, availability, and preference data | Owner or super-admin read; owner-safe field writes; `event_creator` is not self-assignable      |
+| `events/{eventId}`                      | Events and tournament configuration                     | Public read; owner-scoped or explicitly assigned event-manager writes                           |
+| `events/{eventId}/rr_drafts/{drawKey}`  | Organizer Round Robin draft state                       | Event creator read/write; assigned-organizer co-management awaits stakeholder confirmation      |
+| `event_participants/{id}`               | Event membership, date, doubles/zone state              | Authenticated read; participant or event-scoped manager mutation                                |
+| `matches/{id}`                          | Tournament fixtures, rallies, challenges, submissions   | Authenticated read; state-specific player/creator mutations                                     |
+| `ranking_history/{uid}/entries/{id}`    | Historical ranking snapshots                            | Public read; server-only write                                                                  |
+| `courts/{id}`                           | Check-ins, attendance, condition/queue/photo reports    | Authenticated read; constrained append-only creates; no update/delete                           |
+| `tasks/{id}`                            | Per-user progress and server award ledger               | Public read; only the owner may edit allowlisted progress fields                                |
+| `task_claims/{id}`                      | Volunteer/ambassador/host claims                        | Owner/admin read; deterministic ambassador IDs plus a server legacy-claim guard; admin review   |
+| `offers/{uid}`                          | Reward balance/catalog projection                       | Owner or super-admin read; server-only write                                                    |
+| `redemptions/{code}`                    | Reward redemption lifecycle                             | Owner/provider/admin read; server-only write                                                    |
+| `listings/{id}`                         | Member marketplace listings                             | Public read; owner create/delete; owner or super-admin update                                   |
+| `public_contacts/{uid}`                 | Listing-safe contact projection                         | Authenticated read; server-only allowlisted projection write                                    |
+| `connections/{pair}`                    | Opponent/contact-access relationship                    | Participant read; server-only write                                                             |
+| `notifications/{id}`                    | Per-user in-app notifications                           | Recipient read/update/delete; server-only create                                                |
+| `group_lessons/{month}`                 | Monthly roster projection                               | Public read; server-only write                                                                  |
+| `group_lesson_contact_access/current`   | Expiring coach-to-roster contact authorization          | No direct client access; server-maintained and evaluated only by Rules                          |
+| `mailing_list/{id}`                     | Public signup capture                                   | Anonymous constrained create; super-admin read/manage                                           |
+| `site_stats/{id}`                       | Public site aggregates and group-award state            | Public read; server-only write                                                                  |
+| `admin_stats/{id}`                      | Restricted operational metrics                          | Super-admin read; server-only write                                                             |
+| `_archive_database_consolidation/{...}` | Migration/archive namespace                             | Denied to clients                                                                               |
 
 ## Key relationships
 

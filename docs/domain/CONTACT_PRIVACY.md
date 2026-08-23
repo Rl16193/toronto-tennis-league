@@ -3,18 +3,23 @@
 ## Read access
 
 **Rule:** A contact document is readable by its owner, an authenticated opponent with a persisted
-connection, a global event creator, or an authenticated user using an organizer/listing-mediated
-contact path. Anonymous users cannot read contacts.
+connection, the assigned coach for a player currently enrolled in the monthly group lesson, or the
+super-admin. Anonymous users cannot read contacts.
 
 **Why:** The app shares contact details for real coordination, but a public member directory must
 not become a phone-number directory.
 
-**Important exception:** A public marketplace listing maintains `public_contacts/{uid}` through a
-server trigger; the marker grants the listing-mediated path, not anonymous access.
+**Important exceptions:** Event creators do not receive general contact access. A marketplace
+listing exposes only an allowlisted projection through `public_contacts/{uid}` to authenticated
+members; it does not unlock the private `contacts/{uid}` document. Group-lesson access uses a
+server-owned marker that expires at the next Toronto month boundary and contains only the current
+roster.
 
-**Code:** `firestore.rules`, `functions/connections.js`, `functions/index.js`.
+**Code:** `firestore.rules`, `functions/connections.js`, `functions/rewards.js`,
+`functions/index.js`.
 
-**Regression test:** `tests/rules/firestore.rules.test.mjs` (`contacts become readable...`).
+**Regression tests:** `tests/rules/firestore.rules.test.mjs` (`contacts become readable...` and
+`only the active group lesson coach...`).
 
 ## Writes and sensitive fields
 

@@ -187,6 +187,7 @@ describe('Firestore authorization boundaries', () => {
     });
     await seedDoc('preferences/coach-a', { coach: true, coach_id: 'archie' });
     await seedDoc('preferences/coach-b', { coach: true, coach_id: 'other-coach' });
+    await seedDoc('preferences/coach-id-only', { coach_id: 'archie' });
     await seedDoc('group_lesson_contact_access/current', {
       month: '2026-08',
       coach_id: 'archie',
@@ -197,6 +198,7 @@ describe('Firestore authorization boundaries', () => {
     await assertSucceeds(getDoc(doc(dbFor('coach-a'), 'contacts/member-a')));
     await assertFails(getDoc(doc(dbFor('coach-a'), 'contacts/member-b')));
     await assertFails(getDoc(doc(dbFor('coach-b'), 'contacts/member-a')));
+    await assertFails(getDoc(doc(dbFor('coach-id-only'), 'contacts/member-a')));
     await assertFails(getDoc(doc(dbFor('coach-a'), 'group_lesson_contact_access/current')));
     await assertFails(
       setDoc(doc(dbFor('coach-a'), 'group_lesson_contact_access/current'), {
