@@ -69,9 +69,14 @@ export async function createHostClaim(
 const hasPlayedAMatch = async (uid: string): Promise<boolean> =>
   (await fetchCompletedTournamentMatches(uid)).length > 0;
 
-const alreadyClaimed = async (inviteeId: string): Promise<boolean> => {
+const alreadyClaimedByUser = async (uid: string, inviteeId: string): Promise<boolean> => {
   const snap = await getDocs(
-    query(collection(db, 'task_claims'), where('type', '==', 'ambassador'), where('invitee_id', '==', inviteeId)),
+    query(
+      collection(db, 'task_claims'),
+      where('uid', '==', uid),
+      where('type', '==', 'ambassador'),
+      where('invitee_id', '==', inviteeId),
+    ),
   );
   return snap.docs.some((d) => ['pending', 'approved'].includes(d.data().status));
 };
@@ -88,8 +93,8 @@ export async function createAmbassadorClaim(
   if (inviteeId === uid) return 'You can’t invite yourself.';
   const played = await hasPlayedAMatch(inviteeId);
   if (!played) return `${inviteeName} hasn’t played a match yet — you can claim this once they have.`;
-  const claimed = await alreadyClaimed(inviteeId);
-  if (claimed) return `Someone has already claimed ${inviteeName}.`;
+  const claimed = await alreadyClaimedByUser(uid, inviteeId);
+  if (claimed) return `You already claimed ${inviteeName}.`;
   await addDoc(collection(db, 'task_claims'), {
     type: 'ambassador',
     uid: uid,

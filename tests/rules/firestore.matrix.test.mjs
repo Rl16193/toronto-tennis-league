@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing';
-import { deleteDoc, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const rules = await readFile(resolve(here, '../../firestore.rules'), 'utf8');
@@ -194,6 +194,12 @@ describe('expanded Firestore authorization matrix', () => {
     };
 
     await assertSucceeds(setDoc(doc(dbFor('member-a'), 'task_claims/claim-a'), claim));
+    await assertSucceeds(getDoc(doc(dbFor('member-a'), 'task_claims/claim-a')));
+    await assertFails(getDoc(doc(dbFor('member-b'), 'task_claims/claim-a')));
+    await assertSucceeds(getDoc(doc(dbFor('7PvfzNtDmsOq5GLMieId7QRT7wH3'), 'task_claims/claim-a')));
+    await assertSucceeds(getDocs(query(collection(dbFor('member-a'), 'task_claims'), where('uid', '==', 'member-a'))));
+    await assertFails(getDocs(collection(dbFor('member-b'), 'task_claims')));
+    await assertSucceeds(getDocs(collection(dbFor('7PvfzNtDmsOq5GLMieId7QRT7wH3'), 'task_claims')));
     await assertFails(setDoc(doc(dbFor('member-b'), 'task_claims/claim-b'), claim));
     await assertFails(
       setDoc(doc(dbFor('member-a'), 'task_claims/claim-c'), {

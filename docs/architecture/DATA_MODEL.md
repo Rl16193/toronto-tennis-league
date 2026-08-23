@@ -21,7 +21,7 @@ Diagram: [Firestore data model](diagrams/firestore-data-model.md).
 | `ranking_history/{uid}/entries/{id}`    | Historical ranking snapshots                            | Public read; server-only write                                                                |
 | `courts/{id}`                           | Check-ins, attendance, condition/queue/photo reports    | Authenticated read; constrained append-only creates; no update/delete                         |
 | `tasks/{id}`                            | Per-user progress and server award ledger               | Public read; only the owner may edit allowlisted progress fields                              |
-| `task_claims/{id}`                      | Volunteer/ambassador/host claims                        | Authenticated read; owner creates pending claim; super-admin review                           |
+| `task_claims/{id}`                      | Volunteer/ambassador/host claims                        | Owner or super-admin read; owner creates pending claim; super-admin review                    |
 | `offers/{uid}`                          | Reward balance/catalog projection                       | Owner or super-admin read; server-only write                                                  |
 | `redemptions/{code}`                    | Reward redemption lifecycle                             | Owner/provider/admin read; server-only write                                                  |
 | `listings/{id}`                         | Member marketplace listings                             | Public read; owner create/delete; owner or super-admin update                                 |
