@@ -15,7 +15,7 @@ Diagram: [Firestore data model](diagrams/firestore-data-model.md).
 | `stats/{uid}`                           | League points, wins/losses, match counters              | Public read; owner may edit only safe profile-summary fields; protected stats are server-only |
 | `preferences/{uid}`                     | Private notification, availability, and preference data | Owner or super-admin read; owner-safe field writes; `event_creator` is not self-assignable    |
 | `events/{eventId}`                      | Events and tournament configuration                     | Public read; owner-scoped or explicitly assigned event-manager writes                         |
-| `events/{eventId}/rr_drafts/{drawKey}`  | Organizer Round Robin draft state                       | Event owner, assigned organizer, or super-admin read/write                                    |
+| `events/{eventId}/rr_drafts/{drawKey}`  | Organizer Round Robin draft state                       | Event creator read/write; assigned-organizer co-management awaits stakeholder confirmation    |
 | `event_participants/{id}`               | Event membership, date, doubles/zone state              | Authenticated read; participant or event-scoped manager mutation                              |
 | `matches/{id}`                          | Tournament fixtures, rallies, challenges, submissions   | Authenticated read; state-specific player/creator mutations                                   |
 | `ranking_history/{uid}/entries/{id}`    | Historical ranking snapshots                            | Public read; server-only write                                                                |

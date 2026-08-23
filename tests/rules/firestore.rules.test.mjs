@@ -661,10 +661,11 @@ describe('Firestore authorization boundaries', () => {
     );
   });
 
-  test('round-robin drafts are readable and writable only by an event manager', async () => {
+  test('round-robin drafts stay creator-only until assigned-organizer co-management is approved', async () => {
     await seedDoc('events/synthetic-event', {
       id: 'synthetic-event',
       creator_id: 'organizer-a',
+      organizer_ids: ['organizer-b'],
       title: 'Synthetic Event',
     });
     await seedDoc('preferences/organizer-a', {
@@ -682,7 +683,16 @@ describe('Firestore authorization boundaries', () => {
       }),
     );
     await assertSucceeds(getDoc(doc(dbFor('organizer-a'), 'events/synthetic-event/rr_drafts/draw-a')));
+    await assertFails(getDoc(doc(dbFor('organizer-b'), 'events/synthetic-event/rr_drafts/draw-a')));
     await assertFails(getDoc(doc(dbFor('member-a'), 'events/synthetic-event/rr_drafts/draw-a')));
+    await assertFails(
+      setDoc(doc(dbFor('organizer-b'), 'events/synthetic-event/rr_drafts/draw-assigned'), {
+        event_id: 'synthetic-event',
+        draw_key: 'draw-assigned',
+        status: 'draft',
+        groups: [],
+      }),
+    );
     await assertFails(
       setDoc(doc(dbFor('member-a'), 'events/synthetic-event/rr_drafts/draw-b'), {
         event_id: 'synthetic-event',

@@ -99,6 +99,11 @@ service cloud.firestore {
         );
     }
 
+    function isCreatorOfEvent(eventId) {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/events/$(eventId)).data.creator_id == request.auth.uid;
+    }
+
     function isOwnerOfEvent(eventId) {
       return isAuthenticated() &&
         (
@@ -646,8 +651,10 @@ service cloud.firestore {
     // onSnapshot error path just sets the draft to null.
     match /events/{eventId}/rr_drafts/{drawKey} {
       // Draft groups and withdrawals are unpublished organizer state. Participants see the
-      // generated match documents after release, not this pre-generation workspace.
-      allow read, write: if isManagerOfEvent(eventId);
+      // generated match documents after release, not this pre-generation workspace. Assigned
+      // organizer co-management remains a stakeholder decision, so the client and Rules both
+      // stay creator-only until that authority is explicitly approved.
+      allow read, write: if isCreatorOfEvent(eventId);
     }
 
   }
