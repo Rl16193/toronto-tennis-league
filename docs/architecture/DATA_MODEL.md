@@ -29,6 +29,7 @@ Diagram: [Firestore data model](diagrams/firestore-data-model.md).
 | `connections/{pair}`                    | Opponent/contact-access relationship                    | Participant read; server-only write                                                           |
 | `notifications/{id}`                    | Per-user in-app notifications                           | Recipient read/update/delete; server-only create                                              |
 | `group_lessons/{month}`                 | Monthly roster projection                               | Public read; server-only write                                                                |
+| `group_lesson_contact_access/current`   | Expiring coach-to-roster contact authorization          | No direct client access; server-maintained and evaluated only by Rules                        |
 | `mailing_list/{id}`                     | Public signup capture                                   | Anonymous constrained create; super-admin read/manage                                         |
 | `site_stats/{id}`                       | Public site aggregates and group-award state            | Public read; server-only write                                                                |
 | `admin_stats/{id}`                      | Restricted operational metrics                          | Super-admin read; server-only write                                                           |

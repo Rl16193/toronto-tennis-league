@@ -58,6 +58,18 @@ test('profile normalization does not grant role flags or trust malformed arrays'
   assert.equal(stats.wins, 0);
 });
 
+test('profile normalization preserves verified provider roles without coercing them', () => {
+  const coach = normalizeUserPreferences({ coach: true, coach_id: 'archie' });
+  assert.equal(coach.coach, true);
+  assert.equal(coach.coach_id, 'archie');
+
+  const malformed = normalizeUserPreferences({ coach: 'true', coach_id: 7, stringer: 'true', stringer_id: 9 });
+  assert.equal(malformed.coach, false);
+  assert.equal(malformed.coach_id, undefined);
+  assert.equal(malformed.stringer, false);
+  assert.equal(malformed.stringer_id, undefined);
+});
+
 test('round-robin draft normalization rejects malformed nested values', () => {
   assert.deepEqual(
     normalizeRoundRobinDraft({

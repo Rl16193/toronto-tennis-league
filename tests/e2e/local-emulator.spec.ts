@@ -130,6 +130,17 @@ test('organizer creates an owned event without receiving global review authority
   await capture(page, '05-organizer-event-created');
 });
 
+test('group lesson coach can contact an enrolled player', async ({ page }) => {
+  await login(page, 'provider-a@example.invalid', 'local-provider-a-123!');
+  await page.goto('/marketplace');
+  await page.getByRole('button', { name: 'Coaches', exact: true }).click();
+  await page.getByRole('button', { name: /Synthetic Coach/ }).click();
+  await page.getByRole('button', { name: '1/4 joined', exact: true }).click();
+
+  await expect(page.getByLabel('Email Synthetic Member')).toBeVisible();
+  await capture(page, '06-group-lesson-coach-contact');
+});
+
 test('member cannot see unpublished Round Robin groups', async ({ page }) => {
   await login(page, 'member-a@example.invalid', 'local-member-a-123!');
   await page.goto('/matches?mode=tournament&event=e2e-round-robin');
@@ -142,7 +153,7 @@ test('member cannot see unpublished Round Robin groups', async ({ page }) => {
   await expect(page.getByText('Group Stage')).toHaveCount(0);
   await expect(page.getByText('Synthetic Organizer', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Synthetic Multi-role User', { exact: true })).toHaveCount(0);
-  await capture(page, '06-round-robin-unpublished-hidden');
+  await capture(page, '07-round-robin-unpublished-hidden');
 });
 
 test('organizer generates a Round Robin draw and records a no-show result', async ({ page }) => {
@@ -166,5 +177,5 @@ test('organizer generates a Round Robin draw and records a no-show result', asyn
   await page.getByRole('button', { name: 'Record No Show' }).click();
   await expect(page.getByText('Recorded as a no show — 1 point to each player.')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('No show · 1 pt each')).toBeVisible({ timeout: 15_000 });
-  await capture(page, '07-round-robin-no-show');
+  await capture(page, '08-round-robin-no-show');
 });

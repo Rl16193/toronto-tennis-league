@@ -21,7 +21,7 @@ Firebase Auth supplies identity. Firestore Rules are the effective client author
 
 - Contacts are not globally readable; event creators do not gain unrelated contact access.
 - `connections` and `public_contacts` are write-denied to clients.
-- `offers`, protected stats/reward fields, `redemptions`, `group_lessons`, aggregate stats, ranking history, and notifications creation are server-controlled.
+- `offers`, protected stats/reward fields, `redemptions`, `group_lessons`, the expiring group-lesson contact-access projection, aggregate stats, ranking history, and notifications creation are server-controlled.
 - Reward redemption review is limited to the super-admin bootstrap; event creators cannot review,
   use, flag, or receive global coupon notifications unless they separately own the provider record.
 - Private preferences are owner/super-admin readable. `public_preferences` is reserved deny-all.

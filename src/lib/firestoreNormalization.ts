@@ -259,6 +259,8 @@ export const normalizeUserPreferences = (value: unknown): UserPreferences => {
     email_notifications: typeof data.email_notifications === 'boolean' ? data.email_notifications : undefined,
     stringer: data.stringer === true,
     stringer_id: optionalString(data.stringer_id),
+    coach: data.coach === true,
+    coach_id: optionalString(data.coach_id),
     ...(Array.isArray(data.availability_tags) ? { availability_tags: strings(data.availability_tags) } : {}),
   };
 };

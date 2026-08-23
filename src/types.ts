@@ -92,6 +92,10 @@ export interface UserPreferences {
   // the "your shop" coupon list (mark used / flag) — never anything points-related.
   stringer?: boolean;
   stringer_id?: string;
+  // Coaching uses the same admin-assigned provider-role shape as stringing. The normalized role
+  // is required by the monthly group-lesson roster and provider coupon views.
+  coach?: boolean;
+  coach_id?: string;
 }
 
 // Collection: tasks — self-serve community tasks (Tasks tab). Each completed task is

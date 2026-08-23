@@ -1,5 +1,20 @@
 // Synthetic-only Firestore fixtures for local emulator smoke tests.
 // Never replace these values with production exports or real member contact data.
+const currentMonthKey = () => {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Toronto',
+      year: 'numeric',
+      month: '2-digit',
+    })
+      .formatToParts(new Date())
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}`;
+};
+
+const fixtureMonth = currentMonthKey();
+
 export const LOCAL_AUTH_FIXTURES = [
   {
     uid: 'member-a',
@@ -111,7 +126,7 @@ export const LOCAL_FIXTURES = [
   },
   {
     path: 'preferences/provider-a',
-    data: { uid: 'provider-a', event_creator: false, stringer: true, stringer_id: 'synthetic-stringer' },
+    data: { uid: 'provider-a', event_creator: false, coach: true, coach_id: 'archie' },
   },
   {
     path: 'preferences/multi-role-a',
@@ -356,6 +371,40 @@ export const LOCAL_FIXTURES = [
       offer: 'Synthetic restring',
       active: true,
       points_cost: 10,
+    },
+  },
+  {
+    path: 'tasks/synthetic-coaching-offer',
+    data: {
+      type: 'offer',
+      category: 'coaching',
+      provider_id: 'archie',
+      provider_name: 'Synthetic Coach',
+      uid: 'provider-a',
+      area: 'Synthetic Toronto',
+      offer: 'Synthetic coaching session',
+      active: true,
+      points_cost: 10,
+    },
+  },
+  {
+    path: `group_lessons/${fixtureMonth}`,
+    data: {
+      month: fixtureMonth,
+      coach_id: 'archie',
+      coach_name: 'Synthetic Coach',
+      capacity: 4,
+      players: [{ uid: 'member-a', name: 'Synthetic Member', joined_at: '2026-01-01T00:00:00.000Z' }],
+    },
+  },
+  {
+    path: 'group_lesson_contact_access/current',
+    data: {
+      month: fixtureMonth,
+      coach_id: 'archie',
+      player_ids: ['member-a'],
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      updated_at: '2026-01-01T00:00:00.000Z',
     },
   },
   {

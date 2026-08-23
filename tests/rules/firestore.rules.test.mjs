@@ -174,6 +174,47 @@ describe('Firestore authorization boundaries', () => {
     );
   });
 
+  test('only the active group lesson coach can read enrolled player contacts', async () => {
+    await seedDoc('contacts/member-a', {
+      email: 'member-a@example.invalid',
+      phone: '+14165550100',
+      contactable: true,
+    });
+    await seedDoc('contacts/member-b', {
+      email: 'member-b@example.invalid',
+      phone: '+14165550101',
+      contactable: true,
+    });
+    await seedDoc('preferences/coach-a', { coach: true, coach_id: 'archie' });
+    await seedDoc('preferences/coach-b', { coach: true, coach_id: 'other-coach' });
+    await seedDoc('group_lesson_contact_access/current', {
+      month: '2026-08',
+      coach_id: 'archie',
+      player_ids: ['member-a'],
+      expires_at: new Date(Date.now() + 60_000),
+    });
+
+    await assertSucceeds(getDoc(doc(dbFor('coach-a'), 'contacts/member-a')));
+    await assertFails(getDoc(doc(dbFor('coach-a'), 'contacts/member-b')));
+    await assertFails(getDoc(doc(dbFor('coach-b'), 'contacts/member-a')));
+    await assertFails(getDoc(doc(dbFor('coach-a'), 'group_lesson_contact_access/current')));
+    await assertFails(
+      setDoc(doc(dbFor('coach-a'), 'group_lesson_contact_access/current'), {
+        coach_id: 'archie',
+        player_ids: ['member-b'],
+        expires_at: new Date(Date.now() + 60_000),
+      }),
+    );
+
+    await seedDoc('group_lesson_contact_access/current', {
+      month: '2026-08',
+      coach_id: 'archie',
+      player_ids: ['member-a'],
+      expires_at: new Date(Date.now() - 60_000),
+    });
+    await assertFails(getDoc(doc(dbFor('coach-a'), 'contacts/member-a')));
+  });
+
   test('event_creator is scoped to owned or explicitly assigned events', async () => {
     await seedDoc('preferences/organizer-a', { uid: 'organizer-a', event_creator: true });
     await seedDoc('preferences/organizer-b', { uid: 'organizer-b', event_creator: true });

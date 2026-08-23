@@ -91,8 +91,6 @@ export interface GroupLesson {
 export interface GroupLessonPlayer {
   uid: string;
   name: string;
-  phone?: string;
-  email?: string;
   joined_at: string;
 }
 

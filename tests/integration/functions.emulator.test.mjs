@@ -132,6 +132,33 @@ test('redemption rejects non-offer task documents', async () => {
   assert.equal((await db.collection('redemptions').get()).empty, true);
 });
 
+test('group lesson enrollment maintains expiring coach contact access', async () => {
+  const player = await session('group-lesson-player');
+  await Promise.all([
+    db.doc(`users/${player.uid}`).set({ name: 'Group Lesson Player' }),
+    db.doc('tasks/group-lesson-coach').set({
+      type: 'offer',
+      category: 'coaching',
+      provider_id: 'archie',
+      provider_name: 'Synthetic Coach',
+      uid: 'coach-a',
+      active: true,
+    }),
+  ]);
+
+  const joined = await call('joinGroupLesson', player.token, {});
+  assert.equal(joined.status, 200, JSON.stringify(joined.body));
+  const accessAfterJoin = (await db.doc('group_lesson_contact_access/current').get()).data();
+  assert.equal(accessAfterJoin.coach_id, 'archie');
+  assert.deepEqual(accessAfterJoin.player_ids, [player.uid]);
+  assert.ok(accessAfterJoin.expires_at.toDate().getTime() > Date.now());
+
+  const left = await call('leaveGroupLesson', player.token, {});
+  assert.equal(left.status, 200, JSON.stringify(left.body));
+  const accessAfterLeave = (await db.doc('group_lesson_contact_access/current').get()).data();
+  assert.deepEqual(accessAfterLeave.player_ids, []);
+});
+
 test('approved cancellation refunds points and releases the lock', async () => {
   const player = await session('refund-player');
   const administrator = await session('refund-administrator', '7PvfzNtDmsOq5GLMieId7QRT7wH3');

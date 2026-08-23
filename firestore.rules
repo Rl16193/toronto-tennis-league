@@ -90,6 +90,26 @@ service cloud.firestore {
         );
     }
 
+    function isCoachFor(providerId) {
+      return isAuthenticated() && providerId != null &&
+        get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.get('coach', false) == true &&
+        get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.get('coach_id', '') == providerId;
+    }
+
+    // The monthly roster stays public without contact fields. A server-owned, expiring projection
+    // grants the assigned coach access to contact details only for players who are still enrolled.
+    function isCurrentGroupLessonCoachFor(userId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/group_lesson_contact_access/current) &&
+        get(/databases/$(database)/documents/group_lesson_contact_access/current).data
+          .get('expires_at', request.time) > request.time &&
+        userId in get(/databases/$(database)/documents/group_lesson_contact_access/current).data
+          .get('player_ids', []) &&
+        isCoachFor(
+          get(/databases/$(database)/documents/group_lesson_contact_access/current).data.get('coach_id', '')
+        );
+    }
+
     function isManagerOfEvent(eventId) {
       return isAuthenticated() &&
         (
@@ -179,8 +199,8 @@ service cloud.firestore {
     // Contacts Collection
     // ===============================================================
     // Phone / email / WhatsApp. Readable by the owner, by someone who is actually their opponent
-    // (accepted rally or challenge, or a shared tournament fixture), and by organizers, who have
-    // to be able to reach players to run an event.
+    // (accepted rally or challenge, or a shared tournament fixture), and by the current group
+    // lesson coach for players still enrolled in that lesson.
     //
     // This used to be `isAuthenticated()`, i.e. every member could read every other member's
     // phone number. The app shares contact details rather than carrying messages, so they have to
@@ -188,6 +208,7 @@ service cloud.firestore {
     match /contacts/{userId} {
       allow read: if isOwner(userId) ||
         isConnectedTo(userId) ||
+        isCurrentGroupLessonCoachFor(userId) ||
         isSuperAdmin();
       allow create: if isOwner(userId) &&
         request.resource.data.keys().hasOnly(ownerContactFields());
@@ -616,6 +637,12 @@ service cloud.firestore {
     match /group_lessons/{month} {
       allow read: if true;
       allow write: if false;
+    }
+
+    // Expiring coach-to-roster authorization projection. Cloud Functions maintains it alongside
+    // the monthly roster; clients may neither inspect nor forge the access marker directly.
+    match /group_lesson_contact_access/{documentId} {
+      allow read, write: if false;
     }
 
     // ===============================================================

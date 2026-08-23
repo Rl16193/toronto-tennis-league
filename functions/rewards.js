@@ -21,6 +21,7 @@ const { earnedRsPoints } = require('./lib/points');
 const { notify, adminUids } = require('./lib/notify');
 const { assertCouponStatus } = require('./lib/redemptionState');
 const { safeId } = require('./lib/logging');
+const { nextMonthStart } = require('./lib/groupLessonAccess');
 const {
   OPEN_REDEMPTION_STATUSES,
   assertRedemptionLockAvailable,
@@ -445,6 +446,7 @@ exports.joinGroupLesson = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
   const month = monthKey();
   const ref = db().doc(`group_lessons/${month}`);
+  const accessRef = db().doc('group_lesson_contact_access/current');
 
   const [userSnap, coachSnap] = await Promise.all([
     db().doc(`users/${uid}`).get(),
@@ -489,6 +491,13 @@ exports.joinGroupLesson = onCall({ region: REGION }, async (request) => {
       },
       { merge: true },
     );
+    tx.set(accessRef, {
+      month,
+      coach_id: coach.provider_id || '',
+      player_ids: next.map((player) => player.uid),
+      expires_at: admin.firestore.Timestamp.fromDate(nextMonthStart(month)),
+      updated_at: nowISO(),
+    });
 
     return GROUP_LESSON_CAPACITY - next.length;
   });
@@ -499,7 +508,9 @@ exports.joinGroupLesson = onCall({ region: REGION }, async (request) => {
 /** Give up your spot, freeing it for someone else this month. */
 exports.leaveGroupLesson = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
-  const ref = db().doc(`group_lessons/${monthKey()}`);
+  const month = monthKey();
+  const ref = db().doc(`group_lessons/${month}`);
+  const accessRef = db().doc('group_lesson_contact_access/current');
 
   const spotsLeft = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -510,6 +521,13 @@ exports.leaveGroupLesson = onCall({ region: REGION }, async (request) => {
     }
     const next = players.filter((p) => p.uid !== uid);
     tx.update(ref, { players: next, updated_at: nowISO() });
+    tx.set(accessRef, {
+      month,
+      coach_id: snap.data().coach_id || '',
+      player_ids: next.map((player) => player.uid),
+      expires_at: admin.firestore.Timestamp.fromDate(nextMonthStart(month)),
+      updated_at: nowISO(),
+    });
     return GROUP_LESSON_CAPACITY - next.length;
   });
 
