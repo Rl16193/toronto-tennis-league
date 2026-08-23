@@ -96,7 +96,7 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
             </div>
             <div className="space-y-1">
               <h3 className="text-lg font-bold text-fg">Sent for review</h3>
-              <p className="text-fg/70 text-sm">An organizer will approve it before it counts.</p>
+              <p className="text-fg/70 text-sm">An administrator will approve it before it counts.</p>
             </div>
             <Button variant="outline" className="w-full" onClick={onClose}>
               Done

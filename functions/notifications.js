@@ -431,7 +431,7 @@ exports.onTaskProgressUpdated = onDocumentUpdated({ document: 'tasks/{uid}', reg
     await notify(uid, {
       type: 'task_revoked',
       title: 'A task was removed from your Initiation',
-      body: 'An organizer reviewed a claimed task. Complete it again to restore your progress.',
+      body: 'An administrator reviewed a claimed task. Complete it again to restore your progress.',
       link: '/tasks',
     });
   }
