@@ -15,7 +15,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
-const { REGION, SUPER_ADMIN_UID, TZ } = require('./lib/constants');
+const { GROUP_LESSON_COACH_PROVIDER_ID, REGION, SUPER_ADMIN_UID, TZ } = require('./lib/constants');
 const { normalizeCouponCode, optionalTrimmedString, requireAuth, requireTrimmedString } = require('./lib/callable');
 const { earnedRsPoints } = require('./lib/points');
 const { notify, adminUids } = require('./lib/notify');
@@ -453,8 +453,16 @@ exports.joinGroupLesson = onCall({ region: REGION }, async (request) => {
     db().collection('tasks').where('type', '==', 'offer').get(),
   ]);
   const u = userSnap.exists ? userSnap.data() : {};
-  const coachDoc = coachSnap.docs.find((d) => d.data().category === 'coaching');
-  const coach = coachDoc ? coachDoc.data() : {};
+  const coachDoc = coachSnap.docs.find((doc) => {
+    const offer = doc.data();
+    return (
+      offer.category === 'coaching' && offer.provider_id === GROUP_LESSON_COACH_PROVIDER_ID && offer.active === true
+    );
+  });
+  if (!coachDoc) {
+    throw new HttpsError('failed-precondition', 'The group lesson coach is not available.');
+  }
+  const coach = coachDoc.data();
 
   const spotsLeft = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -483,7 +491,7 @@ exports.joinGroupLesson = onCall({ region: REGION }, async (request) => {
       ref,
       {
         month,
-        coach_id: coach.provider_id || '',
+        coach_id: GROUP_LESSON_COACH_PROVIDER_ID,
         coach_name: coach.provider_name || '',
         capacity: GROUP_LESSON_CAPACITY,
         players: next,
@@ -493,7 +501,7 @@ exports.joinGroupLesson = onCall({ region: REGION }, async (request) => {
     );
     tx.set(accessRef, {
       month,
-      coach_id: coach.provider_id || '',
+      coach_id: GROUP_LESSON_COACH_PROVIDER_ID,
       player_ids: next.map((player) => player.uid),
       expires_at: admin.firestore.Timestamp.fromDate(nextMonthStart(month)),
       updated_at: nowISO(),

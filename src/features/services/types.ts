@@ -96,6 +96,10 @@ export interface GroupLessonPlayer {
 
 export const GROUP_LESSON_CAPACITY = 4;
 
+// Mirrors GROUP_LESSON_COACH_PROVIDER_ID in functions/lib/constants.js and the seeded Archie
+// provider. The free lesson must never move merely because catalog ordering changes.
+export const GROUP_LESSON_PROVIDER_ID = 'archie';
+
 /** Current month key in Toronto time — must match monthKey() in functions/rewards.js. */
 export const currentMonthKey = (): string => {
   const parts = new Intl.DateTimeFormat('en-CA', {

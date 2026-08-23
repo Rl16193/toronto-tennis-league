@@ -15,6 +15,7 @@ import { fadeUp, tapScale } from '../../lib/motion';
 import {
   CATEGORY_LABEL,
   GROUP_LESSON_CAPACITY,
+  GROUP_LESSON_PROVIDER_ID,
   MIN_REWARD_COST,
   Provider,
   Redemption,
@@ -1067,7 +1068,7 @@ export const ServicesTab: React.FC = () => {
                     bodyClassName="px-5 space-y-2.5"
                   >
                     {/* The free monthly group lesson is Archie's offer — lives under his name. */}
-                    {p.id === 'archie' && <GroupLessonCard />}
+                    {p.id === GROUP_LESSON_PROVIDER_ID && <GroupLessonCard />}
                     {p.offers.map((r) => (
                       <OfferCard
                         key={r.id}

@@ -12,6 +12,11 @@ const TZ = 'America/Toronto';
 const REGION = 'us-central1';
 const SUPER_ADMIN_UID = '7PvfzNtDmsOq5GLMieId7QRT7wH3';
 
+// Provider that owns the free monthly group lesson. This mirrors
+// GROUP_LESSON_PROVIDER_ID in src/features/services/types.ts and the Archie row in
+// scripts/seed-rewards.mjs. Do not infer the coach from catalog ordering.
+const GROUP_LESSON_COACH_PROVIDER_ID = 'archie';
+
 // Outgoing address for every email. `notifications@` is a real Hostinger mailbox, not a black
 // hole — the old `noreply@` was unroutable, which reads badly to spam filters and to people.
 const EMAIL_FROM = 'Racquets & Strings <notifications@racquetsandstrings.ca>';
@@ -29,4 +34,15 @@ const INSTAGRAM = 'https://www.instagram.com/racqnstringstoronto';
 const WHATSAPP = 'https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX';
 const FAQ = 'https://docs.google.com/document/d/17lyP5f62iuXRIiwDtrcn4EZo6vnx0jbr87kxdkEIzYY/edit?tab=t.0';
 
-module.exports = { TZ, REGION, SUPER_ADMIN_UID, EMAIL_FROM, EMAIL_REPLY_TO, SITE, INSTAGRAM, WHATSAPP, FAQ };
+module.exports = {
+  TZ,
+  REGION,
+  SUPER_ADMIN_UID,
+  GROUP_LESSON_COACH_PROVIDER_ID,
+  EMAIL_FROM,
+  EMAIL_REPLY_TO,
+  SITE,
+  INSTAGRAM,
+  WHATSAPP,
+  FAQ,
+};

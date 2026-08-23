@@ -136,11 +136,27 @@ test('group lesson enrollment maintains expiring coach contact access', async ()
   const player = await session('group-lesson-player');
   await Promise.all([
     db.doc(`users/${player.uid}`).set({ name: 'Group Lesson Player' }),
-    db.doc('tasks/group-lesson-coach').set({
+    db.doc('tasks/a-unrelated-active-coach').set({
+      type: 'offer',
+      category: 'coaching',
+      provider_id: 'unrelated-coach',
+      provider_name: 'Unrelated Active Coach',
+      uid: 'coach-b',
+      active: true,
+    }),
+    db.doc('tasks/b-inactive-archie-coach').set({
       type: 'offer',
       category: 'coaching',
       provider_id: 'archie',
-      provider_name: 'Synthetic Coach',
+      provider_name: 'Inactive Archie',
+      uid: 'coach-a',
+      active: false,
+    }),
+    db.doc('tasks/z-active-archie-coach').set({
+      type: 'offer',
+      category: 'coaching',
+      provider_id: 'archie',
+      provider_name: 'Synthetic Archie',
       uid: 'coach-a',
       active: true,
     }),
@@ -149,7 +165,10 @@ test('group lesson enrollment maintains expiring coach contact access', async ()
   const joined = await call('joinGroupLesson', player.token, {});
   assert.equal(joined.status, 200, JSON.stringify(joined.body));
   const accessAfterJoin = (await db.doc('group_lesson_contact_access/current').get()).data();
+  const rosterAfterJoin = (await db.collection('group_lessons').limit(1).get()).docs[0].data();
   assert.equal(accessAfterJoin.coach_id, 'archie');
+  assert.equal(rosterAfterJoin.coach_id, 'archie');
+  assert.equal(rosterAfterJoin.coach_name, 'Synthetic Archie');
   assert.deepEqual(accessAfterJoin.player_ids, [player.uid]);
   assert.ok(accessAfterJoin.expires_at.toDate().getTime() > Date.now());
 
