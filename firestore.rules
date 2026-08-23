@@ -645,8 +645,9 @@ service cloud.firestore {
     // this path and every draft read/write was denied by default — silently, because the
     // onSnapshot error path just sets the draft to null.
     match /events/{eventId}/rr_drafts/{drawKey} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && isManagerOfEvent(eventId);
+      // Draft groups and withdrawals are unpublished organizer state. Participants see the
+      // generated match documents after release, not this pre-generation workspace.
+      allow read, write: if isManagerOfEvent(eventId);
     }
 
   }

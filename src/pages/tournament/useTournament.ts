@@ -805,7 +805,9 @@ export const useTournament = (eventIdOverride?: string) => {
 
   // Live-subscribe to the current draw's RR draft doc (edited pre-generation groups + withdrawals).
   useEffect(() => {
-    if (!event || currentDrawFormat !== 'rr' || !currentDraw) {
+    // Drafts are an organizer workspace. Participants switch to generated match documents once
+    // the draw is released and must not subscribe to unpublished groups or withdrawals.
+    if (!isCreator || !event || currentDrawFormat !== 'rr' || !currentDraw) {
       setRRDraft(null);
       return;
     }
@@ -813,7 +815,7 @@ export const useTournament = (eventIdOverride?: string) => {
     return subscribeRoundRobinDraft(event.id, drawKey, setRRDraft);
     // Depend on currentDrawKey itself, not its parts: the key includes zone, so listing only
     // choice/division/skillGroup meant switching zones kept the previous zone's draft loaded.
-  }, [event?.id, currentDrawFormat, currentDrawKey]);
+  }, [isCreator, event?.id, currentDrawFormat, currentDrawKey]);
 
   // Players the creator withdrew from this draw (persisted) — never auto-placed back.
   const rrWithdrawn = useMemo(() => new Set(rrDraft?.withdrawn ?? []), [rrDraft]);
