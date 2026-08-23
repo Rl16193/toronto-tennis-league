@@ -138,6 +138,7 @@ test('member cannot see unpublished Round Robin groups', async ({ page }) => {
   await page.getByRole('button', { name: 'Downtown - Midtown', exact: true }).click();
   await page.getByRole('button', { name: /Challengers.*3\/8/ }).click();
 
+  await expect(page.getByText('The Round Robin draw has not been released yet.')).toBeVisible();
   await expect(page.getByText('Group Stage')).toHaveCount(0);
   await expect(page.getByText('Synthetic Organizer', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Synthetic Multi-role User', { exact: true })).toHaveCount(0);

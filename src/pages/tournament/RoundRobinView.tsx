@@ -212,7 +212,15 @@ export const RoundRobinView: React.FC<Props> = ({
   );
   const contactsByUid = useContacts(contactUids);
 
-  if (groups.length === 0) return null;
+  if (groups.length === 0) {
+    return (
+      <div className="rounded-2xl bg-tennis-surface/20 p-8 text-center" role="status">
+        <p className="text-sm text-fg/70">
+          {isCreator ? 'No Round Robin groups are ready yet.' : 'The Round Robin draw has not been released yet.'}
+        </p>
+      </div>
+    );
+  }
 
   // All players across all groups + unplaced pool (for reassignment / Add Player dropdowns).
   // In edit mode, use editPlayers (skill-group: All) so the creator can pull cross-skill players
