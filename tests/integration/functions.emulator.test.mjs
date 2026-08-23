@@ -178,6 +178,112 @@ test('group lesson enrollment maintains expiring coach contact access', async ()
   assert.deepEqual(accessAfterLeave.player_ids, []);
 });
 
+const ambassadorClaim = (uid, inviteeId, status = 'pending') => ({
+  type: 'ambassador',
+  uid,
+  user_name: `Claimant ${uid}`,
+  invitee_id: inviteeId,
+  invitee_name: `Invitee ${inviteeId}`,
+  status,
+  created_at: '2026-08-23T00:00:00.000Z',
+});
+
+const notificationsFor = async (uid, type) => {
+  const snapshot = await db.collection('notifications').where('uid', '==', uid).get();
+  return snapshot.docs.filter((doc) => doc.data().type === type);
+};
+
+const deleteNotificationsFor = async (uid) => {
+  const snapshot = await db.collection('notifications').where('uid', '==', uid).get();
+  const batch = db.batch();
+  snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+  await batch.commit();
+};
+
+test('rejected ambassador resubmission returns to the admin review queue', async () => {
+  const claimantId = `claimant-${crypto.randomUUID()}`;
+  const inviteeId = `invitee-${crypto.randomUUID()}`;
+  const claimRef = db.doc(`task_claims/ambassador_${inviteeId}`);
+  const pending = ambassadorClaim(claimantId, inviteeId);
+
+  await claimRef.set(pending);
+  await waitFor(
+    () => notificationsFor('7PvfzNtDmsOq5GLMieId7QRT7wH3', 'organizer_review_pending'),
+    (notifications) => notifications.length > 0,
+  );
+  await claimRef.update({ status: 'rejected', reviewer_note: 'Synthetic rejection' });
+  await waitFor(
+    () => notificationsFor(claimantId, 'claim_rejected'),
+    (notifications) => notifications.length > 0,
+  );
+
+  await deleteNotificationsFor('7PvfzNtDmsOq5GLMieId7QRT7wH3');
+  await claimRef.set(pending);
+  await waitFor(
+    () => notificationsFor('7PvfzNtDmsOq5GLMieId7QRT7wH3', 'organizer_review_pending'),
+    (notifications) => notifications.length > 0,
+  );
+  assert.equal((await claimRef.get()).data().status, 'pending');
+});
+
+test('legacy approved ambassador claim rejects a new deterministic duplicate', async () => {
+  const claimantId = `claimant-${crypto.randomUUID()}`;
+  const legacyClaimantId = `legacy-${crypto.randomUUID()}`;
+  const inviteeId = `invitee-${crypto.randomUUID()}`;
+  const legacyRef = db.doc(`task_claims/legacy-${crypto.randomUUID()}`);
+  const claimRef = db.doc(`task_claims/ambassador_${inviteeId}`);
+
+  await legacyRef.set({ ...ambassadorClaim(legacyClaimantId, inviteeId, 'approved'), type: 'volunteer' });
+  await legacyRef.update({ type: 'ambassador' });
+  await claimRef.set(ambassadorClaim(claimantId, inviteeId));
+
+  const rejected = await waitFor(
+    async () => (await claimRef.get()).data(),
+    (claim) => claim?.status === 'rejected',
+  );
+  assert.equal(rejected.reviewer_note, 'Already claimed by another member.');
+  assert.equal((await legacyRef.get()).data().status, 'approved');
+});
+
+test('approval guard awards no invite when a legacy approved ambassador claim exists', async () => {
+  const claimantId = `claimant-${crypto.randomUUID()}`;
+  const legacyClaimantId = `legacy-${crypto.randomUUID()}`;
+  const inviteeId = `invitee-${crypto.randomUUID()}`;
+  const legacyRef = db.doc(`task_claims/legacy-${crypto.randomUUID()}`);
+  const claimRef = db.doc(`task_claims/ambassador_${inviteeId}`);
+
+  await claimRef.set(ambassadorClaim(claimantId, inviteeId));
+  await waitFor(
+    () => notificationsFor('7PvfzNtDmsOq5GLMieId7QRT7wH3', 'organizer_review_pending'),
+    (notifications) => notifications.length > 0,
+  );
+  await legacyRef.set({ ...ambassadorClaim(legacyClaimantId, inviteeId, 'approved'), type: 'volunteer' });
+  await legacyRef.update({ type: 'ambassador' });
+  await claimRef.update({ status: 'approved' });
+
+  const rejected = await waitFor(
+    async () => (await claimRef.get()).data(),
+    (claim) => claim?.status === 'rejected',
+  );
+  assert.equal(rejected.reviewer_note, 'Already claimed by another member.');
+  assert.equal((await db.doc(`tasks/${claimantId}`).get()).exists, false);
+});
+
+test('joining an event marks initiation progress without a reserved placeholder field', async () => {
+  const playerId = `event-player-${crypto.randomUUID()}`;
+  await db.doc(`event_participants/${crypto.randomUUID()}`).set({
+    event_id: 'synthetic-event',
+    uid: playerId,
+    user_name: 'Synthetic Event Player',
+  });
+
+  const progress = await waitFor(
+    async () => (await db.doc(`tasks/${playerId}`).get()).data(),
+    (task) => task?.joinEvent === true,
+  );
+  assert.equal(Object.hasOwn(progress, '__none__'), false);
+});
+
 test('approved cancellation refunds points and releases the lock', async () => {
   const player = await session('refund-player');
   const administrator = await session('refund-administrator', '7PvfzNtDmsOq5GLMieId7QRT7wH3');
@@ -318,7 +424,17 @@ const seedTournament = async (ownerUid, playerOne, playerTwo) => {
       set_3_player_2: 0,
     }),
   ]);
+  await waitFor(
+    async () => Promise.all([db.doc(`tasks/${playerOne}`).get(), db.doc(`tasks/${playerTwo}`).get()]),
+    (progress) => progress.every((snapshot) => snapshot.data()?.joinEvent === true),
+  );
 };
+
+const waitForTournamentProgress = (playerOne, playerTwo) =>
+  waitFor(
+    async () => Promise.all([db.doc(`tasks/${playerOne}`).get(), db.doc(`tasks/${playerTwo}`).get()]),
+    (progress) => progress.every((snapshot) => snapshot.data()?.matchesPlayed === 1),
+  );
 
 test('tournament result applies stats and advancement exactly once', { skip: !tournamentAvailable }, async () => {
   const owner = await session('tournament-owner');
@@ -340,6 +456,7 @@ test('tournament result applies stats and advancement exactly once', { skip: !to
   assert.equal((await db.doc('matches/m3').get()).data().player_1_uid, 'p1');
   assert.equal((await db.doc('stats/p1').get()).data().leaguePoints26, 3);
   assert.equal((await db.doc('stats/p2').get()).data().leaguePoints26, 1);
+  await waitForTournamentProgress('p1', 'p2');
 
   const duplicate = await call('applyTournamentResult', owner.token, data);
   assert.equal(duplicate.status, 200, JSON.stringify(duplicate.body));
@@ -430,6 +547,7 @@ test(
       submissionId: 'result-1',
     });
     assert.equal(applied.status, 200, JSON.stringify(applied.body));
+    await waitForTournamentProgress('p1', 'p2');
 
     await db.doc('matches/not-bracket').set({
       event_id: 'e1',

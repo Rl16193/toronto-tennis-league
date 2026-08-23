@@ -141,11 +141,12 @@ async function bumpCounterAndAward(uid, name, counterField, incrementBy, initTas
     const snap = await tx.get(ref);
     const data = snap.exists ? snap.data() : {};
 
-    const newVal = (data[counterField] || 0) + incrementBy;
-    const update = { uid, name, category: 'progress', updatedAt: new Date().toISOString(), [counterField]: newVal };
+    const update = { uid, name, category: 'progress', updatedAt: new Date().toISOString() };
+    const newVal = counterField ? (data[counterField] || 0) + incrementBy : 0;
+    if (counterField) update[counterField] = newVal;
 
     for (const tier of ALL_TIERS) {
-      if (tier.counter !== counterField || data[tier.id]) continue;
+      if (!counterField || tier.counter !== counterField || data[tier.id]) continue;
       if (newVal >= tier.need) update[tier.id] = true;
     }
 
@@ -160,7 +161,7 @@ async function bumpCounterAndAward(uid, name, counterField, incrementBy, initTas
 
 // joinEvent has no tier of its own — just the Initiation checkbox.
 async function markInitiationTask(uid, name, taskId) {
-  await bumpCounterAndAward(uid, name, '__none__', 0, taskId);
+  await bumpCounterAndAward(uid, name, null, 0, taskId);
 }
 
 // ─── Global-admin digest: totals only, never names ──────────────────────────
@@ -176,6 +177,38 @@ async function notifyAdminsOfQueue(link) {
     title: `${claims.size} task${claims.size > 1 ? 's' : ''} need approval`,
     link,
   });
+}
+
+const AMBASSADOR_DUPLICATE_NOTE = 'Already claimed by another member.';
+
+// Current clients use task_claims/ambassador_{inviteeId}, which gives Firestore Rules one atomic
+// slot per invitee. Older releases used random ids, so keep a server-side compatibility guard:
+// one single-field query (no composite index) detects an active legacy claim before review or
+// award. Existing historical data is not rewritten or migrated.
+async function findOtherActiveAmbassadorClaim(claimRef, inviteeId) {
+  if (typeof inviteeId !== 'string' || inviteeId.trim() === '') return null;
+  const claims = await db().collection('task_claims').where('invitee_id', '==', inviteeId).get();
+  return (
+    claims.docs.find((doc) => {
+      const claim = doc.data();
+      return (
+        doc.id !== claimRef.id &&
+        claim.type === 'ambassador' &&
+        (claim.status === 'pending' || claim.status === 'approved')
+      );
+    }) || null
+  );
+}
+
+async function rejectDuplicateAmbassadorClaim(claimRef, claim) {
+  const other = await findOtherActiveAmbassadorClaim(claimRef, claim.invitee_id);
+  if (!other) return false;
+  await claimRef.update({
+    status: 'rejected',
+    reviewer_note: AMBASSADOR_DUPLICATE_NOTE,
+    reviewed_at: new Date().toISOString(),
+  });
+  return true;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -328,15 +361,17 @@ exports.onPhotoReportAwardPoints = onDocumentCreated({ document: 'courts/{id}', 
 exports.onClaimReviewed = onDocumentUpdated({ document: 'task_claims/{id}', region: REGION }, async (event) => {
   const before = event.data?.before.data() || {};
   const after = event.data?.after.data() || {};
+  const claimRef = event.data.after.ref;
   if (before.status !== 'pending') {
     // Rejected ambassador slots are reusable. A resubmission is an update to the deterministic
-    // document, so the create trigger will not see it; notify the review queue from here instead.
+    // document, so the create trigger will not see it. Check legacy active claims before putting
+    // the resubmission back in the review queue.
     if (before.status === 'rejected' && after.status === 'pending' && after.type === 'ambassador') {
+      if (await rejectDuplicateAmbassadorClaim(claimRef, after)) return;
       await notifyAdminsOfQueue('/tasks?review=claims');
     }
     return;
   }
-  const claimRef = event.data.after.ref;
 
   if (after.status === 'approved') {
     if (after.type === 'volunteer') {
@@ -344,21 +379,7 @@ exports.onClaimReviewed = onDocumentUpdated({ document: 'task_claims/{id}', regi
     } else if (after.type === 'host') {
       await bumpCounterAndAward(after.uid, after.user_name || '', 'meetups', 1, undefined);
     } else if (after.type === 'ambassador') {
-      // New claims use one deterministic document per invitee. Keep this approval-stage query as
-      // a compatibility guard for legacy random-id claims that predate that invariant.
-      const dupe = await db()
-        .collection('task_claims')
-        .where('type', '==', 'ambassador')
-        .where('invitee_id', '==', after.invitee_id)
-        .where('status', '==', 'approved')
-        .get();
-      const other = dupe.docs.find((d) => d.id !== claimRef.id);
-      if (other) {
-        await claimRef.update({
-          status: 'rejected',
-          reviewer_note: 'Already claimed by another member.',
-          reviewed_at: new Date().toISOString(),
-        });
+      if (await rejectDuplicateAmbassadorClaim(claimRef, after)) {
         await notify(after.uid, {
           type: 'claim_rejected',
           title: `${after.invitee_name || 'That player'} was already claimed by someone else`,
@@ -386,7 +407,15 @@ exports.onClaimReviewed = onDocumentUpdated({ document: 'task_claims/{id}', regi
 
 // Global-admin digest — fires whenever a claim needs approval. Totals only (never names); the link
 // opens the review queue.
-exports.onTaskClaimCreated = onDocumentCreated({ document: 'task_claims/{id}', region: REGION }, async () => {
+exports.onTaskClaimCreated = onDocumentCreated({ document: 'task_claims/{id}', region: REGION }, async (event) => {
+  const claim = event.data?.data() || {};
+  if (
+    claim.type === 'ambassador' &&
+    claim.status === 'pending' &&
+    (await rejectDuplicateAmbassadorClaim(event.data.ref, claim))
+  ) {
+    return;
+  }
   await notifyAdminsOfQueue('/tasks?review=claims');
 });
 
