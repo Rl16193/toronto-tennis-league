@@ -77,7 +77,6 @@ export const ensureUserProfileDocuments = async (user: User) => {
         ...emptyContacts(),
         email: user.email || '',
         updated_at: new Date().toISOString(),
-        uid: user.uid,
       }),
     );
   }

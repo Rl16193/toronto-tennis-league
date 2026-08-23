@@ -278,6 +278,27 @@ describe('Firestore authorization boundaries', () => {
     await assertFails(updateDoc(doc(otherDb, 'contacts/owner-a'), { phone: '+14165550101' }));
   });
 
+  test('first-time OAuth contact bootstrap uses only owner-allowlisted fields', async () => {
+    const ownerDb = dbFor('oauth-owner');
+    const contactData = {
+      email: 'oauth-owner@example.invalid',
+      phone: '',
+      preferred_mode_of_contact: [],
+      whatsapp_contact: '',
+      whatsapp_same_as_phone: false,
+      contactable: false,
+      updated_at: '2026-08-23T00:00:00.000Z',
+    };
+
+    await assertSucceeds(setDoc(doc(ownerDb, 'contacts/oauth-owner'), contactData));
+    await assertFails(
+      setDoc(doc(dbFor('oauth-owner-with-uid'), 'contacts/oauth-owner-with-uid'), {
+        ...contactData,
+        uid: 'oauth-owner-with-uid',
+      }),
+    );
+  });
+
   test('contacts become readable to a connected opponent and public listing viewers, not an unrelated organizer', async () => {
     await seedDoc('preferences/organizer-a', {
       uid: 'organizer-a',
