@@ -92,6 +92,16 @@ allowlisted participant/preference fields. Validation is local-only; production 
 data mutation remain out of scope, with staging deferred until an authorized project and verified
 recovery path exist.
 
+### Sprint D5 review note
+
+The D5 slice adds typed component primitives with real call-site consumption, a real 404 route,
+event-scoped organizer checks, flag-only task checklist writes, server-issued provider records,
+the `services` catalog, callable-owned booking transitions, and callable claim review. Legacy task
+offers and preference provider fields remain read-only compatibility fallbacks until a separately
+authorized migration. Group lessons are retired from the active client/Rules surface. Validation
+is local-only; no production deployment or data mutation was performed, and staging is deferred
+until an authorized project and verified recovery path exist.
+
 `.agents/skills/gstack/` is tracked third-party agent tooling kept for reproducible local workflows.
 `.gitattributes` marks it as vendored for repository language metrics; ESLint and application tests
 also exclude it. Security review must still inspect the vendor tree when its source or lock changes.

@@ -368,7 +368,7 @@ exports.onClaimReviewed = onDocumentUpdated({ document: 'task_claims/{id}', regi
     // the resubmission back in the review queue.
     if (before.status === 'rejected' && after.status === 'pending' && after.type === 'ambassador') {
       if (await rejectDuplicateAmbassadorClaim(claimRef, after)) return;
-      await notifyAdminsOfQueue('/tasks?review=claims');
+      await claimRef.update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: 'system' });
     }
     return;
   }
@@ -414,6 +414,10 @@ exports.onTaskClaimCreated = onDocumentCreated({ document: 'task_claims/{id}', r
     claim.status === 'pending' &&
     (await rejectDuplicateAmbassadorClaim(event.data.ref, claim))
   ) {
+    return;
+  }
+  if (claim.type === 'ambassador' && claim.status === 'pending') {
+    await event.data.ref.update({ status: 'approved', reviewed_at: new Date().toISOString(), reviewed_by: 'system' });
     return;
   }
   await notifyAdminsOfQueue('/tasks?review=claims');

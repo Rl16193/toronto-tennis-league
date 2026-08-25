@@ -39,6 +39,7 @@ const HowItWorks = lazyWithRetry(
 const Terms = lazyWithRetry(() => import('./pages/StaticPages').then((m) => ({ default: m.Terms })), 'Terms');
 const Privacy = lazyWithRetry(() => import('./pages/StaticPages').then((m) => ({ default: m.Privacy })), 'Privacy');
 const Contact = lazyWithRetry(() => import('./pages/StaticPages').then((m) => ({ default: m.Contact })), 'Contact');
+const NotFound = lazyWithRetry(() => import('./pages/NotFound').then((m) => ({ default: m.NotFound })), 'NotFound');
 
 const ScrollToTop: React.FC = () => {
   const location = useLocation();
@@ -169,7 +170,7 @@ export default function App() {
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/contact" element={<Contact />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<NotFound />} />
               </Routes>
             </Layout>
           </Router>

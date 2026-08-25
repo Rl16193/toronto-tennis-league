@@ -12,9 +12,7 @@ const TZ = 'America/Toronto';
 const REGION = 'us-central1';
 const SUPER_ADMIN_UID = '7PvfzNtDmsOq5GLMieId7QRT7wH3';
 
-// Provider that owns the free monthly group lesson. This mirrors
-// GROUP_LESSON_PROVIDER_ID in src/features/services/types.ts and the Archie row in
-// scripts/seed-rewards.mjs. Do not infer the coach from catalog ordering.
+// Legacy lesson provider id used only by the read-only compatibility callables during migration.
 const GROUP_LESSON_COACH_PROVIDER_ID = 'archie';
 
 // Outgoing address for every email. `notifications@` is a real Hostinger mailbox, not a black

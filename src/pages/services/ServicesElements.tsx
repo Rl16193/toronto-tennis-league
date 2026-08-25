@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AnimatePresence, motion } from 'motion/react';
-import { BadgeCheck, Check, ChevronDown, Copy, Flag, Pencil, Plus, Sparkles, Trash2, Users, X } from 'lucide-react';
+import { motion } from 'motion/react';
+import { BadgeCheck, Check, Copy, Flag, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
@@ -10,19 +10,19 @@ import { field, fieldLabelCls } from '../../components/Input';
 import { Fab } from '../../components/Fab';
 import { Sheet } from '../../components/Sheet';
 import { Tree, TreeGroup } from '../../components/Tree';
+import { Checkbox } from '../../components/Checkbox';
+import { EmptyState } from '../../components/EmptyState';
+import { FieldError } from '../../components/FieldError';
+import { Pill } from '../../components/Pill';
 import { ContactOpponentButton } from '../../components/ContactOpponentButton';
-import { useContacts } from '../../features/contacts/useContacts';
 import { fadeUp, tapScale } from '../../lib/motion';
 import {
   CATEGORY_LABEL,
-  GROUP_LESSON_CAPACITY,
-  GROUP_LESSON_PROVIDER_ID,
   MIN_REWARD_COST,
   Provider,
   Redemption,
   Reward,
   ServiceCategory,
-  useGroupLesson,
   useMyRedemptions,
   useProviderAvatars,
   useProviderRedemptions,
@@ -32,8 +32,6 @@ import {
 } from '../../features/services/useServices';
 import {
   flagCoupon,
-  joinGroupLesson,
-  leaveGroupLesson,
   markCouponUsed,
   redeemReward,
   requestCancellation,
@@ -41,144 +39,7 @@ import {
 } from '../../features/services/servicesApi';
 import { createOffer, deactivateOffer, updateOffer } from '../../features/services/adminApi';
 
-// Services tab, offer form, and group-lesson card. Firestore reads live in features/services/.
-
-// ─── Free monthly group lesson ───────────────────────────────────────────────────────────────────
-
-const monthLabel = (month: string) => {
-  const [y, m] = month.split('-').map(Number);
-  return new Date(y, (m || 1) - 1, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
-};
-
-/**
- * The free monthly group lesson — 2-4 players, no points. Laid out like the round-robin group
- * cards: a header with the roster count, and an expandable player list.
- *
- * Spots reset on the 1st because the roster lives in a per-month document, so a new month is
- * simply a doc that doesn't exist yet. The coach who owns this offer sees names and gets a
- * Contact button per player; everyone else sees names only.
- */
-export const GroupLessonCard: React.FC = () => {
-  const { user } = useAuth();
-  const { month, players, joined, loading } = useGroupLesson();
-  const { role } = useProviderRole();
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  const isCoach = role === 'coach';
-  const spotsLeft = Math.max(0, GROUP_LESSON_CAPACITY - players.length);
-  const full = spotsLeft === 0;
-
-  // Only the coach needs these, and only once the roster is expanded.
-  const rosterIds = isCoach && open ? players.map((p) => p.uid) : [];
-  const rosterContacts = useContacts(rosterIds);
-
-  const act = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    setError('');
-    try {
-      await fn();
-    } catch (err) {
-      setError(serviceErrorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="rounded-2xl bg-clay/[0.06] border border-clay/30 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-bold text-fg leading-snug">30 min group lesson</p>
-          <p className="text-[11px] text-fg/70 mt-0.5">Free · 2–4 players · {monthLabel(month)}</p>
-        </div>
-        <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-clay-fg border border-clay/45 rounded-full px-2 py-0.5">
-          Free
-        </span>
-      </div>
-
-      {error && <p className="text-xs text-badge-loss mt-2">{error}</p>}
-
-      <div className="flex items-center justify-between gap-2.5 mt-3.5 pt-3 border-t border-clay/20">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1.5 text-xs text-fg/70 hover:text-fg transition-colors"
-          aria-expanded={open}
-        >
-          <Users className="w-3.5 h-3.5" />
-          {loading ? '—' : `${players.length}/${GROUP_LESSON_CAPACITY} joined`}
-          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
-        </button>
-
-        {/* The coach runs the session, so they get the roster rather than a Join button. */}
-        {!isCoach &&
-          (joined ? (
-            <Button size="sm" variant="outline" onClick={() => act(() => leaveGroupLesson({}))} isLoading={busy}>
-              Leave
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="clay"
-              disabled={full || !user || busy}
-              isLoading={busy}
-              onClick={() => act(() => joinGroupLesson({}))}
-            >
-              {full ? 'Full' : !user ? 'Log in to join' : 'Join'}
-            </Button>
-          ))}
-      </div>
-
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: 'easeInOut' }}
-            className="overflow-hidden"
-          >
-            <div className="mt-3 pt-3 border-t border-clay/20 space-y-1.5">
-              {players.length === 0 ? (
-                <p className="text-xs text-fg/70">No one has joined yet. All {GROUP_LESSON_CAPACITY} spots are open.</p>
-              ) : (
-                players.map((p) => (
-                  <div key={p.uid} className="flex items-center gap-2 min-h-[32px]">
-                    <span className="min-w-0 flex-1 text-sm text-fg truncate">
-                      {p.name || 'Player'}
-                      {user?.uid === p.uid && <span className="ml-1 text-clay-fg text-[10px]">(you)</span>}
-                    </span>
-                    {/* Contact details are resolved live from `contacts/{uid}` rather than being
-                        snapshotted onto the roster — group_lessons is world-readable, so storing
-                        them there exposed every player's phone and email to signed-out visitors. */}
-                    {isCoach && (
-                      <ContactOpponentButton
-                        name={p.name || 'Player'}
-                        phone={rosterContacts[p.uid]?.phone}
-                        email={rosterContacts[p.uid]?.email}
-                        whatsappContact={rosterContacts[p.uid]?.whatsapp_contact}
-                        preferred={rosterContacts[p.uid]?.preferred_mode_of_contact}
-                        size="sm"
-                        variant="white"
-                      />
-                    )}
-                  </div>
-                ))
-              )}
-              {!full && players.length > 0 && (
-                <p className="text-[11px] text-fg/70 pt-1">
-                  {spotsLeft} spot{spotsLeft === 1 ? '' : 's'} left this month.
-                </p>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
+// Services tab and offer form. Group lessons are retired; lessons are now event add-ons.
 
 // ─── Add / edit an offer (super-admin only) ──────────────────────────────────────────────────────
 
@@ -346,7 +207,7 @@ export const AddServiceForm: React.FC<{
       <form onSubmit={submit} className="p-5 pt-2 space-y-3">
         {error && (
           <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-2.5">
-            {error}
+            <FieldError>{error}</FieldError>
           </div>
         )}
 
@@ -394,17 +255,7 @@ export const AddServiceForm: React.FC<{
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
-              {category === 'coaching' && (
-                <label className="flex items-center gap-2 text-sm text-fg/70 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={certified}
-                    onChange={(e) => setCertified(e.target.checked)}
-                    className="accent-clay"
-                  />
-                  Certified
-                </label>
-              )}
+              {category === 'coaching' && <Checkbox checked={certified} onChange={setCertified} label="Certified" />}
             </div>
           ) : (
             <>
@@ -471,15 +322,7 @@ export const AddServiceForm: React.FC<{
                     />
                   </div>
                   {category === 'coaching' && (
-                    <label className="flex items-center gap-2 text-sm text-fg/70 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={certified}
-                        onChange={(e) => setCertified(e.target.checked)}
-                        className="accent-clay"
-                      />
-                      Certified
-                    </label>
+                    <Checkbox checked={certified} onChange={setCertified} label="Certified" />
                   )}
                 </div>
               )}
@@ -652,10 +495,9 @@ export const AddServiceForm: React.FC<{
 
 // ─── The Services tab ────────────────────────────────────────────────────────────────────────────
 
-// Admin/provider operations remain backlog until a server-authoritative callable exists. The
-// checked-in Rules intentionally reject direct catalog and role writes, so no mutation controls
-// are exposed even to the legacy super-admin UID.
-const ADMIN_OFFER_MANAGEMENT_AVAILABLE = false;
+// The callable enforces this again server-side. The UI only exposes the form to an account that
+// owns a provider row or the configured super-admin; a devtools toggle cannot grant write access.
+const SUPER_ADMIN_UID = '7PvfzNtDmsOq5GLMieId7QRT7wH3';
 
 const money = (n: number | null | undefined) => (typeof n === 'number' ? `$${n % 1 === 0 ? n : n.toFixed(2)}` : '—');
 
@@ -841,7 +683,7 @@ const ProviderPanel: React.FC = () => {
     <div className="rounded-3xl border border-amber-400/30 bg-amber-400/5 p-5 mb-5">
       <p className="text-xs font-bold text-badge uppercase tracking-widest mb-3">Your shop</p>
 
-      {error && <p className="text-xs text-badge-loss mb-2.5">{error}</p>}
+      {error && <FieldError>{error}</FieldError>}
 
       {loading ? (
         <div className="h-14 bg-fg/5 rounded-2xl animate-pulse" />
@@ -905,10 +747,11 @@ const ProviderPanel: React.FC = () => {
 export const ServicesTab: React.FC = () => {
   const { user } = useAuth();
   const { rewards, byCategory, loading: catalogLoading, reload: reloadCatalog } = useServicesCatalog();
+  const { providerId } = useProviderRole();
   const [showAddService, setShowAddService] = useState(false);
   const [editingReward, setEditingReward] = useState<Reward | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const canManageOffers = ADMIN_OFFER_MANAGEMENT_AVAILABLE;
+  const canManageOffers = user?.uid === SUPER_ADMIN_UID || !!providerId;
   const providerAvatars = useProviderAvatars(rewards.map((r) => r.uid));
   const { balance, loading: balanceLoading } = useRedeemablePoints();
   const { redemptions } = useMyRedemptions();
@@ -990,7 +833,7 @@ export const ServicesTab: React.FC = () => {
 
       {error && (
         <div className="rounded-2xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-3 mb-4">
-          {error}
+          <FieldError>{error}</FieldError>
         </div>
       )}
 
@@ -1012,10 +855,7 @@ export const ServicesTab: React.FC = () => {
       {catalogLoading ? (
         <div className="h-40 bg-tennis-surface/30 rounded-3xl animate-pulse" />
       ) : byCategory.size === 0 ? (
-        <div className="rounded-3xl bg-tennis-surface/30 py-12 text-center">
-          <Sparkles className="w-7 h-7 text-fg/70 mx-auto mb-3" />
-          <p className="text-sm text-fg/70">No services available yet. Check back soon.</p>
-        </div>
+        <EmptyState title="No services available yet" description="Check back soon." />
       ) : (
         <Tree>
           {categories.map((cat) => {
@@ -1044,7 +884,11 @@ export const ServicesTab: React.FC = () => {
                         <span className="min-w-0">
                           <span className="flex items-center gap-1.5">
                             {p.name}
-                            {p.certified && <BadgeCheck className="w-3.5 h-3.5 text-clay-fg shrink-0" />}
+                            {p.certified && (
+                              <Pill tone="accent">
+                                <BadgeCheck className="mr-1 h-3.5 w-3.5" aria-hidden="true" /> Certified
+                              </Pill>
+                            )}
                           </span>
                           <span className="block text-[11px] font-medium text-fg/70 mt-0.5">{p.area}</span>
                         </span>
@@ -1065,8 +909,6 @@ export const ServicesTab: React.FC = () => {
                     }
                     bodyClassName="px-5 space-y-2.5"
                   >
-                    {/* The free monthly group lesson is Archie's offer — lives under his name. */}
-                    {p.id === GROUP_LESSON_PROVIDER_ID && <GroupLessonCard />}
                     {p.offers.map((r) => (
                       <OfferCard
                         key={r.id}

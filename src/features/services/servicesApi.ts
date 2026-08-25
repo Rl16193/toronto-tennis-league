@@ -1,8 +1,8 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
 
-// Every points-moving action, and the group-lesson cap, is a Cloud Function — the client can't
-// write `offers/*`, `redemptions/*` or `group_lessons/*` directly (see firestore.rules).
+// Every points-moving action and booking transition is a Cloud Function — the client can't write
+// `offers/*`, `redemptions/*`, `services/*` or `bookings/*` directly (see firestore.rules).
 // Each callable throws an HttpsError whose `message` is already player-readable.
 
 const call = <T, R>(name: string) => {
@@ -18,10 +18,17 @@ export const reviewRedemption = call<{ code: string; approve: boolean; note?: st
   'reviewRedemption',
 );
 
-// Free monthly group lesson — the 4-spot cap is enforced in a transaction so two people
-// tapping Join at once can't both take the last seat.
-export const joinGroupLesson = call<Record<string, never>, { ok: boolean; spotsLeft: number }>('joinGroupLesson');
-export const leaveGroupLesson = call<Record<string, never>, { ok: boolean; spotsLeft: number }>('leaveGroupLesson');
+export const bookService = call<
+  { service_id: string; provider_id: string; note?: string },
+  { ok: boolean; booking: import('./types').Booking }
+>('book');
+export const racquetDropped = call<{ booking_id: string }, { ok: boolean }>('racquetDropped');
+export const requestBookingCompletion = call<{ booking_id: string }, { ok: boolean }>('requestCompletion');
+export const confirmBookingCompletion = call<
+  { booking_id: string; confirmed: boolean },
+  { ok: boolean; status: string }
+>('confirmCompletion');
+export const cancelLeadBooking = call<{ booking_id: string }, { ok: boolean }>('cancelLead');
 
 /** Unwraps a callable rejection into the message the function set, or a generic fallback. */
 export const serviceErrorMessage = (err: unknown): string => {

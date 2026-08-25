@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   normalizeEvent,
   normalizeEventParticipant,
+  normalizeProvider,
   normalizeRoundRobinDraft,
   normalizeTournamentMatch,
   normalizeUserPreferences,
@@ -20,6 +21,19 @@ test('event normalization resolves missing and malformed zone buckets safely', (
   assert.equal(event.id, 'event-1');
   assert.equal(event.image, '');
   assert.ok(event.zone_draw_config.buckets.length > 0);
+});
+
+test('provider normalization keeps only known roles and rejects incomplete rows', () => {
+  assert.deepEqual(
+    normalizeProvider('stringer-1', { name: '  Sam  ', roles: ['stringer', 'stringer', 'root'], member_uid: 4 }),
+    {
+      id: 'stringer-1',
+      name: 'Sam',
+      roles: ['stringer'],
+    },
+  );
+  assert.equal(normalizeProvider('', { name: 'Sam', roles: ['stringer'] }), null);
+  assert.equal(normalizeProvider('stringer-1', { name: 'Sam', roles: [] }), null);
 });
 
 test('participant and match normalization reject documents without stable identity', () => {

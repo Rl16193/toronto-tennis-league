@@ -47,6 +47,15 @@ const main = async () => {
       `Object.assign(exports, require(${JSON.stringify(path.join(root, 'functions', 'friendlyPoints.js'))}));`,
       `Object.assign(exports, require(${JSON.stringify(path.join(root, 'functions', 'taskPoints.js'))}));`,
       `Object.assign(exports, require(${JSON.stringify(path.join(root, 'functions', 'accountLookup.js'))}));`,
+      ...(existsSync(path.join(root, 'functions', 'bookings.js'))
+        ? [`Object.assign(exports, require(${JSON.stringify(path.join(root, 'functions', 'bookings.js'))}));`]
+        : []),
+      ...(existsSync(path.join(root, 'functions', 'claims.js'))
+        ? [`Object.assign(exports, require(${JSON.stringify(path.join(root, 'functions', 'claims.js'))}));`]
+        : []),
+      ...(existsSync(path.join(root, 'functions', 'serviceAdmin.js'))
+        ? [`Object.assign(exports, require(${JSON.stringify(path.join(root, 'functions', 'serviceAdmin.js'))}));`]
+        : []),
       ...(existsSync(path.join(root, 'functions', 'tournamentResults.js'))
         ? [`Object.assign(exports, require(${JSON.stringify(path.join(root, 'functions', 'tournamentResults.js'))}));`]
         : []),

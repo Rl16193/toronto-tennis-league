@@ -21,6 +21,7 @@ const { earnedRsPoints } = require('./lib/points');
 const { notify, adminUids } = require('./lib/notify');
 const { assertCouponStatus } = require('./lib/redemptionState');
 const { safeId } = require('./lib/logging');
+const { providerIdForRole } = require('./lib/providers');
 const { nextMonthStart } = require('./lib/groupLessonAccess');
 const {
   OPEN_REDEMPTION_STATUSES,
@@ -45,14 +46,16 @@ const randomCode = () => {
 
 const isRewardAdmin = (uid) => uid === SUPER_ADMIN_UID;
 
-// A stringer or coach is a normal account with `stringer_id` / `coach_id` on their preferences
-// doc naming the catalog entry they own. Same role-flag shape as `event_creator`.
+// Providers are server-issued. Keep the legacy preference fallback read-only while existing
+// coupons are rolled over; it cannot grant write access because Rules and service callables use
+// the providers row for authorization.
 async function providerIdFor(uid) {
-  const snap = await db().doc(`preferences/${uid}`).get();
-  if (!snap.exists) return null;
-  const d = snap.data();
-  if (d.stringer === true && typeof d.stringer_id === 'string') return d.stringer_id;
-  if (d.coach === true && typeof d.coach_id === 'string') return d.coach_id;
+  const providerId = (await providerIdForRole(uid, 'stringer')) || (await providerIdForRole(uid, 'coach'));
+  if (providerId) return providerId;
+  const prefs = await db().doc(`preferences/${uid}`).get();
+  const data = prefs.exists ? prefs.data() : {};
+  if (data.stringer === true && typeof data.stringer_id === 'string') return data.stringer_id;
+  if (data.coach === true && typeof data.coach_id === 'string') return data.coach_id;
   return null;
 }
 
@@ -71,6 +74,101 @@ async function readBalance(tx, uid) {
   return { earned, spent, balance: earned - spent };
 }
 
+async function loadService(rewardId) {
+  const serviceRef = db().doc(`services/${rewardId}`);
+  const serviceSnap = await serviceRef.get();
+  if (serviceSnap.exists) return serviceSnap;
+  return db().doc(`tasks/${rewardId}`).get();
+}
+
+// Legacy compatibility only. The D5 client no longer exposes this monthly roster; these
+// callables remain temporarily so existing enrolled members can leave safely before migration to
+// event add-on blocks. No new UI path depends on them.
+function legacyMonthKey() {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit' }).formatToParts(
+    new Date(),
+  );
+  const get = (type) => parts.find((part) => part.type === type)?.value || '';
+  return `${get('year')}-${get('month')}`;
+}
+
+exports.joinGroupLesson = onCall({ region: REGION }, async (request) => {
+  const uid = requireAuth(request);
+  const month = legacyMonthKey();
+  const ref = db().doc(`group_lessons/${month}`);
+  const accessRef = db().doc('group_lesson_contact_access/current');
+  const [userSnap, coachSnap] = await Promise.all([
+    db().doc(`users/${uid}`).get(),
+    db().collection('tasks').where('type', '==', 'offer').get(),
+  ]);
+  const coachDoc = coachSnap.docs.find((doc) => {
+    const offer = doc.data();
+    return (
+      offer.category === 'coaching' && offer.provider_id === GROUP_LESSON_COACH_PROVIDER_ID && offer.active === true
+    );
+  });
+  if (!coachDoc) throw new HttpsError('failed-precondition', 'The group lesson coach is not available.');
+  const existing = (await ref.get()).data() || {};
+  const players = existing.players || [];
+  if (players.some((player) => player.uid === uid))
+    throw new HttpsError('already-exists', 'You already have a spot this month.');
+  if (players.length >= 4) throw new HttpsError('failed-precondition', 'This month’s group lesson is full.');
+  const next = players.concat([{ uid, name: userSnap.data()?.name || '', joined_at: nowISO() }]);
+  await db().runTransaction(async (tx) => {
+    const current = await tx.get(ref);
+    const currentPlayers = current.exists ? current.data().players || [] : [];
+    if (currentPlayers.some((player) => player.uid === uid))
+      throw new HttpsError('already-exists', 'You already have a spot this month.');
+    if (currentPlayers.length >= 4) throw new HttpsError('failed-precondition', 'This month’s group lesson is full.');
+    const currentNext = currentPlayers.concat([{ uid, name: userSnap.data()?.name || '', joined_at: nowISO() }]);
+    tx.set(
+      ref,
+      {
+        month,
+        coach_id: GROUP_LESSON_COACH_PROVIDER_ID,
+        coach_name: coachDoc.data().provider_name || '',
+        capacity: 4,
+        players: currentNext,
+        updated_at: nowISO(),
+      },
+      { merge: true },
+    );
+    tx.set(accessRef, {
+      month,
+      coach_id: GROUP_LESSON_COACH_PROVIDER_ID,
+      player_ids: currentNext.map((player) => player.uid),
+      expires_at: admin.firestore.Timestamp.fromDate(nextMonthStart(month)),
+      updated_at: nowISO(),
+    });
+  });
+  return { ok: true, spotsLeft: Math.max(0, 4 - next.length) };
+});
+
+exports.leaveGroupLesson = onCall({ region: REGION }, async (request) => {
+  const uid = requireAuth(request);
+  const month = legacyMonthKey();
+  const ref = db().doc(`group_lessons/${month}`);
+  const accessRef = db().doc('group_lesson_contact_access/current');
+  const spotsLeft = await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'No group lesson this month.');
+    const players = snap.data().players || [];
+    if (!players.some((player) => player.uid === uid))
+      throw new HttpsError('failed-precondition', 'You don’t have a spot to give up.');
+    const next = players.filter((player) => player.uid !== uid);
+    tx.update(ref, { players: next, updated_at: nowISO() });
+    tx.set(accessRef, {
+      month,
+      coach_id: snap.data().coach_id || '',
+      player_ids: next.map((player) => player.uid),
+      expires_at: admin.firestore.Timestamp.fromDate(nextMonthStart(month)),
+      updated_at: nowISO(),
+    });
+    return 4 - next.length;
+  });
+  return { ok: true, spotsLeft };
+});
+
 // ─── Redeem ─────────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -82,7 +180,7 @@ exports.redeemReward = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
   const rewardId = requireTrimmedString(request.data && request.data.rewardId, 'Missing reward.');
 
-  const rewardSnap = await db().doc(`tasks/${rewardId}`).get();
+  const rewardSnap = await loadService(rewardId);
   if (!rewardSnap.exists) throw new HttpsError('not-found', 'That reward no longer exists.');
   const reward = rewardSnap.data();
   const validOffer =
@@ -419,125 +517,4 @@ exports.reviewRedemption = onCall({ region: REGION }, async (request) => {
   });
 
   return { ok: true };
-});
-
-// ─── Free monthly group lesson ──────────────────────────────────────────────────────────────
-
-// One doc per month (`group_lessons/{YYYY-MM}`), so the 4 spots reset on the 1st with no
-// scheduled job — a new month is simply a doc that doesn't exist yet. Must match
-// currentMonthKey() in src/features/services/types.ts.
-function monthKey() {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ,
-    year: 'numeric',
-    month: '2-digit',
-  }).formatToParts(new Date());
-  const get = (t) => (parts.find((p) => p.type === t) || {}).value || '';
-  return `${get('year')}-${get('month')}`;
-}
-
-const GROUP_LESSON_CAPACITY = 4;
-
-/**
- * Take a spot in this month's free group lesson. Transactional, so two simultaneous Joins can't
- * both claim the last seat. Costs no points.
- */
-exports.joinGroupLesson = onCall({ region: REGION }, async (request) => {
-  const uid = requireAuth(request);
-  const month = monthKey();
-  const ref = db().doc(`group_lessons/${month}`);
-  const accessRef = db().doc('group_lesson_contact_access/current');
-
-  const [userSnap, coachSnap] = await Promise.all([
-    db().doc(`users/${uid}`).get(),
-    db().collection('tasks').where('type', '==', 'offer').get(),
-  ]);
-  const u = userSnap.exists ? userSnap.data() : {};
-  const coachDoc = coachSnap.docs.find((doc) => {
-    const offer = doc.data();
-    return (
-      offer.category === 'coaching' && offer.provider_id === GROUP_LESSON_COACH_PROVIDER_ID && offer.active === true
-    );
-  });
-  if (!coachDoc) {
-    throw new HttpsError('failed-precondition', 'The group lesson coach is not available.');
-  }
-  const coach = coachDoc.data();
-
-  const spotsLeft = await db().runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    const existing = snap.exists ? snap.data() : null;
-    const players = (existing && existing.players) || [];
-
-    if (players.some((p) => p.uid === uid)) {
-      throw new HttpsError('already-exists', 'You already have a spot this month.');
-    }
-    if (players.length >= GROUP_LESSON_CAPACITY) {
-      throw new HttpsError('failed-precondition', 'This month’s group lesson is full.');
-    }
-
-    // Name and uid only. `group_lessons` is world-readable, so snapshotting phone/email here
-    // handed every player's contact details to anyone, signed out, via one getDoc. The coach
-    // resolves them from `contacts/{uid}` instead, which requires a sign-in.
-    const next = players.concat([
-      {
-        uid: uid,
-        name: u.name || '',
-        joined_at: nowISO(),
-      },
-    ]);
-
-    tx.set(
-      ref,
-      {
-        month,
-        coach_id: GROUP_LESSON_COACH_PROVIDER_ID,
-        coach_name: coach.provider_name || '',
-        capacity: GROUP_LESSON_CAPACITY,
-        players: next,
-        updated_at: nowISO(),
-      },
-      { merge: true },
-    );
-    tx.set(accessRef, {
-      month,
-      coach_id: GROUP_LESSON_COACH_PROVIDER_ID,
-      player_ids: next.map((player) => player.uid),
-      expires_at: admin.firestore.Timestamp.fromDate(nextMonthStart(month)),
-      updated_at: nowISO(),
-    });
-
-    return GROUP_LESSON_CAPACITY - next.length;
-  });
-
-  return { ok: true, spotsLeft };
-});
-
-/** Give up your spot, freeing it for someone else this month. */
-exports.leaveGroupLesson = onCall({ region: REGION }, async (request) => {
-  const uid = requireAuth(request);
-  const month = monthKey();
-  const ref = db().doc(`group_lessons/${month}`);
-  const accessRef = db().doc('group_lesson_contact_access/current');
-
-  const spotsLeft = await db().runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists) throw new HttpsError('not-found', 'No group lesson this month.');
-    const players = snap.data().players || [];
-    if (!players.some((p) => p.uid === uid)) {
-      throw new HttpsError('failed-precondition', 'You don’t have a spot to give up.');
-    }
-    const next = players.filter((p) => p.uid !== uid);
-    tx.update(ref, { players: next, updated_at: nowISO() });
-    tx.set(accessRef, {
-      month,
-      coach_id: snap.data().coach_id || '',
-      player_ids: next.map((player) => player.uid),
-      expires_at: admin.firestore.Timestamp.fromDate(nextMonthStart(month)),
-      updated_at: nowISO(),
-    });
-    return GROUP_LESSON_CAPACITY - next.length;
-  });
-
-  return { ok: true, spotsLeft };
 });

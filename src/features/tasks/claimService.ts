@@ -1,10 +1,10 @@
 import { FirebaseError } from 'firebase/app';
-import { addDoc, collection, doc, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { addDoc, collection, doc, setDoc } from 'firebase/firestore';
+import { db, functions } from '../../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { fetchCompletedTournamentMatches } from './matchHistory';
 
-// Volunteer / Ambassador / Host all work the same way: a player submits a claim, the global admin
-// approves or rejects it in the review queue, and only an approval awards the points.
+// Volunteer and host claims are reviewed by the event organizer; ambassador claims auto-approve.
 
 export type ClaimType = 'volunteer' | 'ambassador' | 'host';
 export type ClaimStatus = 'pending' | 'approved' | 'rejected';
@@ -49,6 +49,8 @@ export async function createVolunteerClaim(
 export async function createHostClaim(
   uid: string,
   name: string,
+  eventId: string,
+  eventTitle: string,
   meetupTitle: string,
   meetupDate: string,
   note: string,
@@ -57,6 +59,8 @@ export async function createHostClaim(
     type: 'host',
     uid: uid,
     user_name: name,
+    event_id: eventId,
+    event_title: eventTitle,
     meetup_title: meetupTitle,
     ...(meetupDate ? { meetup_date: meetupDate } : {}),
     ...(note.trim() ? { note: note.trim() } : {}),
@@ -107,9 +111,6 @@ export async function createAmbassadorClaim(
 }
 
 export async function reviewClaim(id: string, approve: boolean, reviewerNote?: string): Promise<void> {
-  await updateDoc(doc(db, 'task_claims', id), {
-    status: approve ? 'approved' : 'rejected',
-    reviewed_at: new Date().toISOString(),
-    ...(reviewerNote?.trim() ? { reviewer_note: reviewerNote.trim() } : {}),
-  });
+  const review = httpsCallable(functions, 'reviewTaskClaim');
+  await review({ id, approve, reviewer_note: reviewerNote?.trim() || '' });
 }

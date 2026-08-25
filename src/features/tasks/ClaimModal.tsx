@@ -34,7 +34,7 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (type === 'volunteer') {
+    if (type === 'volunteer' || type === 'host') {
       getDocs(collection(db, 'events')).then((snap) =>
         setEvents(
           snap.docs
@@ -49,8 +49,8 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
   const submit = async () => {
     if (!user) return;
     setError('');
-    if (type === 'volunteer' && !eventId) {
-      setError('Please select an event.');
+    if ((type === 'volunteer' || type === 'host') && !eventId) {
+      setError('Please select the event.');
       return;
     }
     if (type === 'host' && !meetupTitle.trim()) {
@@ -69,7 +69,8 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
         await createVolunteerClaim(user.uid, name, eventId, ev?.title || '', note);
         setSuccess(true);
       } else if (type === 'host') {
-        await createHostClaim(user.uid, name, meetupTitle.trim(), meetupDate, note);
+        const ev = events.find((e) => e.id === eventId);
+        await createHostClaim(user.uid, name, eventId, ev?.title || '', meetupTitle.trim(), meetupDate, note);
         setSuccess(true);
       } else if (selected) {
         const errorMsg = await createAmbassadorClaim(user.uid, name, selected.id, selected.name);
@@ -110,7 +111,7 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
               </div>
             )}
 
-            {type === 'volunteer' && (
+            {(type === 'volunteer' || type === 'host') && (
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-fg/70 uppercase tracking-widest">Which event?</label>
                 <select

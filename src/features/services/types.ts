@@ -1,19 +1,30 @@
 // Services = things members can spend points on, or just browse and book at regular price.
 export type ServiceCategory = 'stringing' | 'coaching' | 'others';
 
+export type ProviderRole = 'stringer' | 'coach' | 'other';
+
+export interface ProviderRecord {
+  id: string;
+  name: string;
+  roles: ProviderRole[];
+  member_uid?: string;
+  area?: string;
+  updated_at?: string;
+}
+
 export const CATEGORY_LABEL: Record<ServiceCategory, string> = {
   stringing: 'Stringing',
   coaching: 'Coaches',
   others: 'Others',
 };
 
-// Collection: tasks, where type === 'offer' — the Services offer catalog.
-// Seeded by scripts/seed-rewards.mjs. Offer doc ids must stay stable because issued
-// coupons store them in redemptions.reward_id.
+// Collection: services — the Services catalog. Existing task offer documents remain a
+// read-only compatibility source until the authorized data migration is complete. Service doc
+// ids must stay stable because issued coupons store them in redemptions.reward_id.
 export interface Reward {
   id: string;
   category: ServiceCategory;
-  /** Groups offers under one provider. Matches preferences.stringer_id / coach_id. */
+  /** Groups services under one provider row. */
   provider_id: string;
   provider_name: string;
   /**
@@ -74,39 +85,22 @@ export interface Redemption {
 // still sees it on their list.
 export const OPEN_STATUSES: RedemptionStatus[] = ['active', 'flagged', 'cancel_requested'];
 
+export type BookingStatus = 'lead' | 'in_progress' | 'completed' | 'cancelled';
+
+export interface Booking {
+  id: string;
+  service_id: string;
+  provider_id: string;
+  uid: string;
+  user_name: string;
+  status: BookingStatus;
+  note?: string;
+  created_at: string;
+  updated_at: string;
+  completion_requested_at?: string;
+  completed_at?: string;
+  cancelled_at?: string;
+}
+
 /** Cheapest thing in the catalog — drives the "unlock a reward" threshold across the app. */
 export const MIN_REWARD_COST = 15;
-
-// ─── Free monthly group lesson ──────────────────────────────────────────────────────────────
-
-/** Collection: group_lessons/{YYYY-MM} — one doc per month, so spots reset on the 1st. */
-export interface GroupLesson {
-  month: string; // 'YYYY-MM'
-  coach_id: string;
-  coach_name: string;
-  capacity: number;
-  players: GroupLessonPlayer[];
-}
-
-export interface GroupLessonPlayer {
-  uid: string;
-  name: string;
-  joined_at: string;
-}
-
-export const GROUP_LESSON_CAPACITY = 4;
-
-// Mirrors GROUP_LESSON_COACH_PROVIDER_ID in functions/lib/constants.js and the seeded Archie
-// provider. The free lesson must never move merely because catalog ordering changes.
-export const GROUP_LESSON_PROVIDER_ID = 'archie';
-
-/** Current month key in Toronto time — must match monthKey() in functions/rewards.js. */
-export const currentMonthKey = (): string => {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Toronto',
-    year: 'numeric',
-    month: '2-digit',
-  }).formatToParts(new Date());
-  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
-  return `${get('year')}-${get('month')}`;
-};

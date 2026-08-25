@@ -200,7 +200,7 @@ const deleteNotificationsFor = async (uid) => {
   await batch.commit();
 };
 
-test('rejected ambassador resubmission returns to the admin review queue', async () => {
+test('ambassador claims auto-approve', async () => {
   const claimantId = `claimant-${crypto.randomUUID()}`;
   const inviteeId = `invitee-${crypto.randomUUID()}`;
   const claimRef = db.doc(`task_claims/ambassador_${inviteeId}`);
@@ -208,22 +208,10 @@ test('rejected ambassador resubmission returns to the admin review queue', async
 
   await claimRef.set(pending);
   await waitFor(
-    () => notificationsFor('7PvfzNtDmsOq5GLMieId7QRT7wH3', 'organizer_review_pending'),
-    (notifications) => notifications.length > 0,
+    () => claimRef.get(),
+    (snapshot) => snapshot.data()?.status === 'approved',
   );
-  await claimRef.update({ status: 'rejected', reviewer_note: 'Synthetic rejection' });
-  await waitFor(
-    () => notificationsFor(claimantId, 'claim_rejected'),
-    (notifications) => notifications.length > 0,
-  );
-
-  await deleteNotificationsFor('7PvfzNtDmsOq5GLMieId7QRT7wH3');
-  await claimRef.set(pending);
-  await waitFor(
-    () => notificationsFor('7PvfzNtDmsOq5GLMieId7QRT7wH3', 'organizer_review_pending'),
-    (notifications) => notifications.length > 0,
-  );
-  assert.equal((await claimRef.get()).data().status, 'pending');
+  assert.equal((await claimRef.get()).data().status, 'approved');
 });
 
 test('legacy approved ambassador claim rejects a new deterministic duplicate', async () => {
@@ -252,14 +240,9 @@ test('approval guard awards no invite when a legacy approved ambassador claim ex
   const legacyRef = db.doc(`task_claims/legacy-${crypto.randomUUID()}`);
   const claimRef = db.doc(`task_claims/ambassador_${inviteeId}`);
 
-  await claimRef.set(ambassadorClaim(claimantId, inviteeId));
-  await waitFor(
-    () => notificationsFor('7PvfzNtDmsOq5GLMieId7QRT7wH3', 'organizer_review_pending'),
-    (notifications) => notifications.length > 0,
-  );
   await legacyRef.set({ ...ambassadorClaim(legacyClaimantId, inviteeId, 'approved'), type: 'volunteer' });
   await legacyRef.update({ type: 'ambassador' });
-  await claimRef.update({ status: 'approved' });
+  await claimRef.set(ambassadorClaim(claimantId, inviteeId));
 
   const rejected = await waitFor(
     async () => (await claimRef.get()).data(),

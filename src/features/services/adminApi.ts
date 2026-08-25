@@ -1,3 +1,5 @@
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../../lib/firebase';
 import { ServiceCategory } from './types';
 
 export interface NewOfferInput {
@@ -16,28 +18,37 @@ export interface NewOfferInput {
   linkUid?: string;
 }
 
-const unavailable = (): never => {
-  throw new Error('Offer administration requires a server-authoritative callable and is not available yet.');
-};
+const upsertService = httpsCallable(functions, 'upsertService');
+const deactivateService = httpsCallable(functions, 'deactivateService');
+const servicePayload = (input: NewOfferInput) => ({
+  category: input.category,
+  provider_id: input.providerId,
+  provider_name: input.providerName,
+  area: input.area,
+  phone: input.phone,
+  email: input.email,
+  certified: input.certified,
+  offer: input.offer,
+  brands: input.brands,
+  total_price: input.totalPrice,
+  discount: input.discount,
+  points_cost: input.pointsCost,
+});
 
-/**
- * Offer administration is deliberately dormant. Catalog entries and provider-role changes are
- * privileged writes, so the earlier direct-Firestore implementation could never pass the checked-in
- * Rules safely. Keep these typed boundaries for the existing form while the approved callable remains
- * backlog work; callers fail closed and perform no write.
- */
-export async function createOffer(_input: NewOfferInput): Promise<string> {
-  return unavailable();
+/** Catalog writes cross the owner-gated callable; provider identity is bootstrapped separately. */
+export async function createOffer(input: NewOfferInput): Promise<string> {
+  const result = await upsertService(servicePayload(input));
+  return (result.data as { id: string }).id;
 }
 
 export async function updateOffer(
-  _id: string,
-  _providerId: string,
-  _input: Omit<NewOfferInput, 'providerId'>,
+  id: string,
+  providerId: string,
+  input: Omit<NewOfferInput, 'providerId'>,
 ): Promise<void> {
-  unavailable();
+  await upsertService({ id, ...servicePayload({ ...input, providerId } as NewOfferInput) });
 }
 
-export async function deactivateOffer(_id: string): Promise<void> {
-  unavailable();
+export async function deactivateOffer(id: string): Promise<void> {
+  await deactivateService({ id });
 }

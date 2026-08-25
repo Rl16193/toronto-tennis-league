@@ -29,6 +29,8 @@ import { ReviewQueue } from '../features/tasks/ReviewQueue';
 import type { ClaimType } from '../features/tasks/claimService';
 import { Toast } from '../components/Toast';
 import { useBadgeToast } from '../features/tasks/useBadgeToast';
+import { ProgressRing } from '../components/ProgressRing';
+import { StatTile } from '../components/StatTile';
 
 // Global task/reward review is an administrative capability, not an event-organizer power.
 // Keep this aligned with firestore.rules and functions/lib/constants.js until roles move to claims.
@@ -196,19 +198,22 @@ export const Tasks: React.FC = () => {
           unconditional now, since the "Rewards Available" count already conveys whether there's
           anything to redeem. */}
       <motion.div {...fadeUp} className="rounded-3xl bg-tennis-surface/30 p-5 mb-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-fg/60">Member progress</p>
+            <p className="mt-1 text-sm font-bold text-fg">
+              {doneUnlocked}/{UNLOCKED_TASK_IDS.length} initiation tasks
+            </p>
+          </div>
+          <ProgressRing
+            value={(doneUnlocked / Math.max(1, UNLOCKED_TASK_IDS.length)) * 100}
+            label="Initiation progress"
+          />
+        </div>
         <div className="grid grid-cols-3 gap-2 mb-4">
-          <div className="text-center">
-            <p className="text-2xl font-black text-clay-fg leading-none">{points}</p>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mt-1">RS Points</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-black text-fg leading-none">{tournamentPoints}</p>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mt-1">League Points</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-black text-fg leading-none">{claimableRewards}</p>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mt-1">Rewards</p>
-          </div>
+          <StatTile label="RS Points" value={points} />
+          <StatTile label="League Points" value={tournamentPoints} />
+          <StatTile label="Rewards" value={claimableRewards} />
         </div>
         <div className="flex items-center justify-center gap-2 flex-wrap">
           <Link to="/tasks?checkin=1">

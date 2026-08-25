@@ -116,17 +116,13 @@ export const profileMissingFields = (p: UserProfile | null): string[] => {
 
 // Owner marks their own task; the organizer calls this with done=false to revoke someone else's.
 export const setTaskDone = (uid: string, name: string, id: string, done: boolean) =>
-  setDoc(
-    doc(db, 'tasks', uid),
-    { uid, name, category: 'progress', [id]: done, updatedAt: new Date().toISOString() },
-    { merge: true },
-  );
+  setDoc(doc(db, 'tasks', uid), { uid, name, [id]: done, updatedAt: new Date().toISOString() }, { merge: true });
 
 // Bump a stored counter (used for things the app can't derive from other collections).
 export const bumpCounter = (uid: string, name: string, key: string, by = 1) =>
   setDoc(
     doc(db, 'tasks', uid),
-    { uid, name, category: 'progress', [key]: increment(by), updatedAt: new Date().toISOString() },
+    { uid, name, [key]: increment(by), updatedAt: new Date().toISOString() },
     { merge: true },
   );
 
