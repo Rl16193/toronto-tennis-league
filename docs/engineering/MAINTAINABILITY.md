@@ -22,11 +22,12 @@ and skill-band rules are likewise owned by `src/features/tournament/domain/place
 modules retain compatibility exports only. Parsed court records are owned by
 `src/features/courts/`, so check-in and photo-report features do not import court types from the
 CourtMap page.
-Organizer-approved tournament result persistence now crosses
+Server-authoritative tournament result persistence now crosses
 `src/features/tournament/services/tournamentResultService.ts` into the idempotent
 `functions/tournamentResults.js` transaction. The page hook constructs intent only; score
-validation and statistics/points/advancement application no longer depend on its subscription or
-presentation state.
+validation, auto-approval/reconciliation, and statistics/points/advancement application no longer
+depend on client subscriptions or presentation state. Ladder challenge confirmation and Round Robin
+group bonuses use the same callable boundary.
 
 ## Quality commands
 
@@ -80,9 +81,9 @@ The pinned source and update procedure remain in `docs/engineering/AGENT_SKILLS.
 
 - Some route hooks still mix Firestore subscriptions and presentation state; extract only when a
   repository boundary centralizes paths, normalization, or transaction behavior.
-- Tournament result application is Function-authoritative. Completed-result reset/cancellation and
-  manual Round Robin group bonuses are deliberately disabled in the browser until bounded server
-  operations exist; pending, points-free draw cancellation remains available.
+- Tournament result application, ladder challenge points, and Round Robin group bonuses are
+  Function-authoritative. Production deployment and migration remain out of scope; staging waits
+  for an authorized project and verified recovery path.
 - Functions remain JavaScript. Shared callable validation is centralized first; TypeScript
   migration should follow where integration coverage is strong.
 - Signup intentionally has a pre-auth email-existence check so secondary-email migration remains

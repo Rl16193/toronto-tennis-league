@@ -50,6 +50,17 @@ export type UnplacedEntry = {
   zone: string;
 };
 
+export type ScoreForm = {
+  matchDocId: string;
+  winnerUserId: string;
+  sets: Array<{ mine: string; opponent: string }>;
+  court: string;
+  /** Legacy field retained for old drafts; new submissions reject no-show results. */
+  noShow?: boolean;
+  /** Organizer-only zero-score walkover. */
+  walkover?: boolean;
+};
+
 export type ScoreSubmission = {
   claimed_winner_name: string;
   claimed_winner_uid: string;
@@ -60,39 +71,6 @@ export type ScoreSubmission = {
   set_3_player_1: number;
   set_3_player_2: number;
   court?: string;
-};
-
-export type ScoreForm = {
-  matchDocId: string;
-  winnerUserId: string;
-  sets: Array<{ mine: string; opponent: string }>;
-  court: string;
-  /** Organizer ticked "Count As No Show" — no winner, 1 point each. RR group stage only. */
-  noShow?: boolean;
-};
-
-// A player-submitted score awaiting the creator's confirmation (stored in the shared matches collection).
-export type ScoreSubmissionDoc = ScoreSubmission & {
-  id: string;
-  category: 'score_submission';
-  event_id: string;
-  match_id: string;
-  match_round: string;
-  draw_label: string;
-  player_1_name: string;
-  player_2_name: string;
-  submitted_by: string;
-  submitted_by_name: string;
-  is_walkover: boolean;
-  created_at: string;
-  /**
-   * Set once actioned; the doc is KEPT rather than deleted so what each player submitted stays on
-   * record. Absent = still awaiting the organizer. 'superseded' means the match was already scored
-   * by the time this one was reached — typically the second player's copy of the same result.
-   */
-  resolved?: 'confirmed' | 'rejected' | 'superseded';
-  resolved_at?: string;
-  resolved_by?: string;
 };
 
 export type RRConfig = {

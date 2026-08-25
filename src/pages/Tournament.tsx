@@ -22,7 +22,6 @@ import {
   BracketErrorBoundary,
   ChangeZoneModal,
   DrawTabs,
-  PendingScoresPanel,
   RRConfigModal,
   RequestZoneChangeButton,
   ScheduleRequestsPanel,
@@ -40,10 +39,6 @@ import { AlertMessage } from '../components/AlertMessage';
 import { LoadingBar } from '../components/LoadingBar';
 import { TennisEvent } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { fetchEvents } from '../features/events/services/eventService';
-import { isLadderEvent } from '../utils/eventTypes';
-import { leagueDivision } from '../utils/skillLevels';
-import { proposeConversion, LadderDivision } from '../features/leagues/ladderService';
 
 type EventStatus = 'active' | 'completed';
 
@@ -109,15 +104,7 @@ export const Tournament: React.FC = () => {
   // Round picker for the knockout download. Opens instead of downloading directly, so the
   // creator can grab one round with contacts (or the whole bracket).
   const [showDownloadPicker, setShowDownloadPicker] = useState(false);
-  const [alsoConvertToChallenge, setAlsoConvertToChallenge] = useState(false);
-  const [ladder, setLadder] = useState<TennisEvent | null>(null);
   const { profile } = useAuth();
-
-  useEffect(() => {
-    fetchEvents()
-      .then((all) => setLadder(all.filter((e) => isLadderEvent(e))[0] ?? null))
-      .catch(() => {});
-  }, []);
 
   const {
     authLoading,
@@ -176,11 +163,8 @@ export const Tournament: React.FC = () => {
     handleEditPlayer,
     handleSubmitScore,
     handleOpenScoreForm,
-    pendingSubmissions,
     pendingMatchIds,
     submittableMatchIds,
-    handleConfirmSubmission,
-    handleRejectSubmission,
     currentDrawFormat,
     drawFormat,
     showRRConfig,
@@ -501,14 +485,6 @@ export const Tournament: React.FC = () => {
       )}
 
       {!pastMode && isCreator && (
-        <PendingScoresPanel
-          submissions={pendingSubmissions}
-          onConfirm={handleConfirmSubmission}
-          onReject={handleRejectSubmission}
-        />
-      )}
-
-      {!pastMode && isCreator && (
         <ScheduleRequestsPanel requests={scheduleRequests} onSetSchedule={handleSetSchedule} />
       )}
       {/* Only once a draw exists — before that "unplaced" is everyone, which says nothing. */}
@@ -724,102 +700,36 @@ export const Tournament: React.FC = () => {
       )}
 
       <AnimatePresence>
-        {scoreForm &&
-          scoreFormMatch &&
-          (() => {
-            // A converted match still needs the same round-based tournament points it always got —
-            // this only ever ADDS the flat ±3 challenge points on top once the other player and the
-            // organizer both confirm; bracket advancement is completely unaffected either way.
-            const canConvert =
-              !!ladder &&
-              !!profile &&
-              scoreFormMatch.tournament_choice === 'Singles' &&
-              !!scoreFormMatch.player_1_uid &&
-              !!scoreFormMatch.player_2_uid;
-
-            const handleSubmitWithConversion = async (e: React.FormEvent<HTMLFormElement>) => {
-              // Snapshot before handleSubmitScore clears the form state on success.
-              const match = scoreFormMatch;
-              const form = scoreForm;
-              const convert = alsoConvertToChallenge;
-              await handleSubmitScore(e);
-              // `form.noShow` matters: ticking No Show doesn't clear a winner already picked, so
-              // without this a no-show could still fire a challenge conversion for that winner.
-              if (!convert || !canConvert || !match || form?.noShow || !form?.winnerUserId || !ladder || !user) return;
-              const isP1Winner = form.winnerUserId === match.player_1_uid;
-              const winner = isP1Winner
-                ? { id: match.player_1_uid, name: match.player_1_name }
-                : { id: match.player_2_uid, name: match.player_2_name };
-              const other = isP1Winner
-                ? { id: match.player_2_uid, name: match.player_2_name }
-                : { id: match.player_1_uid, name: match.player_1_name };
-              const proposer = user.uid === winner.id ? winner : other;
-              // The creator enters a tournament score as player_1 vs player_2 of the MATCH, but the
-              // challenge doc makes the PROPOSER its player_1. Reorder so the converted challenge's
-              // sets are absolute for its own slots rather than inheriting the match's ordering.
-              const proposerIsMatchP1 = proposer.id === match.player_1_uid;
-              const sets = form.sets
-                .map((s) => ({ mine: Number(s.mine || 0), opponent: Number(s.opponent || 0) }))
-                .filter((s) => s.mine > 0 || s.opponent > 0)
-                .map((s) => (proposerIsMatchP1 ? [s.mine, s.opponent] : [s.opponent, s.mine]) as [number, number]);
-              await proposeConversion({
-                eventId: ladder.id,
-                division: (leagueDivision(match.division) === "Women's" ? 'womens' : 'mens') as LadderDivision,
-                source: 'tournament',
-                sourceId: match.id,
-                proposer: { id: proposer.id, name: proposer.name },
-                other: proposer.id === winner.id ? other : winner,
-                winner,
-                sets,
-              }).catch(() => {
-                /* conversion is best-effort — the tournament score itself already landed */
-              });
-              setAlsoConvertToChallenge(false);
-            };
-
-            return (
-              <ScoreModal
-                matchInfo={{
-                  title: scoreFormMatch.round,
-                  player1: { uid: scoreFormMatch.player_1_uid, name: scoreFormMatch.player_1_name },
-                  player2: { uid: scoreFormMatch.player_2_uid, name: scoreFormMatch.player_2_name },
-                }}
-                scoreForm={scoreForm}
-                onChange={setScoreForm}
-                onClose={() => {
-                  setScoreForm(null);
-                  setAlsoConvertToChallenge(false);
-                }}
-                onSubmit={handleSubmitWithConversion}
-                isCreatorSubmit={isCreator}
-                extraCheckbox={
-                  canConvert
-                    ? {
-                        label: 'Also count as a Challenge',
-                        checked: alsoConvertToChallenge,
-                        onChange: setAlsoConvertToChallenge,
-                      }
-                    : undefined
-                }
-                // Organizer only, and group matches only — a no-show has no winner, so there is
-                // nobody for a knockout to advance. useTournament re-checks both conditions.
-                noShow={
-                  isCreator && scoreFormMatch.format === 'rr' && scoreFormMatch.round === 'RR'
-                    ? {
-                        checked: !!scoreForm.noShow,
-                        onChange: (v) => setScoreForm({ ...scoreForm, noShow: v }),
-                      }
-                    : undefined
-                }
-                // Only for an organizer, and only once there's a result to undo.
-                onReset={
-                  isCreator && scoreFormMatch.status === 'complete'
-                    ? () => handleResetMatchScore(scoreFormMatch)
-                    : undefined
-                }
-              />
-            );
-          })()}
+        {scoreForm && scoreFormMatch && (
+          <ScoreModal
+            matchInfo={{
+              title: scoreFormMatch.round,
+              player1: { uid: scoreFormMatch.player_1_uid, name: scoreFormMatch.player_1_name },
+              player2: { uid: scoreFormMatch.player_2_uid, name: scoreFormMatch.player_2_name },
+            }}
+            scoreForm={scoreForm}
+            onChange={setScoreForm}
+            onClose={() => {
+              setScoreForm(null);
+            }}
+            onSubmit={handleSubmitScore}
+            isCreatorSubmit={isCreator}
+            walkover={
+              isCreator
+                ? {
+                    checked: !!scoreForm.walkover,
+                    onChange: (v) => setScoreForm({ ...scoreForm, walkover: v }),
+                  }
+                : undefined
+            }
+            // Only for an organizer, and only once there's a result to undo.
+            onReset={
+              isCreator && scoreFormMatch.status === 'complete'
+                ? () => handleResetMatchScore(scoreFormMatch)
+                : undefined
+            }
+          />
+        )}
       </AnimatePresence>
 
       <AnimatePresence>

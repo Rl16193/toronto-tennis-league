@@ -108,27 +108,7 @@ test('rejects an unrelated winner and malformed or unbounded scores', () => {
   );
 });
 
-test('keeps no-show distinct from walkover and only permits it in RR group stage', () => {
-  const noShow = normalizeTournamentResult(
-    {
-      noShow: true,
-      scores: [
-        [4, 2],
-        [0, 0],
-        [0, 0],
-      ],
-    },
-    match,
-  );
-  assert.deepEqual(noShow.scores, [
-    [0, 0],
-    [0, 0],
-    [0, 0],
-  ]);
-  assert.equal(noShow.winnerUid, '');
-  assert.equal(noShow.noShow, true);
-  assert.equal(noShow.walkover, false);
-
+test('accepts organizer walkovers and rejects no-show results', () => {
   const walkover = normalizeTournamentResult(
     {
       winnerUid: 'player-b',
@@ -155,7 +135,7 @@ test('keeps no-show distinct from walkover and only permits it in RR group stage
             [0, 0],
           ],
         },
-        { ...match, round: 'QF' },
+        match,
       ),
     (error) => error.code === 'invalid-argument',
   );
@@ -176,7 +156,7 @@ test('preserves established tournament point awards', () => {
   });
 });
 
-test('builds first-application stat deltas without counting a no-show as played', () => {
+test('builds first-application stat deltas and walkover awards', () => {
   const scored = statDeltasForResult(
     match,
     normalizeTournamentResult(
@@ -197,7 +177,21 @@ test('builds first-application stat deltas without counting a no-show as played'
   assert.equal(scored.get('player-b').leaguePoints26, 1);
   assert.equal(scored.get('player-b').loses, 1);
 
-  const noShow = statDeltasForResult(match, normalizeTournamentResult({ noShow: true }, match));
-  assert.deepEqual(noShow.get('player-a'), { leaguePoints26: 1, league: "Men's" });
-  assert.deepEqual(noShow.get('player-b'), { leaguePoints26: 1, league: "Men's" });
+  const walkover = statDeltasForResult(
+    match,
+    normalizeTournamentResult(
+      {
+        winnerUid: 'player-a',
+        walkover: true,
+        scores: [
+          [0, 0],
+          [0, 0],
+          [0, 0],
+        ],
+      },
+      match,
+    ),
+  );
+  assert.deepEqual(walkover.get('player-a'), { leaguePoints26: 1, league: "Men's" });
+  assert.deepEqual(walkover.get('player-b'), { leaguePoints26: 1, league: "Men's" });
 });

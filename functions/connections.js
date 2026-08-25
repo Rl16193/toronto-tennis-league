@@ -115,6 +115,49 @@ async function hasActiveEventParticipant(eventId, uid) {
 exports.isActiveEventParticipant = isActiveEventParticipant;
 
 /**
+ * Event managers need the same narrow contact access as tournament opponents. The participant
+ * trigger is deliberately separate from the match trigger because a draw may be published before
+ * a match document exists, and withdrawal must revoke the manager link again.
+ */
+exports.onParticipantJoin = onDocumentWritten(
+  { document: 'event_participants/{participantId}', region: REGION },
+  async (event) => {
+    const before = event.data?.before?.data() || {};
+    const after = event.data?.after?.data();
+    const eventId = after?.event_id || before?.event_id;
+    const uid = after?.uid || before?.uid;
+    if (!eventId || !uid) return;
+    const eventSnap = await db().doc(`events/${eventId}`).get();
+    if (!eventSnap.exists) return;
+    const eventData = eventSnap.data() || {};
+    const managers = [
+      eventData.creator_id,
+      ...(eventData.organizer_ids || []),
+      ...(eventData.organizer_uids || []),
+    ].filter(Boolean);
+    const active = after && isActiveEventParticipant(after);
+    if (active) {
+      await Promise.all(
+        managers.filter((manager) => manager !== uid).map((manager) => linkPlayers(manager, uid, 'event-organizer')),
+      );
+      return;
+    }
+    if (before && !isActiveEventParticipant(before)) return;
+    await Promise.all(
+      managers
+        .filter((manager) => manager !== uid)
+        .map(async (manager) => {
+          const ref = db().collection('connections').doc(pairId(manager, uid));
+          const snap = await ref.get();
+          // Withdrawal revokes the organizer's access even when the same pair was first linked
+          // by a tournament fixture; the participant is no longer in the event's contact scope.
+          if (snap.exists) await ref.delete();
+        }),
+    );
+  },
+);
+
+/**
  * `onDocumentWritten`, not created/updated separately: a tournament match arrives already
  * populated (create) while a rally or challenge earns its connection later, on accept (update).
  */

@@ -45,7 +45,8 @@ test('round-robin standings use the same points award as match scoring', () => {
       format: 'rr',
       round: 'RR',
       status: 'complete',
-      no_show: true,
+      walkover: true,
+      winner_uid: 'b',
       player_1_uid: 'b',
       player_2_uid: 'c',
       player_1_name: 'B',
@@ -65,17 +66,17 @@ test('round-robin standings use the same points award as match scoring', () => {
   assert.equal(rows[0].gamesLost, 2);
 });
 
-test('matchAward gives no-show points to both players and does not invent a winner', () => {
+test('matchAward gives walkover points to both RR players', () => {
   const award = matchAward({
     format: 'rr',
     round: 'RR',
-    no_show: true,
-    winner_uid: '',
+    walkover: true,
+    winner_uid: 'a',
     player_1_uid: 'a',
     player_2_uid: 'b',
   });
-  assert.equal(award.noShow, true);
-  assert.equal(award.winnerUid, null);
+  assert.equal(award.walkover, true);
+  assert.equal(award.winnerUid, 'a');
   assert.equal(award.winnerPts, 1);
   assert.equal(award.loserPts, 1);
 });

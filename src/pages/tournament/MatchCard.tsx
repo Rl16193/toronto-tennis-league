@@ -2,6 +2,7 @@ import React from 'react';
 import { Trash2 } from 'lucide-react';
 import { TournamentMatch, TournamentPlayer } from './types';
 import { BYE, PLAYER_LOADING, formatPlayerName, getMatchDisplayFlags } from './utils';
+import { AlertMessage } from '../../components/AlertMessage';
 
 // One match cell, shared by the desktop grid (BracketView) and the mobile accordion
 // (BracketAccordion). The sections and the conditions that show them are identical in both —
@@ -188,6 +189,12 @@ export const MatchCard: React.FC<Props> = ({
 
       {scoreText && <div className={v.score}>{scoreText}</div>}
 
+      {match.score_disputed && (
+        <AlertMessage tone="error" className="m-2 text-[11px]">
+          Conflicting result reported. The organizer must review this match.
+        </AlertMessage>
+      )}
+
       {isFinal && match.winner_name ? (
         <div className={v.winner}>Winner: {formatPlayerName(match.winner_name)}</div>
       ) : null}
@@ -200,7 +207,7 @@ export const MatchCard: React.FC<Props> = ({
 
       {showPlayerSubmit &&
         (alreadySubmitted ? (
-          <div className={v.submitted}>Submitted ✓ awaiting confirmation</div>
+          <div className={v.submitted}>Recorded ✓</div>
         ) : (
           <button type="button" onClick={() => onSubmitScore!(match)} className={v.playerBtn}>
             Submit score

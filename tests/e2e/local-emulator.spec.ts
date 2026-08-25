@@ -156,7 +156,7 @@ test('member cannot see unpublished Round Robin groups', async ({ page }) => {
   await capture(page, '07-round-robin-unpublished-hidden');
 });
 
-test('organizer generates a Round Robin draw and records a no-show result', async ({ page }) => {
+test('organizer generates a Round Robin draw and records a walkover result', async ({ page }) => {
   await login(page, 'organizer-a@example.invalid', 'local-organizer-a-123!');
   await page.goto('/matches?mode=tournament&event=e2e-round-robin');
   await expect(page.getByText('Synthetic Round Robin')).toBeVisible();
@@ -173,9 +173,9 @@ test('organizer generates a Round Robin draw and records a no-show result', asyn
 
   await page.getByRole('button', { name: 'Matches (3)' }).click();
   await page.getByRole('button', { name: 'Score', exact: true }).last().click();
-  await page.getByLabel('Count As No Show').check();
-  await page.getByRole('button', { name: 'Record No Show' }).click();
-  await expect(page.getByText('Recorded as a no show — 1 point to each player.')).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('No show · 1 pt each')).toBeVisible({ timeout: 15_000 });
-  await capture(page, '08-round-robin-no-show');
+  await page.getByRole('radio').first().click();
+  await page.getByLabel('Record walkover').check();
+  await page.getByRole('button', { name: 'Record Walkover' }).click();
+  await expect(page.getByText('Walkover')).toBeVisible({ timeout: 15_000 });
+  await capture(page, '08-round-robin-walkover');
 });

@@ -142,13 +142,34 @@ service cloud.firestore {
 
     function boundedScore(result, field) {
       return !(field in result) ||
-        (result[field] is number && result[field] >= 0 && result[field] <= 7 && result[field] == int(result[field]));
+        (result[field] is number && result[field] >= 0 && result[field] <= 99 && result[field] == int(result[field]));
+    }
+
+    function scoreMarginIsValid(result, first, second) {
+      let high = first > second ? first : second;
+      return high <= 10 || first - second == 2 || second - first == 2;
+    }
+
+    function scoreSetsAreValid(result) {
+      let a1 = result.get('set_1_player_1', 0);
+      let b1 = result.get('set_1_player_2', 0);
+      let a2 = result.get('set_2_player_1', 0);
+      let b2 = result.get('set_2_player_2', 0);
+      let a3 = result.get('set_3_player_1', 0);
+      let b3 = result.get('set_3_player_2', 0);
+      return scoreMarginIsValid(result, a1, b1) && scoreMarginIsValid(result, a2, b2) &&
+        scoreMarginIsValid(result, a3, b3) &&
+        (
+          (a1 > b1 ? 1 : 0) + (a2 > b2 ? 1 : 0) + (a3 > b3 ? 1 : 0) !=
+          (b1 > a1 ? 1 : 0) + (b2 > a2 ? 1 : 0) + (b3 > a3 ? 1 : 0)
+        );
     }
 
     function reportedScoresAreBounded(result) {
       return boundedScore(result, 'set_1_player_1') && boundedScore(result, 'set_1_player_2') &&
         boundedScore(result, 'set_2_player_1') && boundedScore(result, 'set_2_player_2') &&
-        boundedScore(result, 'set_3_player_1') && boundedScore(result, 'set_3_player_2');
+        boundedScore(result, 'set_3_player_1') && boundedScore(result, 'set_3_player_2') &&
+        scoreSetsAreValid(result);
     }
 
     // Score-submission documents are untrusted intent. Bind every submission to the existing
@@ -208,8 +229,7 @@ service cloud.firestore {
     match /contacts/{userId} {
       allow read: if isOwner(userId) ||
         isConnectedTo(userId) ||
-        isCurrentGroupLessonCoachFor(userId) ||
-        isSuperAdmin();
+        isCurrentGroupLessonCoachFor(userId);
       allow create: if isOwner(userId) &&
         request.resource.data.keys().hasOnly(ownerContactFields());
       allow update: if isOwner(userId) &&
@@ -249,7 +269,7 @@ service cloud.firestore {
     // Preferences Collection
     // ===============================================================
     match /preferences/{userId} {
-      allow read: if isOwner(userId) || isSuperAdmin();
+      allow read: if true;
       allow create: if isOwner(userId) &&
         request.resource.data.keys().hasOnly(ownerPreferenceFields()) &&
         request.resource.data.get('uid', userId) == userId &&
@@ -377,12 +397,6 @@ service cloud.firestore {
           request.resource.data.player_1_uid == request.auth.uid &&
           request.resource.data.status == 'open'
         ) ||
-        // A player files a score submission for a match they played.
-        (
-          request.resource.data.category == 'score_submission' &&
-          request.resource.data.submitted_by == request.auth.uid &&
-          isValidTournamentScoreSubmission(request.resource.data)
-        ) ||
         (
           'event_id' in request.resource.data &&
           isManagerOfEvent(request.resource.data.event_id) &&
@@ -496,11 +510,6 @@ service cloud.firestore {
           resource.data.category in ['rally', 'challenge'] &&
           resource.data.status == 'open' &&
           request.auth.uid == resource.data.player_1_uid
-        ) ||
-        // Submitter retracts their own score submission (organizer confirm also deletes it).
-        (
-          resource.data.category == 'score_submission' &&
-          request.auth.uid == resource.data.submitted_by
         ) ||
         (
           'event_id' in resource.data &&

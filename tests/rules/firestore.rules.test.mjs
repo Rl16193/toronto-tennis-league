@@ -145,7 +145,7 @@ describe('Firestore authorization boundaries', () => {
     await assertFails(updateDoc(preferences, { coach: true, coach_id: 'coach-a' }));
   });
 
-  test('private preferences are owner-only and public projections cannot expose private or role fields', async () => {
+  test('preferences are publicly readable while writes remain owner-scoped', async () => {
     await seedDoc('preferences/member-a', {
       uid: 'member-a',
       event_creator: false,
@@ -161,9 +161,9 @@ describe('Firestore authorization boundaries', () => {
     });
 
     await assertSucceeds(getDoc(doc(dbFor('member-a'), 'preferences/member-a')));
-    await assertFails(getDoc(doc(dbFor('member-b'), 'preferences/member-a')));
-    await assertFails(getDoc(doc(anonDb(), 'preferences/member-a')));
-    await assertFails(getDocs(collection(dbFor('member-b'), 'preferences')));
+    await assertSucceeds(getDoc(doc(dbFor('member-b'), 'preferences/member-a')));
+    await assertSucceeds(getDoc(doc(anonDb(), 'preferences/member-a')));
+    await assertSucceeds(getDocs(collection(dbFor('member-b'), 'preferences')));
     await assertFails(getDoc(doc(anonDb(), 'public_preferences/member-a')));
     await assertFails(getDoc(doc(dbFor('member-b'), 'public_preferences/member-a')));
     await assertFails(
@@ -551,7 +551,7 @@ describe('Firestore authorization boundaries', () => {
     );
   });
 
-  test('tournament matches stay organizer-controlled while player-authored score submissions remain self-scoped', async () => {
+  test('tournament matches stay organizer-controlled and score submissions are callable-only', async () => {
     await seedDoc('preferences/organizer-a', {
       uid: 'organizer-a',
       event_creator: true,
@@ -621,7 +621,7 @@ describe('Firestore authorization boundaries', () => {
       }),
     );
 
-    await assertSucceeds(
+    await assertFails(
       setDoc(doc(dbFor('member-a'), 'matches/submission-a'), {
         id: 'submission-a',
         category: 'score_submission',
@@ -688,7 +688,8 @@ describe('Firestore authorization boundaries', () => {
     await assertFails(
       updateDoc(doc(dbFor('member-a'), 'matches/rally-a'), {
         ...validReport,
-        set_1_player_1: 8,
+        set_1_player_1: 12,
+        set_1_player_2: 4,
       }),
     );
 

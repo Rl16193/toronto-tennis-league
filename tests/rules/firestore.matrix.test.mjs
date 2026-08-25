@@ -287,7 +287,7 @@ describe('expanded Firestore authorization matrix', () => {
     await assertFails(deleteDoc(doc(dbFor('member-a'), 'group_lessons/2026-08')));
   });
 
-  test('score submissions are participant-scoped intents and cannot apply official outcomes', async () => {
+  test('score submission documents are no longer client-writable; official outcomes use callables', async () => {
     await seedDoc('events/event-a', {
       id: 'event-a',
       creator_id: 'organizer-a',
@@ -326,7 +326,7 @@ describe('expanded Firestore authorization matrix', () => {
       created_at: '2026-08-19T00:00:00.000Z',
     };
 
-    await assertSucceeds(setDoc(doc(dbFor('member-a'), 'matches/submission-a'), submission));
+    await assertFails(setDoc(doc(dbFor('member-a'), 'matches/submission-a'), submission));
     await assertFails(
       setDoc(doc(dbFor('outsider'), 'matches/submission-outsider'), {
         ...submission,

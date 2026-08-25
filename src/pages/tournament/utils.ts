@@ -21,7 +21,7 @@ import {
 
 // Compatibility exports keep existing page/feature consumers stable while the pure rules live in
 // the feature domain boundary.
-export { matchAward, NO_SHOW_POINTS, setFieldsFrom } from '../../features/tournament/domain/scoring';
+export { matchAward, setFieldsFrom } from '../../features/tournament/domain/scoring';
 
 // Format a scheduled match date+slot as e.g. "Jul 4th, 6pm". Shared by the bracket and
 // round-robin opponent panels and the schedule controls so they read identically.

@@ -45,6 +45,7 @@ Object.assign(exports, require('./accountLookup'));
 
 // Server-authoritative tournament results, statistics, points, and advancement.
 Object.assign(exports, require('./tournamentResults'));
+Object.assign(exports, require('./competitionResults'));
 
 // Opponent connections — gates who may read whose contacts/{uid} doc.
 Object.assign(exports, require('./connections'));

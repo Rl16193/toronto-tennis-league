@@ -6,7 +6,6 @@ export type TournamentResultIntent = {
   winnerUid?: string;
   scores: [[number, number], [number, number], [number, number]];
   walkover?: boolean;
-  noShow?: boolean;
   court?: string;
   submissionId?: string;
 };
@@ -16,11 +15,27 @@ export type TournamentResultResponse = {
   duplicate: boolean;
   advanced: boolean;
   needsManual: boolean;
+  disputed?: boolean;
+  reconciled?: boolean;
 };
 
 /** Apply one organizer-approved result through the server-authoritative transaction. */
 export async function applyTournamentResult(intent: TournamentResultIntent) {
   const callable = httpsCallable<TournamentResultIntent, TournamentResultResponse>(functions, 'applyTournamentResult');
   const response = await callable(intent);
+  return response.data;
+}
+
+export async function setGroupBonus(args: {
+  eventId: string;
+  rrGroup: number;
+  award: boolean;
+  tournamentChoice?: string;
+  division?: string;
+  skillGroup?: string;
+  zone?: string | null;
+}) {
+  const callable = httpsCallable<typeof args, { applied: boolean; awarded: boolean }>(functions, 'setGroupBonus');
+  const response = await callable(args);
   return response.data;
 }

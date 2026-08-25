@@ -293,16 +293,6 @@ export function computeGroupStandings(groupMatches: TournamentMatch[]): RRStandi
     if (m.status !== 'complete') continue;
     const award = matchAward(m);
 
-    // A no show has no winner: both players take the same points and neither a win, a loss, nor
-    // any games — a match nobody played must not move anyone's record.
-    if (award.noShow) {
-      [m.player_1_uid, m.player_2_uid].filter(Boolean).forEach((uid) => {
-        const s = stats.get(uid);
-        if (s) s.points += award.winnerPts;
-      });
-      continue;
-    }
-
     const { winnerUid, loserUid } = award;
     if (!winnerUid) continue;
 
@@ -311,8 +301,7 @@ export function computeGroupStandings(groupMatches: TournamentMatch[]): RRStandi
     const winnerGames = winnerUid === m.player_1_uid ? p1Games : p2Games;
     const loserGames = winnerUid === m.player_1_uid ? p2Games : p1Games;
 
-    // Games are tracked for a walkover too: it normally has none, but a creator can enter a score
-    // alongside the flag.
+    // Walkovers have no games; the server-authoritative result is still reflected in standings.
     const w = stats.get(winnerUid);
     const l = loserUid ? stats.get(loserUid) : undefined;
     if (w) {

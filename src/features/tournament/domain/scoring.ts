@@ -2,22 +2,17 @@
  * Tournament scoring decisions are pure domain logic.
  *
  * Keep this module free of React and Firestore so the same rule can drive the stats writer,
- * Round Robin standings, and focused regression tests. In particular, no-show must be evaluated
- * before winner/loser logic because both players receive the established no-show award and there
- * is intentionally no winner to advance.
+ * Round Robin standings, and focused regression tests.
  */
 
 export type ScoringMatch = {
   format?: string;
   round: string;
-  no_show?: boolean;
+  walkover?: boolean;
   winner_uid?: string;
   player_1_uid: string;
   player_2_uid: string;
 };
-
-/** Paid to both players when an organizer marks a group match as a no-show. */
-export const NO_SHOW_POINTS = 1;
 
 /** Absolute player_1/player_2 score fields for tournament, ladder, and friendly results. */
 export const setFieldsFrom = (pairs: [number, number][]) => ({
@@ -40,30 +35,17 @@ export const matchAward = (m: ScoringMatch) => {
   const isRRGroupStage = m.format === 'rr' && m.round === 'RR';
   const isFinal = m.round === 'F';
 
-  if (m.no_show) {
-    return {
-      noShow: true,
-      isRRGroupStage,
-      isFinal,
-      winnerUid: null as string | null,
-      loserUid: null as string | null,
-      winnerPts: NO_SHOW_POINTS,
-      loserPts: NO_SHOW_POINTS,
-      winnerPointsApply: true,
-    };
-  }
-
   const LOSER_PTS: Record<string, number> = { R32: 1, R16: 2, QF: 3, RR: 1, SF: 5, F: 10 };
   const winnerUid = m.winner_uid || null;
   const loserUid = winnerUid ? (winnerUid === m.player_1_uid ? m.player_2_uid : m.player_1_uid) || null : null;
   return {
-    noShow: false,
+    walkover: !!m.walkover,
     isRRGroupStage,
     isFinal,
     winnerUid,
     loserUid,
-    winnerPts: isRRGroupStage ? 3 : 20,
-    loserPts: LOSER_PTS[m.round] ?? 1,
-    winnerPointsApply: isFinal || isRRGroupStage,
+    winnerPts: m.walkover ? (isRRGroupStage ? 1 : 0) : isRRGroupStage ? 3 : 20,
+    loserPts: m.walkover && isRRGroupStage ? 1 : (LOSER_PTS[m.round] ?? 1),
+    winnerPointsApply: m.walkover ? isRRGroupStage : isFinal || isRRGroupStage,
   };
 };

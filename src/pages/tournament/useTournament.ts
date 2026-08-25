@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  addDoc,
   arrayUnion,
   collection,
   doc,
@@ -24,7 +23,6 @@ import {
   ScheduleRequest,
   ScoreForm,
   ScoreSubmission,
-  ScoreSubmissionDoc,
   SkillGroup,
   SkillMergePair,
   SKILL_GROUP_ORDER,
@@ -77,7 +75,7 @@ import {
   normalizeUserPreferences,
   normalizeUserStats,
 } from '../../lib/firestoreNormalization';
-import { applyTournamentResult } from '../../features/tournament/services/tournamentResultService';
+import { applyTournamentResult, setGroupBonus } from '../../features/tournament/services/tournamentResultService';
 import { buildScoreSubmissionIntent } from '../../features/tournament/domain/scoreSubmission';
 import {
   createTournamentWriteBatch,
@@ -88,7 +86,6 @@ import {
   loadTournamentEvents,
   subscribeEventParticipants,
   subscribeRoundRobinDraft,
-  subscribeScoreSubmissions,
   subscribeTournamentMatches,
 } from '../../features/tournament/services/tournamentSubscriptions';
 import { createEventParticipant } from '../../features/events/services/eventRepository';
@@ -121,7 +118,6 @@ export const useTournament = (eventIdOverride?: string) => {
   const [activeDoubles, setActiveDoubles] = useState("Men's");
   const [activeZone, setActiveZone] = useState<string | undefined>(undefined);
   const [scoreForm, setScoreForm] = useState<ScoreForm | null>(null);
-  const [pendingSubmissions, setPendingSubmissions] = useState<ScoreSubmissionDoc[]>([]);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Auto-dismiss message banner after 30 seconds
@@ -353,59 +349,9 @@ export const useTournament = (eventIdOverride?: string) => {
     if (matches.some((m) => m.tournament_choice === 'Doubles' && m.division === 'All')) setConsolidateDoubles(true);
   }, [matches, statsMap]);
 
-  // Marks a submission actioned without destroying it. `user` is captured at call time so the
-  // record says who resolved it.
-  const resolvedStamp = (as: 'confirmed' | 'rejected' | 'superseded') => ({
-    resolved: as,
-    resolved_at: new Date().toISOString(),
-    ...(user ? { resolved_by: user.uid } : {}),
-  });
-
-  // Player-submitted scores awaiting the creator's confirmation. Actioned submissions are kept
-  // (stamped `resolved`) rather than deleted, so what each player submitted stays on record —
-  // filtered out here so only the outstanding ones reach the queue.
-  useEffect(() => {
-    if (!event) {
-      setPendingSubmissions([]);
-      return;
-    }
-    return subscribeScoreSubmissions(event.id, setPendingSubmissions, () => setPendingSubmissions([]));
-  }, [event]);
-
-  // Only submissions whose match still exists and is not yet scored are actionable.
-  const actionablePendingSubmissions = useMemo(
-    () =>
-      pendingSubmissions.filter((s) => {
-        const m = matches.find((mm) => mm.id === s.match_id);
-        return !!m && m.status !== 'complete';
-      }),
-    [pendingSubmissions, matches],
-  );
-
-  const pendingMatchIds = useMemo(
-    () => new Set(actionablePendingSubmissions.map((s) => s.match_id)),
-    [actionablePendingSubmissions],
-  );
-
-  // Clear stale submissions out of the queue (match already scored or gone) by stamping them
-  // 'superseded'. Creator only — they're the only ones permitted to write other players' docs.
-  // This is where the SECOND player's copy of an agreed score lands, so it must be retained,
-  // not deleted: it's the only evidence of whether the two of them actually agreed.
-  const cleaningStaleRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!isCreator || !matchesReady) return;
-    const stale = pendingSubmissions.filter((s) => {
-      const m = matches.find((mm) => mm.id === s.match_id);
-      return !m || m.status === 'complete';
-    });
-    for (const s of stale) {
-      if (cleaningStaleRef.current.has(s.id)) continue;
-      cleaningStaleRef.current.add(s.id);
-      updateDoc(doc(db, 'matches', s.id), resolvedStamp('superseded'))
-        .catch(() => {})
-        .finally(() => cleaningStaleRef.current.delete(s.id));
-    }
-  }, [isCreator, pendingSubmissions, matches, matchesReady]);
+  // Player and organizer submissions both use the callable now. There is no pending score
+  // collection or organizer approval queue; the match result itself carries the submission map.
+  const pendingMatchIds = useMemo(() => new Set<string>(), []);
 
   // Match ids the current user may submit a score for: a slot player, or (doubles) the
   // mutually-registered teammate of a slot player. Empty for the creator (they use Enter score).
@@ -1417,13 +1363,7 @@ export const useTournament = (eventIdOverride?: string) => {
     await persistDrawDocuments(drawDocuments, byeAdvances);
   };
 
-  const updateMatchWithSubmission = async (
-    match: TournamentMatch,
-    submission: ScoreSubmission,
-    isWalkover?: boolean,
-    isNoShow?: boolean,
-    submissionId?: string,
-  ) =>
+  const updateMatchWithSubmission = async (match: TournamentMatch, submission: ScoreSubmission, isWalkover = false) =>
     applyTournamentResult({
       matchId: match.id,
       winnerUid: submission.claimed_winner_uid || undefined,
@@ -1432,10 +1372,8 @@ export const useTournament = (eventIdOverride?: string) => {
         [submission.set_2_player_1, submission.set_2_player_2],
         [submission.set_3_player_1, submission.set_3_player_2],
       ],
-      walkover: isWalkover === true,
-      noShow: isNoShow === true,
+      walkover: isWalkover,
       court: submission.court,
-      submissionId,
     });
 
   // ── Action handlers ───────────────────────────────────────────────────────
@@ -1580,8 +1518,7 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  // The creator records scores immediately; a player in the match queues a submission
-  // for the creator to confirm (players can't write the official record by security rules).
+  // Both organizer and participants submit through the server-authoritative callable.
   const handleSubmitScore = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!scoreForm || !user) return;
@@ -1597,49 +1534,20 @@ export const useTournament = (eventIdOverride?: string) => {
       setMessage({ type: 'error', text: built.error ?? 'Invalid score.' });
       return;
     }
-    const { submission, isNoShow, isWalkover } = built.intent;
-
-    // Player path → queue a pending submission for the creator to confirm.
-    if (!isCreator) {
-      try {
-        await addDoc(collection(db, 'matches'), {
-          category: 'score_submission',
-          event_id: match.event_id,
-          match_id: match.id,
-          match_round: match.round,
-          draw_label: currentDraw?.label ?? '',
-          player_1_uid: match.player_1_uid,
-          player_2_uid: match.player_2_uid,
-          player_1_name: match.player_1_name,
-          player_2_name: match.player_2_name,
-          submitted_by: user.uid,
-          submitted_by_name: profile?.user?.name || userParticipant?.user_name || 'Player',
-          is_walkover: isWalkover,
-          ...submission,
-          created_at: new Date().toISOString(),
-        });
-        setScoreForm(null);
-        setMessage({ type: 'success', text: '✓ Completed.' });
-      } catch (err) {
-        console.error('Score submission failed:', err);
-        setMessage({ type: 'error', text: 'Could not submit your score. Please try again.' });
-      }
-      return;
-    }
-
-    // Creator path → record immediately.
     try {
-      const { needsManual } = await updateMatchWithSubmission(match, submission, isWalkover, isNoShow);
+      const result = await updateMatchWithSubmission(match, built.intent.submission, built.intent.isWalkover);
       setScoreForm(null);
       setMessage(
-        isNoShow
-          ? { type: 'success', text: 'Recorded as a no show — 1 point to each player.' }
-          : needsManual
-            ? {
-                type: 'error',
-                text: 'Score recorded, but the winner could not be auto-advanced. Use Edit Draw to place them manually.',
-              }
-            : { type: 'success', text: 'Score recorded and draw updated.' },
+        result.disputed
+          ? {
+              type: 'error',
+              text: 'Result disputed — the first applied result remains while the organizer reviews it.',
+            }
+          : result.reconciled
+            ? { type: 'success', text: 'Score updated and stats reconciled.' }
+            : result.duplicate
+              ? { type: 'success', text: 'That score was already recorded.' }
+              : { type: 'success', text: 'Score recorded and draw updated.' },
       );
     } catch (err) {
       console.error('Score submission failed:', err);
@@ -1647,73 +1555,10 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  // Creator confirms a player-submitted score → records it officially, then removes the pending doc.
-  const handleConfirmSubmission = async (sub: ScoreSubmissionDoc) => {
-    if (!isCreator) return;
-    const match = matches.find((m) => m.id === sub.match_id);
-    // Stale: match gone or already scored — discard without re-scoring/re-advancing.
-    if (!match || match.status === 'complete') {
-      // Don't claim it was cleared if the write failed — the organizer would keep seeing the
-      // same submission in the queue with no idea why.
-      const cleared = await updateDoc(doc(db, 'matches', sub.id), resolvedStamp('superseded'))
-        .then(() => true)
-        .catch(() => false);
-      setMessage(
-        cleared
-          ? { type: 'error', text: 'That match is already scored. The submission was kept on record but not applied.' }
-          : {
-              type: 'error',
-              text: 'That match is already scored, but the submission could not be cleared. Please try again.',
-            },
-      );
-      return;
-    }
-    const submission: ScoreSubmission = {
-      claimed_winner_name: sub.claimed_winner_name,
-      claimed_winner_uid: sub.claimed_winner_uid,
-      set_1_player_1: sub.set_1_player_1,
-      set_1_player_2: sub.set_1_player_2,
-      set_2_player_1: sub.set_2_player_1,
-      set_2_player_2: sub.set_2_player_2,
-      set_3_player_1: sub.set_3_player_1,
-      set_3_player_2: sub.set_3_player_2,
-      ...(sub.court ? { court: sub.court } : {}),
-    };
-    try {
-      const { needsManual } = await updateMatchWithSubmission(match, submission, sub.is_walkover, false, sub.id);
-      setMessage(
-        needsManual
-          ? {
-              type: 'error',
-              text: 'Score confirmed, but the winner could not be auto-advanced. Use Edit Draw to place them manually.',
-            }
-          : { type: 'success', text: 'Score confirmed and draw updated.' },
-      );
-    } catch (err) {
-      console.error('Confirm submission failed:', err);
-      setMessage({ type: 'error', text: 'Could not confirm the score. Please try again.' });
-    }
-  };
-
-  // Result reversal must eventually use the same server transaction boundary as application.
+  // Organizer rescores and player corrections both use the same callable transaction boundary.
   const handleResetMatchScore = async (match: TournamentMatch) => {
     if (!isCreator || match.status !== 'complete') return;
-    setMessage({
-      type: 'error',
-      text: 'Completed results cannot be reset from the browser because points and advancement are server-authoritative.',
-    });
-  };
-
-  const handleRejectSubmission = async (sub: ScoreSubmissionDoc) => {
-    if (!isCreator) return;
-    try {
-      // Kept, not deleted — a rejected claim is exactly the one worth being able to look up later.
-      await updateDoc(doc(db, 'matches', sub.id), resolvedStamp('rejected'));
-      setMessage({ type: 'success', text: 'Submission rejected.' });
-    } catch (err) {
-      console.error('Reject submission failed:', err);
-      setMessage({ type: 'error', text: 'Could not reject the submission.' });
-    }
+    setMessage({ type: 'error', text: 'Edit the score and submit it again to rescore this match.' });
   };
 
   const handleAddPlayer = async (userId: string, partnerName?: string, divisionOverride?: string) => {
@@ -2228,12 +2073,26 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   // Bonus point mutation stays disabled until its own bounded server operation is available.
-  const handleSetGroupBonus = async (_rrGroup: number, _award: boolean) => {
-    if (!isCreator) return;
-    setMessage({
-      type: 'error',
-      text: 'Round Robin point bonuses are unavailable until the server-authoritative award operation is enabled.',
-    });
+  const handleSetGroupBonus = async (rrGroup: number, award: boolean) => {
+    if (!isCreator || !event) return;
+    try {
+      const result = await setGroupBonus({
+        eventId: event.id,
+        rrGroup,
+        award,
+        tournamentChoice: currentDraw?.tournamentChoice,
+        division: currentDraw?.division,
+        skillGroup: currentDraw?.skillGroup,
+        zone: currentDraw?.zone ?? null,
+      });
+      setMessage({
+        type: 'success',
+        text: result.applied ? (award ? 'Group bonus awarded.' : 'Group bonus reversed.') : 'No bonus changes needed.',
+      });
+    } catch (err) {
+      console.error('Group bonus failed:', err);
+      setMessage({ type: 'error', text: 'Could not update the group bonus.' });
+    }
   };
 
   // ── Match scheduling ──────────────────────────────────────────────────────
@@ -2491,7 +2350,7 @@ export const useTournament = (eventIdOverride?: string) => {
       completed.length > 0
         ? `Cancel the Round Robin draw?\n\nAll ${currentMatches.length} matches will be deleted and the stats from ${completed.length} completed match${completed.length > 1 ? 'es' : ''} will be reset. This cannot be undone.`
         : 'Cancel the Round Robin draw? This will clear all group and knockout matches.';
-    const hasPaidBonus = currentMatches.some((m) => m.rr_group_bonus_v2);
+    const hasPaidBonus = currentMatches.some((m) => m.rr_groupbonus !== undefined);
     if (completed.length > 0 || hasPaidBonus) {
       setMessage({
         type: 'error',
@@ -2621,11 +2480,8 @@ export const useTournament = (eventIdOverride?: string) => {
     handleEditPlayer,
     handleSubmitScore,
     handleOpenScoreForm,
-    pendingSubmissions: actionablePendingSubmissions,
     pendingMatchIds,
     submittableMatchIds,
-    handleConfirmSubmission,
-    handleRejectSubmission,
     handleResetMatchScore,
     // Round Robin
     currentDrawFormat,

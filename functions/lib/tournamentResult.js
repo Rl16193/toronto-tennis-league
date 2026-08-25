@@ -35,30 +35,37 @@ function normalizeScores(value) {
   });
 }
 
+function validateSetScores(scores) {
+  const nonEmpty = scores.filter(([p1, p2]) => p1 !== 0 || p2 !== 0);
+  if (nonEmpty.length === 0) fail('A played result must contain at least one scored set.');
+  for (const [p1, p2] of nonEmpty) {
+    if (p1 === p2) fail('A set cannot be tied.');
+    const high = Math.max(p1, p2);
+    if (high > 10 && Math.abs(p1 - p2) !== 2) {
+      fail('Scores above 10 must have a margin of exactly 2.');
+    }
+  }
+  return nonEmpty;
+}
+
+function resultMargin(scores, winnerUid, match) {
+  const winnerIndex = winnerUid === match.player_1_uid ? 0 : 1;
+  return scores.reduce((total, [p1, p2]) => total + (winnerIndex === 0 ? p1 - p2 : p2 - p1), 0);
+}
+
 function normalizeTournamentResult(input, match) {
   if (!input || typeof input !== 'object') fail('Missing result.');
-  const noShow = input.noShow === true;
+  const noShow = false;
   const walkover = input.walkover === true;
-  if (noShow && walkover) fail('A result cannot be both a no-show and a walkover.');
-  if (noShow && (match.format !== 'rr' || match.round !== 'RR')) {
-    fail('No-show is available only for Round Robin group matches.');
-  }
-
-  const scores = noShow
-    ? [
-        [0, 0],
-        [0, 0],
-        [0, 0],
-      ]
-    : normalizeScores(input.scores);
+  const scores = normalizeScores(input.scores);
   const allZero = scores.every(([p1, p2]) => p1 === 0 && p2 === 0);
   if (walkover && !allZero) fail('A walkover must have zero scores.');
-  if (!noShow && !walkover && allZero) fail('Use walkover for a zero-score result.');
+  if (!walkover) validateSetScores(scores);
 
   const players = [match.player_1_uid, match.player_2_uid];
-  const winnerUid = noShow ? '' : typeof input.winnerUid === 'string' ? input.winnerUid.trim() : '';
-  if (!noShow && !players.includes(winnerUid)) fail('Winner must be one of the match participants.');
-  if (!noShow && !walkover) {
+  const winnerUid = typeof input.winnerUid === 'string' ? input.winnerUid.trim() : '';
+  if (!players.includes(winnerUid)) fail('Winner must be one of the match participants.');
+  if (!walkover) {
     const setWins = scores.reduce(
       (wins, [p1, p2]) => {
         if (p1 > p2) wins[0] += 1;
@@ -75,7 +82,8 @@ function normalizeTournamentResult(input, match) {
 
   const court = typeof input.court === 'string' ? input.court.trim() : '';
   if (court.length > 200) fail('Court name is too long.');
-  return { winnerUid, scores, noShow, walkover, court };
+  const margin = resultMargin(scores, winnerUid, match);
+  return { winnerUid, scores, noShow, walkover, court, margin };
 }
 
 function tournamentAward(match) {
@@ -106,9 +114,16 @@ function statDeltasForResult(match, result, partnerUidByCaptain = new Map()) {
     const partner = partnerUidByCaptain.get(uid);
     return partner && partner !== uid ? [uid, partner] : [uid];
   };
-  if (result.noShow) {
-    for (const uid of [match.player_1_uid, match.player_2_uid]) {
-      addDelta(deltas, uid, { leaguePoints26: 1, league });
+  if (result.walkover) {
+    const award = tournamentAward(match);
+    const winnerIsP1 = result.winnerUid === match.player_1_uid;
+    const loserUid = winnerIsP1 ? match.player_2_uid : match.player_1_uid;
+    const winnerPoints = match.format === 'rr' && match.round === 'RR' ? 1 : 0;
+    for (const uid of creditedUids(result.winnerUid)) {
+      addDelta(deltas, uid, { ...(winnerPoints ? { leaguePoints26: winnerPoints } : {}), league });
+    }
+    for (const uid of creditedUids(loserUid)) {
+      addDelta(deltas, uid, { leaguePoints26: award.loserPoints, league });
     }
     return deltas;
   }
@@ -147,13 +162,14 @@ function scoreFieldPatch(scores) {
 }
 
 function storedTournamentResult(match) {
-  return {
+  const result = {
     winnerUid: match.winner_uid || '',
     scores: SCORE_FIELDS.map(([p1, p2]) => [match[p1] ?? 0, match[p2] ?? 0]),
-    noShow: match.no_show === true,
+    noShow: false,
     walkover: match.walkover === true,
     court: typeof match.court === 'string' ? match.court : '',
   };
+  return { ...result, margin: resultMargin(result.scores, result.winnerUid, match) };
 }
 
 function mergeStatDeltas(target, source, multiplier = 1) {
@@ -171,6 +187,8 @@ module.exports = {
   TournamentResultError,
   mergeStatDeltas,
   normalizeTournamentResult,
+  resultMargin,
+  validateSetScores,
   scoreFieldPatch,
   statDeltasForResult,
   storedTournamentResult,

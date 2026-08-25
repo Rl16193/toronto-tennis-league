@@ -61,6 +61,7 @@ export type TournamentMatch = {
   created_at?: string;
   completed_at?: string;
   score_edited_at?: string;
+  score_disputed?: boolean;
   format?: TournamentFormat;
   rr_group?: number;
   rr_round?: number;
@@ -70,15 +71,8 @@ export type TournamentMatch = {
   // Idempotency stamp written on every match of a group in the same batch that pays the group's
   // +5 completion bonus. Its presence is the only proof the bonus was actually paid (the bonus
   // is a separate, best-effort commit) — reversal must check it.
-  rr_group_bonus_v2?: boolean;
+  rr_groupbonus?: boolean;
   walkover?: boolean;
-  /**
-   * Neither player showed / the group match was never played. Pays 1 point to BOTH and has no
-   * winner — distinct from a walkover, which still pays 3/1 to a winner. Both are all-zero
-   * scores, so this flag is what tells them apart; it must be checked before `walkover`.
-   * RR group stage only, organizer only.
-   */
-  no_show?: boolean;
   court?: string;
   // Scheduling — players may edit only these fields (Firestore rules carve-out); scores stay
   // organizer-only. Absent schedule_status is treated as 'unscheduled'.

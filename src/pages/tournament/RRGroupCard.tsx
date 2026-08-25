@@ -89,7 +89,7 @@ export const RRGroupCard: React.FC<Props> = ({
   const [awarding, setAwarding] = useState(false);
 
   // The paid stamp lives on the match docs, so every viewer reads the same state off the live feed.
-  const bonusAwarded = matches.some((m) => m.rr_group_bonus_v2);
+  const bonusAwarded = matches.some((m) => !!m.rr_groupbonus);
 
   // Sync local state when the roster actually changes (e.g. after a save completes) — NOT on
   // every new `players` array reference. `players` is derived from the live matches feed, so an
@@ -283,9 +283,7 @@ export const RRGroupCard: React.FC<Props> = ({
                           <span className="text-fg/70">—</span>
                         ) : played ? (
                           <span className="inline-flex items-center gap-1.5">
-                            {/* A no show has no winner, so neither player gets a W/L pill — without
-                              this exclusion both of them are shown a red L. */}
-                            {!!mine && !relevant.no_show && (
+                            {!!mine && (
                               <span
                                 className={`px-1.5 py-0.5 rounded text-[9px] font-black ${wonIt ? 'bg-green-500/15 text-badge-win' : 'bg-red-500/15 text-badge-loss'}`}
                               >
@@ -293,7 +291,7 @@ export const RRGroupCard: React.FC<Props> = ({
                               </span>
                             )}
                             <span className="text-xs font-bold text-fg">
-                              {relevant.no_show ? 'No show' : formatSetScores(relevant) || 'Recorded'}
+                              {relevant.walkover ? 'Walkover' : formatSetScores(relevant) || 'Recorded'}
                             </span>
                           </span>
                         ) : isCreator ? (
@@ -415,11 +413,7 @@ export const RRGroupCard: React.FC<Props> = ({
                           </span>
                         </p>
                         {isDone && scoreStr && <p className="text-xs text-fg/70 mt-0.5">{scoreStr}</p>}
-                        {m.no_show ? (
-                          <p className="text-[10px] text-badge/70 mt-0.5">No show · 1 pt each</p>
-                        ) : (
-                          m.walkover && <p className="text-[10px] text-badge/70 mt-0.5">Walkover</p>
-                        )}
+                        {m.walkover && <p className="text-[10px] text-badge/70 mt-0.5">Walkover</p>}
                       </div>
                       <div className="shrink-0 flex items-center gap-2">
                         {isDone && (

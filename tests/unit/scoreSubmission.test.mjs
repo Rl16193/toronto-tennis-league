@@ -47,9 +47,25 @@ test('score intent validates winner and maps player perspective to official slot
   assert.equal(built.submission.claimed_winner_uid, 'p2');
 });
 
-test('organizer-only RR no-show clears winner and stays distinct from walkover', () => {
-  const built = buildScoreSubmissionIntent(form({ winnerUserId: '', noShow: true }), match, 'owner', true).intent;
-  assert.equal(built.isNoShow, true);
-  assert.equal(built.isWalkover, false);
-  assert.equal(built.submission.claimed_winner_uid, '');
+test('organizer-only walkover requires a winner and zero scores', () => {
+  const built = buildScoreSubmissionIntent(
+    form({
+      winnerUserId: 'p1',
+      walkover: true,
+      sets: [
+        { mine: '', opponent: '' },
+        { mine: '', opponent: '' },
+        { mine: '', opponent: '' },
+      ],
+    }),
+    match,
+    'owner',
+    true,
+  ).intent;
+  assert.equal(built.isWalkover, true);
+  assert.equal(built.submission.claimed_winner_uid, 'p1');
+  assert.equal(
+    buildScoreSubmissionIntent(form({ noShow: true, winnerUserId: '' }), match, 'owner', true).error,
+    'No-show results are no longer supported. Record the played score.',
+  );
 });

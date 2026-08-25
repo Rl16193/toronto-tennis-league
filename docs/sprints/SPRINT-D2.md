@@ -3,30 +3,30 @@
 > **Server authority and the new scoring contract.** The five blocking branch conflicts, plus the
 > auto-approval rule that replaces organizer approval on every result in the app.
 
-| | |
-| --- | --- |
-| **Branch base** | [Sprint D1](SPRINT-D1.md) merge |
-| **Blocking** | A1 defines every callable signature **before 10:00**; A3 and A4 build against it, not around it |
-| **Replaces** | `HARMONIZATION_REPORT.md` **[D4](../notes/HARMONIZATION_REPORT.md#D4)** ("nothing auto-applies") and `WORKFLOW_DESIGN_REPORT.md` §1. Both carry a dated amendment pointing here |
-| **Ship** | Functions → rules → hosting, end of day |
+|                 |                                                                                                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Branch base** | [Sprint D1](SPRINT-D1.md) merge                                                                                                                                                 |
+| **Blocking**    | Sprint implementation is isolated on `codex/sprint-2-d2`; merge review into `dev-anuj` follows validation                                                                       |
+| **Replaces**    | `HARMONIZATION_REPORT.md` **[D4](../notes/HARMONIZATION_REPORT.md#D4)** ("nothing auto-applies") and `WORKFLOW_DESIGN_REPORT.md` §1. Both carry a dated amendment pointing here |
+| **Ship**        | Local unit/type/build/rules-emulator validation; staging is deferred until an authorized project and recovery path exist                                                        |
 
 ---
 
 ## The points table — every number this sprint writes
 
-| Result | Winner | Loser |
-| --- | --: | --: |
-| RR group — **played** match | **3** | **1** |
-| RR group — **walkover** | **1** | **1** |
-| RR group bonus (organizer switch) | **+5** | **+5** |
-| Knockout **R32** | advances, banks **0** | **1** |
-| Knockout **R16** | advances, banks **0** | **2** |
-| Knockout **QF** | advances, banks **0** | **3** |
-| Knockout **SF** | advances, banks **0** | **5** |
-| Knockout **Final** | **20** | **10** |
-| Ladder challenge | **+3** | **−3** floored at 0 |
-| Friendly / rally | **+2** | **+1** |
-| ~~No show~~ | **removed** | **removed** |
+| Result                            |                Winner |               Loser |
+| --------------------------------- | --------------------: | ------------------: |
+| RR group — **played** match       |                 **3** |               **1** |
+| RR group — **walkover**           |                 **1** |               **1** |
+| RR group bonus (organizer switch) |                **+5** |              **+5** |
+| Knockout **R32**                  | advances, banks **0** |               **1** |
+| Knockout **R16**                  | advances, banks **0** |               **2** |
+| Knockout **QF**                   | advances, banks **0** |               **3** |
+| Knockout **SF**                   | advances, banks **0** |               **5** |
+| Knockout **Final**                |                **20** |              **10** |
+| Ladder challenge                  |                **+3** | **−3** floored at 0 |
+| Friendly / rally                  |                **+2** |              **+1** |
+| ~~No show~~                       |           **removed** |         **removed** |
 
 Source: `src/features/tournament/domain/scoring.ts:56,64-67` and `functions/lib/tournamentResult.js:84`.
 
@@ -34,13 +34,13 @@ Source: `src/features/tournament/domain/scoring.ts:56,64-67` and `functions/lib/
 
 ## Board
 
-| Lane | Tasks | Rows |
-| --- | --: | --- |
-| **A1 Rules + Functions** | 7 | conflicts 1–5, auto-approval, [D6](../notes/HARMONIZATION_REPORT.md#D6) walkovers-only |
-| **A2 Data** | 4 | [L2](../notes/HARMONIZATION_REPORT.md#L2), [L3](../notes/HARMONIZATION_REPORT.md#L3) (amended), [L4](../notes/HARMONIZATION_REPORT.md#L4), [N2](../notes/HARMONIZATION_REPORT.md#N2), the submission shape |
-| **A3 Client / Dev** | 4 | wire five callables, [LB-5](../ACTION-REPORT.md#LB-5), remove client points paths, remove conversion |
-| **A4 UI/UX** | 4 | ScoreModal rework ([R-5](../ACTION-REPORT.md#R-5)), dispute banner, notification copy, delete `Stepper` |
-| **A5 Verify** | 5 | the twelve score examples, three reconcile cases, double-tap, rules matrix, gate |
+| Lane                     | Tasks | Rows                                                                                                                                                                                                       |
+| ------------------------ | ----: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A1 Rules + Functions** |     7 | conflicts 1–5, auto-approval, [D6](../notes/HARMONIZATION_REPORT.md#D6) walkovers-only                                                                                                                     |
+| **A2 Data**              |     4 | [L2](../notes/HARMONIZATION_REPORT.md#L2), [L3](../notes/HARMONIZATION_REPORT.md#L3) (amended), [L4](../notes/HARMONIZATION_REPORT.md#L4), [N2](../notes/HARMONIZATION_REPORT.md#N2), the submission shape |
+| **A3 Client / Dev**      |     4 | wire five callables, [LB-5](../ACTION-REPORT.md#LB-5), remove client points paths, remove conversion                                                                                                       |
+| **A4 UI/UX**             |     4 | ScoreModal rework ([R-5](../ACTION-REPORT.md#R-5)), dispute banner, notification copy, delete `Stepper`                                                                                                    |
+| **A5 Verify**            |     5 | the twelve score examples, three reconcile cases, double-tap, rules matrix, gate                                                                                                                           |
 
 ---
 
@@ -50,8 +50,8 @@ Source: `src/features/tournament/domain/scoring.ts:56,64-67` and `functions/lib/
 
 Integers **0–99**. When the higher score exceeds **10**, the margin must be exactly **2**. The winner takes the set majority. A winner must be named.
 
-| Valid | Invalid |
-| --- | --- |
+| Valid                                                        | Invalid               |
+| ------------------------------------------------------------ | --------------------- |
 | `4-3` `7-2` `7-5` `8-4` `9-3` `10-4` `24-22` `38-40` `94-92` | `12-2` `40-0` `90-40` |
 
 **Today:** the server accepts any 0–99 margin, so `12-2` passes (`functions/lib/tournamentResult.js:1` `MAX_GAME_SCORE = 99`). The rules cap player submissions at 0–7 (`firestore.rules:143` `boundedScore`), so `8-4` and `24-22` are **rejected**. Three layers disagree and valid scores are refused.
@@ -79,21 +79,21 @@ flowchart TD
 
 Quarter-final. Chandra beat Rahul.
 
-| Step | Submission | Margin | Result |
-| --- | --- | --: | --- |
-| 1 | Chandra: `7-0, 7-0`, winner Chandra | (7+7) − (0+0) = **14** | Applied. Chandra → SF. Rahul banks **QF = 3**. Chandra banks **0** |
-| 2 | Rahul: `7-2, 7-4`, winner Chandra | (7+7) − (2+4) = **8** | **8 < 14 → `7-2, 7-4` records.** Reverse + reapply in one transaction |
-| — | Points | | **Unchanged** — 3 to Rahul, 0 to Chandra. Only games move |
+| Step | Submission                          |                 Margin | Result                                                                |
+| ---- | ----------------------------------- | ---------------------: | --------------------------------------------------------------------- |
+| 1    | Chandra: `7-0, 7-0`, winner Chandra | (7+7) − (0+0) = **14** | Applied. Chandra → SF. Rahul banks **QF = 3**. Chandra banks **0**    |
+| 2    | Rahul: `7-2, 7-4`, winner Chandra   |  (7+7) − (2+4) = **8** | **8 < 14 → `7-2, 7-4` records.** Reverse + reapply in one transaction |
+| —    | Points                              |                        | **Unchanged** — 3 to Rahul, 0 to Chandra. Only games move             |
 
-Had Rahul submitted **himself** as winner: nothing changes, `7-0, 7-0` stays applied and on the card, the match flags, both players see *"Result disputed — organizer reviewing"*, the organizer gets one notice.
+Had Rahul submitted **himself** as winner: nothing changes, `7-0, 7-0` stays applied and on the card, the match flags, both players see _"Result disputed — organizer reviewing"_, the organizer gets one notice.
 
 ### Notifications — exact strings
 
-| Recipient | String |
-| --- | --- |
-| Winner | **"Win recorded — 7-2, 7-4 v. Rahul"** |
-| Loser | **"Score recorded — 2-7, 4-7 v. Chandra"** |
-| On a margin reconcile | Both re-notified with the final score, same two strings |
+| Recipient               | String                                                                                             |
+| ----------------------- | -------------------------------------------------------------------------------------------------- |
+| Winner                  | **"Win recorded — 7-2, 7-4 v. Rahul"**                                                             |
+| Loser                   | **"Score recorded — 2-7, 4-7 v. Chandra"**                                                         |
+| On a margin reconcile   | Both re-notified with the final score, same two strings                                            |
 | Organizer, on a dispute | **"Result disputed — Chandra v. Rahul, QF"** — one notice, to `creator_id` **and** `organizer_ids` |
 
 Scores are always shown from the recipient's own perspective.
@@ -120,23 +120,42 @@ Scores are always shown from the recipient's own perspective.
 {
   // the applied result — unchanged field names
   "winner_uid": "chandra_uid",
-  "set_1_player_1": 7, "set_1_player_2": 2,
-  "set_2_player_1": 7, "set_2_player_2": 4,
-  "set_3_player_1": 0, "set_3_player_2": 0,
-  "result_at":    "2026-08-25T14:02:11Z",   // L2 — re-stamped on every apply
-  "completed_at": "2026-08-25T13:47:03Z",   // pinned at FIRST scoring, never rewritten
+  "set_1_player_1": 7,
+  "set_1_player_2": 2,
+  "set_2_player_1": 7,
+  "set_2_player_2": 4,
+  "set_3_player_1": 0,
+  "set_3_player_2": 0,
+  "result_at": "2026-08-25T14:02:11Z", // L2 — re-stamped on every apply
+  "completed_at": "2026-08-25T13:47:03Z", // pinned at FIRST scoring, never rewritten
 
   // who said what — the reconcile input
   "result_submissions": {
-    "chandra_uid": { "winner_uid": "chandra_uid", "sets": [[7,0],[7,0]], "margin": 14,
-                     "submitted_at": "2026-08-25T13:47:03Z", "hash": "…" },
-    "rahul_uid":   { "winner_uid": "chandra_uid", "sets": [[7,2],[7,4]], "margin": 8,
-                     "submitted_at": "2026-08-25T14:02:11Z", "hash": "…" }
+    "chandra_uid": {
+      "winner_uid": "chandra_uid",
+      "sets": [
+        [7, 0],
+        [7, 0],
+      ],
+      "margin": 14,
+      "submitted_at": "2026-08-25T13:47:03Z",
+      "hash": "…",
+    },
+    "rahul_uid": {
+      "winner_uid": "chandra_uid",
+      "sets": [
+        [7, 2],
+        [7, 4],
+      ],
+      "margin": 8,
+      "submitted_at": "2026-08-25T14:02:11Z",
+      "hash": "…",
+    },
   },
 
   // dispute, set only when the two submissions name different winners
   "score_disputed": false,
-  "score_disputed_at": null
+  "score_disputed_at": null,
 }
 ```
 
@@ -172,7 +191,7 @@ One name. The current field is `rr_group_bonus_v2` (`src/features/tournament/typ
 
 The callable refuses a different result on a completed match — while reset and cancel are **disabled stubs**. A mis-scored match is uncorrectable today.
 
-**Build** · reverse-then-reapply in the same transaction. `mergeStatDeltas(…, -1)` at `functions/lib/tournamentResult.js:166` exists and is test-only today; make it the reverse half. Stamp `result_at`. Leave `completed_at` alone. Log actor and before/after to the `tournament` change log (**[D1](../notes/HARMONIZATION_REPORT.md#D1)** — the change log *is* the audit; there is no submissions collection).
+**Build** · reverse-then-reapply in the same transaction. `mergeStatDeltas(…, -1)` at `functions/lib/tournamentResult.js:166` exists and is test-only today; make it the reverse half. Stamp `result_at`. Leave `completed_at` alone. Log actor and before/after to the `tournament` change log (**[D1](../notes/HARMONIZATION_REPORT.md#D1)** — the change log _is_ the audit; there is no submissions collection).
 
 **Done when** · two successive edits leave stats equal to a fresh recompute · `completed_at` unchanged · a replayed identical edit is a no-op.
 
@@ -213,7 +232,7 @@ const handleSetGroupBonus = async (_rrGroup: number, _award: boolean) => { … }
 
 **Build** · manager check; stamp or unstamp `rr_groupbonus` on **every** match in the group and pay or reverse **+5** to every member, in **one transaction**. No-op when the stamp already matches the requested state.
 
-The stamp is the **only proof of payment**. It used to pay automatically when the last match completed, keyed off `status !== 'complete'` — which only means *this* match was unscored. So a corrected match re-confirmed paid a second +5 while a later reset removed only 5, leaving a permanent surplus. Reversal requires the stamp, or a reset takes 5 points players never received.
+The stamp is the **only proof of payment**. It used to pay automatically when the last match completed, keyed off `status !== 'complete'` — which only means _this_ match was unscored. So a corrected match re-confirmed paid a second +5 while a later reset removed only 5, leaving a permanent surplus. Reversal requires the stamp, or a reset takes 5 points players never received.
 
 The organizer may award a group that still has unplayed matches, so **reversal must not gate on completeness**.
 
@@ -272,11 +291,11 @@ Remove `no_show` from the model, from the points path, and remove the `is_walkov
 
 **Payout after removal — the walkover absorbs the no-show's 1/1 in the group stage:**
 
-| Stage | Winner | Loser |
-| --- | --: | --: |
-| RR group **walkover** | **1** | **1** — both players, because it is not a played result |
-| RR group **played** match | 3 | 1 — unchanged |
-| Knockout **walkover** | advances, banks 0 | that round's award: R32 **1** · R16 **2** · QF **3** · SF **5** · F **10** |
+| Stage                     |            Winner |                                                                      Loser |
+| ------------------------- | ----------------: | -------------------------------------------------------------------------: |
+| RR group **walkover**     |             **1** |                    **1** — both players, because it is not a played result |
+| RR group **played** match |                 3 |                                                              1 — unchanged |
+| Knockout **walkover**     | advances, banks 0 | that round's award: R32 **1** · R16 **2** · QF **3** · SF **5** · F **10** |
 
 This is a **change from the current code**, which pays a walkover the full 3/1 in a group. `CLAUDE.md` documents the old rule and is corrected in [Sprint D3](SPRINT-D3.md) step 16. Sources: `DECISIONS_BRIEF` §1 · `HARMONIZATION_REPORT` [D6](../notes/HARMONIZATION_REPORT.md#D6) and [L10](../notes/HARMONIZATION_REPORT.md#L10) · `ACTION-REPORT` Q-4 (closed).
 
@@ -292,12 +311,12 @@ This is a **change from the current code**, which pays a walkover the full 3/1 i
 
 ### ⬛ Wire the five callables
 
-| Stub / client write | Becomes |
-| --- | --- |
-| `useTournament.ts:2231` `handleSetGroupBonus` | call `setGroupBonus`, surface its errors |
-| `useTournament.ts` reset / cancel stubs | call the rescore path |
-| `ladderService.ts:148-190` `confirmChallenge` client stat writes | call `challengeResults`; delete the client writes |
-| score submission | goes through the result callable; **the client no longer computes or applies points anywhere** |
+| Stub / client write                                              | Becomes                                                                                        |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `useTournament.ts:2231` `handleSetGroupBonus`                    | call `setGroupBonus`, surface its errors                                                       |
+| `useTournament.ts` reset / cancel stubs                          | call the rescore path                                                                          |
+| `ladderService.ts:148-190` `confirmChallenge` client stat writes | call `challengeResults`; delete the client writes                                              |
+| score submission                                                 | goes through the result callable; **the client no longer computes or applies points anywhere** |
 
 **Do not reimplement any of this client-side.** Removing client points authority is the whole of the server-hardening work already on this branch.
 
@@ -325,23 +344,23 @@ Delete the "Also count as a Challenge" checkbox path and `proposeConversion`. On
 
 **File** · `src/pages/tournament/ScoreModal.tsx`
 
-| Line | Now | After |
-| --- | --- | --- |
-| `:121` | `const selected = !isNoShow && scoreForm.winnerUserId === p.uid` | unchanged — but [D1](../notes/HARMONIZATION_REPORT.md#D1) made `winnerUserId` start empty, so **neither card is selected on open**. Verify it renders that way |
-| `:110` | *"…The organizer will confirm it."* | *"Pick the winner, enter the games, and submit. The result is recorded straight away."* |
-| `:191`, `:200` | `<Stepper …>` | **number entry fields** (`field-dense`). ± to 99 was never usable, and it dissolves the 0–99 reachability problem |
-| `:231-239` | the "Count As No Show" checkbox and its prop | **delete** — the whole no-show concept goes |
-| `:193-204` | "Also count as a Challenge" checkbox | **delete** |
-| new | — | an explicit **Walkover** switch, **rendered for organizers only** |
-| `:87` | passes **no `title`** to `Sheet` | pass one. The app's most-used modal currently announces unnamed |
+| Line           | Now                                                              | After                                                                                                                                                          |
+| -------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `:121`         | `const selected = !isNoShow && scoreForm.winnerUserId === p.uid` | unchanged — but [D1](../notes/HARMONIZATION_REPORT.md#D1) made `winnerUserId` start empty, so **neither card is selected on open**. Verify it renders that way |
+| `:110`         | _"…The organizer will confirm it."_                              | _"Pick the winner, enter the games, and submit. The result is recorded straight away."_                                                                        |
+| `:191`, `:200` | `<Stepper …>`                                                    | **number entry fields** (`field-dense`). ± to 99 was never usable, and it dissolves the 0–99 reachability problem                                              |
+| `:231-239`     | the "Count As No Show" checkbox and its prop                     | **delete** — the whole no-show concept goes                                                                                                                    |
+| `:193-204`     | "Also count as a Challenge" checkbox                             | **delete**                                                                                                                                                     |
+| new            | —                                                                | an explicit **Walkover** switch, **rendered for organizers only**                                                                                              |
+| `:87`          | passes **no `title`** to `Sheet`                                 | pass one. The app's most-used modal currently announces unnamed                                                                                                |
 
 Then **delete `src/components/Stepper.tsx`** and its `.design-sync` preview — verify `grep -rn 'Stepper' src/` returns nothing first. Its only two consumers were `:191` and `:200`.
 
 ### ⬛ Dispute banner and the notification strings
 
-- Banner on the match card when `score_disputed` — *"Result disputed — organizer reviewing"*. Use `AlertMessage`; `text-badge` for the warning tone, never `text-amber-300`, which does not flip and washes out on light surfaces.
+- Banner on the match card when `score_disputed` — _"Result disputed — organizer reviewing"_. Use `AlertMessage`; `text-badge` for the warning tone, never `text-amber-300`, which does not flip and washes out on light surfaces.
 - The applied result stays visible **underneath** the banner. The first submitted result is what shows until the organizer resolves.
-- Notification copy: winner *"Win recorded — {score} v. {opponent}"*, loser *"Score recorded — {score} v. {opponent}"*, scores from the recipient's perspective.
+- Notification copy: winner _"Win recorded — {score} v. {opponent}"_, loser _"Score recorded — {score} v. {opponent}"_, scores from the recipient's perspective.
 
 ### ⬛ `MatchCard` submitted state
 
@@ -361,23 +380,23 @@ One table-driven test asserting identical pass/fail at **form**, **rules** and *
 
 ### ⬛ The three reconcile cases
 
-| Case | Assert |
-| --- | --- |
-| Same winner, same score | No second payout; hash no-op |
-| Same winner, different score | `7-0,7-0` then `7-2,7-4` → applied score is `7-2,7-4`; **points unchanged**; both re-notified |
-| Different winner | Applied result unchanged; `score_disputed` true; one organizer notice; advancement not rolled back |
+| Case                         | Assert                                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| Same winner, same score      | No second payout; hash no-op                                                                       |
+| Same winner, different score | `7-0,7-0` then `7-2,7-4` → applied score is `7-2,7-4`; **points unchanged**; both re-notified      |
+| Different winner             | Applied result unchanged; `score_disputed` true; one organizer notice; advancement not rolled back |
 
 Plus: a player-submitted all-zero result is rejected · a non-participant submission is rejected · a blank `winner_uid` is rejected at all three layers.
 
 ### ⬛ Conflict gates
 
-| Conflict | Gate |
-| --- | --- |
-| 1 | Two successive edits = fresh recompute; `completed_at` unchanged; replay is a no-op |
-| 2 | The twelve examples |
-| 3 | Manager confirm pays once; **double-tap pays once**; non-manager rejected |
-| 4 | On = +5 once; off = −5; repeats no-op; a group with unplayed matches can still be awarded and reversed |
-| 5 | Creator downloads a bracket image with contacts; denied for a non-participant; **loses the read on withdrawal** |
+| Conflict | Gate                                                                                                            |
+| -------- | --------------------------------------------------------------------------------------------------------------- |
+| 1        | Two successive edits = fresh recompute; `completed_at` unchanged; replay is a no-op                             |
+| 2        | The twelve examples                                                                                             |
+| 3        | Manager confirm pays once; **double-tap pays once**; non-manager rejected                                       |
+| 4        | On = +5 once; off = −5; repeats no-op; a group with unplayed matches can still be awarded and reversed          |
+| 5        | Creator downloads a bracket image with contacts; denied for a non-participant; **loses the read on withdrawal** |
 
 ### ⬛ Exit gate
 
@@ -387,8 +406,8 @@ All five conflicts flip to `RESOLVED` in `DEV_ANUJ_CONFLICTS.md` §Summary. `gre
 
 ## Handoffs into Sprint D3
 
-| From | To | What |
-| --- | --- | --- |
-| A1 | A5 | Callable signatures, for the rules matrix |
-| A2 | A3 | The `result_submissions` shape, for the stat-definition pass |
-| A4 | all | `Stepper.tsx` is gone — anything importing it breaks `tsc` |
+| From | To  | What                                                         |
+| ---- | --- | ------------------------------------------------------------ |
+| A1   | A5  | Callable signatures, for the rules matrix                    |
+| A2   | A3  | The `result_submissions` shape, for the stat-definition pass |
+| A4   | all | `Stepper.tsx` is gone — anything importing it breaks `tsc`   |

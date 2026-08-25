@@ -24,8 +24,10 @@ Firebase Auth supplies identity. Firestore Rules are the effective client author
 - `offers`, protected stats/reward fields, `redemptions`, `group_lessons`, the expiring group-lesson contact-access projection, aggregate stats, ranking history, and notifications creation are server-controlled.
 - Reward redemption review is limited to the super-admin bootstrap; event creators cannot review,
   use, flag, or receive global coupon notifications unless they separately own the provider record.
-- Private preferences are owner/super-admin readable. `public_preferences` is reserved deny-all.
-- Match updates use state- and participant-specific field allowlists.
+- Preferences are publicly readable projections; writes remain owner-scoped and role fields cannot be self-assigned.
+  `public_preferences` remains reserved deny-all.
+- Tournament result, ladder challenge, and group-bonus mutations use callable Functions; client match
+  writes remain limited to scheduling and other allowlisted fields.
 - Storage writes require an owner UID for member paths and image/type/size constraints; anonymous court reports use a fixed anonymous prefix.
 
 ## Target role model

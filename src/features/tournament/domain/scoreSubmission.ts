@@ -2,8 +2,31 @@ import type { ScoreForm, ScoreSubmission, TournamentMatch } from '../../../pages
 
 type ScoreIntent = {
   submission: ScoreSubmission;
-  isNoShow: boolean;
   isWalkover: boolean;
+};
+
+export const validateScorePairs = (
+  pairs: Array<[number, number]>,
+  winnerIndex: 0 | 1,
+  walkover = false,
+): string | undefined => {
+  const allZero = pairs.every(([p1, p2]) => p1 === 0 && p2 === 0);
+  if (walkover) return allZero ? undefined : 'A walkover must have zero scores.';
+  if (allZero) return 'Enter at least one scored set or choose Walkover.';
+  const wins = [0, 0];
+  for (const [p1, p2] of pairs) {
+    if (![p1, p2].every((score) => Number.isInteger(score) && score >= 0 && score <= 99)) {
+      return 'Scores must be whole numbers from 0 to 99.';
+    }
+    if (p1 === 0 && p2 === 0) continue;
+    if (p1 === p2) return 'A set cannot be tied.';
+    const high = Math.max(p1, p2);
+    if (high > 10 && Math.abs(p1 - p2) !== 2) {
+      return 'Scores above 10 must have a margin of exactly 2.';
+    }
+    wins[p1 > p2 ? 0 : 1] += 1;
+  }
+  return wins[winnerIndex] > wins[1 - winnerIndex] ? undefined : 'The winner must take the set majority.';
 };
 
 export const buildScoreSubmissionIntent = (
@@ -12,8 +35,8 @@ export const buildScoreSubmissionIntent = (
   userUid: string,
   isCreator: boolean,
 ): { intent?: ScoreIntent; error?: string } => {
-  const isNoShow = !!scoreForm.noShow && isCreator && match.format === 'rr' && match.round === 'RR';
-  if (!isNoShow && !scoreForm.winnerUserId) return { error: 'Please choose who won the match.' };
+  if (scoreForm.noShow) return { error: 'No-show results are no longer supported. Record the played score.' };
+  if (!scoreForm.winnerUserId) return { error: 'Please choose who won the match.' };
 
   const parsedSets = scoreForm.sets.map((set) => ({
     mine: Number(set.mine || 0),
@@ -30,35 +53,31 @@ export const buildScoreSubmissionIntent = (
   const submitterIsP1 = isCreator || userUid === match.player_1_uid;
   const p1 = parsedSets.map((set) => (submitterIsP1 ? set.mine : set.opponent));
   const p2 = parsedSets.map((set) => (submitterIsP1 ? set.opponent : set.mine));
+  const winnerIndex = scoreForm.winnerUserId === match.player_1_uid ? 0 : 1;
+  const isWalkover = !!scoreForm.walkover;
+  const scoreError = validateScorePairs(
+    p1.map((score, index) => [score, p2[index]] as [number, number]),
+    winnerIndex as 0 | 1,
+    isWalkover,
+  );
+  if (scoreError) return { error: scoreError };
+  if (isWalkover && !isCreator) return { error: 'Only the event organizer can record a walkover.' };
   const court = scoreForm.court.trim();
-  const submission: ScoreSubmission = isNoShow
-    ? {
-        claimed_winner_name: '',
-        claimed_winner_uid: '',
-        set_1_player_1: 0,
-        set_1_player_2: 0,
-        set_2_player_1: 0,
-        set_2_player_2: 0,
-        set_3_player_1: 0,
-        set_3_player_2: 0,
-        ...(court ? { court } : {}),
-      }
-    : {
-        claimed_winner_name: scoreForm.winnerUserId === match.player_1_uid ? match.player_1_name : match.player_2_name,
-        claimed_winner_uid: scoreForm.winnerUserId,
-        set_1_player_1: p1[0],
-        set_1_player_2: p2[0],
-        set_2_player_1: p1[1],
-        set_2_player_2: p2[1],
-        set_3_player_1: p1[2],
-        set_3_player_2: p2[2],
-        ...(court ? { court } : {}),
-      };
+  const submission: ScoreSubmission = {
+    claimed_winner_name: scoreForm.winnerUserId === match.player_1_uid ? match.player_1_name : match.player_2_name,
+    claimed_winner_uid: scoreForm.winnerUserId,
+    set_1_player_1: p1[0],
+    set_1_player_2: p2[0],
+    set_2_player_1: p1[1],
+    set_2_player_2: p2[1],
+    set_3_player_1: p1[2],
+    set_3_player_2: p2[2],
+    ...(court ? { court } : {}),
+  };
   return {
     intent: {
       submission,
-      isNoShow,
-      isWalkover: !isNoShow && parsedSets.every((set) => set.mine === 0 && set.opponent === 0),
+      isWalkover,
     },
   };
 };
