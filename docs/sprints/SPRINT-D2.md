@@ -5,10 +5,13 @@
 
 |                 |                                                                                                                                                                                 |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Branch base** | [Sprint D1](SPRINT-D1.md) merge                                                                                                                                                 |
-| **Blocking**    | Sprint implementation is isolated on `codex/sprint-2-d2`; merge review into `dev-anuj` follows validation                                                                       |
+| **Branch base** | [Sprint D1](SPRINT-D1.md) merge; implemented on `codex/sprint-2-d2`, merged to `dev-anuj` at `9325b3a`                                                                          |
+| **Blocking**    | Core D2 implementation is merged; staging remains deferred pending an authorized project and recovery path                                                                      |
 | **Replaces**    | `HARMONIZATION_REPORT.md` **[D4](../notes/HARMONIZATION_REPORT.md#D4)** ("nothing auto-applies") and `WORKFLOW_DESIGN_REPORT.md` §1. Both carry a dated amendment pointing here |
 | **Ship**        | Local unit/type/build/rules-emulator validation; staging is deferred until an authorized project and recovery path exist                                                        |
+
+> **Merge record — 25 Aug 2026:** `codex/sprint-2-d2` was validated and fast-forward merged into
+> `dev-anuj` at `9325b3a`. No production deployment, migration, or data mutation was performed.
 
 ---
 
