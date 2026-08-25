@@ -76,6 +76,7 @@ export const normalizeEvent = (id: string, value: unknown): TennisEvent => {
     about: optionalString(data.about),
     description: optionalString(data.description),
     organizer: optionalString(data.organizer),
+    zones: strings(data.zones),
     round_deadlines: Object.fromEntries(
       Object.entries(record(data.round_deadlines)).filter(
         (entry): entry is [string, string] => typeof entry[1] === 'string',
@@ -122,9 +123,18 @@ export const normalizeEventParticipant = (id: string, value: unknown): EventPart
       ? { partner_in_app: data.partner_in_app }
       : {}),
     partner_uid: optionalString(data.partner_uid),
+    partner_name: optionalString(data.partner_name),
     ...(data.skill_group === 'Retired Pro' ? { skill_group: 'Retired Pro' as const } : {}),
     req_zone_change: boolean(data.req_zone_change),
     new_zone: optionalString(data.new_zone),
+    status: data.status === 'withdrawn' ? 'withdrawn' : 'active',
+    withdrawn_reason: ['injury', 'unavailable', 'cannot_contact', 'other'].includes(string(data.withdrawn_reason))
+      ? (data.withdrawn_reason as EventParticipant['withdrawn_reason'])
+      : undefined,
+    withdrawn_note: optionalString(data.withdrawn_note),
+    withdrawn_at: optionalString(data.withdrawn_at),
+    withdrawn_by: optionalString(data.withdrawn_by),
+    zone: optionalString(data.zone),
     removal: boolean(data.removal),
     removal_at: optionalString(data.removal_at),
     zone_override: optionalString(data.zone_override),
@@ -211,7 +221,6 @@ export const normalizeUserData = (value: unknown): UserData => {
     created_at: string(data.created_at),
     avatar: optionalString(data.avatar),
     bio: optionalString(data.bio),
-    profile_details_visible: boolean(data.profile_details_visible),
     isVerified: boolean(data.isVerified),
     welcomeEmailSent: boolean(data.welcomeEmailSent),
     ...(Array.isArray(data.display_badges) ? { display_badges: strings(data.display_badges).slice(0, 3) } : {}),
@@ -262,6 +271,7 @@ export const normalizeUserPreferences = (value: unknown): UserPreferences => {
     coach: data.coach === true,
     coach_id: optionalString(data.coach_id),
     ...(Array.isArray(data.availability_tags) ? { availability_tags: strings(data.availability_tags) } : {}),
+    available_to_play: typeof data.available_to_play === 'boolean' ? data.available_to_play : true,
   };
 };
 

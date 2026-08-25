@@ -1005,8 +1005,8 @@ export const TournamentHeader: React.FC<{
             {hasMatches ? (
               <Row
                 icon={<XCircle className="w-4 h-4" />}
-                label="Cancel Matches"
-                hint="Delete this draw's generated matches"
+                label="Reset Draw"
+                hint="Clear pending matches in this draw; recorded scores stay"
                 danger
                 busy={isProcessing}
                 onClick={() => {

@@ -48,6 +48,22 @@ Diagram: [Firestore data model](diagrams/firestore-data-model.md).
 
 Keep stable document IDs and append-only activity records while continuing to formalize field schemas and ownership in rules tests and typed contracts. Treat `stats`, reward ledgers, connection markers, public-contact markers, notifications, aggregate collections, and tournament outcomes as server-authoritative.
 
+### Sprint D4 remodel review
+
+The event roster now carries the event-scoped `zone`, optional doubles partner shape, and
+`status: active|withdrawn` with withdrawal metadata. A withdrawal remains registered and
+unplaced; the server callable records walkovers for unplayed fixtures and leaves completed
+results unchanged. Participant creation is the only automatic seating trigger, and knockout
+first-round seats remain `PLAYER_LOADING` until an organizer assigns them. `preferences` owns the
+member's `preferred_zone_manual` and `available_to_play` flags, while `events` may persist both
+`zone_draw_config` and the derived `zones` coverage. Round deadlines are keyed by draw and round,
+excluding the Round Robin group stage.
+
+The Rules boundary now uses explicit participant and preference field whitelists. Profile identity
+does not carry `profile_details_visible`; league display is public. Validation for this remodel is
+local-only. Production deployment and data mutation remain out of scope, and staging is deferred
+until an authorized isolated project and verified recovery path exist.
+
 ## Evidence, risks, and open questions
 
 - Evidence: `firestore.rules`, `storage.rules`, `src/features/**`, `src/pages/tournament/useTournament.ts`, `functions/**`.

@@ -39,9 +39,6 @@ export interface UserData {
   name: string;
   avatar?: string;
   bio?: string;
-  // The league (gender + optional Retired Pro/Juniors suffix) lives on stats.league; this
-  // controls whether it's shown on the public player profile card.
-  profile_details_visible?: boolean;
   // Up to 3 badge ids the player has chosen to show on their profile and beside their name.
   display_badges?: string[];
   created_at: string;
@@ -88,6 +85,8 @@ export interface UserPreferences {
   // Any number of preset windows (see AvailabilityTag in utils/availability.ts). The only
   // availability representation — the old grid and day/time lists are gone from code and data.
   availability_tags?: string[];
+  /** When false, challenge and rally cards show the member as Away. */
+  available_to_play?: boolean;
   // Rewards: a stringer is an ordinary account flagged here, with `stringer_id` naming the
   // rewards-catalog entry they own. Same role-flag shape as `event_creator`. It only unlocks
   // the "your shop" coupon list (mark used / flag) — never anything points-related.
@@ -180,7 +179,10 @@ export interface TennisEvent {
   about?: string;
   description?: string;
   organizer?: string;
-  round_deadlines?: Record<string, string>; // round → 'YYYY-MM-DD'
+  /** Deadline keys are draw+round; the RR group stage is intentionally absent. */
+  round_deadlines?: Record<string, string>;
+  organizer_ids?: string[];
+  zones?: string[];
   tournament_format?: 'knockout' | 'rr';
   tournament_choice?: 'Singles' | 'Doubles';
   // One-off per-event override: hides the Men's/Women's Retired Pro draw tabs on this event only —
@@ -212,12 +214,20 @@ export interface EventParticipant {
   doubles?: string;
   partner_in_app?: 'yes' | 'no' | '';
   partner_uid?: string;
+  partner_name?: string;
   skill?: number;
   // 'Retired Pro' opts the player into the age-based Retired Pro (55+) draw; absent means normal
   // skill-derived routing (Challengers/Masters).
   skill_group?: 'Retired Pro';
   dateselected?: string[];
   created_at: string;
+  status?: 'active' | 'withdrawn';
+  withdrawn_reason?: 'injury' | 'unavailable' | 'cannot_contact' | 'other';
+  withdrawn_note?: string;
+  withdrawn_at?: string;
+  withdrawn_by?: 'self' | string;
+  /** Organizer-set event zone. Profile zone remains separate. */
+  zone?: string;
   // Player asked to move zone; `new_zone` is the zone they picked. Per-event on purpose: the
   // notify trigger routes to the organizer via this row's event_id.
   req_zone_change?: boolean;

@@ -59,7 +59,7 @@ exports.onZoneChanged = onDocumentUpdated({ document: 'preferences/{uid}', regio
     .map((d) => ({ id: d.id, ...d.data() }))
     // `zone_override` means an organizer placed them by hand; that decision stands and needs no
     // prompting from a preference change.
-    .filter((p) => p.event_id && !p.removal && !p.zone_override);
+    .filter((p) => p.event_id && !p.removal && p.status !== 'withdrawn' && !p.zone_override);
   if (rows.length === 0) return;
 
   for (const row of rows) {

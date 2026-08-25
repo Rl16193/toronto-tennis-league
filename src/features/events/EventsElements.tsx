@@ -609,6 +609,25 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
               </div>
             </div>
 
+            {event.zones?.length && (
+              <div className="rounded-xl border border-clay/30 bg-clay/5 p-3">
+                <p className="text-xs font-bold text-fg/70 uppercase tracking-widest mb-2">Enter A Zone</p>
+                <p className="mb-2 text-xs text-fg/70">Choose the courts you can reach. This routes your event draw.</p>
+                <div className="flex flex-wrap gap-2">
+                  {event.zones.map((zone) => (
+                    <button
+                      key={zone}
+                      type="button"
+                      onClick={() => setJoinForm({ ...joinForm, preferredZone: zone })}
+                      className={chip(joinForm.preferredZone === zone)}
+                    >
+                      {zone.replaceAll('_', ' ')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Retired Pro 55+ opt-in — singles only, shown only to eligible players */}
             {displayChoice === 'Singles' && seniorsEligible && (
               <button
@@ -657,7 +676,7 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
                   excludeId={currentUserId}
                   allowGuest
                   placeholder="Search for your partner…"
-                  hint="Not on the app yet? Type their full name and pick “not on the app”."
+                  hint="No partner yet? Leave this blank to join the event's partner pool."
                 />
                 <div>
                   <p className="text-xs font-bold text-fg/70 uppercase tracking-widest mb-2">Combined Skill (1–5)</p>

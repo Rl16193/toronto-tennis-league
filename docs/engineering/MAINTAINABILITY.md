@@ -81,6 +81,17 @@ isolated project and verified recovery path exist.
 
 ## Vendor boundary
 
+### Sprint D4 review note
+
+The D4 slice makes event placement, withdrawal, zone state, and knockout seating explicit at the
+data boundary. Participant creation is server-triggered; browser and nightly placement paths are
+not used. Withdrawal is a callable workflow that preserves played matches, records unplayed
+walkovers, and notifies affected members. The client no longer gates Matches on profile completion,
+rewrites event skill snapshots from profile edits, or auto-seeds knockout seats. Rules now use
+allowlisted participant/preference fields. Validation is local-only; production deployment and
+data mutation remain out of scope, with staging deferred until an authorized project and verified
+recovery path exist.
+
 `.agents/skills/gstack/` is tracked third-party agent tooling kept for reproducible local workflows.
 `.gitattributes` marks it as vendored for repository language metrics; ESLint and application tests
 also exclude it. Security review must still inspect the vendor tree when its source or lock changes.

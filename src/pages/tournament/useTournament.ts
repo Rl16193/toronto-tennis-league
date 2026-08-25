@@ -40,7 +40,6 @@ import {
   computeGroupStandings,
   deriveRRConfig,
   generateGroupPairings,
-  selectGroupWinners,
   sharedBand,
   sharedZone,
 } from './rrGeneration';
@@ -76,6 +75,7 @@ import {
   normalizeUserStats,
 } from '../../lib/firestoreNormalization';
 import { applyTournamentResult, setGroupBonus } from '../../features/tournament/services/tournamentResultService';
+import { withdrawEventParticipant } from '../../features/events/services/withdrawalService';
 import { buildScoreSubmissionIntent } from '../../features/tournament/domain/scoreSubmission';
 import {
   createTournamentWriteBatch,
@@ -654,7 +654,8 @@ export const useTournament = (eventIdOverride?: string) => {
       previewDrawSize[currentDraw.label] ?? getDrawSize(currentDrawAllPlayers.length, currentDraw.tournamentChoice);
     const templateMatches = normalizeTemplateMatches(fallbackTemplate(drawsize));
     const slotMap = new Map<number, TournamentPlayer>();
-    currentDrawAllPlayers.slice(0, drawsize).forEach((p, i) => slotMap.set(i + 1, p));
+    if (event?.tournament_format !== 'knockout')
+      currentDrawAllPlayers.slice(0, drawsize).forEach((p, i) => slotMap.set(i + 1, p));
 
     const drawOverrides = previewSlotOverrides[currentDraw.label] ?? {};
     Object.entries(drawOverrides).forEach(([slotStr, player]) => {
@@ -677,7 +678,16 @@ export const useTournament = (eventIdOverride?: string) => {
       started,
       ...buildMatchFields(tm, index, slotMap, cfg),
     }));
-  }, [currentDraw, currentDrawAllPlayers, currentMatches, event?.id, previewDrawSize, previewSlotOverrides, started]);
+  }, [
+    currentDraw,
+    currentDrawAllPlayers,
+    currentMatches,
+    event?.id,
+    event?.tournament_format,
+    previewDrawSize,
+    previewSlotOverrides,
+    started,
+  ]);
 
   // Excludes RR group-stage docs (round === 'RR'); without it the Knockout tab could resolve to
   // the player's completed group-stage match instead of nothing.
@@ -1130,7 +1140,7 @@ export const useTournament = (eventIdOverride?: string) => {
             const p = normalizeEventParticipant(d.id, d.data());
             if (!p) return;
             const key = `${p.event_id}|${p.uid}`;
-            if (!p.uid || p.removal || seen.has(key)) return;
+            if (!p.uid || p.removal || p.status === 'withdrawn' || seen.has(key)) return;
             seen.add(key);
             candidates.push(p);
           }),
@@ -1205,7 +1215,7 @@ export const useTournament = (eventIdOverride?: string) => {
               division: p.division,
               tournamentChoice: p.tournament_choice,
               skill: p.skill,
-              zone: pref && (pref.manual || pref.courts.length > 0) ? pref.zone : '',
+              zone: p.zone || (pref && (pref.manual || pref.courts.length > 0) ? pref.zone : ''),
             };
           }),
         );
@@ -1307,7 +1317,8 @@ export const useTournament = (eventIdOverride?: string) => {
 
     const templateMatches = normalizeTemplateMatches(fallbackTemplate(drawsize));
     const slotMap = new Map<number, TournamentPlayer>();
-    slicedPlayers.forEach((p, i) => slotMap.set(i + 1, p));
+    // Knockout generation starts blank; an organizer fills every seat from Unplaced Players.
+    if (event.tournament_format !== 'knockout') slicedPlayers.forEach((p, i) => slotMap.set(i + 1, p));
 
     const drawOverrides = previewSlotOverrides[draw.label] ?? {};
     Object.entries(drawOverrides).forEach(([slotStr, player]) => {
@@ -1384,7 +1395,8 @@ export const useTournament = (eventIdOverride?: string) => {
     setEvent(updated);
     setAllTournamentEvents((prev) => prev.map((e) => (e.id === event.id ? updated : e)));
     try {
-      await updateDoc(doc(db, 'events', event.id), { zone_draw_config: config ?? null });
+      const coveredZones = [...new Set((config?.buckets ?? []).flatMap((bucket) => bucket.zones))];
+      await updateDoc(doc(db, 'events', event.id), { zone_draw_config: config ?? null, zones: coveredZones });
     } catch (err) {
       console.error('Failed to save zone draw config:', err);
     }
@@ -1392,15 +1404,17 @@ export const useTournament = (eventIdOverride?: string) => {
 
   const handleUpdateRoundDeadline = async (round: string, date: string) => {
     if (!isCreator || !event) return;
+    if (round === 'RR') return; // group stage runs the season; only knockout rounds have deadlines
+    const deadlineKey = `${currentDrawKey}:${round}`;
     const updated: TennisEvent = {
       ...event,
-      round_deadlines: { ...(event.round_deadlines ?? {}), [round]: date },
+      round_deadlines: { ...(event.round_deadlines ?? {}), [deadlineKey]: date },
     };
     // Optimistic local update
     setEvent(updated);
     setAllTournamentEvents((prev) => prev.map((e) => (e.id === event.id ? updated : e)));
     try {
-      await updateDoc(doc(db, 'events', event.id), { [`round_deadlines.${round}`]: date });
+      await updateDoc(doc(db, 'events', event.id), { [`round_deadlines.${deadlineKey}`]: date });
     } catch (err) {
       console.error('Failed to save round deadline:', err);
     }
@@ -1431,26 +1445,19 @@ export const useTournament = (eventIdOverride?: string) => {
   const handleResetDraw = async () => {
     if (!isCreator || !currentDraw || currentMatches.length === 0) return;
 
-    // Cancelling deletes every match in this draw and reverses the stats any completed match
-    // awarded. Warn clearly when played matches exist; this cannot be undone.
+    // Reset is scoped to the current draw and never deletes recorded scores. Pending matches may
+    // be cleared while completed history remains visible and authoritative.
     const completed = currentMatches.filter((m) => m.status === 'complete');
     const warn =
       completed.length > 0
-        ? `Cancel all matches for ${currentDraw.label}?\n\nAll matches will be deleted and the stats from ${completed.length} completed match${completed.length > 1 ? 'es' : ''} will be reset. This cannot be undone.`
+        ? `Reset ${currentDraw.label}?\n\nPending matches will be cleared. ${completed.length} completed match${completed.length > 1 ? 'es' : ''} and their scores will remain.`
         : `Cancel all matches for ${currentDraw.label}? This will clear the draw and return to preview mode.`;
-    if (completed.length > 0) {
-      setMessage({
-        type: 'error',
-        text: 'Completed draws cannot be cancelled from the browser because result reversals are server-authoritative.',
-      });
-      return;
-    }
     if (!window.confirm(warn)) return;
     setResettingDraw(true);
     setMessage(null);
     try {
       const batch = createTournamentWriteBatch();
-      currentMatches.forEach((m) => batch.deleteMatch(m.id));
+      currentMatches.filter((m) => m.status !== 'complete').forEach((m) => batch.deleteMatch(m.id));
       await batch.commit();
       setEditMode(false);
       setPreviewSlotOverrides((prev) => deleteKey(prev, currentDraw.label));
@@ -1612,9 +1619,12 @@ export const useTournament = (eventIdOverride?: string) => {
         manuallyUnplacedIdsRef.current.delete(userId);
         await setRRWithdrawnMembership([], [userId]);
       }
-      // A previously removed player who is re-added becomes active again.
-      const priorRemoved = participants.filter((p) => p.uid === userId && p.removal);
-      await Promise.all(priorRemoved.map((p) => updateDoc(doc(db, 'event_participants', p.id), { removal: false })));
+      // A previously withdrawn player who is re-added becomes active again. Existing walkovers
+      // remain historical and are corrected by a normal organizer rescore when needed.
+      const priorWithdrawn = participants.filter((p) => p.uid === userId && (p.removal || p.status === 'withdrawn'));
+      await Promise.all(
+        priorWithdrawn.map((p) => updateDoc(doc(db, 'event_participants', p.id), { removal: false, status: 'active' })),
+      );
       setMessage({ type: 'success', text: `${userData.name} added. Use Move Players to assign their bracket.` });
     } catch (err) {
       console.error('Add player failed:', err);
@@ -1622,37 +1632,15 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  /**
-   * Soft delete: the `event_participants` row survives with `removal: true`, and completed
-   * matches and earned stats are left as they are. Their slot becomes Player Loading — shown in a
-   * knockout so there's somewhere to drop a replacement, hidden in RR groups where it's noise.
-   */
+  /** Organizer withdrawal. The callable applies pending walkovers through the server workflow. */
   const handleRemovePlayer = async (uid: string) => {
     if (!isCreator || !event || !uid) return;
     try {
-      const rows = participants.filter((p) => p.uid === uid);
-      const batch = createTournamentWriteBatch();
-      rows.forEach((p) =>
-        batch.updateParticipant(p.id, {
-          removal: true,
-          removal_at: new Date().toISOString(),
-        }),
-      );
-      // Blank them out of any unplayed match in this draw. Played matches keep their record —
-      // rewriting a completed result to Player Loading would orphan the score.
-      currentMatches
-        .filter((m) => m.status !== 'complete')
-        .forEach((m) => {
-          if (m.player_1_uid === uid) batch.updateMatch(m.id, { player_1_uid: '', player_1_name: PLAYER_LOADING });
-          if (m.player_2_uid === uid) batch.updateMatch(m.id, { player_2_uid: '', player_2_name: PLAYER_LOADING });
-        });
-      await batch.commit();
-      // RR auto-placement would otherwise seat them again on the next pass.
-      if (currentDrawFormat === 'rr') {
-        manuallyUnplacedIdsRef.current.add(uid);
-        await setRRWithdrawnMembership([uid]);
-      }
-      setMessage({ type: 'success', text: 'Player removed from the draw.' });
+      const result = await withdrawEventParticipant(event.id, uid, 'other');
+      setMessage({
+        type: 'success',
+        text: `Player withdrawn. ${result.affectedMatches} pending match(es) were resolved.`,
+      });
     } catch (err) {
       console.error('Remove player failed:', err);
       setMessage({ type: 'error', text: 'Could not remove the player.' });
@@ -2208,34 +2196,20 @@ export const useTournament = (eventIdOverride?: string) => {
     // Scoped to THIS player, not the whole division. Checking the division meant that once any
     // draw was generated — i.e. for most of a tournament — no zone change could ever be approved.
     const theirMatches = matches.filter((m) => m.player_1_uid === target.uid || m.player_2_uid === target.uid);
-    // A played match is the one genuine blocker: its result belongs to the old zone's draw, and
-    // moving them would leave that result stranded somewhere they no longer play.
-    if (theirMatches.some((m) => m.status === 'complete')) {
-      setMessage({
-        type: 'error',
-        text: 'This player has already played a match. They can only change zone once the event is over.',
-      });
-      return;
-    }
-
     try {
-      const batch = createTournamentWriteBatch();
-      batch.updateParticipant(participantId, {
+      // A zone change never vacates a seat or rewrites an existing match. The participant is
+      // explicitly eligible for the new zone and may appear in both draws until the organizer
+      // resolves that choice.
+      await updateDoc(doc(db, 'event_participants', participantId), {
+        zone: bucketId,
         zone_override: bucketId,
         req_zone_change: false,
       });
-      // Vacate their unplayed slots so they actually leave the old zone's draw. Without this
-      // they'd be routed to the new zone while still sitting in the old one's bracket.
-      theirMatches.forEach((m) => {
-        if (m.player_1_uid === target.uid) batch.updateMatch(m.id, { player_1_uid: '', player_1_name: PLAYER_LOADING });
-        if (m.player_2_uid === target.uid) batch.updateMatch(m.id, { player_2_uid: '', player_2_name: PLAYER_LOADING });
-      });
-      await batch.commit();
       setMessage({
         type: 'success',
         text:
           theirMatches.length > 0
-            ? `Player moved. ${theirMatches.length} unplayed slot${theirMatches.length === 1 ? '' : 's'} freed up in their old draw.`
+            ? 'Zone saved. Existing matches remain unchanged; place the player in the new draw when ready.'
             : 'Player moved to the new zone.',
       });
     } catch (err) {
@@ -2351,7 +2325,7 @@ export const useTournament = (eventIdOverride?: string) => {
         ? `Cancel the Round Robin draw?\n\nAll ${currentMatches.length} matches will be deleted and the stats from ${completed.length} completed match${completed.length > 1 ? 'es' : ''} will be reset. This cannot be undone.`
         : 'Cancel the Round Robin draw? This will clear all group and knockout matches.';
     const hasPaidBonus = currentMatches.some((m) => m.rr_groupbonus !== undefined);
-    if (completed.length > 0 || hasPaidBonus) {
+    if (hasPaidBonus) {
       setMessage({
         type: 'error',
         text: 'Played or bonus-paid draws cannot be cancelled from the browser because reversals are server-authoritative.',
@@ -2362,10 +2336,10 @@ export const useTournament = (eventIdOverride?: string) => {
     setResettingDraw(true);
     try {
       const batch = createTournamentWriteBatch();
-      currentMatches.forEach((m) => batch.deleteMatch(m.id));
+      currentMatches.filter((m) => m.status !== 'complete').forEach((m) => batch.deleteMatch(m.id));
       await batch.commit();
       setEditMode(false);
-      setMessage({ type: 'success', text: 'Round Robin draw cancelled. Matches deleted and stats reset.' });
+      setMessage({ type: 'success', text: 'Round Robin draw reset. Pending matches cleared; recorded scores kept.' });
     } catch (err) {
       console.error('RR reset failed:', err);
       setMessage({ type: 'error', text: 'Could not reset the draw.' });
@@ -2374,9 +2348,8 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  // Build/rebuild the RR knockout at a creator-chosen size (R4/R8/R16). Group winners are
-  // auto-seeded; remaining slots are PLAYER_LOADING for manual placement. Re-selecting rebuilds —
-  // refused once any knockout match has been played.
+  // Build/expand the RR knockout at a creator-chosen size (R4/R8/R16). Every slot is
+  // PLAYER_LOADING; the organizer controls placement and expansion never deletes existing docs.
   const handleGenerateRRKnockout = async (size?: number) => {
     if (!isCreator || !event || !currentDraw || rrGroupMatches.length === 0) return;
     if (rrKnockoutMatches.some((m) => m.status === 'complete')) {
@@ -2387,19 +2360,23 @@ export const useTournament = (eventIdOverride?: string) => {
     setMessage(null);
     try {
       const drawKey = currentDrawKey;
-      const winners = selectGroupWinners(rrGroups, rrStandingsByGroup);
+      const existingSize = rrKnockoutMatches[0]?.drawsize ?? 0;
+      if (existingSize > 0 && (!size || size <= existingSize)) {
+        setMessage({ type: 'error', text: `Knockout can only expand beyond ${existingSize} slots.` });
+        return;
+      }
       const docs = buildRRKnockoutDocs({
         eventId: event.id,
         drawKey,
         draw: currentDraw,
-        advancingPlayers: winners,
+        advancingPlayers: [],
         started,
         drawsize: size,
         manualFill: true,
       });
       const batch = createTournamentWriteBatch();
-      rrKnockoutMatches.forEach((m) => batch.deleteMatch(m.id));
-      docs.forEach(({ docId, fields }) => batch.setMatch(docId, fields));
+      const existingIds = new Set(rrKnockoutMatches.map((m) => m.id));
+      docs.filter(({ docId }) => !existingIds.has(docId)).forEach(({ docId, fields }) => batch.setMatch(docId, fields));
       await batch.commit();
       setRRView('knockout');
     } catch (err) {

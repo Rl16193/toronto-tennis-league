@@ -15,6 +15,7 @@ import {
   updateFavouritePlayers,
   updateEmailNotifications,
   updateAvailabilityTags,
+  updateAvailableToPlay,
   changeEmail,
   updateEventParticipantDates,
   updateContactMethods,
@@ -109,11 +110,8 @@ export const useProfileActions = () => {
       updateAvatar: (url: string) => withProfileUpdate(() => updateAvatar(user!.uid, url)),
       updateSkills: (skillLevel: number, tournamentPreference: string) =>
         withProfileUpdate(() => updateSkills(user!.uid, skillLevel, tournamentPreference)),
-      updateLeagueAgeCategory: (
-        league: "Men's" | "Women's" | '',
-        ageCategory: 'Retired Pro' | 'Juniors' | '',
-        visible: boolean,
-      ) => withProfileUpdate(() => updateLeagueAndAgeCategory(user!.uid, league, ageCategory, visible)),
+      updateLeagueAgeCategory: (league: "Men's" | "Women's" | '', ageCategory: 'Retired Pro' | 'Juniors' | '') =>
+        withProfileUpdate(() => updateLeagueAndAgeCategory(user!.uid, league, ageCategory)),
       updateDisplayBadges: (badgeIds: string[]) => withProfileUpdate(() => updateDisplayBadges(user!.uid, badgeIds)),
       updatePreferredCourts: (courts: string[], zone: string) =>
         withProfileUpdate(() => updatePreferredCourts(user!.uid, courts, zone)),
@@ -125,6 +123,8 @@ export const useProfileActions = () => {
       updateContactMethods: (methods: ContactMethod[]) =>
         withProfileUpdate(() => updateContactMethods(user!.uid, methods)),
       updateAvailabilityTags: (tags: string[]) => withProfileUpdate(() => updateAvailabilityTags(user!.uid, tags)),
+      updateAvailableToPlay: (available: boolean) =>
+        withProfileUpdate(() => updateAvailableToPlay(user!.uid, available)),
       changeEmail: handleChangeEmail,
       refreshEmailChange: handleRefreshEmailChange,
       updateEventDates: handleUpdateEventDates,

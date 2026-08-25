@@ -1,34 +1,43 @@
 # Sprint D4 — Thursday 27 August 2026
 
 > **Data remodel [P2a](../notes/WORKFLOW_DESIGN_REPORT.md#P2a), zones, withdrawal, placement, and the organizer-controlled knockout.**
-> The heaviest data day. Everything here writes to production shape.
+> The heaviest data day. The implementation is validated locally; production deployment and data mutation are out of scope.
 
-| | |
-| --- | --- |
-| **Branch base** | [Sprint D3](SPRINT-D3.md) merge |
-| **Blocking** | A2 lands every field **before 11:00**; A1's whitelists follow; A3 and A4 build on both |
+|                 |                                                                                                                                                                                          |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Branch base** | [Sprint D3](SPRINT-D3.md) merge                                                                                                                                                          |
+| **Blocking**    | A2 lands every field **before 11:00**; A1's whitelists follow; A3 and A4 build on both                                                                                                   |
 | **Data safety** | **[PD8](../notes/DECISIONS_BRIEF.md#PD8) is deferred with no commitment.** Monday's export is the only rollback point. Every migration `--dry-run` first, diff in the report, then apply |
-| **Ship** | Functions → rules → hosting |
+| **Ship**        | Functions → rules → local hosting/emulator validation; staging deferred                                                                                                                  |
 
 ---
 
 ## Board
 
-| Lane | Tasks | Rows |
-| --- | --: | --- |
-| **A2 Data** | 9 | [L1](../notes/HARMONIZATION_REPORT.md#L1), [L5](../notes/HARMONIZATION_REPORT.md#L5), [L6](../notes/HARMONIZATION_REPORT.md#L6), [L7](../notes/HARMONIZATION_REPORT.md#L7), [L12](../notes/HARMONIZATION_REPORT.md#L12), [L15](../notes/HARMONIZATION_REPORT.md#L15), [L16](../notes/HARMONIZATION_REPORT.md#L16), [L17](../notes/HARMONIZATION_REPORT.md#L17), [L18](../notes/HARMONIZATION_REPORT.md#L18) |
-| **A1 Rules + Functions** | 6 | whitelists, [D5](../notes/HARMONIZATION_REPORT.md#D5) placer, withdrawal walkovers, `onZoneChanged`, unmapped-court notice, [P3](../notes/WORKFLOW_DESIGN_REPORT.md#P3) scheduling removal |
-| **A3 Client / Dev** | 9 | [F7](../notes/WORKFLOW_DESIGN_REPORT.md#F7), [F8](../notes/WORKFLOW_DESIGN_REPORT.md#F8), [F9](../notes/WORKFLOW_DESIGN_REPORT.md#F9), [F10](../notes/WORKFLOW_DESIGN_REPORT.md#F10), [F11](../notes/WORKFLOW_DESIGN_REPORT.md#F11), [LB-17](../ACTION-REPORT.md#LB-17), [LB-18](../ACTION-REPORT.md#LB-18), [KO-1](../ACTION-REPORT.md#KO-1), [KO-2](../ACTION-REPORT.md#KO-2), [R-4](../ACTION-REPORT.md#R-4) draw controls |
-| **A4 UI/UX** | 6 | Enter A Zone, Withdraw, Reset + orange **!**, partner pool, Away pill, unplaced list |
-| **A5 Verify** | 4 | dry-run diffs, rules matrix, journeys 1/4/5, gate |
+| Lane                     | Tasks | Rows                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------ | ----: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A2 Data**              |     9 | [L1](../notes/HARMONIZATION_REPORT.md#L1), [L5](../notes/HARMONIZATION_REPORT.md#L5), [L6](../notes/HARMONIZATION_REPORT.md#L6), [L7](../notes/HARMONIZATION_REPORT.md#L7), [L12](../notes/HARMONIZATION_REPORT.md#L12), [L15](../notes/HARMONIZATION_REPORT.md#L15), [L16](../notes/HARMONIZATION_REPORT.md#L16), [L17](../notes/HARMONIZATION_REPORT.md#L17), [L18](../notes/HARMONIZATION_REPORT.md#L18)                   |
+| **A1 Rules + Functions** |     6 | whitelists, [D5](../notes/HARMONIZATION_REPORT.md#D5) placer, withdrawal walkovers, `onZoneChanged`, unmapped-court notice, [P3](../notes/WORKFLOW_DESIGN_REPORT.md#P3) scheduling removal                                                                                                                                                                                                                                    |
+| **A3 Client / Dev**      |     9 | [F7](../notes/WORKFLOW_DESIGN_REPORT.md#F7), [F8](../notes/WORKFLOW_DESIGN_REPORT.md#F8), [F9](../notes/WORKFLOW_DESIGN_REPORT.md#F9), [F10](../notes/WORKFLOW_DESIGN_REPORT.md#F10), [F11](../notes/WORKFLOW_DESIGN_REPORT.md#F11), [LB-17](../ACTION-REPORT.md#LB-17), [LB-18](../ACTION-REPORT.md#LB-18), [KO-1](../ACTION-REPORT.md#KO-1), [KO-2](../ACTION-REPORT.md#KO-2), [R-4](../ACTION-REPORT.md#R-4) draw controls |
+| **A4 UI/UX**             |     6 | Enter A Zone, Withdraw, Reset + orange **!**, partner pool, Away pill, unplaced list                                                                                                                                                                                                                                                                                                                                          |
+| **A5 Verify**            |     4 | dry-run diffs, rules matrix, journeys 1/4/5, gate                                                                                                                                                                                                                                                                                                                                                                             |
 
 ---
 
 ## The three rules that govern this whole day
 
-1. **A zone change never unseats anyone.** Existing matches are untouched — the player keeps playing every one of them. The new zone only decides draws not yet generated, and the player is *added* to the new zone's draw, so a player may sit in two or more groups.
-2. **Nobody is ever seated automatically except by the one server placer.** Two auto-placers used to fight over this and were deleted: an in-browser effect that topped up any group under 5 ignoring band and zone, and only ran while an organizer happened to have that draw open; and a nightly Admin script applying a *different* rule. Whichever fired first won, so a player's group depended on whether a browser tab was open. **Do not reintroduce either.**
+1. **A zone change never unseats anyone.** Existing matches are untouched — the player keeps playing every one of them. The new zone only decides draws not yet generated, and the player is _added_ to the new zone's draw, so a player may sit in two or more groups.
+2. **Nobody is ever seated automatically except by the one server placer.** Two auto-placers used to fight over this and were deleted: an in-browser effect that topped up any group under 5 ignoring band and zone, and only ran while an organizer happened to have that draw open; and a nightly Admin script applying a _different_ rule. Whichever fired first won, so a player's group depended on whether a browser tab was open. **Do not reintroduce either.**
 3. **Removal is gone; withdrawal replaces it.** A withdrawn player stays registered, stays in Unplaced, and is never auto-seated.
+
+## Implementation status
+
+The D4 implementation is complete on the isolated `codex/sprint-4-d4` branch for review and merge
+into `dev-anuj`. It includes the participant schema/rules whitelist, server participant placer,
+withdrawal walkover workflow, notify-only zone changes, partner-pool registration, availability
+state, completion-gate removal, and organizer-controlled knockout/reset behavior. Local tests,
+typecheck, lint, build, and documentation verification are the release evidence; no production
+deployment, migration, export, or staging promotion was performed.
 
 ---
 
@@ -42,10 +51,10 @@ An organizer-set `zone` on `event_participants`, **marked manual**. The profile 
 
 **`req_zone_change` / `new_zone` are kept** (owner ruling). Behaviour:
 
-| When | What happens |
-| --- | --- |
-| Before matches are generated | The player moves freely. `preferred_zone` alone routes them |
-| After matches are generated | The organizer is notified. The player sits in **both** zone draws until the organizer resolves it — **displace**, **add to both draws** (*default*), or **cancel** |
+| When                         | What happens                                                                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Before matches are generated | The player moves freely. `preferred_zone` alone routes them                                                                                                        |
+| After matches are generated  | The organizer is notified. The player sits in **both** zone draws until the organizer resolves it — **displace**, **add to both draws** (_default_), or **cancel** |
 
 `zone_change_requested` / `zone_change_requested_at` are legacy and **no longer written** — read-only, for rows raised before the rename. Writing both was masking a real defect: the rules' player-write whitelist listed only the legacy pair, so `hasOnly()` rejected the whole update and **a player could not request a zone change at all.**
 
@@ -72,11 +81,11 @@ Re-add after a mistaken withdrawal is allowed. Applied walkovers are **not** aut
 
 ### ⬛ L18 — Doubles partner shape and the partner pool
 
-| Case | Shape |
-| --- | --- |
-| Partner is on the app | `partner_uid`. The server creates the partner's own participant row. Partner uids sit on the match doc, so a partner can read the opponents' contacts and submit scores |
-| Partner is not on the app | `partner_name` only, no uid |
-| **No partner yet** | The player joins the event's **partner pool** |
+| Case                      | Shape                                                                                                                                                                   |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Partner is on the app     | `partner_uid`. The server creates the partner's own participant row. Partner uids sit on the match doc, so a partner can read the opponents' contacts and submit scores |
+| Partner is not on the app | `partner_name` only, no uid                                                                                                                                             |
+| **No partner yet**        | The player joins the event's **partner pool**                                                                                                                           |
 
 Pool rules: pool members are the dropdown other players pick from — **not** every player on the app. A pool member is **notified when someone new joins**. Selecting a partner **removes both** from the pool. One `setDoublesPartner` writes either shape.
 
@@ -118,11 +127,11 @@ Keyed by **draw and round**. They **exclude the Round Robin group stage** — it
 
 ### ⬛ D5 — One server-side placer, on participant-create
 
-| State of the draw | Placement |
-| --- | --- |
-| Generated | Seat into an open `PLAYER_LOADING` slot or an RR group **within their zone** |
-| Not generated | Zone-assigned at join; `preferred_zone` routes them when it is generated |
-| Organizer-removed / withdrawn | **Never re-seated.** They stay in Unplaced |
+| State of the draw             | Placement                                                                    |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| Generated                     | Seat into an open `PLAYER_LOADING` slot or an RR group **within their zone** |
+| Not generated                 | Zone-assigned at join; `preferred_zone` routes them when it is generated     |
+| Organizer-removed / withdrawn | **Never re-seated.** They stay in Unplaced                                   |
 
 **Groups are capped at 5** (`RR_GROUP_MAX`). The placer respects the cap; `overGroupCap` guards the manual paths.
 
@@ -132,10 +141,10 @@ Keyed by **draw and round**. They **exclude the Round Robin group stage** — it
 
 The server withdrawal operation applies walkovers by calling the **same result path** as a normal score. Do not write match documents directly — that is how the writer and the display drifted before.
 
-| Stage | Unplayed match becomes | Payout |
-| --- | --- | --- |
-| RR group | walkover | **1 to each player** |
-| Knockout | walkover | opponent advances; the withdrawing player collects that round's award (R32 **1** · R16 **2** · QF **3** · SF **5** · F **10**) |
+| Stage    | Unplayed match becomes | Payout                                                                                                                         |
+| -------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| RR group | walkover               | **1 to each player**                                                                                                           |
+| Knockout | walkover               | opponent advances; the withdrawing player collects that round's award (R32 **1** · R16 **2** · QF **3** · SF **5** · F **10**) |
 
 **Played matches stay as played.** Notices go to the organizer, the member, and every affected opponent.
 
@@ -175,7 +184,7 @@ Name, skill, league, one court — collected on the **signup preferences screen 
 
 One function serving signup and profile. **Every explicit pick sets `preferred_zone_manual`.**
 
-Delete the silent Downtown-Midtown default at the placement site. `effectiveZone`'s Downtown default exists for *placement* only — a member with no courts is now stopped at join by the "Enter A Zone" modal instead, so nobody is silently defaulted.
+Delete the silent Downtown-Midtown default at the placement site. `effectiveZone`'s Downtown default exists for _placement_ only — a member with no courts is now stopped at join by the "Enter A Zone" modal instead, so nobody is silently defaulted.
 
 > Keep the mapping of a **missing** `zone` onto the default zone for pre-zone groups. Zones went live mid-event; groups generated before that carry no `zone`. They were briefly kept as a separate zone-less draw — which put the running groups outside the zone list and matched every participant to two draws, **doubling every "N signed up" count**. They are Downtown-Midtown draws, not a fourth category.
 
@@ -199,23 +208,23 @@ Toggle on the profile; pill on challenge and rally cards.
 
 **This reverses the current auto-seeding.**
 
-| Row | Now | After |
-| --- | --- | --- |
+| Row                                  | Now                                                                                                           | After                                                                                                                                 |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | **[KO-1](../ACTION-REPORT.md#KO-1)** | `selectGroupWinners` auto-seeds every group winner, ordered points → gamesWon so the top seed lands in slot 1 | **Generate all slots as `PLAYER_LOADING`.** Drop the points → gamesWon ordering. Keep `manualFill: true` and the first-round bye skip |
-| **[KO-2](../ACTION-REPORT.md#KO-2)** | The top seed is engine-placed and reads as authoritative | **Every occupied slot is reassignable from the unplaced list.** No slot is read-only, including a group's first-ranked player |
-| **[KO-3](../ACTION-REPORT.md#KO-3)** | `CLAUDE.md` documents the auto-seeding | A5 rewrites that paragraph in [Sprint D3](SPRINT-D3.md) step 16 — confirm it landed |
+| **[KO-2](../ACTION-REPORT.md#KO-2)** | The top seed is engine-placed and reads as authoritative                                                      | **Every occupied slot is reassignable from the unplaced list.** No slot is read-only, including a group's first-ranked player         |
+| **[KO-3](../ACTION-REPORT.md#KO-3)** | `CLAUDE.md` documents the auto-seeding                                                                        | A5 rewrites that paragraph in [Sprint D3](SPRINT-D3.md) step 16 — confirm it landed                                                   |
 
 There is **no** automatic runner-up fill; that behaviour was already removed with `selectAdvancingPlayers`.
 
 ### ⬛ The knockout size bar
 
-| Rule | Detail |
-| --- | --- |
-| Visibility | **Organizer only** |
-| Timing | Size chosen **before** generation |
-| After generation | **Expand only** — 4→8, 8→16. **Never backward** |
-| On expand | **Existing matches are retained.** The organizer goes to Manage Draw and saves for the increase to take effect |
-| Confirm | Add one anyway as cheap insurance (Q-24) |
+| Rule             | Detail                                                                                                         |
+| ---------------- | -------------------------------------------------------------------------------------------------------------- |
+| Visibility       | **Organizer only**                                                                                             |
+| Timing           | Size chosen **before** generation                                                                              |
+| After generation | **Expand only** — 4→8, 8→16. **Never backward**                                                                |
+| On expand        | **Existing matches are retained.** The organizer goes to Manage Draw and saves for the increase to take effect |
+| Confirm          | Add one anyway as cheap insurance (Q-24)                                                                       |
 
 ### ⬛ Reset and cancel, scoped
 
@@ -249,12 +258,12 @@ A custom court entry that resolves to no zone shows a confirmation that it has b
 
 A joined event shows a **Withdraw** button.
 
-| State | Behaviour |
-| --- | --- |
-| Before draws exist | Withdrawing leaves the roster |
-| After draws exist | Warning: *"You lose all matches — opponents get walkovers"* → confirm → every unplayed match becomes a walkover. Played matches stay as played. **Permanent from the member's side** |
+| State              | Behaviour                                                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Before draws exist | Withdrawing leaves the roster                                                                                                                                                        |
+| After draws exist  | Warning: _"You lose all matches — opponents get walkovers"_ → confirm → every unplayed match becomes a walkover. Played matches stay as played. **Permanent from the member's side** |
 
-The organizer is notified: *"{Name} withdraws from {tournament} {division}"*.
+The organizer is notified: _"{Name} withdraws from {tournament} {division}"_.
 
 ### ⬛ Reset and the orange **!** — organizer
 
@@ -292,14 +301,14 @@ Every L-row. **You read the diff before anything is applied.** Doc counts, field
 
 ### ⬛ Journeys
 
-| # | Journey | Assert |
-| --- | --- | --- |
-| **1** | Sign up → join with no courts → "Enter A Zone" → seated | The join does not complete until courts are chosen; the member lands in the right zone's draw; nobody is defaulted to Downtown-Midtown |
-| **4** | Walkover payouts | RR group **1 to each**; knockout advances the winner and pays R32 1 / R16 2 / QF 3 / SF 5 / F 10 |
-| **5** | Withdrawal after draws | Unplayed matches become walkovers with the payouts above; **played matches untouched**; organizer, member and every affected opponent notified; the player stays in Unplaced and is never re-seated |
-| new | Zone change after generation | Player sits in **both** draws; organizer sees three options with add-to-both selected; **no seat is vacated** |
-| new | Reset scoping | Resetting one zone's draw leaves the other zone's matches and points **completely untouched** |
-| new | Knockout | Every slot generates as `PLAYER_LOADING`; every occupied slot is reassignable; the size bar expands and never contracts; existing matches survive an expand |
+| #     | Journey                                                 | Assert                                                                                                                                                                                              |
+| ----- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1** | Sign up → join with no courts → "Enter A Zone" → seated | The join does not complete until courts are chosen; the member lands in the right zone's draw; nobody is defaulted to Downtown-Midtown                                                              |
+| **4** | Walkover payouts                                        | RR group **1 to each**; knockout advances the winner and pays R32 1 / R16 2 / QF 3 / SF 5 / F 10                                                                                                    |
+| **5** | Withdrawal after draws                                  | Unplayed matches become walkovers with the payouts above; **played matches untouched**; organizer, member and every affected opponent notified; the player stays in Unplaced and is never re-seated |
+| new   | Zone change after generation                            | Player sits in **both** draws; organizer sees three options with add-to-both selected; **no seat is vacated**                                                                                       |
+| new   | Reset scoping                                           | Resetting one zone's draw leaves the other zone's matches and points **completely untouched**                                                                                                       |
+| new   | Knockout                                                | Every slot generates as `PLAYER_LOADING`; every occupied slot is reassignable; the size bar expands and never contracts; existing matches survive an expand                                         |
 
 ### ⬛ Rules matrix
 
@@ -313,8 +322,8 @@ Every migration diff read and approved · no member silently defaulted to a zone
 
 ## Handoffs into Sprint D5
 
-| From | To | What |
-| --- | --- | --- |
-| A2 | A1 | The `providers` shape — roles move off `preferences` tomorrow |
-| A3 | A4 | `CompleteProfileModal` is deleted; anything still importing it breaks `tsc` |
-| A1 | A5 | The placer's seating rules, for the release regression |
+| From | To  | What                                                                        |
+| ---- | --- | --------------------------------------------------------------------------- |
+| A2   | A1  | The `providers` shape — roles move off `preferences` tomorrow               |
+| A3   | A4  | `CompleteProfileModal` is deleted; anything still importing it breaks `tsc` |
+| A1   | A5  | The placer's seating rules, for the release regression                      |

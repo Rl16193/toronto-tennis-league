@@ -1,5 +1,4 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
 import { TournamentMatch, TournamentPlayer } from './types';
 import { BYE, PLAYER_LOADING, formatPlayerName, getMatchDisplayFlags } from './utils';
 import { AlertMessage } from '../../components/AlertMessage';
@@ -54,7 +53,7 @@ type PlayerSelectProps = {
   currentName: string;
   players: TournamentPlayer[];
   onSelect: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
-  /** Organizer removes this player from the draw entirely (soft delete). */
+  /** Organizer withdraws this player; the server resolves pending matches as walkovers. */
   onRemovePlayer?: (uid: string) => void;
 };
 
@@ -90,17 +89,16 @@ export const PlayerSelect: React.FC<PlayerSelectProps> = ({
           </option>
         ))}
       </select>
-      {/* Removing takes the player out of the whole draw; the slot falls back to Player Loading so
-          there's still somewhere visible to drop a replacement. */}
+      {/* Withdrawal keeps the registration and match history; the server resolves only pending work. */}
       {onRemovePlayer && currentUserId && currentName !== PLAYER_LOADING && (
         <button
           type="button"
-          aria-label={`Remove ${currentName} from the draw`}
-          title="Remove from draw"
+          aria-label={`Withdraw ${currentName}`}
+          title="Withdraw player"
           onClick={() => {
             if (
               window.confirm(
-                `Remove ${currentName} from this event draw?\n\nThis unregisters them and deletes pending matches. Players with completed matches cannot be removed.`,
+                `Withdraw ${currentName}?\n\nUnplayed matches become walkovers; played matches stay recorded.`,
               )
             ) {
               onRemovePlayer(currentUserId);
@@ -108,7 +106,7 @@ export const PlayerSelect: React.FC<PlayerSelectProps> = ({
           }}
           className="shrink-0 p-1 rounded text-fg/70 opacity-70 hover:opacity-100 hover:text-badge-loss hover:bg-red-500/10 transition-colors"
         >
-          <Trash2 className="w-3 h-3" />
+          <span className="text-badge font-black text-sm leading-none">!</span>
         </button>
       )}
     </div>

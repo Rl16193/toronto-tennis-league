@@ -8,6 +8,7 @@ export type JoinFormState = {
   partnerUid: string;
   combinedSkill: string;
   dateselected: string[];
+  preferredZone: string;
 };
 
 export type JoinedRegistration = {
@@ -33,4 +34,5 @@ export const INITIAL_JOIN_FORM: JoinFormState = {
   partnerUid: '',
   combinedSkill: '',
   dateselected: [],
+  preferredZone: '',
 };
