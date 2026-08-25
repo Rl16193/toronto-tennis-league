@@ -40,7 +40,7 @@ const C = {
   cardStroke: '#2C6656',
   text: '#F1F5F9',
   textMuted: '#9FB8B0',
-  winner: '#FF6B35',
+  winner: '#E84A27',
   divider: '#24564A',
   connector: '#3A7565',
   score: '#CBD5E1',

@@ -16,8 +16,6 @@ export const TOURNAMENT_OPTIONS = [
   { name: 'Masters', range: '4.0-5.0' },
 ] as const;
 
-export const skillTier = (skill: number) => (skill < 3 ? 'Beginner' : skill < 4 ? 'Challenger' : 'Masters');
-
 // Normalize the free-text stats.league into the Men's/Women's selector value ("women" first —
 // it contains "men").
 export const leagueDivision = (league?: string): "Men's" | "Women's" | '' => {

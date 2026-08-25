@@ -135,7 +135,7 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
 
         {step === 'locating' && (
           <div className="text-center py-10">
-            <Loader2 className="w-8 h-8 text-clay animate-spin mx-auto mb-3" />
+            <Loader2 className="w-8 h-8 text-clay-fg animate-spin mx-auto mb-3" />
             <p className="text-fg/70 text-sm">Finding your location…</p>
           </div>
         )}

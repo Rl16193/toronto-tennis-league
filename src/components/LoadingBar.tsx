@@ -7,14 +7,20 @@ export const LoadingBar: React.FC<{
   label: string;
   progress: number;
   className?: string;
-  /** Tailwind bg-* class for the progress fill. Defaults to the app's clay accent. */
-  barColorClassName?: string;
-}> = ({ label, progress, className, barColorClassName = 'bg-clay' }) => (
+}> = ({ label, progress, className }) => (
   <div className={className ?? 'absolute inset-0 z-20 bg-tennis-dark flex flex-col items-center justify-center gap-4'}>
     <p className="text-fg font-semibold text-sm tracking-wide">{label}</p>
-    <div className="w-56 h-1.5 bg-fg/10 rounded-full overflow-hidden">
+    <div
+      className="w-56 h-1.5 bg-fg/10 rounded-full overflow-hidden"
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={progress}
+      aria-valuetext={`${progress}%`}
+    >
       <div
-        className={`h-full ${barColorClassName} rounded-full transition-all duration-500 ease-out`}
+        className="h-full bg-clay rounded-full transition-all duration-500 ease-out"
         style={{ width: `${progress}%` }}
       />
     </div>

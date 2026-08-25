@@ -94,7 +94,7 @@ export const BracketView: React.FC<Props> = ({
                 const rs = getRoundState(round.matches);
                 return (
                   <p
-                    className={`text-center text-xs uppercase tracking-widest font-black ${rs === 'finished' ? 'text-clay' : rs === 'loading' ? 'text-fg/70' : 'text-fg'}`}
+                    className={`text-center text-xs uppercase tracking-widest font-black ${rs === 'finished' ? 'text-clay-fg' : rs === 'loading' ? 'text-fg/70' : 'text-fg'}`}
                   >
                     {round.round} —{' '}
                     {rs === 'preview'

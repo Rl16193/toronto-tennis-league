@@ -89,11 +89,11 @@ export const ScoreModal: React.FC<Props> = ({
     <Sheet onClose={onClose} title="Submit score" maxWidthClassName="max-w-xl">
       <form onSubmit={handleSubmit} className="p-6">
         <div className="text-center mb-4 pr-10">
-          <p className="text-xs uppercase tracking-widest text-clay font-black mb-2">Submit Score</p>
+          <p className="text-xs uppercase tracking-widest text-clay-fg font-black mb-2">Submit Score</p>
           <h2 className="text-2xl font-black text-fg">{matchInfo.title}</h2>
         </div>
 
-        <div className="flex items-center gap-2 mb-5 px-3 py-2.5 text-sm text-clay">
+        <div className="flex items-center gap-2 mb-5 px-3 py-2.5 text-sm text-clay-fg">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           {isCreatorSubmit
             ? 'Entering score as event organizer. This will be accepted immediately.'
@@ -144,7 +144,7 @@ export const ScoreModal: React.FC<Props> = ({
             }}
             onFocus={() => setShowCourtDropdown(true)}
             onBlur={() => setTimeout(() => setShowCourtDropdown(false), 150)}
-            className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+            className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
           />
           {showCourtDropdown && courtMatches.length > 0 && (
             <div className="absolute left-0 right-0 top-full mt-1 z-10 max-h-48 overflow-y-auto rounded-2xl bg-tennis-dark/95 p-1 shadow-2xl">

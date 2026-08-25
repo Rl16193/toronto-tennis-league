@@ -132,7 +132,7 @@ export function MultiFilterSelect({
             style={{ background: SEL_BG }}
           >
             <button type="button" onClick={() => onChange(new Set())} className={rowCls(selected.size === 0)}>
-              <span className="w-3 shrink-0 text-clay">{selected.size === 0 ? '✓' : ''}</span>
+              <span className="w-3 shrink-0 text-clay-fg">{selected.size === 0 ? '✓' : ''}</span>
               {allLabel}
             </button>
             {options.map((o) => {
@@ -149,7 +149,7 @@ export function MultiFilterSelect({
                   }}
                   className={rowCls(on)}
                 >
-                  <span className="w-3 shrink-0 text-clay">{on ? '✓' : ''}</span>
+                  <span className="w-3 shrink-0 text-clay-fg">{on ? '✓' : ''}</span>
                   <span className="truncate">{o.label}</span>
                 </button>
               );
@@ -414,7 +414,7 @@ export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(
     if (loading) {
       return (
         <div className="flex items-center justify-center h-32">
-          <Loader2 className="w-5 h-5 text-clay animate-spin" />
+          <Loader2 className="w-5 h-5 text-clay-fg animate-spin" />
         </div>
       );
     }
@@ -475,13 +475,13 @@ export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(
                 </motion.button>
                 {/* Distance, then the same actions the map bubble offers, stacked beneath it. */}
                 <div className="shrink-0 flex flex-col items-end gap-1">
-                  {userCoords && <span className="text-clay font-medium text-xs">{formatDist(c.distKm)}</span>}
+                  {userCoords && <span className="text-clay-fg font-medium text-xs">{formatDist(c.distKm)}</span>}
                   {c.bookingUrl && (
                     <a
                       href={c.bookingUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="rounded-lg bg-clay px-2 py-0.5 text-[10px] font-bold text-white hover:bg-clay-dark transition-colors"
+                      className="rounded-lg bg-clay px-2 py-0.5 text-[10px] font-bold text-white hover:bg-clay-press transition-colors"
                     >
                       Book Online
                     </a>
@@ -529,7 +529,7 @@ export const ProgramResultsList: React.FC<ProgramResultsProps> = React.memo(
     if (loading) {
       return (
         <div className="flex items-center justify-center h-32">
-          <Loader2 className="w-5 h-5 text-clay animate-spin" />
+          <Loader2 className="w-5 h-5 text-clay-fg animate-spin" />
         </div>
       );
     }
@@ -572,7 +572,7 @@ export const ProgramResultsList: React.FC<ProgramResultsProps> = React.memo(
                   <div className="flex items-start justify-between gap-2 mb-0.5">
                     <p className="font-semibold text-fg text-sm leading-snug min-w-0">{p.title || p.locationName}</p>
                     {p.distKm !== null && userCoords && (
-                      <span className="text-clay font-medium text-xs shrink-0">{formatDist(p.distKm)}</span>
+                      <span className="text-clay-fg font-medium text-xs shrink-0">{formatDist(p.distKm)}</span>
                     )}
                   </div>
                   {!!p.title && <p className="text-fg/70 text-xs">{p.locationName}</p>}
@@ -615,7 +615,7 @@ export const ProgramResultsList: React.FC<ProgramResultsProps> = React.memo(
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
                         className="shrink-0 inline-flex items-center rounded-lg bg-clay px-2.5 py-1
-                                  text-xs font-bold text-white hover:bg-clay-dark transition-colors"
+                                  text-xs font-bold text-white hover:bg-clay-press transition-colors"
                       >
                         View Activity
                       </a>

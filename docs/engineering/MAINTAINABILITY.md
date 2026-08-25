@@ -69,6 +69,16 @@ compatibility data. New profile and tournament writes do not create those counte
 slice is local-only; production deployment and production data mutation are explicitly out of scope,
 with staging deferred until an isolated project and recovery path are approved.
 
+### Sprint D3 review note
+
+The D3 UI foundation centralizes the page/card/recess color tokens, field and button geometry,
+keyboard focus/reduced-motion behavior, and the design assertion suite in
+`scripts/verify-design-d3.mjs`. Routing preserves legacy tournament query parameters, and the
+notification triggers deduplicate draw notices, digest event joins, include assigned organizers,
+and omit the retired ladder-reset/bye noise. Validation is local-only; no production deployment,
+data mutation, or staging promotion was performed. Staging remains deferred until an authorized
+isolated project and verified recovery path exist.
+
 ## Vendor boundary
 
 `.agents/skills/gstack/` is tracked third-party agent tooling kept for reproducible local workflows.

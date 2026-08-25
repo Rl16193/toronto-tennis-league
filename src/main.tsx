@@ -31,8 +31,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
         <div className="min-h-screen flex items-center justify-center bg-tennis-dark px-4 text-center">
           <div className="space-y-4">
             <h1 className="text-2xl font-black text-fg">Unable to load</h1>
-            {/* TODO(CT-2): use the accessible clay foreground token once the token split lands. */}
-            <p className="text-sm text-clay">Kindly refresh the page.</p>
+            <p className="text-sm text-clay-fg">Kindly refresh the page.</p>
             {/* A hard reload, not setState: the usual cause here is a failed dynamic import,
                 and React caches the lazy component's rejected payload — re-rendering rethrows
                 the same error without ever re-fetching, so the button could never recover. */}

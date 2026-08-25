@@ -6,6 +6,7 @@ const checks = [
   ['lint', ['run', 'lint']],
   ['format check', ['run', 'format:check']],
   ['documentation freshness', ['run', 'docs:verify']],
+  ['Sprint D3 design assertions', ['run', 'design:verify']],
   ['Functions syntax', ['run', 'functions:syntax']],
   ['root unit tests', ['test']],
   ['Functions unit tests', ['--prefix', 'functions', 'test']],

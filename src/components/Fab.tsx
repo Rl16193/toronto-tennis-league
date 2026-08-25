@@ -14,8 +14,8 @@ export const Fab: React.FC<{
     aria-label={ariaLabel}
     whileTap={tapScale.whileTap}
     transition={tapScale.transition}
-    className="fixed right-4 bottom-24 z-40 w-14 h-14 rounded-full bg-clay text-white shadow-[0_8px_24px_rgba(255,107,53,0.4)]
-               flex items-center justify-center hover:bg-clay-dark transition-colors"
+    className="fixed right-4 bottom-24 z-40 w-14 h-14 rounded-full bg-clay text-white shadow-lg shadow-clay/40
+               flex items-center justify-center hover:bg-clay-press transition-colors focus-visible"
     style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
   >
     {children}

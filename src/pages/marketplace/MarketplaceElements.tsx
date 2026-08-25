@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { ImagePlus, MapPin, Package, Pencil, Trash2, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/Button';
+import { field, fieldLabelCls } from '../../components/Input';
 import { Sheet } from '../../components/Sheet';
 import { ContactOpponentButton } from '../../components/ContactOpponentButton';
 import { fadeUp, staggerDelay } from '../../lib/motion';
@@ -74,7 +75,7 @@ const ListingCard: React.FC<{
           </div>
           <p className="text-[11px] text-fg/70 mt-0.5">
             {listing.condition} · {listing.user_name || 'Member'}
-            {gone && <span className="ml-1.5 text-clay font-bold">{STATUS_LABEL[listing.status]}</span>}
+            {gone && <span className="ml-1.5 text-clay-fg font-bold">{STATUS_LABEL[listing.status]}</span>}
           </p>
           <p className="text-xs text-fg/70 mt-1.5 leading-relaxed line-clamp-3">{listing.description}</p>
         </div>
@@ -166,7 +167,7 @@ export const ListingsTab: React.FC<{
         </p>
         {!user && (
           <p className="text-sm text-fg/70 mt-1.5">
-            <Link to="/login" className="text-clay font-bold hover:underline">
+            <Link to="/login" className="text-clay-fg font-bold hover:underline">
               Log in
             </Link>{' '}
             to post something.
@@ -224,10 +225,8 @@ const ExistingPhoto: React.FC<{ path: string; onRemove: () => void }> = ({ path,
 };
 
 // Shared field chrome, sized to keep the form within one or two phone screens.
-const fieldCls =
-  'w-full rounded-xl bg-tennis-dark/70 px-3.5 py-2.5 text-sm text-fg ' +
-  'placeholder-fg/30 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
-const labelCls = 'block text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-1.5';
+const fieldCls = `${field} bg-tennis-dark/70`;
+const labelCls = fieldLabelCls;
 
 export const ListingForm: React.FC<{ kind: ListingKind; editingListing?: Listing; onClose: () => void }> = ({
   kind,

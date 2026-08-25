@@ -55,10 +55,10 @@ const BrandMark: React.FC = () => (
   <div className="mx-auto mb-2 text-center">
     <span className="text-2xl font-black font-display tracking-tight">
       <span className="text-fg">RACQUETS</span>
-      <span className="text-clay"> &amp; </span>
+      <span className="text-clay-fg"> &amp; </span>
       <span className="text-fg">STRINGS</span>
     </span>
-    <p className="text-clay font-bold text-xs tracking-widest uppercase mt-1">L&apos;ŒUF FOR THE GAME</p>
+    <p className="text-clay-fg font-bold text-xs tracking-widest uppercase mt-1">L&apos;ŒUF FOR THE GAME</p>
   </div>
 );
 
@@ -67,7 +67,7 @@ const BrandMark: React.FC = () => (
 // courts list can't be allowed to push the card title around.
 const CardSummary: React.FC<{ text: string }> = ({ text }) =>
   text.trim() ? (
-    <span className="max-w-[9rem] sm:max-w-[14rem] truncate text-xs font-bold text-clay">{text}</span>
+    <span className="max-w-[9rem] sm:max-w-[14rem] truncate text-xs font-bold text-clay-fg">{text}</span>
   ) : null;
 
 export const Signup: React.FC = () => {
@@ -503,7 +503,7 @@ export const Signup: React.FC = () => {
                       {stepNum > i ? <CheckCircle2 className="w-6 h-6" /> : i}
                     </div>
                     <span
-                      className={`text-xs font-bold uppercase tracking-widest ${stepNum >= i ? 'text-clay' : 'text-fg'}`}
+                      className={`text-xs font-bold uppercase tracking-widest ${stepNum >= i ? 'text-clay-fg' : 'text-fg'}`}
                     >
                       {i === 1 ? 'Account' : 'Preferences'}
                     </span>
@@ -574,10 +574,10 @@ export const Signup: React.FC = () => {
                       required
                     />
                     {emailSuggestion && (
-                      <div className="text-sm text-clay mt-1">
+                      <div className="text-sm text-clay-fg mt-1">
                         Did you mean{' '}
                         <button
-                          className="underline hover:text-clay"
+                          className="underline hover:text-clay-fg"
                           onClick={() => {
                             setFormData({ ...formData, email: emailSuggestion.full });
                             setEmailSuggestion(null);
@@ -665,7 +665,7 @@ export const Signup: React.FC = () => {
                         <button
                           type="button"
                           onClick={goToEmailPhase}
-                          className="text-clay hover:underline font-semibold"
+                          className="text-clay-fg hover:underline font-semibold"
                         >
                           (change)
                         </button>
@@ -711,7 +711,7 @@ export const Signup: React.FC = () => {
                             setShowForgot(true);
                             setError('');
                           }}
-                          className="text-sm font-medium text-clay hover:text-clay-dark transition-colors"
+                          className="text-sm font-medium text-clay-fg hover:text-clay-press transition-colors"
                         >
                           Forgot Password?
                         </button>
@@ -737,7 +737,7 @@ export const Signup: React.FC = () => {
                             setShowForgot(false);
                             setError('');
                           }}
-                          className="text-clay font-bold hover:underline text-sm"
+                          className="text-clay-fg font-bold hover:underline text-sm"
                         >
                           Back to Sign In
                         </button>
@@ -788,7 +788,11 @@ export const Signup: React.FC = () => {
                   <BrandMark />
                   <p className="text-fg/70 text-sm">
                     {formData.email}{' '}
-                    <button type="button" onClick={goToEmailPhase} className="text-clay hover:underline font-semibold">
+                    <button
+                      type="button"
+                      onClick={goToEmailPhase}
+                      className="text-clay-fg hover:underline font-semibold"
+                    >
                       (change)
                     </button>
                   </p>
@@ -799,7 +803,7 @@ export const Signup: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="w-full space-y-1.5">
                       <label className="block text-sm font-medium text-fg">
-                        Password <span className="text-clay">*</span>
+                        Password <span className="text-clay-fg">*</span>
                       </label>
                       <div className="relative">
                         <input
@@ -823,7 +827,7 @@ export const Signup: React.FC = () => {
 
                     <div className="w-full space-y-1.5">
                       <label className="block text-sm font-medium text-fg">
-                        Re-enter Password <span className="text-clay">*</span>
+                        Re-enter Password <span className="text-clay-fg">*</span>
                       </label>
                       <div className="relative">
                         <input
@@ -934,7 +938,7 @@ export const Signup: React.FC = () => {
                         which number to give rather than letting someone enter a landline. */}
                       <p className="text-xs text-fg/70 mt-1.5">
                         Tip: Number for your preferred messaging service:{' '}
-                        <span className="text-clay font-semibold">SMS/WhatsApp</span>
+                        <span className="text-clay-fg font-semibold">SMS/WhatsApp</span>
                       </p>
                     </div>
                   </div>
@@ -948,7 +952,7 @@ export const Signup: React.FC = () => {
                   title="Skill"
                   right={
                     openCards.has('skill') ? (
-                      <span className="text-sm font-black text-clay">{formData.skillLevel.toFixed(1)}</span>
+                      <span className="text-sm font-black text-clay-fg">{formData.skillLevel.toFixed(1)}</span>
                     ) : (
                       <CardSummary text={`${formData.skillLevel.toFixed(1)} · ${skillBand(formData.skillLevel)}`} />
                     )
@@ -970,7 +974,7 @@ export const Signup: React.FC = () => {
                             onClick={() => setFormData({ ...formData, skillLevel: level })}
                             className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
                               active
-                                ? 'bg-clay/10 text-clay border-clay'
+                                ? 'bg-clay/10 text-clay-fg border-clay'
                                 : 'bg-fg/5 text-fg border-transparent hover:bg-fg/10'
                             }`}
                           >
@@ -981,7 +985,7 @@ export const Signup: React.FC = () => {
                     </div>
                     {/* skillBand is the same function the draw engine groups on, so this label and
                       the group a player actually lands in can never disagree. */}
-                    <p className="text-sm font-bold text-clay text-center">{skillBand(formData.skillLevel)}</p>
+                    <p className="text-sm font-bold text-clay-fg text-center">{skillBand(formData.skillLevel)}</p>
                   </div>
                 </Accordion>
 
@@ -994,8 +998,8 @@ export const Signup: React.FC = () => {
                 >
                   <div className="space-y-4 pt-1">
                     <p className="text-xs text-fg/70">
-                      Tip: select <span className="text-clay font-semibold">Stanley Park South - Toronto</span> for the
-                      downtown area.
+                      Tip: select <span className="text-clay-fg font-semibold">Stanley Park South - Toronto</span> for
+                      the downtown area.
                     </p>
 
                     {formData.preferredCourts.length > 0 && (
@@ -1065,7 +1069,7 @@ export const Signup: React.FC = () => {
                     {formData.pendingZoneChoice ? (
                       <div className="mt-3 p-4 rounded-2xl bg-clay/10 space-y-3">
                         <p className="text-xs font-bold text-fg uppercase tracking-wider flex items-center gap-2">
-                          <MapPin className="w-3.5 h-3.5 text-clay" />
+                          <MapPin className="w-3.5 h-3.5 text-clay-fg" />
                           Your court is near a zone boundary — choose your zone
                         </p>
                         <div className="flex gap-2">
@@ -1087,9 +1091,9 @@ export const Signup: React.FC = () => {
                       </div>
                     ) : formData.preferredZone ? (
                       <div className="mt-3 flex items-center gap-2">
-                        <MapPin className="w-3.5 h-3.5 text-clay shrink-0" />
+                        <MapPin className="w-3.5 h-3.5 text-clay-fg shrink-0" />
                         <span className="text-xs text-fg/70">Zone auto-assigned:</span>
-                        <span className="px-2.5 py-1 rounded-lg bg-clay/20 text-clay text-xs font-bold">
+                        <span className="px-2.5 py-1 rounded-lg bg-clay/20 text-clay-fg text-xs font-bold">
                           {formData.preferredZone}
                         </span>
                       </div>
@@ -1165,7 +1169,7 @@ export const Signup: React.FC = () => {
 
                 <p className="text-xs text-fg/70 text-center px-2 pt-2">
                   By joining you agree to our{' '}
-                  <Link to="/terms" className="text-clay hover:underline">
+                  <Link to="/terms" className="text-clay-fg hover:underline">
                     terms of service
                   </Link>
                   .

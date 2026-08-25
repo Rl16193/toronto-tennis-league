@@ -216,7 +216,7 @@ export const Events: React.FC = () => {
                 className="flex items-center gap-3 px-4 py-3.5 hover:bg-fg/[0.04] transition-colors"
               >
                 <span className="w-8 h-8 shrink-0 rounded-xl bg-clay/15 border border-clay/25 flex items-center justify-center">
-                  <Trophy className="w-4 h-4 text-clay" />
+                  <Trophy className="w-4 h-4 text-clay-fg" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-fg truncate">{e.title}</p>
@@ -302,7 +302,6 @@ export const Events: React.FC = () => {
             setEventForm={setEventForm}
             eventFormMessage={eventFormMessage}
             creatingEvent={creatingEvent}
-            organizerPlaceholder={profile?.user.name || 'Organizer name'}
             isEditing={!!editingEventId}
             onSubmit={handleCreateEvent}
             onClose={() => {

@@ -29,7 +29,7 @@ export const Accordion: React.FC<{
   children,
 }) => (
   <div
-    className={`rounded-3xl border p-5 ${
+    className={`rounded-3xl border ${
       locked
         ? 'bg-tennis-surface/15 border-fg/5'
         : highlight
@@ -40,7 +40,8 @@ export const Accordion: React.FC<{
     <button
       type="button"
       onClick={() => onToggle(id)}
-      className="w-full flex items-center justify-between gap-3 text-left"
+      disabled={locked}
+      className="w-full min-h-11 flex items-center justify-between gap-3 px-4 py-3 text-left"
       aria-expanded={open}
     >
       <h2 className={`${titleClassName} ${locked ? 'text-fg/70' : 'text-fg'}`}>{title}</h2>
@@ -58,7 +59,7 @@ export const Accordion: React.FC<{
           transition={{ duration: 0.25, ease: 'easeInOut' }}
           className="overflow-hidden"
         >
-          <div className={bodyClassName}>{children}</div>
+          <div className={`px-4 pb-4 ${bodyClassName}`}>{children}</div>
         </motion.div>
       )}
     </AnimatePresence>

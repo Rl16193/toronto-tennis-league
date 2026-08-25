@@ -18,12 +18,13 @@ type Props = {
  * Render it unconditionally with a null `message` when there's nothing to show; the exit
  * animation needs the component to stay mounted.
  */
-export const Toast: React.FC<Props> = ({ message, onDismiss, duration = 5000 }) => {
+export const Toast: React.FC<Props> = ({ message, onDismiss, duration = 8000 }) => {
+  const [paused, setPaused] = React.useState(false);
   useEffect(() => {
-    if (!message) return;
+    if (!message || paused) return;
     const t = setTimeout(onDismiss, duration);
     return () => clearTimeout(t);
-  }, [message, duration, onDismiss]);
+  }, [message, duration, onDismiss, paused]);
 
   return createPortal(
     <AnimatePresence>
@@ -38,13 +39,17 @@ export const Toast: React.FC<Props> = ({ message, onDismiss, duration = 5000 }) 
           className="fixed inset-x-4 bottom-24 sm:bottom-8 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2
                      z-[110] sm:w-[22rem] flex items-center gap-3 rounded-2xl
                      bg-tennis-surface shadow-2xl px-4 py-3"
+          onMouseEnter={() => setPaused(true)}
+          onMouseLeave={() => setPaused(false)}
+          onFocus={() => setPaused(true)}
+          onBlur={() => setPaused(false)}
         >
           <p className="flex-1 text-sm font-semibold text-fg">{message}</p>
           <button
             type="button"
             onClick={onDismiss}
             aria-label="Dismiss"
-            className="shrink-0 text-fg hover:text-clay transition-colors"
+            className="shrink-0 text-fg hover:text-clay-fg transition-colors"
           >
             <X className="w-4 h-4" />
           </button>

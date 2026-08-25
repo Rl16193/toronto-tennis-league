@@ -28,6 +28,7 @@
     "format": "node scripts/run-prettier.mjs write",
     "format:check": "node scripts/run-prettier.mjs check",
     "docs:verify": "node scripts/verify-docs.mjs",
+    "design:verify": "node scripts/verify-design-d3.mjs",
     "functions:syntax": "node scripts/check-functions-syntax.mjs",
     "migrations:example": "node scripts/migrations/001-example.mjs",
     "verify": "node scripts/verify.mjs"

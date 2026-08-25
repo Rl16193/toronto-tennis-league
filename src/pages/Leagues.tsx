@@ -210,10 +210,7 @@ export const Leagues: React.FC = () => {
                           { label: 'Matches', value: `${userStats.matchesPlayed ?? 0}` },
                           {
                             label: 'P/G Win %',
-                            value:
-                              (userStats.totalPointsPlayed ?? 0) > 0
-                                ? `${Math.round(((userStats.pointswon ?? 0) / (userStats.totalPointsPlayed ?? 1)) * 100)}%`
-                                : '—',
+                            value: pgWinPct(userStats),
                           },
                         ].map((t) => (
                           <div key={t.label} className="rounded-2xl bg-fg/[0.03] px-3 py-3 text-center">
@@ -225,7 +222,7 @@ export const Leagues: React.FC = () => {
                       <AreaChart
                         series={[
                           { label: 'P/G Won %', color: '#3b82f6', data: pgWonSeries },
-                          { label: 'Win %', color: '#FF6B35', data: winPctSeries },
+                          { label: 'Win %', color: '#E84A27', data: winPctSeries },
                         ]}
                         className="w-full h-24"
                       />
@@ -309,7 +306,7 @@ export const Leagues: React.FC = () => {
                             transition={{ duration: 0.2, ease: 'easeInOut' }}
                             className="overflow-hidden"
                           >
-                            <p className="pl-9 pr-3 pb-2 pt-1 text-[11px] text-clay">{challengeMessage.text}</p>
+                            <p className="pl-9 pr-3 pb-2 pt-1 text-[11px] text-clay-fg">{challengeMessage.text}</p>
                           </motion.div>
                         )}
                       </AnimatePresence>
@@ -343,7 +340,7 @@ export const Leagues: React.FC = () => {
             <p className="text-xl font-bold text-fg">No RS Points yet</p>
             <p className="text-fg/70 mt-1 text-sm">
               Complete tasks in the{' '}
-              <Link to="/tasks" className="text-clay font-semibold">
+              <Link to="/tasks" className="text-clay-fg font-semibold">
                 Tasks
               </Link>{' '}
               tab to earn points.
@@ -359,7 +356,7 @@ export const Leagues: React.FC = () => {
                   key={row.uid}
                   {...fadeUp}
                   transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}
-                  className={`rounded-2xl border ${isUser ? 'bg-clay/10 border-clay/20' : 'bg-tennis-surface/30 border-fg/5'}`}
+                  className={`rounded-2xl ${isUser ? 'bg-clay/10' : 'bg-tennis-surface/30'}`}
                 >
                   <PlayerCard
                     id={row.uid}

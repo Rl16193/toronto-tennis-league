@@ -38,7 +38,7 @@ export const Notifications: React.FC = () => {
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <Bell className="w-5 h-5 text-clay" />
+        <Bell className="w-5 h-5 text-clay-fg" />
         <h1 className="sr-only">Notifications</h1>
       </div>
 
@@ -51,12 +51,12 @@ export const Notifications: React.FC = () => {
             to="/marketplace"
             className="flex items-center gap-3 rounded-2xl bg-clay/[0.08] px-4 py-3 hover:bg-clay/[0.12] transition-colors"
           >
-            <Gift className="w-5 h-5 text-clay shrink-0" />
+            <Gift className="w-5 h-5 text-clay-fg shrink-0" />
             <p className="min-w-0 flex-1 text-sm font-bold text-fg">
               You have collected {redeemable} Points. {claimableRewards} Reward{claimableRewards === 1 ? '' : 's'}{' '}
               available.
             </p>
-            <ChevronRight className="w-4 h-4 text-clay shrink-0" />
+            <ChevronRight className="w-4 h-4 text-clay-fg shrink-0" />
           </Link>
         </motion.div>
       )}

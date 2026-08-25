@@ -143,11 +143,11 @@ export const Tasks: React.FC = () => {
                   {have}/{t.need}
                 </span>
               )}
-              <span className={`text-xs font-bold shrink-0 ${done ? 'text-clay' : 'text-fg/70'}`}>{t.points}</span>
+              <span className={`text-xs font-bold shrink-0 ${done ? 'text-clay-fg' : 'text-fg/70'}`}>{t.points}</span>
               {!done && !c.locked && c.to && (
                 <Link
                   to={c.to}
-                  className="text-fg/70 hover:text-clay transition-colors shrink-0"
+                  className="text-fg/70 hover:text-clay-fg transition-colors shrink-0"
                   aria-label={`Go to ${t.title}`}
                 >
                   <ChevronRight className="w-4 h-4" />
@@ -177,7 +177,7 @@ export const Tasks: React.FC = () => {
         <div key={g.id} className="py-3">
           <div className="flex items-start justify-between gap-3">
             <span className="text-sm font-bold text-fg">{g.name}</span>
-            <span className="text-xs font-bold text-clay shrink-0">{g.points}</span>
+            <span className="text-xs font-bold text-clay-fg shrink-0">{g.points}</span>
           </div>
           <p className="text-xs text-fg/70 mt-1 leading-relaxed">{g.trigger}</p>
         </div>
@@ -198,7 +198,7 @@ export const Tasks: React.FC = () => {
       <motion.div {...fadeUp} className="rounded-3xl bg-tennis-surface/30 p-5 mb-6">
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="text-center">
-            <p className="text-2xl font-black text-clay leading-none">{points}</p>
+            <p className="text-2xl font-black text-clay-fg leading-none">{points}</p>
             <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mt-1">RS Points</p>
           </div>
           <div className="text-center">
@@ -243,7 +243,7 @@ export const Tasks: React.FC = () => {
           {...sectionProps('initiation')}
           right={
             initiationComplete ? (
-              <span className="px-2 py-0.5 rounded-lg text-[11px] font-black bg-clay/15 text-clay border border-clay/25">
+              <span className="px-2 py-0.5 rounded-lg text-[11px] font-black bg-clay/15 text-clay-fg border border-clay/25">
                 +{SETUP_POINTS} pts
               </span>
             ) : (
@@ -278,7 +278,7 @@ export const Tasks: React.FC = () => {
                     href={t.link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-clay/70 hover:text-clay transition-colors shrink-0"
+                    className="text-clay/70 hover:text-clay-fg transition-colors shrink-0"
                     aria-label={`Open link for ${t.title}`}
                   >
                     <ExternalLink className="w-4 h-4" />
@@ -286,7 +286,7 @@ export const Tasks: React.FC = () => {
                 ) : t.to && !done ? (
                   <Link
                     to={t.to}
-                    className="text-fg/70 hover:text-clay transition-colors shrink-0"
+                    className="text-fg/70 hover:text-clay-fg transition-colors shrink-0"
                     aria-label={`Go to ${t.title}`}
                   >
                     <ChevronRight className="w-4 h-4" />

@@ -59,7 +59,7 @@ export const AddTeammatePanel: React.FC<Props> = ({ currentUserId, saving, onSav
   return (
     <div className="mb-6 rounded-3xl bg-tennis-surface/30 p-5 space-y-4">
       <div className="flex items-center gap-2">
-        <Users className="w-4 h-4 text-clay shrink-0" />
+        <Users className="w-4 h-4 text-clay-fg shrink-0" />
         <div>
           <p className="text-sm font-bold text-fg">Add your teammate</p>
           <p className="text-[11px] text-fg">You’re registered for doubles but we don’t have your partner yet.</p>

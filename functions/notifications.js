@@ -23,6 +23,65 @@ const {
 
 const { TZ, REGION } = require('./lib/constants');
 const db = () => admin.firestore();
+const nodeCrypto = require('node:crypto');
+
+const eventOrganizerUids = (event) => [
+  ...new Set(
+    [
+      event?.creator_id,
+      ...(event?.organizer_ids || []),
+      ...(event?.assigned_organizer_uids || []),
+      ...(event?.organizer_uids || []),
+    ].filter(Boolean),
+  ),
+];
+
+// Stable notification ids make Firestore retries harmless for draw/group notices. The normal
+// notify() helper intentionally creates a new feed item each time; these lifecycle notices need
+// stronger idempotency because a draw is assembled across many match documents.
+const notifyOnce = async (key, recipients, payload) => {
+  const ids = [...new Set((Array.isArray(recipients) ? recipients : [recipients]).filter(Boolean))];
+  if (!ids.length) return;
+  const refs = ids.map((uid) =>
+    db()
+      .collection('notifications')
+      .doc(nodeCrypto.createHash('sha1').update(`${key}:${uid}`).digest('hex')),
+  );
+  const existing = await db().getAll(...refs);
+  const batch = db().batch();
+  refs.forEach((ref, i) => {
+    if (!existing[i].exists) {
+      batch.set(ref, { uid: ids[i], read: false, created_at: new Date().toISOString(), ...payload });
+    }
+  });
+  if (refs.some((_, i) => !existing[i].exists)) await batch.commit();
+};
+
+const notifyJoinDigest = async (eventData, participant) => {
+  const day = new Date().toISOString().slice(0, 10);
+  const title = eventData.title || 'your event';
+  await Promise.all(
+    eventOrganizerUids(eventData).map(async (uid) => {
+      const ref = db()
+        .collection('notifications')
+        .doc(nodeCrypto.createHash('sha1').update(`join-digest:${participant.event_id}:${day}:${uid}`).digest('hex'));
+      await db().runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        const count = (snap.exists ? snap.data().count || 0 : 0) + 1;
+        tx.set(ref, {
+          uid,
+          read: false,
+          created_at: snap.exists ? snap.data().created_at : new Date().toISOString(),
+          type: 'organizer_event_roster',
+          title: `${count} player${count === 1 ? '' : 's'} joined ${title} today`,
+          body: `${count === 1 ? participant.user_name || 'A player' : `${count} players`} joined today.`,
+          link: '/events',
+          count,
+        });
+      });
+    }),
+  );
+};
 
 // "6-4, 6-3" from the absolute per-set fields every result now carries. Falls back to the legacy
 // `score_line` string for rows written before challenges/rallies used the tournament shape.
@@ -36,7 +95,6 @@ const scoreLineOf = (m) => {
 };
 
 const matchPlayers = (m) => [m.player_1_uid, m.player_2_uid].filter(Boolean);
-const otherPlayer = (m, uid) => (m.player_1_uid === uid ? m.player_2_uid : m.player_1_uid);
 const opponentName = (m, uid) => (m.player_1_uid === uid ? m.player_2_name : m.player_1_name);
 const matchLink = (m) => `/tournament?event=${m.event_id}`;
 // Preview/placeholder docs never represent a real fixture.
@@ -59,26 +117,13 @@ exports.onMatchCreated = onDocumentCreated({ document: 'matches/{matchId}', regi
   if (players.length === 0) return;
 
   const isRR = !!m.rr_group || m.format === 'rr';
-  await Promise.all(
-    players.map((uid) => {
-      const opp = opponentName(m, uid);
-      // A slot with no opponent yet is a bye through to the next round.
-      if (!otherPlayer(m, uid)) {
-        return notify(uid, {
-          type: 'match_bye',
-          title: 'You have a bye',
-          body: 'You advance to the next round automatically.',
-          link: matchLink(m),
-        });
-      }
-      return notify(uid, {
-        type: isRR ? 'group_assigned' : 'draw_published',
-        title: isRR ? 'You’ve been placed in a group' : 'The draw is out',
-        body: opp ? `Your match: vs ${opp}` : 'Your fixtures are ready.',
-        link: matchLink(m),
-      });
-    }),
-  );
+  const drawKey = m.draw_id || m.drawId || m.draw_type || m.format || 'draw';
+  await notifyOnce(`draw:${m.event_id}:${drawKey}:${isRR ? `group:${m.rr_group ?? 'unknown'}` : 'knockout'}`, players, {
+    type: isRR ? 'group_assigned' : 'draw_published',
+    title: isRR ? 'You’ve been placed in a group' : 'The draw is out',
+    body: isRR ? 'Your Round Robin group fixtures are ready.' : 'Your tournament fixtures are ready.',
+    link: matchLink(m),
+  });
 });
 
 // Schedule set/changed, score recorded, and advancement into an empty slot.
@@ -131,10 +176,10 @@ exports.onScoreSubmitted = onDocumentCreated({ document: 'matches/{id}', region:
   if (!s || s.category !== 'score_submission') return;
   if (!s.event_id) return;
   const eventDoc = await db().doc(`events/${s.event_id}`).get();
-  const creatorId = eventDoc.exists ? eventDoc.data().creator_id : null;
+  const organizerIds = eventDoc.exists ? eventOrganizerUids(eventDoc.data()) : [];
   const link = `/tournament?event=${s.event_id}`;
 
-  await notify(creatorId, {
+  await notify(organizerIds, {
     type: 'organizer_score_pending',
     title: 'A score needs your approval',
     body: `${s.player_1_name || ''} vs ${s.player_2_name || ''}`.trim(),
@@ -174,7 +219,7 @@ exports.onScheduleRequested = onDocumentUpdated({ document: 'matches/{matchId}',
 
   const eventDoc = await db().doc(`events/${after.event_id}`).get();
   if (!eventDoc.exists) return;
-  await notify(eventDoc.data().creator_id, {
+  await notify(eventOrganizerUids(eventDoc.data()), {
     type: 'organizer_schedule_request',
     title: 'A player asked you to schedule a match',
     body: `${after.player_1_name || ''} vs ${after.player_2_name || ''}`.trim(),
@@ -196,7 +241,7 @@ exports.onZoneChangeRequested = onDocumentUpdated(
 
     const eventDoc = await db().doc(`events/${after.event_id}`).get();
     if (!eventDoc.exists) return;
-    await notify(eventDoc.data().creator_id, {
+    await notify(eventOrganizerUids(eventDoc.data()), {
       type: 'organizer_zone_change_request',
       title: 'A player asked about a zone change',
       body: after.user_name || 'A player',
@@ -286,7 +331,7 @@ exports.onLadderChallengeUpdated = onDocumentUpdated(
       });
       const eventDoc = await db().doc(`events/${after.event_id}`).get();
       if (eventDoc.exists) {
-        await notify(eventDoc.data().creator_id, {
+        await notify(eventOrganizerUids(eventDoc.data()), {
           type: 'organizer_ladder_pending',
           title: 'A ladder result needs confirming',
           body: `${after.player_1_name || ''} vs ${after.player_2_name || ''}`.trim(),
@@ -455,11 +500,7 @@ exports.onParticipantJoined = onDocumentCreated(
       body: 'We’ll let you know when the draw is out.',
       link,
     });
-    await notify(e.creator_id, {
-      type: 'organizer_event_roster',
-      title: `${p.user_name || 'A player'} joined ${e.title || 'your event'}`,
-      link,
-    });
+    await notifyJoinDigest(e, p);
   },
 );
 
@@ -477,25 +518,43 @@ exports.weeklyReminders = onSchedule(
       .get();
     const pendingByUser = new Map();
     const pendingByUserEvent = new Map(); // uid -> Map<event_id, count>
+    const pendingDeadlineCandidates = new Map(); // uid -> [{ match, event }]
+    const eventIds = new Set();
     matches.docs.forEach((d) => {
       const m = d.data();
       if (!isRealMatch(d.id, m)) return;
+      if (matchPlayers(m).length < 2) return; // byes are not matches to arrange
+      eventIds.add(m.event_id);
       matchPlayers(m).forEach((uid) => {
         pendingByUser.set(uid, (pendingByUser.get(uid) || 0) + 1);
         if (!pendingByUserEvent.has(uid)) pendingByUserEvent.set(uid, new Map());
         const byEvent = pendingByUserEvent.get(uid);
         byEvent.set(m.event_id, (byEvent.get(m.event_id) || 0) + 1);
+        if (!pendingDeadlineCandidates.has(uid)) pendingDeadlineCandidates.set(uid, []);
+        pendingDeadlineCandidates.get(uid).push(m);
       });
     });
+    const eventEntries = await Promise.all(
+      [...eventIds].map(async (id) => {
+        const snap = await db().doc(`events/${id}`).get();
+        return [id, snap.exists ? snap.data() : {}];
+      }),
+    );
+    const eventById = new Map(eventEntries);
     await Promise.all(
-      [...pendingByUser.entries()].map(([uid, count]) =>
-        notify(uid, {
+      [...pendingByUser.entries()].map(([uid, count]) => {
+        const deadlines = (pendingDeadlineCandidates.get(uid) || [])
+          .map((m) => m.deadline || m.proposed_date || eventById.get(m.event_id)?.round_deadlines?.[m.round])
+          .filter(Boolean)
+          .sort();
+        const earliest = deadlines[0];
+        return notify(uid, {
           type: 'reminder_pending_matches',
           title: `You have ${count} match${count > 1 ? 'es' : ''} to play`,
-          body: 'Arrange a time with your opponent this week.',
+          body: earliest ? `Earliest deadline ${fmtDate(earliest)}.` : 'Arrange a time with your opponent.',
           link: '/tournament',
-        }),
-      ),
+        });
+      }),
     );
 
     // (Event titles used to be fetched here to itemise the digest by tournament. The template
@@ -560,21 +619,6 @@ exports.weeklyReminders = onSchedule(
         );
       }),
     );
-
-    // Weekly ladder allowance reset — anyone who used a challenge last week.
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const challenges = await db()
-      .collection('matches')
-      .where('category', '==', 'challenge')
-      .where('created_at', '>=', weekAgo)
-      .get();
-    const challengers = [...new Set(challenges.docs.map((d) => d.data().player_1_uid).filter(Boolean))];
-    await notify(challengers, {
-      type: 'ladder_challenges_reset',
-      title: 'Your ladder challenges have reset',
-      body: 'You have 3 challenges available this week.',
-      link: '/tournament',
-    });
   },
 );
 

@@ -8,7 +8,6 @@ export const fadeUp = {
 
 export const tapScale = {
   whileTap: { scale: 0.96 },
-  whileHover: { scale: 1.02 },
   transition: { type: 'spring' as const, stiffness: 400, damping: 25 },
 };
 

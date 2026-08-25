@@ -9,7 +9,7 @@ import { storage } from '../../../lib/firebase';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { RacquetIcon } from '../../../components/RacquetIcon';
-import { SELECTABLE_SKILL_LEVELS, skillTier, leagueDivision, leagueAgeCategory } from '../../../utils/skillLevels';
+import { SELECTABLE_SKILL_LEVELS, leagueDivision, leagueAgeCategory } from '../../../utils/skillLevels';
 import {
   defaultCourtOptions,
   extractCourtsWithCoords,
@@ -117,7 +117,7 @@ const ZonePickerSheet: React.FC<{
               } ${saving ? 'opacity-50' : ''}`}
             >
               <span className="text-sm font-bold text-fg truncate">{z}</span>
-              {isCurrent && <span className="text-[11px] font-bold text-clay shrink-0">Current</span>}
+              {isCurrent && <span className="text-[11px] font-bold text-clay-fg shrink-0">Current</span>}
             </button>
           );
         })}
@@ -426,7 +426,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
                   inputProps={{
                     placeholder: 'WhatsApp number',
                     className:
-                      'w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none',
+                      'w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-fg/70 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none',
                   }}
                 />
               )}
@@ -463,7 +463,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
                 rows={3}
                 maxLength={300}
                 placeholder="Your tennis vibe: play times, rally or games, and any other details?"
-                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
+                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-fg/70 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
               />
               <Button size="sm" onClick={() => save(() => actions.updateBio(bioDraft))} isLoading={updateLoading}>
                 Save
@@ -479,7 +479,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
         {/* Skill */}
         <div className="py-3">
           <SectionHeader
-            icon={<RacquetIcon className="w-3.5 h-3.5 text-clay" />}
+            icon={<RacquetIcon className="w-3.5 h-3.5 text-clay-fg" />}
             label="Skill Level"
             editing={editing === 'skill'}
             onEdit={() => open('skill')}
@@ -501,7 +501,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
                       onClick={() => setSkillDraft(level)}
                       className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
                         active
-                          ? 'bg-clay/10 text-clay border-clay'
+                          ? 'bg-clay/10 text-clay-fg border-clay'
                           : 'bg-fg/5 text-fg border-transparent hover:bg-fg/10'
                       }`}
                     >
@@ -512,7 +512,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
               </div>
               {/* skillBand is the same function the draw engine groups on, so this label and the
                   group a player actually lands in can never disagree. */}
-              <p className="text-sm font-bold text-clay text-center">{skillBand(skillDraft)}</p>
+              <p className="text-sm font-bold text-clay-fg text-center">{skillBand(skillDraft)}</p>
               <Button
                 size="sm"
                 onClick={() => save(() => actions.updateSkills(skillDraft, skillBand(skillDraft)))}
@@ -531,7 +531,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
         {/* League */}
         <div className="py-3">
           <SectionHeader
-            icon={<Users className="w-3.5 h-3.5 text-clay" />}
+            icon={<Users className="w-3.5 h-3.5 text-clay-fg" />}
             label="League"
             editing={editing === 'league'}
             onEdit={() => open('league')}
@@ -631,13 +631,13 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
         {/* Badges */}
         <div className="py-3">
           <span className="text-xs font-bold text-fg/70 uppercase tracking-widest flex items-center gap-1.5">
-            <Award className="w-3.5 h-3.5 text-clay" />
+            <Award className="w-3.5 h-3.5 text-clay-fg" />
             Badges
           </span>
           {/* Skill tag and badges share one row — badges use the same pill so the whole line
               reads as one set of labels. */}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className={BADGE_PILL_CLASS}>{skillTier(stats.skill_level)}</span>
+            <span className={BADGE_PILL_CLASS}>{skillBand(stats.skill_level)}</span>
             <BadgePicker
               selected={user.display_badges ?? []}
               onSave={actions.updateDisplayBadges}
@@ -651,7 +651,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
         {/* Courts */}
         <div className="py-3">
           <SectionHeader
-            icon={<MapPin className="w-3.5 h-3.5 text-clay" />}
+            icon={<MapPin className="w-3.5 h-3.5 text-clay-fg" />}
             label="Courts"
             editing={editing === 'courts'}
             onEdit={() => open('courts')}
@@ -738,13 +738,13 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
         <div className="py-3">
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs font-bold text-fg/70 uppercase tracking-widest flex items-center gap-1.5 min-w-0">
-              <MapPin className="w-3.5 h-3.5 text-clay" />
+              <MapPin className="w-3.5 h-3.5 text-clay-fg" />
               Zone
             </span>
             <button
               type="button"
               onClick={() => setShowZoneSheet(true)}
-              className="text-xs font-semibold text-clay hover:text-clay/80 transition-colors shrink-0"
+              className="text-xs font-semibold text-clay-fg hover:text-clay/80 transition-colors shrink-0"
             >
               Change
             </button>
@@ -763,7 +763,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
         {/* Favourites */}
         <div className="py-3">
           <SectionHeader
-            icon={<Star className="w-3.5 h-3.5 text-clay" />}
+            icon={<Star className="w-3.5 h-3.5 text-clay-fg" />}
             label="Favourites"
             editing={editing === 'favourites'}
             onEdit={() => open('favourites')}
@@ -839,7 +839,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
                 <button
                   type="button"
                   onClick={() => addFavourite(favInput)}
-                  className="text-xs font-bold text-clay hover:underline"
+                  className="text-xs font-bold text-clay-fg hover:underline"
                 >
                   Add “{favInput.trim()}”
                 </button>
@@ -951,7 +951,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
           <button
             type="button"
             onClick={() => open('email')}
-            className="text-xs font-semibold text-clay hover:text-clay/80 transition-colors"
+            className="text-xs font-semibold text-clay-fg hover:text-clay/80 transition-colors"
           >
             Change email address
           </button>

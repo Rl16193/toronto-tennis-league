@@ -55,7 +55,7 @@ export const BadgePicker: React.FC<{
       <button
         type="button"
         onClick={open}
-        className="px-2.5 py-1 rounded-lg text-xs font-bold text-clay hover:bg-clay/10 transition-colors"
+        className="px-2.5 py-1 rounded-lg text-xs font-bold text-clay-fg hover:bg-clay/10 transition-colors"
       >
         Edit
       </button>

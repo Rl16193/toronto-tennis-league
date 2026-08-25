@@ -10,7 +10,7 @@ export const INSTAGRAM_URL = 'https://www.instagram.com/racqnstringstoronto';
 export const WHATSAPP_URL = 'https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX';
 
 const linkCls = (className: string) =>
-  `inline-flex items-center gap-1.5 hover:text-clay transition-colors ${className}`;
+  `inline-flex items-center gap-1.5 hover:text-clay-fg transition-colors ${className}`;
 
 export const InstagramLink: React.FC<{ className?: string }> = ({ className = '' }) => (
   <a href={INSTAGRAM_URL} target="_blank" rel="noopener noreferrer" className={linkCls(className)}>

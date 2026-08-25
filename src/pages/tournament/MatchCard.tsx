@@ -23,11 +23,11 @@ const VARIANTS = {
     lastRowBorder: true,
     check: false,
     score: 'border-t border-fg/10 px-2 py-0.5 text-[10px] text-fg/70 font-mono tracking-wide',
-    winner: 'border-t border-fg/10 px-2 py-1 text-xs font-black text-clay',
+    winner: 'border-t border-fg/10 px-2 py-1 text-xs font-black text-clay-fg',
     creatorBtn:
-      'w-full border-t border-fg/10 px-2 py-1 text-[10px] text-fg/70 hover:text-clay transition-colors text-center leading-tight',
+      'w-full border-t border-fg/10 px-2 py-1 text-[10px] text-fg/70 hover:text-clay-fg transition-colors text-center leading-tight',
     playerBtn:
-      'w-full border-t border-fg/10 px-2 py-1 text-[10px] text-fg/70 hover:text-clay transition-colors text-center leading-tight',
+      'w-full border-t border-fg/10 px-2 py-1 text-[10px] text-fg/70 hover:text-clay-fg transition-colors text-center leading-tight',
     submitted: 'w-full border-t border-fg/10 px-2 py-1 text-[10px] text-badge-win text-center leading-tight',
   },
   // Mobile: roomier, with 44px touch targets.
@@ -38,11 +38,11 @@ const VARIANTS = {
     lastRowBorder: false,
     check: true,
     score: 'border-t border-fg/10 px-3 py-1 text-[11px] text-fg/70 font-mono tracking-wide',
-    winner: 'border-t border-fg/10 px-3 py-1.5 text-xs font-black text-clay',
+    winner: 'border-t border-fg/10 px-3 py-1.5 text-xs font-black text-clay-fg',
     creatorBtn:
-      'w-full border-t border-fg/10 px-3 py-2 text-xs font-bold text-fg/70 hover:text-clay transition-colors text-center bg-fg/[0.03]',
+      'w-full border-t border-fg/10 px-3 py-2 text-xs font-bold text-fg/70 hover:text-clay-fg transition-colors text-center bg-fg/[0.03]',
     playerBtn:
-      'w-full border-t border-fg/10 px-3 py-2 text-xs font-bold text-clay transition-colors text-center bg-clay/10',
+      'w-full border-t border-fg/10 px-3 py-2 text-xs font-bold text-clay-fg transition-colors text-center bg-clay/10',
     submitted: 'w-full border-t border-fg/10 px-3 py-2 text-xs text-badge-win text-center',
   },
 } as const;
@@ -180,7 +180,7 @@ export const MatchCard: React.FC<Props> = ({
             onRemovePlayer={onRemovePlayer}
           />
         ) : (
-          <div key={slot} className={`${v.row} ${border} ${isWinner ? 'text-clay' : 'text-fg'}`}>
+          <div key={slot} className={`${v.row} ${border} ${isWinner ? 'text-clay-fg' : 'text-fg'}`}>
             <span className="truncate">{formatPlayerName(name) || ' '}</span>
             {v.check && isWinner && <span className="ml-auto text-xs">✓</span>}
           </div>

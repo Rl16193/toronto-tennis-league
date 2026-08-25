@@ -69,7 +69,7 @@ export const MemberSearchInput: React.FC<Props> = ({
               setSearch('');
               onChange(null);
             }}
-            className="shrink-0 ml-3 text-xs font-bold text-fg hover:text-clay"
+            className="shrink-0 ml-3 text-xs font-bold text-fg hover:text-clay-fg"
           >
             Change
           </button>
@@ -88,7 +88,7 @@ export const MemberSearchInput: React.FC<Props> = ({
           placeholder={placeholder}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 pl-10 pr-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+          className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 pl-10 pr-4 py-2.5 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
         />
       </div>
 

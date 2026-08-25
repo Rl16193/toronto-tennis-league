@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Calendar, CheckCircle2, MapPin, Pencil, Star } from 'lucide-react';
 import { Button } from '../../components/Button';
+import { field, fieldLabelCls } from '../../components/Input';
 import { Sheet } from '../../components/Sheet';
 import { RacquetIcon } from '../../components/RacquetIcon';
 import { useAuth } from '../../context/AuthContext';
@@ -159,11 +160,11 @@ export const EventCard: React.FC<EventCardProps> = ({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      className="bg-tennis-surface/30 hover:border-clay/30 rounded-2xl p-5 flex flex-col gap-3 transition-colors"
+      className="bg-tennis-surface/30 rounded-2xl p-5 flex flex-col gap-3 transition-colors"
     >
       {/* Card header */}
       <div className="flex items-start justify-between gap-2">
-        <span className="px-2.5 py-0.5 bg-clay/10 border border-clay/20 rounded-lg text-[10px] font-bold text-clay uppercase tracking-widest">
+        <span className="px-2.5 py-0.5 bg-clay/10 border border-clay/20 rounded-lg text-[10px] font-bold text-clay-fg uppercase tracking-widest">
           {isLadder ? 'Challenges' : event.type}
         </span>
         <div className="flex items-center gap-2 shrink-0">
@@ -194,7 +195,7 @@ export const EventCard: React.FC<EventCardProps> = ({
         <div className="shrink-0">
           {isLadder ? (
             <Button
-              variant="primary"
+              variant="clay"
               size="sm"
               onClick={() => navigate(isLoggedIn ? '/matches?mode=challenges' : '/login')}
               disabled={authLoading}
@@ -204,7 +205,7 @@ export const EventCard: React.FC<EventCardProps> = ({
             </Button>
           ) : (
             <Button
-              variant={isJoined ? 'secondary' : 'primary'}
+              variant={isJoined ? 'secondary' : 'clay'}
               size="sm"
               onClick={() => (isLoggedIn ? onJoin(event) : navigate('/signup?intent=join-event'))}
               disabled={isJoined || joinClosed || authLoading}
@@ -222,7 +223,7 @@ export const EventCard: React.FC<EventCardProps> = ({
             <button
               type="button"
               onClick={() => setDescExpanded((v) => !v)}
-              className="text-xs font-semibold text-clay hover:text-clay/80 transition-colors mt-0.5"
+              className="text-xs font-semibold text-clay-fg hover:text-clay/80 transition-colors mt-0.5"
             >
               {descExpanded ? 'Less' : 'More'}
             </button>
@@ -233,19 +234,19 @@ export const EventCard: React.FC<EventCardProps> = ({
       <div className="flex flex-wrap gap-1.5">
         {dateLabel && (
           <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-fg/5 text-xs text-fg/70">
-            <Calendar className="w-3 h-3 text-clay shrink-0" />
+            <Calendar className="w-3 h-3 text-clay-fg shrink-0" />
             {dateLabel}
           </span>
         )}
         {event.location && (
           <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-fg/5 text-xs text-fg/70">
-            <MapPin className="w-3 h-3 text-clay shrink-0" />
+            <MapPin className="w-3 h-3 text-clay-fg shrink-0" />
             {event.location}
           </span>
         )}
         {event.skill_level && (
           <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-fg/5 text-xs text-fg/70">
-            <Star className="w-3 h-3 text-clay shrink-0" />
+            <Star className="w-3 h-3 text-clay-fg shrink-0" />
             {event.skill_level}
           </span>
         )}
@@ -263,7 +264,6 @@ type CreatorEventModalProps = {
   setEventForm: (eventForm: EventFormState) => void;
   eventFormMessage: FormMessage;
   creatingEvent: boolean;
-  organizerPlaceholder: string;
   isEditing?: boolean;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
@@ -271,11 +271,9 @@ type CreatorEventModalProps = {
 
 // Compact field chrome: smaller labels, tighter inputs, and short fields paired two-across so
 // the whole form fits in roughly one phone screen instead of eleven stacked full-width rows.
-const fieldCls =
-  'w-full rounded-xl bg-tennis-dark/70 px-3.5 py-2.5 text-sm text-fg ' +
-  'placeholder-fg/30 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
-const labelCls = 'block text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-1.5';
-const req = <span className="text-clay">*</span>;
+const fieldCls = `${field} bg-tennis-dark/70`;
+const labelCls = fieldLabelCls;
+const req = <span className="text-clay-fg">*</span>;
 
 const Toggle: React.FC<{
   label: string;
@@ -309,7 +307,6 @@ export const CreatorEventModal: React.FC<CreatorEventModalProps> = ({
   setEventForm,
   eventFormMessage,
   creatingEvent,
-  organizerPlaceholder,
   isEditing,
   onSubmit,
   onClose,

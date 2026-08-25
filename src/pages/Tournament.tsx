@@ -771,7 +771,7 @@ export const Tournament: React.FC = () => {
           {selectedMeta && (
             <span
               className={`shrink-0 text-[10px] font-bold rounded-full border px-2.5 py-1 whitespace-nowrap ${
-                pastMode ? 'text-fg/70 border-fg/20' : 'text-clay border-clay/50'
+                pastMode ? 'text-fg/70 border-fg/20' : 'text-clay-fg border-clay/50'
               }`}
             >
               {pastMode ? 'Completed' : formatEventRange(selectedMeta) || 'Live'}

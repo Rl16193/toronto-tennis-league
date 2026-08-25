@@ -55,7 +55,7 @@ const PageWrapper: React.FC<{ title?: string; icon?: any; boxed?: boolean; child
         )}
 
         <div className="flex items-center justify-center gap-6 text-sm font-semibold">
-          <Link to={user ? '/profile' : '/login'} className="text-fg/70 hover:text-clay transition-colors">
+          <Link to={user ? '/profile' : '/login'} className="text-fg/70 hover:text-clay-fg transition-colors">
             Profile
           </Link>
           <span className="text-fg/70">·</span>
@@ -154,10 +154,10 @@ export const About: React.FC = () => {
               <div className="mb-4 text-center">
                 <span className="text-lg font-black font-display tracking-tight">
                   <span className="text-fg">RACQUETS</span>
-                  <span className="text-clay"> &amp; </span>
+                  <span className="text-clay-fg"> &amp; </span>
                   <span className="text-fg">STRINGS</span>
                 </span>
-                <p className="text-clay font-bold text-[10px] tracking-widest uppercase mt-1">
+                <p className="text-clay-fg font-bold text-[10px] tracking-widest uppercase mt-1">
                   L&apos;&OElig;UF FOR THE GAME
                 </p>
               </div>
@@ -176,7 +176,7 @@ export const About: React.FC = () => {
                 <>
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 rounded-xl bg-clay/15 border border-clay/30 flex items-center justify-center shrink-0">
-                      <step.icon className="w-5 h-5 text-clay" />
+                      <step.icon className="w-5 h-5 text-clay-fg" />
                     </div>
                     <span className="text-fg/70 font-black text-lg">{i + 1}</span>
                   </div>
@@ -368,7 +368,7 @@ export const Contact: React.FC = () => (
     <div className="space-y-8">
       <section className="space-y-4">
         <h2 className="text-2xl font-bold text-fg flex items-center">
-          <MessageSquare className="w-5 h-5 mr-3 text-clay" />
+          <MessageSquare className="w-5 h-5 mr-3 text-clay-fg" />
           Get in Touch
         </h2>
         <p className="text-fg/70 leading-relaxed">
@@ -378,13 +378,13 @@ export const Contact: React.FC = () => (
       <section className="grid grid-cols-1 gap-4">
         <div className="rounded-[2rem] bg-fg/5 p-6">
           <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-2">Email</p>
-          <a href={`mailto:${CONTACT_EMAIL}`} className="text-clay font-bold hover:underline break-all">
+          <a href={`mailto:${CONTACT_EMAIL}`} className="text-clay-fg font-bold hover:underline break-all">
             {CONTACT_EMAIL}
           </a>
         </div>
         <div className="rounded-[2rem] bg-fg/5 p-6">
           <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-2">Instagram</p>
-          <InstagramLink className="text-clay font-bold" />
+          <InstagramLink className="text-clay-fg font-bold" />
         </div>
       </section>
     </div>

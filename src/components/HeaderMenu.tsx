@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, Info, Bell, LogOut, User, Medal } from 'lucide-react';
+import { Menu, X, Info, Bell, LogOut, User, Medal, FileText, Shield, Mail } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
@@ -54,7 +54,7 @@ export const HeaderMenu: React.FC = () => {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="relative p-2 rounded-xl text-fg hover:text-clay hover:bg-clay/5 transition-colors"
+        className="relative p-2 rounded-xl text-fg hover:text-clay-fg hover:bg-clay/5 transition-colors"
         aria-label="Open menu"
       >
         <Menu className="w-5 h-5" />
@@ -95,17 +95,17 @@ export const HeaderMenu: React.FC = () => {
                     className="text-sm font-bold font-['Montserrat'] tracking-tight whitespace-nowrap"
                   >
                     <span className="text-fg">RACQUETS</span>
-                    <span className="text-clay"> &</span>
+                    <span className="text-clay-fg"> &</span>
                     <span className="text-fg"> STRINGS</span>
                   </Link>
                   <button
                     type="button"
                     onClick={close}
-                    className="p-1.5 -mr-1 rounded-xl text-fg/70 hover:text-clay hover:bg-clay/5 transition-colors shrink-0"
+                    className="p-1.5 -mr-1 rounded-xl text-fg/70 hover:text-clay-fg hover:bg-clay/5 transition-colors shrink-0"
                     aria-label="Close menu"
                   >
                     <span className="sr-only">Close</span>
-                    <Menu className="w-5 h-5" />
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
               </div>
@@ -141,6 +141,31 @@ export const HeaderMenu: React.FC = () => {
                     <span className="flex-1">Profile</span>
                   </Link>
                 )}
+
+                <Link
+                  to="/terms"
+                  onClick={close}
+                  className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-bold text-fg hover:bg-fg/5 transition-colors"
+                >
+                  <FileText className="w-5 h-5 text-fg/70" />
+                  <span className="flex-1">Terms</span>
+                </Link>
+                <Link
+                  to="/privacy"
+                  onClick={close}
+                  className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-bold text-fg hover:bg-fg/5 transition-colors"
+                >
+                  <Shield className="w-5 h-5 text-fg/70" />
+                  <span className="flex-1">Privacy</span>
+                </Link>
+                <Link
+                  to="/contact"
+                  onClick={close}
+                  className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-bold text-fg hover:bg-fg/5 transition-colors"
+                >
+                  <Mail className="w-5 h-5 text-fg/70" />
+                  <span className="flex-1">Contact</span>
+                </Link>
 
                 {user && (
                   <Link

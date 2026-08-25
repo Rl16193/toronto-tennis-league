@@ -234,7 +234,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
 
             <div className="space-y-1.5 relative">
               <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">
-                Select Court <span className="text-clay">*</span>
+                Select Court <span className="text-clay-fg">*</span>
               </p>
               <input
                 type="text"
@@ -247,7 +247,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
                 }}
                 onFocus={() => setShowDropdown(true)}
                 onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
-                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
               />
               {showDropdown && courtMatches.length > 0 && (
                 <div className="absolute left-0 right-0 top-full mt-1 z-10 max-h-48 overflow-y-auto rounded-2xl bg-tennis-dark/95 p-1 shadow-2xl">
@@ -341,7 +341,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
             {type === 'waiting_board' && (
               <div className="space-y-1.5">
                 <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">
-                  How many waiting boards? <span className="text-clay">*</span>
+                  How many waiting boards? <span className="text-clay-fg">*</span>
                 </p>
                 <input
                   type="number"
@@ -350,7 +350,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
                   value={waitingBoards}
                   onChange={(e) => setWaitingBoards(e.target.value)}
                   placeholder="e.g. 2"
-                  className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                  className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
                 />
               </div>
             )}
@@ -359,7 +359,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">
-                    Racquets in Queue <span className="text-clay">*</span>
+                    Racquets in Queue <span className="text-clay-fg">*</span>
                   </p>
                   <input
                     type="number"
@@ -368,7 +368,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
                     value={racquetsInQueue}
                     onChange={(e) => setRacquetsInQueue(e.target.value)}
                     placeholder="e.g. 3"
-                    className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                    className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
                   />
                 </div>
 
@@ -391,14 +391,14 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
 
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-fg/70 uppercase tracking-widest">
-                Note <span className="text-clay">*</span>
+                Note <span className="text-clay-fg">*</span>
               </label>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 rows={2}
                 placeholder="Tell us what's going on…"
-                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-gray-500 text-sm outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-fg/70 text-sm outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
               />
             </div>
 

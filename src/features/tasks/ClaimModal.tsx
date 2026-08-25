@@ -160,7 +160,7 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={2}
-                  className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-gray-500 text-sm outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                  className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-fg/70 text-sm outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
                 />
               </div>
             )}

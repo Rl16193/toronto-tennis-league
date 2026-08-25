@@ -7,14 +7,14 @@ interface ButtonProps extends Omit<
   React.ButtonHTMLAttributes<HTMLButtonElement>,
   'onDrag' | 'onDragStart' | 'onDragEnd' | 'onAnimationStart'
 > {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'clay' | 'white';
+  variant?: 'secondary' | 'outline' | 'ghost' | 'clay' | 'white';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
 }
 
 export const Button: React.FC<ButtonProps> = ({
   className,
-  variant = 'primary',
+  variant = 'clay',
   size = 'md',
   isLoading,
   children,
@@ -22,27 +22,27 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const variants = {
-    primary: 'bg-clay hover:bg-clay-dark text-white shadow-lg shadow-clay/20',
-    secondary: 'bg-tennis-surface hover:bg-tennis-surface/80 text-fg',
-    outline: 'border-2 border-clay text-clay hover:bg-clay hover:text-white',
+    secondary: 'bg-tennis-surface hover:bg-tennis-surface/80 text-fg border border-fg/10',
+    outline: 'border border-clay text-clay-fg hover:bg-clay hover:text-white',
     ghost: 'hover:bg-fg/10 text-fg',
-    danger: 'bg-red-500 hover:bg-red-600 text-white',
-    clay: 'bg-clay hover:bg-clay-dark text-white shadow-lg shadow-clay/20',
+    clay: 'bg-clay hover:bg-clay-press text-white shadow-lg shadow-clay/20',
     white: 'bg-white hover:bg-white/90 text-ink shadow-lg shadow-black/10',
   };
 
   const sizes = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-6 py-2.5',
-    lg: 'px-8 py-3.5 text-lg',
+    sm: 'h-11 px-6 rounded-2xl text-base',
+    md: 'h-11 px-6 rounded-2xl text-base',
+    lg: 'h-11 px-6 rounded-2xl text-base',
   };
 
   return (
     <motion.button
       whileTap={disabled || isLoading ? undefined : tapScale.whileTap}
       transition={tapScale.transition}
+      type={props.type ?? 'button'}
+      aria-busy={isLoading || undefined}
       className={cn(
-        'inline-flex items-center justify-center rounded-2xl font-semibold transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center rounded-2xl border border-transparent font-semibold transition-colors duration-200 disabled:cursor-not-allowed focus-visible',
         variants[variant],
         sizes[size],
         className,
@@ -51,7 +51,7 @@ export const Button: React.FC<ButtonProps> = ({
       {...props}
     >
       {isLoading ? (
-        <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+        <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
       ) : null}
       {children}
     </motion.button>

@@ -26,7 +26,7 @@ export const BottomNav: React.FC = () => {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-fg/8 bg-nav/95 backdrop-blur-xl"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-fg/10 bg-tennis-dark/95 backdrop-blur-xl"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="Primary"
     >

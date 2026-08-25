@@ -162,15 +162,11 @@ export const Profile: React.FC = () => {
   }, [matches]);
 
   // Points-won rate off the stats doc (the same pointswon/totalPointsPlayed pair the Leaderboard
-  // uses), with a games-won fallback derived from played matches for anyone whose points columns
-  // were never populated — otherwise long-time members with matches but no point totals read 0%.
+  // uses). Missing stats are unknown, not a reason to mix match populations into this percentage.
   const wonPct = useMemo(() => {
     const played = profile?.stats.totalPointsPlayed ?? 0;
-    if (played > 0) return Math.round(((profile?.stats.pointswon ?? 0) / played) * 100);
-    const mine = matches.reduce((n, m) => n + m.myGames, 0);
-    const theirs = matches.reduce((n, m) => n + m.oppGames, 0);
-    return mine + theirs > 0 ? Math.round((mine / (mine + theirs)) * 100) : null;
-  }, [profile, matches]);
+    return played > 0 ? Math.round(((profile?.stats.pointswon ?? 0) / played) * 100) : null;
+  }, [profile]);
 
   // Last weekly snapshot's move, e.g. "▲ 3". No snapshot yet -> nothing to report.
   const rankMove = profile?.stats.rankMove ?? 0;
@@ -226,8 +222,8 @@ export const Profile: React.FC = () => {
     <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-20 pt-8 space-y-4">
       {incompleteFields.length > 0 && (
         <div className="px-1">
-          <p className="text-sm text-clay font-bold mb-1">Profile incomplete</p>
-          <p className="text-sm text-clay">Please add details for: {incompleteFields.join(', ')}.</p>
+          <p className="text-sm text-clay-fg font-bold mb-1">Profile incomplete</p>
+          <p className="text-sm text-clay-fg">Please add details for: {incompleteFields.join(', ')}.</p>
         </div>
       )}
 
@@ -259,7 +255,7 @@ export const Profile: React.FC = () => {
             aria-expanded={showStats}
             className={`rounded-2xl border transition-colors py-3 flex flex-col items-center gap-1.5 ${showStats ? 'border-clay/40 bg-clay/10' : 'border-fg/10 bg-fg/5 hover:border-clay/40'}`}
           >
-            <Sparkles className="w-4 h-4 text-clay" />
+            <Sparkles className="w-4 h-4 text-clay-fg" />
             <span className="text-[11px] font-bold text-fg flex items-center gap-1">
               Stats
               {showStats ? (
@@ -275,7 +271,7 @@ export const Profile: React.FC = () => {
             aria-expanded={showUpcoming}
             className={`rounded-2xl border transition-colors py-3 flex flex-col items-center gap-1.5 ${showUpcoming ? 'border-clay/40 bg-clay/10' : 'border-fg/10 bg-fg/5 hover:border-clay/40'}`}
           >
-            <RacquetIcon className="w-4 h-4 text-clay" />
+            <RacquetIcon className="w-4 h-4 text-clay-fg" />
             <span className="text-[11px] font-bold text-fg flex items-center gap-1">
               Upcoming
               {showUpcoming ? (
@@ -291,7 +287,7 @@ export const Profile: React.FC = () => {
             to="/leagues"
             className="rounded-2xl bg-fg/5 hover:border-clay/40 transition-colors py-3 flex flex-col items-center gap-1.5"
           >
-            <Medal className="w-4 h-4 text-clay" />
+            <Medal className="w-4 h-4 text-clay-fg" />
             <span className="text-[11px] font-bold text-fg">Leaderboard</span>
           </Link>
         </div>
@@ -308,7 +304,7 @@ export const Profile: React.FC = () => {
                 to="/marketplace"
                 className="rounded-2xl bg-white/[0.04] py-3 block hover:bg-white/[0.07] transition-colors"
               >
-                <p className="text-lg font-black text-clay flex items-center justify-center gap-1">
+                <p className="text-lg font-black text-clay-fg flex items-center justify-center gap-1">
                   <Sparkles className="w-3.5 h-3.5" />
                   {rsPoints}
                 </p>
@@ -319,7 +315,7 @@ export const Profile: React.FC = () => {
                 <p className="text-[9px] font-bold uppercase tracking-widest text-fg/70">P/G Won</p>
               </div>
               <div className="rounded-2xl bg-white/[0.04] py-3">
-                <p className="text-lg font-black text-fg">{matches.length}</p>
+                <p className="text-lg font-black text-fg">{profile?.stats.matchesPlayed ?? 0}</p>
                 <p className="text-[9px] font-bold uppercase tracking-widest text-fg/70">Matches</p>
               </div>
               <div className="rounded-2xl bg-white/[0.04] py-3">
@@ -338,7 +334,7 @@ export const Profile: React.FC = () => {
                     this one holds only a 16px icon, so without it the row collapsed and pulled the
                     label 12px above the labels beside it. Any icon-only tile needs the same. */}
                 <p className="text-lg font-black text-fg flex items-center justify-center h-7">
-                  <HistoryIcon className="w-4 h-4 text-clay" />
+                  <HistoryIcon className="w-4 h-4 text-clay-fg" />
                 </p>
                 {/* "History", not "Full History" — the longer label wrapped to two lines, so this
                     tile's title sat a line lower than the five beside it. */}
@@ -449,7 +445,6 @@ export const Profile: React.FC = () => {
                                 phone={phone}
                                 email={email}
                                 whatsappContact={contactFull?.whatsapp_contact}
-                                whatsappSameAsPhone={contactFull?.whatsapp_same_as_phone}
                                 preferred={contactFull?.preferred_mode_of_contact}
                                 variant="white"
                                 size="sm"
@@ -607,7 +602,7 @@ export const Profile: React.FC = () => {
                         selected
                           ? 'bg-clay text-white font-bold'
                           : deflt
-                            ? 'border border-clay/60 text-clay font-semibold hover:bg-clay/20 cursor-pointer'
+                            ? 'border border-clay/60 text-clay-fg font-semibold hover:bg-clay/20 cursor-pointer'
                             : past
                               ? 'text-fg/70 bg-fg/5 opacity-50 cursor-not-allowed'
                               : participantId
@@ -638,13 +633,13 @@ export const Profile: React.FC = () => {
       {/* Site links relocated here from the removed global footer. */}
       <div className="pt-6 mt-2 border-t border-fg/5">
         <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-fg/70">
-          <Link to="/about" className="hover:text-clay transition-colors">
+          <Link to="/about" className="hover:text-clay-fg transition-colors">
             About Us
           </Link>
-          <Link to="/terms" className="hover:text-clay transition-colors">
+          <Link to="/terms" className="hover:text-clay-fg transition-colors">
             Terms of Service
           </Link>
-          <Link to="/privacy" className="hover:text-clay transition-colors">
+          <Link to="/privacy" className="hover:text-clay-fg transition-colors">
             Privacy Policy
           </Link>
           <ContactLink />

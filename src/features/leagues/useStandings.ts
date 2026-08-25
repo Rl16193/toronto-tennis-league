@@ -27,17 +27,8 @@ export const inDivision = (league: string, tab: DivTab): boolean => {
 };
 
 // Public leaderboard — `stats` is world-readable, so this loads with or without an account.
-// From the same single read it also derives community totals for the Home hero (no extra query):
-// `activePlayers` = players who have played a match; `matchesOrganized` = Σ matchesPlayed / 2.
-export function useStandings(): {
-  rows: LeagueRow[];
-  loading: boolean;
-  activePlayers: number;
-  matchesOrganized: number;
-} {
+export function useStandings(): { rows: LeagueRow[]; loading: boolean } {
   const [rows, setRows] = useState<LeagueRow[]>([]);
-  const [activePlayers, setActivePlayers] = useState(0);
-  const [matchesOrganized, setMatchesOrganized] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,15 +37,9 @@ export function useStandings(): {
       .then((snap) => {
         if (cancelled) return;
         const data: LeagueRow[] = [];
-        let players = 0;
-        let matchTotal = 0;
         snap.forEach((d) => {
           const s = d.data();
           const mp = s.matchesPlayed ?? 0;
-          if (mp > 0) {
-            players += 1;
-            matchTotal += mp;
-          }
           // Everyone with a name is returned, including brand-new members on 0 points. This used
           // to skip them, which meant a new signup was invisible to the whole app — including the
           // "New" filter on Matches, whose entire job is to surface them. Consumers that only want
@@ -77,8 +62,6 @@ export function useStandings(): {
           });
         });
         setRows(data);
-        setActivePlayers(players);
-        setMatchesOrganized(Math.round(matchTotal / 2));
         setLoading(false);
       })
       .catch((err) => {
@@ -94,5 +77,5 @@ export function useStandings(): {
     };
   }, []);
 
-  return { rows, loading, activePlayers, matchesOrganized };
+  return { rows, loading };
 }

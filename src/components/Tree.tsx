@@ -49,9 +49,7 @@ export const TreeGroup: React.FC<{
         : ''
     }
   >
-    <div
-      className={`w-full flex items-center gap-2 py-3.5 pr-5 ${level === 1 ? 'pl-10' : 'pl-5'} ${disabled ? 'opacity-40' : ''}`}
-    >
+    <div className={`w-full min-h-11 flex items-center gap-2 py-2 pr-5 ${level === 1 ? 'pl-10' : 'pl-5'}`}>
       <button
         type="button"
         onClick={() => !disabled && onToggle(id)}
@@ -104,7 +102,7 @@ export const TreeRow: React.FC<{
   // The two add up to the same text position as before, so nothing shifts.
   // The width is stated explicitly rather than left to a block-level flex box stretching on its
   // own, so the row is guaranteed to run all the way to the right edge of the group.
-  const shared = `flex items-center gap-2.5 py-2 pr-3.5 text-left rounded-xl transition-colors ${
+  const shared = `flex items-center gap-2.5 min-h-11 py-2 pr-3.5 text-left rounded-xl transition-colors ${
     level === 1 ? 'ml-10 w-[calc(100%-2.5rem)] pl-4' : 'ml-5 w-[calc(100%-1.25rem)] pl-5'
   }`;
   const pct = fill ? Math.min(100, Math.round((fill.count / Math.max(1, fill.size)) * 100)) : 0;
@@ -134,16 +132,14 @@ export const TreeRow: React.FC<{
     </>
   );
 
-  const activeClass = active ? 'bg-white text-clay' : '';
+  const activeClass = active ? 'bg-clay/15 border border-clay/50 text-fg' : '';
   if (!onClick) return <div className={`${shared} ${activeClass}`}>{body}</div>;
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`${shared} ${activeClass} ${
-        disabled ? 'opacity-40 cursor-not-allowed' : active ? '' : 'hover:bg-fg/[0.03]'
-      }`}
+      className={`${shared} ${activeClass} ${disabled ? 'cursor-not-allowed' : active ? '' : 'hover:bg-fg/[0.03]'}`}
     >
       {body}
     </button>

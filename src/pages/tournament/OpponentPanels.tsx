@@ -19,7 +19,6 @@ export type OpponentRow = {
   email: string;
   phone: string;
   whatsappContact: string;
-  whatsappSameAsPhone: boolean;
   preferredContactMethods?: ContactMethod[];
   skill: number | null;
   wins: number;
@@ -109,7 +108,7 @@ export const OpponentCard: React.FC<{
       {open && (
         <div className="space-y-3">
           {opponent.round && (
-            <p className="text-[10px] uppercase tracking-widest text-clay font-bold">{opponent.round}</p>
+            <p className="text-[10px] uppercase tracking-widest text-clay-fg font-bold">{opponent.round}</p>
           )}
 
           {/* Two-column row: left is name/skill, tier, availability (3 lines); right is
@@ -125,7 +124,7 @@ export const OpponentCard: React.FC<{
                   {opponent.userId ? (
                     <Link
                       to={`/players/${opponent.userId}`}
-                      className="text-sm font-semibold text-fg truncate hover:text-clay transition-colors"
+                      className="text-sm font-semibold text-fg truncate hover:text-clay-fg transition-colors"
                     >
                       {opponent.name}
                     </Link>
@@ -151,7 +150,6 @@ export const OpponentCard: React.FC<{
                   phone={opponent.phone}
                   email={opponent.email}
                   whatsappContact={opponent.whatsappContact}
-                  whatsappSameAsPhone={opponent.whatsappSameAsPhone}
                   preferred={opponent.preferredContactMethods}
                   variant="white"
                   size="sm"
@@ -281,7 +279,7 @@ export const RROpponentPanel: React.FC<{
                       {p.uid ? (
                         <Link
                           to={`/players/${p.uid}`}
-                          className="text-sm font-semibold text-fg truncate hover:text-clay transition-colors"
+                          className="text-sm font-semibold text-fg truncate hover:text-clay-fg transition-colors"
                         >
                           {formatPlayerName(p.name)}
                         </Link>
@@ -307,7 +305,6 @@ export const RROpponentPanel: React.FC<{
                       phone={c?.phone}
                       email={c?.email}
                       whatsappContact={c?.whatsapp_contact}
-                      whatsappSameAsPhone={c?.whatsapp_same_as_phone}
                       preferred={c?.preferred_mode_of_contact}
                       variant="white"
                       size="sm"

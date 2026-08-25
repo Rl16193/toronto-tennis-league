@@ -211,13 +211,6 @@ export const Matches: React.FC = () => {
       ),
     [rows, myDivision],
   );
-  const rankIndexByUid = useMemo(() => {
-    const m = new Map<string, number>();
-    divisionRanked.forEach((r, i) => m.set(r.user_id, i));
-    return m;
-  }, [divisionRanked]);
-  const myRankIdx = user ? (rankIndexByUid.get(user.uid) ?? -1) : -1;
-
   // Friendlies base pool: everyone, every league — casual play doesn't care about division.
   const allLeaguesPool = useMemo(
     () => rows.filter((r) => r.user_id && r.user_id !== user?.uid && r.name),
@@ -241,7 +234,7 @@ export const Matches: React.FC = () => {
   }, [matches]);
   // These comparators feed the pool useMemos below. They're useCallbacks so those memos can list
   // them honestly instead of suppressing exhaustive-deps — the old hand-written dep arrays
-  // omitted rankIndexByUid entirely, so a rank refresh didn't re-sort the Challenges pool.
+  // The pool comparators are stable callbacks so their useMemos can list dependencies honestly.
   const byActivity = useCallback(
     (a: LeagueRow, b: LeagueRow) =>
       b.matchesPlayed - a.matchesPlayed || seededRand(week + a.user_id) - seededRand(week + b.user_id),
@@ -617,7 +610,7 @@ export const Matches: React.FC = () => {
                           setReviewBusy(null);
                         }
                       }}
-                      className="p-2.5 rounded-xl bg-green-500/15 text-badge-win hover:bg-green-500/25 transition-colors disabled:opacity-40"
+                      className="p-2.5 rounded-xl bg-green-500/15 text-badge-win hover:bg-green-500/25 transition-colors"
                       aria-label="Confirm result"
                     >
                       <Check className="w-4 h-4" />
@@ -633,7 +626,7 @@ export const Matches: React.FC = () => {
                           setReviewBusy(null);
                         }
                       }}
-                      className="p-2.5 rounded-xl bg-red-500/15 text-badge-loss hover:bg-red-500/25 transition-colors disabled:opacity-40"
+                      className="p-2.5 rounded-xl bg-red-500/15 text-badge-loss hover:bg-red-500/25 transition-colors"
                       aria-label="Reject result"
                     >
                       <X className="w-4 h-4" />
@@ -765,10 +758,6 @@ export const Matches: React.FC = () => {
                                   whatsappContact={
                                     (mode === 'friendlies' ? rallyContactMap : contactMap)[p.user_id]?.whatsapp_contact
                                   }
-                                  whatsappSameAsPhone={
-                                    (mode === 'friendlies' ? rallyContactMap : contactMap)[p.user_id]
-                                      ?.whatsapp_same_as_phone
-                                  }
                                   preferred={
                                     (mode === 'friendlies' ? rallyContactMap : contactMap)[p.user_id]
                                       ?.preferred_mode_of_contact
@@ -800,7 +789,7 @@ export const Matches: React.FC = () => {
                               ) : (
                                 <button
                                   type="button"
-                                  className={`${pillButtonCls('sm', 'clay')} disabled:opacity-40`}
+                                  className={pillButtonCls('sm', 'clay')}
                                   disabled={challengeBlocked || busy === p.user_id}
                                   onClick={() => sendChallenge(p)}
                                 >
@@ -849,7 +838,7 @@ export const Matches: React.FC = () => {
                                 whileTap={canRandomize ? tapScale.whileTap : undefined}
                                 transition={tapScale.transition}
                                 title={canRandomize ? 'Randomize this slot' : 'No randomizes left this week'}
-                                className="p-2 rounded-xl bg-fg/5 text-fg/70 hover:text-fg transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                                className="p-2 rounded-xl bg-fg/5 text-fg/70 hover:text-fg transition-colors disabled:cursor-not-allowed shrink-0"
                                 aria-label="Randomize slot"
                               >
                                 <Dices className="w-4 h-4" />
@@ -949,7 +938,7 @@ export const Matches: React.FC = () => {
                             ) : challengeState === 'pending' ? null : (
                               <button
                                 type="button"
-                                className={`${pillButtonCls('sm', 'clay')} disabled:opacity-40`}
+                                className={pillButtonCls('sm', 'clay')}
                                 disabled={challengeBlocked || busy === p.user_id}
                                 onClick={() => sendChallenge(p)}
                               >

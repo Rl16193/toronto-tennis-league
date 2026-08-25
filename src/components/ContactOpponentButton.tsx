@@ -25,12 +25,10 @@ export type Channel = { key: string; label: string; href: string; icon: React.Co
 // Shared pill shape for small buttons that sit inline together in a row (Contact, Schedule on
 // Matchdays, Submit Score, …) — same size/shape/text everywhere they're placed side by side.
 export const pillButtonCls = (size: 'sm' | 'md', variant: 'outline' | 'white' | 'clay') => {
-  const base = `inline-flex items-center gap-1.5 rounded-lg font-bold transition-colors whitespace-nowrap ${
-    size === 'sm' ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-xs'
-  }`;
+  const base = `inline-flex items-center justify-center gap-1.5 h-11 px-6 rounded-2xl text-base font-bold transition-colors whitespace-nowrap`;
   if (variant === 'white') return `${base} bg-white text-ink hover:bg-white/90`;
-  if (variant === 'clay') return `${base} bg-clay text-white hover:bg-clay-dark`;
-  return `${base} border-2 border-clay text-clay hover:bg-clay hover:text-white`;
+  if (variant === 'clay') return `${base} bg-clay text-white hover:bg-clay-press`;
+  return `${base} border border-clay text-clay-fg hover:bg-clay hover:text-white`;
 };
 
 /**
@@ -78,7 +76,6 @@ export const ContactOpponentButton: React.FC<{
   phone?: string;
   email?: string;
   whatsappContact?: string;
-  whatsappSameAsPhone?: boolean;
   /** Their `contacts.preferred_mode_of_contact`. Empty/absent = offer every channel they have. */
   preferred?: ContactMethod[];
   size?: 'sm' | 'md';
@@ -101,7 +98,7 @@ export const ContactOpponentButton: React.FC<{
           rel="noopener noreferrer"
           title={`${c.label} ${name}`}
           aria-label={`${c.label} ${name}`}
-          className={`${pillButtonCls(size, variant)} !px-1.5`}
+          className={pillButtonCls(size, variant)}
         >
           <c.icon className="w-3.5 h-3.5" />
         </a>

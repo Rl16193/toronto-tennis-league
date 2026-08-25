@@ -73,10 +73,8 @@ const readCachedSlides = (): string[] => {
   }
 };
 
-// Live figures come from the public site_stats/summary doc; these seed the strip so it never
-// flashes 0 and stays populated if the doc/rule isn't deployed. Courts matches the Court Map's
-// "Members Only" filter exactly — courts with a live count > 0 (via useCourtData).
-const COMMUNITY_BASELINE = { activePlayers: 100, matchesOrganized: 170, courts: 42 };
+// Live figures come from the public site_stats/summary doc. A missing document is represented as
+// zero; a failed read remains unknown rather than displaying invented community totals.
 
 // Landing page: the hero photo is its OWN contained card (not a page-wide background) with
 // Check-In / Submit a Photo / Join-or-Log-In overlaid on the image itself. The card is
@@ -89,8 +87,8 @@ export const Home: React.FC = () => {
   const navigate = useNavigate();
   const { courts } = useCourtData();
 
-  const [activePlayers, setActivePlayers] = useState(COMMUNITY_BASELINE.activePlayers);
-  const [matchesOrganized, setMatchesOrganized] = useState(COMMUNITY_BASELINE.matchesOrganized);
+  const [activePlayers, setActivePlayers] = useState<number | null>(null);
+  const [matchesOrganized, setMatchesOrganized] = useState<number | null>(null);
   const [checkinStep, setCheckinStep] = useState<null | 'regular' | 'report'>(null);
   const [slides, setSlides] = useState<string[]>(readCachedSlides);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -140,12 +138,20 @@ export const Home: React.FC = () => {
       try {
         const summary = await getDoc(doc(db, 'site_stats', 'summary'));
         if (cancelled) return;
-        if (!summary.exists()) return; // doc genuinely doesn't exist — not a transient failure
+        if (!summary.exists()) {
+          setActivePlayers(0);
+          setMatchesOrganized(0);
+          return;
+        }
         const d = summary.data();
-        if (typeof d.active_players === 'number') setActivePlayers(d.active_players);
-        if (typeof d.matches_organized === 'number') setMatchesOrganized(d.matches_organized);
+        setActivePlayers(typeof d.active_players === 'number' ? d.active_players : 0);
+        setMatchesOrganized(typeof d.matches_organized === 'number' ? d.matches_organized : 0);
       } catch {
-        if (cancelled || attempt >= 4) return; // site_stats rule/doc not deployed — give up quietly
+        if (cancelled || attempt >= 4) {
+          setActivePlayers(null);
+          setMatchesOrganized(null);
+          return;
+        }
         setTimeout(
           () => {
             if (!cancelled) load(attempt + 1);
@@ -167,13 +173,13 @@ export const Home: React.FC = () => {
 
   // Each stat tile is a shortcut: number + label + destination. Values count up to their
   // target rather than just appearing.
-  const activePlayersDisplay = useCountUp(activePlayers);
-  const matchesOrganizedDisplay = useCountUp(matchesOrganized);
+  const activePlayersDisplay = useCountUp(activePlayers ?? 0);
+  const matchesOrganizedDisplay = useCountUp(matchesOrganized ?? 0);
   const courtsWithMembers = courts.filter((c) => c.count > 0).length;
-  const courtsCoveredDisplay = useCountUp(courtsWithMembers || COMMUNITY_BASELINE.courts);
+  const courtsCoveredDisplay = useCountUp(courtsWithMembers);
   const stats = [
-    { value: `${activePlayersDisplay}`, label: 'Players', to: '/leagues' },
-    { value: `${matchesOrganizedDisplay}`, label: 'Matches', to: '/events' },
+    { value: activePlayers === null ? '—' : `${activePlayersDisplay}`, label: 'Players', to: '/leagues' },
+    { value: matchesOrganized === null ? '—' : `${matchesOrganizedDisplay}`, label: 'Matches', to: '/events' },
     { value: `${courtsCoveredDisplay}`, label: 'Courts', to: '/courts' },
   ];
 
@@ -202,7 +208,7 @@ export const Home: React.FC = () => {
             the description sits on the gradient, which itself flips per theme, so it uses the
             theme-aware fg token (white in dark, dark green in light). */}
         <div className="absolute inset-x-0 bottom-0 px-4 sm:px-6 pb-6 text-center">
-          <h1 className="text-2xl sm:text-3xl font-black text-clay tracking-tight">L&apos;ŒUF FOR THE GAME</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-clay-fg tracking-tight">L&apos;ŒUF FOR THE GAME</h1>
           <p className="mt-2 text-sm text-fg max-w-md mx-auto">
             Toronto&apos;s home for free tennis events, public court and wait time insights. Join our movement to make
             tennis more accessible.
@@ -269,6 +275,22 @@ export const Home: React.FC = () => {
       <div className="flex justify-center mt-5">
         <InstagramLink className="text-xs font-bold text-fg/70" />
       </div>
+      <nav
+        className="flex justify-center items-center gap-3 mt-3 text-[11px] font-semibold text-fg/60"
+        aria-label="Legal"
+      >
+        <Link to="/terms" className="hover:text-clay-fg transition-colors">
+          Terms
+        </Link>
+        <span aria-hidden="true">·</span>
+        <Link to="/privacy" className="hover:text-clay-fg transition-colors">
+          Privacy
+        </Link>
+        <span aria-hidden="true">·</span>
+        <Link to="/contact" className="hover:text-clay-fg transition-colors">
+          Contact
+        </Link>
+      </nav>
 
       {/* ── Check-In / Report modals ── */}
       {checkinStep === 'regular' && <CheckInModal onClose={() => setCheckinStep(null)} />}

@@ -61,7 +61,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
         <div className="space-y-3">
           <div className="flex justify-between items-end">
             <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Skill Level</p>
-            <span className="text-2xl font-black text-clay">{skillLevel}</span>
+            <span className="text-2xl font-black text-clay-fg">{skillLevel}</span>
           </div>
           <input
             type="range"

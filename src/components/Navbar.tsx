@@ -52,7 +52,7 @@ export const Navbar: React.FC = () => {
           {isAuthPage ? (
             <Link
               to="/"
-              className="flex items-center gap-2 shrink-0 text-fg hover:text-clay transition-colors"
+              className="flex items-center gap-2 shrink-0 text-fg hover:text-clay-fg transition-colors"
               aria-label="Back to home"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -62,50 +62,48 @@ export const Navbar: React.FC = () => {
             <Link to="/" className="flex items-center shrink-0" aria-label="Home">
               <span className="text-lg md:text-xl font-bold font-['Montserrat'] tracking-tight">
                 <span className="text-fg">RACQUETS</span>
-                <span className="text-clay"> &</span>
+                <span className="text-clay-fg"> &</span>
                 <span className="text-fg"> STRINGS</span>
               </span>
             </Link>
           )}
 
           {/* Theme toggle + hamburger (About Us / How It Works / Notifications / Profile / Logout) */}
-          {!isAuthPage && (
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className="p-2 rounded-xl text-fg hover:text-clay hover:bg-clay/5 transition-colors"
-                aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="p-2 rounded-xl text-fg hover:text-clay-fg hover:bg-clay/5 transition-colors"
+              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+            {!isAuthPage && user && (
+              <Link
+                to="/profile"
+                className="p-2 rounded-xl text-fg hover:text-clay-fg hover:bg-clay/5 transition-colors"
+                aria-label="Profile"
               >
-                {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </button>
-              {user && (
-                <Link
-                  to="/profile"
-                  className="p-2 rounded-xl text-fg hover:text-clay hover:bg-clay/5 transition-colors"
-                  aria-label="Profile"
-                >
-                  {profile?.user.avatar && !avatarFailed ? (
-                    // Google sign-in seeds `avatar` from the account's photoURL
-                    // (profileBootstrap.ts), and those lh3.googleusercontent.com URLs often
-                    // fail — rate limits, or a privacy blocker. `no-referrer` stops Google
-                    // rejecting the request outright; onError falls back to the icon so a dead
-                    // URL never shows a broken-image glyph.
-                    <img
-                      src={profile.user.avatar}
-                      alt=""
-                      referrerPolicy="no-referrer"
-                      onError={() => setAvatarFailed(true)}
-                      className="w-5 h-5 rounded-full object-cover"
-                    />
-                  ) : (
-                    <User className="w-5 h-5" />
-                  )}
-                </Link>
-              )}
-              <HeaderMenu />
-            </div>
-          )}
+                {profile?.user.avatar && !avatarFailed ? (
+                  // Google sign-in seeds `avatar` from the account's photoURL
+                  // (profileBootstrap.ts), and those lh3.googleusercontent.com URLs often
+                  // fail — rate limits, or a privacy blocker. `no-referrer` stops Google
+                  // rejecting the request outright; onError falls back to the icon so a dead
+                  // URL never shows a broken-image glyph.
+                  <img
+                    src={profile.user.avatar}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    onError={() => setAvatarFailed(true)}
+                    className="w-5 h-5 rounded-full object-cover"
+                  />
+                ) : (
+                  <User className="w-5 h-5" />
+                )}
+              </Link>
+            )}
+            {!isAuthPage && <HeaderMenu />}
+          </div>
         </div>
       </div>
     </nav>

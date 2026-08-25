@@ -50,6 +50,12 @@ const ScrollToTop: React.FC = () => {
     history.scrollRestoration = 'manual';
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
 
+    return () => {
+      history.scrollRestoration = previousScrollRestoration;
+    };
+  }, [location.pathname]);
+
+  React.useEffect(() => {
     analyticsPromise.then((analytics) => {
       if (analytics) {
         logEvent(analytics, 'page_view', {
@@ -59,10 +65,6 @@ const ScrollToTop: React.FC = () => {
         });
       }
     });
-
-    return () => {
-      history.scrollRestoration = previousScrollRestoration;
-    };
   }, [location.pathname, location.search]);
 
   return null;
@@ -88,7 +90,7 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     );
   }
 
-  return user ? <>{children}</> : <Navigate to="/login" />;
+  return user ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
 export default function App() {
@@ -106,14 +108,7 @@ export default function App() {
                 <Route path="/login" element={<Signup />} />
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/events" element={<Events />} />
-                <Route
-                  path="/tournament"
-                  element={
-                    <PrivateRoute>
-                      <TournamentRedirect />
-                    </PrivateRoute>
-                  }
-                />
+                <Route path="/tournament" element={<TournamentRedirect />} />
                 <Route path="/leagues" element={<Leagues />} />
                 <Route
                   path="/tasks"
@@ -147,8 +142,8 @@ export default function App() {
                     </PrivateRoute>
                   }
                 />
-                <Route path="/friendlies" element={<Navigate to="/matches" replace />} />
-                <Route path="/challenges" element={<Navigate to="/matches" replace />} />
+                <Route path="/friendlies" element={<Navigate to="/matches?mode=friendlies" replace />} />
+                <Route path="/challenges" element={<Navigate to="/matches?mode=challenges" replace />} />
                 <Route
                   path="/notifications"
                   element={
@@ -174,7 +169,7 @@ export default function App() {
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/contact" element={<Contact />} />
-                <Route path="*" element={<Navigate to="/" />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Layout>
           </Router>

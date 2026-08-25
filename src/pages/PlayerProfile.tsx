@@ -11,7 +11,8 @@ import { MemberInfo, UserPreferences, UserStats } from '../types';
 import type { TournamentMatch } from './tournament/types';
 import { BadgeRow } from '../features/tasks/BadgeRow';
 import { useCommunityStandings } from '../features/tasks/useTasks';
-import { skillTier, leagueDivision, leagueAgeCategory } from '../utils/skillLevels';
+import { leagueDivision, leagueAgeCategory } from '../utils/skillLevels';
+import { skillBand } from '../features/tournament/domain/placement';
 import { contactChannels, pillButtonCls } from '../components/ContactOpponentButton';
 import {
   normalizeContactData,
@@ -206,7 +207,7 @@ export const PlayerProfile: React.FC = () => {
 
   const s = stats as (UserStats & { matchesPlayed?: number; leaguePoints26?: number }) | null;
   const statTiles = [
-    { label: 'Streak', value: results.streak, accent: 'text-clay' },
+    { label: 'Streak', value: results.streak, accent: 'text-clay-fg' },
     { label: 'RS Points', value: `${rsPoints}`, accent: 'text-fg' },
     { label: 'League Points', value: `${s?.leaguePoints26 ?? 0}`, accent: 'text-fg' },
     { label: 'Matches', value: `${s?.matchesPlayed ?? 0}`, accent: 'text-fg' },
@@ -284,7 +285,7 @@ export const PlayerProfile: React.FC = () => {
           </div>
 
           <div className="py-3">
-            <SectionLabel icon={<RacquetIcon className="w-3.5 h-3.5 text-clay" />} label="Skill Level" />
+            <SectionLabel icon={<RacquetIcon className="w-3.5 h-3.5 text-clay-fg" />} label="Skill Level" />
             {stats ? (
               <div className="mt-1 flex items-center gap-2">
                 <span className="text-lg font-bold text-fg">NTRP {stats.skill_level}</span>
@@ -295,11 +296,11 @@ export const PlayerProfile: React.FC = () => {
           </div>
 
           <div className="py-3">
-            <SectionLabel icon={<Award className="w-3.5 h-3.5 text-clay" />} label="Badges" />
+            <SectionLabel icon={<Award className="w-3.5 h-3.5 text-clay-fg" />} label="Badges" />
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {stats && (
                 <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-badge border border-amber-500/25">
-                  {skillTier(stats.skill_level)}
+                  {skillBand(stats.skill_level)}
                 </span>
               )}
               <BadgeRow ids={player.display_badges} />
@@ -309,7 +310,7 @@ export const PlayerProfile: React.FC = () => {
           {/* League — only when the player opted in ("Make visible to others"). */}
           {player.profile_details_visible && leagueDivision(stats?.league) && (
             <div className="py-3">
-              <SectionLabel icon={<Users className="w-3.5 h-3.5 text-clay" />} label="League" />
+              <SectionLabel icon={<Users className="w-3.5 h-3.5 text-clay-fg" />} label="League" />
               <div className="mt-1 flex flex-wrap gap-1.5">
                 <Pill label={`${leagueDivision(stats?.league)} League`} />
                 {leagueAgeCategory(stats?.league) && <Pill label={leagueAgeCategory(stats?.league)} />}
@@ -318,7 +319,7 @@ export const PlayerProfile: React.FC = () => {
           )}
 
           <div className="py-3">
-            <SectionLabel icon={<MapPin className="w-3.5 h-3.5 text-clay" />} label="Courts" />
+            <SectionLabel icon={<MapPin className="w-3.5 h-3.5 text-clay-fg" />} label="Courts" />
             <div className="mt-1 flex flex-wrap gap-1.5">
               {courts.length > 0 ? (
                 courts.map((c) => <Pill key={c} label={c} />)
@@ -329,7 +330,7 @@ export const PlayerProfile: React.FC = () => {
           </div>
 
           <div className="py-3">
-            <SectionLabel icon={<Star className="w-3.5 h-3.5 text-clay" />} label="Favourites" />
+            <SectionLabel icon={<Star className="w-3.5 h-3.5 text-clay-fg" />} label="Favourites" />
             <div className="mt-1 flex flex-wrap gap-1.5">
               {favourites.length > 0 ? (
                 favourites.map((p) => <Pill key={p} label={p} />)
@@ -344,7 +345,7 @@ export const PlayerProfile: React.FC = () => {
       {/* Match Stats — read-only mirror of ProfileStats */}
       <div className="bg-tennis-surface/30 rounded-[2.5rem] shadow-xl p-6">
         <h2 className="text-lg font-bold text-fg flex items-center mb-4">
-          <Star className="w-5 h-5 mr-2 text-clay" />
+          <Star className="w-5 h-5 mr-2 text-clay-fg" />
           Match Stats
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -368,13 +369,13 @@ export const PlayerProfile: React.FC = () => {
           <div className="flex flex-wrap gap-6">
             {organizer.email && (
               <div className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-clay shrink-0" />
+                <Mail className="w-4 h-4 text-clay-fg shrink-0" />
                 <span className="text-fg font-semibold break-all">{organizer.email}</span>
               </div>
             )}
             {organizer.phone && (
               <div className="flex items-center gap-2">
-                <Phone className="w-4 h-4 text-clay shrink-0" />
+                <Phone className="w-4 h-4 text-clay-fg shrink-0" />
                 <span className="text-fg font-semibold">{organizer.phone}</span>
               </div>
             )}

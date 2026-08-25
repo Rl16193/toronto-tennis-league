@@ -175,11 +175,11 @@ export const RRGroupCard: React.FC<Props> = ({
                           {formatPlayerName(row.name)}
                         </span>
                         {isAdvancing && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold border border-clay/50 text-clay uppercase tracking-wider shrink-0">
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold border border-clay/50 text-clay-fg uppercase tracking-wider shrink-0">
                             ADV
                           </span>
                         )}
-                        <span className="text-clay font-black text-sm tabular-nums shrink-0">{row.points} pts</span>
+                        <span className="text-clay-fg font-black text-sm tabular-nums shrink-0">{row.points} pts</span>
                       </button>
                       {/* Move this player to another zone. Same organizer action the zone-change
                       queue offers, but reachable for ANYONE in the draw rather than only players
@@ -264,7 +264,6 @@ export const RRGroupCard: React.FC<Props> = ({
                               phone={contactsByUid[row.userId]?.phone}
                               email={contactsByUid[row.userId]?.email}
                               whatsappContact={contactsByUid[row.userId]?.whatsapp_contact}
-                              whatsappSameAsPhone={contactsByUid[row.userId]?.whatsapp_same_as_phone}
                               preferred={contactsByUid[row.userId]?.preferred_mode_of_contact}
                               size="sm"
                               variant="white"
@@ -452,7 +451,7 @@ export const RRGroupCard: React.FC<Props> = ({
                 <button
                   onClick={() => onRenameGroup(labelDraft)}
                   disabled={!labelDraft.trim() || labelDraft.trim() === groupLabel}
-                  className="px-3 py-1 rounded-lg bg-clay/20 text-clay text-xs font-bold hover:bg-clay/30 transition-colors disabled:opacity-40"
+                  className="px-3 py-1 rounded-lg bg-clay/20 text-clay-fg text-xs font-bold hover:bg-clay/30 transition-colors"
                 >
                   Rename
                 </button>

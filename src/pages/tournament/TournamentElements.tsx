@@ -628,7 +628,7 @@ export const ZoneDrawConfigPanel: React.FC<{
             </span>
           </span>
           <span
-            className={`text-[10px] font-black uppercase tracking-wide shrink-0 ${config.enabled ? 'text-clay' : 'text-fg/70'}`}
+            className={`text-[10px] font-black uppercase tracking-wide shrink-0 ${config.enabled ? 'text-clay-fg' : 'text-fg/70'}`}
           >
             {config.enabled ? 'On' : 'Off'}
           </span>
@@ -674,7 +674,7 @@ export const ZoneDrawConfigPanel: React.FC<{
                             key={s}
                             type="button"
                             onClick={() => onUnmerge(s)}
-                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-clay/10 text-clay hover:bg-clay/20 transition-colors"
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-clay/10 text-clay-fg hover:bg-clay/20 transition-colors"
                           >
                             Unmerge {labelOf(s)}
                           </button>
@@ -689,7 +689,7 @@ export const ZoneDrawConfigPanel: React.FC<{
             {/* "Merge <zone> into…" — the target list is every other active zone. */}
             {mergeSource && (
               <div className="rounded-2xl border border-clay/40 bg-clay/5 p-3.5 space-y-2">
-                <p className="text-xs font-bold uppercase tracking-widest text-clay">
+                <p className="text-xs font-bold uppercase tracking-widest text-clay-fg">
                   Merge {labelOf(mergeSource)} into
                 </p>
                 <div className="space-y-1.5">
@@ -970,7 +970,7 @@ export const TournamentHeader: React.FC<{
     >
       <span
         className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-          danger ? 'bg-red-500/15 text-badge-loss' : active ? 'bg-clay/20 text-clay' : 'bg-fg/5 text-fg/70'
+          danger ? 'bg-red-500/15 text-badge-loss' : active ? 'bg-clay/20 text-clay-fg' : 'bg-fg/5 text-fg/70'
         }`}
       >
         {icon}
@@ -979,7 +979,7 @@ export const TournamentHeader: React.FC<{
         <span className={`block text-sm font-bold ${danger ? 'text-badge-loss' : 'text-fg'}`}>{label}</span>
         {hint && <span className="block text-xs text-fg/70 mt-0.5">{hint}</span>}
       </span>
-      {active && <span className="text-[10px] font-black uppercase tracking-wide text-clay shrink-0">On</span>}
+      {active && <span className="text-[10px] font-black uppercase tracking-wide text-clay-fg shrink-0">On</span>}
     </button>
   );
 

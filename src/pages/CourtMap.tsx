@@ -593,9 +593,7 @@ export const CourtMap: React.FC = () => {
     <div className="flex flex-col h-dvh pt-16 pb-16 bg-tennis-dark overflow-hidden">
       {/* MAP — full screen (mobile-only layout; wireframe 1j) */}
       <div className="flex-1 relative">
-        {(loading || !mapReady) && (
-          <LoadingBar label="Loading locations…" progress={loadingProgress} barColorClassName="bg-[#4ade80]" />
-        )}
+        {(loading || !mapReady) && <LoadingBar label="Loading locations…" progress={loadingProgress} />}
 
         {/* Zone overlay toggle + legend — sits BELOW the Search/Members Only/Filters bar (which
             is top-3 left-3 right-3, full width) so the two don't paint on top of each other. */}
@@ -763,7 +761,7 @@ export const CourtMap: React.FC = () => {
                 className="flex-1 bg-transparent text-fg placeholder-fg/30 text-sm outline-none min-w-0"
               />
               {searching ? (
-                <Loader2 className="w-3.5 h-3.5 text-clay animate-spin shrink-0" />
+                <Loader2 className="w-3.5 h-3.5 text-clay-fg animate-spin shrink-0" />
               ) : (
                 searchQuery && (
                   <button
@@ -800,7 +798,7 @@ export const CourtMap: React.FC = () => {
             onClick={() => setShowAllCourts((v) => !v)}
             className={`h-10 shrink-0 px-3.5 rounded-2xl backdrop-blur border shadow-xl text-xs font-bold transition-colors ${
               showAllCourts
-                ? 'bg-clay/15 border-clay/40 text-clay'
+                ? 'bg-clay/15 border-clay/40 text-clay-fg'
                 : 'bg-tennis-dark/95 border-fg/10 text-fg hover:border-clay/50'
             }`}
           >
@@ -820,7 +818,7 @@ export const CourtMap: React.FC = () => {
         {!user && !mobileResultsOpen && (
           <Link
             to="/signup"
-            className="absolute bottom-14 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full bg-clay text-white text-xs font-bold shadow-lg shadow-clay/30 hover:bg-clay-dark transition-colors"
+            className="absolute bottom-14 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full bg-clay text-white text-xs font-bold shadow-lg shadow-clay/30 hover:bg-clay-press transition-colors"
           >
             Join
           </Link>
@@ -861,7 +859,7 @@ export const CourtMap: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowSuggestModal(true)}
-                  className="shrink-0 px-3 py-1.5 rounded-xl border border-clay/40 text-clay text-[11px] font-semibold hover:bg-clay/10 transition-colors"
+                  className="shrink-0 px-3 py-1.5 rounded-xl border border-clay/40 text-clay-fg text-[11px] font-semibold hover:bg-clay/10 transition-colors"
                 >
                   Report
                 </button>

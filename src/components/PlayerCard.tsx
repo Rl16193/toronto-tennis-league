@@ -25,7 +25,7 @@ export const RankMove: React.FC<{ t?: 'up' | 'down' | 'flat'; move?: number }> =
 // which is white in dark theme and dark green in light, from the --color-fg token.
 export const SourceLetter: React.FC<{ source: 'tournament' | 'challenge' | 'rally' }> = ({ source }) => (
   <span
-    className={`text-[11px] font-black ${source === 'rally' ? 'text-fg' : 'text-clay'}`}
+    className={`text-[11px] font-black ${source === 'rally' ? 'text-fg' : 'text-clay-fg'}`}
     aria-label={source === 'tournament' ? 'Tournament' : source === 'challenge' ? 'Challenge' : 'Friendly'}
   >
     {source === 'tournament' ? 'T' : source === 'challenge' ? 'C' : 'R'}
@@ -89,6 +89,7 @@ export type PlayerCardProps = {
 };
 
 export const PlayerCard: React.FC<PlayerCardProps> = ({
+  id,
   name,
   subtitle,
   nameHref,
@@ -110,7 +111,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
   const hasDrawer = !!(stats?.length || expandedPills || children);
 
   return (
-    <div className={`${isYou ? 'bg-clay/10' : ''} px-3 py-2.5 ${className}`}>
+    <div className={`${isYou ? 'bg-clay/10' : ''} min-h-11 px-3 py-2.5 ${className}`}>
       <div className="flex items-center gap-3">
         {rank !== undefined && <span className="text-fg/70 font-mono text-xs w-6 shrink-0">{rank}</span>}
 
@@ -118,13 +119,13 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
           <p className="text-fg font-semibold text-sm truncate">
             {nameBadge ? <span className="mr-1.5">{nameBadge}</span> : null}
             {nameHref ? (
-              <Link to={nameHref} className="hover:text-clay transition-colors">
+              <Link to={nameHref} className="hover:text-clay-fg transition-colors">
                 {name}
               </Link>
             ) : (
               name
             )}
-            {isYou ? <span className="ml-1 text-clay text-[10px]">(you)</span> : null}
+            {isYou ? <span className="ml-1 text-clay-fg text-[10px]">(you)</span> : null}
           </p>
           {subtitle ? <p className="text-fg/70 text-[11px]">{subtitle}</p> : null}
           {pills ? <div className="flex items-center gap-1.5 flex-wrap mt-1">{pills}</div> : null}
@@ -139,6 +140,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
             type="button"
             onClick={onToggle}
             aria-expanded={open}
+            aria-controls={`player-card-${id}`}
             aria-label={`Stats for ${name}`}
             className="shrink-0 p-1 -m-1"
           >
@@ -150,6 +152,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
       <AnimatePresence initial={false}>
         {hasDrawer && open && (
           <motion.div
+            id={`player-card-${id}`}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}

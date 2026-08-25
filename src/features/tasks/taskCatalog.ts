@@ -248,7 +248,6 @@ export const TIER_POINTS: Record<string, number> = Object.fromEntries(ALL_TIERS.
 export const categoryTotal = (c: CategoryDef): number => c.tiers.reduce((n, t) => n + t.points, 0);
 // 970 = every tier + the Initiation's flat award. (Was 1,050 before the three "Climb N spots"
 // tiers were removed — nothing ever flipped their flags, so those 80 points were unreachable.)
-export const TOTAL_AVAILABLE = CATEGORIES.reduce((n, c) => n + categoryTotal(c), 0) + SETUP_POINTS;
 
 // Badge grouping: "playing tasks" spans the three match-based categories.
 export const PLAYING_CATEGORY_IDS = ['tournament', 'ladder', 'streaks'];

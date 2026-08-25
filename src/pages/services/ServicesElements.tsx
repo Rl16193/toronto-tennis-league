@@ -6,6 +6,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/Button';
+import { field, fieldLabelCls } from '../../components/Input';
 import { Fab } from '../../components/Fab';
 import { Sheet } from '../../components/Sheet';
 import { Tree, TreeGroup } from '../../components/Tree';
@@ -92,7 +93,7 @@ export const GroupLessonCard: React.FC = () => {
           <p className="text-sm font-bold text-fg leading-snug">30 min group lesson</p>
           <p className="text-[11px] text-fg/70 mt-0.5">Free · 2–4 players · {monthLabel(month)}</p>
         </div>
-        <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-clay border border-clay/45 rounded-full px-2 py-0.5">
+        <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-clay-fg border border-clay/45 rounded-full px-2 py-0.5">
           Free
         </span>
       </div>
@@ -147,7 +148,7 @@ export const GroupLessonCard: React.FC = () => {
                   <div key={p.uid} className="flex items-center gap-2 min-h-[32px]">
                     <span className="min-w-0 flex-1 text-sm text-fg truncate">
                       {p.name || 'Player'}
-                      {user?.uid === p.uid && <span className="ml-1 text-clay text-[10px]">(you)</span>}
+                      {user?.uid === p.uid && <span className="ml-1 text-clay-fg text-[10px]">(you)</span>}
                     </span>
                     {/* Contact details are resolved live from `contacts/{uid}` rather than being
                         snapshotted onto the roster — group_lessons is world-readable, so storing
@@ -158,7 +159,6 @@ export const GroupLessonCard: React.FC = () => {
                         phone={rosterContacts[p.uid]?.phone}
                         email={rosterContacts[p.uid]?.email}
                         whatsappContact={rosterContacts[p.uid]?.whatsapp_contact}
-                        whatsappSameAsPhone={rosterContacts[p.uid]?.whatsapp_same_as_phone}
                         preferred={rosterContacts[p.uid]?.preferred_mode_of_contact}
                         size="sm"
                         variant="white"
@@ -183,10 +183,8 @@ export const GroupLessonCard: React.FC = () => {
 // ─── Add / edit an offer (super-admin only) ──────────────────────────────────────────────────────
 
 // Compact field chrome, matching Add an Event: one size for every field in the sheet.
-const fieldCls =
-  'w-full rounded-xl bg-tennis-dark/70 border border-fg/10 px-3.5 py-2.5 text-sm text-fg ' +
-  'placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
-const labelCls = 'block text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-1.5';
+const fieldCls = `${field} bg-tennis-dark/70`;
+const labelCls = fieldLabelCls;
 
 type LinkCandidate = { uid: string; name: string };
 
@@ -790,7 +788,7 @@ const CouponCard: React.FC<{ r: Redemption; onCancel: (code: string) => void; bu
         {r.stringer_name} · {money(r.discounted_price)}
       </p>
 
-      <p className="mt-3.5 font-mono text-2xl tracking-[0.14em] text-clay">{r.code}</p>
+      <p className="mt-3.5 font-mono text-2xl tracking-[0.14em] text-clay-fg">{r.code}</p>
       <p className="text-[11px] text-fg/70 mt-1.5">Show this code when you go in</p>
 
       {r.status === 'flagged' && r.flag_note && (
@@ -969,7 +967,7 @@ export const ServicesTab: React.FC = () => {
           spend right now, and the Tasks page already tracks earning. */}
       <motion.div {...fadeUp} className="flex items-end justify-between gap-3 mb-4">
         <div>
-          <p className="text-3xl font-black text-clay leading-none">{balanceLoading ? '—' : balance}</p>
+          <p className="text-3xl font-black text-clay-fg leading-none">{balanceLoading ? '—' : balance}</p>
           <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70 mt-1.5">Redeemable points</p>
         </div>
         <div className="text-right">
@@ -983,7 +981,7 @@ export const ServicesTab: React.FC = () => {
 
       {!user && (
         <p className="text-[11px] text-fg/70 mb-5 -mt-3">
-          <Link to="/login" className="text-clay font-bold hover:underline">
+          <Link to="/login" className="text-clay-fg font-bold hover:underline">
             Join or Log in
           </Link>{' '}
           to redeem points or avail the services.
@@ -1046,7 +1044,7 @@ export const ServicesTab: React.FC = () => {
                         <span className="min-w-0">
                           <span className="flex items-center gap-1.5">
                             {p.name}
-                            {p.certified && <BadgeCheck className="w-3.5 h-3.5 text-clay shrink-0" />}
+                            {p.certified && <BadgeCheck className="w-3.5 h-3.5 text-clay-fg shrink-0" />}
                           </span>
                           <span className="block text-[11px] font-medium text-fg/70 mt-0.5">{p.area}</span>
                         </span>

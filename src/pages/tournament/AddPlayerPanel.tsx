@@ -64,7 +64,7 @@ export const AddPlayerPanel: React.FC<Props> = ({ availableUsers, currentDraw, o
   return (
     <div className="mb-6 rounded-2xl bg-tennis-surface/40 p-4">
       <div className="flex items-center gap-2 mb-4">
-        <UserPlus className="w-4 h-4 text-clay" />
+        <UserPlus className="w-4 h-4 text-clay-fg" />
         <span className="text-sm font-bold text-fg uppercase tracking-widest">Add Player</span>
       </div>
 
@@ -91,7 +91,7 @@ export const AddPlayerPanel: React.FC<Props> = ({ availableUsers, currentDraw, o
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search…"
-                  className="border border-fg/25 w-full bg-transparent text-sm text-fg placeholder-gray-500 outline-none"
+                  className="border border-fg/25 w-full bg-transparent text-sm text-fg placeholder-fg/70 outline-none"
                 />
               </div>
               <ul className="max-h-52 overflow-y-auto">
@@ -147,7 +147,7 @@ export const AddPlayerPanel: React.FC<Props> = ({ availableUsers, currentDraw, o
             value={partnerName}
             onChange={(e) => setPartnerName(e.target.value)}
             placeholder="Partner name…"
-            className="border border-fg/25 flex-1 min-w-[160px] px-3 py-2 rounded-xl bg-tennis-surface/60 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay/50 transition-colors"
+            className="border border-fg/25 flex-1 min-w-[160px] px-3 py-2 rounded-xl bg-tennis-surface/60 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay/50 transition-colors"
           />
         )}
 
