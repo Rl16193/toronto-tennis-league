@@ -3,12 +3,12 @@
 > **Foundation and the live bugs.** Everything in this file is broken for real members on the live
 > project today, or is the harness the rest of the week runs on.
 
-| | |
-| --- | --- |
-| **Branch base** | `tbtc/dev-anuj` @ `9c81f00` |
-| **Agents** | A1 `rules-functions` · A2 `dev-data` · A3 `dev-client` · A4 `ui-ux` · A5 `dev-verify` |
-| **Blocking** | A5's branch-and-harness task blocks nothing else, but nothing merges until it is green |
-| **Ship** | Functions → rules → hosting, end of day. This sprint is independently shippable. |
+|                 |                                                                                                                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Branch base** | `origin/docs/planning` @ `21ddf73bb49ead5c6bd6e0213a15d19d8921a855`; implementation branch `codex/sprint-1-d1`                                                                       |
+| **Agents**      | A1 `rules-functions` · A2 `dev-data` · A3 `dev-client` · A4 `ui-ux` · A5 `dev-verify`                                                                                                |
+| **Blocking**    | A5's branch-and-harness task blocks nothing else, but nothing merges until it is green                                                                                               |
+| **Ship**        | Local emulator and unit gates are required. No production deploy or production data mutation is part of D1; staging validation is deferred until an isolated staging project exists. |
 
 **Line numbers are `dev-anuj`, verified 2026-08-23.** Re-check before you edit; re-cite the row when you touch it.
 
@@ -16,13 +16,13 @@
 
 ## Board
 
-| Lane | Tasks | Rows |
-| --- | --: | --- |
-| **A1 Rules + Functions** | 5 | [F1](../notes/WORKFLOW_DESIGN_REPORT.md#F1)/LB-16, [F4](../notes/WORKFLOW_DESIGN_REPORT.md#F4), [F13](../notes/WORKFLOW_DESIGN_REPORT.md#F13), [F12](../notes/WORKFLOW_DESIGN_REPORT.md#F12), [conflict 6](../notes/DEV_ANUJ_CONFLICTS.md#6-deployment-order--trap) |
-| **A2 Data** | 2 | [F2](../notes/WORKFLOW_DESIGN_REPORT.md#F2) + [L14](../notes/HARMONIZATION_REPORT.md#L14), baseline export |
-| **A3 Client / Dev** | 24 | [LB-1](../ACTION-REPORT.md#LB-1), [LB-2](../ACTION-REPORT.md#LB-2), [LB-3](../ACTION-REPORT.md#LB-3), [LB-4](../ACTION-REPORT.md#LB-4), [LB-6](../ACTION-REPORT.md#LB-6), [LB-19](../ACTION-REPORT.md#LB-19)…[LB-29](../ACTION-REPORT.md#LB-29), [LB-31](../ACTION-REPORT.md#LB-31)…[LB-37](../ACTION-REPORT.md#LB-37), [LB-39](../ACTION-REPORT.md#LB-39), [LB-42](../ACTION-REPORT.md#LB-42), [LB-45](../ACTION-REPORT.md#LB-45), [LB-47](../ACTION-REPORT.md#LB-47)…[LB-50](../ACTION-REPORT.md#LB-50) |
-| **A4 UI/UX** | 3 | [CT-12](../ACTION-REPORT.md#CT-12), [LB-30](../ACTION-REPORT.md#LB-30), [LB-24](../ACTION-REPORT.md#LB-24)/LB-25 surfaces |
-| **A5 Verify** | 4 | harness, previews, regression tests, gate |
+| Lane                     | Tasks | Rows                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------ | ----: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A1 Rules + Functions** |     5 | [F1](../notes/WORKFLOW_DESIGN_REPORT.md#F1)/LB-16, [F4](../notes/WORKFLOW_DESIGN_REPORT.md#F4), [F13](../notes/WORKFLOW_DESIGN_REPORT.md#F13), [F12](../notes/WORKFLOW_DESIGN_REPORT.md#F12), [conflict 6](../notes/DEV_ANUJ_CONFLICTS.md#6-deployment-order--trap)                                                                                                                                                                                                                                       |
+| **A2 Data**              |     2 | [F2](../notes/WORKFLOW_DESIGN_REPORT.md#F2) + [L14](../notes/HARMONIZATION_REPORT.md#L14), baseline export                                                                                                                                                                                                                                                                                                                                                                                                |
+| **A3 Client / Dev**      |    24 | [LB-1](../ACTION-REPORT.md#LB-1), [LB-2](../ACTION-REPORT.md#LB-2), [LB-3](../ACTION-REPORT.md#LB-3), [LB-4](../ACTION-REPORT.md#LB-4), [LB-6](../ACTION-REPORT.md#LB-6), [LB-19](../ACTION-REPORT.md#LB-19)…[LB-29](../ACTION-REPORT.md#LB-29), [LB-31](../ACTION-REPORT.md#LB-31)…[LB-37](../ACTION-REPORT.md#LB-37), [LB-39](../ACTION-REPORT.md#LB-39), [LB-42](../ACTION-REPORT.md#LB-42), [LB-45](../ACTION-REPORT.md#LB-45), [LB-47](../ACTION-REPORT.md#LB-47)…[LB-50](../ACTION-REPORT.md#LB-50) |
+| **A4 UI/UX**             |     3 | [CT-12](../ACTION-REPORT.md#CT-12), [LB-30](../ACTION-REPORT.md#LB-30), [LB-24](../ACTION-REPORT.md#LB-24)/LB-25 surfaces                                                                                                                                                                                                                                                                                                                                                                                 |
+| **A5 Verify**            |     4 | harness, previews, regression tests, gate                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ---
 
@@ -76,7 +76,7 @@ A one-player group legitimately keeps a placeholder match so the lone player sta
 
 **Files** · `src/pages/Marketplace.tsx:39` · `src/pages/Profile.tsx:91`
 
-A denied `contacts` read is **normal in this app, not an error** — `CLAUDE.md` says so explicitly. The connection doc lands a moment *after* a request is accepted, so a denial is expected traffic. Both sites batch the reads and attach one trailing `.catch()`, so **one** denial rejects the whole `Promise.all` and removes the Contact button for every seller on the Marketplace board and every upcoming opponent on Profile.
+A denied `contacts` read is **normal in this app, not an error** — `CLAUDE.md` says so explicitly. The connection doc lands a moment _after_ a request is accepted, so a denial is expected traffic. Both sites batch the reads and attach one trailing `.catch()`, so **one** denial rejects the whole `Promise.all` and removes the Contact button for every seller on the Marketplace board and every upcoming opponent on Profile.
 
 **Build** · per-id `.catch(() => null)` on each `getDoc`, exactly as `PlayerProfile.tsx` already does. Drop the single trailing catch. Route both through `useContacts` if the shape allows it without a rewrite.
 
@@ -98,54 +98,54 @@ The catch block advances to the success screen **and** fires the `complete_profi
 
 **File** · `src/pages/Matches.tsx`
 
-| Row | Line | Defect | Fix |
-| --- | --- | --- | --- |
-| [LB-19](../ACTION-REPORT.md#LB-19) | `:717` `cancelRequest`, rendered at `:808` | `cancelRequest` only matches `status === 'open'`, but the button renders on accepted challenges too — a pure dead click | Restrict rendering to `isPending`, or extend `cancelRequest` |
-| [LB-20](../ACTION-REPORT.md#LB-20) | `:499` `openChallengeScore` vs `useLadder.ts` | `challengeAccepted` includes `reported`; `openChallengeScore` only finds `accepted` — another dead click | Align the two predicates |
-| [LB-21](../ACTION-REPORT.md#LB-21) | `:702` `const showContact = showScore;` | Contact drops the moment a rally hits `reported`, while the name link survives — the two players lose each other exactly when they need to talk about the score | Include `reported` in `showContact` |
+| Row                                | Line                                          | Defect                                                                                                                                                          | Fix                                                          |
+| ---------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [LB-19](../ACTION-REPORT.md#LB-19) | `:717` `cancelRequest`, rendered at `:808`    | `cancelRequest` only matches `status === 'open'`, but the button renders on accepted challenges too — a pure dead click                                         | Restrict rendering to `isPending`, or extend `cancelRequest` |
+| [LB-20](../ACTION-REPORT.md#LB-20) | `:499` `openChallengeScore` vs `useLadder.ts` | `challengeAccepted` includes `reported`; `openChallengeScore` only finds `accepted` — another dead click                                                        | Align the two predicates                                     |
+| [LB-21](../ACTION-REPORT.md#LB-21) | `:702` `const showContact = showScore;`       | Contact drops the moment a rally hits `reported`, while the name link survives — the two players lose each other exactly when they need to talk about the score | Include `reported` in `showContact`                          |
 
 ---
 
 ### ⬛ LB-22 to LB-29 — Silent failures
 
-| Row | File | Defect | Fix |
-| --- | --- | --- | --- |
-| [LB-22](../ACTION-REPORT.md#LB-22) | `Profile.tsx` events calendar | `Selected:` sorts `"May 9, 2026"` lexicographically, so May 10 lists before May 9; the 7-column grid has no leading blank cells so weekdays align only by coincidence | Sort on real dates; offset the grid by the month's first weekday |
-| [LB-23](../ACTION-REPORT.md#LB-23) | `Tournament.tsx` zone Approve | If no bucket matches the stored `new_zone`, Approve silently does nothing | Error banner naming the unmatched zone |
-| [LB-24](../ACTION-REPORT.md#LB-24) | `ProfileInfo.tsx` avatar upload | A >5 MB or non-image file returns early with no message; the picker just closes | Set the card's error message; disable the button during upload |
-| [LB-25](../ACTION-REPORT.md#LB-25) | `BadgePicker.tsx` | Selecting a 4th badge is a no-op with no styling change and no message | Disable unselected chips at 3, show "3 maximum" |
-| [LB-26](../ACTION-REPORT.md#LB-26) | `RRGroupCard.tsx` Save Group · `RoundRobinView.tsx` Create | Cap-of-5 and already-played validation is server-side only and surfaces as a banner at the top of a long list — an invisible failure | Validate `overGroupCap` and played-match state client-side; disable with a reason |
-| [LB-27](../ACTION-REPORT.md#LB-27) | `TournamentElements.tsx` `BracketErrorBoundary` | `hasError` never clears, so switching draws or events after one render error keeps the error card until a full reload | Reset on a `key`/prop change via `getDerivedStateFromProps` |
-| [LB-28](../ACTION-REPORT.md#LB-28) | `RoundRobinView.tsx` | `onDownload={() => {}}` — after a knockout render error the fallback's "Download Draw" silently does nothing | Pass the handler `BracketView` gets, or omit the prop and hide the button |
-| [LB-29](../ACTION-REPORT.md#LB-29) | `Tasks.tsx:63` `searchParams.get('claim')` | `?claim=banana` opens a sheet with an undefined title and a Submit whose validation branches all fall through | Whitelist `volunteer` / `ambassador` / `host`; otherwise ignore the param |
+| Row                                | File                                                       | Defect                                                                                                                                                                | Fix                                                                               |
+| ---------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| [LB-22](../ACTION-REPORT.md#LB-22) | `Profile.tsx` events calendar                              | `Selected:` sorts `"May 9, 2026"` lexicographically, so May 10 lists before May 9; the 7-column grid has no leading blank cells so weekdays align only by coincidence | Sort on real dates; offset the grid by the month's first weekday                  |
+| [LB-23](../ACTION-REPORT.md#LB-23) | `Tournament.tsx` zone Approve                              | If no bucket matches the stored `new_zone`, Approve silently does nothing                                                                                             | Error banner naming the unmatched zone                                            |
+| [LB-24](../ACTION-REPORT.md#LB-24) | `ProfileInfo.tsx` avatar upload                            | A >5 MB or non-image file returns early with no message; the picker just closes                                                                                       | Set the card's error message; disable the button during upload                    |
+| [LB-25](../ACTION-REPORT.md#LB-25) | `BadgePicker.tsx`                                          | Selecting a 4th badge is a no-op with no styling change and no message                                                                                                | Disable unselected chips at 3, show "3 maximum"                                   |
+| [LB-26](../ACTION-REPORT.md#LB-26) | `RRGroupCard.tsx` Save Group · `RoundRobinView.tsx` Create | Cap-of-5 and already-played validation is server-side only and surfaces as a banner at the top of a long list — an invisible failure                                  | Validate `overGroupCap` and played-match state client-side; disable with a reason |
+| [LB-27](../ACTION-REPORT.md#LB-27) | `TournamentElements.tsx` `BracketErrorBoundary`            | `hasError` never clears, so switching draws or events after one render error keeps the error card until a full reload                                                 | Reset on a `key`/prop change via `getDerivedStateFromProps`                       |
+| [LB-28](../ACTION-REPORT.md#LB-28) | `RoundRobinView.tsx`                                       | `onDownload={() => {}}` — after a knockout render error the fallback's "Download Draw" silently does nothing                                                          | Pass the handler `BracketView` gets, or omit the prop and hide the button         |
+| [LB-29](../ACTION-REPORT.md#LB-29) | `Tasks.tsx:63` `searchParams.get('claim')`                 | `?claim=banana` opens a sheet with an undefined title and a Submit whose validation branches all fall through                                                         | Whitelist `volunteer` / `ambassador` / `host`; otherwise ignore the param         |
 
 ---
 
 ### ⬛ LB-31 to LB-37, LB-39 — Court map, signup and forms
 
-| Row | File | Defect | Fix |
-| --- | --- | --- | --- |
-| [LB-31](../ACTION-REPORT.md#LB-31) | `courtmap/CourtMapElements.tsx` `MultiFilterSelect` | Opening Zone then tapping Total Courts leaves two overlapping popovers, the second rendering under the first | Document `mousedown` and `keydown` listeners; close on outside click and Escape |
-| [LB-32](../ACTION-REPORT.md#LB-32) | `CourtMap.tsx` search `×` | The `×` calls `handleReset` (`:386`) and silently wipes Type / Lights / Zone / Total Courts / programs | Call `handleClear` (`:374`); keep Reset inside the Filters sheet |
-| [LB-33](../ACTION-REPORT.md#LB-33) | `CourtMap.tsx:386` `handleReset` | Skips `showAllCourts` (`:152`), so Reset leaves the map in whichever mode it was in | Include `setShowAllCourts(false)` |
-| [LB-34](../ACTION-REPORT.md#LB-34) | `Signup.tsx:382` `goToEmailPhase` | Only the Google credential is cleared; after an Apple hand-off `(change)` leaves `pendingAppleCredential` (`:101`) armed and the OAuth buttons hidden for the rest of the session | Clear both |
-| [LB-35](../ACTION-REPORT.md#LB-35) | `Signup.tsx` | One shared `loading` flag across the three sign-in buttons | Split per button |
-| [LB-36](../ACTION-REPORT.md#LB-36) | `CheckInModal.tsx` | One shared `busy` flag across rows | Per-row scope |
-| [LB-37](../ACTION-REPORT.md#LB-37) | `ServicesElements.tsx` offer form | `$NaN` in the live preview | Guard the parse |
-| [LB-39](../ACTION-REPORT.md#LB-39) | `Signup.tsx` | `emailSuggestion` is loosely typed | Type it properly |
+| Row                                | File                                                | Defect                                                                                                                                                                            | Fix                                                                             |
+| ---------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [LB-31](../ACTION-REPORT.md#LB-31) | `courtmap/CourtMapElements.tsx` `MultiFilterSelect` | Opening Zone then tapping Total Courts leaves two overlapping popovers, the second rendering under the first                                                                      | Document `mousedown` and `keydown` listeners; close on outside click and Escape |
+| [LB-32](../ACTION-REPORT.md#LB-32) | `CourtMap.tsx` search `×`                           | The `×` calls `handleReset` (`:386`) and silently wipes Type / Lights / Zone / Total Courts / programs                                                                            | Call `handleClear` (`:374`); keep Reset inside the Filters sheet                |
+| [LB-33](../ACTION-REPORT.md#LB-33) | `CourtMap.tsx:386` `handleReset`                    | Skips `showAllCourts` (`:152`), so Reset leaves the map in whichever mode it was in                                                                                               | Include `setShowAllCourts(false)`                                               |
+| [LB-34](../ACTION-REPORT.md#LB-34) | `Signup.tsx:382` `goToEmailPhase`                   | Only the Google credential is cleared; after an Apple hand-off `(change)` leaves `pendingAppleCredential` (`:101`) armed and the OAuth buttons hidden for the rest of the session | Clear both                                                                      |
+| [LB-35](../ACTION-REPORT.md#LB-35) | `Signup.tsx`                                        | One shared `loading` flag across the three sign-in buttons                                                                                                                        | Split per button                                                                |
+| [LB-36](../ACTION-REPORT.md#LB-36) | `CheckInModal.tsx`                                  | One shared `busy` flag across rows                                                                                                                                                | Per-row scope                                                                   |
+| [LB-37](../ACTION-REPORT.md#LB-37) | `ServicesElements.tsx` offer form                   | `$NaN` in the live preview                                                                                                                                                        | Guard the parse                                                                 |
+| [LB-39](../ACTION-REPORT.md#LB-39) | `Signup.tsx`                                        | `emailSuggestion` is loosely typed                                                                                                                                                | Type it properly                                                                |
 
 ---
 
 ### ⬛ LB-42, LB-45, LB-47 to LB-50 — Reads, images and empty states
 
-| Row | File | Defect | Fix |
-| --- | --- | --- | --- |
-| [LB-42](../ACTION-REPORT.md#LB-42) | Completed tab | Cache guard is wrong, so the tab refetches or serves stale | Fix the guard key |
-| [LB-45](../ACTION-REPORT.md#LB-45) | `ProfileInfo.tsx` avatar · `Home.tsx` hero slides | No `onError` fallback — a dead URL renders a broken image | Add `onError` |
-| [LB-47](../ACTION-REPORT.md#LB-47) | `Home.tsx` | The Report button is unreachable for logged-out visitors | Make it reachable, or hide it honestly |
-| [LB-48](../ACTION-REPORT.md#LB-48) | Wait-time table | Points at the wrong racquet count — not the one the reporter typed | Point it at the reported count |
-| [LB-49](../ACTION-REPORT.md#LB-49) | Notification feed | Reports a capped unread count as if it were the true one | Report the true count, or label the cap |
-| [LB-50](../ACTION-REPORT.md#LB-50) | Empty states caused by failed reads | No retry — a failed read is indistinguishable from "nothing here" | Add a retry |
+| Row                                | File                                              | Defect                                                             | Fix                                     |
+| ---------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------- |
+| [LB-42](../ACTION-REPORT.md#LB-42) | Completed tab                                     | Cache guard is wrong, so the tab refetches or serves stale         | Fix the guard key                       |
+| [LB-45](../ACTION-REPORT.md#LB-45) | `ProfileInfo.tsx` avatar · `Home.tsx` hero slides | No `onError` fallback — a dead URL renders a broken image          | Add `onError`                           |
+| [LB-47](../ACTION-REPORT.md#LB-47) | `Home.tsx`                                        | The Report button is unreachable for logged-out visitors           | Make it reachable, or hide it honestly  |
+| [LB-48](../ACTION-REPORT.md#LB-48) | Wait-time table                                   | Points at the wrong racquet count — not the one the reporter typed | Point it at the reported count          |
+| [LB-49](../ACTION-REPORT.md#LB-49) | Notification feed                                 | Reports a capped unread count as if it were the true one           | Report the true count, or label the cap |
+| [LB-50](../ACTION-REPORT.md#LB-50) | Empty states caused by failed reads               | No retry — a failed read is indistinguishable from "nothing here"  | Add a retry                             |
 
 **Held to Sprint 3, deliberately:** [LB-7](../ACTION-REPORT.md#LB-7) to [LB-15](../ACTION-REPORT.md#LB-15). Every one moves a stored field or a definition and belongs with A2's stat-definition pass. Do not start them today.
 
@@ -197,7 +197,7 @@ The welcome email bypasses the non-production delivery gate. On `dev-anuj` — a
 
 ---
 
-### ⬛ Conflict 6 — Deploy runbook and the deployed-vs-repo rules diff
+### ⬛ Conflict 6 — Deployment order and rules-diff handoff
 
 **Deliverable, not code.**
 
@@ -205,13 +205,13 @@ The welcome email bypasses the non-production delivery gate. On `dev-anuj` — a
 2. **Diff the repo `firestore.rules` and `storage.rules` against the deployed console copies** and record the delta. Deployment is manual in this project, so the repo file is not necessarily what is enforcing anything right now. Every rules decision this week rests on knowing that delta.
 
 ```text
-1. Firebase console: reCAPTCHA Enterprise key registered
-2. firebase deploy --only functions
-3. firebase deploy --only firestore:rules[,storage]
-4. hosting build with VITE_FIREBASE_APP_CHECK_SITE_KEY, then deploy
+1. Confirm the target is a local emulator or an explicitly isolated staging project.
+2. Run Functions, Firestore Rules, Storage Rules, and Hosting checks against that non-production target.
+3. Record the repo-versus-deployed rules delta only when an authorized staging console is available.
+4. Keep production deploys and production data changes out of this sprint; promote only after a separate approval.
 ```
 
-`tbtc` is the test environment. `storage.rules` is still in progress there — the "deploying replaces the console copy" warning applies when promoting to the **live** project.
+No staging Firebase project is configured in this checkout. The future staging runbook must name its project explicitly before any Firebase CLI command is run.
 
 **A1 verification** · `npm run test:rules` · `npm run test:storage` · `cd functions && npm test` · `npm run test:functions:integration` · `npm run functions:syntax`
 
@@ -235,11 +235,11 @@ export const pgWinPct = (r: { pointswon: number; totalPointsPlayed: number }) =>
 
 **Build**
 
-1. Drop both fields from the bootstrap write and from the `stats` type.
-2. Re-express `pgWinPct` to take the member's matches, not two stored counters.
-3. Write the migration that strips both from the existing docs. **Dry-run first** and put the diff in your report.
+1. Drop both fields from the bootstrap write and make them optional legacy-read fields.
+2. Keep new tournament result writes limited to authoritative match counters; client readers use match-derived totals where available.
+3. Defer any strip migration until an isolated staging project and approved dry-run/recovery path exist.
 
-**Done when** · a fresh Google sign-in produces `users` + `stats` + `preferences` + `tasks` + `contacts` · `grep -rn 'pointswon\|totalPointsPlayed' src/` returns only the derivation helper · the strip migration's dry-run diff shows exactly the expected doc count and no other field touched.
+**Done when** · a fresh Google sign-in produces `users` + `stats` + `preferences` + `tasks` + `contacts` · new stats writes omit the legacy P/G fields · no migration runs against production.
 
 > This is also why the auto-approval rule was defined on **scores**, not on P/G Won %: a submitter-percentage tie-break would have required both fields to stay stored, and reversed [L14](../notes/HARMONIZATION_REPORT.md#L14).
 
@@ -247,7 +247,7 @@ export const pgWinPct = (r: { pointswon: number; totalPointsPlayed: number }) =>
 
 ### ⬛ Baseline export
 
-Take a full production export before anything else runs this week. **[PD8](../notes/DECISIONS_BRIEF.md#PD8) (backup and restore) is deferred with no commitment**, so this export is the only rollback point the programme has. Record where it lives.
+Do not take a production export in D1. A staging export may be added later once an isolated staging project and approved recovery path exist; until then, use deterministic local fixtures and emulator state for validation.
 
 `R6` says all 204 `stats` docs currently satisfy `loses = matchesPlayed − wins`. Capture that as the reconciliation baseline; it must still hold on Friday.
 
@@ -315,23 +315,23 @@ One test per row above, failing on the old code. Priority order: [LB-1](../ACTIO
 
 ### ⬛ Exit gate
 
-| Check | Passes when |
-| --- | --- |
-| Clean-clone verification | All eleven commands green |
-| `docs/` + `.design-sync/` | Tracked and pushed |
-| Design-sync | 16 components × 2 themes, three graded |
-| [LB-1](../ACTION-REPORT.md#LB-1) | Blank winner refused at form, rules and callable; test fails on old code |
-| [F2](../notes/WORKFLOW_DESIGN_REPORT.md#F2) | Fresh OAuth sign-in produces all five profile documents |
-| Rules delta | A1's deployed-vs-repo diff recorded |
-| Baseline | Production export taken; `loses = matchesPlayed − wins` holds on 204 docs |
+| Check                                       | Passes when                                                                                                                    |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Clean-clone verification                    | All eleven commands green                                                                                                      |
+| `docs/` + `.design-sync/`                   | Tracked and pushed                                                                                                             |
+| Design-sync                                 | 16 components × 2 themes, three graded                                                                                         |
+| [LB-1](../ACTION-REPORT.md#LB-1)            | Blank winner refused at form, rules and callable; test fails on old code                                                       |
+| [F2](../notes/WORKFLOW_DESIGN_REPORT.md#F2) | Fresh OAuth sign-in produces all five profile documents                                                                        |
+| Rules delta                                 | A1's deployed-vs-repo diff recorded                                                                                            |
+| Baseline                                    | Local fixtures/emulator checks recorded; staging export and reconciliation deferred until an authorized staging project exists |
 
 ---
 
 ## Handoffs into Sprint D2
 
-| From | To | What |
-| --- | --- | --- |
-| A1 | A3 | The rules delta — it decides which of tomorrow's client writes are currently refused |
-| A2 | A1 | The `stats` field list after the [L14](../notes/HARMONIZATION_REPORT.md#L14) strip, for tomorrow's whitelist |
-| A3 | A4 | `ScoreModal` is now winner-less on open — tomorrow's rework builds on that, not around it |
-| A5 | all | Graded baseline, so Wednesday's diffs mean something |
+| From | To  | What                                                                                                         |
+| ---- | --- | ------------------------------------------------------------------------------------------------------------ |
+| A1   | A3  | The rules delta — it decides which of tomorrow's client writes are currently refused                         |
+| A2   | A1  | The `stats` field list after the [L14](../notes/HARMONIZATION_REPORT.md#L14) strip, for tomorrow's whitelist |
+| A3   | A4  | `ScoreModal` is now winner-less on open — tomorrow's rework builds on that, not around it                    |
+| A5   | all | Graded baseline, so Wednesday's diffs mean something                                                         |

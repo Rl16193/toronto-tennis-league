@@ -60,6 +60,14 @@ documentation review. The mapping covers Firebase configuration/rules, callable 
 boundaries, tournament/data-access modules, and migration tooling. Expand it when a new durable
 boundary is introduced.
 
+### Sprint D1 review note
+
+The D1 implementation keeps tournament score submission and result application Function-authoritative,
+uses a shared overlay stack for nested Escape handling, and treats legacy P/G counters as read-only
+compatibility data. New profile and tournament writes do not create those counters. Validation for this
+slice is local-only; production deployment and production data mutation are explicitly out of scope,
+with staging deferred until an isolated project and recovery path are approved.
+
 ## Vendor boundary
 
 `.agents/skills/gstack/` is tracked third-party agent tooling kept for reproducible local workflows.
