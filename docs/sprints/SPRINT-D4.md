@@ -32,8 +32,8 @@
 
 ## Implementation status
 
-The D4 implementation is complete on the isolated `codex/sprint-4-d4` branch for review and merge
-into `dev-anuj`. It includes the participant schema/rules whitelist, server participant placer,
+The D4 implementation was completed on the isolated `codex/sprint-4-d4` branch and merged into
+`dev-anuj` in the Sprint 4 merge commit. It includes the participant schema/rules whitelist, server participant placer,
 withdrawal walkover workflow, notify-only zone changes, partner-pool registration, availability
 state, completion-gate removal, and organizer-controlled knockout/reset behavior. Local tests,
 typecheck, lint, build, and documentation verification are the release evidence; no production
