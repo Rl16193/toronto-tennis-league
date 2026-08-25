@@ -83,7 +83,7 @@ exports.requestCompletion = onCall({ region: REGION }, async (request) => {
       throw new HttpsError('permission-denied', 'Only the assigned provider can complete this booking.');
     }
     assertBookingStatus(data.status, 'requestCompletion');
-    tx.update(ref, { status: 'completion_requested', completion_requested_at: now(), updated_at: now() });
+    tx.update(ref, { status: 'in_progress', completion_requested_at: now(), updated_at: now() });
     return data;
   });
   await notify(result.uid, {
