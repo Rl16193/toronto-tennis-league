@@ -11,12 +11,12 @@
 
 | # | Decision |
 | - | --- |
-| D1 | **No submissions collection.** Player reports are a pending block on the match doc; the `tournament` change log (actor, before/after) is the audit. The owner reads it through the CSV exporter (`tournament` added to `analysis/export-firestore.js`). |
-| D2 | **Ladder challenges keep `event_id`.** The year-round ladder is an event; its manager confirms results (±3, loser floored at 0) through `challengeResults`. |
-| D3 | **One-step rescore, unlimited.** Reverse old + apply new in one transaction; `result_at` stamped each time; `completed_at` pinned at first scoring; every edit logged. |
-| D4 | ~~**Nothing auto-applies.** A winner flip with a downstream result, or a mismatch against the recorded score, flags for the organizer; players see "Score / Winner change requested"; tick applies, X denies; approval never overwrites a played slot.~~ **SUPERSEDED 2026-08-23 — see the amendment below.** The one surviving clause: **approval never overwrites a played slot.** |
-| D5 | **One server-side placer** on participant-create seats joiners within their zone's draws (open LOADING slot or RR group; zone-assigned at join before generation). Organizer-removed players stay in Unplaced; the placer never re-seats them. |
-| D6 | **Walkovers only.** No-show is removed. A walkover is all-zero scores plus a winner, tournaments only; `is_walkover` is not stored. **Payout:** a Round Robin group walkover pays **1 point to each player**; a knockout walkover advances the winner and the eliminated player collects that round's award. |
+| <a id="D1"></a>D1 | **No submissions collection.** Player reports are a pending block on the match doc; the `tournament` change log (actor, before/after) is the audit. The owner reads it through the CSV exporter (`tournament` added to `analysis/export-firestore.js`). |
+| <a id="D2"></a>D2 | **Ladder challenges keep `event_id`.** The year-round ladder is an event; its manager confirms results (±3, loser floored at 0) through `challengeResults`. |
+| <a id="D3"></a>D3 | **One-step rescore, unlimited.** Reverse old + apply new in one transaction; `result_at` stamped each time; `completed_at` pinned at first scoring; every edit logged. |
+| <a id="D4"></a>D4 | ~~**Nothing auto-applies.** A winner flip with a downstream result, or a mismatch against the recorded score, flags for the organizer; players see "Score / Winner change requested"; tick applies, X denies; approval never overwrites a played slot.~~ **SUPERSEDED 2026-08-23 — see the amendment below.** The one surviving clause: **approval never overwrites a played slot.** |
+| <a id="D5"></a>D5 | **One server-side placer** on participant-create seats joiners within their zone's draws (open LOADING slot or RR group; zone-assigned at join before generation). Organizer-removed players stay in Unplaced; the placer never re-seats them. |
+| <a id="D6"></a>D6 | **Walkovers only.** No-show is removed. A walkover is all-zero scores plus a winner, tournaments only; `is_walkover` is not stored. **Payout:** a Round Robin group walkover pays **1 point to each player**; a knockout walkover advances the winner and the eliminated player collects that round's award. |
 
 ### Amendment — 2026-08-23 · results auto-apply on submission
 
@@ -60,42 +60,42 @@ flowchart LR
 
 | # | Amendment | Collection |
 | - | --- | --- |
-| L1 | Challenges keep `event_id`; a permanent ladder event document exists. `league` still derives from `stats.league`. | `matches` |
-| L2 | Add `result_at`. | `matches` |
-| L3 | The idempotency hash lives inside `score_pending`; no separate `result_application` field. | `matches` |
-| L4 | Add `organizer_ids` (per-event assignment; `providers` rows carry roles, not assignments). | `events` |
-| L5 | Add `preferred_zone_manual` (live guard against court edits re-zoning a player). | `preferences` |
-| L6 | `profile_details_visible` is **dropped** (owner ruling 2026-08-22): it hid only the league pill, which is public on the leaderboards. | `users` |
-| L7 | Both `zones` (coverage) and `zone_draw_config` (draw bucketing: `{ enabled, buckets: [{ id, label, zones[] }], includeUnassigned, merges }`) stay; every bucket zone must appear in `zones`. | `events` |
-| L8 | `group_lessons` retires; a lesson is an add-on block on a social event. | `events` |
-| L9 | Public-field contract: every collection readable publicly except `contacts` **and `mailing_list`**; `preferences`, `tasks`, `site_stats` public; only `points_spent` stored, totals derived at read. | all |
-| L10 | Remove `no_show`; walkovers only (D6). The walkover **payout** differs by stage: Round Robin group 1 point each; knockout winner advances and the eliminated player collects the round award. A missed scheduled match is recorded as a real 6-0 result, not a walkover. | `matches` |
-| L11 | Bookings: `lead → in_progress → completed`, `cancelled` from `lead` only (points refunded); `completion_requested_at` while the player answers "Got your racquet back?"; no `flagged` / `cancel_requested`. | `bookings` |
-| L12 | Withdrawal: Withdraw button for members; after draws, unplayed matches become walkovers (RR 1 point each; knockout opponent advances); organizer Reset + orange ! form writes `status: withdrawn` + note; re-add allowed, walkovers corrected by rescore. | `event_participants` · `matches` |
-| L13 | Contacts readable in-app only by the event organizer for their own sign-ups and by opponents through connections; super-admin profile viewing removed. | `contacts` |
-| L14 | `pointswon` and `totalPointsPlayed` are **not stored**; "P/G Won %" is derived client-side from the member's matches. | `stats` |
-| L15 | A per-event `zone` (organizer-set, marked manual) on the participant row; the profile zone is untouched. **`req_zone_change` / `new_zone` are kept** (owner ruling 2026-08-22): before matches are generated the player moves freely; after generation the organizer is notified and the player sits in **both** zone draws until the organizer resolves it — displace, add to both draws (default), or cancel. A zone change never unseats. | `event_participants` |
-| L16 | Add `available_to_play` (member toggle; off shows an Away pill on challenge and rally cards). | `preferences` |
-| L17 | Round deadlines are keyed by draw and round and **exclude the Round Robin group stage** (it runs the season); Round Robin knockout rounds carry deadlines. | `events` |
-| L18 | Doubles without a partner: a player may register alone and joins a **partner pool** for that event; pool members are the dropdown other players pick from, and a pool member is notified when someone new joins. Selecting a partner removes both from the pool. A partner who is not on the app is stored as `partner_name` only. | `event_participants` |
+| <a id="L1"></a>L1 | Challenges keep `event_id`; a permanent ladder event document exists. `league` still derives from `stats.league`. | `matches` |
+| <a id="L2"></a>L2 | Add `result_at`. | `matches` |
+| <a id="L3"></a>L3 | The idempotency hash lives inside `score_pending`; no separate `result_application` field. | `matches` |
+| <a id="L4"></a>L4 | Add `organizer_ids` (per-event assignment; `providers` rows carry roles, not assignments). | `events` |
+| <a id="L5"></a>L5 | Add `preferred_zone_manual` (live guard against court edits re-zoning a player). | `preferences` |
+| <a id="L6"></a>L6 | `profile_details_visible` is **dropped** (owner ruling 2026-08-22): it hid only the league pill, which is public on the leaderboards. | `users` |
+| <a id="L7"></a>L7 | Both `zones` (coverage) and `zone_draw_config` (draw bucketing: `{ enabled, buckets: [{ id, label, zones[] }], includeUnassigned, merges }`) stay; every bucket zone must appear in `zones`. | `events` |
+| <a id="L8"></a>L8 | `group_lessons` retires; a lesson is an add-on block on a social event. | `events` |
+| <a id="L9"></a>L9 | Public-field contract: every collection readable publicly except `contacts` **and `mailing_list`**; `preferences`, `tasks`, `site_stats` public; only `points_spent` stored, totals derived at read. | all |
+| <a id="L10"></a>L10 | Remove `no_show`; walkovers only (D6). The walkover **payout** differs by stage: Round Robin group 1 point each; knockout winner advances and the eliminated player collects the round award. A missed scheduled match is recorded as a real 6-0 result, not a walkover. | `matches` |
+| <a id="L11"></a>L11 | Bookings: `lead → in_progress → completed`, `cancelled` from `lead` only (points refunded); `completion_requested_at` while the player answers "Got your racquet back?"; no `flagged` / `cancel_requested`. | `bookings` |
+| <a id="L12"></a>L12 | Withdrawal: Withdraw button for members; after draws, unplayed matches become walkovers (RR 1 point each; knockout opponent advances); organizer Reset + orange ! form writes `status: withdrawn` + note; re-add allowed, walkovers corrected by rescore. | `event_participants` · `matches` |
+| <a id="L13"></a>L13 | Contacts readable in-app only by the event organizer for their own sign-ups and by opponents through connections; super-admin profile viewing removed. | `contacts` |
+| <a id="L14"></a>L14 | `pointswon` and `totalPointsPlayed` are **not stored**; "P/G Won %" is derived client-side from the member's matches. | `stats` |
+| <a id="L15"></a>L15 | A per-event `zone` (organizer-set, marked manual) on the participant row; the profile zone is untouched. **`req_zone_change` / `new_zone` are kept** (owner ruling 2026-08-22): before matches are generated the player moves freely; after generation the organizer is notified and the player sits in **both** zone draws until the organizer resolves it — displace, add to both draws (default), or cancel. A zone change never unseats. | `event_participants` |
+| <a id="L16"></a>L16 | Add `available_to_play` (member toggle; off shows an Away pill on challenge and rally cards). | `preferences` |
+| <a id="L17"></a>L17 | Round deadlines are keyed by draw and round and **exclude the Round Robin group stage** (it runs the season); Round Robin knockout rounds carry deadlines. | `events` |
+| <a id="L18"></a>L18 | Doubles without a partner: a player may register alone and joins a **partner pool** for that event; pool members are the dropdown other players pick from, and a pool member is notified when someone new joins. Selecting a partner removes both from the pool. A partner who is not on the app is stored as `partner_name` only. | `event_participants` |
 
 ## 4. Naming
 
 | # | Resolution |
 | - | --- |
-| N1 | Catalog collection is **`services`**; `offers` retires. Correct the Review's Phase 6a wording. |
-| N2 | Bonus stamp is **`rr_groupbonus`**. Correct the Review's Phase 4b structure row. |
+| <a id="N1"></a>N1 | Catalog collection is **`services`**; `offers` retires. Correct the Review's Phase 6a wording. |
+| <a id="N2"></a>N2 | Bonus stamp is **`rr_groupbonus`**. Correct the Review's Phase 4b structure row. |
 
 ## 5. Sequencing corrections to the Review
 
 | # | Correction | Phase |
 | - | --- | --- |
-| S1 | The `loses` strip lands in Phase 4b, where both writers stop (result deltas, friendly payout). | 4b |
-| S2 | Add `tournamentResults.js` to the touched list — it writes `rr_winner_pts_v2`. | 1 |
-| S3 | The participant check reads `status`; no withdrawn data exists, so code only. | 2a |
-| S4 | Events rename: `isCreatorOfEvent()` is stale — `creator_id` is read by `isManagerOfEvent` / `isOwnerOfEvent`, the events rules pins, `isEventOrganizer`, `onScheduleRequested`. | 2a |
-| S5 | No `requested_by` backfill (the boolean never recorded who asked); pending requests expire, players re-request. | 3 |
-| S6 | The `event_creator` fallback ends at the `providers` cutover, not at Lockdown. | 5 |
+| <a id="S1"></a>S1 | The `loses` strip lands in Phase 4b, where both writers stop (result deltas, friendly payout). | 4b |
+| <a id="S2"></a>S2 | Add `tournamentResults.js` to the touched list — it writes `rr_winner_pts_v2`. | 1 |
+| <a id="S3"></a>S3 | The participant check reads `status`; no withdrawn data exists, so code only. | 2a |
+| <a id="S4"></a>S4 | Events rename: `isCreatorOfEvent()` is stale — `creator_id` is read by `isManagerOfEvent` / `isOwnerOfEvent`, the events rules pins, `isEventOrganizer`, `onScheduleRequested`. | 2a |
+| <a id="S5"></a>S5 | No `requested_by` backfill (the boolean never recorded who asked); pending requests expire, players re-request. | 3 |
+| <a id="S6"></a>S6 | The `event_creator` fallback ends at the `providers` cutover, not at Lockdown. | 5 |
 
 Every phase deploys functions → rules → hosting with union whitelists; every hosting build carries the App Check key.
 
@@ -116,13 +116,13 @@ Every phase deploys functions → rules → hosting with union whitelists; every
 
 | # | Trade-off | Disposition |
 | - | --- | --- |
-| R1 | Unlimited organizer edits re-open the tamper surface server scoring closed. | Accepted — auditable via change log, pinned `completed_at`, `result_at`. |
-| R2 | No independent submissions record; the server that applies also writes the log. | Accepted — `reported_by` + logged payloads compensate. |
-| R3 | One pending block per match: two conflicting reports cannot coexist. | Overwrite-latest; the superseded report stays in the change log. |
-| R4 | D2 contradicts the Ledger's play section. | Amend the Ledger before implementation. |
-| R5 | BYE / LOADING sentinels in `player_*_id`. | Exclude sentinels from connections, stat deltas, notifications. |
-| R6 | Derived `loses` vs legacy drift. | Verified clean: all 204 stats docs satisfy `loses = matchesPlayed − wins`. Counters are authoritative for pre-2026 history (all live match docs are 2026); reconciliation baselines from the archived counter snapshot, never from matches. |
-| R7 | `preferences` world-readable again. | Accepted — member choices only; role and provider fields move to `providers`. |
+| <a id="R1"></a>R1 | Unlimited organizer edits re-open the tamper surface server scoring closed. | Accepted — auditable via change log, pinned `completed_at`, `result_at`. |
+| <a id="R2"></a>R2 | No independent submissions record; the server that applies also writes the log. | Accepted — `reported_by` + logged payloads compensate. |
+| <a id="R3"></a>R3 | One pending block per match: two conflicting reports cannot coexist. | Overwrite-latest; the superseded report stays in the change log. |
+| <a id="R4"></a>R4 | D2 contradicts the Ledger's play section. | Amend the Ledger before implementation. |
+| <a id="R5"></a>R5 | BYE / LOADING sentinels in `player_*_id`. | Exclude sentinels from connections, stat deltas, notifications. |
+| <a id="R6"></a>R6 | Derived `loses` vs legacy drift. | Verified clean: all 204 stats docs satisfy `loses = matchesPlayed − wins`. Counters are authoritative for pre-2026 history (all live match docs are 2026); reconciliation baselines from the archived counter snapshot, never from matches. |
+| <a id="R7"></a>R7 | `preferences` world-readable again. | Accepted — member choices only; role and provider fields move to `providers`. |
 
 ## Future works
 

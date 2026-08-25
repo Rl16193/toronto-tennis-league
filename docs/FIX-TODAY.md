@@ -1,0 +1,361 @@
+<!-- Companion to docs/ACTION-REPORT.md and docs/UI-UX-INVENTORY.md -->
+
+> ⚠ **Branch note (2026-08-23).** This was written against `main`, which is **116 commits behind** `tbtc/dev-anuj` @ `9c81f00`. The design layer is unchanged between them, so every finding here still stands — but **line citations have moved** across 128 files. See `docs/UI-REMAINING.md` for the re-citation table and what is still outstanding.
+
+
+# Fix today — what one file reaches
+
+**Report 1 of 2.** Everything below is deliverable against `main` as it stands, by editing a file that
+already exists and already has consumers. No new component, no new file in `src/`, no per-site sweep.
+Report 2 carries the rest.
+
+### The count, corrected
+
+The brief carries two numbers that do not survive checking.
+
+| Figure | Brief | Verified | Method |
+|---|---|---|---|
+| Total action rows | 273 | **272** | `grep -oE '^\| \*{0,2}(LB\|CT\|BT\|TY\|MF\|RT\|CS\|AX\|DC\|KO)-[0-9]+' docs/ACTION-REPORT.md \| sort -u \| wc -l` → 272. Per prefix: LB 50 · CS 68 · CT 31 · BT 29 · DC 27 · AX 26 · MF 15 · RT 13 · TY 10 · KO 3. The report's own effort summary says 269 because its theme table omits the three KO rows. `CT-31` appears in two tables and is one row. |
+| Fixable today | 71 | **67** | Enumerated below, one row at a time. 58 of the 67 are code; 6 are documentation-only; 3 are `.design-sync` harness. |
+
+The rule I applied: a row qualifies when its fix is **authored in one shared file** — `src/index.css`,
+anything in `src/components/`, `src/App.tsx`, `src/main.tsx`, a `src/lib` or feature-level shared
+constant, or the `.design-sync` harness — and the call sites either need no edit at all, or need a
+deletion only (dropping a prop the shared file no longer accepts). A row that needs any page to be
+*rewritten* is report 2's, however small the rewrite.
+
+Four rows sit on the line and I counted them **in**, because the shared file is where the fix is
+authored and the tail is pure deletion: `MF-2`/`MF-3`/`MF-4` (Sheet absorbs padding, header and
+footer; the 19 mounts then delete their own copies) and `DC-1` (a prop declared in
+`ContactOpponentButton.tsx:72` and never destructured; seven call sites delete an argument).
+
+---
+
+### Summary
+
+Sorted by actions fixed, descending. "Reaches" is measured on `src/` today, not quoted.
+
+| File to edit | Reaches | Actions fixed | Effort | Risk | What visibly changes |
+|---|---|---|---|---|---|
+| `src/index.css` | every rendered pixel — 482 `clay`, 42 `bg-tennis-dark`, 103 `bg-tennis-surface`, 194 controls | **11** — CT-1, CT-2, CT-4, CT-15, CT-17, AX-2, AX-24, BT-11, BT-12, DC-15, CS-63 | M | Med | Cards stop being invisible against the page. The accent shifts `#FF6B35` → `#E84A27`. Every popover and dropdown gains a real fill. Keyboard focus becomes visible for the first time. Disabled controls stop vanishing on light cards. |
+| `src/components/Sheet.tsx` | **19** mounts | **9** — MF-1, MF-2, MF-3, MF-4, MF-14, MF-15, CT-14, AX-1, LB-30 | L | High | The modal backdrop actually dims. Every sheet gets one inset, one header, one sticky footer, and an exit animation. Tab stops walking behind the backdrop. The drag handle stops painting over the title. |
+| `src/components/Button.tsx` | **91** call sites (47% of all action controls) | **8** — BT-1, BT-3, BT-4, BT-5, BT-6, BT-7, BT-8, CT-13 | M | Med | Every labelled button becomes 44px at `rounded-2xl`. Google/Apple sign-in buttons become visible. The loading spinner stops being white-on-white. Outline buttons stop rendering 4px taller than filled ones. |
+| `src/App.tsx` | every route | **5** — RT-1, RT-2, RT-4, RT-5, RT-6 | S | Med | `/friendlies` and `/challenges` land on the tab they name. Switching the Matches mode stops jumping to the top of the page. Back stops bouncing off `/login`. |
+| `src/components/Input.tsx` | **15** mounts + the 3 page `labelCls`/`fieldCls` constants (~47 fields) | **3** — MF-5, MF-6, TY-5 | M | Med | One field chrome across Events, Marketplace, Services and every `<Input>`; fields grow ~6–10px and reach 44px. |
+| `src/components/ContactOpponentButton.tsx` | **27** `pillButtonCls` references, 13 files; **8** component mounts | **3** — BT-2, CS-45, DC-1 | M | High | Every inline pill (Contact, Schedule, Submit Score) goes 24px → 44px. Rows get ~20px taller — state this cost before merging. |
+| `src/components/SegmentedControl.tsx` | **7** mounts | **3** — BT-13, AX-7, BT-24 | M | Med | Segments 32px → 44px; the unselected segment stops being the brightest thing on a dark screen. Arrow keys work. |
+| `src/components/Accordion.tsx` (+ `Tree.tsx`, `PlayerCard.tsx`) | Accordion **8** mounts · Tree **7** · PlayerCard **4** | **2** — AX-17, BT-15 | L | High | Rows converge on one 44px height; `locked` sections stop opening when tapped. |
+| `src/components/Fab.tsx` | **3** mounts | **2** — CT-31, BT-19 | S | Low | The FAB's hardcoded orange glow follows the new accent instead of keeping the old one. |
+| `src/components/LoadingBar.tsx` | **2** mounts + 4 derived bars | **2** — AX-23, CT-24 | M | Low | The Court Map's green bar becomes clay. Progress bars announce to screen readers. |
+| `src/components/Toast.tsx` | **2** mounts | **1** — AX-18 | S | Low | A toast stops disappearing while it is being read. |
+| `src/components/AlertMessage.tsx` | **1** consumer today, 30 after MF-9 | **1** — MF-9 | S | Low | One banner shape; the other 13 hand-rolled copies are report 2. |
+| `src/components/Navbar.tsx` | every page | **1** — CS-65 | S | Low | The theme toggle appears on `/login` and `/signup`. |
+| `src/components/BottomNav.tsx` | every page | **1** — CT-16 | S | Low | Nothing, visually — `--color-nav` and `--color-tennis-dark` hold the same value. It unblocks DEC-3. |
+| `src/components/HeaderMenu.tsx` | 1 global drawer | **1** — AX-19 | S | Low | The drawer's close control shows an X instead of the same hamburger that opened it. |
+| `src/components/FooterElements.tsx` | every site-wide link | **1** — RT-9 | S | Low | `/privacy` and `/contact` become reachable without typing the URL. |
+| `src/main.tsx` | the crash screen | **1** — CT-12 | S | Low | "Unable to load" becomes readable on a light OS theme. |
+| `src/lib/motion.ts` | `tapScale`, 5 consumers | **1** — BT-29 | S | Low | Nothing. Removes a dead `whileHover` that invites a forbidden hover-scale. |
+| `src/features/tasks/taskCatalog.ts` | 0 importers | **1** — DC-9 | S | Low | Nothing. Deletes a wrong export before someone renders it. |
+| `src/features/leagues/useStandings.ts` | 0 consumers of the two returns | **1** — DC-10 | S | Low | Nothing. Deletes a second, unused definition of the Home headline numbers. |
+| `src/components/Stepper.tsx` | 2 mounts, both `ScoreModal.tsx:167,:176` | **0** (BT-14 blocked) | — | — | Blocked on R-5. Its only consumer is the score modal that R-5 rewrites; delete the file with that work, not before. |
+| `src/components/Layout.tsx`, `Tree.tsx`, `PlayerCard.tsx` | — | **0 exclusive** | — | — | Consumers of CS-63 and BT-15; no row of their own. |
+| `.design-sync/` (previews + cache) | the only visual baseline | **3** — DC-16, DC-18, DC-19 | L | Low | Nothing shipped. Takes the harness from 3 components to 16 and makes every row above diffable. |
+| `CLAUDE.md` + `docs/UI-UX-INVENTORY.md` | future contributors | **6** — TY-3, CS-33, DC-22, DC-23, DC-24, DC-27 | S | Low | Nothing shipped. Writes down the canon, the four ring refusals, and five stale claims. |
+| **Total** | | **67 of 272 (25%)** — 58 code, 3 harness, 6 docs | | | |
+
+---
+
+### Per file
+
+#### `src/index.css`
+
+| # | Change | Current | After | Action ID | Ruling |
+|---|---|---|---|---|---|
+| 1 | Page background | `:71` `@apply bg-tennis-dark text-fg font-sans antialiased` | unchanged — the **token** moves instead (row 3) | CT-1 | DEC-3. `bg-tennis-dark` becomes the page; the body line is already correct once the value splits. |
+| 2 | Accent | `:15` `--color-clay: #FF6B35` | `--color-clay: #E84A27` | CT-2 | DEC-1. 1 edit, 0 of 482 call sites touched. |
+| 3 | Page / card split | `:17` `--color-tennis-dark: #143D34`; `:18` surface `#143D34` | `--color-tennis-dark: #0B3027`; surface unchanged | CT-1, DEC-3 | Page and card are the **same colour today** — this is the root cause of invisible cards and of every `shadow-*` rendering nothing. |
+| 4 | Recess | `:19` `--color-tennis-deep: #0B3027` | `#06211B` | CT-15, R-3 | 0 call sites — its only 5 consumers (`CourtMapElements.tsx:26,45,85,102` + `selStyle` `:37`) are already field fills. |
+| 5 | Light page / recess | `:46` `#EDEDE7`; `:48` `#DEDED5` | `#DEDED5`; `#D2D2C7` | DEC-3 | Keeps the light card at `#FFFFFF` and gives it a page to sit on. |
+| 6 | Retire `clay-dark` | `:16` `--color-clay-dark: #E84A27` | delete; add `--color-clay-press: #D6401F` | CT-4 | Q-6 (b). An alpha hover composites against whatever is behind it and renders differently per theme. |
+| 7 | Clay as text | none | add `--color-clay-fg: #FF8A65` / light `#9E2D12` | CT-2 collateral | `text-clay` is 2.53–3.86:1 on every surface. 155 sites, one `sed`, largest single text-legibility win in the sweep. |
+| 8 | Light win badge | `:52` `--color-badge-win: #15803d` | `#166534` | CT-2 collateral | 3.71 → 5.27 on the new light page. 0 call sites. |
+| 9 | Retire `nav` | `:22`, `:49` `--color-nav: #143D34` / `#EDEDE7` | delete both | DC-15 | Pairs with CT-16. One consumer; keeping it means two names for one colour. |
+| 10 | Native select popup | `:88` `background-color: var(--color-tennis-dark)` | `var(--color-tennis-deep)` | CT-17 | Matches the new field fill rather than the page. |
+| 11 | intl-tel search field | `:108` `var(--color-tennis-dark)` | `var(--color-tennis-deep)` | CT-17 | Same rule. `.iti__country-list` at `:95` already reads `tennis-deep` and needs no edit. |
+| 12 | Old accent, hardcoded | `:102` `rgba(255,107,53,.18)`; `:129`, `:134` `#FF6B35`; `:146`, `:154` `rgba(255,107,53,.4)` | `var(--color-clay)` / a clay-derived alpha | CT-2 | **Five literals the token revalue cannot reach.** Ship in CT-2's commit or the accent ships in two colours. |
+| 13 | Gradient | `:158` `clay → clay-dark` | `clay → clay-press` | CT-4 | 4 consumers: `BottomNav.tsx:51`, `Signup.tsx` ×2, `StaticPages.tsx` ×2. |
+| 14 | Dark gradient | `:162` `tennis-deep → tennis-dark` | re-point to `tennis-surface → tennis-dark`, or delete | DEC-3 collateral | Becomes `#06211B → #0B3027` — effectively flat. 1 consumer, `Home.tsx`. |
+| 15 | Focus ring | none — `focus-visible` appears **0 times** in `src/` | one `@utility` | AX-2 | 194 controls, 1 edit. **Not** `ring-offset-tennis-surface` — a 2px white halo on the light page. |
+| 16 | Reduced motion | none — `motion-reduce` appears **0 times**; 14 `animate-spin` + 16 `animate-pulse` | one `prefers-reduced-motion` block targeting both | AX-24 | 30 sites → 1 edit. `MotionConfig reducedMotion="user"` at `App.tsx:85` does not reach CSS animations. |
+| 17 | Disabled base | none; 21 off-scale sites (`/25` `/30` `/35` `/40` `/50`) | one base-layer `:disabled, [aria-disabled="true"]` rule | BT-11, BT-12 | DEC-2's `text-fg/70` + `opacity-50`. BT-12's 4 uncued buttons come free; the 16 off-scale overrides then delete (they win on specificity until they do). |
+| 18 | Nav clearance | `:7-9` maplibre `bottom: 52px`, hand-copied against `Layout.tsx:47` `pb-16` | `--nav-clearance: calc(4.5rem + env(safe-area-inset-bottom))`, derive both | CS-63 | The only duplicate in the audit that crosses a language boundary and cannot be type-checked. |
+| 19 | Card / featured depth | none | `.card-shadow`, `.featured-shadow`, light-theme overrides | P1 | Plain classes reading plain custom properties — the house pattern, and it sidesteps any question about Tailwind v4 re-reading a `--shadow-*` theme key inside a `[data-theme]` block. |
+
+**Final token values** (from `plan/P1-tokens.md`). Every ratio was computed, none estimated.
+
+| Token | Dark | Light | Job |
+|---|---|---|---|
+| `--color-clay` | `#E84A27` | `#E84A27` | the one accent — fills, borders, rings, icons |
+| `--color-clay-press` | `#D6401F` | `#D6401F` | pressed/hover, and the fill under any white label (4.55:1) |
+| `--color-clay-fg` | `#FF8A65` | `#9E2D12` | clay as **text only** |
+| `--color-tennis-dark` | `#0B3027` | `#DEDED5` | **the page** — body, full-screen states, top bar, scrims |
+| `--color-tennis-surface` | `#143D34` | `#FFFFFF` | **the card** — unchanged, R-7 forbids touching it |
+| `--color-tennis-deep` | `#06211B` | `#D2D2C7` | **recessed** — field fills, popover panels, chip off-states |
+| `--color-card-featured` | `#87CEEB` | `#87CEEB` | featured card only, reached through the component (report 2) |
+| `--color-fg` | `#ffffff` | `#143D34` | content text; `/70` is the only other tier |
+| `--color-ink` | `#143D34` | `#143D34` | fixed dark text on always-light fills |
+| `--color-badge` | `#fcd34d` | `#92400e` | unchanged |
+| `--color-badge-win` | `#86efac` | `#166534` | light revalued from `#15803d` |
+| `--color-badge-loss` | `#fca5a5` | `#b91c1c` | unchanged |
+
+The light block, verbatim:
+
+```css
+:root[data-theme="light"] {
+  --color-tennis-dark: #DEDED5;
+  --color-tennis-surface: #FFFFFF;
+  --color-tennis-deep: #D2D2C7;
+  --color-fg: #143D34;
+  --color-clay-fg: #9E2D12;
+```
+```css
+  --color-badge: #92400e;
+  --color-badge-win: #166534;
+  --color-badge-loss: #b91c1c;
+  color-scheme: light;
+}
+```
+
+The two depth classes:
+
+```css
+.card-shadow { box-shadow: none; }
+.featured-shadow { box-shadow: none; }
+:root[data-theme="light"] .card-shadow {
+  box-shadow: 0 1px 3px rgba(20,61,52,.10), 0 1px 2px rgba(20,61,52,.06);
+}
+```
+```css
+:root[data-theme="light"] .featured-shadow {
+  box-shadow: 0 2px 14px rgba(20,61,52,.20);
+}
+.clay-gradient {
+  background: linear-gradient(135deg, var(--color-clay) 0%, var(--color-clay-press) 100%);
+}
+```
+
+**One pair the matrix accepts rather than fixes.** Card on page, dark theme, is 1.19:1. `#143D34`
+carries 1.60× the luminance of `#0B3027`, which is the standard dark-theme elevation step; the ratio
+formula compresses hard at these absolute levels. Lightening the card to `#17453B` would raise
+separation to 1.33 and drop clay fills on it to **2.79** — a worse trade, and R-7 forbids it anyway.
+
+#### `src/components/Button.tsx`
+
+Measured variant use: `outline` 27 · `clay` 18 · `white` 14 · `secondary` 4 · `ghost` 3 · `primary` **1** · `danger` **0** · defaulted 24 = 91.
+
+| # | Change | Current | After | Action ID | Ruling |
+|---|---|---|---|---|---|
+| 1 | Base string | `:42` `inline-flex items-center justify-center rounded-2xl font-semibold transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed` | add `border border-transparent`; radius stays `rounded-2xl` | BT-1 | DEC-4, Q-5 (a). 16px at 44px tall under radius-follows-height. |
+| 2 | `md` size | `:33` `px-6 py-2.5` | `h-11 px-6 rounded-2xl text-base` | BT-1 | DEC-4 + DEC-5's control-size rule (TY-3). |
+| 3 | `sm` size | `:32` `px-3 py-1.5 text-sm` | alias it to `md`'s string | BT-4 | DEC-4 deletes `sm`, but deleting the union member breaks 41 call sites at `tsc`. Aliasing the **value** delivers the geometry today at zero call sites; delete the key in report 2. |
+| 4 | `lg` size | `:34` `px-8 py-3.5 text-lg` | alias to `md`; the one caller adds `w-full` | BT-5 | Sole site `Signup.tsx:826`, verified. |
+| 5 | `danger` variant | `:26` `bg-red-500 hover:bg-red-600 text-white` | delete | BT-6 | **0 call sites.** It also hardcodes `bg-red-500` where `--color-badge-loss` exists. |
+| 6 | `primary` variant | `:22`, byte-identical to `clay` at `:27` | delete; the 1 caller moves to `clay` | BT-6 | Measured, not guessed: `clay` 18, `primary` 1. Keep the 18. Ship with DC-16 or `tsc` breaks. |
+| 7 | `secondary` edge | `:23` `bg-tennis-surface hover:bg-tennis-surface/80 text-fg` | add `border border-fg/10` | CT-13 | The Google and Apple sign-in buttons are `#143D34` on a `#143D34` page. The token split fixes the cause; the edge is cheap insurance. |
+| 8 | `outline` weight | `:24` `border-2 border-clay text-clay hover:bg-clay hover:text-white` | `border border-clay text-clay-fg …` | BT-7, CT-2 | `border-2` renders 48px against filled's 44px — every two-button footer is uneven. |
+| 9 | Clay hovers | `:22`, `:27` `hover:bg-clay-dark` | `hover:bg-clay-press` | CT-4 | Becomes a no-op the moment CT-2 lands. Must be in the same change or immediately after. |
+| 10 | Spinner ring | `:51` `border-2 border-white border-t-transparent` | `border-current border-t-transparent` + `aria-busy` | BT-8 | On `outline`/`ghost` in light theme this is white on a white card — loading looks frozen. Live at `ScoreModal.tsx:229`, `MarketplaceElements.tsx:80`, `ServicesElements.tsx:97,:595`. |
+| 11 | Default type | `:12-20` destructure, no `type` | add `type = 'button'` and pass it through | BT-3 | 77 of 91 call sites inherit `submit`; any new `<form>` gets a phantom submit. |
+| 12 | Focus ring | none | apply the AX-2 utility | AX-2 | 91 controls from one line. |
+
+#### `src/components/Sheet.tsx`
+
+| # | Change | Current | After | Action ID | Ruling |
+|---|---|---|---|---|---|
+| 1 | Default width | `:25` `maxWidthClassName = 'max-w-lg'` | `'max-w-md'` | MF-1 | **Verified: 0 of 19 mounts use the default** — 18 pass `max-w-md`, 1 passes `max-w-xl`. 1 edit, 0 call sites, 0 visual change. A default nobody picks is a trap. |
+| 2 | Backdrop | `:67` `bg-tennis-dark/80 backdrop-blur-md` | unchanged; the **token** revalue does it | CT-14 | The scrim is currently the same colour as the panel behind it. Free once DEC-3 lands. |
+| 3 | Close pill | `:106` `bg-tennis-dark/50 hover:bg-tennis-dark` | `bg-fg/10 hover:bg-fg/20`, 44×44 | CT-14, BT-10 | § 07 cites `:107`; it is `:106`. |
+| 4 | Sticky collision | `:88` handle `sticky top-0` vs `:96` header `sticky top-0 sm:top-0` | one sticky block, or offset the header by the handle height | MF-14 | Two elements pinned to the same offset; once the body scrolls the opaque handle covers the top 20px of the title. The `sm:top-0` is redundant with `top-0`. |
+| 5 | Body padding | absent — every mount supplies its own (10 treatments) | `p-6 pt-3 space-y-4` inside `Sheet`; one dense preset for row-list sheets | MF-2 | DEC-6. `Tournament.tsx:701,:727` use `p-3 pt-1`. Tail: 19 mounts delete their own padding. |
+| 6 | Header | `:95-99` renders only when `title` is passed | every mount passes `title`; eyebrow = `label text-clay-fg`, title = subheading | MF-3 | `ScoreModal.tsx:87` passes **no title at all** — the app's most-used modal announces unnamed. |
+| 7 | Footer | absent — 6 treatments across 14 sites | sticky `px-6 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] flex gap-3` | MF-4 | The primary action currently scrolls off the bottom of long form sheets. |
+| 8 | Exit animation | `:23` doc comment requires `<AnimatePresence>` at the call site | move `<AnimatePresence>` inside `Sheet` | MF-15 | 14 of 26 render sites are missing it and pop out instantly. The 12 existing outer wrappers become harmless. |
+| 9 | Focus | `:54-60` sets `aria-modal="true"`, no trap | focus the panel on mount, cycle Tab, restore to the opener | AX-1 | 19 mounts announce a modal that Tab walks straight out of. Same helper serves `HeaderMenu.tsx:79-88`. |
+| 10 | Escape | `:43` binds `window` `keydown` | a small overlay stack; only the top entry handles Escape | LB-30 | `HeaderMenu.tsx:25-27` binds the same event, so a sheet opened over the drawer closes both with one Escape. |
+
+#### `src/components/Input.tsx`
+
+| # | Change | Current | After | Action ID | Ruling |
+|---|---|---|---|---|---|
+| 1 | Field chrome | `:27` `w-full rounded-2xl bg-tennis-surface/50 border border-fg/25 px-4 py-3 text-fg placeholder-gray-500 transition-all duration-200 focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none` | export it as `field`; add `min-h-11`, `text-base`, `placeholder-fg/70` | MF-6, MF-5, CT-9 | Q-1 (a): `min-h-11` on the control itself. A `.hit-44` pseudo-element **never renders on `<input>`/`<select>`** — the § 14 mechanism is undeliverable as written. |
+| 2 | Error border | `:28` `border-red-500 focus:border-red-500 focus:ring-red-500/20` | `border-badge-loss …` | MF-6 | Raw palette does not flip; `--color-badge-loss` does. |
+| 3 | Adornments | none | `startAdornment` / `endAdornment` slots | MF-6 | The missing right slot is exactly why `Signup.tsx:654-663,:758-764,:777-787` hand-rolls three password fields. |
+| 4 | The three page `fieldCls` | `EventsElements.tsx:253-255`, `MarketplaceElements.tsx:186-188`, `ServicesElements.tsx:169-171` — all three read `bg-tennis-dark/70`, and Services alone adds `border border-fg/10` + `placeholder-fg/70` | point all three at the exported `field` | MF-5 | **4 edits move ~47 of the 95 field instances.** They must also leave `bg-tennis-dark` (P1 job 3) or every field turns page-coloured after DEC-3. |
+| 5 | `labelCls` | `EventsElements.tsx:256`, `ServicesElements.tsx:172`, `MarketplaceElements.tsx:189` — verified **byte-identical**: `block text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-1.5` | export `fieldLabelCls` from `Input.tsx`; import in all three | TY-5 | Reaches 21 identical copies today and is the landing point for TY-4's 96 and TY-6's 22 later. |
+| 6 | Required marker | `:21` `<span className="text-clay ml-0.5">*</span>` | `text-clay-fg` | CT-2 collateral | Clay as text fails on every surface. |
+
+#### `src/components/ContactOpponentButton.tsx`
+
+| # | Change | Current | After | Action ID | Ruling |
+|---|---|---|---|---|---|
+| 1 | Pill geometry | `:28-29` `rounded-lg` + `sm: px-2.5 py-1 text-xs` / `md: px-3 py-1.5 text-xs` | `h-11 px-6 rounded-2xl text-base` | BT-2 | **27 references, 13 files.** With BT-1 that is 111 of 194 action controls from two functions. Row height +~20px — state the cost before merging. |
+| 2 | Icon override | `:95` `${pillButtonCls(size, variant)} !px-1.5` | delete the override; icon-only becomes 44×44 | BT-2, BT-10 | An `!important` fighting the primitive is how 43 button treatments happened. |
+| 3 | Clay hover | `:32` `hover:bg-clay-dark` | `hover:bg-clay-press` | CT-4 | Same no-op as Button. |
+| 4 | Outline variant | `:33` `border-2 border-clay text-clay hover:bg-clay hover:text-white` | `border border-clay text-clay-fg …` | BT-7, CT-2 | Matches Button's outline exactly. |
+| 5 | Dense variant | none | add `icon-dense` | CS-45 | Canon `icon` ×3 is 136px inside the ~58px cell at `RRGroupCard.tsx:265-272` — it wraps to three rows in a 78px tile. One named variant beats re-laying-out the RR group card. |
+| 6 | Dead prop | `:72` `whatsappSameAsPhone?: boolean` — declared, never destructured at `:78` | delete | DC-1 | Seven call sites read Firestore and compute a value the component ignores. The link already resolves via `whatsappContact \|\| phoneE164` at `:45`. Tail: delete the argument at `Matches.tsx:683`, `Profile.tsx:381`, `RRGroupCard.tsx:220`, `OpponentPanels.tsx:23,:134,:241`, `ServicesElements.tsx:144`, producer `useTournament.ts:690`. |
+
+#### `src/components/SegmentedControl.tsx`
+
+| # | Change | Current | After | Action ID | Ruling |
+|---|---|---|---|---|---|
+| 1 | Unselected fill | `:25` `active ? 'text-white' : 'bg-white text-ink hover:bg-white/90'` | off-state `bg-tennis-deep text-fg` | BT-13, CT-10 | **R-3: unselected is DARKER.** `bg-white` does not flip, so in dark theme the unselected segment is the brightest thing on screen and reads as selected. |
+| 2 | Segment height | `:24` `rounded-lg px-3 py-2 text-xs` | `rounded-xl py-3` → 44px | BT-13, DEC-4 | 1 definition × 7 mounts. |
+| 3 | Track | `:14` `flex bg-fg/5 rounded-xl p-1` | `rounded-2xl bg-fg/5 p-1` | BT-13, BT-24 | Concentricity: a child inset ≤8px takes parent radius − inset. Without it a tray and its segments read as two stacked objects. |
+| 4 | Keyboard | `:14-22` `role="tablist"` / `role="tab"`, no arrows, no `aria-controls` | roving `tabIndex` + Left/Right; `aria-controls` on each tab | AX-7 | It announces as a tab list a screen-reader user cannot operate. Live on Matches, Marketplace, Events. Tail: each mount supplies its panel `id` and `role="tabpanel"`. |
+
+#### `src/components/Accordion.tsx` (+ `Tree.tsx`, `PlayerCard.tsx`)
+
+| # | Change | Current | After | Action ID | Ruling |
+|---|---|---|---|---|---|
+| 1 | Locked is cosmetic | `:29-40` header `<button>` has no `disabled`; `:19` accepts `locked` | `disabled={locked}` on the header button | AX-17 | A "locked" section dims at `:23` but still opens on tap. (§ 11 cites `:29-34`; the button spans `:29-40`.) |
+| 2 | Tap row | `:21` `rounded-3xl border p-5` — the padding is on the **card**, not the header button | move the inset inside the `<button>`; `min-h-11 flex items-center gap-3 px-4 py-3` | BT-15 | Without moving it the tap row stays ~20px however tall the card is. This is the trap in the § 14 sweep. |
+| 3 | `Tree` row | `Tree.tsx:107-108` `flex items-center gap-2.5 py-2 pr-3.5` | same 44px `row` spec | BT-15 | **Preserve the `ml-5 w-[calc(100%-1.25rem)]` / `ml-10 w-[calc(100%-2.5rem)]` trick** — the comment at `:100-106` explains why the indent is margin + padding, not one padding. |
+| 4 | `Tree` selected | `Tree.tsx:134` `active ? 'bg-white text-clay' : ''` | `bg-clay/15 border-clay/50 text-fg`, or `bg-tennis-deep` off-state | CT-10, BT-21 | **Citation correction: CT-10 lists this as `bg-white text-ink` unselected. It is `bg-white text-clay` and it is the SELECTED state.** The bug is real — `bg-white` still does not flip — but the fix is the on-state idiom, not the off-state one. |
+| 5 | `PlayerCard` row | `PlayerCard.tsx:96` `px-3 py-2.5` — drops to 40px when `subtitle` is absent | `min-h-11` | BT-15 | Seven row objects at 11 heights, 28–82px. |
+| 6 | Disabled tiers | `Tree.tsx:51`, `:142` `opacity-40` | delete; the index.css base rule owns it | BT-11 | The overrides win on specificity until removed. |
+| 7 | `aria-controls` | `PlayerCard.tsx:128` already sets `aria-expanded` | add `aria-controls` on the drawer button | AX-9 (partial) | **Correction: AX-9 implies `PlayerCard` sets neither. It already sets `aria-expanded` at `:128`.** Only `aria-controls` is missing here; the `Matches.tsx:659-666` and `Profile.tsx:408` halves are report 2. |
+
+#### `src/App.tsx`
+
+| # | Change | Current | After | Action ID | Ruling |
+|---|---|---|---|---|---|
+| 1 | Named tab routes | `:104` `<Route path="/friendlies" element={<Navigate to="/matches" replace />} />`; `:105` the same for `/challenges` | `to="/matches?mode=friendlies"` and `?mode=challenges` | RT-2 | Verified — they keep `replace` but drop their `mode`. Two characters of query string each. |
+| 2 | Catch-all | `:117` `<Route path="*" element={<Navigate to="/" />} />` — verified, **no `replace`** | add `replace` **today**; a real `NotFound` element is report 2 | RT-1 | DEC-7 recommends reading (b), a real 404. Reading (a) is the one-line stopgap and stops Back re-entering the redirect. |
+| 3 | Login bounce | `:80` `<Navigate to="/login" />` | add `replace` | RT-5 | Back from `/login` re-enters the guarded route and bounces again. |
+| 4 | `/tournament` gate | `:98` `<PrivateRoute><TournamentRedirect /></PrivateRoute>` | move `TournamentRedirect` outside `PrivateRoute` | RT-6 | A signed-out visitor on `/tournament?event=X` loses the event id at the bounce. `/matches` still guards. |
+| 5 | Scroll on query | `:32-58` one effect keyed `[location.pathname, location.search]`, scrolling **and** logging | split: scroll on `pathname`, log `page_view` on both | RT-4 | Switching the Matches mode or a Marketplace tab jumps the viewport to the top even though `<main>` never remounts. |
+| 6 | Splash fill | `:74` `bg-tennis-dark` | unchanged | DEC-3 | Correct after the revalue — this is a genuine full-screen page state. 0 edits. |
+
+#### The single-row files
+
+| File | # | Change | Current | After | Action ID | Ruling |
+|---|---|---|---|---|---|---|
+| `main.tsx` | 1 | Crash heading | `:34` `text-2xl font-black text-white` | `text-fg` | CT-12 | White on the light theme's page. It renders **outside `ThemeProvider`**, so nothing else can save it. `:35`'s `text-clay` → `text-clay-fg` in the same edit. `:32` `bg-tennis-dark` is correct after the revalue. |
+| `Navbar.tsx` | 1 | Theme toggle | `:73` `{!isAuthPage && (` wraps toggle + avatar + menu | move the toggle outside the guard | CS-65 | A first-time visitor cannot leave the default dark theme until after signup. `:45`'s `bg-tennis-dark py-2` scrolled fill is correct after the revalue — the comment at `:40-42` explains why it needs `/10` and that becomes true rather than aspirational. |
+| `BottomNav.tsx` | 1 | Nav token | `:29` `border-t border-fg/8 bg-nav/95 backdrop-blur-xl` | `bg-tennis-dark/95`; `border-fg/10` | CT-16, CT-6 | 1 consumer. Ship with DC-15 or the token survives as a duplicate. **Correction: TY-8 describes `:57` as `text-[10px] font-black leading-none tracking-widest`; there is no `tracking-widest` there, and the label renders only when the tab is active.** TY-8 stays blocked on Q-11 either way. |
+| `HeaderMenu.tsx` | 1 | Close glyph | `:102-103` `<span className="sr-only">Close</span>` then `<Menu className="w-5 h-5" />` | `<X />`; delete the span | AX-19 | The close control shows the *same* hamburger as "open"; the `sr-only` loses to the `aria-label` at `:100` anyway. `:75` scrim and `:89` `border-fg/8` ride the token wave. |
+| `FooterElements.tsx` | 1 | Legal links | `:34` every Contact control is a `mailto:` | add `/terms`, `/privacy`, `/contact` to the drawer and a public footer | RT-9 | `/privacy` has **no public path at all** and `/contact` has no inbound link anywhere — both legal pages are typed-URL-only while logged out. Either point footer Contact at `/contact` or delete the route. |
+| `Fab.tsx` | 2 | Glow + hover | `:17` `shadow-[0_8px_24px_rgba(255,107,53,0.4)]`; `:18` `hover:bg-clay-dark` | `shadow-lg shadow-clay/40`; `hover:bg-clay-press` | CT-31, CT-4 | The hardcoded hex will not follow CT-2 — one of the 8 literal copies of the old accent. `:17`'s `w-14 h-14 rounded-full` is **unchanged**: BT-19 formalises the 56px exemption rather than editing it. (§ 12.2.2 cites `Fab.tsx:16`; the geometry is on `:17`.) |
+| `Toast.tsx` | 1 | Auto-dismiss | `:22-26` `setTimeout(onDismiss, duration)`, `duration = 5000` | pause on hover/focus; extend to 8s | AX-18 | `aria-live="polite"` announces, but the timer can remove the toast before a screen-reader user reaches the X. (§ 01 cites `:40-50`; that is the `motion.div` — the timer is `:22-26`.) |
+| `AlertMessage.tsx` | 1 | Banner spec | `:24` `rounded-2xl border p-4 flex items-start gap-3` | keep the shape; set body `text-sm`; make it the only banner | MF-9 | **1 consumer against 13 hand-rolled copies, 11 with no box at all and none carrying `role="alert"`.** The tone map at `:14-18` is already correct — tinted `bg`/`border` at 10–20% is safe in both themes; only the text must be a badge token, and it is. Converting the 30 instances is report 2. |
+| `LoadingBar.tsx` | 2 | ARIA + colour prop | `:13-22` no `role`; `:11-12` `barColorClassName = 'bg-clay'` | `role="progressbar"` + `aria-valuemin/max/now/text`; delete the prop | AX-23, CT-24 | `role="progressbar"`, `aria-valuenow` and `strokeDasharray` each appear **0 times in `src/`**. Deleting the prop forces the one override at `CourtMap.tsx:493` (`bg-[#4ade80]`) — the app's only progress fill that is not clay and does not flip. Tail: 1 page edit. |
+| `lib/motion.ts` | 1 | Dead hover | `:11` `whileHover: { scale: 1.02 }` | delete the key | BT-29 | `Button.tsx:39` already passes only `whileTap`. An unused hover-scale invites the size-change-on-hover the motion principle forbids. |
+| `features/tasks/taskCatalog.ts` | 1 | Dead export | `:237` `export const TOTAL_AVAILABLE = …` | delete the export and its comment | DC-9 | **Verified zero importers** — the only occurrence of the identifier in `src/` is its own declaration. Numerator and denominator disagree and it re-bases whenever the catalogue changes. |
+| `features/leagues/useStandings.ts` | 1 | Dead returns | `:90-91` setters, `:104` `return { rows, loading, activePlayers, matchesOrganized }` | remove both from state and the return | DC-10 | **Verified zero consumers** — the only other hits are `Home.tsx`'s unrelated local state at `:90-91,:149-155`, which reads `site_stats/summary`. A second silent definition of the Home headline numbers. |
+| `Stepper.tsx` | 0 | — | `:34`, `:55` `disabled:opacity-30` | **do not edit** | BT-14 | **Blocked.** Verified: its only two consumers are `ScoreModal.tsx:167` and `:176`, which R-5 replaces with number fields. Delete the file with that work. Fixing its disabled tiers today is thrown-away work. |
+
+#### `.design-sync/`
+
+| # | Change | Current | After | Action ID | Ruling |
+|---|---|---|---|---|---|
+| 1 | Button preview | `previews/Button.tsx:10` `variant="danger"`; `:19` `size="lg"` | remove both | DC-16 | **Same commit as BT-6/BT-5 or `tsc` breaks** — the preview is inside the project tsconfig. |
+| 2 | Grade the baseline | `.cache/review/` — `Button`, `Input`, `PlayerCard`, all `pendingGrade: true` | grade all three | DC-19 | They are the **only** visual baseline. Ungraded, the primitive retune is a first impression instead of a diff. Sequencing rule 10 puts this before BT-1, BT-2 and MF-6. |
+| 3 | Missing previews | 13 of the 16 mapped components have none: `Accordion`, `AlertMessage`, `AvailabilityPills`, `ContactOpponentButton`, `Fab`, `LoadingBar`, `NearbyPill`, `RacquetIcon`, `SegmentedControl`, `Sheet`, `Stepper`, `Toast`, `Tree` | a `Variants`/`Sizes`/`States` export each, rendered again inside `<div data-theme="light">`, plus an `h-11 border-badge-loss` guide box | DC-18 | Takes the harness from 3 to 16 components, ~187 rendered instances. **Six of the eight audit passes' correctness findings are light-theme-only — a dark-only harness would have caught none of them.** This is the verification substrate for every other row in this report. |
+
+#### Documentation-only (zero code, same day)
+
+| # | Change | File | Action ID | Ruling |
+|---|---|---|---|---|
+| 1 | Write `text-base` down as the **control** size, not a heading tier | `CLAUDE.md` | TY-3 | Zero edits, and it protects the iOS focus-zoom fix on **58 of 76** fields from the TY-2 heading sweep. |
+| 2 | Record the four ring refusals | `CLAUDE.md` | CS-33 | Tasks headline tiles, draw fill, win rate, RR Group Bonus. A ring implies a ceiling; RS and League Points are unbounded, draw fill's denominator derives from its numerator, the Group Bonus is a switch. |
+| 3 | Add a "Design canon" section | `CLAUDE.md` | DC-22 | The two-tier text rule **is** in `CLAUDE.md` and has 4 breaches; the radius ladder is **not** and has 391 sites across 14 steps. That difference is the entire argument. |
+| 4 | Fix the stale `Leagues.tsx` claim | `CLAUDE.md` | DC-23 | The doc says Leagues renders no challenge UI; a live Challenge button sits at `Leagues.tsx:236-254`. |
+| 5 | Correct five claims inside the inventory | `docs/UI-UX-INVENTORY.md` | DC-24 | Provenance (`main`, not `dev-anuj`); § 12.2.6's "no factual error" scope; § 12.2.1's last row; `/how-it-works` is a `<Navigate>` at `StaticPages.tsx:95`; § 14's "8 `window.confirm`" is 6. |
+| 6 | Move the four smuggled colour decisions out of the geometry canon | `docs/UI-UX-INVENTORY.md` § 14 | DC-27 | § 14 disclaims colour and then changes it in §D, §E, the shared-state hover and §H. Those are visible changes and belong in their own owner block. |
+
+---
+
+### Ship order
+
+Tokens first: they are free at the call sites and they change the most. Then fan-out, largest first.
+
+| Step | File | Why here | Blocked by |
+|---|---|---|---|
+| 0 | `.design-sync/.cache/review/` (DC-19) | Grade the three pending reviews. They are the only baseline; every step below is a diff against them. | — |
+| 0b | `.design-sync/previews/` (DC-18) | Add the 13 missing previews **and the light-theme cell**. Six of eight audit passes' findings are light-only. Without this, step 4 onward has no automatic check. | — |
+| 1 | `src/index.css` — tokens only (CT-1, CT-2, CT-15, CT-17, DC-15, badge-win, the 5 hardcoded `#FF6B35`) | 0 call sites, and it is the root cause behind four separately reported symptoms. Ship the whole token block in one commit, including the five literals the token cannot reach. | — |
+| 2 | `src/components/BottomNav.tsx` (CT-16) + delete `--color-nav` | One edit; it is the only thing keeping a duplicate token alive. **Same commit as step 1's `--color-nav` deletion** or `bg-nav` compiles to nothing. | 1 |
+| 3 | `src/components/Fab.tsx` (CT-31), `Button.tsx` `:22,:27`, `ContactOpponentButton.tsx:32` — the `clay-dark` → `clay-press` hovers (CT-4) | These become no-op hovers the moment step 1 lands. Sequencing rule 6: same change or immediately after. | 1 |
+| **4** | **`src/index.css` — R-2 / DEC-3 pair** | **Load-bearing on each other.** R-2 removes card borders on the argument that the page/card fill difference does the separating. Today page and card are **both `#143D34`**, so removing a border first leaves a card with *no* boundary of any kind. Conversely, splitting the fills while the hairlines stay leaves a doubled edge on every card. Ship the fill split (step 1) and the border removal **in that order, and verify the second before merging** — the shot diff in step 0b is what makes that checkable. | 1 |
+| 5 | `src/index.css` — behaviour rules (AX-2 focus ring, AX-24 reduced motion, BT-11/BT-12 disabled base) | Three more zero-call-site edits, but they change how 194 controls look on focus and on disable, so they want their own diff rather than riding the colour commit. | 1 |
+| 6 | `src/components/Button.tsx` (BT-1, BT-3, BT-4, BT-5, BT-6, BT-7, BT-8, CT-13) **+ `.design-sync/previews/Button.tsx`** (DC-16) | The highest fan-out edit in the audit: 91 instances, 47% of all action controls, from one file with zero call-site edits. Sequencing rule 7: the preview must move in the same commit or `tsc` breaks. | 0, 1, 5 |
+| 7 | `src/App.tsx` (RT-1 stopgap, RT-2, RT-4, RT-5, RT-6) | Independent of everything above; five S-effort routing fixes in one file. Slot it anywhere — it is here because it needs no visual review. | — |
+| 8 | `src/main.tsx` (CT-12), `Navbar.tsx` (CS-65), `HeaderMenu.tsx` (AX-19), `FooterElements.tsx` (RT-9), `Toast.tsx` (AX-18), `lib/motion.ts` (BT-29), `taskCatalog.ts` (DC-9), `useStandings.ts` (DC-10) | Eight one-row files, all S, all Low risk, no interdependence. One commit or eight. | 1 (for CT-12's sibling `text-clay`) |
+| 9 | `src/components/Input.tsx` (MF-6, TY-5) + the three page constants (MF-5) | 4 edits reach ~47 of 95 fields, and it is where Q-1(a)'s `min-h-11` lands in one place instead of 63. The three page `fieldCls` must leave `bg-tennis-dark/70` here or every field turns page-coloured after step 1. | 0, 1 |
+| 10 | `src/components/Sheet.tsx` (MF-1, MF-14, MF-15, CT-14, AX-1, LB-30) | MF-1 and CT-14 are free. MF-14, MF-15, AX-1 and LB-30 are behaviour. Ship these six before the padding/header/footer absorption. | 0, 1 |
+| 11 | `src/components/Sheet.tsx` (MF-2, MF-3, MF-4) + prune the 19 mounts | The only rows in this report with a real tail. Do them last within Sheet: the mounts must delete their own padding in the same commit or every sheet double-insets. | 10 |
+| 12 | `src/components/SegmentedControl.tsx` (BT-13, BT-24, AX-7) | 7 mounts. R-3's off-state depends on `--color-tennis-deep` having its new recessed value from step 1. | 1, 5 |
+| 13 | `src/components/ContactOpponentButton.tsx` (BT-2, CS-45, DC-1) | 27 references. **High risk: +~20px per row on the app's most-tapped control.** Ship after Button so the two geometries land together and the shot diff shows them as one change. | 6 |
+| 14 | `src/components/Accordion.tsx`, `Tree.tsx`, `PlayerCard.tsx` (BT-15, AX-17) | L effort, High risk, seven row objects at 11 heights. Last, and on its own. | 6, 13 |
+| 15 | `src/components/LoadingBar.tsx` (AX-23, CT-24) + 1 page edit | Deleting `barColorClassName` forces `CourtMap.tsx:493`. Small, but it is the one row here that breaks a page file. | 1 |
+| 16 | `CLAUDE.md`, `docs/UI-UX-INVENTORY.md` (TY-3, CS-33, DC-22, DC-23, DC-24, DC-27) | Free, and TY-3 must be written down **before** anyone starts TY-2, or the heading sweep eats the 16px control size and re-opens the iOS focus-zoom bug on 58 fields. | — |
+
+**Not in this order, deliberately:** `Stepper.tsx`. BT-14 is blocked on R-5's `ScoreModal` rewrite and
+its only two consumers are `ScoreModal.tsx:167` and `:176`.
+
+---
+
+### Verification per file
+
+There are no tests. `npm run lint` is `tsc --noEmit` and cannot see a class string. `CLAUDE.md`
+forbids starting a dev server to check visuals. So every check below is a grep assertion, a `tsc`
+pass, a `.design-sync` shot diff, or a route list the owner walks by hand.
+
+| File | Check | Passes when | Fails as |
+|---|---|---|---|
+| `src/index.css` (tokens) | `grep -c 'FF6B35\|255, *107, *53' src/index.css src/components/Fab.tsx src/pages/Leagues.tsx src/pages/tournament/bracketImage.ts` | **0**. All 8 literal copies of the old accent are gone. | The accent ships in two colours — the FAB glow, the range slider and the PNG bracket export keep `#FF6B35` while everything else moves. Invisible in a dark-theme screenshot of the buttons. |
+| `src/index.css` (tokens) | `grep -rn 'bg-nav\|--color-nav' src/` | **0 hits.** | `bg-nav` compiles to nothing and the bottom bar loses its fill entirely. |
+| `src/index.css` (tokens) | `grep -n 'tennis-dark\|tennis-surface\|tennis-deep' src/index.css` and read the three values | Page `#0B3027`, card `#143D34`, recess `#06211B`; light `#DEDED5` / `#FFFFFF` / `#D2D2C7`. All six distinct. | Page and card share a value again — the exact bug being fixed, and it presents as "shadows do nothing", not as "wrong colour". |
+| `src/index.css` (tokens) | `.design-sync` shot diff, **light cell**, on `Button`, `Input`, `PlayerCard` | Card visibly separates from the page in both themes. | A light-only regression that a dark-only harness reports as clean — the failure mode DC-18 exists to close. |
+| `src/index.css` (focus) | `grep -rc 'focus-visible' src/index.css` | **≥1** (it is 0 today across all of `src/`). | 194 controls still have no visible keyboard focus, and nothing in the codebase says so. |
+| `src/index.css` (motion) | `grep -rc 'prefers-reduced-motion' src/index.css`; `grep -rc 'animate-spin\|animate-pulse' src/` | The block exists and covers both class names (14 + 16 = 30 elements). | Spinners keep spinning under an OS reduced-motion setting; `MotionConfig` at `App.tsx:85` does not reach CSS animations. |
+| `src/index.css` (disabled) | `grep -rnE 'disabled:opacity-(25\|30\|35\|40)' src/` | **0.** The 16 off-scale overrides are gone. | They win on specificity, so the new base rule silently does nothing at exactly the 16 worst sites. |
+| `src/components/Button.tsx` | `npm run lint` | Clean. | `variant="primary"` at its 1 remaining site, `size="lg"` at `Signup.tsx:826`, or `.design-sync/previews/Button.tsx:10,:19` still reference deleted members. |
+| `src/components/Button.tsx` | `grep -rc 'variant="danger"\|variant="primary"' src/` | **0.** | Two names for one variant survive and split future call sites again. |
+| `src/components/Button.tsx` | `.design-sync` shot diff on `Button`, `Variants` + `Sizes`, both themes, against the DC-19 grade | Every button 44px tall; the `outline` variant is the same height as filled; the spinner is visible on `outline` in light. | `border-2` survives somewhere and every two-button footer is 4px uneven — visible only when two variants sit side by side. |
+| `src/components/Sheet.tsx` | `grep -rc 'maxWidthClassName' src/` | **22 today** → drops as mounts prune. `grep -c "max-w-lg" src/components/Sheet.tsx` = **0**. | The default nobody picks stays a trap for the next author. |
+| `src/components/Sheet.tsx` | `grep -rc 'AnimatePresence' src/pages src/features` before/after MF-15 | Falls; no mount is required to supply one. | 14 of 26 render sites keep popping out with no exit animation, and it reads as a rendering glitch. |
+| `src/components/Sheet.tsx` | Owner route walk: `/matches` (score modal), `/events` (join sheet), `/tasks` (three sheets at `Tasks.tsx:268-270`), `/marketplace` (post form), `/profile` (avatar + courts) | Every sheet: one inset, backdrop visibly dims the page behind, header title present, Tab stays inside, Escape closes only the top overlay. | Open the drawer, then a sheet over it, press Escape: **both close**. That is LB-30 and it is the only way to see it. |
+| `src/components/Sheet.tsx` (MF-2) | `grep -rnE '<Sheet[^>]*>[^<]*<div className="p-' src/` after the mount prune | 0 mounts supply their own body padding. | Double inset — the sheet's own padding plus the mount's. Visible as a suddenly narrow form. |
+| `src/components/Input.tsx` | `grep -rc 'placeholder-gray-500' src/` | Drops from **12** toward 0. | `placeholder-gray-500` does not flip and is the DEC-2 third-tier breach the two-tier rule exists to prevent. |
+| `src/components/Input.tsx` | `grep -rn "bg-tennis-dark/70" src/features/events/EventsElements.tsx src/pages/marketplace/MarketplaceElements.tsx src/pages/services/ServicesElements.tsx` | **0.** All three `fieldCls` left the page token. | Every field in Events, Marketplace and Services renders **page-coloured** after the token split — a whole form that looks like a background. |
+| `src/components/Input.tsx` | `grep -rc "text-\[11px\] font-bold uppercase tracking-widest text-fg/70" src/` | Falls from **21** as the three private `labelCls` become imports. | Three byte-identical constants drift apart again, which is how there came to be 12 uppercase-label treatments. |
+| `src/components/ContactOpponentButton.tsx` | `npm run lint` after DC-1 | Clean. | One of the 8 `whatsappSameAsPhone` pass-throughs was missed. |
+| `src/components/ContactOpponentButton.tsx` | `grep -c '!px-1.5' src/components/ContactOpponentButton.tsx` | **0.** | An `!important` still fights the primitive, and icon-only pills stay under 44px while labelled ones grow. |
+| `src/components/ContactOpponentButton.tsx` | Owner route walk: `/matches` (Friendlies and Challenges rows), `/leagues` (leaderboard drawer), `/matches?mode=tournament` (RR group card) | Rows are taller and nothing wraps or overflows. | **`RRGroupCard.tsx:265-272` is the failure case** — three canon pills are 136px in a ~58px cell and wrap to three rows. If CS-45's `icon-dense` was not applied, this is where it shows. |
+| `src/components/SegmentedControl.tsx` | `.design-sync` shot diff, `SegmentedControl`, **dark** cell | The unselected segment is *darker* than the track. | If it is brighter, R-3 was not applied and the unselected option still reads as the selected one — the original bug, unchanged. |
+| `src/components/SegmentedControl.tsx` | Owner walk: `/matches`, `/marketplace`, `/events`; press Left/Right | Focus moves between segments. | AX-7's roving tabindex is missing and it still announces as a tab list nobody can operate. |
+| `Accordion` / `Tree` / `PlayerCard` | `grep -rc 'min-h-11\|min-h-\[44px\]' src/components/` | Rises from **2** (`MatchCard.tsx:34`, `RRGroupCard.tsx:139` are the only two in all of `src/` today). | The `p-5` stayed on the Accordion **card** instead of moving inside the header `<button>`, so the card grew and the tap row did not. |
+| `Accordion` / `Tree` | `grep -n 'w-\[calc(100%-' src/components/Tree.tsx` | **2 hits** survive (`:108`). | The indent trick was flattened into one padding, and the selected row's background runs back under the parent group's label — the exact defect the comment at `:100-106` documents. |
+| `main.tsx` | `grep -c 'text-white\|text-clay\b' src/main.tsx` | **0.** | The crash screen is invisible on a light OS theme, and it renders outside `ThemeProvider` so no toggle can rescue it. |
+| `App.tsx` | Owner route walk: type `/friendlies`, `/challenges`, `/nonsense`, `/tournament?event=X` signed out; then `/matches`, switch mode, press Back | Lands on the named tab · 404 or home with no history entry · keeps the event id · mode switch does not scroll to top · Back leaves `/login` cleanly. | `/friendlies` opening the Tournament tab is the one an owner will actually notice; the rest are silent. |
+| `App.tsx` | `npm run lint` | Clean. | The `ScrollToTop` effect split left an unused `location.search` dependency. |
+| `LoadingBar.tsx` | `grep -rc 'barColorClassName' src/` | **0** after the prop and `CourtMap.tsx:493` both go. | `tsc` catches this one — it is the only row here that cannot fail silently. |
+| `taskCatalog.ts` / `useStandings.ts` / `lib/motion.ts` | `npm run lint` + `grep -rc 'TOTAL_AVAILABLE\|whileHover' src/` | Clean; **0**. | Nothing — these three are deletions with verified zero consumers. If `tsc` passes, they are done. |
+| `.design-sync/` | `npm run build` (the harness `buildCmd` runs it and copies the largest `dist/assets/*.css`) | Build succeeds and the CSS lands in `.cache/app.css`. | **Tailwind compiles classes from `src/` only.** A new preview using a class no `src/` file uses renders unstyled and looks broken — DC-17's rule exists for this. Consume every new primitive at one real call site in the same PR. |
+| `CLAUDE.md` / inventory | Read-back only | The canon section carries the five tables and the 44px rule. | The radius ladder stays unwritten and re-forks — 391 sites across 14 steps is what "unwritten" already cost. |
+
+---
+
+### Explicitly NOT in this report
+
+| Needs | Rows | Why it cannot ship today | Goes to |
+|---|---|---|---|
+| **A new component** | CS-2 `StatTile`/`StatGrid` · CS-3 `PersonRow` · CS-4 `ListRow` · CS-5 `EntityCard` · CS-6 `ReviewPanel` · CS-7 `ProfileCard` · CS-8 `PersonOption` · CS-9 `PersonPairRow` · CS-10 `PersonChip` · CS-11 `ApprovePair` · CS-12 `EmptyState` · CS-16 `PlaceCard` · CS-18 `Pill`/`Chip` · CS-30 `ProgressRing` · CS-35 `Skeleton` · CS-36 `Spinner` · MF-8 `FieldError` · MF-10 `ConfirmSheet` · MF-11 `Popover` · MF-12 `Checkbox` · MF-13 `Switch` · DC-21 `ErrorScreen` · RT-1 (the real 404, as opposed to today's `replace` stopgap) | Nothing exists to edit. Each also needs a `.design-sync` registration and one real call site in the same PR, per DC-17. | Report 2 |
+| **A per-site sweep** | CT-3 (28 remaining `bg-tennis-dark`) · CT-5 (12) · CT-6 (44) · CT-7 (9) · CT-8 (186) · CT-9 (24) · CT-10 (7 of 9 — SegmentedControl and Tree ride this report) · CT-11 · CT-19 to CT-23 · CT-25 to CT-30 · BT-9 (16) · BT-10 (35) · BT-16 (18) · BT-17 · BT-20 to BT-23 · BT-25 (97) · BT-26 (145) · BT-27 · TY-1 (161) · TY-2 · TY-4 (96) · TY-6 · TY-7 · MF-7 · AX-3 to AX-6 · AX-8 to AX-16 · AX-20 to AX-22 · AX-25 · DC-2 to DC-8 · DC-13, DC-14 | The shared file is not the leverage point — the classes were written inline at each site. R-10 was applied to each of these in `plan/P2-simplest.md` and the token route was costed and rejected (or is a documented trap: radius, spacing, `@utility transition`). | Report 2 |
+| **A blocking decision** | Q-1/Q-2/Q-3 (the 44px mechanism — closed as R-9, but BT-16's field sweep still needs the sites) · Q-5 (BT-22) · Q-11 (TY-8) · Q-12 (CS-39) · Q-15 (CT-23, CT-27, CS-16, CS-44) · Q-17 (CS-20) · Q-18 (CS-17) · Q-22 (DC-11, DC-12) · Q-23 · Q-25 | An unsettled question, not a missing edit. | Report 2 |
+| **The remodel process (R-6)** | LB-5, LB-7 to LB-15, KO-1, KO-2, and every row that moves points or a stored field | This report may specify them; it does not authorise them. Production is the only environment and there are no backups. | Report 2 |
+| **Live-bug work in page files** | LB-1 to LB-4, LB-6, LB-16 to LB-29, LB-31 to LB-50 (all but LB-30) | Real defects, but each lives in a page or a hook, not a shared file. Several are S/Low and should ship **before** any of this report — LB-1 in particular is live point corruption. | Report 2 |
+| **Blocked on a rewrite this report does not do** | BT-14 (`Stepper` deletion) | Verified: its only consumers are `ScoreModal.tsx:167` and `:176`, which R-5 replaces with number fields. Retuning it now is thrown-away work. | Report 2 |
+| **The freeze list** | `CompleteProfileModal`, the Profile day-toggle grid (retires BT-18), the organizer scheduling trio, the no-show cluster (retires CS-37), the Services Dispute/Cancel controls, `GroupLessonCard` (retires LB-38), the super-admin `AddServiceForm` (retires AX-12 and CS-58) | Deleted by the remodel. Restyling them is thrown-away work. **One reversal to honour: the Request Zone Change flow is no longer frozen** — WDR change C2 keeps it, so it migrates with everything else. | Report 2 |

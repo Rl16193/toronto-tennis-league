@@ -5,9 +5,9 @@
 
 | | |
 | --- | --- |
-| **Branch base** | Sprint D1 merge |
+| **Branch base** | [Sprint D1](SPRINT-D1.md) merge |
 | **Blocking** | A1 defines every callable signature **before 10:00**; A3 and A4 build against it, not around it |
-| **Replaces** | `HARMONIZATION_REPORT.md` **D4** ("nothing auto-applies") and `WORKFLOW_DESIGN_REPORT.md` §1. Both carry a dated amendment pointing here |
+| **Replaces** | `HARMONIZATION_REPORT.md` **[D4](../notes/HARMONIZATION_REPORT.md#D4)** ("nothing auto-applies") and `WORKFLOW_DESIGN_REPORT.md` §1. Both carry a dated amendment pointing here |
 | **Ship** | Functions → rules → hosting, end of day |
 
 ---
@@ -36,10 +36,10 @@ Source: `src/features/tournament/domain/scoring.ts:56,64-67` and `functions/lib/
 
 | Lane | Tasks | Rows |
 | --- | --: | --- |
-| **A1 Rules + Functions** | 7 | conflicts 1–5, auto-approval, D6 walkovers-only |
-| **A2 Data** | 4 | L2, L3 (amended), L4, N2, the submission shape |
-| **A3 Client / Dev** | 4 | wire five callables, LB-5, remove client points paths, remove conversion |
-| **A4 UI/UX** | 4 | ScoreModal rework (R-5), dispute banner, notification copy, delete `Stepper` |
+| **A1 Rules + Functions** | 7 | conflicts 1–5, auto-approval, [D6](../notes/HARMONIZATION_REPORT.md#D6) walkovers-only |
+| **A2 Data** | 4 | [L2](../notes/HARMONIZATION_REPORT.md#L2), [L3](../notes/HARMONIZATION_REPORT.md#L3) (amended), [L4](../notes/HARMONIZATION_REPORT.md#L4), [N2](../notes/HARMONIZATION_REPORT.md#N2), the submission shape |
+| **A3 Client / Dev** | 4 | wire five callables, [LB-5](../ACTION-REPORT.md#LB-5), remove client points paths, remove conversion |
+| **A4 UI/UX** | 4 | ScoreModal rework ([R-5](../ACTION-REPORT.md#R-5)), dispute banner, notification copy, delete `Stepper` |
 | **A5 Verify** | 5 | the twelve score examples, three reconcile cases, double-tap, rules matrix, gate |
 
 ---
@@ -142,7 +142,7 @@ Scores are always shown from the recipient's own perspective.
 
 - **`margin` is stored** because the server would otherwise recompute it on every read to render the reconcile, and it is not derivable from the applied result alone (it belongs to a submission, not to the match).
 - **`hash`** is the idempotency marker — a replayed identical submission is a no-op.
-- **`score_pending` retires.** `no_show` retires with D6.
+- **`score_pending` retires.** `no_show` retires with [D6](../notes/HARMONIZATION_REPORT.md#D6).
 
 ### ⬛ L2 · `result_at`
 
@@ -172,7 +172,7 @@ One name. The current field is `rr_group_bonus_v2` (`src/features/tournament/typ
 
 The callable refuses a different result on a completed match — while reset and cancel are **disabled stubs**. A mis-scored match is uncorrectable today.
 
-**Build** · reverse-then-reapply in the same transaction. `mergeStatDeltas(…, -1)` at `functions/lib/tournamentResult.js:166` exists and is test-only today; make it the reverse half. Stamp `result_at`. Leave `completed_at` alone. Log actor and before/after to the `tournament` change log (**D1** — the change log *is* the audit; there is no submissions collection).
+**Build** · reverse-then-reapply in the same transaction. `mergeStatDeltas(…, -1)` at `functions/lib/tournamentResult.js:166` exists and is test-only today; make it the reverse half. Stamp `result_at`. Leave `completed_at` alone. Log actor and before/after to the `tournament` change log (**[D1](../notes/HARMONIZATION_REPORT.md#D1)** — the change log *is* the audit; there is no submissions collection).
 
 **Done when** · two successive edits leave stats equal to a fresh recompute · `completed_at` unchanged · a replayed identical edit is a no-op.
 
@@ -192,11 +192,11 @@ The callable refuses a different result on a completed match — while reset and
 
 **File** · new `challengeResults` callable · `src/features/leagues/ladderService.ts:148-190` (A3 wires it)
 
-`confirmChallenge` writes stats **from the client** and is denied by the branch's own rules, so **every confirm fails today**. The rules confirm branch admits only players and the super-admin; the ladder event's **manager** should be the authority (**D2**).
+`confirmChallenge` writes stats **from the client** and is denied by the branch's own rules, so **every confirm fails today**. The rules confirm branch admits only players and the super-admin; the ladder event's **manager** should be the authority (**[D2](../notes/HARMONIZATION_REPORT.md#D2)**).
 
 **Build** · `challengeResults` callable. **+3 / −3, loser floored at 0.** The floor needs a read-then-write, so this is a **transaction, not a batch** — in a plain batch two concurrent confirms both read the same starting value and one −3 is silently lost. Read the applied flag **inside** the transaction: a mobile double-tap otherwise applies ±3 twice, winner +6 and loser −6, and those phantom points are spendable on Services. All writes `set(…, { merge: true })` so a player with no `stats` doc cannot reject the whole thing and strand the challenge in `reported`.
 
-Restore the event-manager authority at `firestore.rules:428`. Challenges keep `event_id` (**L1**, **D2**).
+Restore the event-manager authority at `firestore.rules:428`. Challenges keep `event_id` (**[L1](../notes/HARMONIZATION_REPORT.md#L1)**, **D2**).
 
 **Done when** · a manager confirm pays once under emulator rules tests · a double-tap pays once · a non-manager is rejected.
 
@@ -227,11 +227,11 @@ The organizer may award a group that still has unplayed matches, so **reversal m
 
 An event organizer cannot read the contacts of members signed up to their own event, so a non-super-admin creator's bracket image renders blank contacts.
 
-**Build** · a new `onParticipantJoin` trigger writing one `connections/{organizer__player}` pair per organizer, reusing `hasActiveEventParticipant`. Delete the super-admin read from the contacts rule (**F6**, **L13**) — the owner's full-data access is the database export, not in-app profile viewing. `useContacts.ts` and `bracketImage.ts` need no change.
+**Build** · a new `onParticipantJoin` trigger writing one `connections/{organizer__player}` pair per organizer, reusing `hasActiveEventParticipant`. Delete the super-admin read from the contacts rule (**[F6](../notes/WORKFLOW_DESIGN_REPORT.md#F6)**, **[L13](../notes/HARMONIZATION_REPORT.md#L13)**) — the owner's full-data access is the database export, not in-app profile viewing. `useContacts.ts` and `bracketImage.ts` need no change.
 
 `pairId()` exists in **both** `functions/connections.js` and `firestore.rules` and **must stay byte-identical**, or every contact read in the app starts failing.
 
-Also this sprint: **`preferences` becomes public** (**R7**, **PD1**, **F6**) — member choices only; role and provider fields move to `providers` in Sprint 5.
+Also this sprint: **`preferences` becomes public** (**[R7](../notes/HARMONIZATION_REPORT.md#R7)**, **[PD1](../notes/DECISIONS_BRIEF.md#PD1)**, **F6**) — member choices only; role and provider fields move to `providers` in Sprint 5.
 
 **Done when** · a non-super-admin creator downloads a bracket image with contacts populated for their participants · is denied for a non-participant · **loses the read on withdrawal**.
 
@@ -255,7 +255,7 @@ Implement the contract above. Three cases, in this order:
                                   Both players see the banner. Advancement is NOT rolled back.
 ```
 
-Resolution is the organizer's normal rescore (conflict 1), which clears the flag. If the flip would change a knockout winner and the next match already holds a completed or submitted result, **refuse with a message**.
+Resolution is the organizer's normal rescore ([conflict 1](../notes/DEV_ANUJ_CONFLICTS.md#1-organizer-score-editing--broken)), which clears the flag. If the flip would change a knockout winner and the next match already holds a completed or submitted result, **refuse with a message**.
 
 **Done when** · each of the three cases has an integration test · a replayed submission is a no-op · a player-submitted all-zero result is rejected · a non-participant submission is rejected.
 
@@ -278,7 +278,7 @@ Remove `no_show` from the model, from the points path, and remove the `is_walkov
 | RR group **played** match | 3 | 1 — unchanged |
 | Knockout **walkover** | advances, banks 0 | that round's award: R32 **1** · R16 **2** · QF **3** · SF **5** · F **10** |
 
-This is a **change from the current code**, which pays a walkover the full 3/1 in a group. `CLAUDE.md` documents the old rule and is corrected in Sprint D3 step 16. Sources: `DECISIONS_BRIEF` §1 · `HARMONIZATION_REPORT` D6 and L10 · `ACTION-REPORT` Q-4 (closed).
+This is a **change from the current code**, which pays a walkover the full 3/1 in a group. `CLAUDE.md` documents the old rule and is corrected in [Sprint D3](SPRINT-D3.md) step 16. Sources: `DECISIONS_BRIEF` §1 · `HARMONIZATION_REPORT` [D6](../notes/HARMONIZATION_REPORT.md#D6) and [L10](../notes/HARMONIZATION_REPORT.md#L10) · `ACTION-REPORT` Q-4 (closed).
 
 **A player who fails to appear is not a walkover** — the organizer records a real **6-0** and it pays as a normal result. The walkover covers a match **neither** player played.
 
@@ -305,7 +305,7 @@ This is a **change from the current code**, which pays a walkover the full 3/1 i
 
 **File** · `src/features/tournament/domain/scoreSubmission.ts:19-24`
 
-The form caps at 30, the rules cap at 0–7, the contract says 0–99. Make the form implement the exact contract: integers 0–99, margin exactly 2 above 10, winner takes the set majority. R-5 replaces the ± steppers with number fields — that is A4's edit; you own the validator behind it.
+The form caps at 30, the rules cap at 0–7, the contract says 0–99. Make the form implement the exact contract: integers 0–99, margin exactly 2 above 10, winner takes the set majority. [R-5](../ACTION-REPORT.md#R-5) replaces the ± steppers with number fields — that is A4's edit; you own the validator behind it.
 
 ### ⬛ Remove the conversion
 
@@ -327,7 +327,7 @@ Delete the "Also count as a Challenge" checkbox path and `proposeConversion`. On
 
 | Line | Now | After |
 | --- | --- | --- |
-| `:121` | `const selected = !isNoShow && scoreForm.winnerUserId === p.uid` | unchanged — but D1 made `winnerUserId` start empty, so **neither card is selected on open**. Verify it renders that way |
+| `:121` | `const selected = !isNoShow && scoreForm.winnerUserId === p.uid` | unchanged — but [D1](../notes/HARMONIZATION_REPORT.md#D1) made `winnerUserId` start empty, so **neither card is selected on open**. Verify it renders that way |
 | `:110` | *"…The organizer will confirm it."* | *"Pick the winner, enter the games, and submit. The result is recorded straight away."* |
 | `:191`, `:200` | `<Stepper …>` | **number entry fields** (`field-dense`). ± to 99 was never usable, and it dissolves the 0–99 reachability problem |
 | `:231-239` | the "Count As No Show" checkbox and its prop | **delete** — the whole no-show concept goes |

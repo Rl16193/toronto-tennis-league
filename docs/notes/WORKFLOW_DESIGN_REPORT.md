@@ -226,31 +226,31 @@ client-side from the member's matches, the same list the Progress chart uses. `l
 
 | # | Fix | Where |
 | - | --- | --- |
-| F1 | Court check-in on return visits (live) | `src/features/tasks/checkinService.ts`, `functions/taskPoints.js` |
-| F2 | OAuth newcomers stuck: bootstrap writes `pointswon`/`totalPointsPlayed` the stats whitelist rejects | `src/lib/profileBootstrap.ts` |
-| F3 | Marketplace seller contact reads `contacts`, not the projection | `src/pages/Marketplace.tsx` → `useContacts` |
-| F4 | Welcome email bypasses the delivery gate; test project can email members | `functions/index.js` → `sendEmail` |
-| F5 | Rescore, validator, group bonus, ladder callable, organizer connections (conflicts doc items 1–5) | `functions/`, `firestore.rules` |
-| F6 | `preferences` public; super-admin contacts read removed | `firestore.rules#L183`, `#L226` |
-| F7 | Profile completeness set; delete `CompleteProfileModal` and the Profile nag | `src/pages/Signup.tsx`, `src/pages/Matches.tsx`, `src/pages/Profile.tsx` |
-| F8 | Single `resolveZone`; manual flag on explicit picks | `src/pages/Signup.tsx`, `src/features/profile/*` |
-| F9 | Skill edit stops rewriting `event_participants.skill` | `src/features/profile/services/profileService.ts` |
-| F10 | `isEventManager` helper replaces `creator_id` checks | `src/pages/tournament/useTournament.ts`, `src/pages/Events.tsx` |
-| F11 | `available_to_play` toggle and Away pill | `src/features/profile/*`, `src/pages/Matches.tsx` |
-| F12 | Daily rank snapshot | `functions/rankSnapshot.js` |
-| F13 | Group awards skip `no_account` | `functions/groupAwards.js` |
+| <a id="F1"></a>F1 | Court check-in on return visits (live) | `src/features/tasks/checkinService.ts`, `functions/taskPoints.js` |
+| <a id="F2"></a>F2 | OAuth newcomers stuck: bootstrap writes `pointswon`/`totalPointsPlayed` the stats whitelist rejects | `src/lib/profileBootstrap.ts` |
+| <a id="F3"></a>F3 | Marketplace seller contact reads `contacts`, not the projection | `src/pages/Marketplace.tsx` → `useContacts` |
+| <a id="F4"></a>F4 | Welcome email bypasses the delivery gate; test project can email members | `functions/index.js` → `sendEmail` |
+| <a id="F5"></a>F5 | Rescore, validator, group bonus, ladder callable, organizer connections (conflicts doc items 1–5) | `functions/`, `firestore.rules` |
+| <a id="F6"></a>F6 | `preferences` public; super-admin contacts read removed | `firestore.rules#L183`, `#L226` |
+| <a id="F7"></a>F7 | Profile completeness set; delete `CompleteProfileModal` and the Profile nag | `src/pages/Signup.tsx`, `src/pages/Matches.tsx`, `src/pages/Profile.tsx` |
+| <a id="F8"></a>F8 | Single `resolveZone`; manual flag on explicit picks | `src/pages/Signup.tsx`, `src/features/profile/*` |
+| <a id="F9"></a>F9 | Skill edit stops rewriting `event_participants.skill` | `src/features/profile/services/profileService.ts` |
+| <a id="F10"></a>F10 | `isEventManager` helper replaces `creator_id` checks | `src/pages/tournament/useTournament.ts`, `src/pages/Events.tsx` |
+| <a id="F11"></a>F11 | `available_to_play` toggle and Away pill | `src/features/profile/*`, `src/pages/Matches.tsx` |
+| <a id="F12"></a>F12 | Daily rank snapshot | `functions/rankSnapshot.js` |
+| <a id="F13"></a>F13 | Group awards skip `no_account` | `functions/groupAwards.js` |
 
 ## Deferred — by phase
 
 | Phase | Items |
 | --- | --- |
-| P1 | Welcome email on first name set; rename fan-out stays as is until the name-sync trigger |
-| P2a | Per-event zone field; zone-request flow reworked; withdrawal data + notices; doubles partner shape; format lock; `events/ladder`; `profile_details_visible` dropped; late-join placer removed |
-| P3 | `requested_by` scheduling; deadlines per draw and round (no RR group stage); notification noise/purge changes; `eventOrganizerUids` |
-| P4b | Pending block; score modal rework; task counters on apply/reverse; conversion removed; server placer; multi-draw membership; merges persisted; knockout bar; withdrawal walkovers; partner access; P/G derived |
-| P5 | Organizer-assignment UI; admin recovery; `event_creator` fallback end |
-| P6b | Claim review by organizer; ambassador auto-approve; claim dedupe; checklist `category` |
-| P6c | Bookings lifecycle; catalog callable; `redemption_locks` removed |
+| <a id="P1"></a>P1 | Welcome email on first name set; rename fan-out stays as is until the name-sync trigger |
+| <a id="P2a"></a>P2a | Per-event zone field; zone-request flow reworked; withdrawal data + notices; doubles partner shape; format lock; `events/ladder`; `profile_details_visible` dropped; late-join placer removed |
+| <a id="P3"></a>P3 | `requested_by` scheduling; deadlines per draw and round (no RR group stage); notification noise/purge changes; `eventOrganizerUids` |
+| <a id="P4b"></a>P4b | Pending block; score modal rework; task counters on apply/reverse; conversion removed; server placer; multi-draw membership; merges persisted; knockout bar; withdrawal walkovers; partner access; P/G derived |
+| <a id="P5"></a>P5 | Organizer-assignment UI; admin recovery; `event_creator` fallback end |
+| <a id="P6b"></a>P6b | Claim review by organizer; ambassador auto-approve; claim dedupe; checklist `category` |
+| <a id="P6c"></a>P6c | Bookings lifecycle; catalog callable; `redemption_locks` removed |
 
 ## Future work
 

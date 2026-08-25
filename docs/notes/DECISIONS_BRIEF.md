@@ -69,16 +69,16 @@
 
 | # | Decision |
 | - | --- |
-| PD1 | **Public-field contract.** Every collection is publicly readable except `contacts` and `mailing_list`. `preferences` is public (role and provider fields move to `providers`). `tasks/{uid}` stays public — no UI exposes another member's task list; task points must be readable by all. `site_stats` is public. Only `points_spent` is stored; totals and balances are derived at read. |
-| PD2 | **Group lessons** are an add-on block on an upcoming or ongoing social event; the `group_lessons` collection and its join/leave callables retire. |
-| PD3 | **Profiles.** Members can view the profiles of people in their tournament or group from the Profiles page; a link from the tournament display is future work. |
-| PD4 | **Organizer-assignment UI** is built once the organizer view / `providers` collection exists. |
-| PD5 | **Admin bootstrap/recovery.** The admin `providers` row is issued and re-issued only by an Admin-SDK script run with the service account; no in-app path. |
-| PD6 | **`event_creator`** global privilege is removed at the `providers` cutover and moves to the organizer/admin roles. |
-| PD7 | **Staging tier** — deferred; to be decided later. |
-| PD8 | **Backup and restore policy** — required before the first destructive data pass; details to be agreed later. |
-| PD9 | **Mobile.** A mobile app is preferred; a PWA if the effort is too high — decided after an estimate. Notifications (in-app / push) are the primary update channel, to reduce email. Offline: none — every action is online-only. |
-| PD10 | **Group-award storage** is kept: one `awards` document per award with the winners' receipt. |
+| <a id="PD1"></a>PD1 | **Public-field contract.** Every collection is publicly readable except `contacts` and `mailing_list`. `preferences` is public (role and provider fields move to `providers`). `tasks/{uid}` stays public — no UI exposes another member's task list; task points must be readable by all. `site_stats` is public. Only `points_spent` is stored; totals and balances are derived at read. |
+| <a id="PD2"></a>PD2 | **Group lessons** are an add-on block on an upcoming or ongoing social event; the `group_lessons` collection and its join/leave callables retire. |
+| <a id="PD3"></a>PD3 | **Profiles.** Members can view the profiles of people in their tournament or group from the Profiles page; a link from the tournament display is future work. |
+| <a id="PD4"></a>PD4 | **Organizer-assignment UI** is built once the organizer view / `providers` collection exists. |
+| <a id="PD5"></a>PD5 | **Admin bootstrap/recovery.** The admin `providers` row is issued and re-issued only by an Admin-SDK script run with the service account; no in-app path. |
+| <a id="PD6"></a>PD6 | **`event_creator`** global privilege is removed at the `providers` cutover and moves to the organizer/admin roles. |
+| <a id="PD7"></a>PD7 | **Staging tier** — deferred; to be decided later. |
+| <a id="PD8"></a>PD8 | **Backup and restore policy** — required before the first destructive data pass; details to be agreed later. |
+| <a id="PD9"></a>PD9 | **Mobile.** A mobile app is preferred; a PWA if the effort is too high — decided after an estimate. Notifications (in-app / push) are the primary update channel, to reduce email. Offline: none — every action is online-only. |
+| <a id="PD10"></a>PD10 | **Group-award storage** is kept: one `awards` document per award with the winners' receipt. |
 
 ## Future works (UI)
 

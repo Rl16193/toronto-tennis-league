@@ -5,7 +5,7 @@
 
 | | |
 | --- | --- |
-| **Branch base** | Sprint D2 merge |
+| **Branch base** | [Sprint D2](SPRINT-D2.md) merge |
 | **Owner of the day** | **A4.** 67 action rows from ~20 shared files, almost all with zero call-site edits |
 | **Blocking** | Steps run **in order**. Step 4 in particular is load-bearing on step 1 |
 | **Ship** | Hosting only. No functions or rules change today except A1's notification work |
@@ -32,10 +32,10 @@ Fix it first and everything downstream becomes a real visual change instead of a
 
 | Lane | Tasks | Rows |
 | --- | --: | --- |
-| **A4 UI/UX** | 16 steps | CT-1, CT-2, CT-4, CT-14, CT-15, CT-16, CT-17, CT-24, CT-31, CT-32, BT-1…BT-8, BT-11…BT-15, BT-24, BT-29, MF-1…MF-6, MF-14, MF-15, TY-3, TY-5, AX-1, AX-2, AX-7, AX-17, AX-18, AX-19, AX-23, AX-24, CS-45, CS-63, CS-65, DC-1, DC-9, DC-10, DC-15, DC-16, DC-22…DC-27 |
-| **A3 Client / Dev** | 2 | RT-1…RT-6, DC-2…DC-8, DC-13, DC-14 |
-| **A2 Data** | 2 | LB-7…LB-15, DC-11, DC-12 |
-| **A1 Rules + Functions** | 1 | P3 notification noise |
+| **A4 UI/UX** | 16 steps | [CT-1](../ACTION-REPORT.md#CT-1), [CT-2](../ACTION-REPORT.md#CT-2), [CT-4](../ACTION-REPORT.md#CT-4), [CT-14](../ACTION-REPORT.md#CT-14), [CT-15](../ACTION-REPORT.md#CT-15), [CT-16](../ACTION-REPORT.md#CT-16), [CT-17](../ACTION-REPORT.md#CT-17), [CT-24](../ACTION-REPORT.md#CT-24), [CT-31](../ACTION-REPORT.md#CT-31), [CT-32](../ACTION-REPORT.md#CT-32), [BT-1](../ACTION-REPORT.md#BT-1)…[BT-8](../ACTION-REPORT.md#BT-8), [BT-11](../ACTION-REPORT.md#BT-11)…[BT-15](../ACTION-REPORT.md#BT-15), [BT-24](../ACTION-REPORT.md#BT-24), [BT-29](../ACTION-REPORT.md#BT-29), [MF-1](../ACTION-REPORT.md#MF-1)…[MF-6](../ACTION-REPORT.md#MF-6), [MF-14](../ACTION-REPORT.md#MF-14), [MF-15](../ACTION-REPORT.md#MF-15), [TY-3](../ACTION-REPORT.md#TY-3), [TY-5](../ACTION-REPORT.md#TY-5), [AX-1](../ACTION-REPORT.md#AX-1), [AX-2](../ACTION-REPORT.md#AX-2), [AX-7](../ACTION-REPORT.md#AX-7), [AX-17](../ACTION-REPORT.md#AX-17), [AX-18](../ACTION-REPORT.md#AX-18), [AX-19](../ACTION-REPORT.md#AX-19), [AX-23](../ACTION-REPORT.md#AX-23), [AX-24](../ACTION-REPORT.md#AX-24), [CS-45](../ACTION-REPORT.md#CS-45), [CS-63](../ACTION-REPORT.md#CS-63), [CS-65](../ACTION-REPORT.md#CS-65), [DC-1](../ACTION-REPORT.md#DC-1), [DC-9](../ACTION-REPORT.md#DC-9), [DC-10](../ACTION-REPORT.md#DC-10), [DC-15](../ACTION-REPORT.md#DC-15), [DC-16](../ACTION-REPORT.md#DC-16), [DC-22](../ACTION-REPORT.md#DC-22)…[DC-27](../ACTION-REPORT.md#DC-27) |
+| **A3 Client / Dev** | 2 | [RT-1](../ACTION-REPORT.md#RT-1)…[RT-6](../ACTION-REPORT.md#RT-6), [DC-2](../ACTION-REPORT.md#DC-2)…[DC-8](../ACTION-REPORT.md#DC-8), [DC-13](../ACTION-REPORT.md#DC-13), [DC-14](../ACTION-REPORT.md#DC-14) |
+| **A2 Data** | 2 | [LB-7](../ACTION-REPORT.md#LB-7)…[LB-15](../ACTION-REPORT.md#LB-15), [DC-11](../ACTION-REPORT.md#DC-11), [DC-12](../ACTION-REPORT.md#DC-12) |
+| **A1 Rules + Functions** | 1 | [P3](../notes/WORKFLOW_DESIGN_REPORT.md#P3) notification noise |
 | **A5 Verify** | 2 | grep-assertion suite, design-sync diffs |
 
 ---
@@ -96,15 +96,15 @@ Run them in this order. The ordering is not stylistic; four of the dependencies 
 
 ### Step 2 — `BottomNav.tsx:29` · CT-16, CT-6
 
-`bg-nav/95` → `bg-tennis-dark/95`; `border-fg/8` → `border-fg/10`. **Same commit as step 1's `--color-nav` deletion**, or `bg-nav` compiles to nothing and the bottom bar loses its fill entirely. Visually a no-op today — `--color-nav` and `--color-tennis-dark` hold the same value — but it unblocks DEC-3.
+`bg-nav/95` → `bg-tennis-dark/95`; `border-fg/8` → `border-fg/10`. **Same commit as step 1's `--color-nav` deletion**, or `bg-nav` compiles to nothing and the bottom bar loses its fill entirely. Visually a no-op today — `--color-nav` and `--color-tennis-dark` hold the same value — but it unblocks [DEC-3](../ACTION-REPORT.md#DEC-3).
 
 ### Step 3 — The `clay-dark` hovers · CT-4, CT-31
 
-`Button.tsx:25,30` · `ContactOpponentButton.tsx:32` · `Fab.tsx:18` → `hover:bg-clay-press`. Plus `Fab.tsx:17`'s hardcoded glow → `shadow-lg shadow-clay/40`. These become **no-op hovers** the moment step 1 lands, so they ship in the same change or immediately after. `Fab.tsx:17`'s `w-14 h-14 rounded-full` is **unchanged** — BT-19 formalises the 56px exemption rather than editing it.
+`Button.tsx:25,30` · `ContactOpponentButton.tsx:32` · `Fab.tsx:18` → `hover:bg-clay-press`. Plus `Fab.tsx:17`'s hardcoded glow → `shadow-lg shadow-clay/40`. These become **no-op hovers** the moment step 1 lands, so they ship in the same change or immediately after. `Fab.tsx:17`'s `w-14 h-14 rounded-full` is **unchanged** — [BT-19](../ACTION-REPORT.md#BT-19) formalises the 56px exemption rather than editing it.
 
 ### Step 4 — The border removal · CT-32, R-2 · **load-bearing**
 
-R-2 says card boundaries are invisible: cards separate by fill alone, no border. But **page and card are the same colour today**, so removing a border first leaves a card with *no* boundary of any kind. Conversely, splitting the fills while the hairlines stay leaves a doubled edge on every card.
+[R-2](../ACTION-REPORT.md#R-2) says card boundaries are invisible: cards separate by fill alone, no border. But **page and card are the same colour today**, so removing a border first leaves a card with *no* boundary of any kind. Conversely, splitting the fills while the hairlines stay leaves a doubled edge on every card.
 
 **Ship the fill split (step 1) first, then the border removal, and verify the second before merging.** Delete the border from card-level surfaces; keep hairlines only as *row dividers inside* a card.
 
@@ -116,7 +116,7 @@ R-2 says card boundaries are invisible: cards separate by fill alone, no border.
 | One `prefers-reduced-motion` block covering `animate-spin` (14) and `animate-pulse` (16) | `motion-reduce` appears 0 times. `MotionConfig reducedMotion="user"` in `App.tsx` **does not reach CSS animations** |
 | One base-layer `:disabled, [aria-disabled="true"]` rule → `text-fg/70` + `opacity-50` | 21 off-scale sites (`/25` `/30` `/35` `/40` `/50`). The 16 overrides **win on specificity until deleted** — delete them in the same commit |
 | `.card-shadow` / `.featured-shadow`, light-theme only | Plain classes reading plain custom properties. Sidesteps any question about Tailwind v4 re-reading a `--shadow-*` theme key inside a `[data-theme]` block |
-| `--nav-clearance: calc(4.5rem + env(safe-area-inset-bottom))` | CS-63. The maplibre `bottom: 52px` at `:7-9` is hand-copied against `Layout.tsx`'s `pb-16` — the only duplicate in the audit that crosses a language boundary and cannot be type-checked |
+| `--nav-clearance: calc(4.5rem + env(safe-area-inset-bottom))` | [CS-63](../ACTION-REPORT.md#CS-63). The maplibre `bottom: 52px` at `:7-9` is hand-copied against `Layout.tsx`'s `pb-16` — the only duplicate in the audit that crosses a language boundary and cannot be type-checked |
 
 ### Step 6 — `Button.tsx` · BT-1, BT-3…BT-8, CT-13, DC-16 · **the highest-fanout edit in the audit**
 
@@ -124,17 +124,17 @@ R-2 says card boundaries are invisible: cards separate by fill alone, no border.
 
 | Line | Now | After | Row |
 | --- | --- | --- | --- |
-| `:45` | base string | add `border border-transparent`; radius stays `rounded-2xl` | BT-1 |
+| `:45` | base string | add `border border-transparent`; radius stays `rounded-2xl` | [BT-1](../ACTION-REPORT.md#BT-1) |
 | `:36` | `md: 'px-6 py-2.5'` | `h-11 px-6 rounded-2xl text-base` | BT-1 |
-| `:35` | `sm: 'px-3 py-1.5 text-sm'` | **alias to `md`'s string.** Deleting the union member breaks 41 call sites at `tsc`; aliasing the *value* delivers the geometry today at zero call sites | BT-4 |
-| `:37` | `lg: 'px-8 py-3.5 text-lg'` | alias to `md`; the one caller adds `w-full` | BT-5 |
-| `:29` | `danger: 'bg-red-500 …'` | **delete** — 0 call sites, and it hardcodes `bg-red-500` where `--color-badge-loss` exists | BT-6 |
+| `:35` | `sm: 'px-3 py-1.5 text-sm'` | **alias to `md`'s string.** Deleting the union member breaks 41 call sites at `tsc`; aliasing the *value* delivers the geometry today at zero call sites | [BT-4](../ACTION-REPORT.md#BT-4) |
+| `:37` | `lg: 'px-8 py-3.5 text-lg'` | alias to `md`; the one caller adds `w-full` | [BT-5](../ACTION-REPORT.md#BT-5) |
+| `:29` | `danger: 'bg-red-500 …'` | **delete** — 0 call sites, and it hardcodes `bg-red-500` where `--color-badge-loss` exists | [BT-6](../ACTION-REPORT.md#BT-6) |
 | `:25` | `primary`, byte-identical to `clay` at `:30` | **delete**; the 1 caller moves to `clay`. Keep the 18 | BT-6 |
-| `:26` | `secondary: 'bg-tennis-surface …'` | add `border border-fg/10` — the Google and Apple sign-in buttons are `#143d34` on a `#143d34` page | CT-13 |
-| `:27` | `outline: 'border-2 border-clay text-clay …'` | `border border-clay text-clay-fg …` — `border-2` renders 48px against filled's 44px, so every two-button footer is uneven | BT-7, CT-2 |
-| `:54` | `border-2 border-white border-t-transparent` | `border-current border-t-transparent` + `aria-busy` — on `outline`/`ghost` in light theme this is white on a white card and loading looks frozen | BT-8 |
-| `:17` | destructure has no `type` | add `type = 'button'` and pass it through — **77 of 91 call sites inherit `submit`** | BT-3 |
-| — | no focus ring | apply the step-5 utility — 91 controls from one line | AX-2 |
+| `:26` | `secondary: 'bg-tennis-surface …'` | add `border border-fg/10` — the Google and Apple sign-in buttons are `#143d34` on a `#143d34` page | [CT-13](../ACTION-REPORT.md#CT-13) |
+| `:27` | `outline: 'border-2 border-clay text-clay …'` | `border border-clay text-clay-fg …` — `border-2` renders 48px against filled's 44px, so every two-button footer is uneven | [BT-7](../ACTION-REPORT.md#BT-7), [CT-2](../ACTION-REPORT.md#CT-2) |
+| `:54` | `border-2 border-white border-t-transparent` | `border-current border-t-transparent` + `aria-busy` — on `outline`/`ghost` in light theme this is white on a white card and loading looks frozen | [BT-8](../ACTION-REPORT.md#BT-8) |
+| `:17` | destructure has no `type` | add `type = 'button'` and pass it through — **77 of 91 call sites inherit `submit`** | [BT-3](../ACTION-REPORT.md#BT-3) |
+| — | no focus ring | apply the step-5 utility — 91 controls from one line | [AX-2](../ACTION-REPORT.md#AX-2) |
 
 **Ship `.design-sync/previews/Button.tsx` in the same commit** (`:10` `variant="danger"`, `:19` `size="lg"`) or `tsc` breaks — the preview is inside the project tsconfig.
 
@@ -146,14 +146,14 @@ See the A3 section. Independent of everything above.
 
 | File | Line | Change | Row |
 | --- | --- | --- | --- |
-| `main.tsx` | `:40` | `text-clay` → `text-clay-fg` (the `text-white` half shipped in D1) | CT-12 |
-| `Navbar.tsx` | `:72` | move the theme toggle **outside** the `!isAuthPage` guard — a first-time visitor cannot leave the default dark theme until after signup | CS-65 |
-| `HeaderMenu.tsx` | `:111` | `<Menu />` → `<X />`; delete the dead `sr-only` span, which loses to the `aria-label` anyway. The close control currently shows the *same hamburger* that opened it | AX-19 |
-| `FooterElements.tsx` | — | add `/terms`, `/privacy`, `/contact` to the drawer and a public footer. **`/privacy` has no public path at all** and `/contact` no inbound link — both legal pages are typed-URL-only while logged out | RT-9 |
-| `Toast.tsx` | `:21` | pause on hover/focus; `duration` 5000 → 8000. `aria-live="polite"` announces, but the timer removes the toast before a screen-reader user reaches the X | AX-18 |
-| `lib/motion.ts` | `:11` | delete `whileHover: { scale: 1.02 }` — unused, and it invites the hover-scale the motion principle forbids | BT-29 |
-| `taskCatalog.ts` | `:237` | delete `TOTAL_AVAILABLE` — **verified zero importers**; numerator and denominator disagree and it re-bases whenever the catalogue changes | DC-9 |
-| `useStandings.ts` | `:90-91`, `:104` | delete `activePlayers` / `matchesOrganized` — **verified zero consumers**; a second silent definition of the Home headline numbers | DC-10 |
+| `main.tsx` | `:40` | `text-clay` → `text-clay-fg` (the `text-white` half shipped in [D1](../notes/HARMONIZATION_REPORT.md#D1)) | [CT-12](../ACTION-REPORT.md#CT-12) |
+| `Navbar.tsx` | `:72` | move the theme toggle **outside** the `!isAuthPage` guard — a first-time visitor cannot leave the default dark theme until after signup | [CS-65](../ACTION-REPORT.md#CS-65) |
+| `HeaderMenu.tsx` | `:111` | `<Menu />` → `<X />`; delete the dead `sr-only` span, which loses to the `aria-label` anyway. The close control currently shows the *same hamburger* that opened it | [AX-19](../ACTION-REPORT.md#AX-19) |
+| `FooterElements.tsx` | — | add `/terms`, `/privacy`, `/contact` to the drawer and a public footer. **`/privacy` has no public path at all** and `/contact` no inbound link — both legal pages are typed-URL-only while logged out | [RT-9](../ACTION-REPORT.md#RT-9) |
+| `Toast.tsx` | `:21` | pause on hover/focus; `duration` 5000 → 8000. `aria-live="polite"` announces, but the timer removes the toast before a screen-reader user reaches the X | [AX-18](../ACTION-REPORT.md#AX-18) |
+| `lib/motion.ts` | `:11` | delete `whileHover: { scale: 1.02 }` — unused, and it invites the hover-scale the motion principle forbids | [BT-29](../ACTION-REPORT.md#BT-29) |
+| `taskCatalog.ts` | `:237` | delete `TOTAL_AVAILABLE` — **verified zero importers**; numerator and denominator disagree and it re-bases whenever the catalogue changes | [DC-9](../ACTION-REPORT.md#DC-9) |
+| `useStandings.ts` | `:90-91`, `:104` | delete `activePlayers` / `matchesOrganized` — **verified zero consumers**; a second silent definition of the Home headline numbers | [DC-10](../ACTION-REPORT.md#DC-10) |
 
 ### Step 9 — `Input.tsx` + the three page constants · MF-5, MF-6, TY-5
 
@@ -163,21 +163,21 @@ See the A3 section. Independent of everything above.
 
 Point all three page `fieldCls` constants at it: `EventsElements.tsx`, `MarketplaceElements.tsx`, `ServicesElements.tsx`. **All three must leave `bg-tennis-dark/70`** or every field in Events, Marketplace and Services renders **page-coloured** after step 1 — a whole form that looks like a background.
 
-The three `labelCls` constants are **byte-identical**: `block text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-1.5`. Export `fieldLabelCls` from `Input.tsx` and import in all three — reaches 21 copies today and is the landing point for TY-4's 96 and TY-6's 22 later.
+The three `labelCls` constants are **byte-identical**: `block text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-1.5`. Export `fieldLabelCls` from `Input.tsx` and import in all three — reaches 21 copies today and is the landing point for [TY-4](../ACTION-REPORT.md#TY-4)'s 96 and [TY-6](../ACTION-REPORT.md#TY-6)'s 22 later.
 
-> **Q-1 is settled: `min-h-11` on the control itself.** The inventory's `.hit-44` pseudo-element **never renders on `<input>` / `<select>`** — that mechanism is undeliverable as written.
+> **[Q-1](../ACTION-REPORT.md#Q-1) is settled: `min-h-11` on the control itself.** The inventory's `.hit-44` pseudo-element **never renders on `<input>` / `<select>`** — that mechanism is undeliverable as written.
 
 ### Step 10 — `Sheet.tsx`, behaviour · MF-1, MF-14, MF-15, CT-14, AX-1, LB-30
 
 | Line | Now | After | Row |
 | --- | --- | --- | --- |
-| `:25` | `maxWidthClassName = 'max-w-lg'` | `'max-w-md'` — **0 of 19 mounts use the default**; 18 pass `max-w-md`, 1 passes `max-w-xl`. A default nobody picks is a trap | MF-1 |
-| `:69` | `bg-tennis-dark/80 backdrop-blur-md` | unchanged — the **token revalue** makes the scrim actually dim. Free after step 1 | CT-14 |
-| `:110` | `bg-tennis-dark/50 hover:bg-tennis-dark` | `bg-fg/10 hover:bg-fg/20`, 44×44 | CT-14, BT-10 |
-| `:92` vs `:100` | handle `sticky top-0` **and** header `sticky top-0 sm:top-0` | one sticky block, or offset the header by the handle height. Two elements pinned to the same offset means the opaque handle covers the top 20px of the title once the body scrolls. The `sm:top-0` is redundant with `top-0` | MF-14 |
-| `:23` doc comment | requires `<AnimatePresence>` at the call site | move `<AnimatePresence>` **inside** `Sheet`. **14 of 26 render sites are missing it** and pop out instantly; the 12 existing outer wrappers become harmless | MF-15 |
-| `:54-60` | `aria-modal="true"`, no trap | focus the panel on mount, cycle Tab, restore to the opener. Same helper serves `HeaderMenu.tsx` | AX-1 |
-| `:43` | binds `window` `keydown` | the overlay stack A4 built on Monday | LB-30 |
+| `:25` | `maxWidthClassName = 'max-w-lg'` | `'max-w-md'` — **0 of 19 mounts use the default**; 18 pass `max-w-md`, 1 passes `max-w-xl`. A default nobody picks is a trap | [MF-1](../ACTION-REPORT.md#MF-1) |
+| `:69` | `bg-tennis-dark/80 backdrop-blur-md` | unchanged — the **token revalue** makes the scrim actually dim. Free after step 1 | [CT-14](../ACTION-REPORT.md#CT-14) |
+| `:110` | `bg-tennis-dark/50 hover:bg-tennis-dark` | `bg-fg/10 hover:bg-fg/20`, 44×44 | CT-14, [BT-10](../ACTION-REPORT.md#BT-10) |
+| `:92` vs `:100` | handle `sticky top-0` **and** header `sticky top-0 sm:top-0` | one sticky block, or offset the header by the handle height. Two elements pinned to the same offset means the opaque handle covers the top 20px of the title once the body scrolls. The `sm:top-0` is redundant with `top-0` | [MF-14](../ACTION-REPORT.md#MF-14) |
+| `:23` doc comment | requires `<AnimatePresence>` at the call site | move `<AnimatePresence>` **inside** `Sheet`. **14 of 26 render sites are missing it** and pop out instantly; the 12 existing outer wrappers become harmless | [MF-15](../ACTION-REPORT.md#MF-15) |
+| `:54-60` | `aria-modal="true"`, no trap | focus the panel on mount, cycle Tab, restore to the opener. Same helper serves `HeaderMenu.tsx` | [AX-1](../ACTION-REPORT.md#AX-1) |
+| `:43` | binds `window` `keydown` | the overlay stack A4 built on Monday | [LB-30](../ACTION-REPORT.md#LB-30) |
 
 ### Step 11 — `Sheet.tsx`, absorption · MF-2, MF-3, MF-4 · **the only rows with a real tail**
 
@@ -189,7 +189,7 @@ Body padding `p-6 pt-3 space-y-4` inside `Sheet`, plus one dense preset for row-
 
 | Line | Now | After |
 | --- | --- | --- |
-| `:30` | `active ? 'text-white' : 'bg-white text-ink hover:bg-white/90'` | off-state `bg-tennis-deep text-fg`. **R-3: unselected is DARKER.** `bg-white` does not flip, so in dark theme the unselected segment is the brightest thing on screen and reads as selected |
+| `:30` | `active ? 'text-white' : 'bg-white text-ink hover:bg-white/90'` | off-state `bg-tennis-deep text-fg`. **[R-3](../ACTION-REPORT.md#R-3): unselected is DARKER.** `bg-white` does not flip, so in dark theme the unselected segment is the brightest thing on screen and reads as selected |
 | `:29` | `rounded-lg px-3 py-2 text-xs` | `rounded-xl py-3` → 44px |
 | track | `flex bg-fg/5 rounded-xl p-1` | `rounded-2xl` — concentricity: a child inset ≤8px takes parent radius − inset |
 | `:14-22` | `role="tablist"`, no arrows, no `aria-controls` | roving `tabIndex` + Left/Right; `aria-controls` on each tab. It announces as a tab list a screen-reader user cannot operate |
@@ -227,21 +227,21 @@ Body padding `p-6 pt-3 space-y-4` inside `Sheet`, plus one dense preset for row-
 
 ### Step 16 — The canon into `CLAUDE.md` · **A5 writes it, A4 supplies the text**
 
-**TY-3 must be written down before anyone starts TY-2**, or the heading sweep eats the 16px control size and re-opens the iOS focus-zoom bug on 58 of 76 fields.
+**[TY-3](../ACTION-REPORT.md#TY-3) must be written down before anyone starts [TY-2](../ACTION-REPORT.md#TY-2)**, or the heading sweep eats the 16px control size and re-opens the iOS focus-zoom bug on 58 of 76 fields.
 
 | Row | Content |
 | --- | --- |
 | TY-3 | `text-base` is the **control** size for field values and button labels — not a heading tier |
-| CS-33 | The four ring refusals: Tasks headline tiles, draw fill, win rate, RR Group Bonus. A ring implies a ceiling; RS and League Points are unbounded, draw fill's denominator derives from its numerator, the Group Bonus is a switch |
-| DC-22 | A "Design canon" section. The two-tier text rule **is** in `CLAUDE.md` and has 4 breaches; the radius ladder is **not** and has 391 sites across 14 steps. That difference is the whole argument |
-| DC-23 | `CLAUDE.md` says `Leagues.tsx` renders no challenge UI. A live Challenge button sits in it |
-| KO-3 | Replace the `selectGroupWinners` auto-seeding paragraph with the organizer-controlled rule (R-4) |
-| **walkover** | `CLAUDE.md` states an RR walkover pays the normal 3/1 and that "the walkover penalty was deliberately removed". **The settled rule is 1 to each player** in a group (D6 · L10 · Q-4); a *played* group match still pays 3/1. Correct the Round Robin and Stats sections, and the `matchAward` paragraph |
+| [CS-33](../ACTION-REPORT.md#CS-33) | The four ring refusals: Tasks headline tiles, draw fill, win rate, RR Group Bonus. A ring implies a ceiling; RS and League Points are unbounded, draw fill's denominator derives from its numerator, the Group Bonus is a switch |
+| [DC-22](../ACTION-REPORT.md#DC-22) | A "Design canon" section. The two-tier text rule **is** in `CLAUDE.md` and has 4 breaches; the radius ladder is **not** and has 391 sites across 14 steps. That difference is the whole argument |
+| [DC-23](../ACTION-REPORT.md#DC-23) | `CLAUDE.md` says `Leagues.tsx` renders no challenge UI. A live Challenge button sits in it |
+| [KO-3](../ACTION-REPORT.md#KO-3) | Replace the `selectGroupWinners` auto-seeding paragraph with the organizer-controlled rule ([R-4](../ACTION-REPORT.md#R-4)) |
+| **walkover** | `CLAUDE.md` states an RR walkover pays the normal 3/1 and that "the walkover penalty was deliberately removed". **The settled rule is 1 to each player** in a group ([D6](../notes/HARMONIZATION_REPORT.md#D6) · [L10](../notes/HARMONIZATION_REPORT.md#L10) · Q-4); a *played* group match still pays 3/1. Correct the Round Robin and Stats sections, and the `matchAward` paragraph |
 | **scoring** | Replace the "organizer confirms" description with the auto-approval rule: applies on submission · lower aggregate margin wins on a score disagreement · only different winners flag · walkovers organizer-only |
 | **tests** | Delete *"There are no automated tests"* — false on this branch. Write in the eleven commands |
-| DC-24, DC-27 | Correct five stale inventory claims; move the four smuggled colour decisions out of the geometry canon |
+| [DC-24](../ACTION-REPORT.md#DC-24), [DC-27](../ACTION-REPORT.md#DC-27) | Correct five stale inventory claims; move the four smuggled colour decisions out of the geometry canon |
 
-**Blocked and not to be worked around:** nothing. `Stepper.tsx` was deleted in Sprint D2.
+**Blocked and not to be worked around:** nothing. `Stepper.tsx` was deleted in [Sprint D2](SPRINT-D2.md).
 
 ---
 
@@ -252,7 +252,7 @@ Body padding `p-6 pt-3 space-y-4` inside `Sheet`, plus one dense preset for row-
 | Line | Now | After |
 | --- | --- | --- |
 | `App.tsx:150-151` | `<Navigate to="/matches" replace />` for `/friendlies` and `/challenges` | `to="/matches?mode=friendlies"` / `?mode=challenges`. They keep `replace` but **drop their `mode`**, so both land the member on the Tournament tab they did not ask for. Two characters of query string each |
-| `App.tsx:177` | `<Route path="*" element={<Navigate to="/" />} />` — **no `replace`** | add `replace` today; a real `NotFound` element is Sprint D5 |
+| `App.tsx:177` | `<Route path="*" element={<Navigate to="/" />} />` — **no `replace`** | add `replace` today; a real `NotFound` element is [Sprint D5](SPRINT-D5.md) |
 | `App.tsx:91` | `<Navigate to="/login" />` | add `replace` — Back from `/login` re-enters the guarded route and bounces again |
 | `App.tsx` `/tournament` | inside `<PrivateRoute>` | move `TournamentRedirect` outside it. A signed-out visitor on `/tournament?event=X` loses the event id at the bounce. `/matches` still guards |
 | `App.tsx` ScrollToTop | one effect keyed `[location.pathname, location.search]`, scrolling **and** logging | split: scroll on `pathname`, log `page_view` on both. Switching the Matches mode or a Marketplace tab currently jumps the viewport to the top even though `<main>` never remounts |
@@ -275,16 +275,16 @@ One definition each, everywhere.
 
 | Row | Defect | Fix |
 | --- | --- | --- |
-| LB-7 | A member with friendlies sees a **bigger match count on their own profile** than anyone else sees on it | `stats.matchesPlayed` everywhere |
-| LB-8 | Two inline re-implementations of `pgWinPct` — the same member reads `—` on the leaderboard and `62%` on their own profile | Import the one helper at both sites |
-| LB-9 | The Profile games-won fallback mixes populations: games-from-matches against points-from-stats | **Delete the fallback.** `—` is the honest answer |
-| LB-10 | Three streak definitions. `status === 'complete'` silently excludes challenges and rallies, which are `'confirmed'` | One `isComplete` predicate covering both; all three call it |
-| LB-11 | A walkover inflates Matches and Wins, leaves P/G alone, is invisible to Tasks, and pays full 3/1 in the group table when the settled rule is **1 to each player** | One rule via `matchAward`. **`matchAward` and `computeGroupStandings` change in the same commit** — Sprint D2 set the payout, this row makes all three consumers read it |
-| LB-12 | The same player reads "Challenger" and "Challengers" two taps apart | `skillBand()` is the sole source; delete `skillTier`, `SKILL_LEVEL_TIERS` and the `TOURNAMENT_OPTIONS` labels |
-| LB-13 | `COMMUNITY_BASELINE` at `Home.tsx:79` advertises **100 players / 170 matches / 42 courts** as fact when `site_stats/summary` is missing, and a genuine zero is indistinguishable from a failed read | Remove the baselines; skeleton while loading, `0` for zero, nothing on failure |
-| LB-14 | The court-count aggregate has no recency rule, so the same court shows a different count depending on whether the 6-hourly doc exists | Apply the client's 90-day / 0-points filter server-side too. **Needs an A1 functions deploy** |
-| LB-15 | "#12" means a different thing on two pages, and neither reads the stored rank | Pick one pool; then read `stats.rankPosition` or delete it |
-| DC-11 / DC-12 | `loses`, `tournamentsPlayed` and `rankPosition` are written and rendered nowhere | Surface **Losses**; delete the other two and their writers |
+| [LB-7](../ACTION-REPORT.md#LB-7) | A member with friendlies sees a **bigger match count on their own profile** than anyone else sees on it | `stats.matchesPlayed` everywhere |
+| [LB-8](../ACTION-REPORT.md#LB-8) | Two inline re-implementations of `pgWinPct` — the same member reads `—` on the leaderboard and `62%` on their own profile | Import the one helper at both sites |
+| [LB-9](../ACTION-REPORT.md#LB-9) | The Profile games-won fallback mixes populations: games-from-matches against points-from-stats | **Delete the fallback.** `—` is the honest answer |
+| [LB-10](../ACTION-REPORT.md#LB-10) | Three streak definitions. `status === 'complete'` silently excludes challenges and rallies, which are `'confirmed'` | One `isComplete` predicate covering both; all three call it |
+| [LB-11](../ACTION-REPORT.md#LB-11) | A walkover inflates Matches and Wins, leaves P/G alone, is invisible to Tasks, and pays full 3/1 in the group table when the settled rule is **1 to each player** | One rule via `matchAward`. **`matchAward` and `computeGroupStandings` change in the same commit** — [Sprint D2](SPRINT-D2.md) set the payout, this row makes all three consumers read it |
+| [LB-12](../ACTION-REPORT.md#LB-12) | The same player reads "Challenger" and "Challengers" two taps apart | `skillBand()` is the sole source; delete `skillTier`, `SKILL_LEVEL_TIERS` and the `TOURNAMENT_OPTIONS` labels |
+| [LB-13](../ACTION-REPORT.md#LB-13) | `COMMUNITY_BASELINE` at `Home.tsx:79` advertises **100 players / 170 matches / 42 courts** as fact when `site_stats/summary` is missing, and a genuine zero is indistinguishable from a failed read | Remove the baselines; skeleton while loading, `0` for zero, nothing on failure |
+| [LB-14](../ACTION-REPORT.md#LB-14) | The court-count aggregate has no recency rule, so the same court shows a different count depending on whether the 6-hourly doc exists | Apply the client's 90-day / 0-points filter server-side too. **Needs an A1 functions deploy** |
+| [LB-15](../ACTION-REPORT.md#LB-15) | "#12" means a different thing on two pages, and neither reads the stored rank | Pick one pool; then read `stats.rankPosition` or delete it |
+| [DC-11](../ACTION-REPORT.md#DC-11) / [DC-12](../ACTION-REPORT.md#DC-12) | `loses`, `tournamentsPlayed` and `rankPosition` are written and rendered nowhere | Surface **Losses**; delete the other two and their writers |
 
 > **`matchAward` is the single source of truth for match scoring.** The writer and the display used to be two implementations of the same rules and **did drift** — the group table kept adding a +5 completion bonus long after the payout became the organizer's manual switch, so players were shown points nobody had given them. Never re-fork it.
 
@@ -301,7 +301,7 @@ One definition each, everywhere.
 | **One "draw is out" notice per player per draw** — no per-match fan-out, no bye notices | Members currently get one per match |
 | Notify a player when their next-round opponent is ready, and when their RR group is out | Two notices that do not exist |
 | **Joins reach the organizer as one "N joined today" digest** | Not one notice per join |
-| The weekly reminder counts only **real pending matches** and carries the nearest deadline | *"You have 3 matches to play — earliest deadline 14 Sept"*. RR group matches have no deadline (L17), so with no dated match it falls back to *"Arrange a time with your opponent."* |
+| The weekly reminder counts only **real pending matches** and carries the nearest deadline | *"You have 3 matches to play — earliest deadline 14 Sept"*. RR group matches have no deadline ([L17](../notes/HARMONIZATION_REPORT.md#L17)), so with no dated match it falls back to *"Arrange a time with your opponent."* |
 | Delete the false "ladder reset" notice | It fires on nothing |
 | `eventOrganizerUids` — every organizer notice goes to `creator_id` **and** `organizer_ids` | Assigned organizers currently get nothing |
 | The server 30-day prune is the only purge; mark-read happens on tap | — |

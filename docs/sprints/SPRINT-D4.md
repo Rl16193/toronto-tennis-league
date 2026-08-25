@@ -1,13 +1,13 @@
 # Sprint D4 — Thursday 27 August 2026
 
-> **Data remodel P2a, zones, withdrawal, placement, and the organizer-controlled knockout.**
+> **Data remodel [P2a](../notes/WORKFLOW_DESIGN_REPORT.md#P2a), zones, withdrawal, placement, and the organizer-controlled knockout.**
 > The heaviest data day. Everything here writes to production shape.
 
 | | |
 | --- | --- |
-| **Branch base** | Sprint D3 merge |
+| **Branch base** | [Sprint D3](SPRINT-D3.md) merge |
 | **Blocking** | A2 lands every field **before 11:00**; A1's whitelists follow; A3 and A4 build on both |
-| **Data safety** | **PD8 is deferred with no commitment.** Monday's export is the only rollback point. Every migration `--dry-run` first, diff in the report, then apply |
+| **Data safety** | **[PD8](../notes/DECISIONS_BRIEF.md#PD8) is deferred with no commitment.** Monday's export is the only rollback point. Every migration `--dry-run` first, diff in the report, then apply |
 | **Ship** | Functions → rules → hosting |
 
 ---
@@ -16,9 +16,9 @@
 
 | Lane | Tasks | Rows |
 | --- | --: | --- |
-| **A2 Data** | 9 | L1, L5, L6, L7, L12, L15, L16, L17, L18 |
-| **A1 Rules + Functions** | 6 | whitelists, D5 placer, withdrawal walkovers, `onZoneChanged`, unmapped-court notice, P3 scheduling removal |
-| **A3 Client / Dev** | 9 | F7, F8, F9, F10, F11, LB-17, LB-18, KO-1, KO-2, R-4 draw controls |
+| **A2 Data** | 9 | [L1](../notes/HARMONIZATION_REPORT.md#L1), [L5](../notes/HARMONIZATION_REPORT.md#L5), [L6](../notes/HARMONIZATION_REPORT.md#L6), [L7](../notes/HARMONIZATION_REPORT.md#L7), [L12](../notes/HARMONIZATION_REPORT.md#L12), [L15](../notes/HARMONIZATION_REPORT.md#L15), [L16](../notes/HARMONIZATION_REPORT.md#L16), [L17](../notes/HARMONIZATION_REPORT.md#L17), [L18](../notes/HARMONIZATION_REPORT.md#L18) |
+| **A1 Rules + Functions** | 6 | whitelists, [D5](../notes/HARMONIZATION_REPORT.md#D5) placer, withdrawal walkovers, `onZoneChanged`, unmapped-court notice, [P3](../notes/WORKFLOW_DESIGN_REPORT.md#P3) scheduling removal |
+| **A3 Client / Dev** | 9 | [F7](../notes/WORKFLOW_DESIGN_REPORT.md#F7), [F8](../notes/WORKFLOW_DESIGN_REPORT.md#F8), [F9](../notes/WORKFLOW_DESIGN_REPORT.md#F9), [F10](../notes/WORKFLOW_DESIGN_REPORT.md#F10), [F11](../notes/WORKFLOW_DESIGN_REPORT.md#F11), [LB-17](../ACTION-REPORT.md#LB-17), [LB-18](../ACTION-REPORT.md#LB-18), [KO-1](../ACTION-REPORT.md#KO-1), [KO-2](../ACTION-REPORT.md#KO-2), [R-4](../ACTION-REPORT.md#R-4) draw controls |
 | **A4 UI/UX** | 6 | Enter A Zone, Withdraw, Reset + orange **!**, partner pool, Away pill, unplaced list |
 | **A5 Verify** | 4 | dry-run diffs, rules matrix, journeys 1/4/5, gate |
 
@@ -66,7 +66,7 @@ One `status` field replaces the removal flag, the RR withdrawn list, and the fun
   "withdrawn_by": "self" | "<organizer_uid>" }
 ```
 
-**S3 applies:** the participant check reads `status`, and **no withdrawn data exists**, so this is code only — no backfill.
+**[S3](../notes/HARMONIZATION_REPORT.md#S3) applies:** the participant check reads `status`, and **no withdrawn data exists**, so this is code only — no backfill.
 
 Re-add after a mistaken withdrawal is allowed. Applied walkovers are **not** auto-reversed; the organizer corrects each affected match with a normal rescore.
 
@@ -82,7 +82,7 @@ Pool rules: pool members are the dropdown other players pick from — **not** ev
 
 ### ⬛ L1 · LB-44 — The ladder is a permanent event
 
-Fixed id `events/ladder`. Challenges keep `event_id` (**D2**). `league` still derives from `stats.league`.
+Fixed id `events/ladder`. Challenges keep `event_id` (**[D2](../notes/HARMONIZATION_REPORT.md#D2)**). `league` still derives from `stats.league`.
 
 ### ⬛ L6 — Drop `profile_details_visible`
 
@@ -157,7 +157,7 @@ A custom court entry that resolves to no zone notifies the **super-admin and the
 
 ### ⬛ P3 — Scheduling
 
-No dates or times are stored. A player taps Schedule; the client writes `requested_by`; the **opponent** is nudged with the requester's contact channels; the organizer gets a read-only requests panel. **S5: no `requested_by` backfill** — the old boolean never recorded who asked, so pending requests expire and players re-request.
+No dates or times are stored. A player taps Schedule; the client writes `requested_by`; the **opponent** is nudged with the requester's contact channels; the organizer gets a read-only requests panel. **[S5](../notes/HARMONIZATION_REPORT.md#S5): no `requested_by` backfill** — the old boolean never recorded who asked, so pending requests expire and players re-request.
 
 **A1 verification** · `npm run test:rules` · `npm run test:storage` · `cd functions && npm test` · `npm run test:functions:integration`
 
@@ -185,7 +185,7 @@ Delete the silent Downtown-Midtown default at the placement site. `effectiveZone
 
 ### ⬛ LB-18 — `CompleteProfileModal`'s hidden writes
 
-`updateLeagueAndAgeCategory` flips `profile_details_visible` to true (dropped by L6 today), and `updatePreferredCourts` rewrites `preferred_zone` with its **old** value even when the new courts cross a zone. **Recompute `preferred_zone` unless `preferred_zone_manual`.**
+`updateLeagueAndAgeCategory` flips `profile_details_visible` to true (dropped by [L6](../notes/HARMONIZATION_REPORT.md#L6) today), and `updatePreferredCourts` rewrites `preferred_zone` with its **old** value even when the new courts cross a zone. **Recompute `preferred_zone` unless `preferred_zone_manual`.**
 
 ### ⬛ F10 — `isEventManager` helper
 
@@ -201,9 +201,9 @@ Toggle on the profile; pill on challenge and rally cards.
 
 | Row | Now | After |
 | --- | --- | --- |
-| **KO-1** | `selectGroupWinners` auto-seeds every group winner, ordered points → gamesWon so the top seed lands in slot 1 | **Generate all slots as `PLAYER_LOADING`.** Drop the points → gamesWon ordering. Keep `manualFill: true` and the first-round bye skip |
-| **KO-2** | The top seed is engine-placed and reads as authoritative | **Every occupied slot is reassignable from the unplaced list.** No slot is read-only, including a group's first-ranked player |
-| **KO-3** | `CLAUDE.md` documents the auto-seeding | A5 rewrites that paragraph in Sprint D3 step 16 — confirm it landed |
+| **[KO-1](../ACTION-REPORT.md#KO-1)** | `selectGroupWinners` auto-seeds every group winner, ordered points → gamesWon so the top seed lands in slot 1 | **Generate all slots as `PLAYER_LOADING`.** Drop the points → gamesWon ordering. Keep `manualFill: true` and the first-round bye skip |
+| **[KO-2](../ACTION-REPORT.md#KO-2)** | The top seed is engine-placed and reads as authoritative | **Every occupied slot is reassignable from the unplaced list.** No slot is read-only, including a group's first-ranked player |
+| **[KO-3](../ACTION-REPORT.md#KO-3)** | `CLAUDE.md` documents the auto-seeding | A5 rewrites that paragraph in [Sprint D3](SPRINT-D3.md) step 16 — confirm it landed |
 
 There is **no** automatic runner-up fill; that behaviour was already removed with `selectAdvancingPlayers`.
 
@@ -227,7 +227,7 @@ Winner advancement must normalize `zone` too — template match ids (M1, M5, …
 
 ### ⬛ Merges persisted, late-join placer deleted
 
-Read merges from `zone_draw_config` (L7) instead of re-inferring. Delete the in-browser late-join placer — A1's server placer replaces it.
+Read merges from `zone_draw_config` ([L7](../notes/HARMONIZATION_REPORT.md#L7)) instead of re-inferring. Delete the in-browser late-join placer — A1's server placer replaces it.
 
 > The merge-inference effect must key on `[matches, statsMap]`. Inside the matches snapshot callback `statsMap` is a stale `{}` closure, so every band lookup returns 0 and the inference silently falls back to Challengers+Masters.
 
@@ -276,7 +276,7 @@ The **Unplaced Players** list shows each player's zone, and **"No zone" when the
 
 ### ⬛ Delete, do not restyle
 
-The Profile day-toggle grid (23 day buttons + 7 weekday headers — retires BT-18) and the organizer date / AM-PM / Set scheduling controls with their two toasts. No dates are stored after today.
+The Profile day-toggle grid (23 day buttons + 7 weekday headers — retires [BT-18](../ACTION-REPORT.md#BT-18)) and the organizer date / AM-PM / Set scheduling controls with their two toasts. No dates are stored after today.
 
 **Keep and restyle:** the round-deadline inputs and the RR knockout size bar. Both are explicitly **not** frozen.
 

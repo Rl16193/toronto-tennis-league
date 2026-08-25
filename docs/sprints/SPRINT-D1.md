@@ -18,10 +18,10 @@
 
 | Lane | Tasks | Rows |
 | --- | --: | --- |
-| **A1 Rules + Functions** | 5 | F1/LB-16, F4, F13, F12, conflict 6 |
-| **A2 Data** | 2 | F2 + L14, baseline export |
-| **A3 Client / Dev** | 24 | LB-1, LB-2, LB-3, LB-4, LB-6, LB-19…LB-29, LB-31…LB-37, LB-39, LB-42, LB-45, LB-47…LB-50 |
-| **A4 UI/UX** | 3 | CT-12, LB-30, LB-24/LB-25 surfaces |
+| **A1 Rules + Functions** | 5 | [F1](../notes/WORKFLOW_DESIGN_REPORT.md#F1)/LB-16, [F4](../notes/WORKFLOW_DESIGN_REPORT.md#F4), [F13](../notes/WORKFLOW_DESIGN_REPORT.md#F13), [F12](../notes/WORKFLOW_DESIGN_REPORT.md#F12), [conflict 6](../notes/DEV_ANUJ_CONFLICTS.md#6-deployment-order--trap) |
+| **A2 Data** | 2 | [F2](../notes/WORKFLOW_DESIGN_REPORT.md#F2) + [L14](../notes/HARMONIZATION_REPORT.md#L14), baseline export |
+| **A3 Client / Dev** | 24 | [LB-1](../ACTION-REPORT.md#LB-1), [LB-2](../ACTION-REPORT.md#LB-2), [LB-3](../ACTION-REPORT.md#LB-3), [LB-4](../ACTION-REPORT.md#LB-4), [LB-6](../ACTION-REPORT.md#LB-6), [LB-19](../ACTION-REPORT.md#LB-19)…[LB-29](../ACTION-REPORT.md#LB-29), [LB-31](../ACTION-REPORT.md#LB-31)…[LB-37](../ACTION-REPORT.md#LB-37), [LB-39](../ACTION-REPORT.md#LB-39), [LB-42](../ACTION-REPORT.md#LB-42), [LB-45](../ACTION-REPORT.md#LB-45), [LB-47](../ACTION-REPORT.md#LB-47)…[LB-50](../ACTION-REPORT.md#LB-50) |
+| **A4 UI/UX** | 3 | [CT-12](../ACTION-REPORT.md#CT-12), [LB-30](../ACTION-REPORT.md#LB-30), [LB-24](../ACTION-REPORT.md#LB-24)/LB-25 surfaces |
 | **A5 Verify** | 4 | harness, previews, regression tests, gate |
 
 ---
@@ -100,9 +100,9 @@ The catch block advances to the success screen **and** fires the `complete_profi
 
 | Row | Line | Defect | Fix |
 | --- | --- | --- | --- |
-| LB-19 | `:717` `cancelRequest`, rendered at `:808` | `cancelRequest` only matches `status === 'open'`, but the button renders on accepted challenges too — a pure dead click | Restrict rendering to `isPending`, or extend `cancelRequest` |
-| LB-20 | `:499` `openChallengeScore` vs `useLadder.ts` | `challengeAccepted` includes `reported`; `openChallengeScore` only finds `accepted` — another dead click | Align the two predicates |
-| LB-21 | `:702` `const showContact = showScore;` | Contact drops the moment a rally hits `reported`, while the name link survives — the two players lose each other exactly when they need to talk about the score | Include `reported` in `showContact` |
+| [LB-19](../ACTION-REPORT.md#LB-19) | `:717` `cancelRequest`, rendered at `:808` | `cancelRequest` only matches `status === 'open'`, but the button renders on accepted challenges too — a pure dead click | Restrict rendering to `isPending`, or extend `cancelRequest` |
+| [LB-20](../ACTION-REPORT.md#LB-20) | `:499` `openChallengeScore` vs `useLadder.ts` | `challengeAccepted` includes `reported`; `openChallengeScore` only finds `accepted` — another dead click | Align the two predicates |
+| [LB-21](../ACTION-REPORT.md#LB-21) | `:702` `const showContact = showScore;` | Contact drops the moment a rally hits `reported`, while the name link survives — the two players lose each other exactly when they need to talk about the score | Include `reported` in `showContact` |
 
 ---
 
@@ -110,14 +110,14 @@ The catch block advances to the success screen **and** fires the `complete_profi
 
 | Row | File | Defect | Fix |
 | --- | --- | --- | --- |
-| LB-22 | `Profile.tsx` events calendar | `Selected:` sorts `"May 9, 2026"` lexicographically, so May 10 lists before May 9; the 7-column grid has no leading blank cells so weekdays align only by coincidence | Sort on real dates; offset the grid by the month's first weekday |
-| LB-23 | `Tournament.tsx` zone Approve | If no bucket matches the stored `new_zone`, Approve silently does nothing | Error banner naming the unmatched zone |
-| LB-24 | `ProfileInfo.tsx` avatar upload | A >5 MB or non-image file returns early with no message; the picker just closes | Set the card's error message; disable the button during upload |
-| LB-25 | `BadgePicker.tsx` | Selecting a 4th badge is a no-op with no styling change and no message | Disable unselected chips at 3, show "3 maximum" |
-| LB-26 | `RRGroupCard.tsx` Save Group · `RoundRobinView.tsx` Create | Cap-of-5 and already-played validation is server-side only and surfaces as a banner at the top of a long list — an invisible failure | Validate `overGroupCap` and played-match state client-side; disable with a reason |
-| LB-27 | `TournamentElements.tsx` `BracketErrorBoundary` | `hasError` never clears, so switching draws or events after one render error keeps the error card until a full reload | Reset on a `key`/prop change via `getDerivedStateFromProps` |
-| LB-28 | `RoundRobinView.tsx` | `onDownload={() => {}}` — after a knockout render error the fallback's "Download Draw" silently does nothing | Pass the handler `BracketView` gets, or omit the prop and hide the button |
-| LB-29 | `Tasks.tsx:63` `searchParams.get('claim')` | `?claim=banana` opens a sheet with an undefined title and a Submit whose validation branches all fall through | Whitelist `volunteer` / `ambassador` / `host`; otherwise ignore the param |
+| [LB-22](../ACTION-REPORT.md#LB-22) | `Profile.tsx` events calendar | `Selected:` sorts `"May 9, 2026"` lexicographically, so May 10 lists before May 9; the 7-column grid has no leading blank cells so weekdays align only by coincidence | Sort on real dates; offset the grid by the month's first weekday |
+| [LB-23](../ACTION-REPORT.md#LB-23) | `Tournament.tsx` zone Approve | If no bucket matches the stored `new_zone`, Approve silently does nothing | Error banner naming the unmatched zone |
+| [LB-24](../ACTION-REPORT.md#LB-24) | `ProfileInfo.tsx` avatar upload | A >5 MB or non-image file returns early with no message; the picker just closes | Set the card's error message; disable the button during upload |
+| [LB-25](../ACTION-REPORT.md#LB-25) | `BadgePicker.tsx` | Selecting a 4th badge is a no-op with no styling change and no message | Disable unselected chips at 3, show "3 maximum" |
+| [LB-26](../ACTION-REPORT.md#LB-26) | `RRGroupCard.tsx` Save Group · `RoundRobinView.tsx` Create | Cap-of-5 and already-played validation is server-side only and surfaces as a banner at the top of a long list — an invisible failure | Validate `overGroupCap` and played-match state client-side; disable with a reason |
+| [LB-27](../ACTION-REPORT.md#LB-27) | `TournamentElements.tsx` `BracketErrorBoundary` | `hasError` never clears, so switching draws or events after one render error keeps the error card until a full reload | Reset on a `key`/prop change via `getDerivedStateFromProps` |
+| [LB-28](../ACTION-REPORT.md#LB-28) | `RoundRobinView.tsx` | `onDownload={() => {}}` — after a knockout render error the fallback's "Download Draw" silently does nothing | Pass the handler `BracketView` gets, or omit the prop and hide the button |
+| [LB-29](../ACTION-REPORT.md#LB-29) | `Tasks.tsx:63` `searchParams.get('claim')` | `?claim=banana` opens a sheet with an undefined title and a Submit whose validation branches all fall through | Whitelist `volunteer` / `ambassador` / `host`; otherwise ignore the param |
 
 ---
 
@@ -125,14 +125,14 @@ The catch block advances to the success screen **and** fires the `complete_profi
 
 | Row | File | Defect | Fix |
 | --- | --- | --- | --- |
-| LB-31 | `courtmap/CourtMapElements.tsx` `MultiFilterSelect` | Opening Zone then tapping Total Courts leaves two overlapping popovers, the second rendering under the first | Document `mousedown` and `keydown` listeners; close on outside click and Escape |
-| LB-32 | `CourtMap.tsx` search `×` | The `×` calls `handleReset` (`:386`) and silently wipes Type / Lights / Zone / Total Courts / programs | Call `handleClear` (`:374`); keep Reset inside the Filters sheet |
-| LB-33 | `CourtMap.tsx:386` `handleReset` | Skips `showAllCourts` (`:152`), so Reset leaves the map in whichever mode it was in | Include `setShowAllCourts(false)` |
-| LB-34 | `Signup.tsx:382` `goToEmailPhase` | Only the Google credential is cleared; after an Apple hand-off `(change)` leaves `pendingAppleCredential` (`:101`) armed and the OAuth buttons hidden for the rest of the session | Clear both |
-| LB-35 | `Signup.tsx` | One shared `loading` flag across the three sign-in buttons | Split per button |
-| LB-36 | `CheckInModal.tsx` | One shared `busy` flag across rows | Per-row scope |
-| LB-37 | `ServicesElements.tsx` offer form | `$NaN` in the live preview | Guard the parse |
-| LB-39 | `Signup.tsx` | `emailSuggestion` is loosely typed | Type it properly |
+| [LB-31](../ACTION-REPORT.md#LB-31) | `courtmap/CourtMapElements.tsx` `MultiFilterSelect` | Opening Zone then tapping Total Courts leaves two overlapping popovers, the second rendering under the first | Document `mousedown` and `keydown` listeners; close on outside click and Escape |
+| [LB-32](../ACTION-REPORT.md#LB-32) | `CourtMap.tsx` search `×` | The `×` calls `handleReset` (`:386`) and silently wipes Type / Lights / Zone / Total Courts / programs | Call `handleClear` (`:374`); keep Reset inside the Filters sheet |
+| [LB-33](../ACTION-REPORT.md#LB-33) | `CourtMap.tsx:386` `handleReset` | Skips `showAllCourts` (`:152`), so Reset leaves the map in whichever mode it was in | Include `setShowAllCourts(false)` |
+| [LB-34](../ACTION-REPORT.md#LB-34) | `Signup.tsx:382` `goToEmailPhase` | Only the Google credential is cleared; after an Apple hand-off `(change)` leaves `pendingAppleCredential` (`:101`) armed and the OAuth buttons hidden for the rest of the session | Clear both |
+| [LB-35](../ACTION-REPORT.md#LB-35) | `Signup.tsx` | One shared `loading` flag across the three sign-in buttons | Split per button |
+| [LB-36](../ACTION-REPORT.md#LB-36) | `CheckInModal.tsx` | One shared `busy` flag across rows | Per-row scope |
+| [LB-37](../ACTION-REPORT.md#LB-37) | `ServicesElements.tsx` offer form | `$NaN` in the live preview | Guard the parse |
+| [LB-39](../ACTION-REPORT.md#LB-39) | `Signup.tsx` | `emailSuggestion` is loosely typed | Type it properly |
 
 ---
 
@@ -140,14 +140,14 @@ The catch block advances to the success screen **and** fires the `complete_profi
 
 | Row | File | Defect | Fix |
 | --- | --- | --- | --- |
-| LB-42 | Completed tab | Cache guard is wrong, so the tab refetches or serves stale | Fix the guard key |
-| LB-45 | `ProfileInfo.tsx` avatar · `Home.tsx` hero slides | No `onError` fallback — a dead URL renders a broken image | Add `onError` |
-| LB-47 | `Home.tsx` | The Report button is unreachable for logged-out visitors | Make it reachable, or hide it honestly |
-| LB-48 | Wait-time table | Points at the wrong racquet count — not the one the reporter typed | Point it at the reported count |
-| LB-49 | Notification feed | Reports a capped unread count as if it were the true one | Report the true count, or label the cap |
-| LB-50 | Empty states caused by failed reads | No retry — a failed read is indistinguishable from "nothing here" | Add a retry |
+| [LB-42](../ACTION-REPORT.md#LB-42) | Completed tab | Cache guard is wrong, so the tab refetches or serves stale | Fix the guard key |
+| [LB-45](../ACTION-REPORT.md#LB-45) | `ProfileInfo.tsx` avatar · `Home.tsx` hero slides | No `onError` fallback — a dead URL renders a broken image | Add `onError` |
+| [LB-47](../ACTION-REPORT.md#LB-47) | `Home.tsx` | The Report button is unreachable for logged-out visitors | Make it reachable, or hide it honestly |
+| [LB-48](../ACTION-REPORT.md#LB-48) | Wait-time table | Points at the wrong racquet count — not the one the reporter typed | Point it at the reported count |
+| [LB-49](../ACTION-REPORT.md#LB-49) | Notification feed | Reports a capped unread count as if it were the true one | Report the true count, or label the cap |
+| [LB-50](../ACTION-REPORT.md#LB-50) | Empty states caused by failed reads | No retry — a failed read is indistinguishable from "nothing here" | Add a retry |
 
-**Held to Sprint 3, deliberately:** LB-7 to LB-15. Every one moves a stored field or a definition and belongs with A2's stat-definition pass. Do not start them today.
+**Held to Sprint 3, deliberately:** [LB-7](../ACTION-REPORT.md#LB-7) to [LB-15](../ACTION-REPORT.md#LB-15). Every one moves a stored field or a definition and belongs with A2's stat-definition pass. Do not start them today.
 
 **A3 verification** · `npm run typecheck` · `npm run lint` · `npm test` · `npm run test:e2e`
 
@@ -173,7 +173,7 @@ The client writes the check-in passport document directly. On a return visit tha
 
 The welcome email bypasses the non-production delivery gate. On `dev-anuj` — a **test** project — that means it can email live members.
 
-**Build** · route it through the delivery gate like every other message. Then **P1**: fire it when `users.name` is first set, not on document creation. (The doc-creation trigger fires before the member has a name, so the mail goes out addressed to nobody.)
+**Build** · route it through the delivery gate like every other message. Then **[P1](../notes/WORKFLOW_DESIGN_REPORT.md#P1)**: fire it when `users.name` is first set, not on document creation. (The doc-creation trigger fires before the member has a name, so the mail goes out addressed to nobody.)
 
 ---
 
@@ -241,13 +241,13 @@ export const pgWinPct = (r: { pointswon: number; totalPointsPlayed: number }) =>
 
 **Done when** · a fresh Google sign-in produces `users` + `stats` + `preferences` + `tasks` + `contacts` · `grep -rn 'pointswon\|totalPointsPlayed' src/` returns only the derivation helper · the strip migration's dry-run diff shows exactly the expected doc count and no other field touched.
 
-> This is also why the auto-approval rule was defined on **scores**, not on P/G Won %: a submitter-percentage tie-break would have required both fields to stay stored, and reversed L14.
+> This is also why the auto-approval rule was defined on **scores**, not on P/G Won %: a submitter-percentage tie-break would have required both fields to stay stored, and reversed [L14](../notes/HARMONIZATION_REPORT.md#L14).
 
 ---
 
 ### ⬛ Baseline export
 
-Take a full production export before anything else runs this week. **PD8 (backup and restore) is deferred with no commitment**, so this export is the only rollback point the programme has. Record where it lives.
+Take a full production export before anything else runs this week. **[PD8](../notes/DECISIONS_BRIEF.md#PD8) (backup and restore) is deferred with no commitment**, so this export is the only rollback point the programme has. Record where it lives.
 
 `R6` says all 204 `stats` docs currently satisfy `loses = matchesPlayed − wins`. Capture that as the reconciliation baseline; it must still hold on Friday.
 
@@ -304,14 +304,14 @@ A3 owns the logic; you own the message and the disabled state. Use `AlertMessage
 
 ### ⬛ Design-sync baseline — DC-19 and DC-18
 
-- **DC-19** — grade the three pending reviews (`Button`, `Input`, `PlayerCard`, all `pendingGrade: true`). They are the **only** visual baseline; ungraded, Wednesday's primitive retune is a first impression instead of a diff.
-- **DC-18** — add previews for the 13 mapped-but-previewless components: `Accordion`, `AlertMessage`, `AvailabilityPills`, `ContactOpponentButton`, `Fab`, `LoadingBar`, `NearbyPill`, `RacquetIcon`, `SegmentedControl`, `Sheet`, `Stepper`, `Toast`, `Tree`. Each gets `Variants` / `Sizes` / `States`, rendered **again inside `<div data-theme="light">`**, plus an `h-11 border-badge-loss` guide box.
+- **[DC-19](../ACTION-REPORT.md#DC-19)** — grade the three pending reviews (`Button`, `Input`, `PlayerCard`, all `pendingGrade: true`). They are the **only** visual baseline; ungraded, Wednesday's primitive retune is a first impression instead of a diff.
+- **[DC-18](../ACTION-REPORT.md#DC-18)** — add previews for the 13 mapped-but-previewless components: `Accordion`, `AlertMessage`, `AvailabilityPills`, `ContactOpponentButton`, `Fab`, `LoadingBar`, `NearbyPill`, `RacquetIcon`, `SegmentedControl`, `Sheet`, `Stepper`, `Toast`, `Tree`. Each gets `Variants` / `Sizes` / `States`, rendered **again inside `<div data-theme="light">`**, plus an `h-11 border-badge-loss` guide box.
 
 > Six of the eight audit passes' correctness findings are **light-theme only**. A dark-only harness would have caught none of them. The light cell is the point of this task.
 
 ### ⬛ Regression tests
 
-One test per row above, failing on the old code. Priority order: LB-1, LB-2, F1, F2, LB-3/LB-4.
+One test per row above, failing on the old code. Priority order: [LB-1](../ACTION-REPORT.md#LB-1), [LB-2](../ACTION-REPORT.md#LB-2), [F1](../notes/WORKFLOW_DESIGN_REPORT.md#F1), [F2](../notes/WORKFLOW_DESIGN_REPORT.md#F2), [LB-3](../ACTION-REPORT.md#LB-3)/LB-4.
 
 ### ⬛ Exit gate
 
@@ -320,8 +320,8 @@ One test per row above, failing on the old code. Priority order: LB-1, LB-2, F1,
 | Clean-clone verification | All eleven commands green |
 | `docs/` + `.design-sync/` | Tracked and pushed |
 | Design-sync | 16 components × 2 themes, three graded |
-| LB-1 | Blank winner refused at form, rules and callable; test fails on old code |
-| F2 | Fresh OAuth sign-in produces all five profile documents |
+| [LB-1](../ACTION-REPORT.md#LB-1) | Blank winner refused at form, rules and callable; test fails on old code |
+| [F2](../notes/WORKFLOW_DESIGN_REPORT.md#F2) | Fresh OAuth sign-in produces all five profile documents |
 | Rules delta | A1's deployed-vs-repo diff recorded |
 | Baseline | Production export taken; `loses = matchesPlayed − wins` holds on 204 docs |
 
@@ -332,6 +332,6 @@ One test per row above, failing on the old code. Priority order: LB-1, LB-2, F1,
 | From | To | What |
 | --- | --- | --- |
 | A1 | A3 | The rules delta — it decides which of tomorrow's client writes are currently refused |
-| A2 | A1 | The `stats` field list after the L14 strip, for tomorrow's whitelist |
+| A2 | A1 | The `stats` field list after the [L14](../notes/HARMONIZATION_REPORT.md#L14) strip, for tomorrow's whitelist |
 | A3 | A4 | `ScoreModal` is now winner-less on open — tomorrow's rework builds on that, not around it |
 | A5 | all | Graded baseline, so Wednesday's diffs mean something |

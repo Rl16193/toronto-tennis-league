@@ -19,7 +19,7 @@ Read from the code, not from prose. `src/features/tournament/domain/scoring.ts` 
 | Result | Winner | Loser | Note |
 | --- | --: | --: | --- |
 | **Round Robin group — played match** | **3** | **1** | |
-| **Round Robin group — walkover** | **1** | **1** | **Both players 1.** A walkover is not a played result. This is the payout the removed no-show concept used to carry (D6 · L10 · Q-4) |
+| **Round Robin group — walkover** | **1** | **1** | **Both players 1.** A walkover is not a played result. This is the payout the removed no-show concept used to carry ([D6](HARMONIZATION_REPORT.md#D6) · [L10](HARMONIZATION_REPORT.md#L10) · Q-4) |
 | **RR group bonus** (organizer switch) | **+5** | **+5** | Every player in the group. Manual, never automatic. `rr_groupbonus` stamp is the receipt |
 | **Knockout R32** | advances, banks **0** | **1** | |
 | **Knockout R16** | advances, banks **0** | **2** | |
@@ -47,7 +47,7 @@ A group of 4 plays 3 matches per player: 3 wins = 9, 2-1 = 3+3+1 = 7, 1-2 = 3+1+
 
 ## 2 · Journey 3 — score reporting, auto-approved *(replaces D4)*
 
-**This reverses `HARMONIZATION_REPORT.md` D4 ("nothing auto-applies") and `WORKFLOW_DESIGN_REPORT.md` §1.** Those documents carry a dated amendment pointing here.
+**This reverses `HARMONIZATION_REPORT.md` [D4](HARMONIZATION_REPORT.md#D4) ("nothing auto-applies") and `WORKFLOW_DESIGN_REPORT.md` §1.** Those documents carry a dated amendment pointing here.
 
 ### The rule
 
@@ -67,7 +67,7 @@ A group of 4 plays 3 matches per player: 3 wins = 9, 2-1 = 3+3+1 = 7, 1-2 = 3+1+
 
 6. **Margin** = Σ(winner's games) − Σ(loser's games), across all sets. **Tie → the first submission stands.**
 7. **Walkovers are organizer-only.** A walkover is all-zero scores plus a winner; letting a player submit one is `LB-1` coming back through the front door.
-8. **The organizer can rescore any match, any number of times** (D3). `result_at` re-stamped, `completed_at` pinned at first scoring, every edit logged.
+8. **The organizer can rescore any match, any number of times** ([D3](HARMONIZATION_REPORT.md#D3)). `result_at` re-stamped, `completed_at` pinned at first scoring, every edit logged.
 9. **Scope: all three.** Tournament matches, ladder challenges (+3/−3) and friendlies (+2/+1) all auto-apply on submission.
 
 ### Worked example — the differing-score reconcile
@@ -85,7 +85,7 @@ Had Rahul instead submitted **himself** as winner: nothing changes, `7-0, 7-0` s
 
 ### Why "lower margin wins"
 
-You cannot inflate your own dominance. The conservative scoreline is the one that survives, whoever typed it. It needs no `pointswon` / `totalPointsPlayed`, so **L14 stands untouched** — those two fields still go.
+You cannot inflate your own dominance. The conservative scoreline is the one that survives, whoever typed it. It needs no `pointswon` / `totalPointsPlayed`, so **[L14](HARMONIZATION_REPORT.md#L14) stands untouched** — those two fields still go.
 
 ---
 
@@ -94,7 +94,7 @@ You cannot inflate your own dominance. The conservative scoreline is the one tha
 | | Agent | Branch | Owns |
 | --- | --- | --- | --- |
 | **A1** | **Rules + Functions** | `rules-functions` | `firestore.rules`, `storage.rules`, all Cloud Functions and callables, triggers, App Check, deploy order |
-| **A2** | **Data** | `dev-data` | Firestore schema (L1–L18), field naming, migrations, backfills, exports, stat definitions |
+| **A2** | **Data** | `dev-data` | Firestore schema ([L1](HARMONIZATION_REPORT.md#L1)–[L18](HARMONIZATION_REPORT.md#L18)), field naming, migrations, backfills, exports, stat definitions |
 | **A3** | **Client / Dev** | `dev-client` | React hooks, services, page behaviour, routing, the draw engine — everything in `src/` that is not presentation |
 | **A4** | **UI/UX** | `ui-ux` | `src/index.css`, `src/components/*`, the `*Elements.tsx` presentational modules, `.design-sync`, colour, type, a11y |
 | **A5** | **Verify** | `dev-verify` | The test harness, fixtures, rules matrix, e2e journeys, sprint exit gates, the release runbook |
@@ -162,7 +162,7 @@ Each block is the complete standing prompt. Paste verbatim; the daily sprint fil
 >
 > **Verification you run before handing back:** `npm run test:rules` · `npm run test:storage` · `cd functions && npm test` · `npm run test:functions:integration` · `npm run functions:syntax`. A rules change without a passing rules test is not done.
 >
-> **Worked example — your Sprint D2 task, conflict 4.**
+> **Worked example — your [Sprint D2](../sprints/SPRINT-D2.md) task, [conflict 4](DEV_ANUJ_CONFLICTS.md#4-round-robin-group-bonus--broken).**
 >
 > *Task:* `setGroupBonus` callable. Today `useTournament.ts:2231` is a disabled stub and no server operation exists.
 > *Build:* one callable, event-manager check, stamps or unstamps `rr_groupbonus` on **every** match in the group and pays or reverses **+5** to every member in **one transaction**. No-op when the stamp already matches the requested state.
@@ -180,7 +180,7 @@ Each block is the complete standing prompt. Paste verbatim; the daily sprint fil
 
 > **Mandate.** You own the shape of the data and every change to it. A field is stored **only if the server cannot derive it** — `points_spent` is the model case: it is stored, and totals and balances are derived at read.
 >
-> **You own:** the schema decisions L1–L18, field naming, `scripts/migrations/**`, `scripts/backfill-*.mjs`, `firestore.indexes.json`, the stat definitions, exports and reconciliation.
+> **You own:** the schema decisions [L1](HARMONIZATION_REPORT.md#L1)–[L18](HARMONIZATION_REPORT.md#L18), field naming, `scripts/migrations/**`, `scripts/backfill-*.mjs`, `firestore.indexes.json`, the stat definitions, exports and reconciliation.
 >
 > **You never touch:** `firestore.rules` (you propose the field whitelist, A1 writes it), `src/components/**`.
 >
@@ -193,7 +193,7 @@ Each block is the complete standing prompt. Paste verbatim; the daily sprint fil
 >
 > **Verification:** `npm run migrations:*` dry-run, then `npm test`, then a recompute-and-diff against a seeded emulator. `R6` says all 204 stats docs satisfy `loses = matchesPlayed − wins` today. That must still hold after every pass you run.
 >
-> **Worked example — your Sprint D1 task, F2 + L14.**
+> **Worked example — your [Sprint D1](../sprints/SPRINT-D1.md) task, [F2](WORKFLOW_DESIGN_REPORT.md#F2) + [L14](HARMONIZATION_REPORT.md#L14).**
 >
 > *Task:* OAuth newcomers are stuck. `profileBootstrap.ts` writes `pointswon` and `totalPointsPlayed`; the `stats` whitelist rejects both, so the whole write fails and the member never gets a profile.
 > *Build:* L14 says neither field is stored — "P/G Won %" derives client-side from the member's matches. So this is one deletion, not a whitelist widening: drop both from the bootstrap write, drop both from the type, and write the migration that strips them from the 204 existing docs.
@@ -223,7 +223,7 @@ Each block is the complete standing prompt. Paste verbatim; the daily sprint fil
 >
 > **Verification:** `npm run typecheck` · `npm run lint` · `npm test` · `npm run test:e2e`.
 >
-> **Worked example — your Sprint D1 task, LB-1. This is the highest-priority row in the entire audit.**
+> **Worked example — your [Sprint D1](../sprints/SPRINT-D1.md) task, [LB-1](../ACTION-REPORT.md#LB-1). This is the highest-priority row in the entire audit.**
 >
 > *Task:* `useTournament.ts:1826` sets `winnerUserId: match.player_1_uid` when the score modal opens. The fastest possible interaction — open, submit — records a 0-0 result the engine files as a **walkover paying a real 3/1** to whoever happens to be player 1. Against a production database with no backups.
 > *Build:* default `winnerUserId` to empty string. Disable Submit until a winner is chosen. Both handlers currently `return` silently when no winner is set — surface a message instead of a dead press.
@@ -243,11 +243,11 @@ Five days, Mon 24 – Fri 28 Aug. Each sprint file is self-contained.
 
 | Day | Sprint | Theme | File |
 | --- | --- | --- | --- |
-| **Mon 24** | **S1** | Foundation and the live bugs | [`sprints/SPRINT-D1.md`](sprints/SPRINT-D1.md) |
-| **Tue 25** | **S2** | Server authority and the new scoring contract | [`sprints/SPRINT-D2.md`](sprints/SPRINT-D2.md) |
-| **Wed 26** | **S3** | Design foundation — tokens, then primitives | [`sprints/SPRINT-D3.md`](sprints/SPRINT-D3.md) |
-| **Thu 27** | **S4** | Data remodel, zones, withdrawal, the knockout | [`sprints/SPRINT-D4.md`](sprints/SPRINT-D4.md) |
-| **Fri 28** | **S5** | Component system, roles, bookings, release | [`sprints/SPRINT-D5.md`](sprints/SPRINT-D5.md) |
+| **Mon 24** | **[S1](HARMONIZATION_REPORT.md#S1)** | Foundation and the live bugs | [`sprints/SPRINT-D1.md`](../sprints/SPRINT-D1.md) |
+| **Tue 25** | **[S2](HARMONIZATION_REPORT.md#S2)** | Server authority and the new scoring contract | [`sprints/SPRINT-D2.md`](../sprints/SPRINT-D2.md) |
+| **Wed 26** | **[S3](HARMONIZATION_REPORT.md#S3)** | Design foundation — tokens, then primitives | [`sprints/SPRINT-D3.md`](../sprints/SPRINT-D3.md) |
+| **Thu 27** | **[S4](HARMONIZATION_REPORT.md#S4)** | Data remodel, zones, withdrawal, the knockout | [`sprints/SPRINT-D4.md`](../sprints/SPRINT-D4.md) |
+| **Fri 28** | **[S5](HARMONIZATION_REPORT.md#S5)** | Component system, roles, bookings, release | [`sprints/SPRINT-D5.md`](../sprints/SPRINT-D5.md) |
 
 ### Phases, mapped to sprints
 
@@ -255,14 +255,14 @@ The remodel phases from `WORKFLOW_DESIGN_REPORT.md` land as follows.
 
 | Phase | Content | Sprint |
 | --- | --- | --- |
-| **NOW** | F1–F13, live bugs, the five branch conflicts | S1, S2 |
-| **P1** | Welcome email on first name set | S1 |
-| **P2a** | Per-event zone, zone-request rework, withdrawal data, doubles partner shape, format lock, `events/ladder`, `profile_details_visible` dropped, late-join placer removed | S4 |
-| **P3** | `requested_by` scheduling, deadlines per draw and round, notification noise and purge, `eventOrganizerUids` | S3 (A1), S4 |
-| **P4b** | Score modal rework, task counters on apply/reverse, conversion removed, server placer, multi-draw membership, merges persisted, knockout bar, withdrawal walkovers, partner access, P/G derived | S2, S4 |
-| **P5** | Organizer-assignment UI, admin recovery, `event_creator` fallback end | S5 |
-| **P6b** | Claim review by organizer, ambassador auto-approve, claim dedupe, checklist `category` | S5 |
-| **P6c** | Bookings lifecycle, catalog callable, `redemption_locks` removed | S5 |
+| **NOW** | [F1](WORKFLOW_DESIGN_REPORT.md#F1)–[F13](WORKFLOW_DESIGN_REPORT.md#F13), live bugs, the five branch conflicts | [S1](HARMONIZATION_REPORT.md#S1), [S2](HARMONIZATION_REPORT.md#S2) |
+| **[P1](WORKFLOW_DESIGN_REPORT.md#P1)** | Welcome email on first name set | S1 |
+| **[P2a](WORKFLOW_DESIGN_REPORT.md#P2a)** | Per-event zone, zone-request rework, withdrawal data, doubles partner shape, format lock, `events/ladder`, `profile_details_visible` dropped, late-join placer removed | [S4](HARMONIZATION_REPORT.md#S4) |
+| **[P3](WORKFLOW_DESIGN_REPORT.md#P3)** | `requested_by` scheduling, deadlines per draw and round, notification noise and purge, `eventOrganizerUids` | [S3](HARMONIZATION_REPORT.md#S3) (A1), S4 |
+| **[P4b](WORKFLOW_DESIGN_REPORT.md#P4b)** | Score modal rework, task counters on apply/reverse, conversion removed, server placer, multi-draw membership, merges persisted, knockout bar, withdrawal walkovers, partner access, P/G derived | S2, S4 |
+| **[P5](WORKFLOW_DESIGN_REPORT.md#P5)** | Organizer-assignment UI, admin recovery, `event_creator` fallback end | [S5](HARMONIZATION_REPORT.md#S5) |
+| **[P6b](WORKFLOW_DESIGN_REPORT.md#P6b)** | Claim review by organizer, ambassador auto-approve, claim dedupe, checklist `category` | S5 |
+| **[P6c](WORKFLOW_DESIGN_REPORT.md#P6c)** | Bookings lifecycle, catalog callable, `redemption_locks` removed | S5 |
 | **Design** | The 272 UI action rows | S3 (foundation), S5 (component system) |
 
 ---
@@ -275,92 +275,92 @@ Tasks by lane, phase and sprint. Row ids are the audit's; open the sprint file f
 
 | Task | Rows | Phase | Sprint |
 | --- | --- | --- | --- |
-| Court check-in: client writes attendance, server stamps the passport | F1, LB-16 | NOW | S1 |
-| Welcome email bypasses the delivery gate; fires on first name set | F4 | NOW / P1 | S1 |
-| Group awards skip `no_account` | F13 | NOW | S1 |
-| Rank snapshot weekly → daily | F12 | NOW | S1 |
-| Deploy runbook; deployed-vs-repo rules diff | conflict 6 | NOW | S1 |
-| Organizer rescore: reverse-then-reapply in one transaction | conflict 1, D3 | NOW | S2 |
-| Score validator at callable and rules — the twelve examples | conflict 2 | NOW | S2 |
-| `challengeResults` callable; restore the event-manager confirm branch | conflict 3, D2 | NOW | S2 |
-| `setGroupBonus` callable; `rr_groupbonus` stamp is the receipt | conflict 4, N2 | NOW | S2 |
-| `onParticipantJoin` connections trigger; drop super-admin contacts read | conflict 5, F6, L13 | NOW | S2 |
+| Court check-in: client writes attendance, server stamps the passport | [F1](WORKFLOW_DESIGN_REPORT.md#F1), [LB-16](../ACTION-REPORT.md#LB-16) | NOW | [S1](HARMONIZATION_REPORT.md#S1) |
+| Welcome email bypasses the delivery gate; fires on first name set | [F4](WORKFLOW_DESIGN_REPORT.md#F4) | NOW / [P1](WORKFLOW_DESIGN_REPORT.md#P1) | S1 |
+| Group awards skip `no_account` | [F13](WORKFLOW_DESIGN_REPORT.md#F13) | NOW | S1 |
+| Rank snapshot weekly → daily | [F12](WORKFLOW_DESIGN_REPORT.md#F12) | NOW | S1 |
+| Deploy runbook; deployed-vs-repo rules diff | [conflict 6](DEV_ANUJ_CONFLICTS.md#6-deployment-order--trap) | NOW | S1 |
+| Organizer rescore: reverse-then-reapply in one transaction | [conflict 1](DEV_ANUJ_CONFLICTS.md#1-organizer-score-editing--broken), [D3](HARMONIZATION_REPORT.md#D3) | NOW | [S2](HARMONIZATION_REPORT.md#S2) |
+| Score validator at callable and rules — the twelve examples | [conflict 2](DEV_ANUJ_CONFLICTS.md#2-set-score-bounds--gap) | NOW | S2 |
+| `challengeResults` callable; restore the event-manager confirm branch | [conflict 3](DEV_ANUJ_CONFLICTS.md#3-ladder-confirmation--broken), [D2](HARMONIZATION_REPORT.md#D2) | NOW | S2 |
+| `setGroupBonus` callable; `rr_groupbonus` stamp is the receipt | [conflict 4](DEV_ANUJ_CONFLICTS.md#4-round-robin-group-bonus--broken), [N2](HARMONIZATION_REPORT.md#N2) | NOW | S2 |
+| `onParticipantJoin` connections trigger; drop super-admin contacts read | [conflict 5](DEV_ANUJ_CONFLICTS.md#5-organizer-contact-access--gap), [F6](WORKFLOW_DESIGN_REPORT.md#F6), [L13](HARMONIZATION_REPORT.md#L13) | NOW | S2 |
 | **Auto-approval, margin reconcile, dispute flag** | **new** | NOW | S2 |
-| Walkovers only — remove `no_show` from the model and the points path | D6, L10 | P4b | S2 |
-| Notification noise: one draw notice, join digest, weekly deadline | — | P3 | S3 |
-| Rules whitelists for every S4 field; `onZoneChanged` both-draws default | L15, S3, S4 | P2a | S4 |
-| Server-side placer on participant-create | D5 | P4b | S4 |
-| Withdrawal operation applying walkovers through the result path | L12 | P4b | S4 |
-| `providers` cutover; `event_creator` ends; admin recovery script | PD5, PD6, S6 | P5 | S5 |
-| Bookings callables; claim review; ambassador auto-approve | L11 | P6b/c | S5 |
+| Walkovers only — remove `no_show` from the model and the points path | [D6](HARMONIZATION_REPORT.md#D6), [L10](HARMONIZATION_REPORT.md#L10) | [P4b](WORKFLOW_DESIGN_REPORT.md#P4b) | S2 |
+| Notification noise: one draw notice, join digest, weekly deadline | — | [P3](WORKFLOW_DESIGN_REPORT.md#P3) | [S3](HARMONIZATION_REPORT.md#S3) |
+| Rules whitelists for every [S4](HARMONIZATION_REPORT.md#S4) field; `onZoneChanged` both-draws default | [L15](HARMONIZATION_REPORT.md#L15), S3, S4 | [P2a](WORKFLOW_DESIGN_REPORT.md#P2a) | S4 |
+| Server-side placer on participant-create | [D5](HARMONIZATION_REPORT.md#D5) | P4b | S4 |
+| Withdrawal operation applying walkovers through the result path | [L12](HARMONIZATION_REPORT.md#L12) | P4b | S4 |
+| `providers` cutover; `event_creator` ends; admin recovery script | [PD5](DECISIONS_BRIEF.md#PD5), [PD6](DECISIONS_BRIEF.md#PD6), [S6](HARMONIZATION_REPORT.md#S6) | [P5](WORKFLOW_DESIGN_REPORT.md#P5) | [S5](HARMONIZATION_REPORT.md#S5) |
+| Bookings callables; claim review; ambassador auto-approve | [L11](HARMONIZATION_REPORT.md#L11) | [P6b](WORKFLOW_DESIGN_REPORT.md#P6b)/c | S5 |
 
 ### Lane — Data (A2)
 
 | Task | Rows | Phase | Sprint |
 | --- | --- | --- | --- |
-| Strip `pointswon` / `totalPointsPlayed`; unblock OAuth bootstrap | F2, L14 | NOW | S1 |
-| `result_at`; idempotency hash inside `score_pending`; `organizer_ids` | L2, L3, L4 | NOW | S2 |
+| Strip `pointswon` / `totalPointsPlayed`; unblock OAuth bootstrap | [F2](WORKFLOW_DESIGN_REPORT.md#F2), [L14](HARMONIZATION_REPORT.md#L14) | NOW | [S1](HARMONIZATION_REPORT.md#S1) |
+| `result_at`; idempotency hash inside `score_pending`; `organizer_ids` | [L2](HARMONIZATION_REPORT.md#L2), [L3](HARMONIZATION_REPORT.md#L3), [L4](HARMONIZATION_REPORT.md#L4) | NOW | [S2](HARMONIZATION_REPORT.md#S2) |
 | Two-submission shape on the match doc | new | NOW | S2 |
-| Stat definitions: one Matches population, one `pgWinPct`, one streak, one skill label, one rank pool | LB-7…LB-15 | P4b | S3 |
-| Surface `Losses`; delete `rankPosition` and `tournamentsPlayed` | DC-11, DC-12 | P4b | S3 |
-| Per-event participant `zone`; `preferred_zone_manual` | L15, L5 | P2a | S4 |
-| Withdrawal fields replacing the removal flag and the RR withdrawn list | L12 | P2a | S4 |
-| Doubles partner shape and partner pool | L18 | P2a | S4 |
-| Drop `profile_details_visible`; ladder keeps `event_id`, `events/ladder` | L6, L1, LB-44 | P2a | S4 |
-| `available_to_play`; `zone_draw_config`; deadlines per draw and round | L16, L7, L17 | P2a/P3 | S4 |
-| `providers`; bookings lifecycle; `services` catalog; `group_lessons` retires | L11, N1, L8, PD2 | P5/P6c | S5 |
+| Stat definitions: one Matches population, one `pgWinPct`, one streak, one skill label, one rank pool | [LB-7](../ACTION-REPORT.md#LB-7)…[LB-15](../ACTION-REPORT.md#LB-15) | [P4b](WORKFLOW_DESIGN_REPORT.md#P4b) | [S3](HARMONIZATION_REPORT.md#S3) |
+| Surface `Losses`; delete `rankPosition` and `tournamentsPlayed` | [DC-11](../ACTION-REPORT.md#DC-11), [DC-12](../ACTION-REPORT.md#DC-12) | P4b | S3 |
+| Per-event participant `zone`; `preferred_zone_manual` | [L15](HARMONIZATION_REPORT.md#L15), [L5](HARMONIZATION_REPORT.md#L5) | [P2a](WORKFLOW_DESIGN_REPORT.md#P2a) | [S4](HARMONIZATION_REPORT.md#S4) |
+| Withdrawal fields replacing the removal flag and the RR withdrawn list | [L12](HARMONIZATION_REPORT.md#L12) | P2a | S4 |
+| Doubles partner shape and partner pool | [L18](HARMONIZATION_REPORT.md#L18) | P2a | S4 |
+| Drop `profile_details_visible`; ladder keeps `event_id`, `events/ladder` | [L6](HARMONIZATION_REPORT.md#L6), [L1](HARMONIZATION_REPORT.md#L1), [LB-44](../ACTION-REPORT.md#LB-44) | P2a | S4 |
+| `available_to_play`; `zone_draw_config`; deadlines per draw and round | [L16](HARMONIZATION_REPORT.md#L16), [L7](HARMONIZATION_REPORT.md#L7), [L17](HARMONIZATION_REPORT.md#L17) | P2a/P3 | S4 |
+| `providers`; bookings lifecycle; `services` catalog; `group_lessons` retires | [L11](HARMONIZATION_REPORT.md#L11), [N1](HARMONIZATION_REPORT.md#N1), [L8](HARMONIZATION_REPORT.md#L8), [PD2](DECISIONS_BRIEF.md#PD2) | [P5](WORKFLOW_DESIGN_REPORT.md#P5)/P6c | [S5](HARMONIZATION_REPORT.md#S5) |
 
 ### Lane — Client / Dev (A3)
 
 | Task | Rows | Phase | Sprint |
 | --- | --- | --- | --- |
-| **Score modal winner seed — live point corruption** | **LB-1** | NOW | S1 |
-| Placeholder matches pinning the Knockout gate shut | LB-2 | NOW | S1 |
-| Batched `contacts` reads split into per-id catches | LB-3, LB-4, F3 | NOW | S1 |
-| Signup reporting success after a failed write | LB-6 | NOW | S1 |
-| Dead and silent controls | LB-19…LB-29, LB-31…LB-37, LB-39, LB-42, LB-45, LB-47…LB-50 | NOW | S1 |
-| Wire the five new callables; remove client-side points paths | conflicts 1–4 | NOW | S2 |
-| Three-layer score validation reconciled | LB-5 | NOW | S2 |
-| Routing: named tabs, catch-all, login bounce, scroll-on-query | RT-1…RT-6 | — | S3 |
-| Dead code removal | DC-1…DC-14 | — | S3 |
-| One profile-completeness set; delete the modal and the nag | F7 | P2a | S4 |
-| Single `resolveZone`; manual flag on explicit picks | F8 | NOW | S4 |
-| Skill edit stops rewriting `event_participants.skill` | F9, LB-17 | NOW | S4 |
-| `isEventManager` helper; `available_to_play` toggle | F10, F11 | NOW | S4 |
-| **Knockout fully organizer-controlled** | KO-1, KO-2, KO-3 | P4b | S4 |
-| Knockout size bar expand-only; reset scoped to one draw | R-4 | P4b | S4 |
-| Event-scoped organizer honoured; checklist writes only the flag | — | P5/P6b | S5 |
+| **Score modal winner seed — live point corruption** | **[LB-1](../ACTION-REPORT.md#LB-1)** | NOW | [S1](HARMONIZATION_REPORT.md#S1) |
+| Placeholder matches pinning the Knockout gate shut | [LB-2](../ACTION-REPORT.md#LB-2) | NOW | S1 |
+| Batched `contacts` reads split into per-id catches | [LB-3](../ACTION-REPORT.md#LB-3), [LB-4](../ACTION-REPORT.md#LB-4), [F3](WORKFLOW_DESIGN_REPORT.md#F3) | NOW | S1 |
+| Signup reporting success after a failed write | [LB-6](../ACTION-REPORT.md#LB-6) | NOW | S1 |
+| Dead and silent controls | [LB-19](../ACTION-REPORT.md#LB-19)…[LB-29](../ACTION-REPORT.md#LB-29), [LB-31](../ACTION-REPORT.md#LB-31)…[LB-37](../ACTION-REPORT.md#LB-37), [LB-39](../ACTION-REPORT.md#LB-39), [LB-42](../ACTION-REPORT.md#LB-42), [LB-45](../ACTION-REPORT.md#LB-45), [LB-47](../ACTION-REPORT.md#LB-47)…[LB-50](../ACTION-REPORT.md#LB-50) | NOW | S1 |
+| Wire the five new callables; remove client-side points paths | conflicts 1–4 | NOW | [S2](HARMONIZATION_REPORT.md#S2) |
+| Three-layer score validation reconciled | [LB-5](../ACTION-REPORT.md#LB-5) | NOW | S2 |
+| Routing: named tabs, catch-all, login bounce, scroll-on-query | [RT-1](../ACTION-REPORT.md#RT-1)…[RT-6](../ACTION-REPORT.md#RT-6) | — | [S3](HARMONIZATION_REPORT.md#S3) |
+| Dead code removal | [DC-1](../ACTION-REPORT.md#DC-1)…[DC-14](../ACTION-REPORT.md#DC-14) | — | S3 |
+| One profile-completeness set; delete the modal and the nag | [F7](WORKFLOW_DESIGN_REPORT.md#F7) | [P2a](WORKFLOW_DESIGN_REPORT.md#P2a) | [S4](HARMONIZATION_REPORT.md#S4) |
+| Single `resolveZone`; manual flag on explicit picks | [F8](WORKFLOW_DESIGN_REPORT.md#F8) | NOW | S4 |
+| Skill edit stops rewriting `event_participants.skill` | [F9](WORKFLOW_DESIGN_REPORT.md#F9), [LB-17](../ACTION-REPORT.md#LB-17) | NOW | S4 |
+| `isEventManager` helper; `available_to_play` toggle | [F10](WORKFLOW_DESIGN_REPORT.md#F10), [F11](WORKFLOW_DESIGN_REPORT.md#F11) | NOW | S4 |
+| **Knockout fully organizer-controlled** | [KO-1](../ACTION-REPORT.md#KO-1), [KO-2](../ACTION-REPORT.md#KO-2), [KO-3](../ACTION-REPORT.md#KO-3) | [P4b](WORKFLOW_DESIGN_REPORT.md#P4b) | S4 |
+| Knockout size bar expand-only; reset scoped to one draw | [R-4](../ACTION-REPORT.md#R-4) | P4b | S4 |
+| Event-scoped organizer honoured; checklist writes only the flag | — | [P5](WORKFLOW_DESIGN_REPORT.md#P5)/P6b | [S5](HARMONIZATION_REPORT.md#S5) |
 
 ### Lane — UI/UX (A4)
 
 | Task | Rows | Phase | Sprint |
 | --- | --- | --- | --- |
-| Crash screen white heading; Escape closes only the top overlay | CT-12, LB-30 | NOW | S1 |
-| Score modal rework: no preselected winner, Walkover switch, number fields, delete `Stepper` | R-5, BT-14 | P4b | S2 |
+| Crash screen white heading; Escape closes only the top overlay | [CT-12](../ACTION-REPORT.md#CT-12), [LB-30](../ACTION-REPORT.md#LB-30) | NOW | [S1](HARMONIZATION_REPORT.md#S1) |
+| Score modal rework: no preselected winner, Walkover switch, number fields, delete `Stepper` | [R-5](../ACTION-REPORT.md#R-5), [BT-14](../ACTION-REPORT.md#BT-14) | [P4b](WORKFLOW_DESIGN_REPORT.md#P4b) | [S2](HARMONIZATION_REPORT.md#S2) |
 | Dispute banner and the two notification strings | new | NOW | S2 |
-| **Token split — page / card / recess, accent retune, the 5 literals** | CT-1, CT-2, CT-15, CT-17, DC-15 | — | S3 |
-| Card borders removed, fill separates | CT-32, R-2 | — | S3 |
-| Focus ring, reduced motion, disabled base | AX-2, AX-24, BT-11, BT-12 | — | S3 |
-| `Button.tsx` — 91 call sites from one file | BT-1, BT-3…BT-8, CT-13, DC-16 | — | S3 |
-| `Input.tsx` + the three page `fieldCls` | MF-5, MF-6, TY-5 | — | S3 |
-| `Sheet.tsx` — behaviour, then padding/header/footer | MF-1…MF-4, MF-14, MF-15, CT-14, AX-1 | — | S3 |
-| `SegmentedControl`, `ContactOpponentButton`, `Accordion`/`Tree`/`PlayerCard`, `LoadingBar` | BT-13, BT-24, AX-7, BT-2, CS-45, DC-1, BT-15, AX-17, AX-23, CT-24 | — | S3 |
-| The eight one-row files; the canon into `CLAUDE.md` | CT-12, CS-65, AX-19, RT-9, AX-18, BT-29, DC-9, DC-10, TY-3, DC-22…DC-27 | — | S3 |
-| "Enter A Zone" modal; Withdraw / Reset / orange **!**; partner pool; Away pill | — | P2a | S4 |
-| Component system — 22 new primitives, the CS rows, the per-site sweeps | CS-2…CS-68, CT-3…CT-11, BT-9…BT-28, TY-1…TY-10, AX-3…AX-26, MF-7…MF-13 | — | S5 |
-| Bookings UI; delete the freeze-list surfaces | — | P6c | S5 |
+| **Token split — page / card / recess, accent retune, the 5 literals** | [CT-1](../ACTION-REPORT.md#CT-1), [CT-2](../ACTION-REPORT.md#CT-2), [CT-15](../ACTION-REPORT.md#CT-15), [CT-17](../ACTION-REPORT.md#CT-17), [DC-15](../ACTION-REPORT.md#DC-15) | — | [S3](HARMONIZATION_REPORT.md#S3) |
+| Card borders removed, fill separates | [CT-32](../ACTION-REPORT.md#CT-32), [R-2](../ACTION-REPORT.md#R-2) | — | S3 |
+| Focus ring, reduced motion, disabled base | [AX-2](../ACTION-REPORT.md#AX-2), [AX-24](../ACTION-REPORT.md#AX-24), [BT-11](../ACTION-REPORT.md#BT-11), [BT-12](../ACTION-REPORT.md#BT-12) | — | S3 |
+| `Button.tsx` — 91 call sites from one file | [BT-1](../ACTION-REPORT.md#BT-1), [BT-3](../ACTION-REPORT.md#BT-3)…[BT-8](../ACTION-REPORT.md#BT-8), [CT-13](../ACTION-REPORT.md#CT-13), [DC-16](../ACTION-REPORT.md#DC-16) | — | S3 |
+| `Input.tsx` + the three page `fieldCls` | [MF-5](../ACTION-REPORT.md#MF-5), [MF-6](../ACTION-REPORT.md#MF-6), [TY-5](../ACTION-REPORT.md#TY-5) | — | S3 |
+| `Sheet.tsx` — behaviour, then padding/header/footer | [MF-1](../ACTION-REPORT.md#MF-1)…[MF-4](../ACTION-REPORT.md#MF-4), [MF-14](../ACTION-REPORT.md#MF-14), [MF-15](../ACTION-REPORT.md#MF-15), [CT-14](../ACTION-REPORT.md#CT-14), [AX-1](../ACTION-REPORT.md#AX-1) | — | S3 |
+| `SegmentedControl`, `ContactOpponentButton`, `Accordion`/`Tree`/`PlayerCard`, `LoadingBar` | [BT-13](../ACTION-REPORT.md#BT-13), [BT-24](../ACTION-REPORT.md#BT-24), [AX-7](../ACTION-REPORT.md#AX-7), [BT-2](../ACTION-REPORT.md#BT-2), [CS-45](../ACTION-REPORT.md#CS-45), [DC-1](../ACTION-REPORT.md#DC-1), [BT-15](../ACTION-REPORT.md#BT-15), [AX-17](../ACTION-REPORT.md#AX-17), [AX-23](../ACTION-REPORT.md#AX-23), [CT-24](../ACTION-REPORT.md#CT-24) | — | S3 |
+| The eight one-row files; the canon into `CLAUDE.md` | CT-12, [CS-65](../ACTION-REPORT.md#CS-65), [AX-19](../ACTION-REPORT.md#AX-19), [RT-9](../ACTION-REPORT.md#RT-9), [AX-18](../ACTION-REPORT.md#AX-18), [BT-29](../ACTION-REPORT.md#BT-29), [DC-9](../ACTION-REPORT.md#DC-9), [DC-10](../ACTION-REPORT.md#DC-10), [TY-3](../ACTION-REPORT.md#TY-3), [DC-22](../ACTION-REPORT.md#DC-22)…[DC-27](../ACTION-REPORT.md#DC-27) | — | S3 |
+| "Enter A Zone" modal; Withdraw / Reset / orange **!**; partner pool; Away pill | — | [P2a](WORKFLOW_DESIGN_REPORT.md#P2a) | [S4](HARMONIZATION_REPORT.md#S4) |
+| Component system — 22 new primitives, the CS rows, the per-site sweeps | [CS-2](../ACTION-REPORT.md#CS-2)…[CS-68](../ACTION-REPORT.md#CS-68), [CT-3](../ACTION-REPORT.md#CT-3)…[CT-11](../ACTION-REPORT.md#CT-11), [BT-9](../ACTION-REPORT.md#BT-9)…[BT-28](../ACTION-REPORT.md#BT-28), [TY-1](../ACTION-REPORT.md#TY-1)…[TY-10](../ACTION-REPORT.md#TY-10), [AX-3](../ACTION-REPORT.md#AX-3)…[AX-26](../ACTION-REPORT.md#AX-26), [MF-7](../ACTION-REPORT.md#MF-7)…[MF-13](../ACTION-REPORT.md#MF-13) | — | [S5](HARMONIZATION_REPORT.md#S5) |
+| Bookings UI; delete the freeze-list surfaces | — | [P6c](WORKFLOW_DESIGN_REPORT.md#P6c) | S5 |
 
 ### Lane — Verify (A5)
 
 | Task | Phase | Sprint |
 | --- | --- | --- |
-| Branches cut; `docs/` and `.design-sync/` committed; clean verification run green | NOW | S1 |
+| Branches cut; `docs/` and `.design-sync/` committed; clean verification run green | NOW | [S1](HARMONIZATION_REPORT.md#S1) |
 | Grade the three pending design-sync reviews; add 13 previews + light cell + `Target44` guide | NOW | S1 |
 | Regression test per live-bug row | NOW | S1 |
-| The twelve score examples; the three reconcile cases; double-tap pays once | NOW | S2 |
-| Grep-assertion suite; design-sync diffs in both cells | — | S3 |
-| Migration dry-run diffs; the seven journeys | P2a/P4b | S4 |
-| Full regression; recompute-and-diff; release runbook executed on a preview channel | — | S5 |
+| The twelve score examples; the three reconcile cases; double-tap pays once | NOW | [S2](HARMONIZATION_REPORT.md#S2) |
+| Grep-assertion suite; design-sync diffs in both cells | — | [S3](HARMONIZATION_REPORT.md#S3) |
+| Migration dry-run diffs; the seven journeys | [P2a](WORKFLOW_DESIGN_REPORT.md#P2a)/P4b | [S4](HARMONIZATION_REPORT.md#S4) |
+| Full regression; recompute-and-diff; release runbook executed on a preview channel | — | [S5](HARMONIZATION_REPORT.md#S5) |
 
 ---
 
@@ -389,17 +389,17 @@ Everything the remodel deletes. Restyling any of it is thrown-away work.
 
 | Surface | Retires | Phase |
 | --- | --- | --- |
-| `CompleteProfileModal.tsx` + the Matches gate | 18 restyled elements — the largest block of thrown-away work in the audit | S4 |
+| `CompleteProfileModal.tsx` + the Matches gate | 18 restyled elements — the largest block of thrown-away work in the audit | [S4](HARMONIZATION_REPORT.md#S4) |
 | The Profile Tasks nag block | with the gate chain | S4 |
-| The Profile day-toggle grid | also retires BT-18 | S4 |
-| The organizer date / AM-PM / Set scheduling controls and their two toasts | no dates are stored after P3 | S4 |
-| The score-modal no-show cluster, the `RRGroupCard` no-show branches, the no-show toast | the whole no-show concept goes | S2 |
+| The Profile day-toggle grid | also retires [BT-18](../ACTION-REPORT.md#BT-18) | S4 |
+| The organizer date / AM-PM / Set scheduling controls and their two toasts | no dates are stored after [P3](WORKFLOW_DESIGN_REPORT.md#P3) | S4 |
+| The score-modal no-show cluster, the `RRGroupCard` no-show branches, the no-show toast | the whole no-show concept goes | [S2](HARMONIZATION_REPORT.md#S2) |
 | The "Also count as a Challenge" checkbox and `proposeConversion` | one physical match counts once | S2 |
-| The Services Dispute and Cancel controls and their six status strings | lifecycle becomes lead → in_progress → completed | S5 |
+| The Services Dispute and Cancel controls and their six status strings | lifecycle becomes lead → in_progress → completed | [S5](HARMONIZATION_REPORT.md#S5) |
 | The ReviewQueue coupon section — **in both `ServicesElements.tsx` and `Tasks.tsx`** | a one-sided delete strands orphan copy | S5 |
-| `GroupLessonCard` and its four callable error strings | retires LB-38 | S5 |
+| `GroupLessonCard` and its four callable error strings | retires [LB-38](../ACTION-REPORT.md#LB-38) | S5 |
 | `OPEN_STATUSES` and the open-coupon list gate | status set replaced wholesale | S5 |
-| The super-admin `AddServiceForm` | retires AX-12 and CS-58 | S5 |
+| The super-admin `AddServiceForm` | retires [AX-12](../ACTION-REPORT.md#AX-12) and [CS-58](../ACTION-REPORT.md#CS-58) | S5 |
 | `profile_details_visible` and both consumers | hides only the League pill, already public | S4 |
 
 **One reversal to honour:** the **Request Zone Change** flow is **no longer frozen**. It is kept and reworked, so it migrates with everything else.
@@ -429,8 +429,8 @@ Everything the remodel deletes. Restyling any of it is thrown-away work.
 | --- | --- | --- |
 | 1 | Five agents, one branch each | you, 2026-08-23 |
 | 2 | Work against `tbtc/dev-anuj`; `main` is 116 behind with nothing of its own | `UI-REMAINING.md` §7 |
-| 3 | Backup and restore policy (PD8) — **deferred**, no commitment yet | you |
-| 4 | Score auto-applies on submission; **lower aggregate winning margin wins**; different winners flag for review; the first submitted result shows until resolved | you — **replaces D4** |
+| 3 | Backup and restore policy ([PD8](DECISIONS_BRIEF.md#PD8)) — **deferred**, no commitment yet | you |
+| 4 | Score auto-applies on submission; **lower aggregate winning margin wins**; different winners flag for review; the first submitted result shows until resolved | you — **replaces [D4](HARMONIZATION_REPORT.md#D4)** |
 | 5 | Auto-approval covers tournaments, challenges **and** friendlies | you |
 | 6 | Walkovers are organizer-only | you |
 | 7 | Notifications: winner *"Win recorded — {score}"*, loser *"Score recorded — {score}"* | you |
