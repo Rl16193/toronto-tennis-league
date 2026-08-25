@@ -629,6 +629,7 @@ export const Tournament: React.FC = () => {
         : (isCreator ||
             displayMatches.some((m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_'))) && (
             <BracketErrorBoundary
+              resetKey={`${event?.id ?? ''}:${currentDraw?.label ?? ''}:${displayMatches.length}`}
               onDownload={() =>
                 downloadDrawAsPng(
                   displayMatches,

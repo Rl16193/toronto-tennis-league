@@ -1344,7 +1344,7 @@ export const useTournament = (eventIdOverride?: string) => {
   const rrKnockoutReady = useMemo(
     () =>
       rrGroupMatches.length > 0 &&
-      rrGroupMatches.every((m) => m.status === 'complete') &&
+      rrGroupMatches.every((m) => m.status === 'complete' && m.player_1_uid && m.player_2_uid) &&
       rrKnockoutMatches.length === 0,
     [rrGroupMatches, rrKnockoutMatches],
   );
@@ -1823,7 +1823,7 @@ export const useTournament = (eventIdOverride?: string) => {
     if (!match || !user) return;
     setScoreForm({
       matchDocId: match.id,
-      winnerUserId: match.player_1_uid,
+      winnerUserId: '',
       sets: [
         { mine: '', opponent: '' },
         { mine: '', opponent: '' },

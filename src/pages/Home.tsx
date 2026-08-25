@@ -99,6 +99,11 @@ export const Home: React.FC = () => {
     document.title = 'Racquets & Strings';
   }, []);
 
+  const handleSlideError = (url: string) => {
+    setSlides((current) => current.filter((candidate) => candidate !== url));
+    setSlideIndex((index) => Math.max(0, index - 1));
+  };
+
   // Resolve the gs:// slideshow images to download URLs; keep only the ones that resolve, and
   // cache them for next time so a refresh/repeat visit never shows the Logo.png fallback.
   useEffect(() => {
@@ -187,6 +192,7 @@ export const Home: React.FC = () => {
             className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-1000 ${
               i === slideIndex ? 'opacity-100' : 'opacity-0'
             }`}
+            onError={() => handleSlideError(url)}
           />
         ))}
         {/* Bottom-weighted gradient — keeps the overlaid tagline/description legible against any photo. */}

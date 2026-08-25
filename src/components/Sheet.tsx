@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { motion, useDragControls } from 'motion/react';
+import { registerOverlay } from '../lib/overlayStack';
 
 type Props = {
   onClose: () => void;
@@ -40,13 +41,10 @@ export const Sheet: React.FC<Props> = ({ onClose, title, ariaLabel, maxWidthClas
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
+    const unregister = registerOverlay(onClose);
     return () => {
       document.body.style.overflow = prevOverflow;
-      window.removeEventListener('keydown', onKey);
+      unregister();
     };
   }, [onClose]);
 

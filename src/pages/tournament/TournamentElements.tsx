@@ -40,14 +40,21 @@ import { formatPlayerName, formatScheduledDate, formatSetScores, getScheduleStat
 
 // ─── Error boundary ───────────────────────────────────────────────────────────────────────────
 
-type BoundaryProps = { children: React.ReactNode; onDownload: () => void };
-type BoundaryState = { hasError: boolean };
+type BoundaryProps = { children: React.ReactNode; onDownload?: () => void; resetKey?: string | number };
+type BoundaryState = { hasError: boolean; lastResetKey?: string | number };
 
 export class BracketErrorBoundary extends React.Component<BoundaryProps, BoundaryState> {
-  state: BoundaryState = { hasError: false };
+  state: BoundaryState = { hasError: false, lastResetKey: this.props.resetKey };
 
   static getDerivedStateFromError(): BoundaryState {
     return { hasError: true };
+  }
+
+  static getDerivedStateFromProps(nextProps: BoundaryProps, prevState: BoundaryState): BoundaryState | null {
+    if (nextProps.resetKey !== prevState.lastResetKey) {
+      return { hasError: false, lastResetKey: nextProps.resetKey };
+    }
+    return null;
   }
 
   render() {
@@ -57,10 +64,12 @@ export class BracketErrorBoundary extends React.Component<BoundaryProps, Boundar
           <AlertCircle className="w-10 h-10 text-badge-loss mx-auto" />
           <p className="text-fg font-bold text-lg">Failed to load the bracket.</p>
           <p className="text-fg text-sm">Download the draw to view it offline.</p>
-          <Button variant="outline" onClick={this.props.onDownload}>
-            <Download className="w-4 h-4 mr-2" />
-            Download Draw
-          </Button>
+          {this.props.onDownload && (
+            <Button variant="outline" onClick={this.props.onDownload}>
+              <Download className="w-4 h-4 mr-2" />
+              Download Draw
+            </Button>
+          )}
         </div>
       );
     }

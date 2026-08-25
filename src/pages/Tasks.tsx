@@ -60,7 +60,9 @@ export const Tasks: React.FC = () => {
 
   const checkinOpen = searchParams.get('checkin') === '1';
   const photoOpen = searchParams.get('photo') === '1';
-  const claimType = searchParams.get('claim') as ClaimType | null;
+  const rawClaimType = searchParams.get('claim');
+  const claimType: ClaimType | null =
+    rawClaimType === 'volunteer' || rawClaimType === 'ambassador' || rawClaimType === 'host' ? rawClaimType : null;
   // 'photos' is a stale deep-link value from before photo reports stopped needing review.
   const reviewOpen = searchParams.get('review') === 'claims' ? 'claims' : null;
 

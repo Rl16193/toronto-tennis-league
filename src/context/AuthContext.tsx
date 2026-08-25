@@ -109,7 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // welcomeEmailSent flips false → true). Both flags are idempotent.
         const updates: Record<string, boolean> = {};
         if (!userData.isVerified) updates.isVerified = true;
-        if (!userData.welcomeEmailSent) updates.welcomeEmailSent = true;
+        if (!userData.welcomeEmailSent && userData.name.trim()) updates.welcomeEmailSent = true;
         if (Object.keys(updates).length > 0) {
           updateDoc(doc(db, 'users', activeUser.uid), updates).catch(() => {});
         }

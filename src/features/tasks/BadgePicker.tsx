@@ -66,22 +66,27 @@ export const BadgePicker: React.FC<{
             <div className="p-6 pt-3 space-y-5">
               <p className="text-xs text-fg/70">
                 {draft.length} of {MAX_DISPLAY_BADGES} selected.
+                {draft.length >= MAX_DISPLAY_BADGES && <span className="block text-badge mt-1">3 maximum</span>}
               </p>
 
               <div className="flex flex-wrap gap-2">
                 {BADGES.filter((b) => earnedIds.has(b.id)).map((b) => {
                   const on = draft.includes(b.id);
+                  const disabled = !on && draft.length >= MAX_DISPLAY_BADGES;
                   return (
                     <button
                       key={b.id}
                       type="button"
                       aria-pressed={on}
+                      disabled={disabled}
                       onClick={() => toggle(b.id)}
                       title={b.requirement}
                       className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
                         on
                           ? 'bg-amber-500/15 text-badge border-amber-500/25'
-                          : 'bg-fg/5 text-fg/70 border-fg/10 hover:text-fg'
+                          : disabled
+                            ? 'bg-fg/5 text-fg/40 border-fg/10 cursor-not-allowed'
+                            : 'bg-fg/5 text-fg/70 border-fg/10 hover:text-fg'
                       }`}
                     >
                       {b.name}

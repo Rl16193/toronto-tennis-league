@@ -688,6 +688,12 @@ export const Matches: React.FC = () => {
                 const canConfirmRally = rallyReported && myRally?.reported_by !== user.uid;
                 const rallyPending = !rallyAccepted && activePartnerIds.has(p.user_id);
                 const challengeAccepted = acceptedChallengePartnerIds.has(p.user_id);
+                const challengeScorable = challenges.some(
+                  (c) =>
+                    c.status === 'accepted' &&
+                    ((c.player_1_uid === user.uid && c.player_2_uid === p.user_id) ||
+                      (c.player_2_uid === user.uid && c.player_1_uid === p.user_id)),
+                );
                 const challengeState = ladder ? stateWith(p.user_id) : 'cooldown';
                 const challengeBlocked =
                   !ladder ||
@@ -698,8 +704,7 @@ export const Matches: React.FC = () => {
                 // "Connected" is specific to the tab you're on — an accepted Challenge doesn't make
                 // someone's name clickable on the Friendlies tab while their rally is still pending.
                 const isConnected = mode === 'friendlies' ? rallyAccepted : challengeAccepted;
-                const showScore = mode === 'friendlies' ? rallyScorable : challengeAccepted;
-                const showContact = showScore; // contact only once accepted, same gate as Score
+                const showContact = mode === 'friendlies' ? rallyAccepted : challengeAccepted;
                 // "Waiting to reply" — request sent, not yet answered. Lives in the expansion now
                 // rather than as a word on the row, matching the leaderboard's compact shape.
                 const isPending = mode === 'friendlies' ? rallyPending : challengeState === 'pending';
@@ -805,7 +810,7 @@ export const Matches: React.FC = () => {
                               )}
                               {/* Cancel stays available once accepted too, not just while pending — but
                             never for an incoming request, where Decline is the right verb. */}
-                              {!incomingReq && (showContact || isPending) && (
+                              {!incomingReq && isPending && (
                                 <button
                                   type="button"
                                   onClick={cancelRequest}
@@ -932,7 +937,7 @@ export const Matches: React.FC = () => {
                                   Rally
                                 </button>
                               )
-                            ) : challengeAccepted ? (
+                            ) : challengeScorable ? (
                               <button
                                 type="button"
                                 className={pillButtonCls('sm', 'clay')}

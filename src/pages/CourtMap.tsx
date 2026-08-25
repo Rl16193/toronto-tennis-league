@@ -385,6 +385,7 @@ export const CourtMap: React.FC = () => {
 
   const handleReset = useCallback(() => {
     handleClear();
+    setShowAllCourts(false);
     setCourtTypeFilter('');
     setCourtLightsFilter('');
     setCourtCountFilters(new Set());
@@ -767,7 +768,7 @@ export const CourtMap: React.FC = () => {
                 searchQuery && (
                   <button
                     type="button"
-                    onClick={handleReset}
+                    onClick={handleClear}
                     aria-label="Clear"
                     className="text-fg/70 hover:text-fg transition-colors shrink-0"
                   >

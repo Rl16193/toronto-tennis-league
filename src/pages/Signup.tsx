@@ -387,6 +387,7 @@ export const Signup: React.FC = () => {
     setError('');
     setErrors({});
     setPendingGoogleCredential(null);
+    setPendingAppleCredential(null);
   };
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {

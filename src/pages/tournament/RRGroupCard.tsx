@@ -33,7 +33,7 @@ type Props = {
    * played used to be summed from the group standings, which is why it disagreed with the
    * leaderboard. Supplied by RoundRobinView; a missing entry renders as an em-dash.
    */
-  statsByUid?: Map<string, { pointswon: number; totalPointsPlayed: number; matchesPlayed: number }>;
+  statsByUid?: Map<string, { pointswon?: number; totalPointsPlayed?: number; matchesPlayed: number }>;
   /** uid -> contact details, resolved once by RoundRobinView. Absent = no Contact button. */
   contactsByUid?: Record<string, ContactData>;
   /** Organizer removes a player from the draw (soft delete — see handleRemovePlayer). */

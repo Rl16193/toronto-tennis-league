@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MapPin, CheckCircle2, Loader2, Navigation } from 'lucide-react';
+import { CheckCircle2, Loader2, Navigation } from 'lucide-react';
 import { Sheet } from '../../components/Sheet';
 import { Button } from '../../components/Button';
 import { useAuth } from '../../context/AuthContext';
@@ -26,7 +26,7 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   const [step, setStep] = useState<Step>('start');
   const [error, setError] = useState('');
   const [nearby, setNearby] = useState<NearbyCourt[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [busyCourt, setBusyCourt] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [checkedInto, setCheckedInto] = useState<NearbyCourt | null>(null);
   const [visitType, setVisitType] = useState<VisitType>('Practice');
@@ -55,8 +55,8 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   };
 
   const doCheckIn = async (court: NearbyCourt) => {
-    if (!user || !coords || busy) return;
-    setBusy(true);
+    if (!user || !coords || busyCourt) return;
+    setBusyCourt(court.dropdown);
     setError('');
     try {
       const name = profile?.user.name || '';
@@ -78,7 +78,7 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
     } catch {
       setError('Could not check in right now. Please try again.');
     } finally {
-      setBusy(false);
+      setBusyCourt(null);
     }
   };
 
@@ -167,7 +167,12 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                       <p className="text-fg/70 text-xs">{Math.round(c.distM)} m away</p>
                     </div>
                     {here ? (
-                      <Button size="sm" onClick={() => doCheckIn(c)} isLoading={busy}>
+                      <Button
+                        size="sm"
+                        onClick={() => doCheckIn(c)}
+                        isLoading={busyCourt === c.dropdown}
+                        disabled={!!busyCourt}
+                      >
                         Court
                       </Button>
                     ) : (

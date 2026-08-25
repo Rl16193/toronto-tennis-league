@@ -87,17 +87,18 @@ export const Profile: React.FC = () => {
     const ids = [...new Set(upcoming.map((o) => o.opponentId).filter(Boolean))].filter((id) => !opponentContacts[id]);
     if (ids.length === 0) return;
     Promise.all(
-      ids.map((id) =>
-        getDoc(doc(db, 'contacts', id)).then(
-          (s) => [id, s.exists() ? normalizeContactData(s.data()) : undefined] as const,
-        ),
-      ),
-    )
-      .then((entries) => {
-        const found = entries.filter((e): e is [string, ContactData] => !!e[1]);
-        if (found.length) setOpponentContacts((prev) => ({ ...prev, ...Object.fromEntries(found) }));
-      })
-      .catch(() => {});
+      ids.map(async (id) => {
+        try {
+          const s = await getDoc(doc(db, 'contacts', id));
+          return [id, s.exists() ? normalizeContactData(s.data()) : undefined] as const;
+        } catch {
+          return [id, undefined] as const;
+        }
+      }),
+    ).then((entries) => {
+      const found = entries.filter((e): e is [string, ContactData] => !!e[1]);
+      if (found.length) setOpponentContacts((prev) => ({ ...prev, ...Object.fromEntries(found) }));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [upcoming]);
 
@@ -621,7 +622,12 @@ export const Profile: React.FC = () => {
               </div>
               {savedDates.size > 0 && (
                 <div className="mt-4 pt-4 border-t border-fg/5">
-                  <p className="text-fg/70 text-xs">Selected: {[...savedDates].sort().join(', ')}</p>
+                  <p className="text-fg/70 text-xs">
+                    Selected:{' '}
+                    {[...savedDates]
+                      .sort((a, b) => Number(a.match(/\d+/)?.[0]) - Number(b.match(/\d+/)?.[0]))
+                      .join(', ')}
+                  </p>
                 </div>
               )}
             </div>

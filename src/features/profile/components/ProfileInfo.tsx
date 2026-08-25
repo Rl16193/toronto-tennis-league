@@ -216,6 +216,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
   // Avatar upload
   const fileRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState('');
 
   if (!profile) return null;
   const { user, stats, preferences, contacts } = profile;
@@ -290,7 +291,15 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
   const onPickAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    if (!file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) return;
+    if (!file.type.startsWith('image/')) {
+      setAvatarError('Choose an image file.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError('Avatar images must be 5 MB or smaller.');
+      return;
+    }
+    setAvatarError('');
     setAvatarUploading(true);
     try {
       const path = `avatars/${profile.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
@@ -314,7 +323,13 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
         <div className="relative">
           <div className="w-24 h-24 rounded-full bg-tennis-surface flex items-center justify-center overflow-hidden">
             {user.avatar ? (
-              <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              <img
+                src={user.avatar}
+                alt="Avatar"
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+                onError={() => setAvatarError('This avatar could not be loaded. Choose a new image.')}
+              />
             ) : (
               <span className="text-4xl font-black text-fg">{initial}</span>
             )}
@@ -329,6 +344,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
           </button>
           <input ref={fileRef} type="file" accept="image/*" onChange={onPickAvatar} className="hidden" />
         </div>
+        {avatarError && <p className="text-xs text-badge-loss text-center max-w-xs">{avatarError}</p>}
       </div>
 
       <div className="divide-y divide-white/5">

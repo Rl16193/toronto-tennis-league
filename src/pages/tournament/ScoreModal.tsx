@@ -55,6 +55,8 @@ export const ScoreModal: React.FC<Props> = ({
   onReset,
 }) => {
   const isNoShow = !!noShow?.checked;
+  const winnerRequired = !isNoShow;
+  const winnerMissing = winnerRequired && !scoreForm.winnerUserId;
   const [submitting, setSubmitting] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [courts, setCourts] = useState<string[]>([]);
@@ -248,7 +250,12 @@ export const ScoreModal: React.FC<Props> = ({
         </div>
 
         <div className="mt-6 flex gap-2.5">
-          <Button type="submit" className="flex-1" isLoading={submitting} disabled={submitting || resetting}>
+          <Button
+            type="submit"
+            className="flex-1"
+            isLoading={submitting}
+            disabled={submitting || resetting || winnerMissing}
+          >
             {isNoShow ? 'Record No Show' : isCreatorSubmit ? 'Record Score' : 'Submit Score'}
           </Button>
           {onReset && (
@@ -271,6 +278,9 @@ export const ScoreModal: React.FC<Props> = ({
             </Button>
           )}
         </div>
+        {winnerMissing && (
+          <p className="mt-2 text-center text-xs font-semibold text-badge-loss">Choose a winner before submitting.</p>
+        )}
       </form>
     </Sheet>
   );

@@ -6,6 +6,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../features/notifications/useNotifications';
+import { registerOverlay } from '../lib/overlayStack';
 
 const badgeLabel = (n: number) => (n > 9 ? '9+' : n);
 
@@ -24,11 +25,7 @@ export const HeaderMenu: React.FC = () => {
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeRef.current();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return registerOverlay(() => closeRef.current());
   }, [open]);
 
   useEffect(() => {

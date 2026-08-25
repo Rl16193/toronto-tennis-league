@@ -35,17 +35,18 @@ function useSellers(userIds: string[]) {
     // `contacts`, not `users` — and it's sign-in gated, so a logged-out visitor resolves nothing
     // and simply sees no Contact button (which is the intended behaviour anyway).
     Promise.all(
-      missing.map((id) =>
-        getDoc(doc(db, 'contacts', id)).then((s) => [id, s.data() as ContactData | undefined] as const),
-      ),
-    )
-      .then((entries) => {
-        const found = entries.filter((e): e is [string, ContactData] => !!e[1]);
-        if (found.length) setSellers((prev) => ({ ...prev, ...Object.fromEntries(found) }));
-      })
-      .catch(() => {
-        /* Contact just falls back to hidden if we can't resolve them */
-      });
+      missing.map(async (id) => {
+        try {
+          const s = await getDoc(doc(db, 'contacts', id));
+          return [id, s.data() as ContactData | undefined] as const;
+        } catch {
+          return [id, undefined] as const;
+        }
+      }),
+    ).then((entries) => {
+      const found = entries.filter((e): e is [string, ContactData] => !!e[1]);
+      if (found.length) setSellers((prev) => ({ ...prev, ...Object.fromEntries(found) }));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 

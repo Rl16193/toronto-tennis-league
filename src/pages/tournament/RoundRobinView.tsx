@@ -241,7 +241,7 @@ export const RoundRobinView: React.FC<Props> = ({
           />
         )}
         {knockoutMatches.length > 0 ? (
-          <BracketErrorBoundary onDownload={() => {}}>
+          <BracketErrorBoundary resetKey={`${knockoutMatches.length}:${knockoutMatches[0]?.id ?? ''}`}>
             <BracketView
               matches={knockoutMatches}
               drawTitle="Knockout"
