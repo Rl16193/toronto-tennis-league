@@ -342,27 +342,14 @@ const nextPow2 = (x: number) => {
 };
 
 /**
- * Each group's #1, strongest-first (points → gamesWon) so the top seed lands in slot 1.
- * Auto-seeds the knockout; the creator fills the rest.
+ * D4 keeps knockout placement organizer-controlled. Retain the export for older callers, but do
+ * not derive or auto-seat group winners into a persisted bracket.
  */
 export function selectGroupWinners(
-  allGroups: TournamentPlayer[][],
-  standingsByGroup: RRStandingRow[][],
+  _allGroups: TournamentPlayer[][],
+  _standingsByGroup: RRStandingRow[][],
 ): TournamentPlayer[] {
-  const strength = new Map<string, RRStandingRow>();
-  standingsByGroup.flat().forEach((r) => strength.set(r.userId, r));
-  const winners: TournamentPlayer[] = [];
-  for (let g = 0; g < allGroups.length; g++) {
-    const top = standingsByGroup[g]?.[0];
-    if (!top) continue;
-    const p = allGroups[g]?.find((x) => x.uid === top.userId);
-    if (p) winners.push(p);
-  }
-  return winners.sort((a, b) => {
-    const ra = strength.get(a.uid);
-    const rb = strength.get(b.uid);
-    return (rb?.points ?? 0) - (ra?.points ?? 0) || (rb?.gamesWon ?? 0) - (ra?.gamesWon ?? 0);
-  });
+  return [];
 }
 
 /**
@@ -386,8 +373,10 @@ export function buildRRKnockoutDocs(params: {
   const drawsize = params.drawsize ?? nextPow2(Math.max(2, n));
   const template = fallbackTemplate(drawsize);
 
+  // D4 makes every knockout seat organizer-controlled. The old group-winner seed map is
+  // intentionally ignored in manual-fill mode; all first-round numeric seats remain editable.
   const slotMap = new Map<number, TournamentPlayer>();
-  advancingPlayers.forEach((p, i) => slotMap.set(i + 1, p));
+  if (!manualFill) advancingPlayers.forEach((p, i) => slotMap.set(i + 1, p));
 
   // When a first-round match has one seeded player and an empty numeric partner, bake the
   // advancement into the next-round doc so byes resolve at generation.

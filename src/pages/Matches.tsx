@@ -40,13 +40,11 @@ import {
 } from '../features/leagues/ladderService';
 import { useLadder } from '../features/leagues/useLadder';
 import { useCrossEventConflicts } from '../features/leagues/useCrossEventConflicts';
-import { isReadyForMatches } from '../features/leagues/useChallengeRules';
 import { formatSetScores, skillBand } from './tournament/utils';
 // Lazy: the tournament subsystem (useTournament.ts alone is ~2k lines, plus the draw engine and
 // ~20 components) was the bulk of this route's bundle, shipped even to people who only open
 // Friendlies or Challenges.
 const Tournament = lazyWithRetry(() => import('./Tournament').then((m) => ({ default: m.Tournament })), 'Tournament');
-import { CompleteProfileModal } from '../features/profile/components/CompleteProfileModal';
 import { AvailabilityModal } from '../features/profile/components/AvailabilityModal';
 import { sharesCourt } from '../utils/courtOverlap';
 import { NearbyPill } from '../components/NearbyPill';
@@ -90,9 +88,9 @@ export const Matches: React.FC = () => {
   const [mode, setMode] = useState<Mode>(
     initialMode === 'challenges' || initialMode === 'friendlies' ? initialMode : 'tournament',
   );
-  const [showCompleteProfile, setShowCompleteProfile] = useState(false);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [availabilityByUid, setAvailabilityByUid] = useState<Record<string, string[]>>({});
+  const [awayByUid, setAwayByUid] = useState<Record<string, boolean>>({});
   const { rows, loading: peopleLoading } = useStandings();
   const {
     sent,
@@ -180,15 +178,18 @@ export const Matches: React.FC = () => {
         const courts: Record<string, string[]> = {};
         const availability: Record<string, string[]> = {};
         const zones: Record<string, string> = {};
+        const away: Record<string, boolean> = {};
         snap.docs.forEach((d) => {
           const preferences = normalizeUserPreferences(d.data());
           courts[d.id] = preferences.preferred_courts;
           availability[d.id] = preferences.availability_tags ?? [];
           zones[d.id] = preferences.preferred_zone;
+          away[d.id] = preferences.available_to_play === false;
         });
         setCourtsByUid(courts);
         setAvailabilityByUid(availability);
         setZoneByUid(zones);
+        setAwayByUid(away);
       })
       .catch(() => {});
   }, []);
@@ -559,13 +560,6 @@ export const Matches: React.FC = () => {
         <React.Suspense fallback={<div className="h-64 bg-tennis-surface/30 rounded-3xl animate-pulse" />}>
           <Tournament />
         </React.Suspense>
-      ) : !isReadyForMatches(profile) ? (
-        <div className="rounded-3xl bg-tennis-surface/30 py-12 px-6 text-center">
-          <p className="text-sm text-fg/70 mb-4">
-            Set your preferred courts, skill level, and league so we can match you with players.
-          </p>
-          <Button onClick={() => setShowCompleteProfile(true)}>Complete Profile</Button>
-        </div>
       ) : (
         <>
           {/* The old "open requests" lists that sat here are gone. A request now shows inside that
@@ -817,6 +811,11 @@ export const Matches: React.FC = () => {
                             <div className="flex items-center justify-center gap-1.5 flex-wrap">
                               <NearbyPill show={isNearby(p)} />
                               <AvailabilityPills tags={availabilityByUid[p.user_id]} />
+                              {awayByUid[p.user_id] && (
+                                <span className="rounded-md bg-badge/10 px-1.5 py-0.5 text-[10px] font-bold text-badge">
+                                  Away
+                                </span>
+                              )}
                             </div>
                           ),
                         },
@@ -977,13 +976,6 @@ export const Matches: React.FC = () => {
           {(profile?.preferences.availability_tags?.length ?? 0) > 0 ? 'Edit Availability' : 'Add Availability'}
         </Button>
       </div>
-
-      {showCompleteProfile && (
-        <CompleteProfileModal
-          onClose={() => setShowCompleteProfile(false)}
-          onDone={() => setShowCompleteProfile(false)}
-        />
-      )}
 
       {showAvailabilityModal && <AvailabilityModal onClose={() => setShowAvailabilityModal(false)} />}
     </div>

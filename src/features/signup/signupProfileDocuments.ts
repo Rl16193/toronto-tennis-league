@@ -31,6 +31,7 @@ export const buildSignupProfileDocuments = (input: SignupProfileInput, now: stri
     preferences: {
       preferred_courts: input.preferredCourts,
       preferred_zone: input.preferredZone,
+      available_to_play: true,
       scheduling_preference: input.schedulingPreference,
     },
   };

@@ -53,7 +53,21 @@ service cloud.firestore {
       return [
         'uid', 'preferred_courts', 'favourite_players',
         'scheduling_preference', 'event_creator', 'preferred_zone',
-        'preferred_zone_manual', 'email_notifications', 'availability_tags',
+        'preferred_zone_manual', 'email_notifications', 'availability_tags', 'available_to_play',
+      ];
+    }
+
+    // Event participant documents are a shared roster projection. Clients may create their own
+    // registration and organizers may manage placement, but neither side may smuggle arbitrary
+    // fields into the projection.
+    function eventParticipantFields() {
+      return [
+        'id', 'uid', 'user_name', 'event_id', 'event_name', 'tournament_choice', 'division',
+        'doubles', 'partner_in_app', 'partner_uid', 'partner_name', 'skill', 'skill_group',
+        'dateselected', 'created_at', 'status', 'withdrawn_reason', 'withdrawn_note',
+        'withdrawn_at', 'withdrawn_by', 'zone', 'zone_override', 'req_zone_change', 'new_zone',
+        'zone_change_requested', 'zone_change_requested_at', 'merged_zone', 'merged_into',
+        'removal', 'removal_at',
       ];
     }
 
@@ -117,11 +131,6 @@ service cloud.firestore {
           get(/databases/$(database)/documents/events/$(eventId)).data.creator_id == request.auth.uid ||
           request.auth.uid in get(/databases/$(database)/documents/events/$(eventId)).data.get('organizer_ids', [])
         );
-    }
-
-    function isCreatorOfEvent(eventId) {
-      return isAuthenticated() &&
-        get(/databases/$(database)/documents/events/$(eventId)).data.creator_id == request.auth.uid;
     }
 
     function isOwnerOfEvent(eventId) {
@@ -197,13 +206,13 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isOwner(userId) &&
         request.resource.data.keys().hasOnly([
-          'uid', 'name', 'avatar', 'bio', 'profile_details_visible', 'display_badges',
+          'uid', 'name', 'avatar', 'bio', 'display_badges',
           'created_at', 'lastActive', 'isVerified', 'welcomeEmailSent'
         ]) &&
         (!request.resource.data.keys().hasAny(['uid']) || request.resource.data.uid == userId);
       allow update: if isOwner(userId) &&
         request.resource.data.keys().hasOnly([
-          'uid', 'name', 'avatar', 'bio', 'profile_details_visible', 'display_badges',
+          'uid', 'name', 'avatar', 'bio', 'display_badges',
           'created_at', 'lastActive', 'isVerified', 'welcomeEmailSent'
         ]) &&
         (!request.resource.data.keys().hasAny(['uid']) || request.resource.data.uid == userId) &&
@@ -281,7 +290,7 @@ service cloud.firestore {
             .hasOnly([
               'uid', 'preferred_courts', 'favourite_players',
               'scheduling_preference', 'preferred_zone', 'preferred_zone_manual',
-              'email_notifications', 'availability_tags'
+              'email_notifications', 'availability_tags', 'available_to_play'
             ]));
       allow delete: if false;
     }
@@ -354,6 +363,7 @@ service cloud.firestore {
           request.resource.data.uid == request.auth.uid ||
           isManagerOfEvent(request.resource.data.event_id)
         ) &&
+        request.resource.data.keys().hasOnly(eventParticipantFields()) &&
         request.resource.data.event_id is string &&
         request.resource.data.created_at is string;
 
@@ -362,7 +372,8 @@ service cloud.firestore {
           (
             isManagerOfEvent(resource.data.event_id) &&
             request.resource.data.event_id == resource.data.event_id &&
-            request.resource.data.uid == resource.data.uid
+            request.resource.data.uid == resource.data.uid &&
+            request.resource.data.keys().hasOnly(eventParticipantFields())
           ) ||
           (
             resource.data.uid == request.auth.uid &&
@@ -371,7 +382,7 @@ service cloud.firestore {
             // and only listed so the currently-deployed client keeps working; drop them once the
             // new hosting build is out.
             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'dateselected', 'req_zone_change', 'new_zone',
+              'dateselected', 'req_zone_change', 'new_zone', 'partner_uid', 'partner_name',
               'zone_change_requested', 'zone_change_requested_at',
               'doubles', 'partner_in_app', 'skill'
             ])
@@ -721,7 +732,7 @@ service cloud.firestore {
       // generated match documents after release, not this pre-generation workspace. Assigned
       // organizer co-management remains a stakeholder decision, so the client and Rules both
       // stay creator-only until that authority is explicitly approved.
-      allow read, write: if isCreatorOfEvent(eventId);
+      allow read, write: if isOwnerOfEvent(eventId);
     }
 
   }

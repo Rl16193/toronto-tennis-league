@@ -37,11 +37,11 @@ type Actions = {
   updateLeagueAgeCategory: (
     league: "Men's" | "Women's" | '',
     ageCategory: 'Retired Pro' | 'Juniors' | '',
-    visible: boolean,
   ) => Promise<boolean>;
   updateDisplayBadges: (badgeIds: string[]) => Promise<boolean>;
   updatePreferredCourts: (courts: string[], zone: string) => Promise<boolean>;
   updatePreferredZone: (zone: string) => Promise<boolean>;
+  updateAvailableToPlay: (available: boolean) => Promise<boolean>;
   updateFavouritePlayers: (players: string[]) => Promise<boolean>;
   updateEmailNotifications: (enabled: boolean) => Promise<boolean>;
   updateContactMethods: (methods: ContactMethod[]) => Promise<boolean>;
@@ -188,7 +188,6 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
   const [skillDraft, setSkillDraft] = useState(2);
   const [leagueDraft, setLeagueDraft] = useState<"Men's" | "Women's" | ''>('');
   const [ageCategoryDraft, setAgeCategoryDraft] = useState<'Retired Pro' | 'Juniors' | ''>('');
-  const [visibleDraft, setVisibleDraft] = useState(false);
   const [courtsDraft, setCourtsDraft] = useState<string[]>([]);
   const [courtInput, setCourtInput] = useState('');
   const [favDraft, setFavDraft] = useState<string[]>([]);
@@ -231,7 +230,6 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
     setSkillDraft(stats.skill_level);
     setLeagueDraft(leagueDivision(stats.league));
     setAgeCategoryDraft(leagueAgeCategory(stats.league));
-    setVisibleDraft(!!user.profile_details_visible);
     setCourtsDraft(preferences.preferred_courts);
     setFavDraft(preferences.favourite_players);
     setCourtInput('');
@@ -367,6 +365,25 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
           ) : (
             <p className="text-lg font-bold text-fg mt-0.5">{user.name || '—'}</p>
           )}
+        </div>
+
+        {/* Availability is a single member-controlled signal used by challenge and rally cards. */}
+        <div className="py-3 flex items-center justify-between gap-3">
+          <div>
+            <span className="text-xs font-bold text-fg/70 uppercase tracking-widest">Available to play</span>
+            <p className="text-[11px] text-fg/60 mt-1">Turn this off to show an Away pill to other players.</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={preferences.available_to_play !== false}
+            onClick={() => actions.updateAvailableToPlay(preferences.available_to_play === false)}
+            className={`rounded-full px-3 py-1.5 text-xs font-bold transition-colors ${
+              preferences.available_to_play === false ? 'bg-fg/10 text-fg/60' : 'bg-clay/20 text-clay-fg'
+            }`}
+          >
+            {preferences.available_to_play === false ? 'Away' : 'Available'}
+          </button>
         </div>
 
         {/* Phone */}
@@ -588,18 +605,9 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
               {!leagueDraft && (
                 <p className="text-[11px] text-fg/70">Choose a league above to unlock Retired Pro / Juniors.</p>
               )}
-              <label className="flex items-center gap-2 cursor-pointer text-sm text-fg/70">
-                <input
-                  type="checkbox"
-                  checked={visibleDraft}
-                  onChange={(e) => setVisibleDraft(e.target.checked)}
-                  className="accent-clay"
-                />
-                Make visible to others
-              </label>
               <Button
                 size="sm"
-                onClick={() => save(() => actions.updateLeagueAgeCategory(leagueDraft, ageCategoryDraft, visibleDraft))}
+                onClick={() => save(() => actions.updateLeagueAgeCategory(leagueDraft, ageCategoryDraft))}
                 isLoading={updateLoading}
               >
                 Save
@@ -617,13 +625,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
                   {leagueAgeCategory(stats.league)}
                 </span>
               )}
-              {!leagueDivision(stats.league) ? (
-                <span className="text-sm text-fg/70">Not set.</span>
-              ) : (
-                <span className="text-[11px] text-fg/70 ml-1">
-                  {user.profile_details_visible ? 'Visible to others' : 'Hidden from others'}
-                </span>
-              )}
+              {!leagueDivision(stats.league) && <span className="text-sm text-fg/70">Not set.</span>}
             </div>
           )}
         </div>

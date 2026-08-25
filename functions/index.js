@@ -58,6 +58,9 @@ Object.assign(exports, require('./friendlyPoints'));
 
 // Profile zone changes — takes the member out of a live draw belonging to the zone they left.
 Object.assign(exports, require('./zoneMoves'));
+// One server-side seating authority for registrations; no browser or scheduled placer competes.
+Object.assign(exports, require('./participantWorkflow'));
+Object.assign(exports, require('./withdrawalWorkflow'));
 
 // Likelihood levels we treat as unsafe.
 const UNSAFE = new Set(['LIKELY', 'VERY_LIKELY']);

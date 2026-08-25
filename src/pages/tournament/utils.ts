@@ -403,7 +403,8 @@ export const filterParticipantsForDraw = (
     // ANDed with everything else below — a draw with no `zone` (zones never enabled, or doubles)
     // skips this check. An organizer-set zone_override beats the zone derived from preferred
     // courts, so a moved player stays put even if they later change court preferences.
-    if (draw.zone && (p.zone_override ?? zoneBucketFor(zoneMap[p.uid], zoneConfig)) !== draw.zone) return false;
+    if (draw.zone && (p.zone ?? p.zone_override ?? zoneBucketFor(zoneMap[p.uid], zoneConfig)) !== draw.zone)
+      return false;
     // Retired Pro is opt-in at join time (age 55+), not skill-derived: a Retired Pro participant
     // belongs ONLY to the Retired Pro draw, and never falls into Beginners/Challengers/Masters.
     if (p.skill_group === 'Retired Pro') return draw.skillGroup === 'Retired Pro';

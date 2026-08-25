@@ -307,8 +307,8 @@ export const PlayerProfile: React.FC = () => {
             </div>
           </div>
 
-          {/* League — only when the player opted in ("Make visible to others"). */}
-          {player.profile_details_visible && leagueDivision(stats?.league) && (
+          {/* League is public on both leaderboards and profile cards. */}
+          {leagueDivision(stats?.league) && (
             <div className="py-3">
               <SectionLabel icon={<Users className="w-3.5 h-3.5 text-clay-fg" />} label="League" />
               <div className="mt-1 flex flex-wrap gap-1.5">

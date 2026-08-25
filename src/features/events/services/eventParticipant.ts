@@ -12,6 +12,13 @@ export type EventParticipantWrite = {
   division?: string;
   skill_group?: string;
   partner_uid?: string;
+  partner_name?: string;
+  zone?: string;
+  status?: 'active' | 'withdrawn';
+  withdrawn_reason?: 'injury' | 'unavailable' | 'cannot_contact' | 'other';
+  withdrawn_note?: string;
+  withdrawn_at?: string;
+  withdrawn_by?: 'self' | string;
 };
 
 /**
@@ -32,4 +39,11 @@ export const buildEventParticipantData = (input: EventParticipantWrite) => ({
   ...(input.division !== undefined ? { division: input.division } : {}),
   ...(input.skill_group !== undefined ? { skill_group: input.skill_group } : {}),
   ...(input.partner_uid !== undefined ? { partner_uid: input.partner_uid } : {}),
+  ...(input.partner_name !== undefined ? { partner_name: input.partner_name } : {}),
+  ...(input.zone !== undefined ? { zone: input.zone } : {}),
+  ...(input.status !== undefined ? { status: input.status } : {}),
+  ...(input.withdrawn_reason !== undefined ? { withdrawn_reason: input.withdrawn_reason } : {}),
+  ...(input.withdrawn_note !== undefined ? { withdrawn_note: input.withdrawn_note } : {}),
+  ...(input.withdrawn_at !== undefined ? { withdrawn_at: input.withdrawn_at } : {}),
+  ...(input.withdrawn_by !== undefined ? { withdrawn_by: input.withdrawn_by } : {}),
 });

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
 import { PLAYER_LOADING, formatPlayerName, formatSetScores } from './utils';
 import { PLAYER_LOADING_SENTINEL } from './AddPlayerPanel';
@@ -206,12 +206,12 @@ export const RRGroupCard: React.FC<Props> = ({
                       {isCreator && editMode && onRemovePlayer && (
                         <button
                           type="button"
-                          aria-label={`Remove ${formatPlayerName(row.name)} from the draw`}
-                          title="Remove from draw"
+                          aria-label={`Withdraw ${formatPlayerName(row.name)}`}
+                          title="Withdraw player"
                           onClick={() => {
                             if (
                               window.confirm(
-                                `Remove ${formatPlayerName(row.name)} from this event draw?\n\nThis unregisters them and deletes pending matches. Players with completed matches cannot be removed.`,
+                                `Withdraw ${formatPlayerName(row.name)}?\n\nUnplayed matches become walkovers; played matches stay recorded.`,
                               )
                             ) {
                               onRemovePlayer(row.userId);
@@ -219,7 +219,7 @@ export const RRGroupCard: React.FC<Props> = ({
                           }}
                           className="shrink-0 mr-2 p-1.5 rounded-lg text-fg/70 opacity-70 hover:opacity-100 hover:text-badge-loss hover:bg-red-500/10 transition-colors"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <span className="text-badge font-black text-sm leading-none">!</span>
                         </button>
                       )}
                     </div>

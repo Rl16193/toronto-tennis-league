@@ -39,6 +39,7 @@ import { AlertMessage } from '../components/AlertMessage';
 import { LoadingBar } from '../components/LoadingBar';
 import { TennisEvent } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { withdrawEventParticipant } from '../features/events/services/withdrawalService';
 
 type EventStatus = 'active' | 'completed';
 
@@ -101,6 +102,7 @@ export const Tournament: React.FC = () => {
   const [showEventSheet, setShowEventSheet] = useState(false);
   const [showZoneConfig, setShowZoneConfig] = useState(false);
   const [showChangeZone, setShowChangeZone] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
   // Round picker for the knockout download. Opens instead of downloading directly, so the
   // creator can grab one round with contacts (or the whole bracket).
   const [showDownloadPicker, setShowDownloadPicker] = useState(false);
@@ -510,15 +512,41 @@ export const Tournament: React.FC = () => {
           Gated on the RESOLVED config, not `event.zone_draw_config`. No event has ever stored that
           field, while `resolveZoneConfig` defaults `enabled` to true — so reading the raw field
           made this whole row (and the only way a player can ask to move) permanently invisible. */}
-      {!pastMode && !isCreator && zoneConfig.enabled && userParticipant && (
+      {!pastMode && !isCreator && userParticipant && (
         <div className="mb-6 flex items-center justify-end gap-3 flex-wrap">
-          <span className="text-xs text-fg/70">
-            Your zone: <span className="font-bold text-fg">{userZoneLabel}</span>
-          </span>
-          <RequestZoneChangeButton
-            requested={!!userParticipant.req_zone_change}
-            onRequest={() => setShowChangeZone(true)}
-          />
+          {zoneConfig.enabled && (
+            <>
+              <span className="text-xs text-fg/70">
+                Your zone: <span className="font-bold text-fg">{userZoneLabel}</span>
+              </span>
+              <RequestZoneChangeButton
+                requested={!!userParticipant.req_zone_change}
+                onRequest={() => setShowChangeZone(true)}
+              />
+            </>
+          )}
+          <button
+            type="button"
+            disabled={withdrawing || userParticipant.status === 'withdrawn'}
+            onClick={async () => {
+              if (
+                !event ||
+                !user ||
+                !window.confirm('You lose all unplayed matches — opponents get walkovers. Withdraw?')
+              )
+                return;
+              setWithdrawing(true);
+              try {
+                await withdrawEventParticipant(event.id, user.uid, 'other');
+                window.location.reload();
+              } finally {
+                setWithdrawing(false);
+              }
+            }}
+            className="rounded-lg bg-badge-loss/10 px-3 py-1.5 text-xs font-bold text-badge-loss hover:bg-badge-loss/20 disabled:opacity-50"
+          >
+            {withdrawing ? 'Withdrawing…' : 'Withdraw'}
+          </button>
         </div>
       )}
 

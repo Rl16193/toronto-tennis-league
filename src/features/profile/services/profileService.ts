@@ -84,14 +84,6 @@ export const updateAvatar = async (userId: string, avatar: string) => {
 export const updateSkills = async (userId: string, skillLevel: number, tournamentPreference: string) => {
   if (Number.isNaN(skillLevel)) throw new Error('Please select a valid skill level.');
   await updateDoc(doc(db, 'stats', userId), { skill_level: skillLevel, tournament_preference: tournamentPreference });
-
-  const snap = await getDocs(query(collection(db, 'event_participants'), where('uid', '==', userId)));
-  const toSync = snap.docs.filter((d) => (d.data().tournament_choice || '') !== 'Doubles');
-  if (toSync.length > 0) {
-    const batch = writeBatch(db);
-    toSync.forEach((d) => batch.update(d.ref, { skill: skillLevel }));
-    await batch.commit();
-  }
 };
 
 // League (gender + optional Retired Pro/Juniors age category) lives on stats.league as one
@@ -102,9 +94,7 @@ export const updateLeagueAndAgeCategory = async (
   userId: string,
   league: "Men's" | "Women's" | '',
   ageCategory: 'Retired Pro' | 'Juniors' | '',
-  visible: boolean,
 ) => {
-  await updateDoc(doc(db, 'users', userId), { profile_details_visible: visible });
   // Only write the league when one is chosen — never clobber an existing value with ''.
   if (league) {
     const leagueValue = ageCategory ? `${league} ${ageCategory}` : league;
@@ -118,7 +108,10 @@ export const updateDisplayBadges = async (userId: string, badgeIds: string[]) =>
 };
 
 export const updatePreferredCourts = async (userId: string, courts: string[], zone: string) => {
-  await updateDoc(doc(db, 'preferences', userId), { preferred_courts: courts, preferred_zone: zone });
+  const current = await getDocs(query(collection(db, 'preferences'), where('__name__', '==', userId)));
+  const currentData = current.docs[0]?.data() || {};
+  const nextZone = currentData.preferred_zone_manual === true ? currentData.preferred_zone || zone : zone;
+  await updateDoc(doc(db, 'preferences', userId), { preferred_courts: courts, preferred_zone: nextZone });
 };
 
 // Picked by hand on the profile card. Never unseats them: matches already generated are left
@@ -137,6 +130,10 @@ export const updateEmailNotifications = async (userId: string, enabled: boolean)
 
 export const updateAvailabilityTags = async (userId: string, tags: string[]) => {
   await updateDoc(doc(db, 'preferences', userId), { availability_tags: tags });
+};
+
+export const updateAvailableToPlay = async (userId: string, available: boolean) => {
+  await updateDoc(doc(db, 'preferences', userId), { available_to_play: available });
 };
 
 export const changeEmail = async (user: User, newEmail: string, password: string) => {
