@@ -193,7 +193,7 @@ test('builds first-application stat deltas without counting a no-show as played'
   );
   assert.equal(scored.get('player-a').leaguePoints26, 3);
   assert.equal(scored.get('player-a').matchesPlayed, 1);
-  assert.equal(scored.get('player-a').pointswon, 12);
+  assert.equal(scored.get('player-a').pointswon, undefined);
   assert.equal(scored.get('player-b').leaguePoints26, 1);
   assert.equal(scored.get('player-b').loses, 1);
 

@@ -4,23 +4,21 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onObjectFinalized } = require('firebase-functions/v2/storage');
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
-const { defineSecret } = require('firebase-functions/params');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const vision = require('@google-cloud/vision');
-const { Resend } = require('resend');
 const path = require('path');
 // The welcome email shares its shell with the rally/challenge/digest templates.
-const { LINK, buildWelcomeEmail } = require('./lib/emailTemplates');
-const { htmlToText } = require('./lib/htmlToText');
-const { EMAIL_FROM, EMAIL_REPLY_TO } = require('./lib/constants');
+const { buildWelcomeEmail } = require('./lib/emailTemplates');
+const { sendEmail, resendApiKey } = require('./lib/notify');
 const { safeId } = require('./lib/logging');
 
 admin.initializeApp();
 
 // Lazy-load Vision client to prevent initialization timeouts
 let visionClient;
-const resendApiKey = defineSecret('RESEND_API_KEY');
+// `resendApiKey` is shared with the notification helper so welcome mail uses the same
+// environment delivery gate as every other outbound message.
 
 // Bell-icon notification triggers + scheduled reminders
 Object.assign(exports, require('./notifications'));
@@ -220,29 +218,10 @@ exports.sendWelcomeEmail = onDocumentUpdated(
 
     if (before.welcomeEmailSent === true || after.welcomeEmailSent !== true) return;
 
-    // Still triggered by the users doc (that's where welcomeEmailSent flips), but the address is
-    // read from contacts/{uid} — email moved off `users` when contact details were split out.
-    const contactsSnap = await admin.firestore().doc(`contacts/${event.params.uid}`).get();
-    const email = contactsSnap.exists ? contactsSnap.data().email : '';
-    if (!email) return;
-    const firstName = (after.name || '').split(' ')[0] || 'there';
-
-    try {
-      const resend = new Resend(resendApiKey.value());
-      const welcomeHtml = buildWelcomeEmail(firstName);
-      await resend.emails.send({
-        from: EMAIL_FROM,
-        to: email,
-        replyTo: EMAIL_REPLY_TO,
-        subject: 'Welcome to Racquets & Strings 🎾',
-        html: welcomeHtml,
-        text: htmlToText(welcomeHtml),
-        headers: { 'List-Unsubscribe': `<${LINK.profile}>` },
-      });
-      logger.info('Welcome email sent', { recipient: safeId(email.trim().toLowerCase()) });
-    } catch (err) {
-      logger.error('Failed to send welcome email:', err);
-    }
+    await sendEmail(event.params.uid, 'Welcome to Racquets & Strings 🎾', (user) => {
+      const firstName = (user.name || '').split(' ')[0] || 'there';
+      return buildWelcomeEmail(firstName);
+    });
   },
 );
 

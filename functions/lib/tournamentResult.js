@@ -115,9 +115,6 @@ function statDeltasForResult(match, result, partnerUidByCaptain = new Map()) {
 
   const winnerIsP1 = result.winnerUid === match.player_1_uid;
   const loserUid = winnerIsP1 ? match.player_2_uid : match.player_1_uid;
-  const p1Games = result.scores.reduce((sum, pair) => sum + pair[0], 0);
-  const p2Games = result.scores.reduce((sum, pair) => sum + pair[1], 0);
-  const total = p1Games + p2Games;
   const award = tournamentAward(match);
   for (const uid of creditedUids(result.winnerUid)) {
     addDelta(deltas, uid, {
@@ -126,8 +123,6 @@ function statDeltasForResult(match, result, partnerUidByCaptain = new Map()) {
       ...(award.winnerPointsApply ? { leaguePoints26: award.winnerPoints } : {}),
       ...(award.isFinal ? { tournamentsPlayed: 1 } : {}),
       league,
-      pointswon: winnerIsP1 ? p1Games : p2Games,
-      totalPointsPlayed: total,
     });
   }
   for (const uid of creditedUids(loserUid)) {
@@ -137,8 +132,6 @@ function statDeltasForResult(match, result, partnerUidByCaptain = new Map()) {
       leaguePoints26: award.loserPoints,
       tournamentsPlayed: 1,
       league,
-      pointswon: winnerIsP1 ? p2Games : p1Games,
-      totalPointsPlayed: total,
     });
   }
   return deltas;

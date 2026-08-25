@@ -60,8 +60,9 @@ export interface UserStats {
   leaguePoints26: number;
   tournamentsPlayed: number;
   league: string;
-  pointswon: number;
-  totalPointsPlayed: number;
+  /** Legacy fields retained for reading old documents; new results derive totals from matches. */
+  pointswon?: number;
+  totalPointsPlayed?: number;
   // Denormalised onto stats by functions/rankSnapshot.js (weeklyRankSnapshot) so the profile and
   // leaderboard can show a rank move without reading ranking_history. Optional: a player who has
   // never been in a snapshot has none of them.

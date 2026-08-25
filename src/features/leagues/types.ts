@@ -8,8 +8,8 @@ export type LeagueRow = {
   loses: number;
   leaguePoints26: number;
   league: string;
-  pointswon: number;
-  totalPointsPlayed: number;
+  pointswon?: number;
+  totalPointsPlayed?: number;
   rankTrend: 'up' | 'down' | 'flat';
   rankMove: number;
 };

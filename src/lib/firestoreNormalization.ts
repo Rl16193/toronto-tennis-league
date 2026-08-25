@@ -233,8 +233,8 @@ export const normalizeUserStats = (value: unknown): UserStats => {
     leaguePoints26: number(data.leaguePoints26),
     tournamentsPlayed: number(data.tournamentsPlayed),
     league: string(data.league),
-    pointswon: number(data.pointswon),
-    totalPointsPlayed: number(data.totalPointsPlayed),
+    ...(typeof data.pointswon === 'number' ? { pointswon: data.pointswon } : {}),
+    ...(typeof data.totalPointsPlayed === 'number' ? { totalPointsPlayed: data.totalPointsPlayed } : {}),
     rankPosition: optionalNumber(data.rankPosition),
     rankTrend: ['up', 'down', 'same'].includes(string(data.rankTrend))
       ? (data.rankTrend as UserStats['rankTrend'])

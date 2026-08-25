@@ -24,8 +24,6 @@ const createDefaultStats = (user: User): UserStats => ({
   leaguePoints26: 0,
   tournamentsPlayed: 0,
   league: '',
-  pointswon: 0,
-  totalPointsPlayed: 0,
 });
 
 const createDefaultPreferences = (): UserPreferences => ({

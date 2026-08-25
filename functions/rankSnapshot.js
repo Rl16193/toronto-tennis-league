@@ -26,7 +26,7 @@ const inDivision = (league, tab) => {
   return false;
 };
 
-exports.weeklyRankSnapshot = onSchedule({ schedule: '0 1 * * 6', timeZone: TZ, region: REGION }, async () => {
+exports.weeklyRankSnapshot = onSchedule({ schedule: '0 1 * * *', timeZone: TZ, region: REGION }, async () => {
   const snap = await db().collection('stats').get();
   const players = [];
   snap.forEach((d) => {
@@ -90,6 +90,6 @@ exports.weeklyRankSnapshot = onSchedule({ schedule: '0 1 * * 6', timeZone: TZ, r
   }
   await db().collection('site_stats').doc('summary').set(siteStats, { merge: true });
   logger.info(
-    `weeklyRankSnapshot: ${ops.length} rank update(s), site_stats active_players=${siteStats.active_players} matches_organized=${siteStats.matches_organized}`,
+    `dailyRankSnapshot: ${ops.length} rank update(s), site_stats active_players=${siteStats.active_players} matches_organized=${siteStats.matches_organized}`,
   );
 });
