@@ -5,12 +5,18 @@
 
 |                 |                                                                                                                                                                                      |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Branch base** | `origin/docs/planning` @ `21ddf73bb49ead5c6bd6e0213a15d19d8921a855`; implementation branch `codex/sprint-1-d1`                                                                       |
+| **Branch base** | `origin/docs/planning` @ `21ddf73bb49ead5c6bd6e0213a15d19d8921a855`; `codex/sprint-1-d1` fast-forwarded into `dev-anuj` @ `6e5234c`                                                  |
 | **Agents**      | A1 `rules-functions` · A2 `dev-data` · A3 `dev-client` · A4 `ui-ux` · A5 `dev-verify`                                                                                                |
-| **Blocking**    | A5's branch-and-harness task blocks nothing else, but nothing merges until it is green                                                                                               |
+| **Blocking**    | The implementation is merged; design-sync previews, remaining D1 rows, and authorized staging validation remain follow-ups                                                           |
 | **Ship**        | Local emulator and unit gates are required. No production deploy or production data mutation is part of D1; staging validation is deferred until an isolated staging project exists. |
 
 **Line numbers are `dev-anuj`, verified 2026-08-23.** Re-check before you edit; re-cite the row when you touch it.
+
+**Merge record (2026-08-25).** The Sprint 1 D1 implementation and planning documentation were
+fast-forwarded from `codex/sprint-1-d1` into `dev-anuj` at `6e5234c`. Local unit, emulator, build,
+typecheck, syntax, documentation, and nine-test browser gates passed. The repository format check
+still reports fifteen pre-existing planning-document formatting issues; no production deployment,
+production data mutation, migration, or staging claim was made.
 
 ---
 

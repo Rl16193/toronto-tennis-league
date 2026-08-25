@@ -8,9 +8,9 @@
 
 ## Branch and change policy
 
-- Temporary feature branches and isolated worktrees are permitted for implementation. Sprint work may remain on its feature branch until the user reviews it and opens the PR into `dev-anuj`; do not merge or push it into `dev-anuj` automatically. Do not modify or merge into `main`.
+- Work is consolidated on `dev-anuj` for this engineering block. Temporary feature branches and isolated worktrees are permitted during implementation, but reviewed work must be closed into `dev-anuj`; do not modify or merge into `main`.
 - Do not change `main`, merge to `main`, force-push, or rewrite public history.
-- Keep commits issue-sized and reviewable; leave the feature branch and its exact SHA available for the user's later PR review.
+- Keep commits issue-sized and reviewable; after validation, push completed work to `origin/dev-anuj`.
 - Preserve unknown user work. Never reset or delete it without explicit approval.
 
 ## Environment safety
