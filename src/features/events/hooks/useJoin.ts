@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { analyticsPromise } from '../../../lib/firebase';
 import { logEvent } from 'firebase/analytics';
-import { SlotResult } from '../types';
+import { INITIAL_JOIN_FORM, JoinFormState, SlotResult } from '../types';
 import { isTournamentEvent, isSeasonOpener, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
 import { isSeniorsLeague } from '../../../utils/skillLevels';
 import { parseValidDate, type FirestoreDateLike } from '../../../utils/eventDates';
 import { DisplayEvent } from '../services/eventService';
 import { createEventParticipant } from '../services/eventRepository';
 import type { EventParticipantWrite } from '../services/eventParticipant';
-import { INITIAL_JOIN_FORM, JoinFormState } from '../types';
 
 interface Params {
   user: { uid: string; email: string | null } | null;
