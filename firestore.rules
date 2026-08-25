@@ -99,19 +99,21 @@ service cloud.firestore {
     function isProviderFor(providerId) {
       return isAuthenticated() && providerId != null &&
         (
+          (exists(/databases/$(database)/documents/providers/$(providerId)) &&
+            get(/databases/$(database)/documents/providers/$(providerId)).data.get('member_uid', '') == request.auth.uid) ||
           get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.get('stringer_id', '') == providerId ||
           get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.get('coach_id', '') == providerId
         );
     }
 
+    // Legacy read-only compatibility for pre-D5 lesson rosters. New lessons are event add-ons;
+    // no client or callable can create or mutate these documents.
     function isCoachFor(providerId) {
       return isAuthenticated() && providerId != null &&
         get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.get('coach', false) == true &&
         get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.get('coach_id', '') == providerId;
     }
 
-    // The monthly roster stays public without contact fields. A server-owned, expiring projection
-    // grants the assigned coach access to contact details only for players who are still enrolled.
     function isCurrentGroupLessonCoachFor(userId) {
       return isAuthenticated() &&
         exists(/databases/$(database)/documents/group_lesson_contact_access/current) &&
@@ -229,16 +231,13 @@ service cloud.firestore {
     // Contacts Collection
     // ===============================================================
     // Phone / email / WhatsApp. Readable by the owner, by someone who is actually their opponent
-    // (accepted rally or challenge, or a shared tournament fixture), and by the current group
-    // lesson coach for players still enrolled in that lesson.
+    // (accepted rally or challenge, a shared tournament fixture, or the legacy lesson coach).
     //
     // This used to be `isAuthenticated()`, i.e. every member could read every other member's
     // phone number. The app shares contact details rather than carrying messages, so they have to
     // be readable by SOMEONE — but only by the person you're actually arranging a game with.
     match /contacts/{userId} {
-      allow read: if isOwner(userId) ||
-        isConnectedTo(userId) ||
-        isCurrentGroupLessonCoachFor(userId);
+      allow read: if isOwner(userId) || isConnectedTo(userId) || isCurrentGroupLessonCoachFor(userId);
       allow create: if isOwner(userId) &&
         request.resource.data.keys().hasOnly(ownerContactFields());
       allow update: if isOwner(userId) &&
@@ -293,6 +292,25 @@ service cloud.firestore {
               'email_notifications', 'availability_tags', 'available_to_play'
             ]));
       allow delete: if false;
+    }
+
+    // Provider identity and role membership are server-issued. The catalogue is public, but a
+    // browser cannot elevate itself by writing a provider row.
+    match /providers/{providerId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Booking documents are callable-owned state. Members can read their own bookings and the
+    // linked provider can read its queue; every lifecycle transition goes through Functions.
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated() &&
+        (
+          resource.data.uid == request.auth.uid ||
+          isSuperAdmin() ||
+          isProviderFor(resource.data.provider_id)
+        );
+      allow write: if false;
     }
 
     // Reserved projection boundary. Keep closed until product owners approve an explicit
@@ -642,7 +660,9 @@ service cloud.firestore {
     // Task Claims
     // ===============================================================
     match /task_claims/{id} {
-      allow read: if isSuperAdmin() || isOwner(resource.data.uid);
+      allow read: if isSuperAdmin() || isOwner(resource.data.uid) ||
+        (resource.data.get('event_id', '') is string && resource.data.get('event_id', '') != '' &&
+          isManagerOfEvent(resource.data.get('event_id', '')));
       allow create: if isAuthenticated() &&
         request.resource.data.uid == request.auth.uid &&
         request.resource.data.status == 'pending' &&
@@ -682,16 +702,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // ===============================================================
-    // Group Lessons (monthly roster — server-only writes)
-    // ===============================================================
+    // Legacy lesson documents remain readable for existing rosters during migration. The D5
+    // client and Functions no longer create, update, or delete this collection.
     match /group_lessons/{month} {
       allow read: if true;
       allow write: if false;
     }
 
-    // Expiring coach-to-roster authorization projection. Cloud Functions maintains it alongside
-    // the monthly roster; clients may neither inspect nor forge the access marker directly.
     match /group_lesson_contact_access/{documentId} {
       allow read, write: if false;
     }

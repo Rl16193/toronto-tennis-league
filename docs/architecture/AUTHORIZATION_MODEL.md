@@ -4,7 +4,7 @@ Diagram: [authorization boundaries](diagrams/authorization-boundaries.md).
 
 ## Current state
 
-Firebase Auth supplies identity. Firestore Rules are the effective client authorization boundary; React private routes only control navigation. `preferences/{uid}.event_creator` permits event creation, while later event mutations require `creator_id`, explicit membership in `organizer_ids`, or the super-admin bootstrap. It is not global administration. Provider-like access is inferred from server-assigned preference IDs; it is not a general role claim system.
+Firebase Auth supplies identity. Firestore Rules are the effective client authorization boundary; React private routes only control navigation. Event creation remains a compatibility path for `preferences/{uid}.event_creator`; later event mutations require `creator_id`, explicit membership in `organizer_ids`, or the super-admin bootstrap. Provider access is now scoped to server-issued `providers` rows; legacy preference IDs are read-only compatibility fallbacks during cutover.
 
 ## Current permission layers
 
@@ -21,7 +21,7 @@ Firebase Auth supplies identity. Firestore Rules are the effective client author
 
 - Contacts are not globally readable; event creators do not gain unrelated contact access.
 - `connections` and `public_contacts` are write-denied to clients.
-- `offers`, protected stats/reward fields, `redemptions`, `group_lessons`, the expiring group-lesson contact-access projection, aggregate stats, ranking history, and notifications creation are server-controlled.
+- `providers`, `services`, `bookings`, `offers`, protected stats/reward fields, `redemptions`, aggregate stats, ranking history, and notifications creation are server-controlled.
 - Reward redemption review is limited to the super-admin bootstrap; event creators cannot review,
   use, flag, or receive global coupon notifications unless they separately own the provider record.
 - Preferences are publicly readable projections; writes remain owner-scoped and role fields cannot be self-assigned.

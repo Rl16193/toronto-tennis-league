@@ -61,6 +61,9 @@ Object.assign(exports, require('./zoneMoves'));
 // One server-side seating authority for registrations; no browser or scheduled placer competes.
 Object.assign(exports, require('./participantWorkflow'));
 Object.assign(exports, require('./withdrawalWorkflow'));
+Object.assign(exports, require('./bookings'));
+Object.assign(exports, require('./claims'));
+Object.assign(exports, require('./serviceAdmin'));
 
 // Likelihood levels we treat as unsafe.
 const UNSAFE = new Set(['LIKELY', 'VERY_LIKELY']);

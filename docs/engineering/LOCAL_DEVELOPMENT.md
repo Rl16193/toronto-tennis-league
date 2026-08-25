@@ -169,6 +169,23 @@ Do not run bare `firebase deploy`. Hosting wrappers require an explicit target, 
 Functions, Storage promotion, backup recovery, DNS, secrets, and provider configuration remain
 separate external approval gates.
 
+### Provider bootstrap (dry-run first)
+
+Provider role rows are server-issued; there is no in-app role elevation path. Validate an input
+file locally with:
+
+```text
+node scripts/bootstrap-providers.mjs --input /path/to/providers.json
+```
+
+Applying requires an explicitly authorized non-production project and confirmation:
+
+```text
+node scripts/bootstrap-providers.mjs --input /path/to/providers.json --apply --project STAGING_PROJECT_ID --confirm PROVIDERS
+```
+
+The script rejects the production project id and does not run from the normal client workflow.
+
 ## Troubleshooting
 
 - **`java` is missing:** install Java 21, set `JAVA_HOME` if needed, and rerun `java -version`.

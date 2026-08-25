@@ -76,6 +76,7 @@ import {
 } from '../../lib/firestoreNormalization';
 import { applyTournamentResult, setGroupBonus } from '../../features/tournament/services/tournamentResultService';
 import { withdrawEventParticipant } from '../../features/events/services/withdrawalService';
+import { isEventManager } from '../../features/events/eventPermissions';
 import { buildScoreSubmissionIntent } from '../../features/tournament/domain/scoreSubmission';
 import {
   createTournamentWriteBatch,
@@ -173,7 +174,7 @@ export const useTournament = (eventIdOverride?: string) => {
     return true;
   };
 
-  const isCreator = !!user && !!event?.creator_id && event.creator_id === user.uid;
+  const isCreator = isEventManager(event, user?.uid);
   const started = isTournamentStarted(event);
 
   const effectiveStatsMap = useMemo(() => {

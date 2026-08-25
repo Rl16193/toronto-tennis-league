@@ -1,5 +1,6 @@
 import type { ContactData, EventParticipant, TennisEvent, UserData, UserPreferences, UserStats } from '../types';
 import type { TournamentMatch } from '../pages/tournament/types';
+import type { ProviderRecord } from '../features/services/types';
 import { resolveZoneConfig } from '../features/tournament/domain/placement';
 
 type UnknownRecord = Record<string, unknown>;
@@ -9,6 +10,24 @@ export type RoundRobinDraft = {
   custom: boolean[];
   customLabels: string[];
   withdrawn: string[];
+};
+
+export const normalizeProvider = (id: string, value: unknown): ProviderRecord | null => {
+  const data = record(value);
+  const providerId = id.trim();
+  const name = string(data.name).trim();
+  const roles = strings(data.roles).filter(
+    (role): role is ProviderRecord['roles'][number] => role === 'stringer' || role === 'coach' || role === 'other',
+  );
+  if (!providerId || !name || roles.length === 0) return null;
+  return {
+    id: providerId,
+    name,
+    roles: [...new Set(roles)],
+    ...(string(data.member_uid).trim() ? { member_uid: string(data.member_uid).trim() } : {}),
+    ...(string(data.area).trim() ? { area: string(data.area).trim() } : {}),
+    ...(string(data.updated_at) ? { updated_at: string(data.updated_at) } : {}),
+  };
 };
 
 const record = (value: unknown): UnknownRecord =>

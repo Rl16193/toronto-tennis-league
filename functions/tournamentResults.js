@@ -31,9 +31,7 @@ function isEventOrganizer(event, uid) {
   return (
     uid === SUPER_ADMIN_UID ||
     event.creator_id === uid ||
-    [event.organizer_ids, event.assigned_organizer_uids, event.organizer_uids].some(
-      (value) => Array.isArray(value) && value.includes(uid),
-    )
+    (Array.isArray(event.organizer_ids) && event.organizer_ids.includes(uid))
   );
 }
 
@@ -68,12 +66,24 @@ function recipientNotification(match, result, recipientUid) {
 function submissionRecord(uid, result, now, hash) {
   return {
     winner_uid: result.winnerUid,
-    sets: result.scores,
+    sets: persistedScores(result.scores),
     margin: result.margin,
     submitted_at: now,
     hash,
     submitted_by: uid,
   };
+}
+
+// Firestore rejects arrays nested inside arrays. Keep the score pairs readable
+// while storing them as maps in submission and audit records.
+function persistedScores(scores) {
+  return Object.fromEntries(
+    scores.map(([playerOne, playerTwo], index) => [`set_${index + 1}`, { player_1: playerOne, player_2: playerTwo }]),
+  );
+}
+
+function persistedResult(result) {
+  return result ? { ...result, scores: persistedScores(result.scores) } : null;
 }
 
 function activeParticipantMap(snapshot) {
@@ -135,7 +145,14 @@ function combinedStatDeltas(match, oldResult, nextResult, partnerUidByCaptain) {
 }
 
 function resultResponse({ applied, duplicate = false, advanced = false, disputed = false, reconciled = false }) {
-  return { applied, duplicate, advanced, disputed, reconciled, needsManual: false };
+  return {
+    applied,
+    duplicate,
+    advanced,
+    ...(disputed ? { disputed: true } : {}),
+    ...(reconciled ? { reconciled: true } : {}),
+    needsManual: false,
+  };
 }
 
 function mapError(error) {
@@ -301,8 +318,8 @@ exports.applyTournamentResult = onCall({ region: REGION }, async (request) => {
         match_id: matchId,
         actor_uid: callerUid,
         action: oldResult ? 'rescore' : 'apply',
-        before: oldResult,
-        after: result,
+        before: persistedResult(oldResult),
+        after: persistedResult(result),
         recorded_at: now,
       });
 

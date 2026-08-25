@@ -3,7 +3,8 @@ import { collection, doc, getDoc, getDocs, onSnapshot, query, where } from 'fire
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { useTasks } from '../tasks/useTasks';
-import { GroupLesson, Redemption, Reward, ServiceCategory, currentMonthKey } from './types';
+import { normalizeProvider } from '../../lib/firestoreNormalization';
+import { ProviderRecord, Redemption, Reward, ServiceCategory } from './types';
 
 export * from './types';
 
@@ -17,21 +18,43 @@ export interface Provider {
   /** Their member account, when they have one — used for the profile photo beside their name. */
   uid?: string;
   offers: Reward[];
+  roles?: ProviderRecord['roles'];
 }
 
-/** The offer catalog, active offers only, grouped by category then provider. */
+/** The services catalog, active entries only, grouped by category then provider. */
 export function useServicesCatalog() {
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    getDocs(query(collection(db, 'tasks'), where('type', '==', 'offer')))
-      .then((snap) => {
+    Promise.all([
+      getDocs(query(collection(db, 'services'), where('active', '==', true))).catch(() => null),
+      getDocs(query(collection(db, 'tasks'), where('type', '==', 'offer'))).catch(() => null),
+      getDocs(collection(db, 'providers')).catch(() => null),
+    ])
+      .then(([serviceSnap, legacySnap, providerSnap]) => {
+        const providerMap = new Map<string, ProviderRecord>();
+        providerSnap?.docs.forEach((d) => {
+          const provider = normalizeProvider(d.id, d.data());
+          if (provider) providerMap.set(d.id, provider);
+        });
+        const docs = serviceSnap?.docs.length ? serviceSnap.docs : legacySnap?.docs || [];
         setRewards(
-          snap.docs
+          docs
             .map((d) => ({ id: d.id, ...(d.data() as Omit<Reward, 'id'>) }))
             .filter((r) => r.active !== false)
+            .map((r) => {
+              const provider = providerMap.get(r.provider_id);
+              return provider
+                ? {
+                    ...r,
+                    provider_name: provider.name || r.provider_name,
+                    area: provider.area || r.area,
+                    uid: provider.member_uid || r.uid,
+                  }
+                : r;
+            })
             .sort((a, b) => a.provider_name.localeCompare(b.provider_name) || (a.sort ?? 0) - (b.sort ?? 0)),
         );
       })
@@ -183,20 +206,42 @@ export function useMyRedemptions() {
 }
 
 /**
- * The provider id this account owns, if any. A stringer or coach is an ordinary account with
- * `stringer`/`coach` true and the matching id on preferences — same shape as `event_creator`.
+ * The provider id this account owns, if any. Provider rows are authoritative; the preferences
+ * lookup is a read-only compatibility fallback for accounts not yet bootstrapped.
  */
 export function useProviderRole() {
-  const { profile } = useAuth();
-  const prefs = profile?.preferences as
-    { stringer?: boolean; stringer_id?: string; coach?: boolean; coach_id?: string } | undefined;
-  if (prefs?.stringer === true && prefs.stringer_id) {
-    return { providerId: prefs.stringer_id, role: 'stringer' as const };
+  const { user, profile } = useAuth();
+  const [provider, setProvider] = useState<ProviderRecord | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setProvider(null);
+      return;
+    }
+    return onSnapshot(
+      query(collection(db, 'providers'), where('member_uid', '==', user.uid)),
+      (snap) => {
+        const record = snap.docs.map((d) => normalizeProvider(d.id, d.data())).find(Boolean) || null;
+        setProvider(record);
+      },
+      () => setProvider(null),
+    );
+  }, [user?.uid]);
+
+  // Keep the legacy projection as a read-only compatibility fallback while providers is rolled
+  // out. It cannot grant write access because Rules and Functions consult providers first.
+  if (!provider) {
+    const prefs = profile?.preferences as
+      { stringer?: boolean; stringer_id?: string; coach?: boolean; coach_id?: string } | undefined;
+    if (prefs?.stringer === true && prefs.stringer_id)
+      return { providerId: prefs.stringer_id, role: 'stringer' as const };
+    if (prefs?.coach === true && prefs.coach_id) return { providerId: prefs.coach_id, role: 'coach' as const };
   }
-  if (prefs?.coach === true && prefs.coach_id) {
-    return { providerId: prefs.coach_id, role: 'coach' as const };
-  }
-  return { providerId: null, role: null };
+  const role =
+    provider?.roles.find(
+      (candidate): candidate is 'stringer' | 'coach' => candidate === 'stringer' || candidate === 'coach',
+    ) || null;
+  return { providerId: provider?.id || null, role };
 }
 
 /** Coupons issued against the signed-in provider's own offers. */
@@ -247,35 +292,4 @@ export function usePendingRedemptionReviews(enabled: boolean) {
   }, [enabled]);
 
   return items;
-}
-
-/**
- * This month's free group lesson. One doc per month (`group_lessons/{YYYY-MM}`), so spots reset on
- * the 1st with no scheduled job — a new month is simply a doc that doesn't exist yet.
- */
-export function useGroupLesson() {
-  const { user } = useAuth();
-  const month = currentMonthKey();
-  const [lesson, setLesson] = useState<GroupLesson | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    return onSnapshot(
-      doc(db, 'group_lessons', month),
-      (snap) => {
-        setLesson(snap.exists() ? (snap.data() as GroupLesson) : null);
-        setLoading(false);
-      },
-      () => setLoading(false),
-    );
-  }, [month]);
-
-  const players = lesson?.players ?? [];
-  return {
-    month,
-    lesson,
-    players,
-    joined: !!user && players.some((p) => p.uid === user.uid),
-    loading,
-  };
 }
