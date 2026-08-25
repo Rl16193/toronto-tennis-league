@@ -11,7 +11,7 @@
 
 > **Implementation status (Sprint 5):** The D5 component primitives, provider/service/booking
 > boundaries, claim-review callable, organizer scoping, checklist flag-only writes, and real 404
-> are merged on `dev-anuj` at `01d2064`. Only an authorized staging project may be used for
+> are merged on `dev-anuj` at `ca54741`. Only an authorized staging project may be used for
 > environment verification later.
 
 ---
