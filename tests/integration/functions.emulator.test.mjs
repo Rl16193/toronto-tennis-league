@@ -178,6 +178,40 @@ test('group lesson enrollment maintains expiring coach contact access', async ()
   assert.deepEqual(accessAfterLeave.player_ids, []);
 });
 
+test('booking completion requests keep the lifecycle status in progress', async () => {
+  const member = await session('booking-member');
+  const providerMember = await session('booking-provider');
+  await Promise.all([
+    db.doc('providers/provider-1').set({
+      id: 'provider-1',
+      name: 'Test Stringer',
+      roles: ['stringer'],
+      member_uid: providerMember.uid,
+    }),
+    db.doc('services/service-1').set({
+      id: 'service-1',
+      provider_id: 'provider-1',
+      active: true,
+      category: 'stringing',
+      offer: 'Test restring',
+    }),
+  ]);
+
+  const booked = await call('book', member.token, { service_id: 'service-1', provider_id: 'provider-1' });
+  assert.equal(booked.status, 200, JSON.stringify(booked.body));
+  const bookingId = booked.body.result.booking.id;
+  assert.equal((await db.doc(`bookings/${bookingId}`).get()).data().status, 'lead');
+
+  assert.equal((await call('racquetDropped', providerMember.token, { booking_id: bookingId })).status, 200);
+  assert.equal((await call('requestCompletion', providerMember.token, { booking_id: bookingId })).status, 200);
+  const awaitingConfirmation = (await db.doc(`bookings/${bookingId}`).get()).data();
+  assert.equal(awaitingConfirmation.status, 'in_progress');
+  assert.equal(typeof awaitingConfirmation.completion_requested_at, 'string');
+
+  assert.equal((await call('confirmCompletion', member.token, { booking_id: bookingId, confirmed: true })).status, 200);
+  assert.equal((await db.doc(`bookings/${bookingId}`).get()).data().status, 'completed');
+});
+
 const ambassadorClaim = (uid, inviteeId, status = 'pending') => ({
   type: 'ambassador',
   uid,
