@@ -105,7 +105,7 @@ until an authorized project and verified recovery path exist.
 `.agents/skills/gstack/` is tracked third-party agent tooling kept for reproducible local workflows.
 `.gitattributes` marks it as vendored for repository language metrics; ESLint and application tests
 also exclude it. Security review must still inspect the vendor tree when its source or lock changes.
-The pinned source and update procedure remain in `docs/archive/engineering/AGENT_SKILLS.md` and
+The pinned source and update procedure remain in `docs/engineering/AGENT_SKILLS.md` and
 `skills-lock.json`.
 
 ## Known debt

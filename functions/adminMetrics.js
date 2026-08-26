@@ -16,7 +16,7 @@
 // `type`); if you change a definition in one, change it in the other or the scheduled numbers and
 // the engagement report will disagree.
 //
-// Deployment is environment-gated. Follow docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+// Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
 // do not use a bare Firebase deploy command from this checkout.
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');

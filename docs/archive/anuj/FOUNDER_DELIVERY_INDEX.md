@@ -188,66 +188,66 @@ flowchart TD
 
 ### Start here by question
 
-| Founder question                         | Document                                                                                                    | What it explains                                                                        |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| What was delivered and what remains?     | [Takeover stabilization log](../engineering/TAKEOVER_STABILIZATION_LOG.md)                                  | Chronological delivery evidence, validation history, safety boundaries, and open gates. |
-| How did the repository structure change? | [Archived file structure comparison](../planning-2026-08-23/anuj/FILE_STRUCTURE_COMPARISON.md)              | Historical Version 0 and `dev-anuj` comparison from the closed planning package.        |
-| What remains after D1–D5?                | [Master backlog](../../BACKLOG.md) and [future work](../../FUTURE-WORK.md)                                  | Permanent `BLG####` IDs, source task/bug references, status and promotion rules.        |
-| How is the system organized?             | [Architecture index](../architecture/README.md)                                                             | The map for architecture, data, authorization, environments, and diagrams.              |
-| What protects sensitive workflows?       | [Security baseline](../engineering/SECURITY_BASELINE.md)                                                    | Source-level controls, verified boundaries, limitations, and external validation.       |
-| Who can do what?                         | [Authorization model](../architecture/AUTHORIZATION_MODEL.md)                                               | Member, event-manager, administrator, and server permissions.                           |
-| Can a new engineer run it safely?        | [Local development guide](../engineering/LOCAL_DEVELOPMENT.md)                                              | Install, emulators, synthetic data, tests, browser flow, ports, and safety.             |
-| What can be deployed?                    | [Environments and deployment](../architecture/ENVIRONMENTS_AND_DEPLOYMENT.md)                               | Local, source-review, staging, and production evidence are kept distinct.               |
-| What are the core product rules?         | [Tournament rules](../domain/TOURNAMENT_RULES.md) and [scoring and points](../domain/SCORING_AND_POINTS.md) | Established tournament, scoring, no-show, walkover, and points behavior.                |
+| Founder question                         | Document                                                                                                          | What it explains                                                                        |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| What was delivered and what remains?     | [Takeover stabilization log](../../engineering/TAKEOVER_STABILIZATION_LOG.md)                                     | Chronological delivery evidence, validation history, safety boundaries, and open gates. |
+| How did the repository structure change? | [Archived file structure comparison](../planning-2026-08-23/anuj/FILE_STRUCTURE_COMPARISON.md)                    | Historical Version 0 and `dev-anuj` comparison from the closed planning package.        |
+| What remains after D1–D5?                | [Master backlog](../../BACKLOG.md) and [future work](../../FUTURE-WORK.md)                                        | Permanent `BLG####` IDs, source task/bug references, status and promotion rules.        |
+| How is the system organized?             | [Architecture index](../../architecture/README.md)                                                                | The map for architecture, data, authorization, environments, and diagrams.              |
+| What protects sensitive workflows?       | [Security baseline](../../engineering/SECURITY_BASELINE.md)                                                       | Source-level controls, verified boundaries, limitations, and external validation.       |
+| Who can do what?                         | [Authorization model](../../architecture/AUTHORIZATION_MODEL.md)                                                  | Member, event-manager, administrator, and server permissions.                           |
+| Can a new engineer run it safely?        | [Local development guide](../../engineering/LOCAL_DEVELOPMENT.md)                                                 | Install, emulators, synthetic data, tests, browser flow, ports, and safety.             |
+| What can be deployed?                    | [Environments and deployment](../../architecture/ENVIRONMENTS_AND_DEPLOYMENT.md)                                  | Local, source-review, staging, and production evidence are kept distinct.               |
+| What are the core product rules?         | [Tournament rules](../../domain/TOURNAMENT_RULES.md) and [scoring and points](../../domain/SCORING_AND_POINTS.md) | Established tournament, scoring, no-show, walkover, and points behavior.                |
 
 ### Architecture and decisions
 
-| Document                                                                           | Purpose                                                                    |
-| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| [System architecture](../architecture/SYSTEM_ARCHITECTURE.md)                      | Current application structure, runtime services, and ownership boundaries. |
-| [Data flow](../architecture/DATA_FLOW.md)                                          | Trusted and untrusted paths, including server-authoritative results.       |
-| [Data model](../architecture/DATA_MODEL.md)                                        | Important collections, projections, and ownership relationships.           |
-| [Authorization model](../architecture/AUTHORIZATION_MODEL.md)                      | Who may read or change each sensitive product area.                        |
-| [Role authorization decision](../architecture/ADR-001-role-authorization-model.md) | Why `event_creator` is event-scoped, not a global administrator.           |
-| [Environment isolation decision](../architecture/ADR-002-environment-isolation.md) | Why production is never the default development target.                    |
-| [Firestore schema assessment](../architecture/FIRESTORE_SCHEMA_ASSESSMENT.md)      | Data-shape risks, compatibility reads, and migration implications.         |
-| [Mobile path recommendation](../architecture/MOBILE_PATH_RECOMMENDATION.md)        | Product and engineering considerations for a future mobile surface.        |
+| Document                                                                              | Purpose                                                                    |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [System architecture](../../architecture/SYSTEM_ARCHITECTURE.md)                      | Current application structure, runtime services, and ownership boundaries. |
+| [Data flow](../../architecture/DATA_FLOW.md)                                          | Trusted and untrusted paths, including server-authoritative results.       |
+| [Data model](../../architecture/DATA_MODEL.md)                                        | Important collections, projections, and ownership relationships.           |
+| [Authorization model](../../architecture/AUTHORIZATION_MODEL.md)                      | Who may read or change each sensitive product area.                        |
+| [Role authorization decision](../../architecture/ADR-001-role-authorization-model.md) | Why `event_creator` is event-scoped, not a global administrator.           |
+| [Environment isolation decision](../../architecture/ADR-002-environment-isolation.md) | Why production is never the default development target.                    |
+| [Firestore schema assessment](../../architecture/FIRESTORE_SCHEMA_ASSESSMENT.md)      | Data-shape risks, compatibility reads, and migration implications.         |
+| [Mobile path recommendation](../../architecture/MOBILE_PATH_RECOMMENDATION.md)        | Product and engineering considerations for a future mobile surface.        |
 
 ### Product and business rules
 
-| Document                                              | Rule set                                                  |
-| ----------------------------------------------------- | --------------------------------------------------------- |
-| [Tournament rules](../domain/TOURNAMENT_RULES.md)     | Formats, participants, draws, and operating behavior.     |
-| [Scoring and points](../domain/SCORING_AND_POINTS.md) | Points, score fields, walkover, and no-show semantics.    |
-| [Round Robin rules](../domain/ROUND_ROBIN_RULES.md)   | Groups, standings, progression, and safe redraw behavior. |
-| [Rewards rules](../domain/REWARDS_RULES.md)           | Earning, redemption, cancellation, refund, and authority. |
-| [Contact privacy](../domain/CONTACT_PRIVACY.md)       | When contact information may be exposed and to whom.      |
+| Document                                                 | Rule set                                                  |
+| -------------------------------------------------------- | --------------------------------------------------------- |
+| [Tournament rules](../../domain/TOURNAMENT_RULES.md)     | Formats, participants, draws, and operating behavior.     |
+| [Scoring and points](../../domain/SCORING_AND_POINTS.md) | Points, score fields, walkover, and no-show semantics.    |
+| [Round Robin rules](../../domain/ROUND_ROBIN_RULES.md)   | Groups, standings, progression, and safe redraw behavior. |
+| [Rewards rules](../../domain/REWARDS_RULES.md)           | Earning, redemption, cancellation, refund, and authority. |
+| [Contact privacy](../../domain/CONTACT_PRIVACY.md)       | When contact information may be exposed and to whom.      |
 
 ### Engineering, operations, and recovery
 
-| Document                                                            | Purpose                                                             |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| [Maintainability](../engineering/MAINTAINABILITY.md)                | Strict typing, smaller modules, runtime normalization, and cleanup. |
-| [Security baseline](../engineering/SECURITY_BASELINE.md)            | Repository-local security evidence and external verification gaps.  |
-| [Local development](../engineering/LOCAL_DEVELOPMENT.md)            | Safe setup-to-browser-test workflow using synthetic data.           |
-| [Agent skills](../engineering/AGENT_SKILLS.md)                      | Approved specialist workflows for future engineering sessions.      |
-| [Backup and recovery](../runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md) | Recovery expectations, rollback thinking, and rehearsal needs.      |
-| [Email and DNS runbook](../runbooks/RESEND_DOMAIN_VERIFICATION.md)  | External provider and DNS work that remains approval-gated.         |
-| [Repository README](../../../README.md)                             | Main developer entry point, commands, and safety warnings.          |
+| Document                                                               | Purpose                                                             |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [Maintainability](../../engineering/MAINTAINABILITY.md)                | Strict typing, smaller modules, runtime normalization, and cleanup. |
+| [Security baseline](../../engineering/SECURITY_BASELINE.md)            | Repository-local security evidence and external verification gaps.  |
+| [Local development](../../engineering/LOCAL_DEVELOPMENT.md)            | Safe setup-to-browser-test workflow using synthetic data.           |
+| [Agent skills](../../engineering/AGENT_SKILLS.md)                      | Approved specialist workflows for future engineering sessions.      |
+| [Backup and recovery](../../runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md) | Recovery expectations, rollback thinking, and rehearsal needs.      |
+| [Email and DNS runbook](../../runbooks/RESEND_DOMAIN_VERIFICATION.md)  | External provider and DNS work that remains approval-gated.         |
+| [Repository README](../../../README.md)                                | Main developer entry point, commands, and safety warnings.          |
 
 ## All other system diagrams
 
 These diagrams provide deeper views. They remain separate so engineers can edit each source without
 making this founder overview unreadable.
 
-| Diagram                                                                                            | What to use it for                                                    |
-| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| [Current system architecture](../architecture/diagrams/current-system-architecture.md)             | Application, Firebase services, Functions, and external boundaries.   |
-| [Core data flow](../architecture/diagrams/core-data-flow.md)                                       | How important data moves through authorization and server processing. |
-| [Authorization boundaries](../architecture/diagrams/authorization-boundaries.md)                   | Member, event-manager, administrator, and server responsibilities.    |
-| [Firestore data model](../architecture/diagrams/firestore-data-model.md)                           | Major data groups and relationships.                                  |
-| [Modernization before and after](../architecture/diagrams/modernization-before-after.md)           | Earlier coupled design compared with the newer boundary-based design. |
-| [Target safe-delivery architecture](../architecture/diagrams/target-safe-delivery-architecture.md) | Intended local-to-staging-to-production approval flow.                |
+| Diagram                                                                                               | What to use it for                                                    |
+| ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| [Current system architecture](../../architecture/diagrams/current-system-architecture.md)             | Application, Firebase services, Functions, and external boundaries.   |
+| [Core data flow](../../architecture/diagrams/core-data-flow.md)                                       | How important data moves through authorization and server processing. |
+| [Authorization boundaries](../../architecture/diagrams/authorization-boundaries.md)                   | Member, event-manager, administrator, and server responsibilities.    |
+| [Firestore data model](../../architecture/diagrams/firestore-data-model.md)                           | Major data groups and relationships.                                  |
+| [Modernization before and after](../../architecture/diagrams/modernization-before-after.md)           | Earlier coupled design compared with the newer boundary-based design. |
+| [Target safe-delivery architecture](../../architecture/diagrams/target-safe-delivery-architecture.md) | Intended local-to-staging-to-production approval flow.                |
 
 ## Major implementation entry points
 

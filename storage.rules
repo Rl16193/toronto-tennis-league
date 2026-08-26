@@ -2,7 +2,7 @@ rules_version = '2';
 
 // NOTE: deploying this REPLACES the bucket's current console rules. Paste into
 // Firebase Console → Storage → Rules → Publish, or follow the explicit-project, approval-gated
-// workflow in docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md. Do not use a bare deploy command.
+// workflow in docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md. Do not use a bare deploy command.
 service firebase.storage {
   match /b/{bucket}/o {
 

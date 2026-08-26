@@ -57,14 +57,14 @@ checks. It does not deploy or access Firebase.
 
 ## Architecture pointers
 
-- Architecture index: `docs/archive/architecture/README.md`
-- Skills inventory: `docs/archive/engineering/AGENT_SKILLS.md`
-- Diagrams: `docs/archive/architecture/diagrams/`
+- Architecture index: `docs/architecture/README.md`
+- Skills inventory: `docs/engineering/AGENT_SKILLS.md`
+- Diagrams: `docs/architecture/diagrams/`
 - Firebase boundaries: `firestore.rules`, `storage.rules`, `firebase.json`, `.firebaserc`
 
 ## Skill routing
 
-- Architecture diagrams are maintained as Mermaid Markdown under `docs/archive/architecture/diagrams/`.
+- Architecture diagrams are maintained as Mermaid Markdown under `docs/architecture/diagrams/`.
 - Firebase/Auth/Firestore/Hosting/rules work → the relevant existing `.agents/skills/firebase-*` skill; use `firebase-security-rules-auditor` for rules review.
 - Architecture planning → `.agents/skills/gstack/plan-eng-review/SKILL.md`.
 - Bug investigation → `.agents/skills/gstack/investigate/SKILL.md`.

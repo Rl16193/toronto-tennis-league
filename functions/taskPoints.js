@@ -7,7 +7,7 @@
  * Both run in a transaction on tasks/{uid} so simultaneous results can't race. Points/tiers/badges
  * are awarded silently — only submission approvals/rejections notify.
  *
- * Deployment is environment-gated. Follow docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+ * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
  * do not use a bare Firebase deploy command from this checkout.
  */
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');

@@ -12,7 +12,7 @@
  * The `applied` stamp is written in the same transaction as the payout and checked first.
  * `status === 'confirmed'` is NOT proof of payment — the same defect already bit the RR +5 bonus.
  *
- * Deployment is environment-gated. Follow docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+ * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
  * do not use a bare Firebase deploy command from this checkout.
  */
 
