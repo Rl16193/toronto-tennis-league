@@ -9,6 +9,8 @@ material and must evolve with the code.
 - [Master backlog](BACKLOG.md) — the single sprint-planning queue for open, pending, and blocked
   work, with permanent `BLG####` identifiers.
 - [Future work](FUTURE-WORK.md) — product work intentionally outside the closed D1-D5 program.
+- [Sprint planning](planning/README.md) — the active D6–D7 planning package; planned work is not
+  completion evidence.
 - [Architecture](architecture/README.md) — system, data, authorization, environment, ADR, and
   Mermaid diagram references.
 - [Domain rules](domain/README.md) — tournament, scoring, Round Robin, rewards, and contact-privacy
