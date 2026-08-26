@@ -3,7 +3,7 @@
 This directory is the code-derived architecture record for Racquets & Strings. It describes the
 `dev-anuj` checkout and distinguishes current behavior from target safety improvements. The
 maintainability dependency map and quality-command contract live in
-`docs/engineering/MAINTAINABILITY.md`.
+`docs/archive/engineering/MAINTAINABILITY.md`.
 
 ## Reading order
 

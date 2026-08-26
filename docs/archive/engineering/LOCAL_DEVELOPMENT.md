@@ -68,7 +68,7 @@ Use any of these local-only accounts on `/login`:
 | Multi-role fixture | `multi-role-a@example.invalid` | `local-multi-role-a-123!` |
 
 The source of truth for credentials and seeded documents is
-[`tests/fixtures/local-fixtures.mjs`](../../tests/fixtures/local-fixtures.mjs). The seed command
+[`tests/fixtures/local-fixtures.mjs`](../../../tests/fixtures/local-fixtures.mjs). The seed command
 refuses a non-local Auth host or any project other than `rands-local`.
 
 ## Resolve occupied emulator ports
@@ -153,7 +153,7 @@ reward, friendly, and tournament mutations also remain covered at the callable/t
   orchestration, and server-authoritative writes.
 - Review [security baseline](SECURITY_BASELINE.md), `firestore.rules`, and `storage.rules` before
   changing a read or write boundary.
-- Follow the [migration framework](../../scripts/migrations/README.md). It is dry-run by default,
+- Follow the [migration framework](../../../scripts/migrations/README.md). It is dry-run by default,
   requires an explicit project, and never makes production implicit.
 
 ## Know what has and has not been verified

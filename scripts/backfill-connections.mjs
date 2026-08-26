@@ -10,7 +10,7 @@
  * every contact read fails for everyone:
  *
  *   1. Deploy the reviewed Functions using the explicit-project, approval-gated workflow in
- *      docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md.
+ *      docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md.
  *   2. node scripts/backfill-connections.mjs --project rands-staging --key serviceAccount.json
  *      node scripts/backfill-connections.mjs --project rands-staging --key serviceAccount.json --apply
  *   3. Deploy the reviewed Rules using the same explicit-project, approval-gated workflow.

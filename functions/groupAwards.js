@@ -9,7 +9,7 @@
  *
  * courts.json is the server-side courtKey → zone roster, GENERATED FROM
  * public/Tennis Courts Facilities - 4326.csv. Regenerate it if the CSV changes.
- * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+ * Deployment is environment-gated. Follow docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
  * do not use a bare Firebase deploy command from this checkout.
  */
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');

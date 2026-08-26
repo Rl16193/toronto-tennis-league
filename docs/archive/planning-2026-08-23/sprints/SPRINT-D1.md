@@ -207,7 +207,7 @@ The welcome email bypasses the non-production delivery gate. On `dev-anuj` — a
 
 **Deliverable, not code.**
 
-1. Write the deploy order (below) as an executable checklist in `docs/runbooks/`.
+1. Write the deploy order (below) as an executable checklist in `docs/archive/runbooks/`.
 2. **Diff the repo `firestore.rules` and `storage.rules` against the deployed console copies** and record the delta. Deployment is manual in this project, so the repo file is not necessarily what is enforcing anything right now. Every rules decision this week rests on knowing that delta.
 
 ```text

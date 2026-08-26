@@ -9,7 +9,7 @@
  * twice. Coupon codes ARE the redemption doc id, so uniqueness comes from create-if-absent
  * semantics. A deterministic per-user/per-offer lock also closes the duplicate-offer race.
  *
- * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+ * Deployment is environment-gated. Follow docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
  * do not run a bare `firebase deploy` from this production-sensitive checkout.
  */
 const { onCall, HttpsError } = require('firebase-functions/v2/https');

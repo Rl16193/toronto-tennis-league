@@ -1,12 +1,12 @@
 # dev-anuj Branch Conflicts
 
-| | |
-| --- | --- |
-| **Date** | 2026-08-21 (revised 2026-08-22) |
-| **Scope** | Code conflicts on the `dev-anuj` branch only. Product decisions live in `DECISIONS_BRIEF.md`; remodel corrections in `HARMONIZATION_REPORT.md`. |
+|                  |                                                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Date**         | 2026-08-21 (revised 2026-08-22)                                                                                                                        |
+| **Scope**        | Code conflicts on the `dev-anuj` branch only. Product decisions live in `DECISIONS_BRIEF.md`; remodel corrections in `HARMONIZATION_REPORT.md`.        |
 | **Environments** | `tbtctennis/Racquets-And-Strings` + `dev-anuj` is the **test environment**; the owner's repository on the `toronto-tennis-league` project is **live**. |
-| **Code links** | Permalinks to `dev-anuj` `3f40773`. |
-| **Status** | `BROKEN` fails at runtime · `GAP` required behaviour missing · `TRAP` operational hazard · `RESOLVED` decided |
+| **Code links**   | Permalinks to `dev-anuj` `3f40773`.                                                                                                                    |
+| **Status**       | `BROKEN` fails at runtime · `GAP` required behaviour missing · `TRAP` operational hazard · `RESOLVED` decided                                          |
 
 ## 1. Organizer score editing — `BROKEN`
 
@@ -76,27 +76,27 @@ Scoring has no fallback and the signup email check fails closed, so a wrong orde
 
 ## Docs to update
 
-| Docs | Correction |
-| --- | --- |
-| `DATA_FLOW` §2 · `DATA_MODEL` · `diagrams/core-data-flow` | No submission documents; reports are a pending block, nothing applies until the organizer ticks or denies. |
-| `DATA_FLOW` target-state | Unlimited organizer re-edits and the group-bonus toggle are mandated behaviour, not disabled controls. |
-| `REWARDS_RULES` · `DATA_MODEL` · `DATA_FLOW` §3 · `diagrams/core-data-flow` · `diagrams/firestore-data-model` | `services` catalog; `bookings` with `lead → in_progress → completed` + `cancelled`; only `points_spent` stored. |
+| Docs                                                                                                                                   | Correction                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATA_FLOW` §2 · `DATA_MODEL` · `diagrams/core-data-flow`                                                                              | No submission documents; reports are a pending block, nothing applies until the organizer ticks or denies.                                                                                                                                                      |
+| `DATA_FLOW` target-state                                                                                                               | Unlimited organizer re-edits and the group-bonus toggle are mandated behaviour, not disabled controls.                                                                                                                                                          |
+| `REWARDS_RULES` · `DATA_MODEL` · `DATA_FLOW` §3 · `diagrams/core-data-flow` · `diagrams/firestore-data-model`                          | `services` catalog; `bookings` with `lead → in_progress → completed` + `cancelled`; only `points_spent` stored.                                                                                                                                                 |
 | `CONTACT_PRIVACY` · `AUTHORIZATION_MODEL` · `DATA_MODEL` · `diagrams/authorization-boundaries` · `diagrams/modernization-before-after` | Event-scoped organizers + `providers` + owner-held admin; contacts readable by the event organizer (own sign-ups) and connections only; `public_contacts` is a channel-fields projection (the doc still calls it a marker — wrong about the branch's own code). |
-| `TOURNAMENT_RULES` "Removal from a draw" | Reset + withdrawal form replaces the purge; withdrawn players stay registered. |
-| `FIRESTORE_SCHEMA_ASSESSMENT` | Date-bearing scheduled-match indexes retire. |
-| `ROUND_ROBIN_RULES` · `SCORING_AND_POINTS` | One group is ≤ 5 players, not "fewer than three"; no-show is removed. |
+| `TOURNAMENT_RULES` "Removal from a draw"                                                                                               | Reset + withdrawal form replaces the purge; withdrawn players stay registered.                                                                                                                                                                                  |
+| `FIRESTORE_SCHEMA_ASSESSMENT`                                                                                                          | Date-bearing scheduled-match indexes retire.                                                                                                                                                                                                                    |
+| `ROUND_ROBIN_RULES` · `SCORING_AND_POINTS`                                                                                             | One group is ≤ 5 players, not "fewer than three"; no-show is removed.                                                                                                                                                                                           |
 
 ## Summary
 
-| # | Item | Status | Fix size | Blocking |
-| - | --- | --- | --- | --- |
-| 1 | Organizer score editing | `BROKEN` | Medium | Yes |
-| 2 | Score bounds | `GAP` | Small | Yes |
-| 3 | Ladder confirmation | `BROKEN` | Medium | Yes |
-| 4 | Group bonus | `BROKEN` | Small | Yes |
-| 5 | Organizer contact access | `GAP` | Small | Yes |
-| 6 | Deployment order | `TRAP` | Process | Checklist |
-| 7 | Zone at join | `RESOLVED` | Small | UI is future work |
+| #   | Item                     | Status     | Fix size | Blocking          |
+| --- | ------------------------ | ---------- | -------- | ----------------- |
+| 1   | Organizer score editing  | `BROKEN`   | Medium   | Yes               |
+| 2   | Score bounds             | `GAP`      | Small    | Yes               |
+| 3   | Ladder confirmation      | `BROKEN`   | Medium   | Yes               |
+| 4   | Group bonus              | `BROKEN`   | Small    | Yes               |
+| 5   | Organizer contact access | `GAP`      | Small    | Yes               |
+| 6   | Deployment order         | `TRAP`     | Process  | Checklist         |
+| 7   | Zone at join             | `RESOLVED` | Small    | UI is future work |
 
 ## Future works
 

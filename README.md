@@ -42,7 +42,7 @@ The template defaults to local emulators with a synthetic `rands-local` project 
 ## Local development
 
 The full fresh-checkout walkthrough, local credentials, alternate-port workflow, test matrix, and
-environment claim boundaries live in [Local development and verification](docs/engineering/LOCAL_DEVELOPMENT.md).
+environment claim boundaries live in [Local development and verification](docs/archive/engineering/LOCAL_DEVELOPMENT.md).
 
 Start the Emulator Suite in one terminal and the Vite app in another:
 
@@ -92,7 +92,7 @@ npm run seed:emulator # Seeds synthetic local Firestore data; emulator must be r
 cd functions && npm test # Pure Functions helper tests
 ```
 
-Project architecture and security validation gaps are tracked in [docs/engineering/SECURITY_BASELINE.md](docs/engineering/SECURITY_BASELINE.md). Email delivery safety and DNS verification steps are tracked in [docs/runbooks/RESEND_DOMAIN_VERIFICATION.md](docs/runbooks/RESEND_DOMAIN_VERIFICATION.md).
+Project architecture and security validation gaps are tracked in [docs/archive/engineering/SECURITY_BASELINE.md](docs/archive/engineering/SECURITY_BASELINE.md). Email delivery safety and DNS verification steps are tracked in [docs/archive/runbooks/RESEND_DOMAIN_VERIFICATION.md](docs/archive/runbooks/RESEND_DOMAIN_VERIFICATION.md).
 
 ## Firebase and deployment safety
 
@@ -119,19 +119,19 @@ The remaining environment work is to establish:
 
 ## Architecture and engineering guidance
 
-- [Architecture index](docs/architecture/README.md)
-- [System architecture](docs/architecture/SYSTEM_ARCHITECTURE.md)
-- [Data model](docs/architecture/DATA_MODEL.md)
-- [Data flow](docs/architecture/DATA_FLOW.md)
-- [Authorization model](docs/architecture/AUTHORIZATION_MODEL.md)
-- [Environment and delivery boundaries](docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md)
-- [Agent skills inventory](docs/engineering/AGENT_SKILLS.md)
-- [Local development and verification](docs/engineering/LOCAL_DEVELOPMENT.md)
-- [Maintainability map and quality commands](docs/engineering/MAINTAINABILITY.md)
-- [Security baseline](docs/engineering/SECURITY_BASELINE.md)
-- [Takeover stabilization log](docs/engineering/TAKEOVER_STABILIZATION_LOG.md)
-- [Firestore backup and recovery runbook](docs/runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md)
-- [Domain rules](docs/domain/TOURNAMENT_RULES.md)
+- [Architecture index](docs/archive/architecture/README.md)
+- [System architecture](docs/archive/architecture/SYSTEM_ARCHITECTURE.md)
+- [Data model](docs/archive/architecture/DATA_MODEL.md)
+- [Data flow](docs/archive/architecture/DATA_FLOW.md)
+- [Authorization model](docs/archive/architecture/AUTHORIZATION_MODEL.md)
+- [Environment and delivery boundaries](docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md)
+- [Agent skills inventory](docs/archive/engineering/AGENT_SKILLS.md)
+- [Local development and verification](docs/archive/engineering/LOCAL_DEVELOPMENT.md)
+- [Maintainability map and quality commands](docs/archive/engineering/MAINTAINABILITY.md)
+- [Security baseline](docs/archive/engineering/SECURITY_BASELINE.md)
+- [Takeover stabilization log](docs/archive/engineering/TAKEOVER_STABILIZATION_LOG.md)
+- [Firestore backup and recovery runbook](docs/archive/runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md)
+- [Domain rules](docs/archive/domain/TOURNAMENT_RULES.md)
 
 Use the project-local skills under `.agents/skills/` for Firebase work, architecture diagrams, security review, investigation, QA, and documentation. Keep commits issue-sized and push completed work only to `origin/dev-anuj`.
 

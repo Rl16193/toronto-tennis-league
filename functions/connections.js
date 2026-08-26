@@ -10,7 +10,7 @@
  * every contact read starts failing.
  *
  * Connections are permanent: revoking on match completion would strand people mid-arrangement.
- * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+ * Deployment is environment-gated. Follow docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
  * do not use a bare Firebase deploy command from this checkout.
  */
 const { onDocumentWritten } = require('firebase-functions/v2/firestore');

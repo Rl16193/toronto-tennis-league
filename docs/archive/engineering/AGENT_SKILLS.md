@@ -25,7 +25,7 @@ Source: `firebase/agent-skills` on GitHub. These are existing project-local skil
 
 ## Architecture diagrams
 
-- Canonical format: Mermaid fenced blocks in `docs/architecture/diagrams/*.md`.
+- Canonical format: Mermaid fenced blocks in `docs/archive/architecture/diagrams/*.md`.
 - Rendered HTML/SVG exports and the project-local diagram-generation skill are intentionally not part of the project workflow.
 
 ## gstack

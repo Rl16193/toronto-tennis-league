@@ -5,25 +5,25 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const requiredDocs = [
-  'docs/architecture/README.md',
-  'docs/architecture/SYSTEM_ARCHITECTURE.md',
-  'docs/architecture/DATA_FLOW.md',
-  'docs/architecture/DATA_MODEL.md',
-  'docs/architecture/AUTHORIZATION_MODEL.md',
-  'docs/architecture/FIRESTORE_SCHEMA_ASSESSMENT.md',
-  'docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md',
-  'docs/architecture/ADR-001-role-authorization-model.md',
-  'docs/architecture/ADR-002-environment-isolation.md',
-  'docs/engineering/AGENT_SKILLS.md',
-  'docs/engineering/MAINTAINABILITY.md',
-  'docs/engineering/SECURITY_BASELINE.md',
-  'docs/engineering/LOCAL_DEVELOPMENT.md',
-  'docs/runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md',
-  'docs/domain/TOURNAMENT_RULES.md',
-  'docs/domain/ROUND_ROBIN_RULES.md',
-  'docs/domain/SCORING_AND_POINTS.md',
-  'docs/domain/REWARDS_RULES.md',
-  'docs/domain/CONTACT_PRIVACY.md',
+  'docs/archive/architecture/README.md',
+  'docs/archive/architecture/SYSTEM_ARCHITECTURE.md',
+  'docs/archive/architecture/DATA_FLOW.md',
+  'docs/archive/architecture/DATA_MODEL.md',
+  'docs/archive/architecture/AUTHORIZATION_MODEL.md',
+  'docs/archive/architecture/FIRESTORE_SCHEMA_ASSESSMENT.md',
+  'docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md',
+  'docs/archive/architecture/ADR-001-role-authorization-model.md',
+  'docs/archive/architecture/ADR-002-environment-isolation.md',
+  'docs/archive/engineering/AGENT_SKILLS.md',
+  'docs/archive/engineering/MAINTAINABILITY.md',
+  'docs/archive/engineering/SECURITY_BASELINE.md',
+  'docs/archive/engineering/LOCAL_DEVELOPMENT.md',
+  'docs/archive/runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md',
+  'docs/archive/domain/TOURNAMENT_RULES.md',
+  'docs/archive/domain/ROUND_ROBIN_RULES.md',
+  'docs/archive/domain/SCORING_AND_POINTS.md',
+  'docs/archive/domain/REWARDS_RULES.md',
+  'docs/archive/domain/CONTACT_PRIVACY.md',
 ];
 
 const documentationRequirements = [
@@ -36,22 +36,25 @@ const documentationRequirements = [
       'scripts/start-emulators.mjs',
       'scripts/deploy-hosting.mjs',
     ],
-    docs: ['docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md', 'docs/architecture/SYSTEM_ARCHITECTURE.md'],
+    docs: [
+      'docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md',
+      'docs/archive/architecture/SYSTEM_ARCHITECTURE.md',
+    ],
   },
   {
     paths: ['firestore.rules', 'storage.rules'],
     docs: [
-      'docs/architecture/AUTHORIZATION_MODEL.md',
-      'docs/architecture/DATA_MODEL.md',
-      'docs/engineering/SECURITY_BASELINE.md',
+      'docs/archive/architecture/AUTHORIZATION_MODEL.md',
+      'docs/archive/architecture/DATA_MODEL.md',
+      'docs/archive/engineering/SECURITY_BASELINE.md',
     ],
   },
   {
     paths: ['functions/lib', 'functions/rewards.js', 'functions/accountLookup.js', 'functions/connections.js'],
     docs: [
-      'docs/architecture/AUTHORIZATION_MODEL.md',
-      'docs/engineering/SECURITY_BASELINE.md',
-      'docs/engineering/MAINTAINABILITY.md',
+      'docs/archive/architecture/AUTHORIZATION_MODEL.md',
+      'docs/archive/engineering/SECURITY_BASELINE.md',
+      'docs/archive/engineering/MAINTAINABILITY.md',
     ],
   },
   {
@@ -63,14 +66,18 @@ const documentationRequirements = [
       'src/features/tournament',
       'src/pages/tournament',
     ],
-    docs: ['docs/architecture/DATA_FLOW.md', 'docs/architecture/DATA_MODEL.md', 'docs/engineering/MAINTAINABILITY.md'],
+    docs: [
+      'docs/archive/architecture/DATA_FLOW.md',
+      'docs/archive/architecture/DATA_MODEL.md',
+      'docs/archive/engineering/MAINTAINABILITY.md',
+    ],
   },
   {
     paths: ['scripts/migrations'],
     docs: [
-      'docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md',
-      'docs/engineering/MAINTAINABILITY.md',
-      'docs/runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md',
+      'docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md',
+      'docs/archive/engineering/MAINTAINABILITY.md',
+      'docs/archive/runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md',
     ],
   },
   {
@@ -89,10 +96,10 @@ const documentationRequirements = [
       'scripts/snapshot-ranks.mjs',
     ],
     docs: [
-      'docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md',
-      'docs/engineering/SECURITY_BASELINE.md',
-      'docs/engineering/MAINTAINABILITY.md',
-      'docs/runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md',
+      'docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md',
+      'docs/archive/engineering/SECURITY_BASELINE.md',
+      'docs/archive/engineering/MAINTAINABILITY.md',
+      'docs/archive/runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md',
     ],
   },
 ];
@@ -161,7 +168,7 @@ const main = async () => {
     );
   }
 
-  const readme = await readFile(path.join(root, 'docs/architecture/README.md'), 'utf8');
+  const readme = await readFile(path.join(root, 'docs/archive/architecture/README.md'), 'utf8');
   for (const requiredLink of ['SYSTEM_ARCHITECTURE.md', 'DATA_FLOW.md', 'ENVIRONMENTS_AND_DEPLOYMENT.md']) {
     if (!readme.includes(requiredLink)) throw new Error(`Architecture README does not link ${requiredLink}.`);
   }

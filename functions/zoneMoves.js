@@ -17,7 +17,7 @@
  * So this trigger's only job is the notification in case 1. Removing the player was the wrong
  * model and is deliberately absent: a player is never pulled out of matches that already exist.
  *
- * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+ * Deployment is environment-gated. Follow docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
  * do not use a bare Firebase deploy command from this checkout.
  */
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');

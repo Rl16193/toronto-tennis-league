@@ -12,7 +12,7 @@
  * instances require a valid App Check token so this cannot be scraped as an open callable.
  * The Functions emulator bypasses App Check to keep synthetic local signup testing possible.
  *
- * Deployment is environment-gated. Follow docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
+ * Deployment is environment-gated. Follow docs/archive/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md;
  * do not use a bare Firebase deploy command from this checkout.
  */
 const nodeCrypto = require('node:crypto');

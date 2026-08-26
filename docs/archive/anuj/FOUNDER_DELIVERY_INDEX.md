@@ -1,13 +1,17 @@
 # Founder Technical Overview
 
+> **Archive status (2026-08-25):** Completed `dev-anuj` takeover evidence. Every unfinished outcome
+> identified here is represented in the active [master backlog](../../BACKLOG.md).
+
 One visual reference for the current system, delivered engineering work, target state, validation
 coverage, important technical documents, and open work on
 [`dev-anuj`](https://github.com/tbtctennis/Racquets-And-Strings/tree/dev-anuj).
 
-- **Last reviewed:** 2026-08-19
-- **Delivery baseline:** `e960dae493b41326406fea5b2baace040d3f4631`
-- **Delivery scale represented here:** 49 issue-sized commits and 195 changed first-party paths,
-  including this update
+- **Last reviewed:** 2026-08-25
+- **DC00 evidence window:** `4aaf515^..21ddf73`
+- **DC00 delivery scale:** 121 commits, 1,727 changed paths, and 444,481 lines of total churn. The
+  scoped first-party working set is 289 paths and 38,530 lines of churn. See the
+  [DC00 foundation reconciliation](DC00-DEV-ANUJ-FOUNDATION.md) for definitions and comparisons.
 - **Branch status:** Development work is delivered on `dev-anuj`
 - **Review status:** Repository-local PASS is not yet declared. A complete clean verification run and
   four independent approvals on the same final commit remain pending.
@@ -187,7 +191,8 @@ flowchart TD
 | Founder question                         | Document                                                                                                    | What it explains                                                                        |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | What was delivered and what remains?     | [Takeover stabilization log](../engineering/TAKEOVER_STABILIZATION_LOG.md)                                  | Chronological delivery evidence, validation history, safety boundaries, and open gates. |
-| How did the repository structure change? | [File structure comparison](./FILE_STRUCTURE_COMPARISON.md)                                                 | Version 0 and `dev-anuj` trees, file counts, new boundaries, and tooling changes.       |
+| How did the repository structure change? | [Archived file structure comparison](../planning-2026-08-23/anuj/FILE_STRUCTURE_COMPARISON.md)              | Historical Version 0 and `dev-anuj` comparison from the closed planning package.        |
+| What remains after D1–D5?                | [Master backlog](../../BACKLOG.md) and [future work](../../FUTURE-WORK.md)                                  | Permanent `BLG####` IDs, source task/bug references, status and promotion rules.        |
 | How is the system organized?             | [Architecture index](../architecture/README.md)                                                             | The map for architecture, data, authorization, environments, and diagrams.              |
 | What protects sensitive workflows?       | [Security baseline](../engineering/SECURITY_BASELINE.md)                                                    | Source-level controls, verified boundaries, limitations, and external validation.       |
 | Who can do what?                         | [Authorization model](../architecture/AUTHORIZATION_MODEL.md)                                               | Member, event-manager, administrator, and server permissions.                           |
@@ -228,7 +233,7 @@ flowchart TD
 | [Agent skills](../engineering/AGENT_SKILLS.md)                      | Approved specialist workflows for future engineering sessions.      |
 | [Backup and recovery](../runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md) | Recovery expectations, rollback thinking, and rehearsal needs.      |
 | [Email and DNS runbook](../runbooks/RESEND_DOMAIN_VERIFICATION.md)  | External provider and DNS work that remains approval-gated.         |
-| [Repository README](../../README.md)                                | Main developer entry point, commands, and safety warnings.          |
+| [Repository README](../../../README.md)                             | Main developer entry point, commands, and safety warnings.          |
 
 ## All other system diagrams
 
@@ -246,40 +251,40 @@ making this founder overview unreadable.
 
 ## Major implementation entry points
 
-| Business capability         | Primary files                                                                                                                                                                                                                                                                     | Outcome                                                                                            |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Tournament result authority | [`tournamentResults.js`](../../functions/tournamentResults.js), [`tournamentResult.js`](../../functions/lib/tournamentResult.js), [`tournamentResultService.ts`](../../src/features/tournament/services/tournamentResultService.ts)                                               | Server transaction validates and applies results, advancement, statistics, points, and duplicates. |
-| Tournament maintainability  | [`scoreSubmission.ts`](../../src/features/tournament/domain/scoreSubmission.ts), [`tournamentPersistence.ts`](../../src/features/tournament/services/tournamentPersistence.ts), [`tournamentSubscriptions.ts`](../../src/features/tournament/services/tournamentSubscriptions.ts) | Validation, persistence, and subscriptions are separated from the route.                           |
-| Firestore trust boundaries  | [`firestoreNormalization.ts`](../../src/lib/firestoreNormalization.ts)                                                                                                                                                                                                            | External data is normalized before product code uses it.                                           |
-| Signup bootstrap            | [`profilePersistence.ts`](../../src/features/signup/profilePersistence.ts), [`signupProfileDocuments.ts`](../../src/features/signup/signupProfileDocuments.ts)                                                                                                                    | Multi-document profile creation is atomic and outside the screen component.                        |
-| Rewards                     | [`rewards.js`](../../functions/rewards.js), [`redemptionState.js`](../../functions/lib/redemptionState.js), [`redemptionLock.js`](../../functions/lib/redemptionLock.js)                                                                                                          | Balances, duplicate prevention, refunds, and cancellation stay server-authoritative.               |
-| Friendly match points       | [`friendlyPoints.js`](../../functions/friendlyPoints.js), [`friendlyResult.js`](../../functions/lib/friendlyResult.js)                                                                                                                                                            | Points require valid participants and genuine confirmation.                                        |
-| Account lookup              | [`accountLookup.js`](../../functions/accountLookup.js)                                                                                                                                                                                                                            | Deployed lookup requires App Check while local emulator development remains possible.              |
-| Event access                | [`eventRepository.ts`](../../src/features/events/services/eventRepository.ts), [`eventService.ts`](../../src/features/events/services/eventService.ts)                                                                                                                            | Event and participant access use explicit repository and service boundaries.                       |
+| Business capability         | Primary files                                                                                                                                                                                                                                                                              | Outcome                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Tournament result authority | [`tournamentResults.js`](../../../functions/tournamentResults.js), [`tournamentResult.js`](../../../functions/lib/tournamentResult.js), [`tournamentResultService.ts`](../../../src/features/tournament/services/tournamentResultService.ts)                                               | Server transaction validates and applies results, advancement, statistics, points, and duplicates. |
+| Tournament maintainability  | [`scoreSubmission.ts`](../../../src/features/tournament/domain/scoreSubmission.ts), [`tournamentPersistence.ts`](../../../src/features/tournament/services/tournamentPersistence.ts), [`tournamentSubscriptions.ts`](../../../src/features/tournament/services/tournamentSubscriptions.ts) | Validation, persistence, and subscriptions are separated from the route.                           |
+| Firestore trust boundaries  | [`firestoreNormalization.ts`](../../../src/lib/firestoreNormalization.ts)                                                                                                                                                                                                                  | External data is normalized before product code uses it.                                           |
+| Signup bootstrap            | [`profilePersistence.ts`](../../../src/features/signup/profilePersistence.ts), [`signupProfileDocuments.ts`](../../../src/features/signup/signupProfileDocuments.ts)                                                                                                                       | Multi-document profile creation is atomic and outside the screen component.                        |
+| Rewards                     | [`rewards.js`](../../../functions/rewards.js), [`redemptionState.js`](../../../functions/lib/redemptionState.js), [`redemptionLock.js`](../../../functions/lib/redemptionLock.js)                                                                                                          | Balances, duplicate prevention, refunds, and cancellation stay server-authoritative.               |
+| Friendly match points       | [`friendlyPoints.js`](../../../functions/friendlyPoints.js), [`friendlyResult.js`](../../../functions/lib/friendlyResult.js)                                                                                                                                                               | Points require valid participants and genuine confirmation.                                        |
+| Account lookup              | [`accountLookup.js`](../../../functions/accountLookup.js)                                                                                                                                                                                                                                  | Deployed lookup requires App Check while local emulator development remains possible.              |
+| Event access                | [`eventRepository.ts`](../../../src/features/events/services/eventRepository.ts), [`eventService.ts`](../../../src/features/events/services/eventService.ts)                                                                                                                               | Event and participant access use explicit repository and service boundaries.                       |
 
 ## Security and delivery enforcement
 
-| File                                          | Why it matters                                                                                              |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| [`firestore.rules`](../../firestore.rules)    | Enforces data access, event scope, private projections, protected statistics, and client intent boundaries. |
-| [`storage.rules`](../../storage.rules)        | Enforces public, authenticated, and owner-only paths plus type and size limits.                             |
-| [`firebase.json`](../../firebase.json)        | Defines local emulator and Firebase surfaces.                                                               |
-| [`.firebaserc`](../../.firebaserc)            | Makes project selection visible and avoids an implicit production workflow.                                 |
-| [CI workflow](../../.github/workflows/ci.yml) | Runs the same repository verifier without deploying.                                                        |
-| [`package.json`](../../package.json)          | Holds canonical install, verify, emulator, Rules, integration, and browser commands.                        |
-| [`verify.mjs`](../../scripts/verify.mjs)      | Orchestrates the reliable local and CI gates.                                                               |
+| File                                             | Why it matters                                                                                              |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| [`firestore.rules`](../../../firestore.rules)    | Enforces data access, event scope, private projections, protected statistics, and client intent boundaries. |
+| [`storage.rules`](../../../storage.rules)        | Enforces public, authenticated, and owner-only paths plus type and size limits.                             |
+| [`firebase.json`](../../../firebase.json)        | Defines local emulator and Firebase surfaces.                                                               |
+| [`.firebaserc`](../../../.firebaserc)            | Makes project selection visible and avoids an implicit production workflow.                                 |
+| [CI workflow](../../../.github/workflows/ci.yml) | Runs the same repository verifier without deploying.                                                        |
+| [`package.json`](../../../package.json)          | Holds canonical install, verify, emulator, Rules, integration, and browser commands.                        |
+| [`verify.mjs`](../../../scripts/verify.mjs)      | Orchestrates the reliable local and CI gates.                                                               |
 
 ## Test evidence index
 
-| Coverage area                  | Evidence                                                                                                                                             |               Configured reliable count |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------: |
-| Root domain and boundary tests | [`tests/unit/`](../../tests/unit/)                                                                                                                   |                                      35 |
-| Functions unit tests           | [`functions/test/`](../../functions/test/)                                                                                                           |                                      27 |
-| Firestore Rules                | [`firestore.rules.test.mjs`](../../tests/rules/firestore.rules.test.mjs), [`firestore.matrix.test.mjs`](../../tests/rules/firestore.matrix.test.mjs) |                                      29 |
-| Storage Rules                  | [`storage.rules.test.mjs`](../../tests/rules/storage.rules.test.mjs)                                                                                 |                                       5 |
-| Functions emulator integration | [`functions.emulator.test.mjs`](../../tests/integration/functions.emulator.test.mjs)                                                                 |                                      11 |
-| Browser journeys               | [`local-emulator.spec.ts`](../../tests/e2e/local-emulator.spec.ts)                                                                                   |                                       5 |
-| Synthetic data                 | [`local-fixtures.mjs`](../../tests/fixtures/local-fixtures.mjs)                                                                                      | 4 Auth users and 32 Firestore documents |
+| Coverage area                  | Evidence                                                                                                                                                   |               Configured reliable count |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------: |
+| Root domain and boundary tests | [`tests/unit/`](../../../tests/unit/)                                                                                                                      |                                      35 |
+| Functions unit tests           | [`functions/test/`](../../../functions/test/)                                                                                                              |                                      27 |
+| Firestore Rules                | [`firestore.rules.test.mjs`](../../../tests/rules/firestore.rules.test.mjs), [`firestore.matrix.test.mjs`](../../../tests/rules/firestore.matrix.test.mjs) |                                      29 |
+| Storage Rules                  | [`storage.rules.test.mjs`](../../../tests/rules/storage.rules.test.mjs)                                                                                    |                                       5 |
+| Functions emulator integration | [`functions.emulator.test.mjs`](../../../tests/integration/functions.emulator.test.mjs)                                                                    |                                      11 |
+| Browser journeys               | [`local-emulator.spec.ts`](../../../tests/e2e/local-emulator.spec.ts)                                                                                      |                                       5 |
+| Synthetic data                 | [`local-fixtures.mjs`](../../../tests/fixtures/local-fixtures.mjs)                                                                                         | 4 Auth users and 32 Firestore documents |
 
 ## Update rule for this file
 

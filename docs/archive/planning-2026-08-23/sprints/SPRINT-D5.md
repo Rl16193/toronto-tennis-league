@@ -243,7 +243,7 @@ Union whitelists throughout. Functions deploy individually. `tbtc` is the **test
 | Burn-down   | `uisummary_report.md`'s counts and `DEV_ANUJ_CONFLICTS.md`'s Summary flipped for every closed row. The line _"Nothing here has been implemented"_ is the burn-down — update it            |
 | Amendments  | `HARMONIZATION_REPORT.md` [D4](../notes/HARMONIZATION_REPORT.md#D4), `WORKFLOW_DESIGN_REPORT.md` §1 and `DECISIONS_BRIEF.md` §1 carry the dated auto-approval amendment                   |
 | `CLAUDE.md` | Design canon, the corrected walkover payout, the organizer-controlled knockout ([KO-3](../ACTION-REPORT.md#KO-3)), the test commands, and the removal of _"There are no automated tests"_ |
-| Open        | Everything still unscheduled is in `docs/FUTURE-WORK.md`, including the 15 design questions in §8 that block specific rows                                                                |
+| Open        | The original unscheduled register is archived as `../FUTURE-WORK-original.md`; current status is in `docs/FUTURE-WORK.md` with permanent `BLG####` IDs.                                   |
 
 ### ⬛ Exit gate — the week
 
@@ -261,4 +261,4 @@ Union whitelists throughout. Functions deploy individually. `tbtc` is the **test
 
 ## What is deliberately not finished
 
-`docs/FUTURE-WORK.md`, in full. The two largest: the **mobile app vs PWA decision ([PD9](../notes/DECISIONS_BRIEF.md#PD9))** with push notifications behind it, and the **backup and restore policy ([PD8](../notes/DECISIONS_BRIEF.md#PD8))** — both deferred by you, and PD8 in particular still means every destructive pass this week ran against the only copy of the data.
+The original future-work register is preserved as [`../FUTURE-WORK-original.md`](../FUTURE-WORK-original.md). Current status is maintained in [`docs/FUTURE-WORK.md`](../../../FUTURE-WORK.md). The two largest remain the **mobile app vs PWA decision ([PD9](../notes/DECISIONS_BRIEF.md#PD9))** with push notifications behind it, and the **backup and restore policy ([PD8](../notes/DECISIONS_BRIEF.md#PD8))**.
