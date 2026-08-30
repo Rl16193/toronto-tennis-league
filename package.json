@@ -31,7 +31,10 @@
     "design:verify": "node scripts/verify-design-d3.mjs",
     "functions:syntax": "node scripts/check-functions-syntax.mjs",
     "migrations:example": "node scripts/migrations/001-example.mjs",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "dataset:build": "node scripts/build-sample-dataset.mjs",
+    "seed:dataset": "node tests/fixtures/seed-dataset.mjs",
+    "dataset:xlsx": "node scripts/export-dataset-xlsx.mjs"
   },
   "dependencies": {
     "@intl-tel-input/react": "^29.1.2",

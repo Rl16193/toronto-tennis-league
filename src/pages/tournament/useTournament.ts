@@ -1375,7 +1375,7 @@ export const useTournament = (eventIdOverride?: string) => {
     await persistDrawDocuments(drawDocuments, byeAdvances);
   };
 
-  const updateMatchWithSubmission = async (match: TournamentMatch, submission: ScoreSubmission, isWalkover = false) =>
+  const updateMatchWithSubmission = async (match: TournamentMatch, submission: ScoreSubmission, walkover = false) =>
     applyTournamentResult({
       matchId: match.id,
       winnerUid: submission.claimed_winner_uid || undefined,
@@ -1384,7 +1384,7 @@ export const useTournament = (eventIdOverride?: string) => {
         [submission.set_2_player_1, submission.set_2_player_2],
         [submission.set_3_player_1, submission.set_3_player_2],
       ],
-      walkover: isWalkover,
+      walkover,
       court: submission.court,
     });
 
@@ -1543,7 +1543,7 @@ export const useTournament = (eventIdOverride?: string) => {
       return;
     }
     try {
-      const result = await updateMatchWithSubmission(match, built.intent.submission, built.intent.isWalkover);
+      const result = await updateMatchWithSubmission(match, built.intent.submission, built.intent.walkover);
       setScoreForm(null);
       setMessage(
         result.disputed

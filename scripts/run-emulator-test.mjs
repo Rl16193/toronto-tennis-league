@@ -67,10 +67,14 @@ const main = async () => {
     env.STORAGE_EMULATOR_PORT = String(port);
   }
 
-  const command = path.join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'firebase.cmd' : 'firebase');
+// Spawn the CLI's JS entrypoint with the running Node binary, NOT the node_modules/.bin
+// shim: Node refuses to spawn a .cmd without `shell: true` (CVE-2024-27980), which made
+// every emulator command fail with EINVAL on Windows.
+  const command = path.join(root, 'node_modules', 'firebase-tools', 'lib', 'bin', 'firebase.js');
   const child = spawn(
-    command,
+    process.execPath,
     [
+      command,
       'emulators:exec',
       '--config',
       configPath,

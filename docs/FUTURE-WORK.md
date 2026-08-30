@@ -1,115 +1,53 @@
-# Future work
+# Future work register
 
-| | |
-| --- | --- |
-| **Date** | 2026-08-23 |
-| **Scope** | Everything agreed in direction but **deliberately not scheduled**. Nothing here is in the Mon 24 – Fri 28 sprint week. |
-| **Collected from** | `DECISIONS_BRIEF.md` · `DEV_ANUJ_CONFLICTS.md` · `HARMONIZATION_REPORT.md` · `WORKFLOW_DESIGN_REPORT.md` · `ACTION-REPORT.md` |
-| **Rule** | An item leaves this file only by being written into a sprint. Nothing here is "do it if there's time". |
+This is the active register for work that is intentionally outside the closed D1–D5 sprint package. Every row has a permanent backlog ID. `Future Task/Bug ID` stays blank until the row is promoted into an active sprint or implementation ticket.
 
----
+| Backlog ID | Source Ref                        | Source Task ID            | Source Bug ID | Status  | Future Task/Bug ID | Future work item                                                              | Acceptance / closure evidence                                                                                            |
+| ---------- | --------------------------------- | ------------------------- | ------------- | ------- | ------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| BLG0001    | T1 / WDR §4                       | TSK0022                   |               | Pending |                    | Generate every populated tournament draw in one action                        | Organizer can preview and generate all eligible draws safely; partial failure is reported and retryable.                 |
+| BLG0002    | T2 / PD3                          |                           |               | Pending |                    | Link tournament participants to member profiles                               | Authorized members can open an eligible participant profile directly from the draw without exposing restricted profiles. |
+| BLG0003    | T3 / Conflicts §5                 |                           | BUG0011       | Pending |                    | Add organizer-overview contact action                                         | Organizer overview exposes approved contact channels and respects privacy/connection rules.                              |
+| BLG0004    | T4 / Conflicts §5                 |                           | BUG0011       | Closed  |                    | Add contacts to bracket-image exports                                         | Closed by `src/pages/tournament/bracketImage.ts`, which renders approved phone/email contact columns in exports.         |
+| BLG0005    | T5 / WDR backlog                  |                           | BUG0002       | Pending |                    | Remove Player-Loading placeholder participants                                | Single-player groups remain visible and movable without persisted placeholder people or matches.                         |
+| BLG0006    | T6 / WDR backlog                  | TSK0017                   |               | Pending |                    | Link Joined status to the applicable draw                                     | Joined state opens the correct event, draw, division and zone while preserving visibility rules.                         |
+| BLG0007    | T7 / WDR weekly reminder          |                           | BUG0014       | Pending |                    | Itemize weekly reminders by opponent and date                                 | Reminder lists distinct opponents and dates with bounded reads and notification deduplication.                           |
+| BLG0008    | M1 / WDR §2                       | TSK0006                   | BUG0009       | Pending |                    | Route challenge and rally reporting through the authoritative result callable | Challenges, rallies and tournament results share validated server-authoritative reporting semantics.                     |
+| BLG0009    | M2 / WDR §2                       |                           | BUG0009       | Pending |                    | Make reject and cancel semantics durable                                      | Rejected items stay hidden after refresh; accepted cancellations notify the other player.                                |
+| BLG0010    | M3 / WDR §2                       |                           | BUG0014       | Pending |                    | Give challenge notifications rally parity                                     | Declined, confirmed and denied challenge events are deduplicated and visible through approved channels.                  |
+| BLG0011    | M4 / WDR §2                       |                           | BUG0009       | Blocked |                    | Choose and implement one Challenge entry point                                | Product decision selects the surviving entry point; blocked reasons appear in the Challenges tab.                        |
+| BLG0012    | Z1 / PD2                          |                           | BUG0015       | Pending |                    | Add runtime-editable court and zone resolution workflow                       | Authorized admins can add a court, resolve its zone and audit the change without editing shipped source data.            |
+| BLG0013    | Z2 / Q-12 / CS-39                 |                           | BUG0013       | Blocked |                    | Generate one authoritative court roster from the shipped CSV                  | Decide the canonical source, generate derived lists, and fail validation when counts drift.                              |
+| BLG0014    | P1 / RT-7                         |                           | BUG0012       | Pending |                    | Restore the intended `next=` path after login                                 | Successful authentication returns to the validated in-app destination or a safe default.                                 |
+| BLG0015    | P2 / WDR §7                       |                           | BUG0004       | Pending |                    | Support change-email for OAuth-only accounts                                  | Reauthentication and email change work for supported OAuth providers with clear recovery errors.                         |
+| BLG0016    | P3 / WDR §7                       | TSK0021                   |               | Pending |                    | Complete the profile availability editor                                      | Members can edit the full availability model, not only the `available_to_play` toggle.                                   |
+| BLG0017    | P4 / Harmonization future works   | TSK0026                   |               | Pending |                    | Add an organizer-assignment audit trail                                       | Every `organizer_ids` change records actor, target, before/after state and time.                                         |
+| BLG0018    | S1 / WDR §8                       | TSK0027                   |               | Pending |                    | Add a past-bookings section                                                   | Completed and cancelled bookings appear below open bookings with stable ordering and status labels.                      |
+| BLG0019    | E1 / WDR §6                       | TSK0017                   |               | Blocked |                    | Simplify event types and the creation modal                                   | Product detail pass approves event taxonomy and the modal implements the approved fields and validation.                 |
+| BLG0020    | X1 / PD9                          |                           |               | Blocked |                    | Decide mobile app versus PWA                                                  | Produce a costed capability estimate and record the approved platform decision; no offline behavior is implied.          |
+| BLG0021    | X2 / WDR §10 / PD9                |                           | BUG0014       | Blocked |                    | Add push notifications                                                        | Depends on BLG0020; opt-in, delivery, dedupe and fallback behavior are verified.                                         |
+| BLG0022    | X3 / PD7                          | TSK0030                   |               | Blocked |                    | Establish a staging tier                                                      | Owner approves environment boundary; isolated configuration and non-production validation are documented.                |
+| BLG0023    | X4 / PD8                          | TSK0030                   |               | Blocked |                    | Approve and test backup/restore policy                                        | Recovery targets, ownership and a non-production restore exercise are recorded. Existing runbook is documentation only.  |
+| BLG0024    | X5 / Harmonization future works   | TSK0023, TSK0030          |               | Pending |                    | Make recompute-and-diff a first-class migration step                          | Migration framework invokes reconciliation consistently and blocks completion on unexplained drift.                      |
+| BLG0025    | X6 / Harmonization future works   | TSK0017                   |               | Pending |                    | Define uniform null-filled schemas for a future database migration            | Only activate if the persistence platform changes; schema contract and migration path must be approved first.            |
+| BLG0026    | Q-2 / BT-9, BT-10, BT-17          | TSK0012, TSK0013, TSK0025 |               | Blocked |                    | Decide expanded-control clearance                                             | Canon states and automated checks enforce `gap >= 44 - painted height` on the expanded axis.                             |
+| BLG0027    | Q-3 / BT-15                       | TSK0012, TSK0015          |               | Blocked |                    | Decide whether hit expansion applies to bracket/RR rows                       | Approved scope avoids overlapping vertical targets and is reflected in components and tests.                             |
+| BLG0028    | Q-5 / BT-22                       | TSK0013, TSK0025          |               | Blocked |                    | Resolve 16px versus pill control corners                                      | Canon and components agree on the approved radius; pill styling remains reserved consistently.                           |
+| BLG0029    | Q-7 / TY-2                        | TSK0011, TSK0025          |               | Blocked |                    | Resolve marketing display type exception                                      | Canon names the allowed display size and automated checks permit only the approved exception.                            |
+| BLG0030    | Q-11 / TY-8                       | TSK0015, TSK0025          |               | Closed  |                    | Fix BottomNav Marketplace label overflow                                      | Closed by `src/components/BottomNav.tsx`: active label has no wide tracking and fits the five-column layout.             |
+| BLG0031    | Q-12 / CS-39                      |                           | BUG0013       | Blocked |                    | Choose the authoritative court roster                                         | Duplicate decision record for BLG0013 retained for source traceability; closes with the same generated-roster evidence.  |
+| BLG0032    | Q-13 / LB-14 / CS-28              |                           | BUG0013       | Closed  |                    | Align active-player court-count rules                                         | Closed: client and `functions/courtCounts.js` apply the same 90-day rule.                                                |
+| BLG0033    | Q-14 / LB-13                      |                           | BUG0013       | Closed  |                    | Remove fabricated Home stat baselines                                         | Closed: current Home implementation no longer shows the fixed 42-court baseline as live data.                            |
+| BLG0034    | Q-15 / CT-23, CT-27, CS-16, CS-44 | TSK0011, TSK0025          |               | Blocked |                    | Decide the Court Map design-system contract                                   | Approve tokenized app chrome plus a written fixed-light MapLibre contract, then validate both surfaces.                  |
+| BLG0035    | Q-17 / CS-20                      | TSK0025                   |               | Blocked |                    | Decide the fixed 78px action slot                                             | Canon and all action clusters use the approved width without local overrides.                                            |
+| BLG0036    | Q-18 / CS-17                      | TSK0025                   |               | Blocked |                    | Standardize avatar scale                                                      | Approve and implement shared avatar sizes; current Navbar 20px and provider 24px remain inconsistent.                    |
+| BLG0037    | Q-20 / CS-33                      | TSK0025                   |               | Blocked |                    | Decide Tasks headline-ring denominators                                       | Approve numerals-only or defensible denominators; do not fabricate bounded progress for unbounded totals.                |
+| BLG0038    | Q-21 / CS-48                      | TSK0025                   |               | Blocked |                    | Decide contact-method switches and migration                                  | Preserve all channels or migrate stored preferences before removing any channel.                                         |
+| BLG0039    | Q-23                              | TSK0025                   |               | Blocked |                    | Decide canonical prose width                                                  | Canon records the approved width and page-shell variants apply it consistently.                                          |
+| BLG0040    | Q-25                              | TSK0002                   | BUG0004       | Pending |                    | Collect required signup fields before access gates                            | Signup requires league, preferred courts and an explicit skill choice; unanswered skill is not stored as 2.0.            |
 
-## 1 · Tournament and draws
+## Status rules
 
-| # | Item | Why it is not scheduled | Source |
-| --- | --- | --- | --- |
-| T1 | **Generate every populated draw in one click.** Today each draw and level is generated separately, and that stays. | Convenience, not correctness. Wants the organizer-controlled knockout (KO-1/KO-2) settled and used first | WDR §4 |
-| T2 | **Tournament-display link to a co-member's profile.** Members can already open the profiles of people in their tournament from the Profiles page; the link *from the draw* is the missing half. | Needs the profile access model live first | DECISIONS_BRIEF §4, PD3 |
-| T3 | **Organizer overview contact button.** | The `onParticipantJoin` connections trigger that makes it possible ships in Sprint 2; the button is the UI half | Conflicts §5 |
-| T4 | **Bracket-image contact column.** The exported PNG carries no contacts. | Same trigger, same reason. `bracketImage.ts` needs no change — only the column | Conflicts §5 |
-| T5 | **Remove Player-Loading placeholder participants.** | They are load-bearing today: a one-player group keeps a placeholder match so the lone player stays visible and movable | WDR backlog |
-| T6 | **"Joined" links to the draw.** | Small, and it wants the draw-visibility rules stable | WDR backlog |
-| T7 | **Itemise the weekly reminder** by opponent name and date, instead of the aggregate line plus the nearest deadline. | Costed and possible at the same read cost — one `users/{uid}` read per distinct opponent, batched. Deliberately left as the aggregate for now | WDR §"Weekly reminder" |
-
----
-
-## 2 · Matches, challenges and rallies
-
-| # | Item | Why it is not scheduled | Source |
-| --- | --- | --- | --- |
-| M1 | **Challenge and rally reporting routed through the result callable.** | Sprint 2 gives challenges and friendlies auto-approval and the margin reconcile; unifying all three onto one callable path is the follow-up | WDR §2 |
-| M2 | **Reject/cancel semantics.** A rejected request or challenge disappears from the rejecting player's tab and stays gone; reappearing after a refresh is a defect. Cancel after acceptance succeeds with a notice to the other player. | Ships with M1 | WDR §2 |
-| M3 | **Challenge notification parity with rallies** — declined, confirmed, denied. | Ships with M1 | WDR §2 |
-| M4 | **One Challenge entry point**, in the Challenges tab, with the block reason shown. | Today the action exists in more than one place. Needs a decision on which one survives | WDR §2 |
-
----
-
-## 3 · Zones, courts and the map
-
-| # | Item | Why it is not scheduled | Source |
-| --- | --- | --- | --- |
-| Z1 | **Runtime-editable courts map.** A custom court that resolves to no zone notifies the super-admin and the organizer; a human then adds it to the courts dataset and the zone resolves from there. | Map additions ship as data updates to the courts dataset. An in-app editor is a separate build | DECISIONS_BRIEF §2; HARMONIZATION future works |
-| Z2 | **One authoritative court roster generated from the shipped CSV.** Three hand-maintained lists drift today: the CSV (174 rows), `ZONE_COURT_COUNTS` (174), `functions/courts.json` (173 keys, North Scarborough 23 vs 24). | Open question Q-12 — which list is authoritative, and does a build script generate the other two | ACTION-REPORT Q-12, CS-39 |
-
----
-
-## 4 · Profiles, access and auth
-
-| # | Item | Why it is not scheduled | Source |
-| --- | --- | --- | --- |
-| P1 | **`next=` return path after login.** Login returns to the page the member started from, or the profile page if that was the landing page. | Backlog. `RT-7` | WDR §7 |
-| P2 | **Change-email for OAuth-only accounts.** | No path exists today | WDR §7 |
-| P3 | **Availability editor on the Profile card.** | The `available_to_play` toggle and Away pill ship in Sprint 4; the full editor does not | WDR §7 |
-| P4 | **Organizer-assignment audit trail** over `organizer_ids`. The assignment UI itself is in Sprint 5. | The trail is a second build on top | HARMONIZATION future works |
-
----
-
-## 5 · Services and bookings
-
-| # | Item | Why it is not scheduled | Source |
-| --- | --- | --- | --- |
-| S1 | **Past-bookings section**, listed under the open ones. | There is exactly one booking in the system — a test, cancelled. Nothing to list yet | WDR §8 |
-
----
-
-## 6 · Events
-
-| # | Item | Why it is not scheduled | Source |
-| --- | --- | --- | --- |
-| E1 | **Event types and the creation modal simplified.** | Needs a detail pass with you before anyone builds it | WDR §6 |
-
----
-
-## 7 · Platform, mobile and operations
-
-| # | Item | Status | Source |
-| --- | --- | --- | --- |
-| X1 | **Mobile app vs PWA.** A mobile app is preferred; a PWA if the effort is too high — decided after an estimate. Offline: none, every action is online-only. | **PD9 — deferred by you**, pending the estimate | DECISIONS_BRIEF PD9 |
-| X2 | **Push notifications.** Notifications (in-app, later push) are the primary update channel, to reduce email. | Ships with the mobile decision | WDR §10, PD9 |
-| X3 | **Staging tier.** | **PD7 — deferred by you** | DECISIONS_BRIEF PD7 |
-| X4 | **Backup and restore policy.** Required before the first destructive data pass; details to be agreed. | **PD8 — deferred by you, no commitment yet.** Until it lands, treat every destructive one-off as unrecoverable | DECISIONS_BRIEF PD8 |
-| X5 | **Recompute-and-diff reconciliation folded into the migrations framework.** A5 builds the harness in the sprint week; making it a first-class step of every migration is the follow-up | HARMONIZATION future works |
-| X6 | **Uniform null-filled schemas.** Sparse documents stay for now; enforce uniform schemas only if and when the data moves to a different database. | Deferred standard | HARMONIZATION future works |
-
----
-
-## 8 · Design system — the rows that need a decision before they can be built
-
-Not deferred by choice. Each is blocked on an unsettled question, not a missing edit. The recommendation column is the audit's own; taking it turns the row from blocked into scheduled.
-
-| Q | Question | Blocks | Recommended |
-| --- | --- | --- | --- |
-| Q-2 | What clearance does a hit-expanded control need? The licence permits 30px chips at `gap-2`; their expanded targets overlap by 6px and steal each other's taps | BT-9, BT-10, BT-17 | State it as an equation: gap ≥ (44 − painted height) on the expanded axis |
-| Q-3 | Does hit expansion apply to bracket and RR rows at all? Both licensed examples are zero-gap stacks whose vertical neighbours are themselves tappable — the case the same table forbids | BT-15 | Re-scope the licence to horizontally adjacent controls only |
-| Q-5 | DEC-4's "rounded edges" — 16px or a full pill? | BT-22 | **16px.** A pill collides with BT-22, which reserves `rounded-full` for non-tappable |
-| Q-7 | What happens to the four hero type sizes? DEC-5 allows two; the marketing pages use `text-3xl`/`4xl`/`5xl`/`6xl` | TY-2 | Name one `display` exception at `text-3xl` for marketing |
-| Q-11 | The BottomNav label. At `text-xs` + `tracking-widest`, "Marketplace" is ~78–92px in a 73px column at 375px, with no `truncate` | TY-8 | Drop the tracking and add `truncate` — an exception in the one place it will keep being breached is not an exception |
-| Q-12 | Which court roster is authoritative? | CS-39, Z2 | The CSV; generate the other two in a build script |
-| Q-13 | What is an "active player" at a court? The client applies a 90-day / 0-points filter; the Cloud Function does not, so the same court shows a different count depending on whether the aggregate doc exists | LB-14, CS-28 | Teach the function the client's rule — that is the number members have been reading |
-| Q-14 | Keep or drop the Home baselines? "42 courts" never changes and is shown as fact; a genuine zero is indistinguishable from a failed read | LB-13 | Remove them. A fabricated stat is not a stat |
-| Q-15 | Does the Court Map join the design system? 60 hardcoded hex literals plus `system-ui` in one route | CT-23, CT-27, CS-16, CS-44 | Full token sweep for the app-chrome half; a written fixed-light contract for the MapLibre half |
-| Q-17 | Keep the fixed 78px action slot? Half the call sites already defeat it with `w-auto` | CS-20 | Keep it and trim the action clusters |
-| Q-18 | Avatar scale. 20px Navbar against 24px `ProviderAvatar` is an accident, not a decision | CS-17 | Two sizes: `sm` 24 / `lg` 96 |
-| Q-20 | Ring denominators for the three Tasks headline tiles. RS Points and League Points are unbounded; Rewards is a bare count. A ring cannot be drawn without a denominator | CS-33 | No rings there — keep numerals |
-| Q-21 | Remove two of the three Contact Method switches? | CS-48 | Keep all three — or remove two **and** ship a migration clearing `preferred_mode_of_contact`, or members whose stored preference names a removed channel become uncontactable |
-| Q-23 | Prose column width: 576px or 768px? Two published answers 192px apart for the same one-line commit | — | 768px for prose, and the canon gains a second `page-shell` width |
-| Q-25 | Does signup collect the fields that later lock a member out? It accepts empty `preferred_courts` and `league` — exactly the state that blocks `/matches`. `skillLevel` defaults to 2, so "never answered" and "I am a 2.0" are indistinguishable | — | Collect them, and make the skill default absent rather than 2 |
-
----
-
-## 9 · What is **not** here
-
-Two things people expect to find in a future-work list and will not:
-
-- **The 273 UI action rows.** They are scheduled — Sprint 3 for the foundation, Sprint 5 for the component system. Only the rows blocked on §8's questions are unscheduled, and they are listed by their blocking question, not individually.
-- **Anything on the freeze list.** `CompleteProfileModal`, the day-toggle grid, the scheduling trio, the no-show cluster, the Services Dispute/Cancel controls, `GroupLessonCard`, `OPEN_STATUSES`, the super-admin `AddServiceForm`. These are **deleted**, not deferred. See `PROJECT-PLAN.md` §8.
+- `Pending`: approved direction, not yet active.
+- `Blocked`: requires a recorded product, platform or design decision.
+- `Closed`: repository evidence confirms the stated outcome.
+- Promotion creates the next available `TSK####` or `BUG####`; the `BLG####` and source references never change.

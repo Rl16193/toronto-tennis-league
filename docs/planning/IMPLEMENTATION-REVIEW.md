@@ -196,8 +196,8 @@ All five decisions above were taken on 2026-08-25, along with several more. They
 
 | Sprint | Covers |
 | --- | --- |
-| [Sprint D6](../sprints/SPRINT-D6.md) | Every correction in §3, plus the doubles partner pool and the courts-not-zones change. Points won restored, losses and tournaments-played deleted, one award table, the booking rename, dead code and retired features removed |
-| [Sprint D7](../sprints/SPRINT-D7.md) | The 13 remaining shared components and the card consolidation, plus the plain-language copy sweep, the 5.8-inch row rule, and the rebuilt leaderboard chart |
+| [Sprint D6](sprints/SPRINT-D6.md) | Every correction in §3, plus the doubles partner pool and the courts-not-zones change. Points won restored, losses and tournaments-played deleted, one award table, the booking rename, dead code and retired features removed |
+| [Sprint D7](sprints/SPRINT-D7.md) | The 13 remaining shared components and the card consolidation, plus the plain-language copy sweep, the 5.8-inch row rule, and the rebuilt leaderboard chart |
 
 Two rulings from that session reversed decisions in this review: **losses is deleted** rather than kept, because it turned out to be displayed nowhere; and **knockout draw size moves in both directions** in edit mode rather than expanding only, with 4 as the floor.
 

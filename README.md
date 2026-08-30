@@ -119,6 +119,7 @@ The remaining environment work is to establish:
 
 ## Architecture and engineering guidance
 
+- [Documentation home](docs/README.md)
 - [Architecture index](docs/architecture/README.md)
 - [System architecture](docs/architecture/SYSTEM_ARCHITECTURE.md)
 - [Data model](docs/architecture/DATA_MODEL.md)

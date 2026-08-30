@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const requiredDocs = [
+  'docs/README.md',
   'docs/architecture/README.md',
   'docs/architecture/SYSTEM_ARCHITECTURE.md',
   'docs/architecture/DATA_FLOW.md',
@@ -14,11 +15,23 @@ const requiredDocs = [
   'docs/architecture/ENVIRONMENTS_AND_DEPLOYMENT.md',
   'docs/architecture/ADR-001-role-authorization-model.md',
   'docs/architecture/ADR-002-environment-isolation.md',
+  'docs/architecture/MOBILE_PATH_RECOMMENDATION.md',
+  'docs/architecture/diagrams/authorization-boundaries.md',
+  'docs/architecture/diagrams/core-data-flow.md',
+  'docs/architecture/diagrams/current-system-architecture.md',
+  'docs/architecture/diagrams/firestore-data-model.md',
+  'docs/architecture/diagrams/modernization-before-after.md',
+  'docs/architecture/diagrams/target-safe-delivery-architecture.md',
+  'docs/domain/README.md',
   'docs/engineering/AGENT_SKILLS.md',
+  'docs/engineering/README.md',
   'docs/engineering/MAINTAINABILITY.md',
   'docs/engineering/SECURITY_BASELINE.md',
   'docs/engineering/LOCAL_DEVELOPMENT.md',
+  'docs/engineering/TAKEOVER_STABILIZATION_LOG.md',
+  'docs/runbooks/README.md',
   'docs/runbooks/FIRESTORE_BACKUP_AND_RECOVERY.md',
+  'docs/runbooks/RESEND_DOMAIN_VERIFICATION.md',
   'docs/domain/TOURNAMENT_RULES.md',
   'docs/domain/ROUND_ROBIN_RULES.md',
   'docs/domain/SCORING_AND_POINTS.md',
@@ -144,7 +157,7 @@ const main = async () => {
   }
 
   if (missing.length) {
-    throw new Error(`Missing required architecture/runbook docs:\n${missing.map((item) => `- ${item}`).join('\n')}`);
+    throw new Error(`Missing required active documentation:\n${missing.map((item) => `- ${item}`).join('\n')}`);
   }
 
   const changed = changedFiles();
@@ -164,6 +177,17 @@ const main = async () => {
   const readme = await readFile(path.join(root, 'docs/architecture/README.md'), 'utf8');
   for (const requiredLink of ['SYSTEM_ARCHITECTURE.md', 'DATA_FLOW.md', 'ENVIRONMENTS_AND_DEPLOYMENT.md']) {
     if (!readme.includes(requiredLink)) throw new Error(`Architecture README does not link ${requiredLink}.`);
+  }
+
+  const docsIndex = await readFile(path.join(root, 'docs/README.md'), 'utf8');
+  for (const requiredLink of [
+    'architecture/README.md',
+    'domain/README.md',
+    'engineering/README.md',
+    'runbooks/README.md',
+    'archive/README.md',
+  ]) {
+    if (!docsIndex.includes(requiredLink)) throw new Error(`Documentation index does not link ${requiredLink}.`);
   }
 
   const reviewed = sensitiveChanges.length

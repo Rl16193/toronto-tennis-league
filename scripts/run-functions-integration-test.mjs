@@ -33,7 +33,13 @@ const main = async () => {
   const sourceDir = path.join(tempDir, 'functions');
   const configPath = path.join(tempDir, 'firebase.json');
   await mkdir(sourceDir);
-  await symlink(path.join(root, 'functions', 'node_modules'), path.join(sourceDir, 'node_modules'));
+  // 'junction' on Windows: a directory SYMLINK needs elevation there and fails with EPERM for
+  // an ordinary user, while a junction does not. Ignored on POSIX.
+  await symlink(
+    path.join(root, 'functions', 'node_modules'),
+    path.join(sourceDir, 'node_modules'),
+    process.platform === 'win32' ? 'junction' : null,
+  );
   await writeFile(
     path.join(sourceDir, 'package.json'),
     `${JSON.stringify({ private: true, main: 'index.js', engines: { node: '22' } })}\n`,
@@ -98,10 +104,14 @@ const main = async () => {
       : process.env.PATH,
   };
   if (existsSync(path.join(javaHome, 'bin/java'))) env.JAVA_HOME = javaHome;
-  const firebase = path.join(root, 'node_modules', '.bin', process.platform === 'win32' ? 'firebase.cmd' : 'firebase');
+// Spawn the CLI's JS entrypoint with the running Node binary, NOT the node_modules/.bin
+// shim: Node refuses to spawn a .cmd without `shell: true` (CVE-2024-27980), which made
+// every emulator command fail with EINVAL on Windows.
+  const firebase = path.join(root, 'node_modules', 'firebase-tools', 'lib', 'bin', 'firebase.js');
   const child = spawn(
-    firebase,
+    process.execPath,
     [
+      firebase,
       'emulators:exec',
       '--config',
       configPath,
