@@ -209,32 +209,27 @@ Today the loser branch adds `tournamentsPlayed: 1` on **every loss**, and the wi
 
 ---
 
-### ⬛ C5 — One award table · A1
+### ⬛ C5 — Delete the third award table · A1
 
-**File** · `functions/withdrawalWorkflow.js:10,72,112`
+**File** · `functions/withdrawalWorkflow.js:10,11,72`
 
-```js
-const AWARDS = { R32: 1, R16: 2, QF: 3, SF: 5, F: 10 };   // third copy
-const withdrawalAward = (round) => AWARDS[round] || 1;
-...
-const points = rr ? 1 : withdrawalAward(current.round);
-```
+**[Ruling 15](../DECISIONS-2026-08-29.md) simplifies this.** C5 originally planned to make the withdrawal path *import* the shared `tournamentAward`. It no longer needs an award table at all.
 
-**Build** — import the shared one. Same package, already exported:
+**The withdrawing player gets a flat +1 per unplayed match.** So:
 
 ```js
-const { tournamentAward } = require('./lib/tournamentResult');
-...
-const award = tournamentAward({ round: current.round, format: current.format });
-const points = award.loserPoints;              // RR is already 1 in the shared table
-const opponentPoints = rr ? 1 : 0;
+const points = rr ? 1 : withdrawalAward(current.round);   // :72 — becomes a flat 1
 ```
 
-Delete `AWARDS`, `withdrawalAward` and the export at `:112`. Check for test consumers first.
+Delete `AWARDS` (`:10`), `withdrawalAward` (`:11`) and the export. Three award tables become **two by removal**, not by sharing. Check for test consumers first.
 
-Three copies become two. The last two cross the server/browser boundary and cannot share a file; **[Sprint D7](SPRINT-D7.md) group 6 removes the need for the browser copy.**
+The opponent side is unchanged — Round Robin still pays them 1, knockout still advances them (`:76-80`).
 
-**Done when** · withdrawal payouts unchanged · `grep -c "R32: 1" functions/` returns 1.
+> **The two surviving tables agree by accident.** `scoring.ts:38` and `tournamentResult.js:92` both carry `RR: 1`; the one being deleted omits `RR` entirely and falls through to `|| 1`. It has always matched by coincidence rather than construction. [D7 group 6](SPRINT-D7.md) removes the browser copy and leaves one.
+
+**"Does not count toward matches played" already holds.** The withdrawal writes the match patch directly (`:55-70`) rather than going through the result callable, so it never touches `matchesPlayed` or `wins`. No change needed — **but pin it with a test**, because routing this through the result path later would silently start counting them.
+
+**Done when** · a withdrawing player gains exactly 1 point per unplayed match regardless of round · `matchesPlayed` and `wins` are untouched, with a test · `grep -c "R32: 1" functions/` returns 1.
 
 ---
 

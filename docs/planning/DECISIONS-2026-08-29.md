@@ -100,7 +100,7 @@ Closes [BLG0019](../BACKLOG.md).
 
 **Streak is derived, not stored** — the same stat the profile page already shows: consecutive wins or losses from the member's most recent completed matches until the run breaks.
 
-> That derivation already exists **twice**, identically: `src/pages/Profile.tsx:152-162` and `src/pages/PlayerProfile.tsx:42-51`. The leaderboard would be a third copy. **Extract it to one helper and have all three read it** — this is the same class of defect as the three award tables. `tasks.currentStreak` is a bare count with no W/L direction and cannot serve this.
+> **Profile and PlayerProfile share one card — nothing is re-derived.** The streak is computed twice today, identically (`src/pages/Profile.tsx:152-162` and `src/pages/PlayerProfile.tsx:42-51`), because the two pages are separate 700-line components. [D7 CS-7](sprints/SPRINT-D7.md) collapses them into a single `ProfileCard` with `mode: 'own' | 'public'`; the streak travels with the card and the duplicate disappears on its own. Do not extract a streak helper — fix the card. `tasks.currentStreak` is a bare count with no W/L direction and cannot serve this either way.
 
 ### Round Robin group table
 
@@ -167,3 +167,83 @@ Confirms L15's direction and removes the second path: the tournament page's "Req
 | `selectGroupWinners`                     | replaced by the seeding engine                  |
 | `inactive`                               | a third player state; only `withdrawn` survives |
 | Points for an unplayed rally             | a rally with no submitted score pays nothing    |
+
+---
+
+## 11 · One name formatter
+
+**Ruling: one helper, producing `Blake Bell`. Keep only it.**
+
+**The problem measured.** There are **three** formatters, not two:
+
+| Function           | Where                                     | Does                                             |
+| ------------------ | ----------------------------------------- | ------------------------------------------------ |
+| `formatPersonName` | `src/components/PersonRow.tsx:4`          | **trim and fall back only — no casing**          |
+| `toTitleCase`      | `src/features/leagues/useStandings.ts:18` | title-cases                                      |
+| `formatPlayerName` | `src/pages/tournament/utils.ts:155`       | title-cases **and** guards the bracket sentinels |
+
+Building `PersonRow` did not merge the two, it **added a third under the name the fix was supposed to take**. [CS-1](../archive/planning-2026-08-23/ACTION-REPORT.md#CS-1) reads as done and is not.
+
+**This is live.** 6 of 185 members have all-lowercase names (`blake bell`, `sergio trujillo`) and 2 are ALL-CAPS. They render **`blake bell` on every `PersonRow` surface** and **`Blake Bell` on the leaderboard** — one member, two spellings, depending on the screen.
+
+**The merge has a trap.** Only `formatPlayerName` guards `PLAYER_LOADING`, `BYE` and `Winner of …`. A naive title-caser renders **`Bye`** and **`Winner Of Qf1`** in the bracket. The surviving helper must keep those guards.
+
+**Build.** `formatPersonName` title-cases, keeps the fallback, and keeps the sentinel guards. `toTitleCase` and `formatPlayerName` are deleted and every call site moves.
+
+## 12 · Delete the duplicate helpers
+
+Two more helpers already exist and are still duplicated. **Do not extract anything — point the call sites at what is there.**
+
+| Helper      | Exists at            | Duplicated in                                   | Cleared by  |
+| ----------- | -------------------- | ----------------------------------------------- | ----------- |
+| `pgWinPct`  | `useStandings.ts:13` | `Profile.tsx:168` recomputes inline             | ruling 13   |
+| `initialOf` | `PersonRow.tsx:5`    | `ProfileInfo.tsx:313` · `PlayerProfile.tsx:196` | ruling 13   |
+| `initialOf` | —                    | `ServicesElements.tsx:595`                      | its own row |
+
+Three of the four disappear with the profile-card consolidation. Only `ServicesElements.tsx:595` needs separate work.
+
+## 13 · One profile card
+
+**Ruling: one profile card. Only one.**
+
+[CS-7](../archive/planning-2026-08-23/ACTION-REPORT.md#CS-7) says "two 700-line components". There are **three, totalling 2,021 lines**:
+
+| File                                              | Lines | Role             |
+| ------------------------------------------------- | ----- | ---------------- |
+| `src/pages/Profile.tsx`                           | 651   | own-profile page |
+| `src/features/profile/components/ProfileInfo.tsx` | 983   | own-profile card |
+| `src/pages/PlayerProfile.tsx`                     | 387   | public profile   |
+
+The duplications land on **different pairs** — the streak is `Profile` vs `PlayerProfile`; the `Phone` (`ProfileInfo:393`) versus `Contact` (`PlayerProfile:256`) label drift is the other pair. Consolidating only the two CS-7 names moves the duplication rather than ending it. **All three collapse into one card with `mode: 'own' | 'public'`.**
+
+The streak, P/G won % and initial duplications all end here, for free.
+
+## 14 · No browser dialogs, no native dropdowns
+
+**Every browser `confirm()` becomes a modal form with yes and no.** There are **five**, not the four [MF-10](../archive/planning-2026-08-23/ACTION-REPORT.md#MF-10) records:
+
+`MarketplaceElements.tsx:114` · `ServicesElements.tsx:792` · `MatchCard.tsx:100` · `RRGroupCard.tsx:213` · `Tournament.tsx:535`
+
+> **Sequence after the withdrawal work.** `Tournament.tsx:535` is the withdrawal confirm, which the L12 work rewrites. Doing MF-10 first means writing that dialog twice.
+
+**Every dropdown becomes a modal form.** 14 native `<select>` elements across 9 files: `RRGroupCard` (3) · `TournamentElements` (2) · `CourtMapElements` (2) · `EventsElements` (2) · `MatchCard` · `AddPlayerPanel` · `ServicesElements` · `MarketplaceElements` · `ClaimModal`.
+
+This also closes [AX-13](../archive/planning-2026-08-23/ACTION-REPORT.md#AX-13) — nine unlabelled selects — since a modal carries its own heading.
+
+## 15 · Withdrawal pays a flat point per unplayed match
+
+**Ruling: the withdrawing player gets **+1 point for each unplayed match**, and it does **not** count toward matches played.**
+
+Replaces the round-award schedule. Today `functions/withdrawalWorkflow.js:72` reads:
+
+```js
+const points = rr ? 1 : withdrawalAward(current.round); // R32 1 · R16 2 · QF 3 · SF 5 · F 10
+```
+
+It becomes a flat `1`, and **`AWARDS` and `withdrawalAward` (`:10`, `:11`) are deleted outright**.
+
+> **This simplifies [D6 C5](sprints/SPRINT-D6.md).** C5 planned to make the withdrawal path _import_ the shared `tournamentAward`. Under this ruling it needs no award table at all — the third copy is **deleted, not shared**. Three tables become two by removal.
+
+**"Does not count toward matches played" already holds.** The withdrawal writes the match patch directly (`:55-70`) instead of going through the result callable, so it never touches `matchesPlayed` or `wins`. No change needed — but it must stay that way, and a test should pin it.
+
+**The opponent side is unchanged:** in a Round Robin they still take their 1 point; in a knockout they still advance (`:76-80`).

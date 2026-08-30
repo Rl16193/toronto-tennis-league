@@ -345,6 +345,10 @@ export const SHAPE_REFERENCE = {
     status: 'complete',
     started: true,
     walkover: false,
+    // Set only when the walkover came from a withdrawal rather than an organizer entry. Written by
+    // functions/withdrawalWorkflow.js:60 — it postdates the 2026-08-17 snapshot, so the live export
+    // never carried it and the transform could not discover it.
+    withdrawal_walkover: false,
     court: 'Ramsden Park',
     league: 'Challengers',
     // D3 — `completed_at` pins at first scoring and is never rewritten; `result_at` re-stamps on
