@@ -126,7 +126,7 @@ Everything below is applying what D3 built. No new decisions.
 
 **Files** · `MatchCard.tsx:130` (`Score recorded`/`Pending`) · `OpponentPanels.tsx:41-48` (`Win`/`Loss`/`Completed`/`Scheduled on …`) · `RRGroupCard.tsx:335` (`Done`) · `:241` (`W`/`L` — the viewer's glyph, keep).
 
-**Stored words, one per idea:** `confirmed` for a settled match (retires `complete`, `used`) · `declined` for a turned-down invitation (retires `rejected`) · `withdrawn` for leaving a tournament (retires `removal`, `removed`) · `inactive` for a member no longer active in the app · `completed` for tasks and service jobs.
+**Stored words, one per idea:** `confirmed` for a settled match (retires `complete`, `used`) · `declined` for a turned-down invitation (retires `rejected`) · `withdrawn` for leaving a tournament (retires `removal`, `removed`, and `inactive` — there is no app-level inactive state) · `completed` for tasks and service jobs.
 
 ### ⬛ The stats a member sees _(ruling [6](../DECISIONS-2026-08-29.md))_
 
@@ -137,7 +137,9 @@ Nothing else is rendered on either surface.
 | **Leaderboard row**         | matches won · P/G won % · rank move · streak (`2W`, `2L`)         |
 | **Round Robin group table** | matches won in that group · overall P/G won % · pending · contact |
 
-Streak is new on the leaderboard — `currentStreak` exists on `tasks`, but as a count with no W/L direction, so the direction has to be derived from the member's recent matches.
+**Streak is derived, not stored** ([ruling 6](../DECISIONS-2026-08-29.md)) — the same stat the profile page already shows: consecutive wins or losses from the most recent completed matches until the run breaks. `tasks.currentStreak` is a bare count with no W/L direction and cannot serve it.
+
+> **Extract it before adding the third copy.** The identical derivation already exists twice — `src/pages/Profile.tsx:152-162` and `src/pages/PlayerProfile.tsx:42-51`. The leaderboard makes three. One helper, three readers; same class of defect as the three award tables that [D6 C5](SPRINT-D6.md) and [group 6](#group-6--one-scoring-rule) are collapsing.
 
 This supersedes the open half of [CS-22](../../archive/planning-2026-08-23/ACTION-REPORT.md#CS-22)…[CS-29](../../archive/planning-2026-08-23/ACTION-REPORT.md#CS-29): the labels still need to be consistent, but **which** stats appear is now settled.
 

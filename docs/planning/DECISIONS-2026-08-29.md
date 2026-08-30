@@ -51,13 +51,16 @@ Two words. Nothing else appears on a match card.
 
 ### Stored status words — one per idea
 
-| Idea                                    | Word            | Retires              |
-| --------------------------------------- | --------------- | -------------------- |
-| A match result is settled               | **`confirmed`** | `complete`, `used`   |
-| An invitation was turned down           | **`declined`**  | `rejected`           |
-| A player left a tournament              | **`withdrawn`** | `removal`, `removed` |
-| A member is no longer active in the app | **`inactive`**  | —                    |
-| A task or a service job is finished     | **`completed`** | —                    |
+| Idea                                | Word            | Retires              |
+| ----------------------------------- | --------------- | -------------------- |
+| A match result is settled           | **`confirmed`** | `complete`, `used`   |
+| An invitation was turned down       | **`declined`**  | `rejected`           |
+| A player left a tournament          | **`withdrawn`** | `removal`, `removed` |
+| A task or a service job is finished | **`completed`** | —                    |
+
+**There is no app-level `inactive` state** (ruled out 2026-08-29). A player has exactly one state word, `withdrawn`, and it is scoped to a tournament.
+
+> This collapses the "is this participant active?" check, which today tests `!['withdrawn','removed','inactive']` in **two** places — `functions/tournamentResults.js:97` and `functions/connections.js:103`. Both become a single test against `withdrawn`. That is finding **F-B**, where the two lists had already drifted and a withdrawn player stayed scoreable.
 
 `confirmed` is the stored word for a settled match; **Done** is what the member reads. Tasks and service jobs are `completed`, never `confirmed` — a job is finished, a result is agreed.
 
@@ -94,6 +97,10 @@ Closes [BLG0019](../BACKLOG.md).
 ### Leaderboard row
 
 **Matches won · P/G won % · rank move · streak** (`2W`, `2L`).
+
+**Streak is derived, not stored** — the same stat the profile page already shows: consecutive wins or losses from the member's most recent completed matches until the run breaks.
+
+> That derivation already exists **twice**, identically: `src/pages/Profile.tsx:152-162` and `src/pages/PlayerProfile.tsx:42-51`. The leaderboard would be a third copy. **Extract it to one helper and have all three read it** — this is the same class of defect as the three award tables. `tasks.currentStreak` is a bare count with no W/L direction and cannot serve this.
 
 ### Round Robin group table
 
@@ -146,15 +153,17 @@ Confirms L15's direction and removes the second path: the tournament page's "Req
 
 ## 10 · What this removes from the app
 
-| Gone                                     | Was                                           |
-| ---------------------------------------- | --------------------------------------------- |
-| The accept → report → confirm handshake  | 5 states on challenges and rallies            |
-| Rally `disputed`                         | a dead end with no exit                       |
-| `rejected`                               | duplicate of `declined`                       |
-| `complete`, `used`                       | duplicates of `confirmed`                     |
-| `removal`, `removed`                     | duplicates of `withdrawn`                     |
-| `Scheduled`, `No show`, `Score recorded` | display words for states that no longer exist |
-| `hide_seniors`, `hide_beginners`         | per-event draw hiding                         |
-| A fifth event type                       | the lower-case `tournament`                   |
-| Organizer approval for a zone change     | replaced by a notification                    |
-| `selectGroupWinners`                     | replaced by the seeding engine                |
+| Gone                                     | Was                                             |
+| ---------------------------------------- | ----------------------------------------------- |
+| The accept → report → confirm handshake  | 5 states on challenges and rallies              |
+| Rally `disputed`                         | a dead end with no exit                         |
+| `rejected`                               | duplicate of `declined`                         |
+| `complete`, `used`                       | duplicates of `confirmed`                       |
+| `removal`, `removed`                     | duplicates of `withdrawn`                       |
+| `Scheduled`, `No show`, `Score recorded` | display words for states that no longer exist   |
+| `hide_seniors`, `hide_beginners`         | per-event draw hiding                           |
+| A fifth event type                       | the lower-case `tournament`                     |
+| Organizer approval for a zone change     | replaced by a notification                      |
+| `selectGroupWinners`                     | replaced by the seeding engine                  |
+| `inactive`                               | a third player state; only `withdrawn` survives |
+| Points for an unplayed rally             | a rally with no submitted score pays nothing    |
