@@ -230,20 +230,17 @@ The streak, P/G won % and initial duplications all end here, for free.
 
 This also closes [AX-13](../archive/planning-2026-08-23/ACTION-REPORT.md#AX-13) — nine unlabelled selects — since a modal carries its own heading.
 
-## 15 · Withdrawal pays a flat point per unplayed match
+## 15 · Withdrawal payout
 
-**Ruling: the withdrawing player gets **+1 point for each unplayed match**, and it does **not** count toward matches played.**
+**Ruling: a withdrawing player is paid for every unplayed match, and none of it counts toward matches played.**
 
-Replaces the round-award schedule. Today `functions/withdrawalWorkflow.js:72` reads:
+| Stage           | The withdrawing player gets                                 |
+| --------------- | ----------------------------------------------------------- |
+| **Knockout**    | **the round's points** — R32 1 · R16 2 · QF 3 · SF 5 · F 10 |
+| **Round Robin** | **1 point** per unplayed match                              |
 
-```js
-const points = rr ? 1 : withdrawalAward(current.round); // R32 1 · R16 2 · QF 3 · SF 5 · F 10
-```
+This is what the app already does (`functions/withdrawalWorkflow.js:72`), so the payout itself does not change. The opponent side is unchanged too: in a Round Robin they take their 1 point, in a knockout they advance.
 
-It becomes a flat `1`, and **`AWARDS` and `withdrawalAward` (`:10`, `:11`) are deleted outright**.
+**The scoring table is still needed**, so [D6 C5](sprints/SPRINT-D6.md) stands as written — the withdrawal path stops keeping its own private copy and imports the shared one, which already returns the round award for a knockout and 1 for a Round Robin.
 
-> **This simplifies [D6 C5](sprints/SPRINT-D6.md).** C5 planned to make the withdrawal path _import_ the shared `tournamentAward`. Under this ruling it needs no award table at all — the third copy is **deleted, not shared**. Three tables become two by removal.
-
-**"Does not count toward matches played" already holds.** The withdrawal writes the match patch directly (`:55-70`) instead of going through the result callable, so it never touches `matchesPlayed` or `wins`. No change needed — but it must stay that way, and a test should pin it.
-
-**The opponent side is unchanged:** in a Round Robin they still take their 1 point; in a knockout they still advance (`:76-80`).
+**Not counted as matches played.** This already holds: the withdrawal writes match documents directly rather than going through the result callable, so it never touches `matchesPlayed` or `wins`. **It needs a test to stay true** — if this is ever routed through the result path, withdrawals would silently start inflating everyone's match count.

@@ -209,27 +209,38 @@ Today the loser branch adds `tournamentsPlayed: 1` on **every loss**, and the wi
 
 ---
 
-### ⬛ C5 — Delete the third award table · A1
+### ⬛ C5 — One award table · A1
 
-**File** · `functions/withdrawalWorkflow.js:10,11,72`
-
-**[Ruling 15](../DECISIONS-2026-08-29.md) simplifies this.** C5 originally planned to make the withdrawal path *import* the shared `tournamentAward`. It no longer needs an award table at all.
-
-**The withdrawing player gets a flat +1 per unplayed match.** So:
+**File** · `functions/withdrawalWorkflow.js:10,72,112`
 
 ```js
-const points = rr ? 1 : withdrawalAward(current.round);   // :72 — becomes a flat 1
+const AWARDS = { R32: 1, R16: 2, QF: 3, SF: 5, F: 10 };   // third copy
+const withdrawalAward = (round) => AWARDS[round] || 1;
+...
+const points = rr ? 1 : withdrawalAward(current.round);
 ```
 
-Delete `AWARDS` (`:10`), `withdrawalAward` (`:11`) and the export. Three award tables become **two by removal**, not by sharing. Check for test consumers first.
+**Build** — import the shared one. Same package, already exported:
 
-The opponent side is unchanged — Round Robin still pays them 1, knockout still advances them (`:76-80`).
+```js
+const { tournamentAward } = require('./lib/tournamentResult');
+...
+const award = tournamentAward({ round: current.round, format: current.format });
+const points = award.loserPoints;              // RR is already 1 in the shared table
+const opponentPoints = rr ? 1 : 0;
+```
 
-> **The two surviving tables agree by accident.** `scoring.ts:38` and `tournamentResult.js:92` both carry `RR: 1`; the one being deleted omits `RR` entirely and falls through to `|| 1`. It has always matched by coincidence rather than construction. [D7 group 6](SPRINT-D7.md) removes the browser copy and leaves one.
+Delete `AWARDS`, `withdrawalAward` and the export at `:112`. Check for test consumers first.
 
-**"Does not count toward matches played" already holds.** The withdrawal writes the match patch directly (`:55-70`) rather than going through the result callable, so it never touches `matchesPlayed` or `wins`. No change needed — **but pin it with a test**, because routing this through the result path later would silently start counting them.
+Three copies become two. The last two cross the server/browser boundary and cannot share a file; **[Sprint D7](SPRINT-D7.md) group 6 removes the need for the browser copy.**
 
-**Done when** · a withdrawing player gains exactly 1 point per unplayed match regardless of round · `matchesPlayed` and `wins` are untouched, with a test · `grep -c "R32: 1" functions/` returns 1.
+**The payout is unchanged by [ruling 15](../DECISIONS-2026-08-29.md):** a withdrawing player takes **the round's points in a knockout** (R32 1 · R16 2 · QF 3 · SF 5 · F 10) and **1 point per unplayed match in a Round Robin**. The shared `tournamentAward` already returns exactly that, which is why importing it is safe.
+
+> **The three tables agree by accident, not by construction.** `scoring.ts:38` and `tournamentResult.js:92` both carry `RR: 1`; the third omits `RR` entirely and falls through to `|| 1`. It has always matched by coincidence — which is the argument for collapsing it.
+
+**Withdrawal points must not count as matches played** (ruling 15). That already holds: the withdrawal writes match documents directly (`:55-70`) rather than going through the result callable, so `matchesPlayed` and `wins` are never touched. **Pin it with a test** — routing this through the result path later would silently start counting them.
+
+**Done when** · withdrawal payouts are unchanged · a withdrawing player's `matchesPlayed` and `wins` stay put, with a test · `grep -c "R32: 1" functions/` returns 1.
 
 ---
 
