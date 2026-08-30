@@ -7,6 +7,7 @@
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Branch base**   | `tbtc/dev-anuj` @ `4dde946`                                                                                                                                                                                                                                                                                              |
 | **Environment**   | **emulator-first** (owner ruling 2026-08-29). Nothing here touches a cloud project. Migrations run against the local emulator, which is re-seeded from `npm run dataset:build && npm run seed:dataset` — 3,233 documents transformed from the 2026-08-17 live snapshot                                                   |
+| **Decisions**     | [DECISIONS-2026-08-29.md](../DECISIONS-2026-08-29.md) — the 2026-08-29 rulings this sprint implements                                                                                                                                                                                                                    |
 | **Source**        | [IMPLEMENTATION-REVIEW.md](../IMPLEMENTATION-REVIEW.md) — every item traces to a finding in it                                                                                                                                                                                                                           |
 | **Prior sprints** | [D1](../../archive/planning-2026-08-23/sprints/SPRINT-D1.md) · [D2](../../archive/planning-2026-08-23/sprints/SPRINT-D2.md) · [D3](../../archive/planning-2026-08-23/sprints/SPRINT-D3.md) · [D4](../../archive/planning-2026-08-23/sprints/SPRINT-D4.md) · [D5](../../archive/planning-2026-08-23/sprints/SPRINT-D5.md) |
 | **Blocking**      | A5 must confirm the test suite passes on `4dde946` **before** anything else starts. Three earlier commits show a failed check and it was never resolved                                                                                                                                                                  |
@@ -27,13 +28,16 @@
 
 ### Added 2026-08-29
 
-| #       | Item                                        | Lane    | Why it is here and not later                                                                                                                                       |
-| ------- | ------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **C12** | `services` security rules                   | A1      | **C8 cannot be verified without it.** `firestore.rules` has no `services` block at all, so the catalogue falls through to deny and no Book button can be confirmed |
-| **C13** | Score margin threshold 10 → 21              | A1 + A3 | Three layers must change together                                                                                                                                  |
-| **C14** | No re-notification on a lower-margin accept | A1      | Same code path as C13; do them together                                                                                                                            |
-| **C15** | Challenge notification parity               | A1      | [BLG0010](../../BACKLOG.md) — declined and confirmed are silent today                                                                                              |
-| **C16** | Re-seat a re-added participant              | A1 + A3 | The placer never fires for them; blocks the withdrawal round-trip C4 and L12 assume                                                                                |
+| #       | Item                                            | Lane    | Why it is here and not later                                                                                                                                       |
+| ------- | ----------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **C12** | `services` security rules                       | A1      | **C8 cannot be verified without it.** `firestore.rules` has no `services` block at all, so the catalogue falls through to deny and no Book button can be confirmed |
+| **C13** | Score margin threshold 10 → 21                  | A1 + A3 | Three layers must change together                                                                                                                                  |
+| **C14** | No re-notification on a lower-margin accept     | A1      | Same code path as C13; do them together                                                                                                                            |
+| **C15** | **One result model** for challenges and rallies | A1 + A3 | [Ruling 1](../DECISIONS-2026-08-29.md). Rally has **never once** produced a result: 43 opened, 0 completed                                                         |
+| **C16** | Re-seat a re-added participant                  | A1 + A3 | The placer never fires for them; blocks the withdrawal round-trip C4 and L12 assume                                                                                |
+| **C17** | Four event types                                | A2 + A3 | [Ruling 5](../DECISIONS-2026-08-29.md). Live data holds five, including `tournament` in lower case                                                                 |
+| **C18** | Remove per-event draw hiding                    | A3      | [Ruling 4](../DECISIONS-2026-08-29.md). `hide_seniors` / `hide_beginners` go; the Retired Pro draw stays                                                           |
+| **C19** | Zone change without approval                    | A1 + A3 | [Ruling 7](../DECISIONS-2026-08-29.md). Organizer is notified, not asked                                                                                           |
 
 ---
 
@@ -255,9 +259,9 @@ One test booking exists and it is cancelled, so no migration is needed.
 | Where                                          | What                                                                                                                                                                                                                                                                                           |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/features/events/hooks/useJoin.ts:158-162` | The unreachable `'full'` and `'fallback'` branches. `slotStatus` is permanently `null`; these are the old refusal and the path that **rewrote a member's skill level**. Remove the branches, the `slotStatus` memo, `slotFallbackConfirmed`, and the `SlotResult` type if nothing else uses it |
-| ~~`src/pages/tournament/rrGeneration.ts:348`~~ | ~~`selectGroupWinners`~~ — **PULLED FROM THIS SPRINT (owner ruling 2026-08-29).** The stub stays. [Sprint D8](SPRINT-D8.md) reintroduces knockout seeding and replaces it with a real implementation; deleting it here would be undone next sprint. Keep the `advancingPlayers` plumbing too   |
+| `src/pages/tournament/rrGeneration.ts:348`     | `selectGroupWinners` — exported, no callers. **Delete it** ([ruling 9](../DECISIONS-2026-08-29.md)): [D8](SPRINT-D8.md) builds a fresh `seeding.ts` instead of reviving the stub, so nothing depends on it. Remove the `advancingPlayers` plumbing if `buildRRKnockoutDocs` no longer needs it |
 
-**Done when** · `npm run typecheck` clean · `grep -rn "slotStatus" src/` returns nothing · **`selectGroupWinners` is still present**, because [Sprint D8](SPRINT-D8.md) builds on it.
+**Done when** · `npm run typecheck` clean · `grep -rnE "slotStatus|selectGroupWinners" src/` returns nothing.
 
 ---
 
@@ -265,13 +269,13 @@ One test booking exists and it is cancelled, so no migration is needed.
 
 `GroupLessonCard` is already gone from the UI. What remains is server-side.
 
-| Where                                             | What                                                                                                                                                                                                                 |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `firestore.rules:707`                             | delete the `group_lessons` block                                                                                                                                                                                     |
-| `functions/rewards.js:98,150`                     | delete the two functions reading `group_lessons/{month}`                                                                                                                                                             |
-| `firestore.rules` contacts read                   | **remove `isCurrentGroupLessonCoachFor`.** It is a fourth way to read another member's contacts and it retires with the feature. Contacts then read: owner, connection, and through a connection the event organizer |
-| `firestore.rules:641` · `functions/rewards.js:36` | delete `redemption_locks` and `redemptionLockRef`                                                                                                                                                                    |
-| `functions/test/redemptionLock.test.js`           | delete with it                                                                                                                                                                                                       |
+| Where                                             | What                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `firestore.rules:707`                             | delete the `group_lessons` block                                                                                                                                                                                                                                                                                                                                                                                        |
+| `functions/rewards.js:98,150`                     | delete the two functions reading `group_lessons/{month}`                                                                                                                                                                                                                                                                                                                                                                |
+| `firestore.rules` contacts read                   | **Replace `isCurrentGroupLessonCoachFor` — do not simply delete it** ([ruling 8](../DECISIONS-2026-08-29.md)). The coach↔player rule **returns**, rebuilt against the **coaching session** on the lesson add-on block rather than the retired `group_lessons` collection. Contacts then read: owner · connection · event organizer for their own participants · coach and player of a shared coaching session, mutually |
+| `firestore.rules:641` · `functions/rewards.js:36` | delete `redemption_locks` and `redemptionLockRef`                                                                                                                                                                                                                                                                                                                                                                       |
+| `functions/test/redemptionLock.test.js`           | delete with it                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 **A4:** `bookService` exists in `src/features/services/servicesApi.ts:21` but no Book control was found in the Services UI. **Confirm one exists on each service card and add it if not.** It is the entry point to the whole booking flow shipped in [D5](../../archive/planning-2026-08-23/sprints/SPRINT-D5.md).
 
@@ -366,22 +370,30 @@ The neighbouring branch at `:266-268` (margin greater or equal) already returns 
 
 ---
 
-### ⬛ C15 — Challenge notification parity · A1
+### ⬛ C15 — One result model for challenges and rallies · A1 + A3
 
-**File** · `functions/notifications.js`
+**Ruling [1](../DECISIONS-2026-08-29.md).** Measured: rally **43 opened, 0 ever reached a result**. Challenge 5 of 31. Both ran a five-state handshake with different words for identical states.
 
-[BLG0010](../../BACKLOG.md). Rally has `rally_declined` (:412) and `rally_confirmed` (:430). Challenges have neither:
+**Files** · `functions/competitionResults.js` · `functions/notifications.js:262-366` · `src/pages/tournament/useTournament.ts`
 
-| Event             | Rally             | Challenge today                                                              |
-| ----------------- | ----------------- | ---------------------------------------------------------------------------- |
-| Opponent declines | `rally_declined`  | **silent** — `:346` is gated on `after.source`, so only _conversions_ notify |
-| Result confirmed  | `rally_confirmed` | **silent**                                                                   |
+**Build** — challenges and rallies adopt the tournament result model exactly:
 
-Add `ladder_declined` and `ladder_confirmed` on the same trigger that already handles `accepted` and `reported` (`:301`, `:319`).
+| Rule                                            | Change                                                                                                                          |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Either player submits                           | The result callable opens to both players, as it already did for tournaments                                                    |
+| **Applies immediately**                         | Delete the `accepted → reported → confirmed` handshake. No organizer confirmation on challenges                                 |
+| Two submissions, same winner, lower margin wins | Shared with the tournament path                                                                                                 |
+| Two submissions, different winners              | `score_disputed` flag; first result stays applied; organizer resolves                                                           |
+| **A rally score is optional**                   | A rally is a way to earn extra points. If neither player submits, nothing is recorded, no points are paid, and nobody is chased |
+| Walkovers                                       | Tournaments only, organizer-only, stored                                                                                        |
 
-> **Vocabulary note.** `ladder_cancelled` (`:358`) is **not** the decline — it fires from `onLadderChallengeDeleted` when the _challenger_ withdraws their own open challenge, notifying the person they challenged. A decline is the opponent moving `open → rejected`. Two different events, two different recipients.
+**Retires** the rally `disputed` dead end (finding **F-K** — nothing transitioned out of it).
 
-**Done when** · declining a from-scratch challenge notifies the challenger · confirming a reported challenge notifies both · neither duplicates on replay.
+**Notifications.** A declined challenge notifies **the player who created it**. Decline and reject are one event; `declined` is the surviving word ([ruling 2](../DECISIONS-2026-08-29.md)).
+
+> `ladder_cancelled` (`notifications.js:358`) stays what it is — the _challenger_ withdrawing their own open challenge, notifying the person challenged. A decline is the opposite direction and needs its own notification.
+
+**Done when** · either player can submit on a challenge and a rally · the score applies with no confirmation step · a second submission with a different winner flags a dispute · an unsubmitted rally pays nothing and is never chased · declining notifies the creator · `grep -rn "'rejected'" src/ functions/` returns nothing.
 
 ---
 
@@ -403,6 +415,40 @@ A player who withdraws and is re-added is **never placed**, for two independent 
 3. Never touch knockout matches. If the knockout for that draw already exists, the player joins the group stage only.
 
 **Done when** · a withdrawn player re-added before generation is seated normally · re-added after generation gets group matches and no knockout slot · an existing knockout is unchanged · a test covers the re-add round trip.
+
+---
+
+### ⬛ C17 — Four event types · A2 + A3
+
+**Ruling [5](../DECISIONS-2026-08-29.md).** `Socials` · `Tournaments` · `Specials` · `League Ladder`. Nothing else.
+
+Live data holds **five values across ten events**, including **`tournament` in lower case** beside `Tournament`. That is a data defect, so this needs a migration as well as a validator.
+
+**Build** · constrain the type on the event-creation modal · **A2 migration** normalising the one lower-case row · reject anything outside the four on write.
+
+**Done when** · the modal offers exactly four types · no event carries a value outside them · the casing split is gone. Closes [BLG0019](../../BACKLOG.md).
+
+---
+
+### ⬛ C18 — Remove per-event draw hiding · A3
+
+**Ruling [4](../DECISIONS-2026-08-29.md).** Delete `hide_seniors` and `hide_beginners`.
+
+**Files** · `src/pages/tournament/useTournament.ts:216-217` (the two filter lines) and `:256-257` (the deps) · `src/lib/firestoreNormalization.ts:108-109` · `src/types.ts`
+
+**The Retired Pro draw itself survives.** It is a separate, league-gated concept (`useJoin.ts:140-142`), not the toggle. Same for Beginners. What goes is the per-event ability to hide either draw.
+
+**Done when** · both draws always render · `grep -rn "hide_seniors|hide_beginners" src/` returns nothing · a migration strips the fields.
+
+---
+
+### ⬛ C19 — Zone change without approval · A1 + A3
+
+**Ruling [7](../DECISIONS-2026-08-29.md).** A member selects zones freely. **The organizer is notified, not asked.**
+
+Folds into [F2](#f2). The tournament page's "Request Zone Change" (`TournamentElements.tsx:91`) becomes a direct change, matching the profile card. One path, not two.
+
+**Done when** · changing zone needs no approval anywhere · the organizer receives a notification · no approval UI remains.
 
 ---
 
@@ -579,4 +625,4 @@ Decision 8 replaces that rule.
 The 13 remaining shared components and the consolidation of 83 card surfaces — [Sprint D7](SPRINT-D7.md).
 Knockout seeding, the coaching pool, and the workflow and legal documents — [Sprint D8](SPRINT-D8.md).
 
-**`selectGroupWinners` is deliberately left in place** for D8. See C7.
+**`selectGroupWinners` is deleted here.** [Sprint D8](SPRINT-D8.md) builds `src/features/tournament/domain/seeding.ts` from scratch — see [ruling 9](../DECISIONS-2026-08-29.md).

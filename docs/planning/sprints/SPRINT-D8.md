@@ -9,18 +9,19 @@
 | **Environment**   | **emulator-first.** Nothing here touches a cloud project.                                                                                                                                                                                                                      |
 | **Source**        | Owner rulings 2026-08-28 and 2026-08-29                                                                                                                                                                                                                                        |
 | **Prior sprints** | [D6](SPRINT-D6.md) · [D7](SPRINT-D7.md)                                                                                                                                                                                                                                        |
+| **Decisions**     | [DECISIONS-2026-08-29.md](../DECISIONS-2026-08-29.md) — rulings 9 (seeding, `selectGroupWinners`), 2 (vocabulary), 8 (contacts)                                                                                                                                                |
 | **Blocking**      | **S1 cannot start before [D6 C2](SPRINT-D6.md).** The seeding tiebreak reads P/G won %, which is computed from `pointswon` / `totalPointsPlayed` — restored by C2. **S3 cannot start before [D7 CS-3b](SPRINT-D7.md)**, which builds the row slot the seed number renders into |
 
 ---
 
 ## Why this sprint is third
 
-| Depends on | Item                   | Consequence of running it early                                                                      |
-| ---------- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| D6 C2      | S1 seeding tiebreak    | P/G won % is frozen at whatever was last written; every tiebreak resolves wrong                      |
-| D6 C7      | S1 implementation site | C7 was going to delete `selectGroupWinners`; it is now pulled from D6 so S1 has something to replace |
-| D6 C1      | S2 RR knockout seeding | The knockout gate is pinned shut, so there is no knockout to seed                                    |
-| D7 CS-3b   | S3 seed display        | No row slot exists; the number has nowhere to render                                                 |
+| Depends on | Item                   | Consequence of running it early                                                                                                    |
+| ---------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| D6 C2      | S1 seeding tiebreak    | P/G won % is frozen at whatever was last written; every tiebreak resolves wrong                                                    |
+| D6 C7      | S1 clean slate         | C7 deletes `selectGroupWinners` ([ruling 9](../DECISIONS-2026-08-29.md)); S1 builds `seeding.ts` fresh rather than reviving a stub |
+| D6 C1      | S2 RR knockout seeding | The knockout gate is pinned shut, so there is no knockout to seed                                                                  |
+| D7 CS-3b   | S3 seed display        | No row slot exists; the number has nowhere to render                                                                               |
 
 ---
 
@@ -98,10 +99,10 @@ Byes go to the top seeds first. Unseeded players fill the remaining slots in ent
 
 ## S2 · Wire seeding into the draws · A1 + A3
 
-**Files** · `src/pages/tournament/rrGeneration.ts:348` (`selectGroupWinners`) · `:361` (`buildRRKnockoutDocs`) · `:278` (`computeGroupStandings`) · `src/pages/tournament/types.ts:26-32`
+**Files** · `:361` (`buildRRKnockoutDocs`) · `:278` (`computeGroupStandings`) · `src/pages/tournament/types.ts:26-32`
 
 1. `TournamentPlayer` gains `seed?: number`.
-2. Replace the `selectGroupWinners` stub — left in place by [D6 C7](SPRINT-D6.md) precisely for this — with real ordering from `computeGroupStandings`.
+2. Order the knockout from `computeGroupStandings` using the new `seeding.ts`. `selectGroupWinners` is **deleted by [D6 C7](SPRINT-D6.md)** and is not revived ([ruling 9](../DECISIONS-2026-08-29.md)).
 3. `buildRRKnockoutDocs` places by `seedAnchors` rather than fill order.
 
 **Round Robin knockout seeding** uses a different source from entry seeding, per the owner:

@@ -7,6 +7,7 @@
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Branch base**   | Sprint D6 merge                                                                                                                                                                                                                                                                                                                               |
 | **Owner**         | **A4** almost alone. A3 supports on the pages, A5 on the visual baseline                                                                                                                                                                                                                                                                      |
+| **Decisions**     | [DECISIONS-2026-08-29.md](../DECISIONS-2026-08-29.md) — rulings 2 (vocabulary) and 6 (stats)                                                                                                                                                                                                                                                  |
 | **Source**        | [ACTION-REPORT.md](../../archive/planning-2026-08-23/ACTION-REPORT.md) CS rows · `ELEMENT-DESIGN-BRIEFS.md` (local only, not committed — 407KB) for per-element specs                                                                                                                                                                         |
 | **Prior sprints** | [D1](../../archive/planning-2026-08-23/sprints/SPRINT-D1.md) · [D2](../../archive/planning-2026-08-23/sprints/SPRINT-D2.md) · [D3](../../archive/planning-2026-08-23/sprints/SPRINT-D3.md) · [D4](../../archive/planning-2026-08-23/sprints/SPRINT-D4.md) · [D5](../../archive/planning-2026-08-23/sprints/SPRINT-D5.md) · [D6](SPRINT-D6.md) |
 
@@ -109,6 +110,40 @@ Everything below is applying what D3 built. No new decisions.
 ---
 
 ## Group 5 · Labels, copy and the rest
+
+### ⬛ One vocabulary _(ruling [2](../DECISIONS-2026-08-29.md), 2026-08-29)_
+
+**Measured:** a member sees **"Completed", "Done" and "Score recorded" for the same fixture** — [CS-24](../../archive/planning-2026-08-23/ACTION-REPORT.md#CS-24) found four vocabularies across four files.
+
+**On a match card there are two words and no others:**
+
+| Word        | Means                      |
+| ----------- | -------------------------- |
+| **Pending** | not played yet             |
+| **Done**    | a score has been submitted |
+
+> **[CS-24](../../archive/planning-2026-08-23/ACTION-REPORT.md#CS-24)'s own proposal is void.** It proposed `Scheduled · Pending · Done · No show`. **`No show` was deleted** (DECISIONS_BRIEF §1) and **`Scheduled` was deleted** (WDR §3 — no dates are stored). Implement `Pending` / `Done` only.
+
+**Files** · `MatchCard.tsx:130` (`Score recorded`/`Pending`) · `OpponentPanels.tsx:41-48` (`Win`/`Loss`/`Completed`/`Scheduled on …`) · `RRGroupCard.tsx:335` (`Done`) · `:241` (`W`/`L` — the viewer's glyph, keep).
+
+**Stored words, one per idea:** `confirmed` for a settled match (retires `complete`, `used`) · `declined` for a turned-down invitation (retires `rejected`) · `withdrawn` for leaving a tournament (retires `removal`, `removed`) · `inactive` for a member no longer active in the app · `completed` for tasks and service jobs.
+
+### ⬛ The stats a member sees _(ruling [6](../DECISIONS-2026-08-29.md))_
+
+Nothing else is rendered on either surface.
+
+| Surface                     | Shows                                                             |
+| --------------------------- | ----------------------------------------------------------------- |
+| **Leaderboard row**         | matches won · P/G won % · rank move · streak (`2W`, `2L`)         |
+| **Round Robin group table** | matches won in that group · overall P/G won % · pending · contact |
+
+Streak is new on the leaderboard — `currentStreak` exists on `tasks`, but as a count with no W/L direction, so the direction has to be derived from the member's recent matches.
+
+This supersedes the open half of [CS-22](../../archive/planning-2026-08-23/ACTION-REPORT.md#CS-22)…[CS-29](../../archive/planning-2026-08-23/ACTION-REPORT.md#CS-29): the labels still need to be consistent, but **which** stats appear is now settled.
+
+### ⬛ Download Draw _(ruling [8](../DECISIONS-2026-08-29.md))_ — new
+
+One control giving the organizer the draw **and** their participants' contacts together. The only existing "Download the draw" is an error-boundary fallback at `TournamentElements.tsx:65`; this is a different, new control on the organizer view.
 
 [CS-22](../../archive/planning-2026-08-23/ACTION-REPORT.md#CS-22)…[CS-29](../../archive/planning-2026-08-23/ACTION-REPORT.md#CS-29) — one label per stat, everywhere: `P/G Won %`, `Wins`, `Matches`, `Group Pts`, the skill band on the Leagues row, two distinct labels for the two draw counts, `{n} players`, and the rank move rendered once per row.
 
