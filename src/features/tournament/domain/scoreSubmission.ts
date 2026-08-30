@@ -2,7 +2,9 @@ import type { ScoreForm, ScoreSubmission, TournamentMatch } from '../../../pages
 
 type ScoreIntent = {
   submission: ScoreSubmission;
-  isWalkover: boolean;
+  // One name per thing (owner ruling, F-A): the stored match field is `walkover`, so the intent
+  // that produces it carries the same name. The old `is_walkover` spelling is retired.
+  walkover: boolean;
 };
 
 export const validateScorePairs = (
@@ -54,14 +56,14 @@ export const buildScoreSubmissionIntent = (
   const p1 = parsedSets.map((set) => (submitterIsP1 ? set.mine : set.opponent));
   const p2 = parsedSets.map((set) => (submitterIsP1 ? set.opponent : set.mine));
   const winnerIndex = scoreForm.winnerUserId === match.player_1_uid ? 0 : 1;
-  const isWalkover = !!scoreForm.walkover;
+  const walkover = !!scoreForm.walkover;
   const scoreError = validateScorePairs(
     p1.map((score, index) => [score, p2[index]] as [number, number]),
     winnerIndex as 0 | 1,
-    isWalkover,
+    walkover,
   );
   if (scoreError) return { error: scoreError };
-  if (isWalkover && !isCreator) return { error: 'Only the event organizer can record a walkover.' };
+  if (walkover && !isCreator) return { error: 'Only the event organizer can record a walkover.' };
   const court = scoreForm.court.trim();
   const submission: ScoreSubmission = {
     claimed_winner_name: scoreForm.winnerUserId === match.player_1_uid ? match.player_1_name : match.player_2_name,
@@ -77,7 +79,7 @@ export const buildScoreSubmissionIntent = (
   return {
     intent: {
       submission,
-      isWalkover,
+      walkover,
     },
   };
 };

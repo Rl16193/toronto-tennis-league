@@ -314,7 +314,7 @@ describe('expanded Firestore authorization matrix', () => {
       player_2_name: 'Member B',
       submitted_by: 'member-a',
       submitted_by_name: 'Member A',
-      is_walkover: false,
+      walkover: false,
       claimed_winner_uid: 'member-a',
       claimed_winner_name: 'Member A',
       set_1_player_1: 6,

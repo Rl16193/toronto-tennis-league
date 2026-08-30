@@ -5,11 +5,21 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const executable = (name) =>
-  path.join(root, 'node_modules', '.bin', process.platform === 'win32' ? `${name}.cmd` : name);
+// Resolve a package's real CLI entry rather than the node_modules/.bin shim: Node refuses to
+// spawn a .cmd without `shell: true` (CVE-2024-27980), so .bin is EINVAL on Windows. run()
+// launches whatever this returns with process.execPath.
+const requireFromRoot = createRequire(path.join(root, "package.json"));
+const executable = (name) => {
+  const pkgName = name === "firebase" ? "firebase-tools" : name;
+  const manifestPath = requireFromRoot.resolve(`${pkgName}/package.json`);
+  const { bin } = requireFromRoot(`${pkgName}/package.json`);
+  const entry = typeof bin === "string" ? bin : bin[name] ?? Object.values(bin)[0];
+  return path.join(path.dirname(manifestPath), entry);
+};
 const homebrewJava = '/opt/homebrew/opt/openjdk@21';
 const freePort = () =>
   new Promise((resolve, reject) => {
@@ -65,7 +75,11 @@ const waitForCallable = async (url, timeoutMs = 30_000) => {
 
 const run = (command, args, options = {}) =>
   new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: root, stdio: 'inherit', ...options });
+    // executable() returns a .js CLI entry; launch it with the running Node binary.
+    const isJs = typeof command === 'string' && command.endsWith('.js');
+    const child = isJs
+      ? spawn(process.execPath, [command, ...args], { cwd: root, stdio: 'inherit', ...options })
+      : spawn(command, args, { cwd: root, stdio: 'inherit', ...options });
     child.once('error', reject);
     child.once('exit', (code, signal) => resolve(code ?? (signal ? 1 : 0)));
   });
@@ -98,7 +112,13 @@ const outer = async () => {
   const configPath = path.join(tempDir, 'firebase.json');
   const functionsDir = path.join(tempDir, 'functions');
   await mkdir(functionsDir);
-  await symlink(path.join(root, 'functions', 'node_modules'), path.join(functionsDir, 'node_modules'));
+  // 'junction' on Windows: a directory SYMLINK needs elevation there and fails with EPERM for
+  // an ordinary user, while a junction does not. Ignored on POSIX.
+  await symlink(
+    path.join(root, 'functions', 'node_modules'),
+    path.join(functionsDir, 'node_modules'),
+    process.platform === 'win32' ? 'junction' : null,
+  );
   await writeFile(
     path.join(functionsDir, 'package.json'),
     `${JSON.stringify({

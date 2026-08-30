@@ -62,7 +62,7 @@ test('organizer-only walkover requires a winner and zero scores', () => {
     'owner',
     true,
   ).intent;
-  assert.equal(built.isWalkover, true);
+  assert.equal(built.walkover, true);
   assert.equal(built.submission.claimed_winner_uid, 'p1');
   assert.equal(
     buildScoreSubmissionIntent(form({ noShow: true, winnerUserId: '' }), match, 'owner', true).error,

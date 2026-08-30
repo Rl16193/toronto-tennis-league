@@ -35,13 +35,18 @@ const args =
     : ['deploy', '--only', 'hosting', '--project', projectId];
 
 console.log(`Running Firebase Hosting ${mode} for explicitly selected project ${projectId}.`);
+// Spawn the CLI's JS entrypoint with the running Node binary, NOT the node_modules/.bin
+// shim: Node refuses to spawn a .cmd without `shell: true` (CVE-2024-27980), which made
+// every emulator command fail with EINVAL on Windows.
 const firebaseBinary = path.join(
   root,
   'node_modules',
-  '.bin',
-  process.platform === 'win32' ? 'firebase.cmd' : 'firebase',
+  'firebase-tools',
+  'lib',
+  'bin',
+  'firebase.js',
 );
-const result = spawnSync(firebaseBinary, args, { cwd: root, stdio: 'inherit' });
+const result = spawnSync(process.execPath, [firebaseBinary, ...args], { cwd: root, stdio: 'inherit' });
 if (result.error) {
   console.error(`Firebase CLI could not be started: ${result.error.message}`);
   process.exit(1);

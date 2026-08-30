@@ -3,13 +3,13 @@
 > **Fix what the first five sprints got wrong or left out, then build what was missed.**
 > Everything here is small and specific. The component work is [Sprint D7](SPRINT-D7.md).
 
-| | |
-| --- | --- |
-| **Branch base** | `tbtc/dev-anuj` @ `4dde946` |
-| **Environment** | **staging** — this branch deploys to a staging project, not production. Data changes here are recoverable by re-seeding |
-| **Source** | [IMPLEMENTATION-REVIEW.md](../IMPLEMENTATION-REVIEW.md) — every item traces to a finding in it |
+|                   |                                                                                                                                                                                                                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Branch base**   | `tbtc/dev-anuj` @ `4dde946`                                                                                                                                                                                                                                                                                              |
+| **Environment**   | **emulator-first** (owner ruling 2026-08-29). Nothing here touches a cloud project. Migrations run against the local emulator, which is re-seeded from `npm run dataset:build && npm run seed:dataset` — 3,233 documents transformed from the 2026-08-17 live snapshot                                                   |
+| **Source**        | [IMPLEMENTATION-REVIEW.md](../IMPLEMENTATION-REVIEW.md) — every item traces to a finding in it                                                                                                                                                                                                                           |
 | **Prior sprints** | [D1](../../archive/planning-2026-08-23/sprints/SPRINT-D1.md) · [D2](../../archive/planning-2026-08-23/sprints/SPRINT-D2.md) · [D3](../../archive/planning-2026-08-23/sprints/SPRINT-D3.md) · [D4](../../archive/planning-2026-08-23/sprints/SPRINT-D4.md) · [D5](../../archive/planning-2026-08-23/sprints/SPRINT-D5.md) |
-| **Blocking** | A5 must confirm the test suite passes on `4dde946` **before** anything else starts. Three earlier commits show a failed check and it was never resolved |
+| **Blocking**      | A5 must confirm the test suite passes on `4dde946` **before** anything else starts. Three earlier commits show a failed check and it was never resolved                                                                                                                                                                  |
 
 **Line numbers are `dev-anuj` @ `4dde946`.** Re-check before editing.
 
@@ -17,13 +17,23 @@
 
 ## Board
 
-| Lane | Tasks | Theme |
-| --- | --: | --- |
-| **A1 Rules + Functions** | 9 | C2, C3, C4, C5, C8, C9, C10, F1-server |
-| **A2 Data** | 4 | C3 and C4 backfills, F1-schema |
-| **A3 Client / Dev** | 8 | C1, C4, C6, C7, C11, F1-client, F2 |
-| **A4 UI/UX** | 5 | C8-book, F1-UI, F2-UI, F3 |
-| **A5 Verify** | 7 | CI first, then a test per correction |
+| Lane                     | Tasks | Theme                                  |
+| ------------------------ | ----: | -------------------------------------- |
+| **A1 Rules + Functions** |     9 | C2, C3, C4, C5, C8, C9, C10, F1-server |
+| **A2 Data**              |     4 | C3 and C4 backfills, F1-schema         |
+| **A3 Client / Dev**      |     8 | C1, C4, C6, C7, C11, F1-client, F2     |
+| **A4 UI/UX**             |     5 | C8-book, F1-UI, F2-UI, F3              |
+| **A5 Verify**            |    11 | CI first, then a test per correction   |
+
+### Added 2026-08-29
+
+| #       | Item                                        | Lane    | Why it is here and not later                                                                                                                                       |
+| ------- | ------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **C12** | `services` security rules                   | A1      | **C8 cannot be verified without it.** `firestore.rules` has no `services` block at all, so the catalogue falls through to deny and no Book button can be confirmed |
+| **C13** | Score margin threshold 10 → 21              | A1 + A3 | Three layers must change together                                                                                                                                  |
+| **C14** | No re-notification on a lower-margin accept | A1      | Same code path as C13; do them together                                                                                                                            |
+| **C15** | Challenge notification parity               | A1      | [BLG0010](../../BACKLOG.md) — declined and confirmed are silent today                                                                                              |
+| **C16** | Re-seat a re-added participant              | A1 + A3 | The placer never fires for them; blocks the withdrawal round-trip C4 and L12 assume                                                                                |
 
 ---
 
@@ -31,17 +41,17 @@
 
 Taken 2026-08-25. These override the earlier rulings named beside them.
 
-| # | Decision | Overrides |
-| --- | --- | --- |
-| 1 | **Points won and total points played are stored again.** Free at write time, and deriving them would cost a full match history per leaderboard row | [L14](../../archive/planning-2026-08-23/notes/HARMONIZATION_REPORT.md#L14) |
-| 2 | **`loses` is deleted.** Verified: it is stored, carried through three type definitions, and displayed on no screen | [S1](../../archive/planning-2026-08-23/notes/HARMONIZATION_REPORT.md#S1) |
-| 3 | **`tournamentsPlayed` counts events joined**, incremented once when the member joins a tournament, never on a loss | [DC-12](../../archive/planning-2026-08-23/ACTION-REPORT.md#DC-12) |
-| 4 | **Group matches need not all be played before the knockout is created.** A warning replaces the block | new |
-| 5 | **A member picks courts, not a zone.** The zone is derived. No approval to change it, and a zone change still places them in **both** draws | [L15](../../archive/planning-2026-08-23/notes/HARMONIZATION_REPORT.md#L15) kept |
-| 6 | **A mistyped address goes to the home page.** No "not found" screen | reverses [RT-1](../../archive/planning-2026-08-23/ACTION-REPORT.md#RT-1) |
-| 7 | **The empty-score safety rule stays** | confirms D13 |
-| 8 | **Knockout size moves both ways in edit mode**, with 4 as the floor | reverses the expand-only rule |
-| 9 | **Pool contacts are visible to pool members only** | refines [L18](../../archive/planning-2026-08-23/notes/HARMONIZATION_REPORT.md#L18) |
+| #   | Decision                                                                                                                                           | Overrides                                                                          |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 1   | **Points won and total points played are stored again.** Free at write time, and deriving them would cost a full match history per leaderboard row | [L14](../../archive/planning-2026-08-23/notes/HARMONIZATION_REPORT.md#L14)         |
+| 2   | **`loses` is deleted.** Verified: it is stored, carried through three type definitions, and displayed on no screen                                 | [S1](../../archive/planning-2026-08-23/notes/HARMONIZATION_REPORT.md#S1)           |
+| 3   | **`tournamentsPlayed` counts events joined**, incremented once when the member joins a tournament, never on a loss                                 | [DC-12](../../archive/planning-2026-08-23/ACTION-REPORT.md#DC-12)                  |
+| 4   | **Group matches need not all be played before the knockout is created.** A warning replaces the block                                              | new                                                                                |
+| 5   | **A member picks courts, not a zone.** The zone is derived. No approval to change it, and a zone change still places them in **both** draws        | [L15](../../archive/planning-2026-08-23/notes/HARMONIZATION_REPORT.md#L15) kept    |
+| 6   | **A mistyped address goes to the home page.** No "not found" screen                                                                                | reverses [RT-1](../../archive/planning-2026-08-23/ACTION-REPORT.md#RT-1)           |
+| 7   | **The empty-score safety rule stays**                                                                                                              | confirms D13                                                                       |
+| 8   | **Knockout size moves both ways in edit mode**, with 4 as the floor                                                                                | reverses the expand-only rule                                                      |
+| 9   | **Pool contacts are visible to pool members only**                                                                                                 | refines [L18](../../archive/planning-2026-08-23/notes/HARMONIZATION_REPORT.md#L18) |
 
 ---
 
@@ -102,7 +112,7 @@ const rrKnockoutReady = useMemo(
 
 Export `rrGroupUnplayed`, pass it through `Tournament.tsx` to `RoundRobinView`, and show it above the size bar:
 
-> *"{n} group matches still to play. You can build the knockout now and group results will keep counting."*
+> _"{n} group matches still to play. You can build the knockout now and group results will keep counting."_
 
 Update the guard in `handleGenerateRRKnockout` at `:2355` to test `rrRealGroupMatches.length === 0`.
 
@@ -168,7 +178,7 @@ Today the loser branch adds `tournamentsPlayed: 1` on **every loss**, and the wi
 2. In `onParticipantCreated`, when the new participant is for a **tournament** event, increment `stats/{uid}.tournamentsPlayed` by 1.
 3. Leave it alone on withdrawal. They did join.
 
-**A2 backfill.** Existing values equal each member's loss count. Recompute as the number of distinct tournament events each member has a participant row for. Dry-run first; this is staging, so the diff is safe to apply once read.
+**A2 backfill.** Existing values equal each member's loss count. Recompute as the number of distinct tournament events each member has a participant row for. Dry-run first against the seeded emulator, which carries real production shape and volume. Nothing live is touched, so the diff is safe to apply once read.
 
 **Done when** · joining a tournament increments it once · scoring a match never moves it · the backfill diff is read and approved.
 
@@ -178,16 +188,16 @@ Today the loser branch adds `tournamentsPlayed: 1` on **every loss**, and the wi
 
 **Verified: it is displayed on no screen.** It reaches the leaderboard row object and an opponent-panel props type, and neither renders it. The Round Robin group table does show a loss column, but that counts the group's own matches and never touches `stats.loses`.
 
-| File | What |
-| --- | --- |
-| `functions/lib/tournamentResult.js:146` | stop writing it |
-| `functions/friendlyPoints.js` | stop writing it — the second writer |
-| `functions/competitionResults.js` | stop writing it if present |
-| `src/types.ts:56` · `src/features/leagues/types.ts:8` | remove the field |
-| `src/lib/firestoreNormalization.ts:260` | remove |
-| `src/features/leagues/useStandings.ts:55` | remove from the row |
-| `src/pages/tournament/OpponentPanels.tsx:25` | remove the unused prop, and the value passed at `useTournament.ts:746` |
-| `src/lib/profileBootstrap.ts:23` | remove from the seed |
+| File                                                  | What                                                                   |
+| ----------------------------------------------------- | ---------------------------------------------------------------------- |
+| `functions/lib/tournamentResult.js:146`               | stop writing it                                                        |
+| `functions/friendlyPoints.js`                         | stop writing it — the second writer                                    |
+| `functions/competitionResults.js`                     | stop writing it if present                                             |
+| `src/types.ts:56` · `src/features/leagues/types.ts:8` | remove the field                                                       |
+| `src/lib/firestoreNormalization.ts:260`               | remove                                                                 |
+| `src/features/leagues/useStandings.ts:55`             | remove from the row                                                    |
+| `src/pages/tournament/OpponentPanels.tsx:25`          | remove the unused prop, and the value passed at `useTournament.ts:746` |
+| `src/lib/profileBootstrap.ts:23`                      | remove from the seed                                                   |
 
 **A2:** a migration stripping the field from `stats`. Dry-run first.
 
@@ -228,13 +238,13 @@ Three copies become two. The last two cross the server/browser boundary and cann
 
 `completion_requested_at` → **`marked_completed_at`**. Nothing is requested; the stringer is stating the job is done.
 
-| File | Line |
-| --- | --- |
-| `functions/bookings.js` | `:86` set · `:108` clear |
-| `functions/lib/bookingState.js` | `:21` |
-| `src/features/services/types.ts` | `:100` |
-| `functions/test/bookingState.test.js` | `:5`, `:8` |
-| `tests/integration/functions.emulator.test.mjs` | `:209` |
+| File                                            | Line                     |
+| ----------------------------------------------- | ------------------------ |
+| `functions/bookings.js`                         | `:86` set · `:108` clear |
+| `functions/lib/bookingState.js`                 | `:21`                    |
+| `src/features/services/types.ts`                | `:100`                   |
+| `functions/test/bookingState.test.js`           | `:5`, `:8`               |
+| `tests/integration/functions.emulator.test.mjs` | `:209`                   |
 
 One test booking exists and it is cancelled, so no migration is needed.
 
@@ -242,12 +252,12 @@ One test booking exists and it is cancelled, so no migration is needed.
 
 ### ⬛ C7 — Delete dead code · A3
 
-| Where | What |
-| --- | --- |
+| Where                                          | What                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/features/events/hooks/useJoin.ts:158-162` | The unreachable `'full'` and `'fallback'` branches. `slotStatus` is permanently `null`; these are the old refusal and the path that **rewrote a member's skill level**. Remove the branches, the `slotStatus` memo, `slotFallbackConfirmed`, and the `SlotResult` type if nothing else uses it |
-| `src/pages/tournament/rrGeneration.ts:348` | `selectGroupWinners` — exported, no callers. Remove it and the `advancingPlayers` plumbing if `buildRRKnockoutDocs` no longer needs it |
+| ~~`src/pages/tournament/rrGeneration.ts:348`~~ | ~~`selectGroupWinners`~~ — **PULLED FROM THIS SPRINT (owner ruling 2026-08-29).** The stub stays. [Sprint D8](SPRINT-D8.md) reintroduces knockout seeding and replaces it with a real implementation; deleting it here would be undone next sprint. Keep the `advancingPlayers` plumbing too   |
 
-**Done when** · `npm run typecheck` clean · `grep -rn "slotStatus\|selectGroupWinners" src/` returns nothing.
+**Done when** · `npm run typecheck` clean · `grep -rn "slotStatus" src/` returns nothing · **`selectGroupWinners` is still present**, because [Sprint D8](SPRINT-D8.md) builds on it.
 
 ---
 
@@ -255,13 +265,13 @@ One test booking exists and it is cancelled, so no migration is needed.
 
 `GroupLessonCard` is already gone from the UI. What remains is server-side.
 
-| Where | What |
-| --- | --- |
-| `firestore.rules:707` | delete the `group_lessons` block |
-| `functions/rewards.js:98,150` | delete the two functions reading `group_lessons/{month}` |
-| `firestore.rules` contacts read | **remove `isCurrentGroupLessonCoachFor`.** It is a fourth way to read another member's contacts and it retires with the feature. Contacts then read: owner, connection, and through a connection the event organizer |
-| `firestore.rules:641` · `functions/rewards.js:36` | delete `redemption_locks` and `redemptionLockRef` |
-| `functions/test/redemptionLock.test.js` | delete with it |
+| Where                                             | What                                                                                                                                                                                                                 |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `firestore.rules:707`                             | delete the `group_lessons` block                                                                                                                                                                                     |
+| `functions/rewards.js:98,150`                     | delete the two functions reading `group_lessons/{month}`                                                                                                                                                             |
+| `firestore.rules` contacts read                   | **remove `isCurrentGroupLessonCoachFor`.** It is a fourth way to read another member's contacts and it retires with the feature. Contacts then read: owner, connection, and through a connection the event organizer |
+| `firestore.rules:641` · `functions/rewards.js:36` | delete `redemption_locks` and `redemptionLockRef`                                                                                                                                                                    |
+| `functions/test/redemptionLock.test.js`           | delete with it                                                                                                                                                                                                       |
 
 **A4:** `bookService` exists in `src/features/services/servicesApi.ts:21` but no Book control was found in the Services UI. **Confirm one exists on each service card and add it if not.** It is the entry point to the whole booking flow shipped in [D5](../../archive/planning-2026-08-23/sprints/SPRINT-D5.md).
 
@@ -300,11 +310,107 @@ Replace the catch-all with `<Route path="*" element={<Navigate to="/" replace />
 
 ---
 
+### ⬛ C12 — `services` security rules · A1
+
+**File** · `firestore.rules` — insert at **:303**, between the `providers` block (299-302) and `bookings` (304-314).
+
+```
+// The catalogue is public so a logged-out visitor can browse what is on offer. Writes are
+// owner-gated through a callable; booking is members-only because every booking transition
+// goes through Functions, which require auth.
+match /services/{serviceId} {
+  allow read: if true;
+  allow write: if false;
+}
+```
+
+Nothing else is needed for "members can book, visitors cannot": `bookings` is already `allow write: if false` (:313) with reads scoped to owner, super-admin or linked provider (:306-312).
+
+**Deferred — provider contact.** Booking will create a connection keyed on `services.provider_id` → `providers/{providerId}`, and the contact button plus booking number appear once the member books or the provider accepts. Same shape as the opponent `connections/{a__b}` mechanism. **Not this sprint.** While it is deferred, note that `contact_phone` and `contact_email` sit on the world-readable service document, so they are readable by anyone querying the collection directly.
+
+**Done when** · an anonymous read of `services` succeeds · an authenticated write is denied · a super-admin write is denied · C8's Book button can be confirmed.
+
+---
+
+### ⬛ C13 — Score margin threshold 10 → 21 · A1 + A3
+
+Any score above **21** must have a margin of exactly 2. Below or at 21, no margin rule.
+
+| File                                                | Line  | Change                      |
+| --------------------------------------------------- | ----- | --------------------------- |
+| `firestore.rules`                                   | 161   | `high <= 10` → `high <= 21` |
+| `functions/lib/tournamentResult.js`                 | 44-45 | condition and message text  |
+| `src/features/tournament/domain/scoreSubmission.ts` | 26-27 | same                        |
+
+**All three in one commit.** This project has a documented incident where two copies of a scoring rule drifted apart and players were shown points nobody had paid.
+
+**One contract example flips.** Of the twelve in the harmonization report, `12-2` moves from **invalid to valid** — 12 is under the threshold, so no margin applies. `40-0` and `90-40` stay invalid; `24-22`, `38-40` and `94-92` stay valid.
+
+> **Finding F-E is stale.** It records that the margin rule "exists in no layer" and that Rules cap scores at 0-7. Both were fixed since: `firestore.rules:156` allows 0-99 and `:159` implements the margin. All three layers already agree — this change moves one number in each.
+
+**Done when** · `21-19` valid · `22-19` rejected · `12-2` accepted · one test per layer.
+
+---
+
+### ⬛ C14 — No re-notification when a lower score is accepted · A1
+
+**File** · `functions/tournamentResults.js` — the `result.margin < oldResult.margin` path falling out of the guard at **:266** into the apply block.
+
+Today a same-winner reconcile re-applies and notifies both players again. The result did not change hands and the players already know the outcome, so the second notification is noise. Thread a flag through the apply path so a reconcile applies silently.
+
+The neighbouring branch at `:266-268` (margin greater or equal) already returns `notices: []` — match it.
+
+> Per finding **F-M**, once `loses` is derived and games stop being stored, a same-winner reconcile has **no stat consequences at all** — every surviving delta depends on winner, round and format. So this path is a pure score-field update, which is exactly why it should not notify.
+
+**Done when** · a lower-margin resubmission updates the score and sends nothing · a winner change still notifies · a dispute still notifies the organizer once.
+
+---
+
+### ⬛ C15 — Challenge notification parity · A1
+
+**File** · `functions/notifications.js`
+
+[BLG0010](../../BACKLOG.md). Rally has `rally_declined` (:412) and `rally_confirmed` (:430). Challenges have neither:
+
+| Event             | Rally             | Challenge today                                                              |
+| ----------------- | ----------------- | ---------------------------------------------------------------------------- |
+| Opponent declines | `rally_declined`  | **silent** — `:346` is gated on `after.source`, so only _conversions_ notify |
+| Result confirmed  | `rally_confirmed` | **silent**                                                                   |
+
+Add `ladder_declined` and `ladder_confirmed` on the same trigger that already handles `accepted` and `reported` (`:301`, `:319`).
+
+> **Vocabulary note.** `ladder_cancelled` (`:358`) is **not** the decline — it fires from `onLadderChallengeDeleted` when the _challenger_ withdraws their own open challenge, notifying the person they challenged. A decline is the opponent moving `open → rejected`. Two different events, two different recipients.
+
+**Done when** · declining a from-scratch challenge notifies the challenger · confirming a reported challenge notifies both · neither duplicates on replay.
+
+---
+
+### ⬛ C16 — Re-seat a re-added participant · A1 + A3
+
+**Files** · `functions/participantWorkflow.js:91` (`onParticipantCreated`) · `:66` (`seatParticipant`) · `:73` (`choosePlacement`)
+
+A player who withdraws and is re-added is **never placed**, for two independent reasons:
+
+1. **No trigger fires.** The placer is `onDocumentCreated`. Re-adding flips `status` back to `active`, which is an _update_, so `seatParticipant` never runs.
+2. **No slot exists.** `choosePlacement` looks for an open `PLAYER_LOADING` slot. After generation there are none, so it returns `null`.
+
+**Owner ruling 2026-08-29 — option B.** The organizer adds them to a group. Their matches count for **group points only**; the knockout is untouched and is never rebuilt around them.
+
+**Build**
+
+1. Add an `onDocumentUpdated` path on `event_participants` firing when `status` goes `withdrawn → active`.
+2. Extend `choosePlacement` so it can **create** group matches for the re-added player rather than only fill an empty slot.
+3. Never touch knockout matches. If the knockout for that draw already exists, the player joins the group stage only.
+
+**Done when** · a withdrawn player re-added before generation is seated normally · re-added after generation gets group matches and no knockout slot · an existing knockout is unchanged · a test covers the re-add round trip.
+
+---
+
 ## Features
 
 ### ⬛ F1 — The doubles partner pool · all lanes
 
-**The join sheet already promises this.** `EventsElements.tsx:679` reads *"No partner yet? Leave this blank to join the event's partner pool."* and no pool exists. A member who leaves that field blank today joins nothing.
+**The join sheet already promises this.** `EventsElements.tsx:679` reads _"No partner yet? Leave this blank to join the event's partner pool."_ and no pool exists. A member who leaves that field blank today joins nothing.
 
 #### A2 — Schema
 
@@ -357,7 +463,7 @@ match /partner_pool/{eventId}/contacts/{uid} {
 1. Write `partner_pool/{eventId}/contacts/{uid}` from the member's `contacts` document, carrying only the channels they have filled in.
 2. Notify every **other** member in the same event **and** the same `category`:
 
-> **"A new player is waiting to partner up!"** — *{name} joined the {category} doubles pool for {event}.*
+> **"A new player is waiting to partner up!"** — _{name} joined the {category} doubles pool for {event}._
 
 Link to the pool panel. Do not notify the joiner.
 
@@ -374,15 +480,15 @@ Link to the pool panel. Do not notify the joiner.
 
 Three states on the doubles tournament tab:
 
-| The member is… | What they see |
-| --- | --- |
-| **In the pool** | The pool panel is **open by default**, listing every member with name, skill and full contact buttons. A **Partner pool** button re-opens it if they close it by mistake |
-| **Paired** | They see the draw. A **Partner pool** button opens the list — names and skill only, **no contact buttons** |
-| **In the doubles event, not in the pool** | Same as paired: the list, no contacts |
+| The member is…                            | What they see                                                                                                                                                            |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **In the pool**                           | The pool panel is **open by default**, listing every member with name, skill and full contact buttons. A **Partner pool** button re-opens it if they close it by mistake |
+| **Paired**                                | They see the draw. A **Partner pool** button opens the list — names and skill only, **no contact buttons**                                                               |
+| **In the doubles event, not in the pool** | Same as paired: the list, no contacts                                                                                                                                    |
 
 Contacts come from the `contacts` subcollection, which only resolves for members. Reuse `contactChannels` from `ContactOpponentButton` — do not build a second contact control. A denied read is expected for non-members and must not surface as an error.
 
-Empty state: *"Nobody is waiting yet. Join the pool and other players looking for a partner will see you."*
+Empty state: _"Nobody is waiting yet. Join the pool and other players looking for a partner will see you."_
 
 #### A5 — Tests
 
@@ -401,7 +507,7 @@ Joining creates one row · rejoining is a no-op · every other member of the sam
 1. **Replace the zone chips with a court multi-select.** Several courts, matching the profile shape. Derive the zone through the existing `resolveZone` and set `preferred_zone_manual` on an explicit pick.
 2. **Add a link below the picker** to `/courts` (`App.tsx:167`), opening the map **with all courts and the zone layers visible**, so a member can see which zone a court sits in before choosing.
 3. **Keep the gate**, but test courts rather than zone: the join is blocked until at least one court is chosen.
-4. **Tournament tab:** `TournamentElements.tsx:91` reads *"Request Zone Change"* and raises a request an organizer must approve. **Make it a direct change.** No request, no approval. Keep writing `req_zone_change` so the organizer still sees the notice, but drop the approval step.
+4. **Tournament tab:** `TournamentElements.tsx:91` reads _"Request Zone Change"_ and raises a request an organizer must approve. **Make it a direct change.** No request, no approval. Keep writing `req_zone_change` so the organizer still sees the notice, but drop the approval step.
 5. **Profile card:** the zone sheet at `ProfileInfo.tsx:266` already changes zone directly. Add the same `/courts` link beneath it.
 6. **A zone change still places the member in both draws.** `onZoneChanged` is unchanged. The organizer is informed, not asked.
 7. **A custom court name is accepted.** The member's zone resolves to **none**. Then:
@@ -430,14 +536,14 @@ Decision 8 replaces that rule.
 
 **Build**
 
-| Rule | Detail |
-| --- | --- |
-| Direction | **Both ways** — 4↔8, 8↔16 |
-| Floor | **4 is the smallest size.** Nothing below it |
-| When | **Only while the draw is in edit mode.** Outside edit mode the size bar is read-only |
-| Growing | Unchanged. Existing matches are kept; only new slots are written |
-| Shrinking | **Refuse if any slot being dropped holds a generated or played match.** The message names them: *"Cannot reduce to {n}: {x} matches already exist in the slots that would be removed."* Otherwise delete the empty slot documents |
-| Always | **A recorded score is never deleted.** That rule has not changed |
+| Rule      | Detail                                                                                                                                                                                                                            |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Direction | **Both ways** — 4↔8, 8↔16                                                                                                                                                                                                         |
+| Floor     | **4 is the smallest size.** Nothing below it                                                                                                                                                                                      |
+| When      | **Only while the draw is in edit mode.** Outside edit mode the size bar is read-only                                                                                                                                              |
+| Growing   | Unchanged. Existing matches are kept; only new slots are written                                                                                                                                                                  |
+| Shrinking | **Refuse if any slot being dropped holds a generated or played match.** The message names them: _"Cannot reduce to {n}: {x} matches already exist in the slots that would be removed."_ Otherwise delete the empty slot documents |
+| Always    | **A recorded score is never deleted.** That rule has not changed                                                                                                                                                                  |
 
 **Done when** · 8→16 keeps every existing match · 16→8 with an empty upper half succeeds · 16→8 with a played match in the upper half is refused, naming it · the bar is inert outside edit mode · 4 cannot be reduced further.
 
@@ -445,23 +551,32 @@ Decision 8 replaces that rule.
 
 ## Exit gate
 
-| Check | Passes when |
-| --- | --- |
-| CI | `npm run verify` green on the sprint branch |
-| C1 | A one-player group no longer blocks the knockout; the warning shows the unplayed count; a test fails on old code |
-| C2 | Points won moves on every scored match for both players, and reverses exactly |
-| C3 | `tournamentsPlayed` moves on join and never on a result; backfill diff approved |
-| C4 | `loses` gone from code and data; no screen changes |
-| C5 | One award table in `functions/` |
-| C8 | `grep -rn "group_lessons\|redemption_locks" firestore.rules functions/` returns nothing; a Book button exists on every service |
-| C9 | `grep -rn "no_show" firestore.rules functions/` returns nothing |
-| C11 | `/nonsense` lands on home with no history entry |
-| F1 | The seven pool tests pass, including the denied contact read for a non-member; the join-sheet hint is now true |
-| F2 | The five zone conditions, and an unmapped court lands the member in Unplaced |
-| F3 | The five size conditions |
+| Check     | Passes when                                                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| CI        | `npm run verify` green on the sprint branch                                                                                    |
+| C1        | A one-player group no longer blocks the knockout; the warning shows the unplayed count; a test fails on old code               |
+| C2        | Points won moves on every scored match for both players, and reverses exactly                                                  |
+| C3        | `tournamentsPlayed` moves on join and never on a result; backfill diff approved                                                |
+| C4        | `loses` gone from code and data; no screen changes                                                                             |
+| C5        | One award table in `functions/`                                                                                                |
+| C8        | `grep -rn "group_lessons\|redemption_locks" firestore.rules functions/` returns nothing; a Book button exists on every service |
+| C9        | `grep -rn "no_show" firestore.rules functions/` returns nothing                                                                |
+| C11       | `/nonsense` lands on home with no history entry                                                                                |
+| C12       | An anonymous read of `services` succeeds; every write is denied; C8's Book button is confirmable                               |
+| C13       | `21-19` valid, `22-19` rejected, `12-2` accepted — in all three layers                                                         |
+| C14       | A lower-margin resubmission changes the score and sends no notification                                                        |
+| C15       | Declining and confirming a challenge both notify; `ladder_cancelled` still means the challenger withdrew                       |
+| C16       | A re-added participant gets group matches; the existing knockout is untouched                                                  |
+| F1        | The seven pool tests pass, including the denied contact read for a non-member; the join-sheet hint is now true                 |
+| F2        | The five zone conditions, and an unmapped court lands the member in Unplaced                                                   |
+| F3        | The five size conditions                                                                                                       |
+| **Setup** | Port 8080 is free, the six Windows launcher patches are committed, and `test:e2e` has run at least once                        |
 
 ---
 
 ## Not in this sprint
 
 The 13 remaining shared components and the consolidation of 83 card surfaces — [Sprint D7](SPRINT-D7.md).
+Knockout seeding, the coaching pool, and the workflow and legal documents — [Sprint D8](SPRINT-D8.md).
+
+**`selectGroupWinners` is deliberately left in place** for D8. See C7.

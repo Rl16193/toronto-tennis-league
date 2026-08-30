@@ -432,7 +432,7 @@ const seedTournament = async (ownerUid, playerOne, playerTwo) => {
       match_id: 'm1',
       submitted_by: playerOne,
       claimed_winner_uid: playerOne,
-      is_walkover: false,
+      walkover: false,
       set_1_player_1: 6,
       set_1_player_2: 4,
       set_2_player_1: 6,
