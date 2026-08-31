@@ -18,13 +18,16 @@
 
 ## Board
 
-| Lane                     | Tasks | Theme                                  |
-| ------------------------ | ----: | -------------------------------------- |
-| **A1 Rules + Functions** |     9 | C2, C3, C4, C5, C8, C9, C10, F1-server |
-| **A2 Data**              |     4 | C3 and C4 backfills, F1-schema         |
-| **A3 Client / Dev**      |     8 | C1, C4, C6, C7, C11, F1-client, F2     |
-| **A4 UI/UX**             |     5 | C8-book, F1-UI, F2-UI, F3              |
-| **A5 Verify**            |    11 | CI first, then a test per correction   |
+| Lane                     | Tasks | Theme                                                      |
+| ------------------------ | ----: | ---------------------------------------------------------- |
+| **A1 Rules + Functions** |    13 | C2, C3, C4, C5, C8, C9, C10, C20–C23-server, F1-server     |
+| **A2 Data**              |     6 | C3 and C4 backfills, C20 and C21 migrations, F1-schema     |
+| **A3 Client / Dev**      |    10 | C1, C4, C6, C7, C11, C20 and C21 call sites, F1-client, F2 |
+| **A4 UI/UX**             |     5 | C8-book, F1-UI, F2-UI, F3                                  |
+| **A5 Verify**            |    15 | CI first, then a test per correction                       |
+
+Lane counts are the planning estimate. The real breakdown is produced per job, on demand —
+see [tasks/README.md](../tasks/README.md).
 
 ### Added 2026-08-29
 
@@ -33,11 +36,24 @@
 | **C12** | `services` security rules                       | A1      | **C8 cannot be verified without it.** `firestore.rules` has no `services` block at all, so the catalogue falls through to deny and no Book button can be confirmed |
 | **C13** | Score margin threshold 10 → 21                  | A1 + A3 | Three layers must change together                                                                                                                                  |
 | **C14** | No re-notification on a lower-margin accept     | A1      | Same code path as C13; do them together                                                                                                                            |
-| **C15** | **One result model** for challenges and rallies | A1 + A3 | [Ruling 1](../DECISIONS-2026-08-29.md). Rally has **never once** produced a result: 43 opened, 0 completed                                                         |
+| **C15** | **One result model** for challenges and rallies | A1 + A3 | [Ruling 1](../DECISIONS-2026-08-29.md). Three ways to record the same thing; entering a rally score stays optional                                                 |
 | **C16** | Re-seat a re-added participant                  | A1 + A3 | The placer never fires for them; blocks the withdrawal round-trip C4 and L12 assume                                                                                |
 | **C17** | Four event types                                | A2 + A3 | [Ruling 5](../DECISIONS-2026-08-29.md). Live data holds five, including `tournament` in lower case                                                                 |
 | **C18** | Remove per-event draw hiding                    | A3      | [Ruling 4](../DECISIONS-2026-08-29.md). `hide_seniors` / `hide_beginners` go; the Retired Pro draw stays                                                           |
 | **C19** | Zone change without approval                    | A1 + A3 | [Ruling 7](../DECISIONS-2026-08-29.md). Organizer is notified, not asked                                                                                           |
+
+### Added 2026-08-31
+
+From [VISION.md](../VISION.md) and the [2026-08-31 rulings](../specs/2026-08-31-vision-gaps-design.md). These had no sprint id; they belong here because they are corrections to stored data and server behaviour, the same class as C1–C19.
+
+| #       | Item                            | Lane         | Phase | Why it is here                                                                                                                           |
+| ------- | ------------------------------- | ------------ | ----- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **C20** | The `location` field            | A1 + A2 + A3 | M1    | [VISION §2](../VISION.md). Every location rule depends on it, and adding it after beta means a live-data migration. **Wide refactor**    |
+| **C21** | `friendly` → `rally`            | A1 + A2 + A3 | M1    | [VISION §8](../VISION.md). One term, in code, UI and stored data. Same code path as C15 — do them together. **Wide refactor**            |
+| **C22** | League points halve at year end | A1           | M1    | [Ruling 5, 2026-08-31](../specs/2026-08-31-vision-gaps-design.md). Ranking only; the spendable balance carries forward untouched         |
+| **C23** | Beta notifications stay in-app  | A1           | M1    | [Ruling 3, 2026-08-31](../specs/2026-08-31-vision-gaps-design.md). Nothing leaves the app during the beta; this constrains existing code |
+
+**C20 and C21 are wide refactors.** Neither can land as one change — they are sequenced expand → migrate in batches → contract, so the suite stays green between batches. The planner breaks them down that way; see [tasks/README.md](../tasks/README.md).
 
 ---
 
@@ -378,7 +394,9 @@ The neighbouring branch at `:266-268` (margin greater or equal) already returns 
 
 ### ⬛ C15 — One result model for challenges and rallies · A1 + A3
 
-**Ruling [1](../DECISIONS-2026-08-29.md).** Measured: rally **43 opened, 0 ever reached a result**. Challenge 5 of 31. Both ran a five-state handshake with different words for identical states.
+**Ruling [1](../DECISIONS-2026-08-29.md).** Challenges and rallies each ran their own five-state handshake, with different words for identical states, and neither matched how a tournament result is entered. Three ways to record the same thing.
+
+> **A rally without a score is not a failure.** Entering one is optional by design — a way to earn extra points — and choosing not to is a normal outcome. This change is about how a score behaves _when_ it is entered.
 
 **Files** · `functions/competitionResults.js` · `functions/notifications.js:262-366` · `src/pages/tournament/useTournament.ts`
 
@@ -442,7 +460,9 @@ Live data holds **five values across ten events**, including **`tournament` in l
 
 **Files** · `src/pages/tournament/useTournament.ts:216-217` (the two filter lines) and `:256-257` (the deps) · `src/lib/firestoreNormalization.ts:108-109` · `src/types.ts`
 
-**The Retired Pro draw itself survives.** It is a separate, league-gated concept (`useJoin.ts:140-142`), not the toggle. Same for Beginners. What goes is the per-event ability to hide either draw.
+**The Retired Pro draw itself survives.** It is a separate, league-gated concept (`useJoin.ts:140-142`), not the toggle. Same for Beginners.
+
+**A draw already appears only when players in that category join** — seniors, beginners and every zone draw follow who actually signed up, so an empty category shows nothing on its own. The toggles duplicated what participation already handles.
 
 **Done when** · both draws always render · `grep -rn "hide_seniors|hide_beginners" src/` returns nothing · a migration strips the fields.
 
@@ -459,6 +479,48 @@ Folds into [F2](#f2). The tournament page's "Request Zone Change" (`TournamentEl
 ---
 
 ## Features
+
+### ⬛ C20 — The `location` field · A1 + A2 + A3 · wide refactor
+
+**Ruling** · [VISION §2](../VISION.md). A **location** is a city's competition community, created by an event's location. Everything existing becomes `Toronto`. A member's location is derived from the city of their preferred courts, set at signup with no extra UI, and updates when they change courts. Playing is location-scoped — a challenge or rally to another location is refused **server-side**; across zones inside a location it is allowed. Only the global leaderboard is visible across locations.
+
+> **`location`, never `league`.** `league` is the app's existing Men's/Women's field (`src/features/profile/services/profileService.ts`, the ladder, event divisions). The two must not collide.
+
+**Sequence** · expand: add `location` beside what exists and derive it, writing `Toronto` everywhere · migrate: rules, functions, then client read paths in batches · contract: enforce location scoping and remove any interim fallback.
+
+**Done when** · every member and event carries a location · a cross-location challenge and a cross-location rally are both refused by rules and by the callable · a cross-zone challenge inside Toronto still succeeds · the leaderboard still shows every location · a test covers each of those.
+
+---
+
+### ⬛ C21 — `friendly` → `rally` · A1 + A2 + A3 · wide refactor
+
+**Ruling** · [VISION §8](../VISION.md). **`rally` is the canonical term.** `friendly` and `friendlies` disappear from code, UI and stored data. Entering a rally score stays optional; an unplayed rally pays nothing.
+
+Today the term is load-bearing in `src/features/friendlies/rallyService.ts`, its callers, tests, and stored documents. C15 rewrites the same result path — **do C21 and C15 together** rather than renaming twice.
+
+**Sequence** · expand: add the `rally` form beside `friendly` · migrate: call sites in batches, then stored data · contract: delete `friendly`.
+
+**Done when** · `grep -rni "friendl" src/ functions/ tests/` returns nothing outside archived planning documents · no stored document carries the old term · the rally result path is C15's single result model.
+
+---
+
+### ⬛ C22 — League points halve at the year boundary · A1
+
+**Ruling** · [ruling 5, 2026-08-31](../specs/2026-08-31-vision-gaps-design.md). At the end of the year that season's league points **halve** — 100 becomes 50. The halving applies to **ranking only**; the member's spendable balance carries forward untouched.
+
+**Done when** · a season rollover halves ranking points and leaves the spendable balance unchanged · the two figures are visibly separate in the data · a test covers a member holding both.
+
+---
+
+### ⬛ C23 — Beta notifications stay in the app · A1
+
+**Ruling** · [ruling 3, 2026-08-31](../specs/2026-08-31-vision-gaps-design.md). **In-app only for the September beta.** Nothing is sent outside the app.
+
+This constrains existing code rather than adding any: server-side email paths must not fire for beta traffic, and the in-app notification record stays the only delivery.
+
+**Done when** · no beta-triggered path sends email · in-app notifications still record and display · a test asserts the outbound path is not called.
+
+---
 
 ### ⬛ F1 — The doubles partner pool · all lanes
 
@@ -619,6 +681,10 @@ Decision 8 replaces that rule.
 | C14       | A lower-margin resubmission changes the score and sends no notification                                                        |
 | C15       | Declining and confirming a challenge both notify; `ladder_cancelled` still means the challenger withdrew                       |
 | C16       | A re-added participant gets group matches; the existing knockout is untouched                                                  |
+| C20       | Cross-location challenge and rally refused server-side; cross-zone inside Toronto still works; the leaderboard spans locations |
+| C21       | `grep -rni "friendl" src/ functions/ tests/` returns nothing; no stored document carries the old term                          |
+| C22       | A rollover halves ranking points and leaves the spendable balance untouched                                                    |
+| C23       | No beta-triggered path sends email; in-app notifications still record and display                                              |
 | F1        | The seven pool tests pass, including the denied contact read for a non-member; the join-sheet hint is now true                 |
 | F2        | The five zone conditions, and an unmapped court lands the member in Unplaced                                                   |
 | F3        | The five size conditions                                                                                                       |

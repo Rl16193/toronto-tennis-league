@@ -4,13 +4,14 @@
 > all answered). Everything below is the owner's answer, recorded; where a recommendation
 > was overridden, the owner's ruling stands.
 
-|              |                                                                                                                  |
-| ------------ | ---------------------------------------------------------------------------------------------------------------- |
-| **Date**     | 2026-08-31                                                                                                       |
-| **Beta**     | 3rd week of September 2026, on a staging Firebase project                                                        |
-| **Platform** | PWA + website this season; native revisited after winter                                                         |
-| **Related**  | [DECISIONS-2026-08-29.md](DECISIONS-2026-08-29.md) · [task queue](tasks/README.md) · [BACKLOG.md](../BACKLOG.md) |
-| **Contains** | §1–§9 the vision · §10 the 2026-08-31 gap rulings · §11 pending work outside sprints D6–D8                       |
+|              |                                                                                                                                                                       |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Date**     | 2026-08-31                                                                                                                                                            |
+| **Beta**     | 3rd week of September 2026, on a staging Firebase project                                                                                                             |
+| **Platform** | PWA + website this season; native revisited after winter                                                                                                              |
+| **Rulings**  | [DECISIONS-2026-08-29.md](DECISIONS-2026-08-29.md) · [2026-08-31](specs/2026-08-31-vision-gaps-design.md)                                                             |
+| **Delivery** | [D6](sprints/SPRINT-D6.md) → M1 · [D7](sprints/SPRINT-D7.md) → M2 · [D8](sprints/SPRINT-D8.md) → M3 · [D9](sprints/SPRINT-D9.md) → M4 · [task queue](tasks/README.md) |
+| **Contains** | §1–§9 the vision · §10 the 2026-08-31 gap rulings · §11 pending work outside sprints D6–D8                                                                            |
 
 ---
 

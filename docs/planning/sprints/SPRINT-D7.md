@@ -129,6 +129,18 @@ Everything below is applying what D3 built. No new decisions.
 
 **Stored words, one per idea:** `confirmed` for a settled match (retires `complete`, `used`) · `declined` for a turned-down invitation (retires `rejected`) · `withdrawn` for leaving a tournament (retires `removal`, `removed`, and `inactive` — there is no app-level inactive state) · `completed` for tasks and service jobs.
 
+### ⬛ Consent line at signup and join _(ruling [4, 2026-08-31](../specs/2026-08-31-vision-gaps-design.md))_ — new
+
+A draw shared outside the app **carries participant contacts** ([VISION §4](../VISION.md), owner ruling — opponents stay reachable without opening the app). Signup and event join must therefore say so, in one plain sentence, before the member commits.
+
+**Done when** · both surfaces carry the line · the wording is the same on each · nothing else on either screen changes.
+
+### ⬛ The doubles pool card _(ruling [1, 2026-08-31](../specs/2026-08-31-vision-gaps-design.md))_ — new
+
+The doubles pool card carries **five things and no more**: doubles matches won, P/G won %, and the three named in the ruling. Doubles needs no separate result treatment — a doubles result pays through the same result model as everything else.
+
+**Done when** · the card renders the five · it reuses the shared card, not a new one · no sixth stat appears.
+
 ### ⬛ The stats a member sees _(ruling [6](../DECISIONS-2026-08-29.md))_
 
 Nothing else is rendered on either surface.

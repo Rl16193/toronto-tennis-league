@@ -75,6 +75,55 @@ checks. It does not deploy or access Firebase.
 
 Inspect the relevant `SKILL.md` before using a workflow. Do not use gstack ship/deploy workflows to merge into `main` or deploy production.
 
+## Product canon
+
+`docs/planning/VISION.md` is the source of truth for the platform model, roles, delivery
+phases, and vocabulary. Rulings live in `docs/planning/DECISIONS-2026-08-29.md` and
+`docs/planning/specs/2026-08-31-vision-gaps-design.md`; per-milestone specs in
+`docs/planning/specs/`. A ruling outranks a sprint doc, and the later ruling wins where two
+collide.
+
+Vocabulary that must not drift:
+
+- **`location`, never `league`, for a city.** Toronto, Markham, and Brampton are locations; a
+  member's location derives from the city of their preferred courts. `league` is the app's
+  existing Men's/Women's field.
+- **`rally`, never `friendly`.**
+- **Stored status words:** `confirmed`, `declined`, `withdrawn`, `completed` — one per idea. A
+  member sees only **Pending** or **Done**. Never reintroduce `complete`, `used`, `rejected`,
+  `removal`, `removed`, `inactive`, `Scheduled`, `No show`, or `Score recorded`.
+- **One result model** across tournament, challenge, and rally: either player submits, applies
+  immediately, lower aggregate margin wins a same-winner tie, different winners raise a dispute
+  for the organizer. There is no separate result-correction workflow.
+- **Connections** form on match/rally/challenge creation, organizer ↔ participant on event
+  join, and member ↔ provider on a service request or coaching-session join. A connection is
+  what unlocks contact details and profile viewing; only the global leaderboard is visible
+  across locations. Location scoping, points, and connections are all server-enforced.
+
+## Task packets
+
+Sprint work arrives as a **job file**: one file per job under `docs/planning/tasks/`, with its
+tasks inside it (see the README there). Task ids look like `D6-C13-T2` — task 2 of job C13 in
+sprint D6, in the file `docs/planning/tasks/D6-C13.md`.
+
+When asked to **implement task \<TASK-ID\>**:
+
+1. Read the job file in full — the header and task board give context, and check the task's
+   "Blocked by" tasks are `done` before starting.
+2. That task's "Delivers", "Files", "Constraints", and "Out of scope" are the entire scope. Do
+   not widen it, and do not touch other tasks.
+3. Re-verify line numbers against the working tree before editing.
+4. If a "Fix round N" block exists under the task, that round's list is what to fix now.
+5. When done: fill in that task's "Coder's report", set its State to `coded` in the task board,
+   append a History line. Change nothing else in the file.
+
+When asked to **review task \<TASK-ID\>**: follow the "Review brief for Codex" inside that
+task's "Review — OpenAI" section, write PASS or numbered findings into that section, append a
+History line, and change no code.
+
+A task's acceptance criteria are the contract: the emulator test suite and an independent
+Claude-side review will be run against them after you report.
+
 ## Current behavioral invariants
 
 - Everyone is authenticated through Firebase Auth for private workflows; UI route guards are not the authorization boundary.
