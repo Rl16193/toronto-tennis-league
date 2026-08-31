@@ -25,3 +25,5 @@ this repository, so the checkout cannot claim deployed staging isolation.
 ## Evidence and open questions
 
 Evidence: `.firebaserc`, `firebase.json`, `package.json`, `src/lib/firebase.ts`. Open: authorized staging project ID, CI secret storage, database location/edition, and backup schedule.
+
+**Data sensitivity in staging (owner ruling 2026-08-31).** Staging is seeded from the live snapshot **with member contact details included, unscrubbed** ([VISION.md](../planning/VISION.md) §10.2); visibility is left to the connection rules rather than to the seed. This decision is about data, and the isolation argument above is about credentials — the two are separate, and staging holding real personal data is a fact this ADR did not previously contemplate.

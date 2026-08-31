@@ -38,6 +38,6 @@ Everyone remains a Member. Organizer, Provider, and Admin stack on top of member
 
 - Event assignment currently uses optional `events.organizer_ids`; a durable assignment UI/audit trail remains future work.
 - Cross-member preference decoration fails closed until an approved event-scoped or consented projection exists.
-- The hardcoded super-admin UID is operationally brittle and requires a documented bootstrap/recovery process.
+- The hardcoded super-admin UID is operationally brittle and requires a documented bootstrap/recovery process. **Owner ruling 2026-08-31: it stays hardcoded** ([VISION.md](../planning/VISION.md) §10.6) — the brittleness is accepted and the recovery process is still owed. One consequence is load-bearing: the deployed rules must carry a UID that exists in the project they are deployed to, and a second Firebase project has its own Auth tenant, so staging otherwise has no super-admin at all.
 - Provider access is inferred from preference fields and is not consistently represented as a role boundary.
 - Admin SDK functions bypass Firestore Rules, so trigger/callable authorization and input validation need separate tests.

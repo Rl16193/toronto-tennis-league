@@ -24,5 +24,5 @@ Adopt a PWA-first path after environment and authorization stabilization. The ex
 ## Open questions
 
 - Which native capabilities are actually required beyond the responsive web experience?
-- Are push notifications a product requirement or only email/in-app notifications?
+- ~~Are push notifications a product requirement or only email/in-app notifications?~~ **Answered 2026-08-31** ([VISION.md](../planning/VISION.md) §10.3): in-app only for the September beta, Resend email once beta closes, and push stays behind this platform decision.
 - What offline actions, if any, may be queued safely?

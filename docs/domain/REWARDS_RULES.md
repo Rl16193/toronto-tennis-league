@@ -9,6 +9,13 @@ points already spent in `offers/{uid}`. Redeeming does not mutate the earning co
 
 **Important exception:** A balance is clamped to a non-negative integer before redemption.
 
+**Ruled change (2026-08-31, not yet implemented):** "Earned league points" becomes a lifetime
+counter (`leagueEarnedTotal`) rather than the current season column. At the year boundary the
+season column halves and the lifetime counter does not, so the balance carries forward whole —
+[VISION.md](../planning/VISION.md) §10.5 and §10.8. Until the split lands the two are the same
+number and the rule above reads correctly; **after the first halving it does not**, so the split
+has to land first.
+
 **Code:** `functions/rewards.js`, `functions/lib/points.js`.
 
 **Regression test:** `functions/test/domain.test.js`; callable validation coverage in

@@ -369,13 +369,19 @@ secrets, BLG0020/21 for PWA versus native and push.
 
 **Ruling.** In-app only for the September beta. Nothing is sent outside the app.
 
-**What it buys.** Neither blocked row enters the critical path three weeks out. No DNS, no
-sending domain, no secrets, no delivery allowlist. A 10–20 person cohort can also be reached
-directly.
+**What it costs — less than the gap above implies.** The email path is **already built**. Cloud
+Functions send through a `RESEND_API_KEY` secret, the sender is configured, and the notification
+path already reads the address from `contacts/{uid}` and honours a per-member
+`email_notifications` opt-out. A non-production project sends nothing unless
+`EMAIL_DELIVERY_ENABLED=true` and an explicit recipient allowlist are set — so in-app-only is
+already the default on staging. This ruling leaves a switch alone rather than deferring a build.
+What BLG0065 still needs is external: the sending domain verified in Resend and its DNS records
+published. See the [Resend runbook](../runbooks/RESEND_DOMAIN_VERIFICATION.md).
 
-**After beta.** Resend is connected and email notifications go out. BLG0065's work — the sending
-domain, DNS, secrets and the allowlisted delivery path — lands then rather than now. Push stays
-behind the BLG0020/21 platform decision.
+**After beta.** Resend is connected and email notifications go out — the domain verification and
+DNS work, not a build. Push stays behind the BLG0020/21 platform decision, and this ruling closes
+the open question that [MOBILE_PATH_RECOMMENDATION.md](../architecture/MOBILE_PATH_RECOMMENDATION.md)
+had left standing.
 
 ---
 
@@ -662,3 +668,15 @@ schedules**.
 | **Email delivery** (BLG0065)                      | Resend is connected after beta and sends the email notifications (ruled, 10.3); domain, DNS, secrets and the allowlist land then     |
 | **Mobile app versus PWA, then push** (BLG0020/21) | Blocked on the platform decision                                                                                                     |
 | **The annual rollover procedure**                 | Per-year columns mean January work across the rules allowlist, `readBalance`, `rankSnapshot`, D8's seeding query and four test files |
+
+### To verify before estimating
+
+One item in block 1 may already be partly built. It is recorded here rather than resolved,
+because the answer changes what that block costs.
+
+| Question                                  | What the evidence says                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Does the draw download already exist?** | `src/pages/tournament/bracketImage.ts` exports an `RRContactMap` of phone and email and renders a contact column with a phone-first fallback; `Tournament.tsx` imports it, and [FUTURE-WORK.md](../FUTURE-WORK.md) records BLG0004 **closed** by that file. Ruling 8 and D7 both state the only existing control is an error-boundary fallback and that this is new UI |
+
+Either the existing bracket-image export already satisfies part of block 1 item 4, or two
+different exports are being conflated. Resolve it before the block is estimated.

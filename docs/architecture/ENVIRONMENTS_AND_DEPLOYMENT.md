@@ -49,7 +49,7 @@ developer
   -> production project
 ```
 
-Production should be explicit, separately selected, and protected by a deploy guard. Staging and local environment variables must never silently reuse production credentials. Do not run a bare Firebase CLI deploy from this checkout; use an explicit-project, approval-gated workflow and review the affected rules/Functions first.
+Production should be explicit, separately selected, and protected by a deploy guard. Staging and local environment variables must never silently reuse production credentials. Note that staging will nonetheless hold **real member contact data**, seeded unscrubbed by owner ruling 2026-08-31 ([VISION.md](../planning/VISION.md) §10.2), so credential isolation is not the same thing as data isolation here. Do not run a bare Firebase CLI deploy from this checkout; use an explicit-project, approval-gated workflow and review the affected rules/Functions first.
 
 ## Recovery readiness
 

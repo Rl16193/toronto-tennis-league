@@ -2,6 +2,11 @@
 
 ## No-show precedence
 
+> **Retired by ruling 2 (2026-08-29); code cleanup pending.** There is no no-show concept. The
+> word was deleted along with `Scheduled`, and a member sees only `Pending` and `Done`. The rule
+> below still describes how the code behaves today and is removed by
+> [D6 C9](../planning/sprints/SPRINT-D6.md). Do not build anything new against it.
+
 **Rule:** A no-show is evaluated before winner or walkover logic. Both players receive one point;
 there is no winner, score, win/loss, or played-match credit.
 
@@ -34,7 +39,10 @@ when its game fields are zero.
 **Regression test:** `tests/unit/domain.test.mjs`; client counter-minting protections in
 `tests/rules/firestore.rules.test.mjs`.
 
-## Friendly result confirmation
+## Rally result confirmation
+
+> `Rally` is the canonical term; `friendly` is retired display vocabulary (ruling 2). Stored
+> identifiers still read `friendly` in places until the rename lands.
 
 **Rule:** A rally report must identify the authenticated reporter, name one of the two match
 players as winner, and use bounded integer set scores. Points are paid only after a different party
