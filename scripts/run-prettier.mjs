@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveComparisonBase } from './lib/comparison-base.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const mode = process.argv[2];
@@ -33,7 +34,9 @@ addFiles(['ls-files', '-z'], true);
 const comparisonBase = process.env.ARCHITECTURE_BASE_SHA;
 let comparedCommit = false;
 if (comparisonBase) comparedCommit = addFiles(['diff', '--name-only', '-z', `${comparisonBase}...HEAD`]);
-if (!comparedCommit) comparedCommit = addFiles(['diff', '--name-only', '-z', 'origin/dev-anuj...HEAD']);
+const devAnujBase = resolveComparisonBase(root);
+if (!comparedCommit && devAnujBase)
+  comparedCommit = addFiles(['diff', '--name-only', '-z', `${devAnujBase}...HEAD`]);
 if (!comparedCommit) addFiles(['diff', '--name-only', '-z', 'HEAD~1...HEAD']);
 addFiles(['diff', '--name-only', '-z', 'HEAD'], true);
 addFiles(['diff', '--cached', '--name-only', '-z'], true);

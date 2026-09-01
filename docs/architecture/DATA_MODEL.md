@@ -91,3 +91,28 @@ claims route volunteer/host review to the event manager and ambassador claims au
 retired monthly group-lesson collection and callables are no longer part of the client or Rules
 surface. Validation is local-only; no production deployment or data mutation was performed, and
 staging remains deferred until an authorized isolated project and verified recovery path exist.
+
+### Sprint D6 preparation: naming and the shape contract
+
+**Walkover field name.** On `matches`, the walkover flag is `walkover`. The client intent object
+that produces it now carries the same name, so the field reads identically in the form, the domain
+rule, the callable, the document, and every reader. `is_walkover` is retired and recorded as such;
+it is not accepted as an alias on write. No stored data changed — the live documents already used
+`walkover`, and this closed a client-side fork in the name.
+
+**The shape contract.** `tests/fixtures/shape-reference.mjs` is now the machine-readable declaration
+of the intended document shape: 25 collections, one field-by-field reference document each, plus
+registries of retired fields and retired collections and the canonical task-tier and zone lists.
+`tests/unit/fixtureShape.test.mjs` enforces it, so a field cannot be added, removed, or renamed in
+the fixtures without the declaration being updated in the same change. The narrative version, with
+the old-to-new deltas and the open questions, is [DATA_SHAPE.md](DATA_SHAPE.md). Where this table
+and the shape reference disagree, the shape reference is the one under test.
+
+**Test data.** `scripts/build-sample-dataset.mjs` transforms a live snapshot into the new shape as
+3,233 pseudonymised documents: stable synthetic personas per UID, with a free-text scrub pass
+because at least one live display name is itself an email address. `tests/fixtures/seed-dataset.mjs`
+loads it and refuses to run against any project other than `rands-local` or any non-loopback
+emulator host. This is a local fixture, not a staging dataset, and it is not a substitute for the
+unresolved question of what the deployed documents actually contain.
+
+Validation is local-only. No production deployment or data mutation was performed.

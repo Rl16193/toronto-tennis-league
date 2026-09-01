@@ -38,9 +38,14 @@ group bonuses use the same callable boundary.
 - `npm run lint` runs ESLint over first-party React/TypeScript source, scripts, tests, and Functions.
   Existing warnings for legacy hook dependency choices, explicit `any`, and unused legacy values
   remain visible; new errors fail the command.
-- `npm run format:check` checks every tracked first-party file. Generated and vendored paths are
-  excluded explicitly; new source files cannot fall outside the gate. A one-time repository-wide
-  mechanical normalization was reviewed separately from behavior changes.
+- `npm run format:check` enumerates every tracked first-party file rather than only a diff, so an
+  up-to-date branch cannot silently check zero files. Generated and vendored paths are excluded
+  explicitly; new source files cannot fall outside the gate. A one-time repository-wide mechanical
+  normalization was reviewed separately from behavior changes. **This gate does not currently run on
+  Windows:** it launches Prettier through the `node_modules/.bin` shim, and Node refuses to spawn a
+  `.cmd` without `shell: true` (CVE-2024-27980), so the command exits non-zero having formatted
+  nothing. Run directly against every tracked file, Prettier reports no formatting debt, so the red
+  result is the launcher and not the source. See Known debt.
 - `npm run test:rules` and `npm run test:storage` select temporary emulator ports and use local
   OpenJDK when it is installed outside the default PATH. The repository pins `firebase-tools` so
   the emulator wrapper does not download an unbounded CLI version at execution time.
@@ -60,6 +65,16 @@ documents and fails when a mapped architecture-sensitive change set has no direc
 documentation review. The mapping covers Firebase configuration/rules, callable and reward
 boundaries, tournament/data-access modules, and migration tooling. Expand it when a new durable
 boundary is introduced.
+
+The comparison baseline is always the `dev-anuj` branch, resolved through
+`scripts/lib/comparison-base.mjs`: an explicit `ARCHITECTURE_BASE_SHA` first (CI supplies the real
+push or pull-request base), then `origin/dev-anuj`, then the same branch on any other configured
+remote, then the local branch. The indirection is not decoration. In a clone that also has the
+production repository attached, `origin` is not necessarily the repository `dev-anuj` lives in, and
+the earlier hard-coded `origin/dev-anuj` silently failed to resolve there. The gate then fell back
+to treating every file as changed and printed a pass, so it reported success without performing the
+check it exists to perform. Resolution now fails loudly when no candidate exists, and the pass line
+names the baseline it used, so a green result can be checked rather than trusted.
 
 ### Sprint D1 review note
 
@@ -102,6 +117,25 @@ authorized migration. Group lessons are retired from the active client/Rules sur
 is local-only; no production deployment or data mutation was performed, and staging is deferred
 until an authorized project and verified recovery path exist.
 
+### Sprint D6 preparation review note
+
+This slice is groundwork, not feature work. The emulator launcher moves around a busy port instead
+of refusing to start, so a developer with something already bound to 8080 is not blocked;
+`--strict-ports` keeps the old refusal for CI, where a busy port is a real signal rather than an
+inconvenience. The Windows `spawn EINVAL` workaround — resolve a package's real CLI entry and launch
+it with `process.execPath` instead of going through the `.bin` `.cmd` shim — was carried across the
+emulator, integration, browser-test, and deploy launchers so the repository survives a clean clone
+on Windows. `scripts/run-prettier.mjs` was missed by that sweep and still uses the shim; that is the
+single reason the formatting gate is red.
+
+Test data and the document shape are now declared and enforced rather than described: a shape
+reference under test, a transform that produces a pseudonymised local dataset from a live snapshot,
+and a seeder that refuses any project but `rands-local`. The walkover field rename is the one
+behavioural-surface change, and it is a naming cleanup with no data migration behind it.
+
+Validation is local-only; no production deployment or data mutation was performed, and staging
+remains deferred until an authorized isolated project and verified recovery path exist.
+
 `.agents/skills/gstack/` is tracked third-party agent tooling kept for reproducible local workflows.
 `.gitattributes` marks it as vendored for repository language metrics; ESLint and application tests
 also exclude it. Security review must still inspect the vendor tree when its source or lock changes.
@@ -123,5 +157,11 @@ The pinned source and update procedure remain in `docs/engineering/AGENT_SKILLS.
 - The focused Hosting-emulator suite covers login/profile, signup bootstrap, event join, and one
   tournament scoring/advancement journey. Reward and friendly edge cases remain at the more
   deterministic callable/trigger emulator boundary.
+- `npm run format:check` cannot launch Prettier on Windows: `scripts/run-prettier.mjs` spawns the
+  `node_modules/.bin/prettier.cmd` shim directly, which Node refuses without `shell: true`. The fix
+  is the pattern already used by the emulator, integration, browser-test, and deploy launchers —
+  resolve the package's real CLI entry and run it with `process.execPath`. Until then the gate is
+  red on Windows and green on Linux CI, which is the worst of both: contributors see a failure they
+  cannot act on, and no one learns anything from the pass.
 - `npm audit` remains non-zero through transitive development tooling. Dependency upgrades need a
   separate compatibility review; this block does not use an automatic mass-fix.

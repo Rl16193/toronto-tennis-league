@@ -2,6 +2,7 @@ import { access, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { comparisonBaseError, resolveComparisonBase } from './lib/comparison-base.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const requiredDocs = [
@@ -110,21 +111,25 @@ const documentationRequirements = [
   },
 ];
 
+let comparisonBase = null;
 const changedFiles = () => {
-  const base = process.env.ARCHITECTURE_BASE_SHA || 'origin/dev-anuj';
+  const base = resolveComparisonBase(root);
+  if (!base) throw new Error(comparisonBaseError(root));
+  comparisonBase = base;
   const names = new Set();
-  const addGitNames = (args) => {
+  const addGitNames = (args, required = false) => {
     try {
       execFileSync('git', args, { cwd: root, encoding: 'utf8' })
         .split('\n')
         .filter(Boolean)
         .forEach((file) => names.add(file));
-    } catch {
-      // The fallback below is useful for a clean local checkout, but CI must use full history so
-      // an unavailable comparison cannot silently disable architecture-sensitive review checks.
+    } catch (error) {
+      // Working-tree and staged listings are best-effort. The baseline comparison is not: if it
+      // cannot run, this gate must fail rather than silently reviewing an unbounded file set.
+      if (required) throw error;
     }
   };
-  addGitNames(['diff', '--name-only', `${base}...HEAD`]);
+  addGitNames(['diff', '--name-only', `${base}...HEAD`], true);
   addGitNames(['diff', '--name-only', 'HEAD']);
   addGitNames(['diff', '--cached', '--name-only']);
   addGitNames(['ls-files', '--others', '--exclude-standard']);
@@ -193,7 +198,7 @@ const main = async () => {
   const reviewed = sensitiveChanges.length
     ? `${sensitiveChanges.length} sensitive path(s) with mapped docs`
     : 'no sensitive paths';
-  console.log(`docs:verify passed (${changed.length} changed files; ${reviewed}).`);
+  console.log(`docs:verify passed (base ${comparisonBase}; ${changed.length} changed files; ${reviewed}).`);
 };
 
 try {

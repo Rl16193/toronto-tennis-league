@@ -28,6 +28,26 @@ Evidence: `src/features/events/hooks/useJoin.ts`, `src/pages/tournament/useTourn
 `src/features/tournament/services/tournamentResultService.ts`, `functions/tournamentResults.js`,
 `functions/lib/tournamentResult.js`, `src/pages/tournament/rrGeneration.ts`.
 
+### Walkover naming along the score path
+
+The walkover flag carries one name for the whole journey. The browser builds a score intent whose
+field is `walkover`, the callable validates `input.walkover`, and the stored match document carries
+`walkover`. The earlier client-side `isWalkover` intent field is retired, and the `is_walkover`
+document spelling is recorded in the retired-field registry rather than left as a silent alias.
+This is the owner's one-name-per-thing ruling applied to the field that crosses the most
+boundaries: form, domain rule, callable, document, and every downstream reader.
+
+Behaviour is unchanged by the rename. A walkover is still stored as an all-zero score, still
+distinct from a no-show, and still recordable only by an event organizer; a walkover carrying a
+non-zero score is still rejected. Matchday counting continues to exclude walkovers.
+
+The rename covers the data-carrying field, not every local identifier: presentation code may still
+name a derived local flag `isWalkover` where it never leaves the component.
+
+Evidence: `src/features/tournament/domain/scoreSubmission.ts`, `src/pages/tournament/useTournament.ts`,
+`functions/lib/tournamentResult.js`, `functions/tournamentResults.js`, `functions/groupAwards.js`,
+`tests/fixtures/shape-reference.mjs`.
+
 ## 3. Tasks, points, rewards, and redemption
 
 1. A member creates permitted task claims, check-ins, attendance, or photo reports.
