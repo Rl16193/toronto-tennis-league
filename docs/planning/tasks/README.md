@@ -27,6 +27,21 @@ This is the working contract for the multi-agent delivery loop.
 A ruling outranks a sprint doc; the vision outranks a sprint doc on vocabulary, roles, and
 scope; the later ruling wins where two collide.
 
+## The breakdown
+
+Every sprint is broken into tasks, with before/after, acceptance criteria and exit conditions:
+
+| Register                             | Holds                                              |
+| ------------------------------------ | -------------------------------------------------- |
+| [TASK-REGISTER.md](TASK-REGISTER.md) | Every task, its sprint, and cross-sprint blockers  |
+| [TASKS-D6.md](TASKS-D6.md)           | 42 tasks — corrections and the partner pool        |
+| [TASKS-D7.md](TASKS-D7.md)           | 56 tasks — the shared component set                |
+| [TASKS-D8.md](TASKS-D8.md)           | 12 tasks — seeding, coaching pool, workflow record |
+| [TASKS-D9.md](TASKS-D9.md)           | 11 tasks — donations and the payment gateway       |
+
+The register is the plan. A **job file** (below) is created when work on a job actually starts:
+it carries the same tasks plus the evidence the agents record as they go.
+
 ## Ids
 
 `<SPRINT>-<JOB>-T<n>` — e.g. `D6-C13-T2` is task 2 of job C13 in sprint D6. The job file is

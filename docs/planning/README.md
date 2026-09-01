@@ -32,7 +32,8 @@ verified against the code as it stands that day.
 
 ## Source and working contract
 
-- Imported from `origin/docs/planning` at commit `3bd6b0e30143d70eb55a98abe578a1fcbfa40ed2`.
+- **Code baseline: `dev-anuj` @ `ac4dfb1`** ("docs: add D6 and D7 sprint planning package", resolved as `tbtc/dev-anuj`). Every `file:line` reference in this package was read at that commit, and every document states it in those words.
+- Document provenance, which is a different thing: this package was imported from `origin/docs/planning` at commit `3bd6b0e30143d70eb55a98abe578a1fcbfa40ed2`. That commit is **not** on `dev-anuj` and is not a line-number baseline.
 - `dev-anuj` remains the golden working branch; implementation work closes there after review and validation.
 - Open sprint-planning items remain visible in the master [backlog](../BACKLOG.md) and the shared sprint tracker.
 - D6 and D7 must not be reported as complete until their acceptance and validation gates have passed.

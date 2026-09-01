@@ -12,6 +12,8 @@
 | **Decisions**     | [DECISIONS-2026-08-29.md](../DECISIONS-2026-08-29.md) — rulings 9 (seeding, `selectGroupWinners`), 2 (vocabulary), 8 (contacts)                                                                                                                                                |
 | **Blocking**      | **S1 cannot start before [D6 C2](SPRINT-D6.md).** The seeding tiebreak reads P/G won %, which is computed from `pointswon` / `totalPointsPlayed` — restored by C2. **S3 cannot start before [D7 CS-3b](SPRINT-D7.md)**, which builds the row slot the seed number renders into |
 
+**Line numbers are `dev-anuj` @ `ac4dfb1`.** Re-check before editing.
+
 ---
 
 ## Why this sprint is third
@@ -55,6 +57,8 @@ Taken 2026-08-29.
 
 **New file** · `src/features/tournament/domain/seeding.ts` — pure functions, no Firestore, unit-testable in isolation.
 
+> **Knockouts only** (owner ruling 2026-08-31). Round Robin **group formation** is never seeded and keeps its own rule, zone then skill then courts. The knockout generated **from** those groups is still a knockout, so it is seeded, by the ordering in S2.
+
 ### Seed count
 
 ```ts
@@ -93,13 +97,15 @@ export const seedAnchors = (drawSize: number) => {
 
 Byes go to the top seeds first. Unseeded players fill the remaining slots in entry order.
 
+**Placement is automatic.** An 8 draw pairs **1v8, 4v5, 3v6, 2v7** (owner ruling 2026-08-31). Seeds 1 and 2 sit in opposite halves, so the semifinals are 1v4 and 2v3 and the top two can only meet in the final. The construction generalises to 16 and 32 unchanged. **After matches are generated the organizer may move unseeded players by hand**, see S4.
+
 **Done when** · `seedCount` returns 2/4/8/10 for 4/8/16/32 · an 8-draw yields `[1,8,4,5,2,7,3,6]` · two players on equal points and equal P/G % order alphabetically · a third player joining above both renumbers them 2 and 3 · every function is covered by a unit test with no emulator.
 
 ---
 
 ## S2 · Wire seeding into the draws · A1 + A3
 
-**Files** · `:361` (`buildRRKnockoutDocs`) · `:278` (`computeGroupStandings`) · `src/pages/tournament/types.ts:26-32`
+**Files** · `src/pages/tournament/rrGeneration.ts:361` (`buildRRKnockoutDocs`) · `:278` (`computeGroupStandings`) · `src/pages/tournament/types.ts:26-32`
 
 1. `TournamentPlayer` gains `seed?: number`.
 2. Order the knockout from `computeGroupStandings` using the new `seeding.ts`. `selectGroupWinners` is **deleted by [D6 C7](SPRINT-D6.md)** and is not revived ([ruling 9](../DECISIONS-2026-08-29.md)).
@@ -118,7 +124,7 @@ No circularity here — group points and leaderboard rank are independent measur
 
 **Scope is one draw.** Draws split by zone × skill group × division, so seed 1 is the top player _in that bracket_. Seeding across zones would leave some draws with no seed 1 and others with several.
 
-**`buildZoneTierGroups` (`:45`) is not touched.** Group formation stays zone → skill → courts (decision 6).
+**`buildZoneTierGroups` (`src/pages/tournament/rrGeneration.ts:45`) is not touched.** Group formation stays zone → skill → courts (decision 6).
 
 **Done when** · a generated knockout places seed 1 top and seed 2 in the opposite half · seeds 3 and 4 anchor the other quarters · byes land on the top seeds · regenerating the same draw produces the same bracket · group formation is byte-identical to D7.
 
@@ -140,13 +146,15 @@ Before matches exist, seeds recompute on every join — a stronger player joinin
 
 A later entrant takes an open slot and **renumbers nobody**. Nobody already playing is ever moved.
 
-**Done when** · joining an ungenerated draw reorders the seeds · joining a generated draw changes no existing seed · an organizer moving a player by hand keeps that player's seed number.
+**Unseeded players stay movable.** Once the draw exists the organizer may move an **unseeded** player to another open position. Seeded players keep their number and their slot.
+
+**Done when** · joining an ungenerated draw reorders the seeds · joining a generated draw changes no existing seed · the organizer can move an unseeded player to another open position after generation · a seeded player keeps their number and position · reseeding a generated draw stays forbidden.
 
 ---
 
 ## S5 · The workflow record · A1
 
-Additions to `docs/archive/planning-2026-08-23/notes/WORKFLOW-STATES.md`.
+Additions to `docs/archive/planning-2026-08-23/notes/WORKFLOW-STATES.md`. **Every `:NNN` in the table below is a line in that file**, not in source.
 
 > **Append, do not renumber.** The sprint documents cite that file by section number ("section 0", "section 16"); inserting a section would break every live cross-reference.
 
@@ -155,6 +163,8 @@ Additions to `docs/archive/planning-2026-08-23/notes/WORKFLOW-STATES.md`.
 | **§15.3**, after `:604`    | **The coaching pool.** Same batches-of-four pool as the deferred lesson add-on — see [DATA_SHAPE.md §9](../../architecture/DATA_SHAPE.md). A member signing up for a social is offered group classes, games or coaching; choosing coaching pools them; coaches take a batch of four. Storage follows [D6 F1](SPRINT-D6.md)'s precedent — a `lesson_pool/{eventId}/members/{uid}` subcollection, because batching four players across an event is **not** derivable from a participant row the way the doubles pool is |
 | **§19**, new, after `:642` | **Account creation.** The sign-up journey: email gate → password → profile completion. Covers `checkSignupEmail` throttling, the duplicate-address path through `contacts.secondary_email`, and `profileBootstrap`                                                                                                                                                                                                                                                                                                    |
 | **§16**, at `:605`         | Status vocabulary rows for both                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+
+**The coaching pool, as ruled 2026-08-31.** A coaching service offers three actions: **Book group lesson**, **Book**, and **Redeem discount**. Pooling is **not limited to socials**, it applies to any event that offers coaching. Bookings and offers gain a **type**: group classes, private classes, stringing, with room for more. **The old `group_lessons` collection is not coming back** (owner ruling 2026-08-31). [D6 C8](SPRINT-D6.md) deletes it and nothing in this sprint revives it. "Book group lesson" is an action on a coaching service, and a group lesson is a booking of **type** group classes. Nothing reads or writes the retired collection again.
 
 **The coaching pool inherits five unanswered questions** from DATA_SHAPE §9 — the $20 vs $15 tiers, the "free 15/hr" contradiction, where the fee sits against `services` and `bookings`, and whether games hold state. **This sprint documents the target; it does not build it.**
 

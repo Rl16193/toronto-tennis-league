@@ -5,14 +5,14 @@
 
 |                   |                                                                                                                                                                                                                                                                                                                          |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Branch base**   | `tbtc/dev-anuj` @ `4dde946`                                                                                                                                                                                                                                                                                              |
+| **Branch base**   | `tbtc/dev-anuj` @ `ac4dfb1`                                                                                                                                                                                                                                                                                              |
 | **Environment**   | **emulator-first** (owner ruling 2026-08-29). Nothing here touches a cloud project. Migrations run against the local emulator, which is re-seeded from `npm run dataset:build && npm run seed:dataset` — 3,233 documents transformed from the 2026-08-17 live snapshot                                                   |
 | **Decisions**     | [DECISIONS-2026-08-29.md](../DECISIONS-2026-08-29.md) — the 2026-08-29 rulings this sprint implements                                                                                                                                                                                                                    |
 | **Source**        | [IMPLEMENTATION-REVIEW.md](../IMPLEMENTATION-REVIEW.md) — every item traces to a finding in it                                                                                                                                                                                                                           |
 | **Prior sprints** | [D1](../../archive/planning-2026-08-23/sprints/SPRINT-D1.md) · [D2](../../archive/planning-2026-08-23/sprints/SPRINT-D2.md) · [D3](../../archive/planning-2026-08-23/sprints/SPRINT-D3.md) · [D4](../../archive/planning-2026-08-23/sprints/SPRINT-D4.md) · [D5](../../archive/planning-2026-08-23/sprints/SPRINT-D5.md) |
-| **Blocking**      | A5 must confirm the test suite passes on `4dde946` **before** anything else starts. Three earlier commits show a failed check and it was never resolved                                                                                                                                                                  |
+| **Blocking**      | A5 must confirm the test suite passes on `ac4dfb1` **before** anything else starts. Three earlier commits show a failed check and it was never resolved                                                                                                                                                                  |
 
-**Line numbers are `dev-anuj` @ `4dde946`.** Re-check before editing.
+**Line numbers are `dev-anuj` @ `ac4dfb1`.** Re-check before editing.
 
 ---
 
@@ -77,7 +77,7 @@ Taken 2026-08-25. These override the earlier rulings named beside them.
 
 ## A5 · Verify — do this first
 
-### ⬛ V1 — Confirm the suite passes on `4dde946`
+### ⬛ V1 — Confirm the suite passes on `ac4dfb1`
 
 `npm run verify` runs on every push. Commits `411ffed`, `5cdacee` and `54cea44` show a failed check and nothing records it being fixed. **Establish whether the branch is green before anyone adds to it.** If it is red, report what fails; that becomes task zero.
 
@@ -134,7 +134,7 @@ Export `rrGroupUnplayed`, pass it through `Tournament.tsx` to `RoundRobinView`, 
 
 > _"{n} group matches still to play. You can build the knockout now and group results will keep counting."_
 
-Update the guard in `handleGenerateRRKnockout` at `:2355` to test `rrRealGroupMatches.length === 0`.
+Update the guard in `handleGenerateRRKnockout` at `src/pages/tournament/useTournament.ts:2355` to test `rrRealGroupMatches.length === 0`.
 
 Group matches keep scoring normally after the knockout exists. No change to the result path.
 
@@ -301,6 +301,8 @@ One test booking exists and it is cancelled, so no migration is needed.
 
 **A4:** `bookService` exists in `src/features/services/servicesApi.ts:21` but no Book control was found in the Services UI. **Confirm one exists on each service card and add it if not.** It is the entry point to the whole booking flow shipped in [D5](../../archive/planning-2026-08-23/sprints/SPRINT-D5.md).
 
+**Book and Redeem Discount both create a lead** (owner ruling 2026-08-31). Either control adds the member to that provider list of leads and creates the member to provider connection, so contacts become visible both ways.
+
 ---
 
 ### ⬛ C9 — No-show leftovers · A1
@@ -430,7 +432,9 @@ A player who withdraws and is re-added is **never placed**, for two independent 
 1. **No trigger fires.** The placer is `onDocumentCreated`. Re-adding flips `status` back to `active`, which is an _update_, so `seatParticipant` never runs.
 2. **No slot exists.** `choosePlacement` looks for an open `PLAYER_LOADING` slot. After generation there are none, so it returns `null`.
 
-**Owner ruling 2026-08-29 — option B.** The organizer adds them to a group. Their matches count for **group points only**; the knockout is untouched and is never rebuilt around them.
+**Owner ruling 2026-08-31, refining option B.** Placement follows the event type. A tournament labelled **Round Robin** gives them group matches, counting for group points only. A tournament labelled **knockout** puts them back in the draw. Either way, an existing bracket is never rebuilt around them and nobody already playing is moved.
+
+**Timing decides how.** Re-added **before** matches are generated, they take an open slot. Re-added **after** generation, they go to the **unplaced players list** and the organizer assigns the slot.
 
 **Build**
 
@@ -438,7 +442,7 @@ A player who withdraws and is re-added is **never placed**, for two independent 
 2. Extend `choosePlacement` so it can **create** group matches for the re-added player rather than only fill an empty slot.
 3. Never touch knockout matches. If the knockout for that draw already exists, the player joins the group stage only.
 
-**Done when** · a withdrawn player re-added before generation is seated normally · re-added after generation gets group matches and no knockout slot · an existing knockout is unchanged · a test covers the re-add round trip.
+**Done when** · a withdrawn player re-added before generation takes an open slot in either format · re-added after generation appears in the unplaced players list for the organizer to assign · an existing bracket is unchanged and nobody already playing is moved · a test covers the re-add round trip in both formats.
 
 ---
 
@@ -472,13 +476,13 @@ Live data holds **five values across ten events**, including **`tournament` in l
 
 **Ruling [7](../DECISIONS-2026-08-29.md).** A member selects zones freely. **The organizer is notified, not asked.**
 
-Folds into [F2](#f2). The tournament page's "Request Zone Change" (`TournamentElements.tsx:91`) becomes a direct change, matching the profile card. One path, not two.
+Folds into [F2](#f2). The tournament page "Request Zone Change" control (`TournamentElements.tsx:91`) becomes a direct change, matching the profile card. One path, not two.
 
-**Done when** · changing zone needs no approval anywhere · the organizer receives a notification · no approval UI remains.
+**The control reads `Change Your Zone`**, not "Request Zone Change". Nothing is being requested.
+
+**Done when** · the button reads `Change Your Zone` · changing zone needs no approval anywhere · the organizer receives a notification · no approval UI remains.
 
 ---
-
-## Features
 
 ### ⬛ C20 — The `location` field · A1 + A2 + A3 · wide refactor
 
@@ -486,9 +490,11 @@ Folds into [F2](#f2). The tournament page's "Request Zone Change" (`TournamentEl
 
 > **`location`, never `league`.** `league` is the app's existing Men's/Women's field (`src/features/profile/services/profileService.ts`, the ladder, event divisions). The two must not collide.
 
-**Sequence** · expand: add `location` beside what exists and derive it, writing `Toronto` everywhere · migrate: rules, functions, then client read paths in batches · contract: enforce location scoping and remove any interim fallback.
+**Sequence** · expand: add `location` beside what exists and derive it from the member preferred courts · migrate: rules, functions, then client read paths in batches · contract: enforce location scoping and remove any interim fallback.
 
-**Done when** · every member and event carries a location · a cross-location challenge and a cross-location rally are both refused by rules and by the callable · a cross-zone challenge inside Toronto still succeeds · the leaderboard still shows every location · a test covers each of those.
+> **`Toronto` is written only when a member preferred courts include a Toronto court** (owner ruling 2026-08-31). It is never a blanket default. A member with no courts, or courts that map to no city, is left **unset**. An unset location must not stop them playing: they can send and receive challenges and rallies **within the location of any event they have joined** (owner ruling 2026-08-31), so joining an event is what admits them to a location rather than their courts.
+
+**Done when** · a member whose courts include a Toronto court carries `Toronto` and one with no mapped court is left unset · a cross-location challenge and a cross-location rally are both refused by rules and by the callable · a cross-zone challenge inside Toronto still succeeds · a member with no location can still send and receive challenges and rallies within the location of an event they have joined, and nowhere else · the leaderboard still shows every location · a test covers each of those.
 
 ---
 
@@ -504,11 +510,13 @@ Today the term is load-bearing in `src/features/friendlies/rallyService.ts`, its
 
 ---
 
-### ⬛ C22 — League points halve at the year boundary · A1
+### ⬛ C22 — League points halve at the year boundary · A1 · DEFERRED
 
 **Ruling** · [ruling 5, 2026-08-31](../specs/2026-08-31-vision-gaps-design.md). At the end of the year that season's league points **halve** — 100 becomes 50. The halving applies to **ranking only**; the member's spendable balance carries forward untouched.
 
-**Done when** · a season rollover halves ranking points and leaves the spendable balance unchanged · the two figures are visibly separate in the data · a test covers a member holding both.
+> **Deferred out of D6 by the owner, 2026-08-31.** League points are also half the wallet today: `functions/rewards.js:4` computes a member redeemable balance as `leaguePoints26` plus earned task points minus points already spent. Halving them now would halve unspent purchasing power, which the ruling forbids. The **wallet split** is itself deferred to an end of year milestone, and the split must land **before** the first halving ever runs. Both pieces are therefore end of year work, in that order.
+
+**Done when, whenever it is built** · a season rollover halves league points for ranking and leaves the spendable balance unchanged · the two figures are separate in the data · the halving is idempotent, so running it twice does not halve twice · a test covers a member holding both.
 
 ---
 
@@ -521,6 +529,8 @@ This constrains existing code rather than adding any: server-side email paths mu
 **Done when** · no beta-triggered path sends email · in-app notifications still record and display · a test asserts the outbound path is not called.
 
 ---
+
+## Features
 
 ### ⬛ F1 — The doubles partner pool · all lanes
 

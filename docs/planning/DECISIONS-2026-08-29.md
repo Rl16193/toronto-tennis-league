@@ -10,11 +10,15 @@
 | **Scheduled**  | [D6](sprints/SPRINT-D6.md) · [D7](sprints/SPRINT-D7.md) · [D8](sprints/SPRINT-D8.md)                                                                                                          |
 | **Evidence**   | Usage figures from the live snapshot `2026-08-17`, 3,243 documents                                                                                                                            |
 
+**Line numbers are `dev-anuj` @ `ac4dfb1`.** Re-check before editing.
+
 ---
 
 ## 1 · One result model for all three ways to play
 
-**The problem measured.** Rally: 43 opened, **0 ever reached a result**. Challenge: 31 opened, 5 completed (16%). Both ran a five-state handshake — `open → accepted → reported → confirmed` — with different words for identical states.
+**The problem.** Challenges and rallies each ran their own five-state handshake — `open → accepted → reported → confirmed` — with different words for identical states, and neither matched how a tournament result is entered. Three ways to record the same thing.
+
+> **A rally without a score is not a failure.** Entering a rally score is optional by design — it is a way to earn extra points, and choosing not to is a normal outcome. The change here is that _when_ a player does enter one, it works the same way as everywhere else.
 
 **Ruling.** All three match types use **one result model**, the auto-apply model already ruled for tournaments on 2026-08-23:
 
@@ -75,6 +79,8 @@ One redemption in the entire dataset, against nine catalogue entries. **Ruling: 
 ## 4 · No per-event draw hiding
 
 **Remove `hide_seniors` and `hide_beginners`.** They exist only to hide draw tabs (`useTournament.ts:216-217`).
+
+**A draw already appears only when players in that category join.** Seniors, beginners, and every zone draw are driven by who actually signed up — so an empty category shows nothing without anyone toggling it. The toggles were solving a problem that participation already solves.
 
 **The Retired Pro draw itself survives** — it is a separate, league-gated concept (`useJoin.ts:140-142`), not the toggle. Same for Beginners. What goes is the per-event ability to hide either.
 

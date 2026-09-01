@@ -120,10 +120,10 @@ Not scheduled. Each has enough written down to start without re-deciding.
 
 **Files** · `src/pages/StaticPages.tsx:213-311` (Terms, 9 sections) · `:313-364` (Privacy, 5 sections). Routes at `App.tsx:39-40, 170-171`.
 
-Deferred by owner ruling 2026-08-29. Under "the member pays the provider directly", Terms need a provider-relationship section, a points-and-rewards section, a corrected §2 (`:226-232` calls this a "non-profit platform" and never mentions money), and an effective date. Privacy needs **EXIF GPS on court photos** (`courts` stores `exif_gps_lat`, `exif_gps_lng`, `exif_camera`, `exif_taken_at` — undisclosed), the contact-sharing model, photos, WhatsApp, named processors, retention, PIPEDA rights, a named contact, and breach notification.
+Deferred by owner ruling 2026-08-29. Under "the member pays the provider directly", Terms need a provider-relationship section, a points-and-rewards section, a corrected §2 (`StaticPages.tsx:226-232` calls this a "non-profit platform" and never mentions money), and an effective date. Privacy needs **EXIF GPS on court photos** (`courts` stores `exif_gps_lat`, `exif_gps_lng`, `exif_camera`, `exif_taken_at` — undisclosed), the contact-sharing model, photos, WhatsApp, named processors, retention, PIPEDA rights, a named contact, and breach notification.
 
 **Blocked on two facts:** the accountable privacy contact, and the legal entity name.
-**Lawyer review before publication:** the liability waiver (`:268-284`), the minors clause (`:235-241`), the provider section.
+**Lawyer review before publication:** the liability waiver (`StaticPages.tsx:268-284`), the minors clause (`StaticPages.tsx:235-241`), the provider section.
 
 ### 4.2 Provider contact through a booking connection
 

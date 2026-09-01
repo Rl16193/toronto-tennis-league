@@ -213,15 +213,15 @@ Two rulings from that session reversed decisions in this review: **losses is del
 
 ## Appendix — technical references
 
-For Anuj. Line numbers are on `dev-anuj` at `4dde946`.
+For Anuj. **Line numbers are `dev-anuj` @ `ac4dfb1`.** Re-check before editing.
 
 | Item | Where |
 | --- | --- |
 | Knockout gate — **broken fix** | `useTournament.ts:1304`. Needs `rrGroupMatches.filter((m) => m.player_1_uid && m.player_2_uid).every((m) => m.status === 'complete')`, with the `length > 0` guard on `:1303` moved onto the filtered set |
-| Points-won regression | Writer removed from `statDeltasForResult` (`lib/tournamentResult.js:131-150`); readers still live at `useStandings.ts:58-59`, `Profile.tsx:167-168`, `Leagues.tsx:269`, `RRGroupCard.tsx:36`, `firestoreNormalization.ts:264-265`, `types.ts:61-62` |
+| Points-won regression | Writer removed from `statDeltasForResult` (`lib/tournamentResult.js:131-150`); readers still live at `useStandings.ts:58-59`, `Profile.tsx:167-168`, `Leagues.tsx:269`, `RRGroupCard.tsx:36`, `firestoreNormalization.ts:264-265`, `src/types.ts:61-62` |
 | Third award table | `withdrawalWorkflow.js:10`. Replace with `tournamentAward()` from `./lib/tournamentResult` — already exported, same package. `tournamentAward({round, format}).loserPoints` returns 1 for RR, so the special case goes too |
 | Booking timestamp rename | `bookings.js:86,108` · `lib/bookingState.js:21` · `services/types.ts:100` · `test/bookingState.test.js:5,8` · `tests/integration/functions.emulator.test.mjs:209` |
-| Still written, should be deleted | `loses` and `tournamentsPlayed` in `lib/tournamentResult.js:137,146,148` |
+| Still written, should be deleted | `loses` and `tournamentsPlayed` in `lib/tournamentResult.js:139,146,148` |
 | Retired features still present | `redemption_locks` — `firestore.rules:641`, `rewards.js:36`. `group_lessons` — `firestore.rules:707`, `rewards.js:98,150`, plus `isCurrentGroupLessonCoachFor` in the contacts read rule |
 | No-show leftovers | `firestore.rules:529` still whitelists the field; `lib/adminMetricsCompute.js:112` still branches on it |
 | Dead code | `useJoin.ts:158,162` (unreachable `full` / `fallback`) · `rrGeneration.ts:348` (`selectGroupWinners`, no caller) |

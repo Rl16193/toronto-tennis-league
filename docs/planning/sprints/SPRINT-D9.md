@@ -54,8 +54,10 @@ A new collection recording **payments and donors** ([VISION §4](../VISION.md)).
 source of truth for both the Contributor Badge and any refund.
 
 Every record is written **server-side only**, carries the member, the amount, the currency, the
-campaign (summer or winter — each season runs its own), the Stripe identifiers needed to refund
-it, and its state.
+season, the Stripe identifiers needed to refund it, and its state.
+
+**The seasons are fixed:** summer runs **May to November**, winter runs **December to April**.
+Each runs its own campaign, and every payment records which one it belongs to.
 
 **Done when** · a record is created only by a function · its shape covers a donation and its
 refund · a client write is denied.
@@ -74,28 +76,43 @@ signature is verified and an unsigned call is rejected.
 
 ## ⬛ P3 — "Support the league" button · A3 + A4
 
-One clear surface. It says what the money is for and which campaign it belongs to, and hands
-off to Stripe. It uses the shared element set from [D7](SPRINT-D7.md) — no bespoke controls.
+A **Support the league** button on the **profile card** opens it. It says where the money goes: **to help us organize more events, provide new
+tennis balls for matches, get better prizes for winners, and an end of season awards ceremony.**
+It names the current season and hands off to Stripe. It uses the shared element set from
+[D7](SPRINT-D7.md), no bespoke controls.
 
 **Done when** · the button reaches checkout · the page states the campaign · it renders in
 both themes and on a phone.
 
-## ⬛ P4 — Refunds · A1
+## ⬛ P4 — Cancellations · A1
 
-An organizer-initiated refund through the stored Stripe identifiers, reflected in the payment
-record.
+**A member requests, an organizer approves** (owner ruling 2026-08-31). From their payments list a
+member requests cancellation of their own donation, within **90 days** of paying. The organizer
+sees the request in a queue and approves or declines it. **Approval is what executes the Stripe
+refund.** The queue reuses the shared review panel from [D7](SPRINT-D7.md) rather than inventing
+another chrome.
 
-**Done when** · a test-mode refund processes · the record shows it · the Contributor Badge
-follows whatever the ruling says a refunded donation means — decide it here and record it, do
-not leave it implied.
+A court booking payment has no cancellation path here. Booking gets its own tab, **Book My
+Court**, built later.
+
+**A cancelled donation is a refunded donation** (owner ruling 2026-08-31), and it drops out of the
+badge calculation. A member keeps the badge while any donation of theirs is still unrefunded.
+
+**Done when** · a test-mode refund processes · the record shows it · refunding a member only
+donation removes their badge · a member with three donations who has one refunded keeps it.
 
 ## ⬛ P5 — Payment security rules · A1
 
 `firestore.rules` has no payments block. Without one the collection falls through to deny,
-which is safe but unverifiable — the same trap [C12](SPRINT-D6.md) fixed for `services`.
+which is safe but unverifiable, the same trap [C12](SPRINT-D6.md) fixed for `services`.
 
-**Done when** · a member reads their own payment records and no one else's · every client
-write is denied · rules tests cover both.
+**A Payments entry joins the sidebar** (`src/components/HeaderMenu.tsx`, beside Notifications and
+Leaderboard). It is the member own record of what they have paid: one list, one row per payment,
+carrying amount, date, season, **type** and state. A donation inside 90 days offers **Request
+cancellation**. A court booking row never does.
+
+**Done when** · a member reads their own payment records and no one else records · every client
+write is denied · the sidebar entry lists that member payments · rules tests cover both denials.
 
 ## ⬛ P6 — Contributor Badge · A3 + A4
 
