@@ -1,20 +1,27 @@
-import React, { useMemo, useState } from 'react';
-import { AlertCircle, Check, ChevronDown, ChevronUp, Download, Pencil, Play, Settings2, X, XCircle } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, Check, ChevronDown, ChevronUp, Download, Image as ImageIcon, Pencil, Play, Settings2, UserPlus, Users, X, XCircle } from 'lucide-react';
+import { EventCarousel } from '../../features/events/EventCarousel';
+import { DrawSlide, downloadSlide } from './bracketImage';
 import { Button } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
 import { SegmentedControl } from '../../components/SegmentedControl';
+import { SelectField } from '../../components/SelectField';
 import { Tree, TreeGroup, TreeRow } from '../../components/Tree';
-import { EventParticipant } from '../../types';
+import { EventParticipant, UserStats } from '../../types';
 import { ZONE_NAMES, ZoneName } from '../../utils/zones';
-import { ZONE_COURT_COUNTS } from '../../utils/zoneCourtCounts';
-import { pillButtonCls } from '../../components/ContactOpponentButton';
+import { ContactOpponentButton, pillButtonCls } from '../../components/ContactOpponentButton';
+import type { PoolMember } from '../../features/events/services/partnerPool';
+import type { ContactData } from '../../types';
+import type { DisputeRow } from '../../features/matches/scoring';
 import {
-  DrawConfig, DrawTab, OpenDrawSlot, RRConfig, ScheduleRequest, ScoreSubmissionDoc, SkillGroup,
+  DOUBLES_DIVISIONS, DrawConfig, DrawTab, OpenDrawSlot, RRConfig, SkillGroup,
   SkillMergePair, TournamentFormat, TournamentMatch, UnplacedEntry, ZoneDrawConfig,
 } from './types';
 import {
-  formatPlayerName, formatScheduledDate, formatSetScores, getScheduleState, zoneBucketFor,
+  PLAYER_LOADING, PLAYER_LOADING_SENTINEL, formatPlayerName, formatScheduledDate, getScheduleState, zoneBucketFor,
 } from './utils';
+import { skillBand } from '../../utils/skillLevels';
+import { MemberSearchInput, type MemberPick } from '../../features/members/MemberSearchInput';
 
 // Tournament page presentation: error boundary, request panels, modals, draw selector, and the
 // organizer's Manage Draw sheet. Props in, callbacks out — all state lives in useTournament.ts.
@@ -51,17 +58,19 @@ export class BracketErrorBoundary extends React.Component<BoundaryProps, Boundar
 
 // ─── Player-facing zone controls ──────────────────────────────────────────────────────────────
 
-// Flags the participant doc only; the organizer actions the move from ZoneChangeRequestsPanel.
-export const RequestZoneChangeButton: React.FC<{
-  requested: boolean;
-  onRequest: () => void;
-}> = ({ requested, onRequest }) => {
-  if (requested) {
-    return <span className={`${pillButtonCls('sm', 'outline')} opacity-60 pointer-events-none`}>Request sent</span>;
+// Changes the member's zone outright. Nothing is requested and nobody approves it — the organizer
+// is NOTIFIED, and only has to act in the one case where the new zone already has a generated draw
+// (see ZoneChangeRequestsPanel, and CLAUDE.md's three zone-change cases).
+export const ChangeZoneButton: React.FC<{
+  changed: boolean;
+  onChange: () => void;
+}> = ({ changed, onChange }) => {
+  if (changed) {
+    return <span className={`${pillButtonCls('sm', 'outline')} opacity-60 pointer-events-none`}>Zone changed</span>;
   }
   return (
-    <button type="button" className={pillButtonCls('sm', 'outline')} onClick={onRequest}>
-      Request Zone Change
+    <button type="button" className={pillButtonCls('sm', 'outline')} onClick={onChange}>
+      Change Your Zone
     </button>
   );
 };
@@ -91,7 +100,16 @@ export const ChangeZoneModal: React.FC<{
       <div className="p-6 pt-3 space-y-4">
         <p className="text-sm text-fg/70">
           You&apos;re currently in <span className="font-bold text-fg">{currentZone || 'no zone'}</span>.
-          Pick the zone you&apos;d like to play in — the organizer reviews every request.
+          Pick the zone you want to play in. The change is yours to make — the organizer is told,
+          not asked. Matches you already have stay exactly as they are.
+        </p>
+        <p className="text-sm">
+          <a
+            href="/courts"
+            className="font-bold text-clay underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+          >
+            See which zone a court is in
+          </a>
         </p>
 
         <div className="space-y-2">
@@ -125,7 +143,7 @@ export const ChangeZoneModal: React.FC<{
         <div className="flex gap-2 pt-1">
           <Button variant="outline" size="sm" onClick={onClose} className="flex-1">Cancel</Button>
           <Button size="sm" onClick={submit} isLoading={saving} disabled={!picked} className="flex-1">
-            Request move
+            Change zone
           </Button>
         </div>
       </div>
@@ -166,45 +184,6 @@ const QueueDropdown: React.FC<{
   );
 };
 
-const ScheduleRequestRow: React.FC<{
-  match: ScheduleRequest;
-  onSet: (m: TournamentMatch, date: string, slot: 'AM' | 'PM') => void;
-}> = ({ match, onSet }) => {
-  const [date, setDate] = useState(match.proposed_date ?? '');
-  const [slot, setSlot] = useState<'AM' | 'PM'>(match.proposed_slot ?? 'AM');
-  return (
-    <div className="flex flex-wrap items-center gap-2 py-2 border-b border-fg/5 last:border-0">
-      <span className="flex-1 min-w-[140px]">
-        <span className="block text-sm text-fg">
-          {formatPlayerName(match.player_1_name)} vs {formatPlayerName(match.player_2_name)}
-        </span>
-        {!!match.event_title && (
-          <span className="block text-[11px] text-fg/70 truncate">{match.event_title}</span>
-        )}
-      </span>
-      <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-        className="border border-fg/25 rounded-lg bg-tennis-surface px-2 py-1.5 text-fg text-xs" />
-      <div className="flex rounded-lg overflow-hidden">
-        {(['AM', 'PM'] as const).map((s) => (
-          <button key={s} type="button" onClick={() => setSlot(s)}
-            className={`px-3 py-1.5 text-xs font-bold ${slot === s ? 'bg-clay text-white' : 'bg-white text-ink'}`}>{s}</button>
-        ))}
-      </div>
-      <Button size="sm" className="px-3" onClick={() => onSet(match, date, slot)} disabled={!date}>Set</Button>
-    </div>
-  );
-};
-
-// Creator-only, and spans every tournament they run — each row names its tournament.
-export const ScheduleRequestsPanel: React.FC<{
-  requests: ScheduleRequest[];
-  onSetSchedule: (m: TournamentMatch, date: string, slot: 'AM' | 'PM') => void;
-}> = ({ requests, onSetSchedule }) => (
-  <QueueDropdown title="Scheduling requested" count={requests.length}>
-    {requests.map((m) => <ScheduleRequestRow key={m.id} match={m} onSet={onSetSchedule} />)}
-  </QueueDropdown>
-);
-
 const UnplacedPlayerRow: React.FC<{
   player: UnplacedEntry;
   slots: OpenDrawSlot[];
@@ -215,7 +194,7 @@ const UnplacedPlayerRow: React.FC<{
   const meta = [
     player.tournamentChoice, player.division,
     player.skill ? `skill ${player.skill}` : '',
-    player.zone || 'No zone',
+    player.zone || 'Unassigned',
   ].filter(Boolean).join(' · ');
   return (
     <div className="flex flex-wrap items-center gap-2 py-2 border-b border-fg/5 last:border-0">
@@ -224,17 +203,14 @@ const UnplacedPlayerRow: React.FC<{
         {!!player.eventTitle && <span className="block text-[11px] font-semibold text-fg truncate">{player.eventTitle}</span>}
         {!!meta && <span className="block text-[11px] text-fg/70">{meta}</span>}
       </span>
-      <select
+      <SelectField
         value={pick}
-        onChange={(e) => setPick(e.target.value)}
-        aria-label={`Slot for ${player.name}`}
-        className="bg-tennis-surface rounded-lg px-2 py-1.5 text-fg text-xs max-w-[11rem]"
-      >
-        <option value="">Open slot…</option>
-        {slots.map((s) => (
-          <option key={`${s.matchId}_${s.slot}`} value={`${s.matchId}_${s.slot}`}>{s.label}</option>
-        ))}
-      </select>
+        placeholder="Open slot…"
+        title={`Slot for ${player.name}`}
+        options={slots.map((s) => ({ value: `${s.matchId}_${s.slot}`, label: s.label }))}
+        onChange={setPick}
+        className="w-auto max-w-[11rem]"
+      />
       <Button
         size="sm"
         className="px-3"
@@ -275,51 +251,49 @@ export const UnplacedPlayersPanel: React.FC<{
   </QueueDropdown>
 );
 
-// Creator-only queue. Approve pins `zone_override` and clears the request in one write; reject
-// only clears it. Changes which draw the player routes to — does not touch matches they're in.
+// Creator-only queue, and it is a NOTICE, not an approval step — the member has already changed
+// their zone. Seating them pins `zone_override`; dismissing only clears the notice. Either way
+// this changes which draw they route to and never touches matches they are already in.
 export const ZoneChangeRequestsPanel: React.FC<{
   requests: EventParticipant[];
   buckets?: { id: string; label: string }[];
   onMoveZone?: (participantId: string, bucketId: string) => void;
-  /** Approve — move them to the zone they asked for. Only offered when we can resolve it. */
+  /** Seat them in the zone they moved to. Only offered when we can resolve it. */
   onApprove?: (participantId: string, newZone: string) => void;
-  /** Reject — clear the request, leaving the player where they are. */
+  /** Dismiss — clear the notice, leaving the player where they are seated. */
   onClear: (participantId: string) => void;
 }> = ({ requests, buckets = [], onMoveZone, onApprove, onClear }) => {
   if (requests.length === 0) return null;
   return (
     <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
       <p className="text-xs font-bold uppercase tracking-widest text-badge mb-2">
-        Zone change requested ({requests.length})
+        Zone changed ({requests.length})
       </p>
       {requests.map((p) => (
         <div key={p.id} className="flex flex-wrap items-center gap-2 py-2 border-b border-fg/5 last:border-0">
           <span className="flex-1 min-w-[140px]">
             <span className="block text-sm text-fg">{formatPlayerName(p.user_name || 'Player')}</span>
             {p.new_zone && (
-              <span className="block text-[11px] text-fg/70">wants: {p.new_zone}</span>
+              <span className="block text-[11px] text-fg/70">moved to: {p.new_zone}</span>
             )}
           </span>
           {!!buckets.length && onMoveZone && (
-            <select
+            <SelectField
               value=""
-              onChange={(e) => { if (e.target.value) onMoveZone(p.id, e.target.value); }}
-              aria-label={`Move ${formatPlayerName(p.user_name || 'Player')} to a zone`}
-              className="text-xs bg-tennis-surface rounded-lg px-2 py-1.5 text-fg cursor-pointer"
-            >
-              <option value="">Move to zone…</option>
-              {buckets.map((b) => (
-                <option key={b.id} value={b.id}>{b.label}</option>
-              ))}
-            </select>
+              placeholder="Move to zone…"
+              title={`Move ${formatPlayerName(p.user_name || 'Player')} to a zone`}
+              options={buckets.map((b) => ({ value: b.id, label: b.label }))}
+              onChange={(zone) => { if (zone) onMoveZone(p.id, zone); }}
+              className="w-auto"
+            />
           )}
-          {/* Hidden when the request carries no target zone — an older request raised before the
-              picker existed has nothing to approve into. */}
+          {/* Hidden when the row carries no target zone — a notice raised before the picker
+              existed names no zone to seat them into. */}
           {onApprove && p.new_zone && (
             <button
               type="button"
-              aria-label={`Approve move to ${p.new_zone}`}
-              title={`Approve — move to ${p.new_zone}`}
+              aria-label={`Seat them in ${p.new_zone}`}
+              title={`Seat them in ${p.new_zone}`}
               onClick={() => onApprove(p.id, p.new_zone!)}
               className="shrink-0 p-2 rounded-lg bg-green-500/10 text-badge-win hover:bg-green-500/20 transition-colors"
             >
@@ -328,8 +302,8 @@ export const ZoneChangeRequestsPanel: React.FC<{
           )}
           <button
             type="button"
-            aria-label="Reject zone change"
-            title="Reject — leave them in their current zone"
+            aria-label="Dismiss zone change notice"
+            title="Dismiss — leave them where they are seated"
             onClick={() => onClear(p.id)}
             className="shrink-0 p-2 rounded-lg bg-red-500/10 text-badge-loss hover:bg-red-500/20 transition-colors"
           >
@@ -341,55 +315,38 @@ export const ZoneChangeRequestsPanel: React.FC<{
   );
 };
 
-export const PendingScoresPanel: React.FC<{
-  submissions: ScoreSubmissionDoc[];
-  onConfirm: (sub: ScoreSubmissionDoc) => void;
-  onReject: (sub: ScoreSubmissionDoc) => void;
-}> = ({ submissions, onConfirm, onReject }) => {
-  if (submissions.length === 0) return null;
-
+/**
+ * Results two players disagree about, for the organizer: the recorded result stands until they
+ * approve the disputing score (it applies and points follow) or reject it. Shared by the
+ * Tournament page and Matches (challenges and rallies).
+ */
+export const DisputedResultsPanel: React.FC<{
+  rows: DisputeRow[];
+  onSettle: (matchId: string, approve: boolean) => Promise<void> | void;
+}> = ({ rows, onSettle }) => {
+  const [busy, setBusy] = useState<string | null>(null);
+  if (rows.length === 0) return null;
+  const settle = async (id: string, approve: boolean) => {
+    setBusy(id);
+    try { await onSettle(id, approve); } finally { setBusy(null); }
+  };
   return (
-    <div className="mb-6 rounded-2xl border border-clay/40 bg-clay/[0.06] overflow-hidden">
-      <div className="px-4 py-3 border-b border-clay/20 flex items-center gap-2">
-        <span className="px-2 py-0.5 rounded-full bg-clay text-white text-[10px] font-bold">{submissions.length}</span>
-        <span className="text-sm font-bold text-fg">Pending score{submissions.length !== 1 ? 's' : ''} to confirm</span>
-      </div>
-      <div className="divide-y divide-white/5">
-        {submissions.map((s) => {
-          const winnerIsP1 = s.claimed_winner_uid && s.claimed_winner_name === s.player_1_name;
-          const scoreStr = s.is_walkover ? 'Walkover' : formatSetScores(s);
-          return (
-            <div key={s.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-              <div className="min-w-0">
-                <p className="text-sm text-fg truncate">
-                  <span className="text-fg/70 text-xs mr-2">{s.match_round}{s.draw_label ? ` · ${s.draw_label}` : ''}</span>
-                  <span className={winnerIsP1 ? 'font-bold text-fg' : ''}>{formatPlayerName(s.player_1_name)}</span>
-                  <span className="text-fg/70 mx-1.5">vs</span>
-                  <span className={!winnerIsP1 ? 'font-bold text-fg' : ''}>{formatPlayerName(s.player_2_name)}</span>
-                </p>
-                <p className="text-xs text-fg/70 mt-0.5">
-                  {scoreStr && <span className="font-mono mr-2">{scoreStr}</span>}
-                  Winner: <span className="text-fg/70">{formatPlayerName(s.claimed_winner_name)}</span>
-                  <span className="text-fg/70"> · submitted by {formatPlayerName(s.submitted_by_name)}</span>
-                </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => onConfirm(s)}
-                  className="px-3 py-1.5 rounded-lg bg-green-600 text-fg text-xs font-bold hover:bg-green-500 transition-colors"
-                >
-                  Confirm
-                </button>
-                <button
-                  onClick={() => onReject(s)}
-                  className="px-3 py-1.5 rounded-lg border border-fg/15 text-fg/70 text-xs font-bold hover:text-fg hover:border-fg/30 transition-colors"
-                >
-                  Reject
-                </button>
-              </div>
+    <div className="mb-6 rounded-2xl bg-fg/5 overflow-hidden">
+      <p className="px-4 pt-3 text-sm font-bold text-fg">Disputed result{rows.length !== 1 ? 's' : ''}</p>
+      <div className="divide-y divide-fg/10">
+        {rows.map((r) => (
+          <div key={r.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-fg truncate">{r.players}</p>
+              <p className="text-xs text-fg/70 mt-0.5">Recorded: {r.standing}</p>
+              <p className="text-xs text-fg/70">Disputed: {r.disputing}</p>
             </div>
-          );
-        })}
+            <div className="flex items-center gap-2 shrink-0">
+              <Button size="sm" disabled={busy === r.id} onClick={() => settle(r.id, true)}>Approve</Button>
+              <Button size="sm" variant="secondary" disabled={busy === r.id} onClick={() => settle(r.id, false)}>Reject</Button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -398,7 +355,7 @@ export const PendingScoresPanel: React.FC<{
 // ─── Per-match scheduling ─────────────────────────────────────────────────────────────────────
 
 export type ScheduleApi = {
-  onAskOrganizer: (match: TournamentMatch) => void;
+  onAskOpponent: (match: TournamentMatch) => void;
   onSubmitScore?: (match: TournamentMatch) => void;
   submittableMatchIds?: Set<string>;
 };
@@ -449,7 +406,7 @@ export const ScheduleControls: React.FC<{
       {(showAsk || showSubmit) && (
         <div className={buttonLayout === 'grid-2' ? 'grid grid-cols-2 gap-2' : 'flex flex-wrap gap-2'}>
           {showAsk && (
-            <Button size="sm" variant="clay" onClick={() => api.onAskOrganizer(match)}>Schedule</Button>
+            <Button size="sm" variant="clay" onClick={() => api.onAskOpponent(match)}>Schedule</Button>
           )}
           {showSubmit && (
             <Button size="sm" variant="clay" className="px-3" onClick={() => api.onSubmitScore!(match)}>Submit Score</Button>
@@ -558,14 +515,18 @@ export const ZoneDrawConfigPanel: React.FC<{
   config: ZoneDrawConfig;
   participants: EventParticipant[];
   zoneMap: Record<string, string>;
+  /** Same map the draw filters band players by, so the overview agrees with the draws. */
+  statsMap?: Record<string, UserStats>;
   /** Zone ids that already have generated matches — these can't be merged away. */
   zonesWithMatches?: Set<string>;
   onMerge: (sourceId: string, targetId: string) => void;
   onUnmerge: (sourceId: string) => void;
   onSetEnabled: (enabled: boolean) => void;
   onClose: () => void;
-}> = ({ config, participants, zoneMap, zonesWithMatches, onMerge, onUnmerge, onSetEnabled, onClose }) => {
+}> = ({ config, participants, zoneMap, statsMap = {}, zonesWithMatches, onMerge, onUnmerge, onSetEnabled, onClose }) => {
   const [mergeSource, setMergeSource] = useState<string | null>(null);
+  const [openPrefTab, setOpenPrefTab] = useState<string | null>(null);
+  const [openPrefZone, setOpenPrefZone] = useState<string | null>(null);
 
   const merges = config.merges ?? {};
   const activeBuckets = config.buckets.filter((b) => !merges[b.id]);
@@ -581,6 +542,53 @@ export const ZoneDrawConfigPanel: React.FC<{
       });
     return map;
   }, [participants, zoneMap, config]);
+
+  /**
+   * Where people actually PREFER to play: zone derived from their own courts, with
+   * `zone_override` deliberately ignored. The counts above are the opposite — they honour the
+   * override, because that is the zone the player will really be drawn into. Reading the two
+   * together is the point: a zone that is busy here but empty above is one whose players have
+   * all been moved by hand.
+   */
+  const preferred = useMemo(() => {
+    const bandOf = (p: EventParticipant) =>
+      p.skill_group === 'Retired Pro'
+        ? 'Retired Pro'
+        : skillBand(statsMap[p.uid]?.skill_level ?? Number(p.skill || 0));
+
+    const divisions = new Map<string, Map<string, Map<string, number>>>();
+    let moved = 0;
+    participants
+      .filter((p) => p.tournament_choice === 'Singles' && !p.removal && p.uid)
+      .forEach((p) => {
+        const zone = zoneBucketFor(zoneMap[p.uid], config) ?? '';
+        if (p.zone_override && p.zone_override !== zone) moved += 1;
+        const division = p.division ?? '';
+        const zones = divisions.get(division) ?? new Map<string, Map<string, number>>();
+        const bands = zones.get(zone) ?? new Map<string, number>();
+        const b = bandOf(p);
+        bands.set(b, (bands.get(b) ?? 0) + 1);
+        zones.set(zone, bands);
+        divisions.set(division, zones);
+      });
+
+    // Busiest zone first — this is an overview, so the useful ordering is by headcount.
+    const total = (bands: Map<string, number>) => [...bands.values()].reduce((a, b) => a + b, 0);
+    const rows = [...divisions.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([division, zones]) => ({
+        division,
+        count: [...zones.values()].reduce((n, bands) => n + total(bands), 0),
+        zones: [...zones.entries()]
+          .map(([zone, bands]) => ({
+            zone,
+            count: total(bands),
+            bands: [...bands.entries()].sort((x, y) => y[1] - x[1]),
+          }))
+          .sort((x, y) => y.count - x.count),
+      }));
+    return { rows, moved };
+  }, [participants, zoneMap, statsMap, config]);
 
   const sourcesMergedInto = (targetId: string) =>
     Object.entries(merges).filter(([, t]) => t === targetId).map(([s]) => s);
@@ -690,6 +698,51 @@ export const ZoneDrawConfigPanel: React.FC<{
         )}
         </>)}
 
+        {/* Read-only overview. Same tree shape as the draw selector, but it lists where players
+            PREFER to play rather than which draw they are in, so rows aren't selectable — a zone
+            here may have no draw at all. */}
+        {preferred.rows.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-widest text-fg/70">Preferred zones</p>
+            <p className="text-xs text-fg/70">
+              Where players say they want to play, from their own court choices. Hand placements are
+              ignored here, so this can differ from the counts above.
+            </p>
+            <Tree
+              footnote={preferred.moved > 0
+                ? `${preferred.moved} player${preferred.moved === 1 ? ' is' : 's are'} placed in a different zone by hand.`
+                : undefined}
+            >
+              {preferred.rows.map((d) => (
+                <TreeGroup
+                  key={d.division}
+                  id={d.division}
+                  label={d.division}
+                  right={`${d.count} signed up`}
+                  open={openPrefTab === d.division}
+                  onToggle={(id) => setOpenPrefTab((cur) => (cur === id ? null : id))}
+                >
+                  {d.zones.map((z) => (
+                    <TreeGroup
+                      key={`${d.division}-${z.zone}`}
+                      id={`${d.division}-${z.zone}`}
+                      label={labelOf(z.zone)}
+                      level={1}
+                      right={`${z.count}`}
+                      open={openPrefZone === `${d.division}-${z.zone}`}
+                      onToggle={(id) => setOpenPrefZone((cur) => (cur === id ? null : id))}
+                    >
+                      {z.bands.map(([band, n]) => (
+                        <TreeRow key={band} label={band} right={`${n}`} level={1} />
+                      ))}
+                    </TreeGroup>
+                  ))}
+                </TreeGroup>
+              ))}
+            </Tree>
+          </div>
+        )}
+
         <Button variant="clay" className="w-full" onClick={onClose}>Done</Button>
       </div>
     </Sheet>
@@ -725,10 +778,12 @@ export const DrawTabs: React.FC<{
   onRRViewChange?: (v: 'groups' | 'knockout') => void;
   /** Draw-size picker, rendered inside the selected draw's row (creator, pre-generation only). */
   drawSizeControl?: React.ReactNode;
+  /** Opens the picture slideshow. Omitted when the draw has nothing generated to show. */
+  onViewCompleteDraw?: () => void;
 }> = ({
   currentDraw, visibleDraws, drawCounts,
   onTabChange, onSkillChange, onDoublesChange, onZoneChange, rrView, onRRViewChange,
-  drawSizeControl,
+  drawSizeControl, onViewCompleteDraw,
 }) => {
   const drawKey = (d: DrawConfig) => `${d.tab}|${d.division}|${d.skillGroup}|${d.zone ?? ''}`;
   const currentKey = currentDraw ? drawKey(currentDraw) : null;
@@ -834,6 +889,14 @@ export const DrawTabs: React.FC<{
         </Tree>
       )}
 
+      {/* Everyone's way into the pictures, players included. The organizer's Manage Draw sheet no
+          longer carries a download of its own. */}
+      {onViewCompleteDraw && (
+        <Button variant="outline" className="w-full mb-4" onClick={onViewCompleteDraw}>
+          <ImageIcon className="w-4 h-4 mr-1.5" />View Complete Draw
+        </Button>
+      )}
+
       {rrView && onRRViewChange && (
         <SegmentedControl<'groups' | 'knockout'>
           options={[{ value: 'groups', label: 'Groups' }, { value: 'knockout', label: 'Knockout' }]}
@@ -845,6 +908,45 @@ export const DrawTabs: React.FC<{
     </>
   );
 };
+
+// ─── Draw slideshow ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * The pictures for the selected draw, swiped through one at a time, each with its own download.
+ *
+ * The preview and the file are the same SVG string, so what somebody sees is exactly what they
+ * save. Shown inline as a data URI rather than an object URL because there is nothing to revoke
+ * and the markup is self-contained.
+ */
+export const DrawSlideshow: React.FC<{
+  slides: DrawSlide[];
+  onClose: () => void;
+}> = ({ slides, onClose }) => (
+  <Sheet onClose={onClose} title="Complete Draw" maxWidthClassName="max-w-lg">
+    <div className="p-4 pt-1">
+      {slides.length === 0 ? (
+        <p className="text-sm text-fg/70 text-center py-10">
+          Nothing to show for this draw yet. Pictures appear once matches are generated.
+        </p>
+      ) : (
+        <EventCarousel count={slides.length} fullBleed={false} alwaysPager itemLabel="picture">
+          {slides.map((s) => (
+            <div key={s.id} className="space-y-3">
+              <img
+                src={`data:image/svg+xml;utf8,${encodeURIComponent(s.svg)}`}
+                alt={s.label}
+                className="w-full rounded-2xl border border-fg/10"
+              />
+              <Button variant="outline" className="w-full" onClick={() => downloadSlide(s)}>
+                <Download className="w-4 h-4 mr-1.5" />Download {s.label}
+              </Button>
+            </div>
+          ))}
+        </EventCarousel>
+      )}
+    </div>
+  </Sheet>
+);
 
 // ─── Organizer header ─────────────────────────────────────────────────────────────────────────
 
@@ -860,7 +962,6 @@ export const TournamentHeader: React.FC<{
   womensSkillMerge: SkillMergePair | null;
   consolidateDoubles: boolean;
   currentDrawFormat: TournamentFormat;
-  onDownload: () => void;
   onGenerateMatches: () => void;
   onCancelMatches: () => void;
   onToggleEdit: () => void;
@@ -873,7 +974,7 @@ export const TournamentHeader: React.FC<{
   isCreator, hasMatches, isProcessing, editMode, started,
   mensSkillMerge, womensSkillMerge, consolidateDoubles,
   currentDrawFormat,
-  onDownload, onGenerateMatches, onCancelMatches, onToggleEdit,
+  onGenerateMatches, onCancelMatches, onToggleEdit,
   onSetMensSkillMerge, onSetWomensSkillMerge, onToggleConsolidateDoubles,
   zoneDrawsEnabled, onOpenZoneConfig,
 }) => {
@@ -933,12 +1034,8 @@ export const TournamentHeader: React.FC<{
       {open && (
         <Sheet onClose={() => setOpen(false)} title="Manage Draw" maxWidthClassName="max-w-md">
           <div className="p-6 pt-3 space-y-2.5">
-            <Row
-              icon={<Download className="w-4 h-4" />}
-              label="Download Draw"
-              hint="Save the current draw as an image"
-              onClick={() => { onDownload(); setOpen(false); }}
-            />
+            {/* Download Draw used to sit here. It moved to View Complete Draw under the selector,
+                where players can reach it too. */}
             {hasMatches ? (
               <Row
                 icon={<XCircle className="w-4 h-4" />}
@@ -1019,6 +1116,325 @@ export const TournamentHeader: React.FC<{
           </div>
         </Sheet>
       )}
+    </div>
+  );
+};
+
+/**
+ * Doubles partner pool: players who joined doubles without a partner. Members see each other's
+ * contact details (cards written server-side) and pair up; saving a teammate leaves the pool.
+ */
+export const PartnerPoolPanel: React.FC<{
+  members: PoolMember[];
+  contacts: Record<string, ContactData>;
+  viewerUid: string;
+  inPool: boolean;
+  canJoin: boolean;
+  busy: boolean;
+  onJoin: () => void;
+  onLeave: () => void;
+}> = ({ members, contacts, viewerUid, inPool, canJoin, busy, onJoin, onLeave }) => (
+  <section className="mb-6 rounded-3xl bg-fg/5 p-4" aria-label="Partner pool">
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className="text-sm font-bold text-fg">Partner pool</h2>
+        <p className="mt-0.5 text-xs text-fg/70">
+          {inPool ? 'Players looking for a doubles partner. Contact one to team up.' : 'Players looking for a doubles partner.'}
+        </p>
+      </div>
+      {inPool ? (
+        <Button size="sm" variant="outline" className="shrink-0" isLoading={busy} onClick={onLeave}>Leave pool</Button>
+      ) : canJoin ? (
+        <Button size="sm" className="shrink-0" isLoading={busy} onClick={onJoin}>Join pool</Button>
+      ) : null}
+    </div>
+    {members.length === 0 ? (
+      <p className="mt-3 text-sm text-fg">Nobody is waiting yet.</p>
+    ) : (
+      <ul className="mt-3 divide-y divide-fg/10">
+        {members.map((m) => {
+          const c = contacts[m.uid];
+          return (
+            <li key={m.uid} className="flex items-center gap-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-fg">{formatPlayerName(m.name)}{m.uid === viewerUid ? ' (you)' : ''}</p>
+                <p className="text-xs text-fg/70">Skill {Number(m.skill || 0).toFixed(1)}</p>
+              </div>
+              {c && m.uid !== viewerUid && (
+                <ContactOpponentButton
+                  name={m.name}
+                  phone={c.phone}
+                  email={c.email}
+                  whatsappContact={c.whatsapp_contact}
+                  preferred={c.preferred_mode_of_contact}
+                  className="shrink-0"
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    )}
+  </section>
+);
+
+// ─── Zone court counts ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Courts and sites per zone, shown to players when they pick a zone to move to — the number of
+ * courts is the practical reason to prefer one zone over another.
+ *
+ * A static table rather than a runtime calculation: deriving it needs the full facilities CSV
+ * (~174 rows) parsed and every row run through `getZone`, which is a lot of work for a number
+ * that only moves when the City publishes new court data.
+ *
+ * REGENERATE when `public/Tennis Courts Facilities - 4326.csv` or the zone boundaries in
+ * `zones.ts` change — sum the CSV's `Courts` column per `getZone(lat, lng)`.
+ * Last generated: 580 courts across 174 sites.
+ */
+const ZONE_COURT_COUNTS: Record<ZoneName, { courts: number; sites: number }> = {
+  'York West': { courts: 72, sites: 28 },
+  'Etobicoke': { courts: 87, sites: 28 },
+  'Etobicoke - Lakeshore': { courts: 72, sites: 24 },
+  'North York': { courts: 118, sites: 34 },
+  'Downtown - Midtown': { courts: 77, sites: 17 },
+  'North Scarborough': { courts: 84, sites: 24 },
+  'East York and South Scarborough': { courts: 70, sites: 19 },
+};
+
+// ─── Add teammate panel ────────────────────────────────────────────────────────────────────────
+
+type AddTeammatePanelProps = {
+  currentUserId?: string;
+  saving: boolean;
+  onSave: (partnerName: string, partnerInApp: 'yes' | 'no', combinedSkill: number | null) => void;
+};
+
+/**
+ * Shown to a doubles participant whose registration has no partner recorded.
+ *
+ * This exists because registrations could previously be saved as Singles inside a Doubles event
+ * (see the comment in JoinEventSheet) — the partner-name check was keyed on a different value
+ * than the one being written, so it never fired and those signups landed with an empty partner.
+ * Rather than making those players register again, they finish the pairing here.
+ *
+ * The skill field only appears for a partner who isn't on the app: a member's rating comes from
+ * their own profile, so asking someone else to estimate it would be worse data.
+ */
+export const AddTeammatePanel: React.FC<AddTeammatePanelProps> = ({ currentUserId, saving, onSave }) => {
+  const [pick, setPick] = useState<MemberPick | null>(null);
+  const [skill, setSkill] = useState('');
+  const [error, setError] = useState('');
+
+  const isGuest = !!pick && pick.memberId === null;
+
+  const submit = () => {
+    if (!pick) { setError('Please choose your teammate.'); return; }
+    const name = pick.name.trim();
+    // Same rules the join form applies, so both paths produce identical data.
+    if (name.length < 3 || name.length > 80) { setError('Teammate name must be 3–80 characters.'); return; }
+    if (/\d/.test(name)) { setError('Teammate name cannot contain numbers.'); return; }
+
+    let combined: number | null = null;
+    if (isGuest) {
+      const n = Number(skill);
+      if (!skill.trim() || !Number.isFinite(n) || n < 1 || n > 5) {
+        setError('Enter your teammate’s skill level between 1 and 5.');
+        return;
+      }
+      combined = n;
+    }
+    setError('');
+    onSave(name, pick.memberId ? 'yes' : 'no', combined);
+  };
+
+  return (
+    <div className="mb-6 rounded-3xl bg-tennis-surface/30 p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Users className="w-4 h-4 text-clay shrink-0" />
+        <div>
+          <p className="text-sm font-bold text-fg">Add your teammate</p>
+          <p className="text-[11px] text-fg">
+            You’re registered for doubles but we don’t have your partner yet.
+          </p>
+        </div>
+      </div>
+
+      <MemberSearchInput
+        label="Teammate"
+        value={pick}
+        onChange={(p) => { setPick(p); setError(''); }}
+        excludeId={currentUserId}
+        allowGuest
+        placeholder="Search for your teammate…"
+        hint="Not on the app yet? Type their full name and pick “not on the app”."
+      />
+
+      {isGuest && (
+        <div className="space-y-1.5">
+          <label className="block text-xs font-bold text-fg uppercase tracking-widest" htmlFor="tm-skill">
+            Their skill level (1–5)
+          </label>
+          <input
+            id="tm-skill"
+            type="number"
+            min={1}
+            max={5}
+            step={0.5}
+            value={skill}
+            onChange={(e) => setSkill(e.target.value)}
+            placeholder="e.g. 3.5"
+            className="border border-fg/25 w-full rounded-xl bg-tennis-dark/70 px-3 py-2.5 text-sm text-fg outline-none focus:border-clay"
+          />
+        </div>
+      )}
+
+      {error && <p className="text-[11px] text-badge-loss">{error}</p>}
+
+      <Button variant="clay" isLoading={saving} onClick={submit} className="w-full">
+        Save teammate
+      </Button>
+    </div>
+  );
+};
+
+// ─── Add player panel ──────────────────────────────────────────────────────────────────────────
+
+type AvailableUser = { id: string; name: string; email: string };
+
+type AddPlayerPanelProps = {
+  availableUsers: AvailableUser[];
+  currentDraw: DrawConfig | undefined;
+  onAdd: (userId: string, partnerName?: string, divisionOverride?: string) => Promise<void>;
+};
+
+
+export const AddPlayerPanel: React.FC<AddPlayerPanelProps> = ({
+  availableUsers, currentDraw, onAdd,
+}) => {
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [partnerName, setPartnerName] = useState('');
+  const [divisionOverride, setDivisionOverride] = useState("Men's");
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  if (!currentDraw) return null;
+
+  const isDoubles = currentDraw.tournamentChoice === 'Doubles';
+  const needsDivisionPicker = currentDraw.division === 'All';
+
+  const filtered = availableUsers.filter(
+    (u) =>
+      (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (u.email || '').toLowerCase().includes(search.toLowerCase()),
+  );
+  const isPlayerLoading = selectedUserId === PLAYER_LOADING_SENTINEL;
+  const selectedUser = availableUsers.find((u) => u.id === selectedUserId);
+
+  const handleAdd = async () => {
+    if (!selectedUserId) return;
+    setAdding(true);
+    try {
+      await onAdd(
+        selectedUserId,
+        isDoubles && partnerName ? partnerName : undefined,
+        needsDivisionPicker ? divisionOverride : undefined,
+      );
+      setSelectedUserId('');
+      setPartnerName('');
+      setSearch('');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  return (
+    <div className="mb-6 rounded-2xl bg-tennis-surface/40 p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <UserPlus className="w-4 h-4 text-clay" />
+        <span className="text-sm font-bold text-fg uppercase tracking-widest">Add Player</span>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+          <div className="relative flex-1 min-w-[200px]" ref={dropdownRef}>
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              className="w-full text-left px-3 py-2 rounded-xl bg-tennis-surface/60 text-sm text-fg hover:border-clay/50 transition-colors"
+            >
+              {isPlayerLoading ? <span className="text-fg/70 italic">{PLAYER_LOADING}</span> : selectedUser ? selectedUser.name : <span className="text-fg">Select player…</span>}
+            </button>
+            {open && (
+              <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-[#1a1a2e] rounded-xl shadow-xl overflow-hidden">
+                <div className="p-2 border-b border-fg/10">
+                  <input
+                    autoFocus
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search…"
+                    className="border border-fg/25 w-full bg-transparent text-sm text-fg placeholder-fg/70 outline-none"
+                  />
+                </div>
+                <ul className="max-h-52 overflow-y-auto">
+                  <li
+                    onClick={() => { setSelectedUserId(PLAYER_LOADING_SENTINEL); setOpen(false); setSearch(''); }}
+                    className="px-3 py-2 text-sm text-fg/70 italic hover:bg-clay/20 cursor-pointer border-b border-fg/10"
+                  >
+                    {PLAYER_LOADING}
+                  </li>
+                  {filtered.length === 0 ? (
+                    <li className="px-3 py-2 text-sm text-fg">No users found</li>
+                  ) : (
+                    filtered.map((u) => (
+                      <li
+                        key={u.id}
+                        onClick={() => { setSelectedUserId(u.id); setOpen(false); setSearch(''); }}
+                        className="px-3 py-2 text-sm text-fg hover:bg-clay/20 cursor-pointer"
+                      >
+                        <span className="font-semibold">{u.name}</span>
+                        <span className="text-fg ml-2 text-xs">{u.email}</span>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {needsDivisionPicker && (
+            <SelectField
+              title="Division"
+              value={divisionOverride}
+              options={DOUBLES_DIVISIONS}
+              onChange={setDivisionOverride}
+              className="w-auto"
+            />
+          )}
+
+          {isDoubles && (
+            <input
+              value={partnerName}
+              onChange={(e) => setPartnerName(e.target.value)}
+              placeholder="Partner name…"
+              className="border border-fg/25 flex-1 min-w-[160px] px-3 py-2 rounded-xl bg-tennis-surface/60 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay/50 transition-colors"
+            />
+          )}
+
+          <Button onClick={handleAdd} disabled={!selectedUserId} isLoading={adding} size="md">
+            <UserPlus className="w-4 h-4 mr-2" />
+            Add
+          </Button>
+        </div>
     </div>
   );
 };

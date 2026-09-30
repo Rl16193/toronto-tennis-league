@@ -7,62 +7,34 @@ import { Lock, Menu } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { Sheet } from '../components/Sheet';
 import { useTournament } from './tournament/useTournament';
-import { getEventDate, zoneBucketFor } from './tournament/utils';
+import { getEventDate, isPreviewMatch, zoneBucketFor } from './tournament/utils';
 import { parseValidDate } from '../utils/eventDates';
 import type { FirestoreDateLike } from '../utils/eventDates';
-import { downloadDrawAsPng, getRoundLabels, downloadRRGroupsAsPng, downloadRoundAsPng } from './tournament/bracketImage';
-import { TournamentMatch } from './tournament/types';
+import { buildDrawSlides, downloadSlide, loadBrandMark } from './tournament/bracketImage';
 import { BracketView } from './tournament/BracketView';
 import { BracketAccordion } from './tournament/BracketAccordion';
 import {
-  BracketErrorBoundary, ChangeZoneModal, DrawTabs, PendingScoresPanel, RRConfigModal,
-  RequestZoneChangeButton, ScheduleRequestsPanel, TournamentHeader, UnplacedPlayersPanel,
+  BracketErrorBoundary, ChangeZoneModal, DrawSlideshow, DrawTabs, RRConfigModal,
+  ChangeZoneButton, PartnerPoolPanel, TournamentHeader, UnplacedPlayersPanel,
   ZoneChangeRequestsPanel, ZoneDrawConfigPanel,
 } from './tournament/TournamentElements';
 import { OpponentCard } from './tournament/OpponentPanels';
-import { ScoreModal } from './tournament/ScoreModal';
-import { AddPlayerPanel } from './tournament/AddPlayerPanel';
-import { AddTeammatePanel } from './tournament/AddTeammatePanel';
+import { ScoreModal } from '../features/matches/ScoreModal';
+import { AddPlayerPanel } from './tournament/TournamentElements';
+import { AddTeammatePanel } from './tournament/TournamentElements';
 import { RoundRobinView } from './tournament/RoundRobinView';
 import { AlertMessage } from '../components/AlertMessage';
 import { LoadingBar } from '../components/LoadingBar';
 import { TennisEvent } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { fetchEvents } from '../features/events/services/eventService';
-import { isLadderEvent } from '../utils/eventTypes';
+import { useContacts } from '../features/contacts/useContacts';
+import { joinPool, leavePool, poolCategoryForDivision, usePool, usePoolContacts } from '../features/events/services/partnerPool';
+import { useActiveLadder } from '../features/leagues/useChallengeRules';
 import { leagueDivision } from '../utils/skillLevels';
 import { proposeConversion, LadderDivision } from '../features/leagues/ladderService';
 
 type EventStatus = 'active' | 'completed';
 
-const getDrawState = (matches: TournamentMatch[]): string => {
-  const real = matches.filter((m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_'));
-  if (real.length === 0) return 'Live Preview';
-  if (real.some((m) => m.format === 'rr')) {
-    const groupStage = real.filter((m) => m.round === 'RR');
-    const knockout = real.filter((m) => m.format === 'rr' && m.round !== 'RR');
-    if (knockout.length > 0) {
-      const finals = knockout.filter((m) => m.round === 'F');
-      if (finals.length > 0 && finals.every((m) => m.winner_uid)) return 'Tournament Complete';
-      return knockout.some((m) => m.winner_uid) ? 'Knockout Started' : 'Knockout Stage';
-    }
-    if (groupStage.every((m) => m.status === 'complete')) return 'Group Stage Complete';
-    if (groupStage.some((m) => m.status === 'complete')) return 'Group Stage Started';
-    return 'Group Stage';
-  }
-  const drawSize = real[0]?.drawsize || 8;
-  const roundLabels = getRoundLabels(drawSize);
-  const finals = real.filter((m) => m.round === 'F');
-  if (finals.length > 0 && finals.every((m) => m.winner_uid)) return 'Tournament Complete';
-  for (let i = roundLabels.length - 1; i >= 0; i--) {
-    const round = roundLabels[i];
-    const roundMatches = real.filter((m) => m.round === round);
-    if (roundMatches.length === 0 || roundMatches.every((m) => !m.winner_uid)) continue;
-    const allComplete = roundMatches.every((m) => !!m.winner_uid);
-    return allComplete ? `${round} Complete` : `${round} Started`;
-  }
-  return 'Matches Generated';
-};
 
 const formatEventRange = (e: TennisEvent): string => {
   const start = getEventDate(e);
@@ -87,29 +59,25 @@ export const Tournament: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const eventId = searchParams.get('event') || undefined;
 
-  const [showOtherGroups, setShowOtherGroups] = useState(false);
   const [myEventIds, setMyEventIds] = useState<Set<string>>(new Set());
   const [eventStatuses, setEventStatuses] = useState<Record<string, EventStatus>>({});
   const [statusLoading, setStatusLoading] = useState(true);
   const [showEventSheet, setShowEventSheet] = useState(false);
   const [showZoneConfig, setShowZoneConfig] = useState(false);
   const [showChangeZone, setShowChangeZone] = useState(false);
-  // Round picker for the knockout download. Opens instead of downloading directly, so the
-  // creator can grab one round with contacts (or the whole bracket).
-  const [showDownloadPicker, setShowDownloadPicker] = useState(false);
+  // The draw pictures, opened from View Complete Draw under the selector. Everyone can open it,
+  // so the organizer's Manage Draw sheet no longer carries a download of its own.
+  const [showSlideshow, setShowSlideshow] = useState(false);
+  const [brandMark, setBrandMark] = useState('');
   const [alsoConvertToChallenge, setAlsoConvertToChallenge] = useState(false);
-  const [ladder, setLadder] = useState<TennisEvent | null>(null);
+  const ladder = useActiveLadder();
   const { profile } = useAuth();
-
-  useEffect(() => {
-    fetchEvents().then((all) => setLadder(all.filter((e) => isLadderEvent(e))[0] ?? null)).catch(() => {});
-  }, []);
 
   const {
     authLoading, loading, eventDataReady, user,
     event, matches, participants,
     allTournamentEvents,
-    isCreator, started, userParticipant, zoneMap, courtsMap, availabilityMap, userMap,
+    isCreator, userParticipant, zoneMap, statsMap, courtsMap, availabilityMap,
     currentDraw, currentMatches, displayMatches, visibleDraws, drawCounts,
     opponent,
     editPlayers, currentDrawAllPlayers, currentDrawSize,
@@ -124,19 +92,19 @@ export const Tournament: React.FC = () => {
     handleUpdateRoundDeadline, handleSetPreviewDrawSize, handleAddPlayer, handleRemovePlayer,
     handleGenerateAll, handleResetDraw,
     handleEditPlayer, handleSubmitScore, handleOpenScoreForm,
-    pendingSubmissions, pendingMatchIds, submittableMatchIds, handleConfirmSubmission, handleRejectSubmission,
+    submittableMatchIds,
     currentDrawFormat, drawFormat,
     showRRConfig, setShowRRConfig, generatingRR,
-    rrGroups, previewRRGroups, previewRRLabels, userRRGroup, rrStandingsByGroup, rrGroupMatches, rrKnockoutMatches, rrKnockoutReady, rrConfig,
+    rrGroups, previewRRGroups, previewRRLabels, rrStandingsByGroup, rrGroupMatches, rrKnockoutMatches, rrConfig,
     rrGroupLabels, rrGroupIndices,
     rrUnplacedPlayers,
     rrView, setRRView,
     handleGenerateRR, handleResetRR, handleGenerateRRKnockout, handleSaveGroupEdit,
     handleCreateRRGroup, handleRenameGroup, handleSetGroupBonus, handleResetMatchScore,
-    visibleUserMatch, userRRMatches, scheduleRequests,
+    visibleUserMatch,
     unplacedParticipants, openDrawSlots, handleSeatParticipant,
-    handleAskOrganizerSchedule, handleSetSchedule,
-    zoneChangeRequests, handleRequestZoneChange, handleClearZoneChangeRequest, handleMovePlayerZone, handleMoveZoneByUid,
+    handleAskOpponentSchedule,
+    zoneChangeRequests, handleChangeZone, handleClearZoneChangeRequest, handleMovePlayerZone, handleMoveZoneByUid,
     handleMergeZone, handleUnmergeZone, handleSetZoneDrawsEnabled, zoneConfig,
     handleAddTeammate, savingTeammate,
   } = useTournament(eventId);
@@ -148,7 +116,7 @@ export const Tournament: React.FC = () => {
   // the existing submit flow). Undefined when logged out.
   const scheduleApi = user
     ? {
-        onAskOrganizer: handleAskOrganizerSchedule,
+        onAskOpponent: handleAskOpponentSchedule,
         onSubmitScore: handleOpenScoreForm,
         submittableMatchIds,
       }
@@ -165,7 +133,9 @@ export const Tournament: React.FC = () => {
   useEffect(() => {
     if (!user) { setMyEventIds(new Set()); return; }
     getDocs(query(collection(db, 'event_participants'), where('uid', '==', user.uid)))
-      .then((snap) => setMyEventIds(new Set(snap.docs.map((d) => (d.data().event_id as string)).filter(Boolean))))
+      .then((snap) => setMyEventIds(new Set(snap.docs
+        .filter((d) => d.data().removal !== true) // a removed registration isn't a tournament you're in
+        .map((d) => (d.data().event_id as string)).filter(Boolean))))
       .catch(() => {});
   }, [user?.uid]);
 
@@ -214,9 +184,6 @@ export const Tournament: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusLoading, tabKey, eventId, myEvents.length]);
 
-  // Each tournament starts with the "other groups" section collapsed.
-  useEffect(() => { setShowOtherGroups(false); }, [eventId]);
-
   // Gate on BOTH the initial event-list fetch AND the currently-selected event's own data
   // (participants + matches) actually arriving — otherwise switching tournaments (or the gap
   // between the event list loading and the specific event being selected) briefly renders a
@@ -239,21 +206,81 @@ export const Tournament: React.FC = () => {
     return zoneConfig.buckets.find((b) => b.id === bucketId)?.label ?? 'Unassigned';
   }, [zoneConfig, userParticipant, zoneMap]);
 
-  // Rounds present in the current knockout draw, in play order, and the one to preselect in the
-  // download picker: the earliest round with an unplayed match, or the last one if all done.
-  // Must stay above the loading early-return (hooks order).
-  // For an RR draw the group-stage matches sit in displayMatches too (drawsize = group size), so
-  // the knockout image must be built from rrKnockoutMatches only.
-  const knockoutMatches = currentDrawFormat === 'rr' ? rrKnockoutMatches : displayMatches;
-  const downloadRounds = useMemo(() => {
-    const drawSize = Math.max(8, knockoutMatches[0]?.drawsize || 8);
-    return getRoundLabels(drawSize).filter((r) => knockoutMatches.some((m) => m.round === r));
-  }, [knockoutMatches]);
-  const defaultDownloadRound = useMemo(() => {
-    const open = downloadRounds.find((r) =>
-      knockoutMatches.some((m) => m.round === r && m.status !== 'complete'));
-    return open ?? downloadRounds[downloadRounds.length - 1] ?? '';
-  }, [downloadRounds, knockoutMatches]);
+  // ── Draw pictures ──────────────────────────────────────────────────────────
+  // All of this sits above the loading early-return to keep hook order stable.
+
+  // Contacts are fetched ONE AT A TIME, deliberately. `userMap` gets them in batches of ten and
+  // Firestore denies a whole batch if the caller may not read even one of its docs, so a player
+  // connected to two people in a batch got none of them and only organizers ever saw numbers.
+  // A per-uid read with its own catch returns exactly what this viewer is allowed to see, which
+  // is precisely the "contacts for people you are playing" rule. Only while the sheet is open.
+  const drawContactUids = useMemo(() => [...new Set([
+    ...currentMatches.flatMap((m) => [m.player_1_uid, m.player_2_uid]),
+    ...rrGroups.flat().map((p) => p.uid),
+  ].filter(Boolean))], [currentMatches, rrGroups]);
+  const drawContacts = useContacts(showSlideshow ? drawContactUids : []);
+
+  // The badge is fetched and recoloured once, the first time somebody opens the slideshow.
+  useEffect(() => {
+    if (showSlideshow && !brandMark) loadBrandMark().then(setBrandMark);
+  }, [showSlideshow, brandMark]);
+
+  const slideInput = useMemo(() => {
+    const [division, zone] = (currentDraw?.label ?? 'Draw').split(' — ');
+    return {
+      matches: currentMatches,
+      groups: rrGroups.length > 0 ? rrGroups : previewRRGroups,
+      groupLabels: rrGroups.length > 0 ? rrGroupLabels : previewRRLabels,
+      // Singles/Doubles is appended only when the event's own name doesn't already say it,
+      // or the header reads "Zephyr Open 2026 Singles · Singles".
+      eventTitle: [
+        event?.title,
+        currentDraw?.tournamentChoice && !new RegExp(currentDraw.tournamentChoice, 'i').test(event?.title ?? '')
+          ? currentDraw.tournamentChoice : '',
+      ].filter(Boolean).join(' · '),
+      division,
+      zone,
+      roundDeadlines: event?.round_deadlines ?? {},
+      contacts: drawContacts,
+      brandMark,
+    };
+  }, [currentMatches, rrGroups, rrGroupLabels, previewRRGroups, previewRRLabels,
+    event?.title, event?.round_deadlines, currentDraw, drawContacts, brandMark]);
+
+  // Built only while the sheet is open; a closed slideshow costs nothing.
+  const drawSlides = useMemo(
+    () => (showSlideshow ? buildDrawSlides(slideInput) : []),
+    [showSlideshow, slideInput],
+  );
+  // The button appears once the draw has real matches, not previews.
+  const hasGeneratedMatches = displayMatches.some((m) => !isPreviewMatch(m));
+
+  // Hooks: must stay above the loading early return below.
+  // Doubles partner pool. A player sees their own division's pool; an organizer sees every pool.
+  const needsPartner = userParticipant?.tournament_choice === 'Doubles' && !userParticipant.doubles?.trim();
+  const poolCategory = poolCategoryForDivision(userParticipant?.division);
+  const poolMembers = usePool(event?.id, isCreator ? undefined : poolCategory);
+  const inPool = !!user && poolMembers.some((m) => m.uid === user.uid);
+  const poolContacts = usePoolContacts(event?.id, inPool);
+  const [poolBusy, setPoolBusy] = useState(false);
+  const togglePool = async (join: boolean) => {
+    if (!event || !user) return;
+    setPoolBusy(true);
+    try {
+      if (join) {
+        await joinPool(event.id, {
+          uid: user.uid, name: profile?.user.name || userParticipant?.user_name || 'Player',
+          category: poolCategory, skill: Number(profile?.stats.skill_level || 0),
+        });
+      } else {
+        await leavePool(event.id, user.uid);
+      }
+    } catch (err) {
+      console.error('Partner pool update failed:', err);
+    } finally {
+      setPoolBusy(false);
+    }
+  };
 
   const initialLoading = authLoading || (loading && allTournamentEvents.length === 0);
   const eventSwitching = !initialLoading && allTournamentEvents.length > 0 && !eventDataReady;
@@ -266,8 +293,6 @@ export const Tournament: React.FC = () => {
       />
     );
   }
-
-  const drawState = getDrawState(currentMatches);
 
   // Read-only mode is per-event now: a completed tournament opened from History renders
   // exactly like the old Past mode did.
@@ -338,6 +363,7 @@ export const Tournament: React.FC = () => {
       rrView={isRR && rrGroupMatches.length > 0 ? rrView : undefined}
       onRRViewChange={isRR && rrGroupMatches.length > 0 ? setRRView : undefined}
       drawSizeControl={drawSizeControl}
+      onViewCompleteDraw={hasGeneratedMatches ? () => setShowSlideshow(true) : undefined}
     />
   );
 
@@ -351,15 +377,12 @@ export const Tournament: React.FC = () => {
       knockoutMatches={rrKnockoutMatches}
       advancementCount={rrConfig?.advancementCount ?? 1}
       isCreator={readOnly ? false : canEdit}
-      isParticipant={!!userParticipant}
       currentUserId={user?.uid}
-      isPastEvent={pastMode}
       editMode={readOnly ? false : effEditMode}
       editPlayers={editPlayers}
       onEditPlayer={handleEditPlayer}
       onSubmitScore={readOnly ? undefined : submitScore}
       submittableMatchIds={readOnly ? undefined : submittable}
-      pendingMatchIds={pendingMatchIds}
       onSaveGroupEdit={handleSaveGroupEdit}
       onRenameGroup={handleRenameGroup}
       // Passed regardless of readOnly: players see the switch (disabled) so they can tell whether
@@ -367,11 +390,10 @@ export const Tournament: React.FC = () => {
       onSetGroupBonus={handleSetGroupBonus}
       onRemovePlayer={handleRemovePlayer}
       onMovePlayerZone={handleMoveZoneByUid}
-      onAskSchedule={handleAskOrganizerSchedule}
+      onAskSchedule={handleAskOpponentSchedule}
       zoneBuckets={zoneConfig.buckets}
       onCreateGroup={handleCreateRRGroup}
       unplacedPlayers={rrUnplacedPlayers}
-      rrKnockoutReady={rrKnockoutReady}
       generatingKnockout={generatingRR}
       onGenerateKnockout={handleGenerateRRKnockout}
       rrView={rrView}
@@ -388,15 +410,9 @@ export const Tournament: React.FC = () => {
         </AlertMessage>
       )}
 
-      {!pastMode && isCreator && (
-        <PendingScoresPanel
-          submissions={pendingSubmissions}
-          onConfirm={handleConfirmSubmission}
-          onReject={handleRejectSubmission}
-        />
-      )}
+      {/* Disputed results moved to the Organizer Dash (/profile?dash=organizer), which lists every
+          kind of dispute in one place instead of one event at a time. */}
 
-      {!pastMode && isCreator && <ScheduleRequestsPanel requests={scheduleRequests} onSetSchedule={handleSetSchedule} />}
       {/* Only once a draw exists — before that "unplaced" is everyone, which says nothing. */}
       {!pastMode && isCreator && currentMatches.length > 0 && (
         <UnplacedPlayersPanel
@@ -429,9 +445,9 @@ export const Tournament: React.FC = () => {
           <span className="text-xs text-fg/70">
             Your zone: <span className="font-bold text-fg">{userZoneLabel}</span>
           </span>
-          <RequestZoneChangeButton
-            requested={!!userParticipant.req_zone_change}
-            onRequest={() => setShowChangeZone(true)}
+          <ChangeZoneButton
+            changed={!!userParticipant.req_zone_change}
+            onChange={() => setShowChangeZone(true)}
           />
         </div>
       )}
@@ -441,7 +457,7 @@ export const Tournament: React.FC = () => {
           <ChangeZoneModal
             currentZone={userZoneLabel}
             onClose={() => setShowChangeZone(false)}
-            onSubmit={(zone) => handleRequestZoneChange(userParticipant.id, zone)}
+            onSubmit={(zone) => handleChangeZone(userParticipant.id, zone)}
           />
         )}
       </AnimatePresence>
@@ -454,7 +470,23 @@ export const Tournament: React.FC = () => {
         <AddTeammatePanel
           currentUserId={userParticipant.uid}
           saving={savingTeammate}
-          onSave={(name, inApp, skill) => handleAddTeammate(userParticipant.id, name, inApp, skill)}
+          onSave={async (name, inApp, skill) => {
+            await handleAddTeammate(userParticipant.id, name, inApp, skill);
+            if (inPool && event && user) await leavePool(event.id, user.uid).catch(() => {});
+          }}
+        />
+      )}
+
+      {!pastMode && user && (needsPartner || inPool || (isCreator && poolMembers.length > 0)) && (
+        <PartnerPoolPanel
+          members={poolMembers}
+          contacts={poolContacts}
+          viewerUid={user.uid}
+          inPool={inPool}
+          canJoin={needsPartner}
+          busy={poolBusy}
+          onJoin={() => { void togglePool(true); }}
+          onLeave={() => { void togglePool(false); }}
         />
       )}
 
@@ -493,8 +525,11 @@ export const Tournament: React.FC = () => {
       {isRR ? (
         roundRobinFull(!canEdit)
       ) : (
-        (isCreator || displayMatches.some((m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_'))) && (
-          <BracketErrorBoundary onDownload={() => downloadDrawAsPng(displayMatches, currentDraw?.label || 'Draw', drawState, event?.title, event?.round_deadlines ?? {})}>
+        (isCreator || displayMatches.some((m) => !isPreviewMatch(m))) && (
+          <BracketErrorBoundary onDownload={() => {
+            const [first] = buildDrawSlides(slideInput);
+            if (first) downloadSlide(first);
+          }}>
             <div className="sm:hidden">
               <BracketAccordion
                 matches={displayMatches}
@@ -505,7 +540,6 @@ export const Tournament: React.FC = () => {
                 isCreator={isCreator}
                 onSubmitScore={submitScore}
                 submittableMatchIds={submittable}
-                pendingMatchIds={pendingMatchIds}
                 roundDeadlines={event?.round_deadlines}
                 onUpdateDeadline={canEdit ? handleUpdateRoundDeadline : undefined}
               />
@@ -513,7 +547,6 @@ export const Tournament: React.FC = () => {
             <div className="hidden sm:block">
               <BracketView
                 matches={displayMatches}
-                drawTitle={currentDraw?.label || 'Draw'}
                 editMode={effEditMode}
                 editPlayers={editPlayers}
                 onEditPlayer={handleEditPlayer}
@@ -521,7 +554,6 @@ export const Tournament: React.FC = () => {
                 isCreator={isCreator}
                 onSubmitScore={submitScore}
                 submittableMatchIds={submittable}
-                pendingMatchIds={pendingMatchIds}
                 roundDeadlines={event?.round_deadlines}
                 onUpdateDeadline={canEdit ? handleUpdateRoundDeadline : undefined}
               />
@@ -543,9 +575,6 @@ export const Tournament: React.FC = () => {
             womensSkillMerge={womensSkillMerge}
             consolidateDoubles={consolidateDoubles}
             currentDrawFormat={currentDrawFormat}
-            onDownload={() => isRR && rrKnockoutMatches.length === 0
-              ? downloadRRGroupsAsPng(rrGroups, rrGroupLabels, rrGroupMatches, currentDraw?.division || 'Draw', event?.title, userMap)
-              : setShowDownloadPicker(true)}
             onGenerateMatches={drawFormat === 'rr' ? () => setShowRRConfig(true) : handleGenerateAll}
             onCancelMatches={currentDrawFormat === 'rr' ? handleResetRR : handleResetDraw}
             onToggleEdit={() => setEditMode((v) => !v)}
@@ -560,6 +589,7 @@ export const Tournament: React.FC = () => {
               config={zoneConfig}
               participants={participants}
               zoneMap={zoneMap}
+              statsMap={statsMap}
               zonesWithMatches={zonesWithMatches}
               onMerge={handleMergeZone}
               onUnmerge={handleUnmergeZone}
@@ -585,9 +615,7 @@ export const Tournament: React.FC = () => {
             const form = scoreForm;
             const convert = alsoConvertToChallenge;
             await handleSubmitScore(e);
-            // `form.noShow` matters: ticking No Show doesn't clear a winner already picked, so
-            // without this a no-show could still fire a challenge conversion for that winner.
-            if (!convert || !canConvert || !match || form?.noShow || !form?.winnerUserId || !ladder || !user) return;
+            if (!convert || !canConvert || !match || !form?.winnerUserId || !ladder || !user) return;
             const isP1Winner = form.winnerUserId === match.player_1_uid;
             const winner = isP1Winner
               ? { id: match.player_1_uid, name: match.player_1_name }
@@ -633,12 +661,6 @@ export const Tournament: React.FC = () => {
                 label: 'Also count as a Challenge',
                 checked: alsoConvertToChallenge,
                 onChange: setAlsoConvertToChallenge,
-              } : undefined}
-              // Organizer only, and group matches only — a no-show has no winner, so there is
-              // nobody for a knockout to advance. useTournament re-checks both conditions.
-              noShow={isCreator && scoreFormMatch.format === 'rr' && scoreFormMatch.round === 'RR' ? {
-                checked: !!scoreForm.noShow,
-                onChange: (v) => setScoreForm({ ...scoreForm, noShow: v }),
               } : undefined}
               // Only for an organizer, and only once there's a result to undo.
               onReset={isCreator && scoreFormMatch.status === 'complete'
@@ -723,43 +745,7 @@ export const Tournament: React.FC = () => {
       </AnimatePresence>
 
       <AnimatePresence>
-        {showDownloadPicker && (
-          <Sheet onClose={() => setShowDownloadPicker(false)} title="Download Draw" maxWidthClassName="max-w-md">
-            <div className="p-3 pt-1 space-y-1">
-              {downloadRounds.map((r) => (
-                <motion.button
-                  key={r}
-                  type="button"
-                  onClick={() => {
-                    downloadRoundAsPng(knockoutMatches, r, currentDraw?.label || 'Draw', event?.title, userMap);
-                    setShowDownloadPicker(false);
-                  }}
-                  whileTap={tapScale.whileTap}
-                  transition={tapScale.transition}
-                  className={`w-full flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors ${
-                    r === defaultDownloadRound ? 'bg-clay/15 border border-clay/40' : 'bg-fg/5 border border-transparent hover:border-fg/20'
-                  }`}
-                >
-                  <span className="text-sm font-semibold text-fg">{r}</span>
-                  <span className="shrink-0 text-[11px] text-fg/70">Names and contacts</span>
-                </motion.button>
-              ))}
-              <motion.button
-                type="button"
-                onClick={() => {
-                  downloadDrawAsPng(knockoutMatches, currentDraw?.label || 'Draw', drawState, event?.title, event?.round_deadlines ?? {});
-                  setShowDownloadPicker(false);
-                }}
-                whileTap={tapScale.whileTap}
-                transition={tapScale.transition}
-                className="w-full flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors bg-fg/5 border border-transparent hover:border-fg/20"
-              >
-                <span className="text-sm font-semibold text-fg">All rounds</span>
-                <span className="shrink-0 text-[11px] text-fg/70">Full bracket with scores</span>
-              </motion.button>
-            </div>
-          </Sheet>
-        )}
+        {showSlideshow && <DrawSlideshow slides={drawSlides} onClose={() => setShowSlideshow(false)} />}
       </AnimatePresence>
 
       {statusLoading && allTournamentEvents.length === 0 ? (

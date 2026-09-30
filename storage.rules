@@ -46,6 +46,15 @@ service firebase.storage {
         && request.resource.size < 5 * 1024 * 1024;
     }
 
+    // Event images, from the Add / Edit Event form: signed-in owner folder only, images under
+    // 5 MB. Creating the event itself is gated to organizers by firestore.rules.
+    match /events/{userId}/{fileName} {
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.size < 5 * 1024 * 1024;
+    }
+
     // Anonymous "Report" photos (logged-out reporters) land under the fixed `anon/` prefix.
     // No auth required, still image-only and size-capped to limit abuse.
     match /court_reports/anon/{fileName} {

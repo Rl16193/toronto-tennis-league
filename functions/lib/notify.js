@@ -10,7 +10,8 @@ const admin = require('firebase-admin');
 const { Resend } = require('resend');
 const { htmlToText } = require('./htmlToText');
 const { LINK } = require('./emailTemplates');
-const { EMAIL_FROM, EMAIL_REPLY_TO } = require('./constants');
+const { EMAIL_FROM, EMAIL_REPLY_TO, SUPER_ADMIN_UID } = require('./constants');
+const { emailDeliveryDecision } = require('./emailDelivery');
 
 const db = () => admin.firestore();
 const resendApiKey = defineSecret('RESEND_API_KEY');
@@ -33,14 +34,15 @@ async function notify(recipients, payload) {
   await batch.commit().catch((e) => logger.error('notify failed', e));
 }
 
-// All uids with organizer rights (super admin is handled separately client-side; this covers
-// every account with preferences.event_creator === true).
+// Recipients for app-wide organizer work that belongs to no event (claims, coupons, bookings,
+// rally disputes): the super admin plus every `event_creator` account. Event work goes to that
+// event's organizers instead (eventOrganizerUids in roles.js).
 async function organizerUids() {
   const snap = await db().collection('preferences').where('event_creator', '==', true).get();
-  return snap.docs.map((d) => d.id);
+  return [...new Set([SUPER_ADMIN_UID, ...snap.docs.map((d) => d.id)])];
 }
 
-// Best-effort email alongside a notify() call — looks up the recipient's address on `users` and
+// Best-effort email alongside a notify() call — looks up the recipient's address on `contacts` and
 // their opt-out on `preferences.email_notifications` (missing/undefined = opted in, only an
 // explicit `false` skips it), then sends via Resend. Any failure (no email on file, opted out,
 // Resend error) is logged/skipped, never thrown, so a broken email never blocks the in-app
@@ -58,6 +60,11 @@ async function sendEmail(uid, subject, html) {
     const email = user.email;
     if (!email) return;
     if (prefsDoc.data()?.email_notifications === false) return;
+    const decision = emailDeliveryDecision({
+      projectId: process.env.GCLOUD_PROJECT || JSON.parse(process.env.FIREBASE_CONFIG || '{}').projectId || '',
+      emulator: process.env.FUNCTIONS_EMULATOR === 'true',
+    });
+    if (!decision.deliver) { logger.info('sendEmail skipped', { reason: decision.reason }); return; }
     // `html` may be a function of the recipient's user doc — lets a template greet by name
     // without the caller doing its own `users/{uid}` read (we already have it here).
     const body = typeof html === 'function' ? html(user) : html;
@@ -80,8 +87,8 @@ async function sendEmail(uid, subject, html) {
   }
 }
 
-// Idempotent wrapper — the email_log dedupe guard was removed; this now simply forwards
-// to sendEmail. The signature is preserved so callers don't need updating.
+// Kept for its callers' signature. It does NOT deduplicate: the email_log guard was removed, so
+// a trigger that fires twice sends twice. `dedupeKey` is ignored.
 async function sendEmailOnce(uid, dedupeKey, subject, html) {
   await sendEmail(uid, subject, html);
 }

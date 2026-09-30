@@ -1,28 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { MapPin, Camera } from 'lucide-react';
-import { InstagramLink } from '../components/FooterElements';
+import { useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { doc, getDoc } from 'firebase/firestore';
 
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
-import { Button } from '../components/Button';
 import { CheckInModal } from '../features/tasks/CheckInModal';
 import { PhotoSubmitModal } from '../features/tasks/PhotoSubmitModal';
-import { resolveStorageUrl } from '../features/events/services/eventService';
+import { DisplayEvent, fetchEvents, resolveStorageUrl } from '../features/events/services/eventService';
+import { SiteFooterLine } from '../components/FooterElements';
+import { Toast } from '../components/Toast';
+import { subscribeVisitorToNewsletter, useMemberNewsletter } from '../lib/newsletter';
+import { VolunteerSignup, submitVolunteerSignup } from '../lib/volunteer';
+import { CourtImprovement, submitCourtImprovement } from '../lib/courtImprovements';
+import { isCurrentEvent, sortEventsByEndDate } from '../utils/eventDates';
+import { isTopspinMeetupEvent, isWeekendMatchdaysEvent } from '../utils/eventTypes';
 import { useCourtData } from './courtmap/useCourtData';
-import { fadeUp } from '../lib/motion';
-
-// Landing-page hero slideshow (Firebase Storage). Resolved to download URLs at runtime.
-const SLIDESHOW_PATHS = [
-  'gs://toronto-tennis-league.firebasestorage.app/LandingPage/1.png',
-  'gs://toronto-tennis-league.firebasestorage.app/LandingPage/2.png',
-  'gs://toronto-tennis-league.firebasestorage.app/LandingPage/3.png',
-  'gs://toronto-tennis-league.firebasestorage.app/LandingPage/26.png',
-];
-
-const MotionLink = motion.create(Link);
+import {
+  FloatingCtaStack,
+  HomeHero,
+  StatsStrip,
+  SubscribeSheet,
+  SupportBand,
+  UpcomingEventsStrip,
+  VolunteerSheet,
+  CourtNoteSheet,
+} from './home/HomeElements';
 
 // Animates a stat number up to its target whenever the target changes, carrying over the
 // last displayed value (via ref) so a later Firestore update counts up from there instead of
@@ -57,64 +60,36 @@ function useCountUp(target: number, duration = 800) {
   return Math.round(display);
 }
 
-// Cache resolved slideshow download URLs so repeat visits/refreshes skip the Storage round-trip
-// entirely and never show the /Logo.png fallback — only a first-ever visit pays that latency.
-const SLIDESHOW_CACHE_KEY = 'rs-home-slides-v2';
-const SLIDESHOW_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const readCachedSlides = (): string[] => {
-  try {
-    const raw = localStorage.getItem(SLIDESHOW_CACHE_KEY);
-    if (!raw) return [];
-    const { urls, savedAt } = JSON.parse(raw);
-    if (!Array.isArray(urls) || Date.now() - savedAt > SLIDESHOW_CACHE_TTL_MS) return [];
-    return urls;
-  } catch { return []; }
-};
-
 // Live figures come from the public site_stats/summary doc; these seed the strip so it never
 // flashes 0 and stays populated if the doc/rule isn't deployed. Courts matches the Court Map's
 // "Members Only" filter exactly — courts with a live count > 0 (via useCourtData).
 const COMMUNITY_BASELINE = { activePlayers: 100, matchesOrganized: 170, courts: 42 };
 
-// Landing page: the hero photo is its OWN contained card (not a page-wide background) with
-// Check-In / Submit a Photo / Join-or-Log-In overlaid on the image itself. The card is
-// portrait-cropped by default (sized down naturally on small screens via aspect-ratio) and
-// switches to a wider landscape crop when the device is rotated to landscape. Stats sit in a
-// plain horizontal strip below the image. "How it works" now lives on its own page
-// (/how-it-works, linked from Profile) — see src/pages/StaticPages.tsx.
+const UPCOMING_EVENT_COUNT = 6;
+
+/**
+ * Landing page. Owns the data and the modals; every piece of markup lives in
+ * ./home/HomeElements.tsx.
+ *
+ * Nothing in the shell is specific to this route: the tab bar and the header render here exactly
+ * as on every other page (owner ruling 2026-09-17). "How it works" lives on /about — see
+ * src/pages/StaticPages.tsx.
+ */
 export const Home: React.FC = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const { courts } = useCourtData();
 
   const [activePlayers, setActivePlayers] = useState(COMMUNITY_BASELINE.activePlayers);
   const [matchesOrganized, setMatchesOrganized] = useState(COMMUNITY_BASELINE.matchesOrganized);
   const [checkinStep, setCheckinStep] = useState<null | 'regular' | 'report'>(null);
-  const [slides, setSlides] = useState<string[]>(readCachedSlides);
-  const [slideIndex, setSlideIndex] = useState(0);
+  const [upcoming, setUpcoming] = useState<DisplayEvent[]>([]);
+  const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const [volunteerOpen, setVolunteerOpen] = useState(false);
+  const [courtNoteOpen, setCourtNoteOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => { document.title = 'Racquets & Strings'; }, []);
-
-  // Resolve the gs:// slideshow images to download URLs; keep only the ones that resolve, and
-  // cache them for next time so a refresh/repeat visit never shows the Logo.png fallback.
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all(SLIDESHOW_PATHS.map((p) => resolveStorageUrl(p).catch(() => '')))
-      .then((urls) => {
-        const resolved = urls.filter(Boolean);
-        if (cancelled || resolved.length === 0) return;
-        setSlides(resolved);
-        try { localStorage.setItem(SLIDESHOW_CACHE_KEY, JSON.stringify({ urls: resolved, savedAt: Date.now() })); } catch {}
-      });
-    return () => { cancelled = true; };
-  }, []);
-
-  // Rotate slides every 5s (only once more than one resolved).
-  useEffect(() => {
-    if (slides.length < 2) return;
-    const t = setInterval(() => setSlideIndex((i) => (i + 1) % slides.length), 5000);
-    return () => clearInterval(t);
-  }, [slides.length]);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,10 +114,75 @@ export const Home: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
+  // Events strip. `events` is world-readable, so this works signed out. The two exclusions and
+  // `isCurrentEvent` mirror the Events page (useEvents.ts) so the homepage can't advertise an
+  // event that page hides; `isCurrentEvent` is shared code for exactly that reason.
+  useEffect(() => {
+    let cancelled = false;
+    fetchEvents()
+      .then(async (all) => {
+        if (cancelled) return;
+        const now = Date.now();
+        // fetchEvents sorts by start date; the strip wants soonest-to-finish, so it re-sorts
+        // before taking the first six.
+        const shortlist = sortEventsByEndDate(
+          all
+            .filter((e) => !isTopspinMeetupEvent(e) && !isWeekendMatchdaysEvent(e))
+            .filter((e) => isCurrentEvent(e, now)),
+        ).slice(0, UPCOMING_EVENT_COUNT);
+        // Paint the text immediately, then swap in posters as they resolve — a Storage round-trip
+        // per image must not hold up the whole strip.
+        setUpcoming(shortlist);
+
+        // A `gs://` path is not a URL a browser can load; only these few on-screen events pay for
+        // the lookup, unlike the Events page which resolves every event it has fetched.
+        const withPosters = await Promise.all(
+          shortlist.map(async (event) => {
+            if (!event.imagePath) return event;
+            try {
+              return { ...event, image: await resolveStorageUrl(event.imagePath), imagePath: undefined };
+            } catch {
+              return event; // card renders without a banner rather than breaking the strip
+            }
+          }),
+        );
+        if (!cancelled) setUpcoming(withPosters);
+      })
+      .catch(() => { /* the strip renders nothing when the list is empty */ });
+    return () => { cancelled = true; };
+  }, []);
+
   // Check-In needs an account; logged-out visitors are sent to sign in first (like the auth tabs).
   const onCheckIn = () => (user ? setCheckinStep('regular') : navigate('/login'));
   // Report is open to everyone — logged-out reporters submit anonymously.
   const onReport = () => setCheckinStep('report');
+
+  // Two paths, because a member and a stranger are not the same subscriber (see lib/newsletter.ts).
+  // A signed-in member with an email on file is already telling us everything the row needs, so
+  // tapping Subscribe just does it — no form to fill in twice. Everyone else gets the modal, and so
+  // does a member whose account carries no email (some OAuth providers withhold it), since without
+  // one there is nothing to subscribe.
+  const newsletter = useMemberNewsletter(user?.uid, user?.email, profile?.user.name ?? '');
+  const onSubscribeClick = async () => {
+    if (!user?.email) { setSubscribeOpen(true); return; }
+    try {
+      await newsletter.subscribe();
+    } catch {
+      setToast('Could not sign you up just now. Please try again.');
+    }
+  };
+  // Visitors always see Subscribe; a member only until their row exists (hidden while checking).
+  const showSubscribe = !user || newsletter.subscribed === false;
+
+  const handleVisitorSubscribe = (email: string) => subscribeVisitorToNewsletter(email);
+
+  // The form always runs, member or not — only the uid and name ride along for a member.
+  // Visitors only: a member's Submit a Report opens PhotoSubmitModal, which pays points.
+  const handleCourtNote = (note: Omit<CourtImprovement, 'uid' | 'userName'>) =>
+    submitCourtImprovement({ ...note, uid: user?.uid, userName: profile?.user.name ?? '' });
+
+  const handleVolunteer = (signup: Omit<VolunteerSignup, 'uid' | 'userName'>) =>
+    submitVolunteerSignup({ ...signup, uid: user?.uid, userName: profile?.user.name ?? '' });
 
   // Each stat tile is a shortcut: number + label + destination. Values count up to their
   // target rather than just appearing.
@@ -151,94 +191,56 @@ export const Home: React.FC = () => {
   const courtsWithMembers = courts.filter((c) => c.count > 0).length;
   const courtsCoveredDisplay = useCountUp(courtsWithMembers || COMMUNITY_BASELINE.courts);
   const stats = [
-    { value: `${activePlayersDisplay}`, label: 'Players', to: '/leagues'},
-    { value: `${matchesOrganizedDisplay}`, label: 'Matches', to: '/events'},
-    { value: `${courtsCoveredDisplay}`, label: 'Courts', to: '/courts'},
+    { value: `${activePlayersDisplay}`, label: 'Players', to: '/leagues' },
+    { value: `${matchesOrganizedDisplay}`, label: 'Matches', to: '/events' },
+    { value: `${courtsCoveredDisplay}`, label: 'Courts', to: '/courts' },
   ];
 
   return (
-    <div className="max-w-xl mx-auto px-4 sm:px-6 pb-8">
-      {/* ── Hero — full-bleed to the viewport width (not just the page's own max-w-xl column),
-          so it has no side gaps in landscape/wide viewports, starting below the header rather
-          than behind it. ~70% viewport height, tagline + description overlaid near the bottom. ── */}
-      <motion.div
-        {...fadeUp}
-        className="relative left-1/2 -ml-[50vw] w-screen h-[70vh] overflow-hidden"
-      >
-        <div className="absolute inset-0 dark-gradient" />
-        {slides.map((url, i) => (
-          <img
-            key={url}
-            src={url}
-            alt=""
-            className={`absolute inset-0 w-full h-full object-cover object-center transition-opacity duration-1000 ${
-              i === slideIndex ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
-        ))}
-        {/* Bottom-weighted gradient — keeps the overlaid tagline/description legible against any photo. */}
-        <div className="absolute inset-0 bg-gradient-to-t from-tennis-dark/90 via-tennis-dark/20 to-transparent" />
+    <div className="max-w-xl mx-auto px-4 sm:px-6 pb-20">
+      <HomeHero signedIn={!!user} onCheckIn={onCheckIn} onReport={onReport} />
 
-        {/* Tagline stays clay/orange regardless of theme (matches the fixed brand accent);
-            the description sits on the gradient, which itself flips per theme, so it uses the
-            theme-aware fg token (white in dark, dark green in light). */}
-        <div className="absolute inset-x-0 bottom-0 px-4 sm:px-6 pb-6 text-center">
-          <h1 className="text-2xl sm:text-3xl font-black text-clay tracking-tight">L&apos;ŒUF FOR THE GAME</h1>
-          <p className="mt-2 text-sm text-fg max-w-md mx-auto">
-            Toronto&apos;s home for free tennis events, public court and wait time insights. Join our movement to make tennis more accessible.
-          </p>
-        </div>
-      </motion.div>
-
-      {/* ── Buttons — below the hero. Logged-out visitors see only Join or Log In (Court / Report
-          would be confusing before they have an account); signed-in users get both, alternating
-          clay/white. ── */}
-      <motion.div
-        {...fadeUp}
-        transition={{ ...fadeUp.transition, delay: 0.1 }}
-        className={`grid gap-2.5 mt-5 mb-5 ${!user ? 'grid-cols-1' : 'grid-cols-2'}`}
-      >
-        {!user ? (
-          <Link to="/login" className="block">
-            <Button size="md" variant="clay" className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2">Join or Log In</Button>
-          </Link>
-        ) : (
-          <>
-            <Button size="md" variant="clay" className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2" onClick={onCheckIn}>
-              <MapPin className="w-3.5 h-3.5 mr-1 shrink-0" />Court
-            </Button>
-            <Button size="md" variant="white" className="w-full whitespace-nowrap text-[11px] sm:text-sm px-1.5 sm:px-2" onClick={onReport}>
-              <Camera className="w-3.5 h-3.5 mr-1 shrink-0" />Report
-            </Button>
-          </>
-        )}
-      </motion.div>
-
-      {/* ── Stats strip — plain icon/number/label groups blended into the page (no card
-          background/border); hover/tap gives a slight zoom as the only interactive cue. ── */}
-      <motion.div
-        {...fadeUp}
-        transition={{ ...fadeUp.transition, delay: 0.2 }}
-        className="grid grid-cols-3 gap-2.5"
-      >
-        {stats.map((s) => (
-          <MotionLink
-            key={s.label}
-            to={s.to}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-            className="p-3 flex flex-col items-center text-center gap-1"
-          >
-            <span className="text-2xl font-black text-fg leading-none">{s.value}</span>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-fg/70">{s.label}</span>
-          </MotionLink>
-        ))}
-      </motion.div>
-
-      <div className="flex justify-center mt-5">
-        <InstagramLink className="text-xs font-bold text-fg/70" />
+      <div className="mt-5">
+        <StatsStrip stats={stats} />
       </div>
+
+      <UpcomingEventsStrip events={upcoming} />
+      <SupportBand onVolunteer={() => setVolunteerOpen(true)} />
+
+      <SiteFooterLine className="mt-8" />
+
+      {/* Portalled: Layout's animated <main> transforms on route change, and a transformed
+          ancestor re-bases `position: fixed` — the same reason Sheet and Toast portal. */}
+      {createPortal(
+        <FloatingCtaStack onSubscribe={showSubscribe ? onSubscribeClick : undefined} onCourtNote={user ? undefined : () => setCourtNoteOpen(true)} />,
+        document.body,
+      )}
+
+      {subscribeOpen && (
+        <SubscribeSheet
+          onClose={() => setSubscribeOpen(false)}
+          onSubscribe={handleVisitorSubscribe}
+          defaultEmail={user?.email ?? ''}
+        />
+      )}
+
+      {courtNoteOpen && (
+        <CourtNoteSheet
+          onClose={() => setCourtNoteOpen(false)}
+          onSubmit={handleCourtNote}
+        />
+      )}
+
+      {volunteerOpen && (
+        <VolunteerSheet
+          onClose={() => setVolunteerOpen(false)}
+          onSubmit={handleVolunteer}
+          defaultEmail={user?.email ?? ''}
+        />
+      )}
+
+      {/* Mounted unconditionally with a null message — Toast needs to stay mounted to animate out. */}
+      <Toast message={toast} onDismiss={() => setToast(null)} placement="top" />
 
       {/* ── Check-In / Report modals ── */}
       {checkinStep === 'regular' && <CheckInModal onClose={() => setCheckinStep(null)} />}

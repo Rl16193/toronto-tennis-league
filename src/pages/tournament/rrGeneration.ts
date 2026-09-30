@@ -1,5 +1,6 @@
 import { DrawConfig, RRConfig, RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
-import { BYE, PLAYER_LOADING, fallbackTemplate, matchAward, skillBand } from './utils';
+import { BYE, PLAYER_LOADING, fallbackTemplate } from './utils';
+import { skillBand } from '../../utils/skillLevels';
 
 // ── Zone-tier group formation ─────────────────────────────────────────────────
 
@@ -257,9 +258,9 @@ export function buildSafeGroupRewrite(params: {
 }
 
 /**
- * Standings for one group. The POINTS come from `matchAward` in utils.ts — the same function the
- * stats writer uses — so the table can never show a different number from the one paid. This file
- * only decides the extra display columns (wins, losses, games) and the ordering.
+ * Standings for one group. The POINTS are what each match stored when it was paid
+ * (`points_winner` / `points_loser`, written by functions/lib/scoring.js), so the table can never
+ * show a different number from the one paid. This only adds wins, losses, games and the order.
  *
  * Sort: points DESC → gamesWon DESC. No completion bonus: see the note at the foot of the function.
  */
@@ -277,20 +278,19 @@ export function computeGroupStandings(
 
   for (const m of groupMatches) {
     if (m.status !== 'complete') continue;
-    const award = matchAward(m);
-
-    // A no show has no winner: both players take the same points and neither a win, a loss, nor
-    // any games — a match nobody played must not move anyone's record.
-    if (award.noShow) {
+    // An old no show has no winner: both players took the same points and neither a win, a loss,
+    // nor any games — a match nobody played must not move anyone's record.
+    if (m.no_show) {
       [m.player_1_uid, m.player_2_uid].filter(Boolean).forEach((uid) => {
         const s = stats.get(uid);
-        if (s) s.points += award.winnerPts;
+        if (s) s.points += m.points_winner ?? 0;
       });
       continue;
     }
 
-    const { winnerUid, loserUid } = award;
+    const winnerUid = m.winner_uid;
     if (!winnerUid) continue;
+    const loserUid = winnerUid === m.player_1_uid ? m.player_2_uid : m.player_1_uid;
 
     const p1Games = (m.set_1_player_1 ?? 0) + (m.set_2_player_1 ?? 0) + (m.set_3_player_1 ?? 0);
     const p2Games = (m.set_1_player_2 ?? 0) + (m.set_2_player_2 ?? 0) + (m.set_3_player_2 ?? 0);
@@ -301,8 +301,10 @@ export function computeGroupStandings(
     // alongside the flag.
     const w = stats.get(winnerUid);
     const l = loserUid ? stats.get(loserUid) : undefined;
-    if (w) { w.matchWins++; w.gamesWon += winnerGames; w.gamesLost += loserGames; w.points += award.winnerPts; }
-    if (l) { l.matchLosses++; l.gamesWon += loserGames; l.gamesLost += winnerGames; l.points += award.loserPts; }
+    const winnerPts = m.points_winner ?? 0;
+    const loserPts = m.points_loser ?? 0;
+    if (w) { w.matchWins++; w.gamesWon += winnerGames; w.gamesLost += loserGames; w.points += winnerPts; }
+    if (l) { l.matchLosses++; l.gamesWon += loserGames; l.gamesLost += winnerGames; l.points += loserPts; }
   }
 
   const rows: RRStandingRow[] = [];

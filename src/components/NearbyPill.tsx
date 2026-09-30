@@ -2,7 +2,7 @@ import React from 'react';
 import { MapPin } from 'lucide-react';
 
 // Shown wherever two players share a preferred court. Theme-safe neutral pill (matches the
-// "Friendly"/"Challenge" tag pattern already used across the app — `text-fg`/`border-fg` opacity
+// "Rally"/"Challenge" tag pattern already used across the app — `text-fg`/`border-fg` opacity
 // tokens flip automatically with the theme, no hardcoded white/black).
 export const NearbyPill: React.FC<{ show: boolean; className?: string }> = ({ show, className }) => {
   if (!show) return null;
@@ -14,3 +14,10 @@ export const NearbyPill: React.FC<{ show: boolean; className?: string }> = ({ sh
     </span>
   );
 };
+
+// ─── Court overlap ─────────────────────────────────────────────────────────────────────────────
+
+// Shared "do these two players share a preferred court" check — used wherever a "Nearby" pill
+// is shown (Matches page, Tournament match cards, Profile upcoming matches).
+export const sharesCourt = (theirCourts: string[] | undefined, myCourts: Set<string>): boolean =>
+  !!theirCourts?.some((c) => myCourts.has(c));

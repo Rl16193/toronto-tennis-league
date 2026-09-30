@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { collection, doc, getDocs, increment, limit, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import type { TaskProgress, UserProfile } from '../../types';
 import {
   ALL_TIERS, CATEGORIES, Counters, EMPTY_COUNTERS, SETUP_POINTS, TIER_POINTS,
 } from './taskCatalog';
-import { fetchCompletedTournamentMatches } from './matchHistory';
 import { INSTAGRAM_URL, WHATSAPP_URL } from '../../components/FooterElements';
 
 export * from './taskCatalog';
@@ -43,11 +42,11 @@ export const TASKS: TaskDef[] = [
   { id: 'profileComplete', title: 'Complete your profile', label: 'Profile', kind: 'auto', to: '/profile' },
   { id: 'followSocial', title: 'Follow us on Instagram', label: 'Follow', kind: 'trust', link: INSTAGRAM_URL },
   { id: 'tagPost', title: 'Tag us in a story or post', label: 'Tag Post', kind: 'trust', link: INSTAGRAM_URL },
-  { id: 'waitingBoard', title: 'Submit a waiting-board report', label: 'Board Report', kind: 'auto', to: '/tasks?photo=1' },
+  { id: 'waitingBoard', title: 'Submit a waiting-board report', label: 'Board Report', kind: 'auto', to: '/tasks?photo=waiting_board' },
   { id: 'courtVisit', title: 'Visit one public court', label: 'Court Visit', kind: 'auto', to: '/tasks?checkin=1' },
-  { id: 'queuePhoto', title: 'Submit a racquet queue report', label: 'Queue Report', kind: 'auto', to: '/tasks?photo=1' },
+  { id: 'queuePhoto', title: 'Submit a racquet queue report', label: 'Queue Report', kind: 'auto', to: '/tasks?photo=queue' },
   { id: 'playMatch', title: 'Play 1 match', label: 'Match', kind: 'auto', to: '/tournament' },
-  { id: 'courtSuggestion', title: 'Submit a court improvement', label: 'Suggestion', kind: 'auto', to: '/courts' },
+  { id: 'courtSuggestion', title: 'Submit a court improvement', label: 'Suggestion', kind: 'auto', to: '/tasks?photo=condition' },
   { id: 'whatsappGroup', title: 'Join the WhatsApp group', label: 'WhatsApp', kind: 'trust', link: WHATSAPP_URL },
   { id: 'profilePhoto', title: 'Add a profile photo', label: 'Photo', kind: 'auto', to: '/profile' },
   { id: 'joinEvent', title: 'Join your first event', label: 'Event', kind: 'auto', to: '/events' },
@@ -57,6 +56,11 @@ export const TASKS: TaskDef[] = [
 ];
 
 export const UNLOCKED_TASK_IDS: TaskId[] = TASKS.filter((t) => !t.locked).map((t) => t.id);
+
+/** The initiation checklist opens by default (Tasks and Profile) until this many are done. */
+export const INITIATION_OPEN_UNTIL = 7;
+export const initiationDoneCount = (progress: unknown) =>
+  UNLOCKED_TASK_IDS.filter((id) => !!(progress as Record<string, unknown> | null)?.[id]).length;
 
 // A category = one group of tasks. The Community Member Initiation is a category too; the rest
 // come from the catalogue. TASKS COMPLETED = every done item across all categories. MILESTONES =
@@ -112,13 +116,6 @@ export const setTaskDone = (uid: string, name: string, id: string, done: boolean
     { merge: true },
   );
 
-// Bump a stored counter (used for things the app can't derive from other collections).
-export const bumpCounter = (uid: string, name: string, key: string, by = 1) =>
-  setDoc(
-    doc(db, 'tasks', uid),
-    { uid, name, category: 'progress', [key]: increment(by), updatedAt: new Date().toISOString() },
-    { merge: true },
-  );
 
 // ─── Counters derived from real data ────────────────────────────────────────
 
@@ -151,10 +148,12 @@ const loadTournamentResults = async (uid: string): Promise<PlayedResult[]> => {
   }));
 };
 
-const loadLadderResults = async (uid: string): Promise<PlayedResult[]> => {
+// Recorded challenges or rallies (both end as 'confirmed'). Same rule as isPlayedResult in
+// functions/lib/scoring.js, which pays the server-side task progress.
+const loadRecordedResults = async (uid: string, category: 'challenge' | 'rally'): Promise<PlayedResult[]> => {
   const [asChallenger, asOpponent] = await Promise.all([
-    getDocs(query(collection(db, 'matches'), where('category', '==', 'challenge'), where('player_1_uid', '==', uid), where('status', '==', 'confirmed'))),
-    getDocs(query(collection(db, 'matches'), where('category', '==', 'challenge'), where('player_2_uid', '==', uid), where('status', '==', 'confirmed'))),
+    getDocs(query(collection(db, 'matches'), where('category', '==', category), where('player_1_uid', '==', uid), where('status', '==', 'confirmed'))),
+    getDocs(query(collection(db, 'matches'), where('category', '==', category), where('player_2_uid', '==', uid), where('status', '==', 'confirmed'))),
   ]);
   return dedupePlayedResults([...asChallenger.docs, ...asOpponent.docs], (c) => ({
     at: new Date(c.completed_at || c.confirmed_at || c.created_at || 0).getTime(),
@@ -205,12 +204,14 @@ export function useTasks() {
     // query was dropped along with the client write it fed.
     Promise.all([
       safe(loadTournamentResults(user.uid), [] as PlayedResult[]),
-      safe(loadLadderResults(user.uid), [] as PlayedResult[]),
-    ]).then(([tournament, ladder]) => {
+      safe(loadRecordedResults(user.uid, 'challenge'), [] as PlayedResult[]),
+      safe(loadRecordedResults(user.uid, 'rally'), [] as PlayedResult[]),
+    ]).then(([tournament, ladder, rallies]) => {
       if (!alive) return;
-      const all = [...tournament, ...ladder];
+      const all = [...tournament, ...ladder, ...rallies];
       setDerived({
-        matchesPlayed: tournament.length,
+        // Tournament matches and rallies count as matches; challenges have their own tiers.
+        matchesPlayed: tournament.length + rallies.length,
         challengesPlayed: ladder.length,
         challengesWon: ladder.filter((r) => r.won).length,
         bestStreak: longestWinStreak(all),
@@ -220,7 +221,7 @@ export function useTasks() {
     return () => { alive = false; };
   }, [user?.uid]);
 
-  // Stored counters (things the app can't derive) come straight off task_progress.
+  // Stored counters (things the app can't derive) come straight off the tasks/{uid} progress doc.
   const counters: Counters = useMemo(() => {
     const rec = asRecord(progress);
     const num = (k: string) => (typeof rec[k] === 'number' ? (rec[k] as number) : 0);
@@ -321,4 +322,25 @@ export function useCommunityStandings() {
   }, [reloadKey]);
 
   return { rows, loading, reload: () => setReloadKey((k) => k + 1) };
+}
+
+// ─── Completed tournament matches (also the Ambassador claim gate) ─────────────────────────────
+
+// Completed tournament matches a player was in, with real games — walkovers, old no shows and
+// score-less completions don't count (isPlayedResult in functions/lib/scoring.js). Shared by
+// useTasks.ts (task-progress stats) and claimService.ts (the Ambassador claim gate).
+export async function fetchCompletedTournamentMatches(uid: string) {
+  const [p1, p2] = await Promise.all([
+    getDocs(query(collection(db, 'matches'), where('player_1_uid', '==', uid), where('status', '==', 'complete'))),
+    getDocs(query(collection(db, 'matches'), where('player_2_uid', '==', uid), where('status', '==', 'complete'))),
+  ]);
+  const seen = new Set<string>();
+  return [...p1.docs, ...p2.docs].filter((d) => {
+    if (seen.has(d.id)) return false;
+    seen.add(d.id);
+    const m = d.data();
+    if (m.walkover === true || m.no_show) return false;
+    const games = [1, 2, 3].reduce((n, i) => n + (m[`set_${i}_player_1`] ?? 0) + (m[`set_${i}_player_2`] ?? 0), 0);
+    return games > 0 && !!m.winner_uid;
+  });
 }

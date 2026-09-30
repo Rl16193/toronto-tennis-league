@@ -1,167 +1,35 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
 import {
-  BadgeCheck, Check, ChevronDown, Copy, Flag, Pencil, Plus, Sparkles, Trash2, Users, X,
+  BadgeCheck, MapPin, Pencil, Plus, Search, Sparkles, Trash2, X,
 } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/Button';
+import { field } from '../../components/Input';
 import { Fab } from '../../components/Fab';
 import { Sheet } from '../../components/Sheet';
 import { Tree, TreeGroup } from '../../components/Tree';
 import { ContactOpponentButton } from '../../components/ContactOpponentButton';
 import { useContacts } from '../../features/contacts/useContacts';
-import { fadeUp, tapScale } from '../../lib/motion';
+import { fadeUp } from '../../lib/motion';
 import {
-  CATEGORY_LABEL, GROUP_LESSON_CAPACITY, MIN_REWARD_COST, Provider, Redemption, Reward,
-  ServiceCategory, useGroupLesson, useMyRedemptions, useProviderAvatars, useProviderRedemptions,
+  Booking, CATEGORY_IMAGE, CATEGORY_LABEL, GROUP_LESSON_CAPACITY, MIN_REWARD_COST, OPEN_BOOKING_STATUSES, Provider,
+  Reward, ServiceCategory, areaCoords, bookingStage, useMyBookings, useProviderAvatars,
   useProviderRole, useRedeemablePoints, useServicesCatalog,
 } from '../../features/services/useServices';
+import { useTasks } from '../../features/tasks/useTasks';
+import { geocodeQuery } from '../courtmap/courtMapUtils';
+import { haversineKm } from '../../utils/zones';
 import {
-  flagCoupon, joinGroupLesson, leaveGroupLesson, markCouponUsed, redeemReward,
-  requestCancellation, serviceErrorMessage,
+  bookService, cancelBooking, redeemReward, serviceErrorMessage,
 } from '../../features/services/servicesApi';
-import { createOffer, deactivateOffer, updateOffer } from '../../features/services/adminApi';
+import { createOffer, deactivateOffer, updateOffer } from '../../features/services/servicesApi';
+import { SUPER_ADMIN_UID } from '../../utils/eventTypes';
 
-// Services tab, offer form, and group-lesson card. Firestore reads live in features/services/.
-
-// ─── Free monthly group lesson ───────────────────────────────────────────────────────────────────
-
-const monthLabel = (month: string) => {
-  const [y, m] = month.split('-').map(Number);
-  return new Date(y, (m || 1) - 1, 1).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
-};
-
-/**
- * The free monthly group lesson — 2-4 players, no points. Laid out like the round-robin group
- * cards: a header with the roster count, and an expandable player list.
- *
- * Spots reset on the 1st because the roster lives in a per-month document, so a new month is
- * simply a doc that doesn't exist yet. The coach who owns this offer sees names and gets a
- * Contact button per player; everyone else sees names only.
- */
-export const GroupLessonCard: React.FC = () => {
-  const { user } = useAuth();
-  const { month, players, joined, loading } = useGroupLesson();
-  const { role } = useProviderRole();
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  const isCoach = role === 'coach';
-  const spotsLeft = Math.max(0, GROUP_LESSON_CAPACITY - players.length);
-  const full = spotsLeft === 0;
-
-  // Only the coach needs these, and only once the roster is expanded.
-  const rosterIds = isCoach && open ? players.map((p) => p.uid) : [];
-  const rosterContacts = useContacts(rosterIds);
-
-  const act = async (fn: () => Promise<unknown>) => {
-    setBusy(true); setError('');
-    try { await fn(); } catch (err) { setError(serviceErrorMessage(err)); } finally { setBusy(false); }
-  };
-
-  return (
-    <div className="rounded-2xl bg-clay/[0.06] border border-clay/30 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-bold text-fg leading-snug">30 min group lesson</p>
-          <p className="text-[11px] text-fg/70 mt-0.5">
-            Free · 2–4 players · {monthLabel(month)}
-          </p>
-        </div>
-        <span className="shrink-0 text-[10px] font-black uppercase tracking-wide text-clay border border-clay/45 rounded-full px-2 py-0.5">
-          Free
-        </span>
-      </div>
-
-      {error && <p className="text-xs text-badge-loss mt-2">{error}</p>}
-
-      <div className="flex items-center justify-between gap-2.5 mt-3.5 pt-3 border-t border-clay/20">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1.5 text-xs text-fg/70 hover:text-fg transition-colors"
-          aria-expanded={open}
-        >
-          <Users className="w-3.5 h-3.5" />
-          {loading ? '—' : `${players.length}/${GROUP_LESSON_CAPACITY} joined`}
-          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
-        </button>
-
-        {/* The coach runs the session, so they get the roster rather than a Join button. */}
-        {!isCoach && (
-          joined ? (
-            <Button size="sm" variant="outline" onClick={() => act(() => leaveGroupLesson({}))} isLoading={busy}>
-              Leave
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="clay"
-              disabled={full || !user || busy}
-              isLoading={busy}
-              onClick={() => act(() => joinGroupLesson({}))}
-            >
-              {full ? 'Full' : !user ? 'Log in to join' : 'Join'}
-            </Button>
-          )
-        )}
-      </div>
-
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: 'easeInOut' }}
-            className="overflow-hidden"
-          >
-            <div className="mt-3 pt-3 border-t border-clay/20 space-y-1.5">
-              {players.length === 0 ? (
-                <p className="text-xs text-fg/70">
-                  No one has joined yet. All {GROUP_LESSON_CAPACITY} spots are open.
-                </p>
-              ) : (
-                players.map((p) => (
-                  <div key={p.uid} className="flex items-center gap-2 min-h-[32px]">
-                    <span className="min-w-0 flex-1 text-sm text-fg truncate">
-                      {p.name || 'Player'}
-                      {user?.uid === p.uid && <span className="ml-1 text-clay text-[10px]">(you)</span>}
-                    </span>
-                    {/* Contact details are resolved live from `contacts/{uid}` rather than being
-                        snapshotted onto the roster — group_lessons is world-readable, so storing
-                        them there exposed every player's phone and email to signed-out visitors. */}
-                    {isCoach && (
-                      <ContactOpponentButton
-                        name={p.name || 'Player'}
-                        phone={rosterContacts[p.uid]?.phone}
-                        email={rosterContacts[p.uid]?.email}
-                        whatsappContact={rosterContacts[p.uid]?.whatsapp_contact}
-                        whatsappSameAsPhone={rosterContacts[p.uid]?.whatsapp_same_as_phone}
-                        preferred={rosterContacts[p.uid]?.preferred_mode_of_contact}
-                        size="sm"
-                        variant="white"
-                      />
-                    )}
-                  </div>
-                ))
-              )}
-              {!full && players.length > 0 && (
-                <p className="text-[11px] text-fg/70 pt-1">
-                  {spotsLeft} spot{spotsLeft === 1 ? '' : 's'} left this month.
-                </p>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
+// Services tab and offer form. Firestore reads live in features/services/.
 
 // ─── Add / edit an offer (super-admin only) ──────────────────────────────────────────────────────
 
@@ -181,13 +49,21 @@ export const AddServiceForm: React.FC<{
 }> = ({ byCategory, editingReward, onClose, onCreated }) => {
   const isEditing = !!editingReward;
   const [category, setCategory] = useState<ServiceCategory>(editingReward?.category ?? 'stringing');
-  const [providerMode, setProviderMode] = useState<'existing' | 'new'>('existing');
-  const [providerId, setProviderId] = useState(editingReward?.provider_id ?? '');
-  const [providerName, setProviderName] = useState(editingReward?.provider_name ?? '');
+  // Every provider is a member. Searching a name here IS choosing the provider: saving flags their
+  // account (coach/stringer + the provider id) the way scripts/set-stringer.mjs used to. There is
+  // no unlinked-provider path, so there is no separate "link an account" step either.
+  const [providerUid, setProviderUid] = useState(editingReward?.uid ?? '');
+  const [memberName, setMemberName] = useState('');
+  // The business name, when it differs from the member's own — "TIVORYX" for Karan Tiwari.
+  // Blank means they trade under their own name.
+  const [alias, setAlias] = useState(editingReward?.provider_name ?? '');
   const [area, setArea] = useState(editingReward?.area ?? '');
-  const [phone, setPhone] = useState(editingReward?.contact_phone ?? '');
-  const [email, setEmail] = useState(editingReward?.contact_email ?? '');
   const [certified, setCertified] = useState(!!editingReward?.certified);
+  // Coaching only. A group lesson is booked like any offer and grouped by the coach on their dash.
+  // Capacity defaults to 4 when ticked and 1 when not; it is a guide to group size, never a limit.
+  const [groupLesson, setGroupLesson] = useState(!!editingReward?.group_lesson);
+  const [capacity, setCapacity] = useState(editingReward?.capacity ? String(editingReward.capacity) : '');
+  const [duration, setDuration] = useState(editingReward?.duration ?? '');
 
   const [offer, setOffer] = useState(editingReward?.offer ?? '');
   const [brandInput, setBrandInput] = useState('');
@@ -198,9 +74,7 @@ export const AddServiceForm: React.FC<{
   const [discount, setDiscount] = useState(editingReward ? String(editingReward.discount) : '');
   const [pointsCost, setPointsCost] = useState(editingReward ? String(editingReward.points_cost) : '');
 
-  const [linkSearch, setLinkSearch] = useState('');
-  const [linkUid, setLinkUid] = useState(editingReward?.uid ?? '');
-  const [linkName, setLinkName] = useState('');
+  const [search, setSearch] = useState('');
   const [candidates, setCandidates] = useState<LinkCandidate[]>([]);
 
   const [error, setError] = useState('');
@@ -209,18 +83,26 @@ export const AddServiceForm: React.FC<{
   const providersInCategory = useMemo(() => byCategory.get(category) ?? [], [byCategory, category]);
 
   useEffect(() => {
-    // Loaded once, lazily, only when the account-link picker is actually used — `users` is
-    // world-readable, and this keeps the common (no linking) case free of an extra read.
-    if (linkSearch.trim().length < 2 || candidates.length > 0) return;
+    // Loaded once, lazily, only after two characters are typed — `users` is world-readable, and
+    // this keeps opening the form free of a full-collection read.
+    if (search.trim().length < 2 || candidates.length > 0) return;
     getDocs(collection(db, 'users')).then((snap) => {
       setCandidates(snap.docs.map((d) => ({ uid: d.id, name: (d.data().name as string) || '' })));
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linkSearch]);
+  }, [search]);
 
-  const linkMatches = linkSearch.trim().length < 2 ? [] : candidates
-    .filter((c) => c.name.toLowerCase().includes(linkSearch.trim().toLowerCase()))
+  const memberMatches = search.trim().length < 2 ? [] : candidates
+    .filter((c) => c.name.toLowerCase().includes(search.trim().toLowerCase()))
     .slice(0, 6);
+
+  // A member who already sells in this category keeps their existing provider row, so a second
+  // offer groups under the same name instead of starting a duplicate provider.
+  const existingProvider = useMemo(
+    () => providersInCategory.find((p) => !!p.uid && p.uid === providerUid),
+    [providersInCategory, providerUid],
+  );
+  const pickedLabel = memberName || (isEditing ? editingReward!.provider_name : '');
 
   const addBrand = () => {
     const b = brandInput.trim();
@@ -233,21 +115,29 @@ export const AddServiceForm: React.FC<{
   const discountNum = Number(discount) || 0;
   const pointsNum = Number(pointsCost);
   const discountedPrice = Number.isFinite(priceNum) ? Math.max(0, priceNum - discountNum) : null;
+  // No discount and no points is a plain regular-price service — it carries a pill and Book alone.
+  const regularPriceOnly = discountNum === 0 && pointsNum === 0;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const name = isEditing ? editingReward!.provider_name
-      : providerMode === 'existing' ? providersInCategory.find((p) => p.id === providerId)?.name || ''
-      : providerName.trim();
-    if (!name) { setError('Choose a provider, or enter a new provider name.'); return; }
+    // The alias is what members see; without one they see the member's own name.
+    const name = alias.trim() || pickedLabel;
+    if (!providerUid) { setError('Search for the provider by name and pick their account.'); return; }
+    if (!name) { setError('Enter the provider\'s name or business name.'); return; }
     if (!offer.trim()) { setError('Enter an offer title.'); return; }
     if (!Number.isFinite(priceNum) || priceNum < 0) { setError('Enter a valid price.'); return; }
     if (!Number.isFinite(discountNum) || discountNum < 0 || discountNum > priceNum) { setError('Discount must be between 0 and the price.'); return; }
-    if (!Number.isFinite(pointsNum) || pointsNum <= 0) { setError('Enter the points required.'); return; }
-    if (!isEditing && providerMode === 'new' && !area.trim()) { setError('Enter the new provider\'s area.'); return; }
-    if (isEditing && !area.trim()) { setError('Enter the provider\'s area.'); return; }
+    // 0 is allowed: an offer with no discount and no points is a plain regular-price service.
+    if (!Number.isFinite(pointsNum) || pointsNum < 0) { setError('Points cannot be negative.'); return; }
+    if (!area.trim()) { setError('Enter the provider\'s area.'); return; }
+
+    // Coaching always states a capacity so the pill has something to show: 1 for a private lesson,
+    // the group default when the box is ticked, or whatever was typed.
+    const capacityNum = category !== 'coaching' ? 0
+      : capacity.trim() ? Math.max(1, Math.round(Number(capacity)))
+      : groupLesson ? GROUP_LESSON_CAPACITY : 1;
 
     setSaving(true);
     try {
@@ -256,33 +146,35 @@ export const AddServiceForm: React.FC<{
           category,
           providerName: name,
           area: area.trim(),
-          phone: phone.trim() || undefined,
-          email: email.trim() || undefined,
-          certified,
+          certified: category === 'coaching' && certified,
           offer: offer.trim(),
-          brands: brands.length > 0 ? brands.join(', ') : undefined,
+          // Brands are a stringing idea. Passed empty for the other two so switching an offer to
+          // coaching clears what it used to carry (updateOffer writes this one unconditionally).
+          brands: category === 'stringing' && brands.length > 0 ? brands.join(', ') : undefined,
           totalPrice: priceNum,
           discount: discountNum,
           pointsCost: pointsNum,
-          linkUid: linkUid || undefined,
+          groupLesson: category === 'coaching' && groupLesson,
+          capacity: capacityNum,
+          duration: category === 'coaching' ? duration.trim() || undefined : undefined,
+          linkUid: providerUid,
         });
       } else {
         await createOffer({
           category,
-          providerId: providerMode === 'existing' ? providerId : undefined,
+          providerId: existingProvider?.id,
           providerName: name,
-          area: providerMode === 'existing'
-            ? (providersInCategory.find((p) => p.id === providerId)?.area || '')
-            : area.trim(),
-          phone: providerMode === 'new' ? phone.trim() || undefined : undefined,
-          email: providerMode === 'new' ? email.trim() || undefined : undefined,
-          certified: providerMode === 'new' ? certified : undefined,
+          area: area.trim(),
+          certified: category === 'coaching' && certified,
           offer: offer.trim(),
-          brands: brands.length > 0 ? brands.join(', ') : undefined,
+          brands: category === 'stringing' && brands.length > 0 ? brands.join(', ') : undefined,
           totalPrice: priceNum,
           discount: discountNum,
           pointsCost: pointsNum,
-          linkUid: linkUid || undefined,
+          groupLesson: category === 'coaching' && groupLesson,
+          capacity: capacityNum,
+          duration: category === 'coaching' ? duration.trim() || undefined : undefined,
+          linkUid: providerUid,
         });
       }
       onCreated();
@@ -308,9 +200,9 @@ export const AddServiceForm: React.FC<{
               <button
                 key={c}
                 type="button"
-                onClick={() => { setCategory(c); setProviderId(''); }}
+                onClick={() => setCategory(c)}
                 className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-colors ${
-                  category === c ? 'bg-clay border-clay text-white' : 'bg-tennis-dark/70 text-fg/60 border-fg/10 hover:border-fg/30'
+                  category === c ? 'bg-clay border-clay text-white' : 'bg-tennis-dark/70 text-fg/70 border-fg/10 hover:border-fg/30'
                 }`}
               >
                 {CATEGORY_LABEL[c]}
@@ -321,81 +213,34 @@ export const AddServiceForm: React.FC<{
 
         <div>
           <label className={labelCls}>Provider</label>
-          {isEditing ? (
-            // Editing keeps the offer under the same provider row — only its details change.
-            <div className="space-y-2">
-              <p className="text-sm font-bold text-fg">{editingReward!.provider_name}</p>
-              <input className={fieldCls} placeholder="Area" value={area} onChange={(e) => setArea(e.target.value)} />
-              <div className="grid grid-cols-2 gap-2">
-                <input className={fieldCls} placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-                <input className={fieldCls} placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-              </div>
-              {category === 'coaching' && (
-                <label className="flex items-center gap-2 text-sm text-fg/70 cursor-pointer">
-                  <input type="checkbox" checked={certified} onChange={(e) => setCertified(e.target.checked)} className="accent-clay" />
-                  Certified
-                </label>
-              )}
-            </div>
-          ) : (
-            <>
-              <div className="flex gap-2 mb-2">
-                <button type="button" onClick={() => setProviderMode('existing')}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-colors ${
-                    providerMode === 'existing' ? 'bg-clay border-clay text-white' : 'bg-tennis-dark/70 text-fg/60 border-fg/10'
-                  }`}>
-                  Existing
-                </button>
-                <button type="button" onClick={() => setProviderMode('new')}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-colors ${
-                    providerMode === 'new' ? 'bg-clay border-clay text-white' : 'bg-tennis-dark/70 text-fg/60 border-fg/10'
-                  }`}>
-                  New provider
-                </button>
-              </div>
-
-              {providerMode === 'existing' ? (
-                <select value={providerId} onChange={(e) => setProviderId(e.target.value)} className={fieldCls}>
-                  <option value="">Select a provider…</option>
-                  {providersInCategory.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-              ) : (
-                <div className="space-y-2">
-                  <input className={fieldCls} placeholder="Provider name" value={providerName} onChange={(e) => setProviderName(e.target.value)} />
-                  <input className={fieldCls} placeholder="Area (e.g. Downtown Toronto)" value={area} onChange={(e) => setArea(e.target.value)} />
-                  <div className="grid grid-cols-2 gap-2">
-                    <input className={fieldCls} placeholder="Phone (optional)" value={phone} onChange={(e) => setPhone(e.target.value)} />
-                    <input className={fieldCls} placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} />
-                  </div>
-                  {category === 'coaching' && (
-                    <label className="flex items-center gap-2 text-sm text-fg/70 cursor-pointer">
-                      <input type="checkbox" checked={certified} onChange={(e) => setCertified(e.target.checked)} className="accent-clay" />
-                      Certified
-                    </label>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        <div>
-          <label className={labelCls}>Link to an account</label>
-          {linkUid ? (
+          {/* One field: the provider IS a member. Picking them here links the account and flags
+              it as a coach/stringer on save, so there is no separate link step and no way to add
+              a provider nobody can book. */}
+          {providerUid ? (
             <div className="flex items-center justify-between rounded-xl bg-fg/5 px-3.5 py-2.5">
-              <span className="text-sm text-fg font-semibold">{linkName || 'Linked account'}</span>
-              <button type="button" onClick={() => { setLinkUid(''); setLinkName(''); setLinkSearch(''); }}
+              <span className="text-sm text-fg font-semibold">{pickedLabel || 'Linked account'}</span>
+              <button type="button" aria-label="Choose a different provider"
+                onClick={() => { setProviderUid(''); setMemberName(''); setSearch(''); }}
                 className="text-fg/70 hover:text-fg"><X className="w-4 h-4" /></button>
             </div>
           ) : (
             <div className="relative">
-              <input className={fieldCls} placeholder="Search by name…" value={linkSearch} onChange={(e) => setLinkSearch(e.target.value)} />
-              {linkMatches.length > 0 && (
+              <input className={fieldCls} placeholder="Search members by name…" value={search}
+                onChange={(e) => setSearch(e.target.value)} />
+              {memberMatches.length > 0 && (
                 <div className="mt-1.5 rounded-xl border border-fg/10 bg-tennis-dark/95 overflow-hidden">
-                  {linkMatches.map((c) => (
+                  {memberMatches.map((c) => (
                     <button key={c.uid} type="button"
-                      onClick={() => { setLinkUid(c.uid); setLinkName(c.name); setLinkSearch(''); }}
-                      className="w-full text-left px-3.5 py-2 text-sm text-fg/80 hover:bg-clay/20 transition-colors">
+                      onClick={() => {
+                        setProviderUid(c.uid);
+                        setMemberName(c.name);
+                        setSearch('');
+                        // A second offer keeps the area already entered for that provider rather
+                        // than asking for it again.
+                        const already = providersInCategory.find((p) => p.uid === c.uid);
+                        if (already && !area.trim()) setArea(already.area);
+                      }}
+                      className="w-full text-left px-3.5 py-2 text-sm text-fg hover:bg-clay/20 transition-colors">
                       {c.name || '(no name)'}
                     </button>
                   ))}
@@ -406,10 +251,63 @@ export const AddServiceForm: React.FC<{
         </div>
 
         <div>
+          <label className={labelCls}>Business name</label>
+          <input className={fieldCls} placeholder={pickedLabel ? `Optional — defaults to ${pickedLabel}` : 'Optional'}
+            value={alias} onChange={(e) => setAlias(e.target.value)} />
+        </div>
+
+        <div>
+          <label className={labelCls}>Area</label>
+          <input className={fieldCls} placeholder="e.g. Downtown Toronto" value={area}
+            onChange={(e) => setArea(e.target.value)} />
+        </div>
+
+        {category === 'coaching' && (
+          <label className="flex items-center gap-2 text-sm text-fg/70 cursor-pointer">
+            <input type="checkbox" checked={certified} onChange={(e) => setCertified(e.target.checked)} className="accent-clay" />
+            Certified
+          </label>
+        )}
+
+        <div>
           <label className={labelCls}>Offer title</label>
           <input className={fieldCls} placeholder="Mid-level Strings Replacement" value={offer} onChange={(e) => setOffer(e.target.value)} />
         </div>
 
+        {/* Coaching only. Group lesson bookings are grouped by the coach on their dash; capacity
+            and duration are shown to members as pills beside the price. */}
+        {category === 'coaching' && (
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm text-fg cursor-pointer">
+              <input
+                type="checkbox"
+                checked={groupLesson}
+                onChange={(e) => {
+                  setGroupLesson(e.target.checked);
+                  // Only fill a sensible default — never overwrite a number already typed.
+                  if (!capacity) setCapacity(e.target.checked ? '4' : '1');
+                }}
+                className="accent-clay"
+              />
+              Group lesson
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={labelCls}>Capacity</label>
+                <input type="number" inputMode="numeric" min="1" step="1" value={capacity}
+                  onChange={(e) => setCapacity(e.target.value)}
+                  placeholder={groupLesson ? '4' : '1'} className={fieldCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Duration</label>
+                <input className={fieldCls} placeholder="1 hr" value={duration} onChange={(e) => setDuration(e.target.value)} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Stringing only — a coach has no brands to list. */}
+        {category === 'stringing' && (
         <div>
           <label className={labelCls}>Brands</label>
           {brands.length > 0 && (
@@ -430,6 +328,7 @@ export const AddServiceForm: React.FC<{
             <Button type="button" variant="clay" className="px-3 shrink-0" onClick={addBrand} disabled={!brandInput.trim()}>Add</Button>
           </div>
         </div>
+        )}
 
         <div className="grid grid-cols-3 gap-2">
           <div>
@@ -444,12 +343,18 @@ export const AddServiceForm: React.FC<{
           </div>
           <div>
             <label className={labelCls}>Points</label>
-            <input type="number" inputMode="decimal" min="1" step="1" value={pointsCost}
-              onChange={(e) => setPointsCost(e.target.value)} placeholder="15" className={fieldCls} />
+            <input type="number" inputMode="decimal" min="0" step="1" value={pointsCost}
+              onChange={(e) => setPointsCost(e.target.value)} placeholder="0" className={fieldCls} />
           </div>
         </div>
         {discountedPrice !== null && (
-          <p className="text-[11px] text-fg/70">Shown to members as ${discountedPrice} with {pointsCost || '—'} points, off a ${priceNum} regular price.</p>
+          <p className="text-[11px] text-fg/70">
+            {regularPriceOnly
+              ? priceNum === 0
+                ? 'Shown to members as Free — Book only, nothing to redeem.'
+                : `Shown to members at $${priceNum} as a regular price — Book only, nothing to redeem.`
+              : `Shown to members as $${discountedPrice} with ${pointsCost || '—'} points, off a $${priceNum} regular price.`}
+          </p>
         )}
 
         <div className="flex gap-3 pt-1">
@@ -463,8 +368,8 @@ export const AddServiceForm: React.FC<{
 
 // ─── The Services tab ────────────────────────────────────────────────────────────────────────────
 
-// Only the app owner can add/edit the Services catalog — matches firestore.rules isSuperAdmin().
-const SUPER_ADMIN_UID = '7PvfzNtDmsOq5GLMieId7QRT7wH3';
+// Every pill on an offer card wears this: clay on a clay wash, one size.
+const pillCls = 'text-[11px] font-bold text-clay bg-clay/10 rounded-full px-2.5 py-0.5';
 
 const money = (n: number | null | undefined) =>
   typeof n === 'number' ? `$${n % 1 === 0 ? n : n.toFixed(2)}` : '—';
@@ -476,13 +381,27 @@ const money = (n: number | null | undefined) =>
 const OfferCard: React.FC<{
   reward: Reward;
   balance: number;
-  alreadyOpen: boolean;
-  busy: boolean;
+  signedIn: boolean;
+  /** The provider can take the job (a linked account) and it isn't your own offer. */
+  bookable: boolean;
+  /** You already have an open booking for this offer. */
+  booked: boolean;
+  busy: 'book' | 'redeem' | null;
+  onBook: () => void;
   onRedeem: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
-}> = ({ reward, balance, alreadyOpen, busy, onRedeem, onEdit, onDelete }) => {
+}> = ({ reward, balance, signedIn, bookable, booked, busy, onBook, onRedeem, onEdit, onDelete }) => {
   const affordable = balance >= reward.points_cost;
+  // A group lesson takes one redeemed booking at a time (functions/lib/bookingState.js).
+  const redeemTaken = !!reward.group_lesson && !!reward.redeem_booking_id;
+  // Nothing to redeem: no discount and no points. The card says so and offers Book alone.
+  const regularPriceOnly = reward.discount === 0 && reward.points_cost === 0;
+  const pills = [
+    ...(reward.brands ? reward.brands.split(',').map((b) => b.trim()).filter(Boolean) : []),
+    ...(reward.capacity ? [reward.capacity === 1 ? 'Private' : `Up to ${reward.capacity}`] : []),
+    ...(reward.duration ? [reward.duration] : []),
+  ];
 
   return (
     <div className="rounded-2xl bg-fg/[0.03] p-4">
@@ -503,35 +422,59 @@ const OfferCard: React.FC<{
         </div>
       </div>
 
-      {reward.brands && (
+      {/* Brands for stringing; capacity and duration for coaching — same pill row either way, and
+          the price pill leads it. Every pill is clay: they are the card's accents, not captions. */}
+      {(regularPriceOnly || pills.length > 0) && (
         <div className="flex flex-wrap gap-1.5 mt-2.5">
-          {reward.brands.split(',').map((b) => b.trim()).filter(Boolean).map((b) => (
-            <span key={b} className="text-[11px] font-medium text-fg/70 bg-fg/[0.06] rounded-full px-2.5 py-0.5">
-              {b}
-            </span>
-          ))}
+          {regularPriceOnly && (
+            <span className={pillCls}>{reward.total_price === 0 ? 'Free' : 'Regular price'}</span>
+          )}
+          {pills.map((b) => <span key={b} className={pillCls}>{b}</span>)}
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-2.5 mt-3.5 pt-3 border-t border-fg/5">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 mt-3.5 pt-3 border-t border-fg/5">
         <span className="text-xs text-fg/70">
-          {money(reward.discounted_price)} with {reward.points_cost} points
+          {regularPriceOnly
+            ? 'No points needed'
+            : `${money(reward.discounted_price)} with ${reward.points_cost} points`}
         </span>
-        <Button
-          size="sm"
-          variant="clay"
-          onClick={onRedeem}
-          disabled={!affordable || alreadyOpen || busy}
-          isLoading={busy}
-        >
-          {alreadyOpen ? 'Coupon open' : `Redeem a ${money(reward.discount)} discount`}
-        </Button>
+        {/* Book pays the regular price; Redeem spends points. Both send the job to the provider.
+            A signed-out visitor gets the way in rather than a disabled Book they can't explain. */}
+        {bookable && (!signedIn ? (
+          <Link to="/login">
+            <Button size="sm" variant="white">Log in to book</Button>
+          </Link>
+        ) : booked ? (
+          <Button size="sm" variant="white" disabled>Booked</Button>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="white" onClick={onBook} disabled={!!busy} isLoading={busy === 'book'}>
+              Book
+            </Button>
+            {!regularPriceOnly && (
+              <Button
+                size="sm"
+                variant="clay"
+                onClick={onRedeem}
+                disabled={!affordable || redeemTaken || !!busy}
+                isLoading={busy === 'redeem'}
+              >
+                {`Redeem a ${money(reward.discount)} discount`}
+              </Button>
+            )}
+          </div>
+        ))}
       </div>
-      {!affordable && !alreadyOpen && (
-        <p className="text-[11px] text-fg/70 mt-2">
-          Needs {reward.points_cost} points. You can also book at the regular price above.
+      {bookable && !booked && signedIn && !regularPriceOnly && (redeemTaken ? (
+        <p className="text-xs text-fg/70 mt-2">
+          The discount for this lesson has been redeemed.
         </p>
-      )}
+      ) : !affordable && (
+        <p className="text-xs text-fg/70 mt-2">
+          Needs {reward.points_cost} points to redeem. Book pays the regular price.
+        </p>
+      ))}
     </div>
   );
 };
@@ -556,130 +499,149 @@ const ProviderAvatar: React.FC<{ name: string; src?: string }> = ({ name, src })
   )
 );
 
-// ─── One issued coupon (player's view) ──────────────────────────────────────────────────────
+// ─── One of the member's bookings ───────────────────────────────────────────────────────────
 
-const CouponCard: React.FC<{ r: Redemption; onCancel: (code: string) => void; busy: boolean }> = ({ r, onCancel, busy }) => {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard?.writeText(r.code)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })
-      .catch(() => { /* clipboard blocked — the code is on screen anyway */ });
-  };
-
-  const label = r.status === 'cancel_requested' ? 'Cancelling'
-    : r.status === 'flagged' ? 'Flagged' : 'Active';
-
-  return (
-    <div className="rounded-2xl bg-clay/[0.08] border border-clay/45 p-4">
-      <div className="flex items-center justify-between gap-2.5">
-        <p className="text-sm font-bold text-fg leading-snug">{r.offer}</p>
-        <span className="shrink-0 text-[10px] font-black uppercase tracking-wide bg-clay text-white rounded-full px-2 py-0.5">
-          {label}
-        </span>
-      </div>
-      <p className="text-xs text-fg/70 mt-1">{r.stringer_name} · {money(r.discounted_price)}</p>
-
-      <p className="mt-3.5 font-mono text-2xl tracking-[0.14em] text-clay">{r.code}</p>
-      <p className="text-[11px] text-fg/70 mt-1.5">Show this code when you go in</p>
-
-      {r.status === 'flagged' && r.flag_note && (
-        <p className="text-[11px] text-badge/90 mt-2">Flagged: {r.flag_note}</p>
-      )}
-
-      <div className="flex gap-2 mt-3.5">
-        <Button size="sm" variant="white" className="flex-1" onClick={copy}>
-          {copied ? <Check className="w-3.5 h-3.5 mr-1.5" /> : <Copy className="w-3.5 h-3.5 mr-1.5" />}
-          {copied ? 'Copied' : 'Copy code'}
-        </Button>
-        {r.status === 'active' && (
-          <Button size="sm" variant="outline" className="flex-1" onClick={() => onCancel(r.code)} isLoading={busy}>
-            Cancel
-          </Button>
-        )}
-      </div>
-      {r.status === 'cancel_requested' && (
-        <p className="text-[11px] text-fg/70 mt-2">Waiting on the organizer to review your cancellation.</p>
-      )}
-    </div>
-  );
+// Where the job is, in the member's words. The provider's side is ProviderDashElements.tsx.
+const memberStep = (b: Booking) => {
+  const stage = bookingStage(b);
+  if (stage === 'new') return b.group_lesson ? 'Waiting for the coach to add you to a group' : 'Waiting for the provider to confirm';
+  if (stage === 'in_progress') {
+    return b.group_lesson ? 'You’re in the coach’s group lesson'
+      : b.category === 'coaching' ? 'Lesson confirmed' : 'Your racquet is with the provider';
+  }
+  if (stage === 'cancelled' && b.refund === 'pending') {
+    const who = b.cancelled_by !== 'provider' ? 'Cancelled' : b.lesson_group ? 'Class cancelled' : 'Declined';
+    return `${who} · an organizer is reviewing your ${b.points} point refund`;
+  }
+  return '';
 };
 
-// ─── Provider's own coupon list (stringer or coach) ─────────────────────────────────────────
-
-const ProviderPanel: React.FC = () => {
-  const { providerId, redemptions, loading } = useProviderRedemptions();
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState('');
-
-  if (!providerId) return null;
-
-  const open = redemptions.filter((r) => r.status === 'active' || r.status === 'cancel_requested');
-  const recent = redemptions.filter((r) => r.status === 'used').slice(0, 5);
-
-  const run = async (code: string, fn: () => Promise<unknown>) => {
-    setBusy(code); setError('');
-    try { await fn(); } catch (err) { setError(serviceErrorMessage(err)); } finally { setBusy(null); }
-  };
-
+const BookingCard: React.FC<{ b: Booking; busy: boolean; onCancel: () => void }> = ({ b, busy, onCancel }) => {
+  const [confirming, setConfirming] = useState(false);
+  const stage = bookingStage(b);
+  // A group lesson member may leave until the coach marks it done (functions/lib/bookingState.js).
+  const cancellable = stage === 'new' || (!!b.group_lesson && stage === 'in_progress');
   return (
-    <div className="rounded-3xl border border-amber-400/30 bg-amber-400/5 p-5 mb-5">
-      <p className="text-xs font-bold text-badge uppercase tracking-widest mb-3">Your shop</p>
-
-      {error && <p className="text-xs text-badge-loss mb-2.5">{error}</p>}
-
-      {loading ? (
-        <div className="h-14 bg-fg/5 rounded-2xl animate-pulse" />
-      ) : open.length === 0 ? (
-        <p className="text-sm text-fg/70">No open coupons right now.</p>
-      ) : (
-        <div className="space-y-2">
-          {open.map((r) => (
-            <div key={r.code} className="rounded-2xl bg-tennis-surface/40 px-3.5 py-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-fg truncate">{r.user_name}</p>
-                  <p className="font-mono text-xs text-fg/70 tracking-wider mt-0.5">{r.code} · {r.offer}</p>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <motion.button
-                    type="button"
-                    onClick={() => run(r.code, () => markCouponUsed({ code: r.code }))}
-                    disabled={busy === r.code}
-                    whileTap={tapScale.whileTap}
-                    transition={tapScale.transition}
-                    className="p-2.5 rounded-xl bg-green-500/15 text-badge-win hover:bg-green-500/25 transition-colors disabled:opacity-50"
-                    aria-label={`Mark ${r.code} used`}
-                  >
-                    <Check className="w-4 h-4" />
-                  </motion.button>
-                  <motion.button
-                    type="button"
-                    onClick={() => run(r.code, () => flagCoupon({ code: r.code }))}
-                    disabled={busy === r.code}
-                    whileTap={tapScale.whileTap}
-                    transition={tapScale.transition}
-                    className="px-3 py-2.5 rounded-xl bg-amber-500/15 text-badge hover:bg-amber-500/25 transition-colors disabled:opacity-50 flex items-center gap-1.5 text-xs font-bold"
-                  >
-                    <Flag className="w-3.5 h-3.5" />Dispute
-                  </motion.button>
-                </div>
-              </div>
-              {r.status === 'cancel_requested' && (
-                <p className="text-[11px] text-fg/70 mt-1.5">Player asked to cancel. An organizer is reviewing it.</p>
-              )}
-            </div>
-          ))}
+    <div className="rounded-2xl bg-fg/5 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold text-fg">{b.offer}</p>
+          <p className="mt-0.5 truncate text-xs text-fg/70">
+            {[b.provider_name, money(b.price), b.points ? `${b.points} points` : ''].filter(Boolean).join(' · ')}
+          </p>
         </div>
+        {cancellable && (confirming ? (
+          <div className="flex shrink-0 gap-1.5">
+            <Button size="sm" variant="outline" onClick={onCancel} isLoading={busy}>Yes, cancel</Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)} disabled={busy}>Keep</Button>
+          </div>
+        ) : (
+          <Button size="sm" variant="outline" className="shrink-0" onClick={() => setConfirming(true)}>Cancel</Button>
+        ))}
+      </div>
+      {stage === 'confirming' ? (
+        <Link to="/profile?dash=player" className="mt-2 inline-block text-xs font-bold text-clay hover:underline">
+          {b.category === 'coaching' ? 'Lesson marked done' : 'Ready for pickup'}. Confirm it on your Player Dash
+        </Link>
+      ) : (
+        <p className="mt-2 text-xs text-fg/70">{memberStep(b)}</p>
       )}
-
-      {recent.length > 0 && (
-        <p className="text-[11px] text-fg/70 mt-3">Recently used: {recent.map((r) => r.code).join(', ')}</p>
+      {cancellable && b.redemption_code && (
+        <p className="mt-1 text-xs text-fg/70">
+          Coupon <span className="font-mono tracking-wider text-fg">{b.redemption_code}</span>
+        </p>
       )}
     </div>
   );
 };
 
 // ─── The tab ────────────────────────────────────────────────────────────────────────────────
+
+// ─── Nearest-provider search ─────────────────────────────────────────────────────────────────────
+
+type Origin = { label: string; lat: number; lng: number };
+
+const kmLabel = (km: number) => (km < 1 ? 'under 1 km away' : `about ${Math.round(km)} km away`);
+
+/** Distance from the searched address to a provider, or null when their area isn't recognised. */
+const providerDistanceKm = (provider: Provider, origin: Origin | null): number | null => {
+  if (!origin) return null;
+  const at = areaCoords(provider.area);
+  return at ? haversineKm(origin.lat, origin.lng, at.lat, at.lng) : null;
+};
+
+/**
+ * Address bar above the category cards. What's typed goes through the same geocoder the Court Map
+ * uses, and providers are then ordered by distance from it.
+ *
+ * The distance is NEIGHBOURHOOD resolution, not door to door: a provider stores an area rather
+ * than a street address (see AREA_COORDS in features/services/types.ts). That is why the area name
+ * is always shown beside the figure and the figure itself is rounded — neither should read as a
+ * measurement the data can't support. A provider whose area isn't recognised sorts to the end
+ * rather than being placed somewhere invented.
+ */
+const NearestSearch: React.FC<{
+  origin: Origin | null;
+  onOrigin: (origin: Origin | null) => void;
+}> = ({ origin, onOrigin }) => {
+  const [query, setQuery] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = query.trim();
+    if (!q || busy) return;
+    setBusy(true); setError('');
+    try {
+      const hit = await geocodeQuery(q);
+      if (!hit) {
+        setError('No match for that address. A street number or the nearest intersection usually finds it.');
+        return;
+      }
+      onOrigin({ label: q, ...hit });
+    } catch {
+      setError('Address lookup is unavailable right now. Try again in a moment.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mb-4">
+      {/* Default flex alignment stretches the button to the input's height, so the two line up
+          without pinning either to a fixed size. */}
+      <form onSubmit={submit} className="flex gap-2">
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Your address or nearest intersection"
+          aria-label="Find services near an address"
+          className={field}
+        />
+        <Button type="submit" variant="primary" aria-label="Search" isLoading={busy} className="shrink-0 px-4">
+          <Search className="w-4 h-4" />
+        </Button>
+      </form>
+
+      {origin && (
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-fg/70">
+          <MapPin className="w-3.5 h-3.5 shrink-0 text-clay" />
+          <span className="truncate">Nearest to {origin.label}</span>
+          <button
+            type="button"
+            onClick={() => { setQuery(''); setError(''); onOrigin(null); }}
+            className="ml-auto shrink-0 font-bold text-clay hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+          >
+            Clear
+          </button>
+        </p>
+      )}
+      {error && <p className="mt-2 text-xs text-badge-loss">{error}</p>}
+    </div>
+  );
+};
 
 export const ServicesTab: React.FC = () => {
   const { user } = useAuth();
@@ -689,12 +651,21 @@ export const ServicesTab: React.FC = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const isSuperAdmin = user?.uid === SUPER_ADMIN_UID;
   const providerAvatars = useProviderAvatars(rewards.map((r) => r.uid));
-  const { balance, loading: balanceLoading } = useRedeemablePoints();
-  const { redemptions } = useMyRedemptions();
-  // Multiple categories/providers can be open at once here — unlike the Tree elsewhere in the
-  // app (Tournament draws, Leaderboard divisions), which stays single-open. This page only.
-  const [openCategories, setOpenCategories] = useState<Set<string>>(new Set(['stringing']));
+  const { balance, loading: balanceLoading } = useRedeemablePoints(useTasks());
+  const { bookings } = useMyBookings();
+  const { providerId } = useProviderRole();
+  // Category is now a picture card rather than an accordion row, and exactly ONE can be chosen —
+  // tapping the open one closes it and the panel below empties, which is the state the page opens
+  // in. Providers below it can still be open several at a time, unlike the Tree elsewhere in the
+  // app (Tournament draws, Leaderboard divisions), which stays single-open.
+  const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | null>(null);
   const [openProviders, setOpenProviders] = useState<Set<string>>(new Set());
+  // A provider shows ONE offer until asked for the rest. A stringer with five price tiers used to
+  // push every other provider off the screen, so the member had to scroll to learn who else there
+  // was. Keyed by the same `${cat}:${id}` as openProviders.
+  const [allOffersFor, setAllOffersFor] = useState<Set<string>>(new Set());
+  // The address a member searched, if any. Unset is the normal state and keeps the pinned order.
+  const [origin, setOrigin] = useState<Origin | null>(null);
   const toggleSet = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) => (id: string) =>
     setter((cur) => {
       const next = new Set(cur);
@@ -704,9 +675,25 @@ export const ServicesTab: React.FC = () => {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  const openCoupons = redemptions.filter(
-    (r) => r.status === 'active' || r.status === 'flagged' || r.status === 'cancel_requested');
-  const openRewardIds = new Set(openCoupons.map((r) => r.reward_id));
+  // Open jobs, plus cancelled redeemed ones whose refund an organizer hasn't decided yet.
+  const myBookings = bookings.filter((b) => OPEN_BOOKING_STATUSES.includes(b.status) || b.refund === 'pending');
+  const bookedIds = new Set(
+    bookings.filter((b) => OPEN_BOOKING_STATUSES.includes(b.status)).map((b) => b.service_id),
+  );
+  // A provider's phone and email are shown to a member with a LIVE booking with them — from the
+  // moment they book, through the job, and after it completes — and to that provider's own
+  // account. A cancelled or declined booking shows nothing: it is the one case where a member
+  // once tapped Book but no arrangement exists, and it was leaking contacts for exactly that.
+  const contactableProviderIds = new Set([
+    ...bookings.filter((b) => b.status !== 'cancelled').map((b) => b.provider_id),
+    providerId,
+  ].filter(Boolean));
+  // Read live from `contacts/{uid}`, never from the offer doc. The offer is world-readable, so a
+  // number stored on it was fetchable before booking however the page chose to hide it; `contacts`
+  // is permitted only once the booking has created the connection, so the gate is the rules'.
+  const providerContacts = useContacts(
+    rewards.filter((r) => r.uid && contactableProviderIds.has(r.provider_id)).map((r) => r.uid as string),
+  );
 
   const pct = Math.min(100, (Math.max(0, balance) / MIN_REWARD_COST) * 100);
 
@@ -723,6 +710,33 @@ export const ServicesTab: React.FC = () => {
   };
 
   const categories: ServiceCategory[] = ['stringing', 'coaching', 'others'];
+
+  /**
+   * Tapping a card opens it; tapping the open one closes it and empties the panel below.
+   *
+   * Selecting seeds every provider in that category as open, because choosing the category WAS
+   * the picking step — leaving them collapsed would make it three taps to reach a price. They stay
+   * individually collapsible afterwards.
+   */
+  const selectCategory = (cat: ServiceCategory) => {
+    if (selectedCategory === cat) { setSelectedCategory(null); return; }
+    setSelectedCategory(cat);
+    setOpenProviders(new Set((byCategory.get(cat) ?? []).map((p) => `${cat}:${p.id}`)));
+  };
+
+  /**
+   * Default order is the pinned one set in useServices. A searched address replaces it outright —
+   * distance wins, and the pinned pair take their place in the ranking like everyone else.
+   * Providers whose area can't be placed go last rather than being ranked on a guess.
+   */
+  const providersFor = (cat: ServiceCategory): Provider[] => {
+    const list = byCategory.get(cat) ?? [];
+    if (!origin) return list;
+    return [...list].sort(
+      (a, b) =>
+        (providerDistanceKm(a, origin) ?? Infinity) - (providerDistanceKm(b, origin) ?? Infinity),
+    );
+  };
 
   return (
     <div>
@@ -757,16 +771,22 @@ export const ServicesTab: React.FC = () => {
         </div>
       )}
 
-      <ProviderPanel />
+      {providerId && (
+        <p className="text-sm text-fg mb-5">
+          Bookings for your services are on your{' '}
+          <Link to="/profile?dash=provider" className="font-bold text-clay hover:underline">Provider Dash</Link>.
+        </p>
+      )}
 
-      {openCoupons.length > 0 && (
+      {myBookings.length > 0 && (
         <div className="space-y-2.5 mb-5">
-          {openCoupons.map((r) => (
-            <CouponCard
-              key={r.code}
-              r={r}
-              onCancel={(code) => run(code, () => requestCancellation({ code }))}
-              busy={busyId === r.code}
+          <p className="text-xs font-bold uppercase tracking-widest text-fg/70">Your bookings</p>
+          {myBookings.map((b) => (
+            <BookingCard
+              key={b.id}
+              b={b}
+              busy={busyId === `cancel:${b.id}`}
+              onCancel={() => run(`cancel:${b.id}`, () => cancelBooking({ bookingId: b.id }))}
             />
           ))}
         </div>
@@ -780,21 +800,58 @@ export const ServicesTab: React.FC = () => {
           <p className="text-sm text-fg/70">No services available yet. Check back soon.</p>
         </div>
       ) : (
-        <Tree>
-          {categories.map((cat) => {
-            const providers: Provider[] = byCategory.get(cat) ?? [];
-            if (providers.length === 0) return null;
-            const offerCount = providers.reduce((n, p) => n + p.offers.length, 0);
-            return (
-              <TreeGroup
-                key={cat}
-                id={cat}
-                label={CATEGORY_LABEL[cat]}
-                right={`${offerCount} offer${offerCount === 1 ? '' : 's'}`}
-                open={openCategories.has(cat)}
-                onToggle={toggleSet(setOpenCategories)}
-              >
-                {providers.map((p) => (
+        <>
+          {/* Category picker: one square picture card each, in a sideways scroll so a third
+              category slots in without relaying the row out. A category needs BOTH offers and a
+              picture to appear — "Others" has no picture and is deliberately absent, which does
+              mean anything filed under it is unreachable from here. */}
+          {/* Address search (NearestSearch) is off for now; render it here to bring it back. */}
+
+          <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
+            {categories.map((cat) => {
+              const providers: Provider[] = byCategory.get(cat) ?? [];
+              if (providers.length === 0 || !CATEGORY_IMAGE[cat]) return null;
+              const offerCount = providers.reduce((n, p) => n + p.offers.length, 0);
+              const active = selectedCategory === cat;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => selectCategory(cat)}
+                  aria-pressed={active}
+                  className={`relative shrink-0 w-40 aspect-square rounded-2xl overflow-hidden text-left
+                              transition-all focus-visible:outline-2 focus-visible:outline-offset-2
+                              focus-visible:outline-clay ${active ? 'ring-2 ring-clay' : 'opacity-90 hover:opacity-100'}`}
+                >
+                  <img
+                    src={CATEGORY_IMAGE[cat]}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="absolute inset-0 w-full h-full object-cover object-center"
+                  />
+                  {/* The label sits on the photo, so it needs its own darkening to stay readable
+                      whatever the picture behind it happens to be. */}
+                  <span className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-tennis-dark via-tennis-dark/75 to-transparent">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="text-sm font-bold text-clay truncate">{CATEGORY_LABEL[cat]}</span>
+                      <span className="shrink-0 text-xs font-semibold text-fg/70">
+                        {offerCount} offer{offerCount === 1 ? '' : 's'}
+                      </span>
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Nothing here until a card is chosen. */}
+          {selectedCategory && (
+            <Tree>
+              {providersFor(selectedCategory).map((p) => {
+                const cat = selectedCategory;
+                const distKm = providerDistanceKm(p, origin);
+                return (
                   <TreeGroup
                     key={p.id}
                     id={`${cat}:${p.id}`}
@@ -809,37 +866,66 @@ export const ServicesTab: React.FC = () => {
                             {p.name}
                             {p.certified && <BadgeCheck className="w-3.5 h-3.5 text-clay shrink-0" />}
                           </span>
-                          <span className="block text-[11px] font-medium text-fg/70 mt-0.5">{p.area}</span>
+                          {/* Area always shows beside the distance: the figure is measured from
+                              the neighbourhood centre, not the provider's door. */}
+                          <span className="block text-[11px] font-medium text-fg/70 mt-0.5">
+                            {p.area}
+                            {distKm !== null && ` · ${kmLabel(distKm)}`}
+                          </span>
                         </span>
                       </span>
                     }
-                    // Signed-out visitors can browse the catalogue but don't get providers'
-                    // phone numbers and emails handed to them.
-                    right={user
-                      ? <ContactOpponentButton name={p.name} phone={p.phone} email={p.email} size="sm" variant="white" />
+                    // Contacts are shared by booking, so the catalogue shows a provider's phone and
+                    // email only once this member has booked them (never to a signed-out visitor).
+                    right={user && p.uid && contactableProviderIds.has(p.id) && providerContacts[p.uid]
+                      ? (
+                        <ContactOpponentButton
+                          name={p.name}
+                          phone={providerContacts[p.uid]?.phone}
+                          email={providerContacts[p.uid]?.email}
+                          whatsappContact={providerContacts[p.uid]?.whatsapp_contact}
+                          // Deliberately no `preferred`: a provider is offering a service, so every
+                          // channel they have filled in is on, whatever they set for ordinary play.
+                          size="sm"
+                        />
+                      )
                       : undefined}
                     bodyClassName="px-5 space-y-2.5"
                   >
-                    {/* The free monthly group lesson is Archie's offer — lives under his name. */}
-                    {p.id === 'archie' && <GroupLessonCard />}
-                    {p.offers.map((r) => (
+                    {(allOffersFor.has(`${cat}:${p.id}`) ? p.offers : p.offers.slice(0, 1)).map((r) => (
                       <OfferCard
                         key={r.id}
                         reward={r}
                         balance={balance}
-                        alreadyOpen={openRewardIds.has(r.id)}
-                        busy={busyId === r.id}
-                        onRedeem={() => run(r.id, () => redeemReward({ rewardId: r.id }))}
+                        signedIn={!!user}
+                        // Only a provider with a linked account can take the job, and nobody books
+                        // their own. bookService and redeemReward check both again.
+                        bookable={!!r.uid && r.uid !== user?.uid && r.provider_id !== providerId}
+                        booked={bookedIds.has(r.id)}
+                        busy={busyId === `book:${r.id}` ? 'book' : busyId === `redeem:${r.id}` ? 'redeem' : null}
+                        onBook={() => run(`book:${r.id}`, () => bookService({ serviceId: r.id }))}
+                        onRedeem={() => run(`redeem:${r.id}`, () => redeemReward({ rewardId: r.id }))}
                         onEdit={isSuperAdmin ? () => setEditingReward(r) : undefined}
                         onDelete={isSuperAdmin && deletingId !== r.id ? () => removeOffer(r) : undefined}
                       />
                     ))}
+                    {p.offers.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => toggleSet(setAllOffersFor)(`${cat}:${p.id}`)}
+                        className="w-full min-h-11 rounded-2xl bg-fg/[0.03] text-xs font-bold text-clay hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+                      >
+                        {allOffersFor.has(`${cat}:${p.id}`)
+                          ? 'Show less'
+                          : `Show ${p.offers.length - 1} more offer${p.offers.length === 2 ? '' : 's'}`}
+                      </button>
+                    )}
                   </TreeGroup>
-                ))}
-              </TreeGroup>
-            );
-          })}
-        </Tree>
+                );
+              })}
+            </Tree>
+          )}
+        </>
       )}
 
       {isSuperAdmin && (

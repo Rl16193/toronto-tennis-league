@@ -1,5 +1,5 @@
 import { addDoc, collection, doc, getDocs, updateDoc } from 'firebase/firestore';
-import { getDownloadURL, ref } from 'firebase/storage';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../../../lib/firebase';
 import { TennisEvent } from '../../../types';
 import { sortEventsByStartDate } from '../../../utils/eventDates';
@@ -20,6 +20,12 @@ export type EventFormState = {
   skillLevel: string;
   tournamentFormat: 'knockout' | 'rr';
   tournamentChoice: 'Singles' | 'Doubles';
+  /** Meetup only, and NOT persisted yet — the sub-category field it will drive is still being
+   *  built on the database side. See "Recurring meetups" in CLAUDE.md. */
+  recurring: boolean;
+  /** The image already stored on the event (a URL or a legacy gs:// path), or '' for none. A newly
+   *  picked file is held by the page until Save and uploaded then, never kept here. */
+  image: string;
 };
 
 export const INITIAL_EVENT_FORM: EventFormState = {
@@ -33,11 +39,13 @@ export const INITIAL_EVENT_FORM: EventFormState = {
   time: 'Anytime',
   skillLevel: 'All',
   tournamentFormat: 'knockout',
+  recurring: false,
   tournamentChoice: 'Singles',
+  image: '',
 };
 
 export const EVENT_SKILL_OPTIONS = ['All', '2.5+', '3.0+', '3.5+', '4.0+', '4.5+', '5.0+'];
-export const EVENT_TYPE_OPTIONS = ['Tournament', 'League Ladder', 'Meetup', 'Special Event', 'League Event', 'Social'];
+export const EVENT_TYPE_OPTIONS = ['Tournament', 'League Ladder', 'Meetup', 'Social'];
 
 export const fetchEvents = async () => {
   const snapshot = await getDocs(collection(db, 'events'));
@@ -61,6 +69,18 @@ export const resolveStorageUrl = async (imagePath: string) => {
     return getDownloadURL(ref(storage, imagePath));
   }
   return imagePath;
+};
+
+export const MAX_EVENT_IMAGE_BYTES = 5 * 1024 * 1024;
+
+/** Uploads an event image into the creator's own folder (see storage.rules) and returns its URL. */
+export const uploadEventImage = async (userId: string, file: File) => {
+  if (!file.type.startsWith('image/')) throw new Error('Please choose an image file.');
+  if (file.size > MAX_EVENT_IMAGE_BYTES) throw new Error('The image must be under 5 MB.');
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const imageRef = ref(storage, `events/${userId}/${Date.now()}_${safeName}`);
+  await uploadBytes(imageRef, file, { contentType: file.type });
+  return getDownloadURL(imageRef);
 };
 
 export const validateEventForm = (eventForm: EventFormState) => {
@@ -108,6 +128,7 @@ export const updateEvent = async (eventId: string, eventForm: EventFormState) =>
     location: eventForm.location.trim(),
     about: eventForm.about.trim(),
     description: eventForm.about.trim(),
+    image: eventForm.image,
     start_date: eventForm.startDate,
     end_date: eventForm.endDate,
     join_last_date: eventForm.joinLastDate,
@@ -138,5 +159,10 @@ export const formFromEvent = (event: DisplayEvent): EventFormState => ({
   time: event.time || '',
   skillLevel: event.skill_level || 'All',
   tournamentFormat: event.tournament_format || 'knockout',
+  // Nothing is stored yet, so an edit always opens with Recurring unticked.
+  recurring: false,
   tournamentChoice: event.tournament_choice || 'Singles',
+  // fetchEvents moves a gs:// path out of `image` into `imagePath`; hand back whichever is stored,
+  // so saving an edit without touching the image writes the same value back.
+  image: event.imagePath || event.image || '',
 });

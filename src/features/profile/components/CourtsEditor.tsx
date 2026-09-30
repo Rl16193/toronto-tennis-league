@@ -1,0 +1,87 @@
+import React, { useEffect, useState } from 'react';
+import { Button } from '../../../components/Button';
+import { Input } from '../../../components/Input';
+import {
+  defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts,
+  getCourtSuggestions, mergeCourtOptions,
+} from '../../signup/utils/courtSearch';
+import { zoneFromCourts } from '../../../utils/zones';
+import { UserPreferences } from '../../../types';
+import { loadCourtsCsv } from '../../tasks/courtList';
+
+/**
+ * The preferred-courts editor, shared by the profile card and the Player Dash. Saving also
+ * recomputes the zone from the courts, unless the member picked their zone by hand.
+ */
+export const CourtsEditor: React.FC<{
+  preferences: Pick<UserPreferences, 'preferred_courts' | 'preferred_zone' | 'preferred_zone_manual'>;
+  saving: boolean;
+  onSave: (courts: string[], zone: string) => void;
+  /** Set when another button saves (the join sheet's Join): reports the draft and hides Save. */
+  onDraftChange?: (courts: string[], zone: string) => void;
+}> = ({ preferences, saving, onSave, onDraftChange }) => {
+  // Court option list + coords (for the suggestions + zone recompute), loaded once.
+  const [courtOptions, setCourtOptions] = useState<string[]>(defaultCourtOptions);
+  const [courtCoords, setCourtCoords] = useState<Map<string, { lat: number; lng: number }>>(new Map());
+  useEffect(() => {
+    let alive = true;
+    loadCourtsCsv()
+      .then((csv) => { if (alive && csv) { setCourtOptions(mergeCourtOptions(extractDropdownCourts(csv))); setCourtCoords(extractCourtsWithCoords(csv)); } })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  const [courtsDraft, setCourtsDraft] = useState<string[]>(preferences.preferred_courts ?? []);
+  const [courtInput, setCourtInput] = useState('');
+
+  const computeZone = (courts: string[]): string => {
+    // A zone chosen by hand wins over the courts. Recomputing here would silently undo the pick
+    // and move the member between draws the next time they edit their court list.
+    if (preferences.preferred_zone_manual) return preferences.preferred_zone;
+    if (courts.length === 0) return '';
+    // Majority vote across ALL preferred courts (not just the first one) — a player who splits
+    // time across zones should land in whichever zone most of their courts are actually in,
+    // with Downtown as the tiebreaker (see zoneFromCourts).
+    // No Toronto zone from the courts (a non-Toronto court) means '' — the Unassigned draw. The old
+    // zone is kept only until the court coordinates have loaded, so an early save can't wipe it.
+    const zone = zoneFromCourts(courts, courtCoords);
+    if (zone) return zone;
+    return courtCoords.size > 0 ? '' : preferences.preferred_zone || '';
+  };
+
+  // Re-reported once the court coordinates load, so the zone isn't computed from an empty map.
+  useEffect(() => { onDraftChange?.(courtsDraft, computeZone(courtsDraft)); }, [courtsDraft, courtCoords]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const courtSuggestions = getCourtSuggestions(courtOptions, courtsDraft, courtInput);
+  const addCourt = (court: string) => {
+    const t = court.trim();
+    if (!t || courtsDraft.includes(t)) return;
+    setCourtsDraft([...courtsDraft, t]); setCourtInput('');
+  };
+
+  return (
+    <div className="mt-2 space-y-2">
+      {courtsDraft.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {courtsDraft.map((c) => (
+            <button key={c} type="button" onClick={() => setCourtsDraft(courtsDraft.filter((x) => x !== c))}
+              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-clay text-fg flex items-center gap-1.5">{c} <span className="opacity-70">✕</span></button>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Input placeholder="Search courts…" value={courtInput} onChange={(e) => setCourtInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCourt(courtInput); } }} />
+        <Button size="sm" variant="clay" className="px-3 shrink-0" onClick={() => addCourt(courtInput)} disabled={!courtInput.trim()}>Add</Button>
+      </div>
+      {courtSuggestions.length > 0 && (
+        <div className="max-h-40 overflow-y-auto rounded-xl bg-tennis-dark/95 p-1">
+          {courtSuggestions.map((c) => (
+            <button key={c} type="button" onClick={() => addCourt(c)} className="w-full text-left px-3 py-2 text-sm text-fg rounded-lg hover:bg-clay/20">{c}</button>
+          ))}
+        </div>
+      )}
+      {!onDraftChange && <Button size="sm" onClick={() => onSave(courtsDraft, computeZone(courtsDraft))} isLoading={saving}>Save</Button>}
+    </div>
+  );
+};

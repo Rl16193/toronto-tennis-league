@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Loader2 } from 'lucide-react';
+import { Check, ChevronDown, Loader2 } from 'lucide-react';
 import { tapScale } from '../../lib/motion';
+import { Sheet } from '../../components/Sheet';
+import { Button } from '../../components/Button';
 import type {
   CourtWithCount, NearestCourt, NearestProgram, PickleballEntry,
 } from './courtMapUtils';
@@ -25,6 +27,32 @@ export const Badge: React.FC<{ bg: string; color: string; children: React.ReactN
 
 const SEL_BG = 'var(--color-tennis-deep)';
 
+// All four map filters open the same pop-up list (a Sheet), so they behave alike. FilterSelect
+// picks one option; MultiFilterSelect ticks several and closes with Done.
+const FilterTrigger: React.FC<{ label: string; text: string; onOpen: () => void; disabled?: boolean }> = ({ label, text, onOpen, disabled }) => (
+  <div className={`flex flex-col gap-0.5 ${disabled ? 'opacity-35 pointer-events-none' : ''}`}>
+    <span className="text-fg/70 text-[10px] uppercase tracking-wide">{label}</span>
+    <button
+      type="button"
+      onClick={onOpen}
+      disabled={disabled}
+      aria-haspopup="dialog"
+      style={{ background: SEL_BG }}
+      // Borderless: the filled background and focus ring carry the affordance instead.
+      className="w-full text-left text-xs text-fg rounded-md px-2 py-1.5 flex items-center justify-between
+                 focus:outline-none focus:ring-2 focus:ring-clay/40 cursor-pointer"
+    >
+      <span className="truncate">{text}</span>
+      <ChevronDown className="w-3.5 h-3.5 ml-1 shrink-0 text-fg/70" aria-hidden="true" />
+    </button>
+  </div>
+);
+
+const filterRowCls = (on: boolean) =>
+  `w-full min-h-11 flex items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition-colors
+   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay ${
+    on ? 'bg-clay/15 text-fg font-bold' : 'text-fg hover:bg-fg/10'}`;
+
 export function FilterSelect({
   label, value, options, onChange, disabled,
 }: {
@@ -34,30 +62,32 @@ export function FilterSelect({
   onChange: (v: string) => void;
   disabled?: boolean;
 }) {
-  const selStyle = { background: SEL_BG, color: 'var(--color-fg)' } as const;
+  const [open, setOpen] = useState(false);
+  const all = [{ value: '', label: 'All' }, ...options];
+  const text = all.find((o) => o.value === value)?.label ?? 'All';
   return (
-    <div className={`flex flex-col gap-0.5 ${disabled ? 'opacity-35 pointer-events-none' : ''}`}>
-      <span className="text-fg/70 text-[10px] uppercase tracking-wide">{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        style={{ background: SEL_BG }}
-        // Borderless: the filled background and focus ring carry the affordance instead.
-        className="w-full text-xs text-fg rounded-md px-2 py-1.5
-                   focus:outline-none focus:ring-2 focus:ring-clay/40 appearance-none cursor-pointer"
-      >
-        <option value="" style={selStyle}>All</option>
-        {options.map((o) => (
-          <option key={o.value} value={o.value} style={selStyle}>{o.label}</option>
-        ))}
-      </select>
-    </div>
+    <>
+      <FilterTrigger label={label} text={text} onOpen={() => setOpen(true)} disabled={disabled} />
+      <AnimatePresence>
+        {open && (
+          <Sheet onClose={() => setOpen(false)} title={label} maxWidthClassName="max-w-md">
+            <div className="p-3 pt-1 space-y-1">
+              {all.map((o) => (
+                <button key={o.value || 'all'} type="button" onClick={() => { onChange(o.value); setOpen(false); }} className={filterRowCls(o.value === value)}>
+                  <span className="flex-1">{o.label}</span>
+                  {o.value === value && <Check className="w-4 h-4 shrink-0 text-clay" aria-hidden="true" />}
+                </button>
+              ))}
+            </div>
+          </Sheet>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
-// Multi-select twin of FilterSelect: a checklist popover instead of a <select>. An empty set means
-// "all", so the label falls back to `allLabel` and no filtering is applied by the caller.
+// Multi-select twin of FilterSelect. An empty set means "all", so the label falls back to
+// `allLabel` and no filtering is applied by the caller.
 export function MultiFilterSelect({
   label, allLabel, selected, options, onChange,
 }: {
@@ -72,61 +102,41 @@ export function MultiFilterSelect({
     ? allLabel
     : options.filter((o) => selected.has(o.value)).map((o) => o.label).join(', ');
 
-  const rowCls = (on: boolean) =>
-    `w-full text-left text-xs rounded px-2 py-1.5 transition-colors flex items-center gap-1.5 ${
-      on ? 'bg-clay/25 text-fg font-semibold' : 'text-fg hover:bg-fg/10'}`;
-
   return (
-    <div className="flex flex-col gap-0.5 relative">
-      <span className="text-fg/70 text-[10px] uppercase tracking-wide">{label}</span>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        style={{ background: SEL_BG }}
-        // Borderless, matching FilterSelect — the filled background carries the affordance.
-        className="w-full text-left text-xs text-fg rounded-md px-2 py-1.5 flex items-center justify-between
-                   focus:outline-none focus:ring-2 focus:ring-clay/40 cursor-pointer"
-      >
-        <span className="truncate">{text}</span>
-        <span className="text-fg/70 ml-1 text-[9px] shrink-0">{open ? '▲' : '▼'}</span>
-      </button>
+    <>
+      <FilterTrigger label={label} text={text} onOpen={() => setOpen(true)} />
       <AnimatePresence>
         {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.15 }}
-            className="absolute top-full left-0 right-0 z-50 mt-0.5 rounded-md p-1 space-y-0.5
-                       max-h-56 overflow-y-auto shadow-xl border border-fg/20"
-            style={{ background: SEL_BG }}
-          >
-            <button type="button" onClick={() => onChange(new Set())} className={rowCls(selected.size === 0)}>
-              <span className="w-3 shrink-0 text-clay">{selected.size === 0 ? '✓' : ''}</span>
-              {allLabel}
-            </button>
-            {options.map((o) => {
-              const on = selected.has(o.value);
-              return (
-                <button
-                  key={o.value}
-                  type="button"
-                  onClick={() => {
-                    const next = new Set(selected);
-                    if (on) next.delete(o.value); else next.add(o.value);
-                    onChange(next);
-                  }}
-                  className={rowCls(on)}
-                >
-                  <span className="w-3 shrink-0 text-clay">{on ? '✓' : ''}</span>
-                  <span className="truncate">{o.label}</span>
-                </button>
-              );
-            })}
-          </motion.div>
+          <Sheet onClose={() => setOpen(false)} title={label} maxWidthClassName="max-w-md">
+            <div className="p-3 pt-1 space-y-1">
+              <button type="button" onClick={() => onChange(new Set())} className={filterRowCls(selected.size === 0)}>
+                <span className="flex-1">{allLabel}</span>
+                {selected.size === 0 && <Check className="w-4 h-4 shrink-0 text-clay" aria-hidden="true" />}
+              </button>
+              {options.map((o) => {
+                const on = selected.has(o.value);
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => {
+                      const next = new Set(selected);
+                      if (on) next.delete(o.value); else next.add(o.value);
+                      onChange(next);
+                    }}
+                    className={filterRowCls(on)}
+                  >
+                    <span className="flex-1">{o.label}</span>
+                    {on && <Check className="w-4 h-4 shrink-0 text-clay" aria-hidden="true" />}
+                  </button>
+                );
+              })}
+              <Button className="w-full h-11 rounded-2xl mt-2" onClick={() => setOpen(false)}>Done</Button>
+            </div>
+          </Sheet>
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 }
 
@@ -196,7 +206,7 @@ export const CourtPopup: React.FC<{
       )}
       {hasPublicHours(court) && (
         <span style={{ background: '#1e3a5f', color: '#93c5fd', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
-          OPEN HOURS
+          PUBLIC HOURS
         </span>
       )}
       {court.bookingUrl && (
@@ -311,7 +321,7 @@ export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ court
                   <Badge bg="#2d2d3a" color="#d1d5db">{c.courtType.toUpperCase()}</Badge>
                   {c.numCourts > 0 && <Badge bg="#2d2d3a" color="#d1d5db">{c.numCourts} CT</Badge>}
                   {c.lights && <Badge bg="#422006" color="#fbbf24">LIGHTS</Badge>}
-                  {hasPublicHours(c) && <Badge bg="#1e3a5f" color="#93c5fd">OPEN HOURS</Badge>}
+                  {hasPublicHours(c) && <Badge bg="#1e3a5f" color="#93c5fd">PUBLIC HOURS</Badge>}
                   {c.bookingUrl && <Badge bg="#7c2d12" color="#fdba74">BOOKABLE</Badge>}
                   {c.count > 0 && <Badge bg="#14532d" color="#86efac">{c.count} player{c.count !== 1 ? 's' : ''}</Badge>}
                   <PickleballBadges entries={c.pickleballEntries} />

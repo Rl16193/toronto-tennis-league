@@ -1,6 +1,4 @@
-export const SKILL_LEVELS = [2, 2.5, 3, 3.5, 4, 4.5, 5] as const;
-
-// Levels a player may self-select — the full range, matching SKILL_LEVELS.
+// Levels a player may self-select — the full range.
 export const SELECTABLE_SKILL_LEVELS = [2, 2.5, 3, 3.5, 4, 4.5, 5] as const;
 
 // Plain-language bands shown below the selected skill box.
@@ -10,13 +8,14 @@ export const SKILL_LEVEL_TIERS = [
   { range: '4–5', label: 'Masters' },
 ] as const;
 
-export const TOURNAMENT_OPTIONS = [
-  { name: 'Beginners', range: '2.0-2.5' },
-  { name: 'Challengers', range: '3.0-3.5' },
-  { name: 'Masters', range: '4.0-5.0' },
-] as const;
+// Skill band used to sub-group players within a draw: Beginners 2–2.5, Challengers 3–3.5,
+// Masters 4–5. The one place the cut-offs live (functions/zoneMoves.js mirrors it server-side).
+export const skillBand = (skill: number): 'Beginners' | 'Challengers' | 'Masters' =>
+  skill < 3 ? 'Beginners' : skill < 4 ? 'Challengers' : 'Masters';
 
-export const skillTier = (skill: number) => (skill < 3 ? 'Beginner' : skill < 4 ? 'Challenger' : 'Masters');
+/** The same band as a singular label for a player card ("Beginner", "Challenger", "Masters"). */
+export const skillTier = (skill: number) =>
+  ({ Beginners: 'Beginner', Challengers: 'Challenger', Masters: 'Masters' } as const)[skillBand(skill)];
 
 // Normalize the free-text stats.league into the Men's/Women's selector value ("women" first —
 // it contains "men").

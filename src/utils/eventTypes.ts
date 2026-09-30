@@ -1,5 +1,15 @@
 import { TennisEvent } from '../types';
 
+/** The app owner. Mirrors SUPER_ADMIN_UID in functions/lib/constants.js and isSuperAdmin() in firestore.rules. */
+export const SUPER_ADMIN_UID = '7PvfzNtDmsOq5GLMieId7QRT7wH3';
+
+/**
+ * Whether this account manages this event: the super admin, its creator or its organizer_ids.
+ * Same rule as isCreatorOfEvent() in firestore.rules and isOrganizer() in functions/lib/roles.js.
+ */
+export const isEventManager = (event: Pick<TennisEvent, 'creator_id' | 'organizer_ids'> | null | undefined, uid: string | undefined) =>
+  !!uid && !!event && (uid === SUPER_ADMIN_UID || event.creator_id === uid || !!event.organizer_ids?.includes(uid));
+
 export const isRecurringWeekly = (event: TennisEvent) =>
   event.recurring_weekly === true || event.recurring === true || event.recurring === 'Yes';
 

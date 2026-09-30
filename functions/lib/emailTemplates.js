@@ -190,10 +190,10 @@ function step(n, title, body, marginBottom = '12px') {
   </table>`;
 }
 
-// Deep links. The app reads the tab from `?mode=` (see Matches.tsx) — `/friendlies` and
+// Deep links. The app reads the tab from `?mode=` (see Matches.tsx) — `/rallies` and
 // `/challenges` are bare redirects that drop the query string, so they must not be used here.
 const LINK = {
-  friendlies: `${SITE}/matches?mode=friendlies`,
+  rallies: `${SITE}/matches?mode=rallies`,
   challenges: `${SITE}/matches?mode=challenges`,
   profile: `${SITE}/profile`,
   events: `${SITE}/events`,
@@ -202,14 +202,14 @@ const LINK = {
 function buildRallyEmail(senderName) {
   return wrapEmail({
     preheader: `${senderName} wants to rally with you on the court!`,
-    title: 'Friendly Rally Invite',
-    footerNote: "You're receiving this notification because another player invited you to hit on Friendlies.",
+    title: 'Rally Invite',
+    footerNote: "You're receiving this notification because another player invited you to hit on Rallies.",
     bodyHtml: `
-      ${heading('Friendly Rally Invite &#129309;')}
-      ${paragraph(`<strong>${senderName}</strong> sent you an invitation for a friendly rally session! No points, no tournament pressure. Just tennis.`)}
+      ${heading('Rally Invite &#129309;')}
+      ${paragraph(`<strong>${senderName}</strong> sent you an invitation for a rally session! No points, no tournament pressure. Just tennis.`)}
       ${infoBadge('Rally Partner', senderName)}
       ${mutedParagraph('Accept the rally request to arrange a time and court location to hit together.')}
-      ${ctaButton(LINK.friendlies, 'Accept Rally')}
+      ${ctaButton(LINK.rallies, 'Accept Rally')}
     `,
   });
 }
@@ -218,13 +218,13 @@ function buildRallyAcceptedEmail(partnerName) {
   return wrapEmail({
     preheader: `${partnerName} accepted your rally invite — time to hit the court!`,
     title: 'Your rally invite was accepted!',
-    footerNote: "You're receiving this notification because another player accepted your invite on Friendlies.",
+    footerNote: "You're receiving this notification because another player accepted your invite on Rallies.",
     bodyHtml: `
       ${heading('Rally Accepted! &#129309;')}
-      ${paragraph(`<strong>${partnerName}</strong> accepted your friendly rally invite. No points, no pressure &mdash; just time to hit.`)}
+      ${paragraph(`<strong>${partnerName}</strong> accepted your rally invite. No points, no pressure &mdash; just time to hit.`)}
       ${infoBadge('Rally Partner', partnerName)}
-      ${mutedParagraph('Head to Friendlies to lock in a time and a court to hit together.')}
-      ${ctaButton(LINK.friendlies, 'Schedule Your Rally')}
+      ${mutedParagraph('Head to Rallies to lock in a time and a court to hit together.')}
+      ${ctaButton(LINK.rallies, 'Schedule Your Rally')}
     `,
   });
 }
@@ -298,7 +298,7 @@ function buildWelcomeEmail(firstName) {
       </h3>
 
       ${step(1, 'Complete your profile', 'Add your skill level, court preferences, and availability so we can match you with the right opponent.')}
-      ${step(2, 'Browse open events', 'Friendlies, Challenges, Socials and Tournaments are live right now. Free entry, all skill levels welcome.')}
+      ${step(2, 'Browse open events', 'Rallies, Challenges, Socials and Tournaments are live right now. Free entry, all skill levels welcome.')}
       ${step(3, 'Read the rules', 'Understand how scoring and advancement work before your first match.')}
       ${step(4, 'Join the WhatsApp community', 'Stay updated on events, find hitting partners.')}
       ${step(5, 'Tell us about your local courts', 'Help the community understand how the local tennis courts work.', '20px')}

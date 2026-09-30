@@ -39,7 +39,6 @@ const COACHING_COST = 30;
 const PROVIDERS = {
   karan: { name: 'TIVORYX', phone: '4169539281', area: 'Midtown Toronto', uid: 'FYjN50oiPQVseJt0UzD3G9oP6WG3' },
   fortyforty: { name: 'Forty-Forty Tennis', phone: '6479675228', area: 'Downtown Toronto', uid: 'yT3GrDq3bwMGdqHVnGMGjUDXrXx2' },
-  pandemic: { name: 'Pandemic Tennis', phone: '6479572367', area: 'Dufferin - West End' },
   archie: { name: 'Archie', phone: '4374362442', area: 'Downtown', certified: true, uid: 'kVloaSUaNPfWqv1NtdW6Xj4YDOP2' },
 };
 
@@ -49,9 +48,6 @@ const STRINGING = [
   ['fortyforty', 'Budget Strings Replacement', 'Head, Kirschbaum, MSV', 5, 35],
   ['fortyforty', 'Mid-level Strings Replacement', 'Solinco, Yonex, ReString', 5, 40],
   ['fortyforty', 'Premium Strings Replacement', 'Grapplesnake, Toroline', 5, 50],
-  ['pandemic', 'Budget Strings Replacement', 'Head, Kirschbaum, MSV', 5, 35],
-  ['pandemic', 'Mid-level Strings Replacement', 'Solinco, Babolat', 5, 40],
-  ['pandemic', 'Premium Strings Replacement', 'Luxilon ALU Power, Grapplesnake, Technifibre NRG2', 5, 45],
 ];
 
 // The free monthly group lesson is not a catalog offer — it costs no points and is capped per

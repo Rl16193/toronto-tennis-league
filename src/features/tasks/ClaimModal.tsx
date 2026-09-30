@@ -5,6 +5,7 @@ import { db } from '../../lib/firebase';
 import { Sheet } from '../../components/Sheet';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
+import { SelectField } from '../../components/SelectField';
 import { MemberSearchInput } from '../members/MemberSearchInput';
 import { useAuth } from '../../context/AuthContext';
 import { createAmbassadorClaim, createHostClaim, createVolunteerClaim, type ClaimType } from './claimService';
@@ -91,17 +92,13 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
             )}
 
             {type === 'volunteer' && (
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-fg/70 uppercase tracking-widest">Which event?</label>
-                <select
-                  value={eventId}
-                  onChange={(e) => setEventId(e.target.value)}
-                  className="w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
-                >
-                  <option value="">Select an event…</option>
-                  {events.map((e) => <option key={e.id} value={e.id}>{e.title}</option>)}
-                </select>
-              </div>
+              <SelectField
+                label="Which event?"
+                value={eventId}
+                options={events.map((e) => ({ value: e.id, label: e.title }))}
+                onChange={setEventId}
+                placeholder="Select an event…"
+              />
             )}
 
             {type === 'host' && (
@@ -131,7 +128,7 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={2}
-                  className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-gray-500 text-sm outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                  className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-fg/70 text-sm outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
                 />
               </div>
             )}

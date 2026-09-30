@@ -56,9 +56,3 @@ export const getOAuthSignInErrorMessage = async (
   }
   return getAuthErrorMessage(error, 'google');
 };
-
-export const getGoogleSignInErrorMessage = (error: any, email: string) =>
-  getOAuthSignInErrorMessage(error, email, 'google.com');
-
-export const getAppleSignInErrorMessage = (error: any, email: string) =>
-  getOAuthSignInErrorMessage(error, email, 'apple.com');

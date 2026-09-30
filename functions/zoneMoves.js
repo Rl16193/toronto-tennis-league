@@ -1,21 +1,12 @@
 /**
- * Zone moves — NOTIFY ONLY. This function never touches a match doc.
- *
- * A member picks their zone by hand on the profile card (`preferences.preferred_zone`, written by
- * `updatePreferredZone` in src/features/profile/services/profileService.ts). Zone decides which
- * draw they belong to, but a change must never unseat them:
- *
- *   1. Already playing, and the zone they moved TO has matches generated — they keep every match
- *      they're in, surface in the organizer's Unplaced Players list for the new zone (that list is
- *      zone-aware, see `unplacedParticipants` in useTournament.ts), and the organizer is told here.
- *      Nobody is auto-seated.
- *   2. The zone they moved to has NO matches yet — silent. Nothing to place them into and nothing
- *      to tell anyone; `preferred_zone` alone routes them in when that draw is generated, while
- *      they carry on in the draw they're already playing.
- *   3. Not in a tournament, or in one with no draw generated — silent, for the same reason.
- *
- * So this trigger's only job is the notification in case 1. Removing the player was the wrong
- * model and is deliberately absent: a player is never pulled out of matches that already exist.
+ * Zone moves. A member changes their zone on the profile card or from the tournament page (both
+ * write `preferences.preferred_zone`). For every live singles tournament they're registered in:
+ *   - an old-zone draw where none of their matches has a real opponent (and none is played) is
+ *     given up: their slot becomes Player Loading. Any seat with a real opponent is kept;
+ *   - the organizers get ONE alert saying what happened and whether to place them from Unplaced
+ *     Players (the new zone already has a draw) or wait for that draw to be generated.
+ * Nobody is ever auto-seated. A player an organizer placed by hand (`zone_override`) is left
+ * alone, and doubles has no zones.
  *
  * Deploy with: firebase deploy --only functions:onZoneChanged
  */
@@ -24,6 +15,7 @@ const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const { notify } = require('./lib/notify');
 const { REGION } = require('./lib/constants');
+const { eventOrganizerUids } = require('./lib/roles');
 
 const db = () => admin.firestore();
 
@@ -43,6 +35,43 @@ const resolveMergedZone = (bucketId, merges = {}) => {
   return id;
 };
 
+const OPEN_NAMES = ['Player Loading', 'BYE'];
+const hasOpponent = (m, uid) => {
+  const side = m.player_1_uid === uid ? 'player_2' : 'player_1';
+  return !!m[`${side}_uid`] && !OPEN_NAMES.includes(m[`${side}_name`]);
+};
+
+// Per old-zone draw: if none of the player's matches there has a real opponent and none is played,
+// blank their slot to Player Loading. Re-checked in a transaction so a fixture filled meanwhile is
+// kept. Returns how many matches they left.
+async function unseatWithoutOpponent(uid, seated, merges, wanted) {
+  const byDraw = new Map();
+  seated
+    .filter((m) => resolveMergedZone(effectiveZone(m.zone), merges) !== wanted)
+    .forEach((m) => {
+      const key = `${m.tournament_choice}|${m.division}|${m.skill_group}|${effectiveZone(m.zone)}`;
+      byDraw.set(key, [...(byDraw.get(key) || []), m]);
+    });
+  let unseated = 0;
+  for (const ms of byDraw.values()) {
+    if (ms.some((m) => m.status === 'complete' || hasOpponent(m, uid))) continue;
+    unseated += await db().runTransaction(async (tx) => {
+      const snaps = await Promise.all(ms.map((m) => tx.get(db().doc(`matches/${m.id}`))));
+      const live = snaps.filter((s) => s.exists).map((s) => ({ ref: s.ref, ...s.data() }));
+      if (live.some((m) => m.status === 'complete' || hasOpponent(m, uid))) return 0;
+      let n = 0;
+      live.forEach((m) => {
+        const side = m.player_1_uid === uid ? 'player_1' : m.player_2_uid === uid ? 'player_2' : null;
+        if (!side) return;
+        tx.update(m.ref, { [`${side}_uid`]: '', [`${side}_name`]: 'Player Loading' });
+        n += 1;
+      });
+      return n;
+    });
+  }
+  return unseated;
+}
+
 exports.onZoneChanged = onDocumentUpdated(
   { document: 'preferences/{uid}', region: REGION },
   async (event) => {
@@ -56,7 +85,7 @@ exports.onZoneChanged = onDocumentUpdated(
       .map((d) => ({ id: d.id, ...d.data() }))
       // `zone_override` means an organizer placed them by hand; that decision stands and needs no
       // prompting from a preference change.
-      .filter((p) => p.event_id && !p.removal && !p.zone_override);
+      .filter((p) => p.event_id && !p.removal && !p.zone_override && p.tournament_choice !== 'Doubles');
     if (rows.length === 0) return;
 
     for (const row of rows) {
@@ -64,34 +93,46 @@ exports.onZoneChanged = onDocumentUpdated(
         const eventDoc = await db().doc(`events/${row.event_id}`).get();
         if (!eventDoc.exists) continue;
         const ev = eventDoc.data();
+        if (!String(ev.type || '').toLowerCase().includes('tournament')) continue;
         const merges = ev.zone_draw_config?.merges ?? {};
         const wanted = resolveMergedZone(zoneBucketId(after.preferred_zone), merges);
         const band = row.skill_group === 'Retired Pro' ? 'Retired Pro' : skillBand(Number(row.skill || 0));
 
         const matchSnap = await db().collection('matches').where('event_id', '==', row.event_id).get();
         const drawMatches = matchSnap.docs
-          .map((d) => d.data())
+          .map((d) => ({ id: d.id, ...d.data() }))
           .filter((m) => ['singles', 'doubles'].includes(m.category));
 
-        // Case 3 — nothing generated for them to be sitting in.
+        // A tournament whose draws are all played is over; its organizers don't need to hear.
+        if (drawMatches.length > 0 && drawMatches.every((m) => m.status === 'complete')) continue;
+
         const seated = drawMatches.filter((m) => m.player_1_uid === uid || m.player_2_uid === uid);
-        if (seated.length === 0) continue;
-
         // Already in the zone they asked for (following any merge).
-        if (seated.every((m) => resolveMergedZone(effectiveZone(m.zone), merges) === wanted)) continue;
+        if (seated.length > 0 && seated.every((m) => resolveMergedZone(effectiveZone(m.zone), merges) === wanted)) continue;
 
-        // Case 2 vs 1 — is there a generated draw in the zone they moved to that they'd belong to?
+        // Seats in another zone with no real opponent yet are given up, blanked to Player Loading
+        // exactly as a removal does; a seat with a real opponent is kept. See CLAUDE.md, "Zones".
+        const unseated = await unseatWithoutOpponent(uid, seated, merges, wanted);
+
+        // Is there a generated draw in the zone they moved to that they'd belong to?
         const targetDrawExists = drawMatches.some((m) =>
           resolveMergedZone(effectiveZone(m.zone), merges) === wanted
           && m.tournament_choice === row.tournament_choice
           && (m.division === row.division || m.division === 'All')
           && (m.skill_group === band || m.skill_group === 'All'));
-        if (!targetDrawExists) continue; // case 2 — silent
-
-        await notify(ev.creator_id, {
+        const name = row.user_name || 'A player';
+        await notify(eventOrganizerUids(ev), {
           type: 'organizer_zone_change_request',
-          title: 'A player changed their zone',
-          body: `${row.user_name || 'A player'} moved to ${after.preferred_zone}. They stay in their current matches; place them in the new zone's draw when you're ready.`,
+          title: `${name} changed their zone`,
+          body: [
+            unseated > 0 ? `${name} moved to ${after.preferred_zone} and was taken out of ${unseated} old-zone match${unseated === 1 ? '' : 'es'} with no opponent yet.` : `${name} moved to ${after.preferred_zone}.`,
+            seated.length > unseated
+              ? 'They stay in the matches they already have an opponent for.'
+              : '',
+            targetDrawExists
+              ? 'Place them in the new zone\'s draw from Unplaced Players.'
+              : 'Nothing to do now: they join that zone\'s draw when it\'s generated.',
+          ].filter(Boolean).join(' '),
           link: `/tournament?event=${row.event_id}`,
         });
         logger.info(`Zone move: ${uid} → ${after.preferred_zone} in ${row.event_id}; organizer notified`);

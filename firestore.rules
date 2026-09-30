@@ -74,20 +74,47 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/public_contacts/$(userId));
     }
 
+    // A stringer or coach for this catalog provider. The role flag is checked as well as the id,
+    // and an empty id never matches: without both, any member with no id matched an empty one.
     function isProviderFor(providerId) {
-      return isAuthenticated() && providerId != null &&
+      return isAuthenticated() && providerId is string && providerId != '' &&
         (
-          get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.get('stringer_id', '') == providerId ||
-          get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.get('coach_id', '') == providerId
+          (get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.get('stringer', false) == true &&
+            get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.get('stringer_id', '') == providerId) ||
+          (get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.get('coach', false) == true &&
+            get(/databases/$(database)/documents/preferences/$(request.auth.uid)).data.get('coach_id', '') == providerId)
         );
     }
 
+    // The fields that make an account a provider. Only the super admin sets them: a self-made
+    // provider could read a real provider's bookings and be connected to every member who books.
+    function providerRoleFields() {
+      return ['stringer', 'stringer_id', 'coach', 'coach_id'];
+    }
+
+    // An event's organizers (Racquets-And-Strings ADR-001): the super admin, its creator and its
+    // organizer_ids. Same rule as isOrganizer() in functions/lib/roles.js — change both together.
     function isCreatorOfEvent(eventId) {
+      let e = get(/databases/$(database)/documents/events/$(eventId)).data;
       return isAuthenticated() &&
-        (
-          isGlobalEventCreator() ||
-          get(/databases/$(database)/documents/events/$(eventId)).data.creator_id == request.auth.uid
-        );
+        (isSuperAdmin() || e.creator_id == request.auth.uid || request.auth.uid in e.get('organizer_ids', []));
+    }
+
+    // ── Results are the server's ────────────────────────────────────
+    // Every result, and the points it pays, is written by the scoreMatch Cloud Function
+    // (functions/lib/scoring.js), which also checks the score. No client, organizer included,
+    // may write these fields on a match.
+    function resultFields() {
+      return [
+        'winner_uid', 'winner_name', 'walkover', 'no_show',
+        'set_1_player_1', 'set_1_player_2', 'set_2_player_1', 'set_2_player_2',
+        'set_3_player_1', 'set_3_player_2',
+        'reported_by', 'reported_at', 'confirmed_at', 'completed_at', 'score_edited_at',
+        'recorded_by_organizer', 'result_submissions', 'score_disputed', 'score_disputed_at', 'dispute_uid',
+        'applied', 'applied_at', 'applied_deltas', 'applied_winner_uid', 'applied_loser_delta',
+        'applied_counted_match', 'scoring_v2', 'points_winner', 'points_loser',
+        'rr_group_bonus_v2', 'rr_group_bonus_uids', 'rr_winner_pts_v2',
+      ];
     }
 
     // ===============================================================
@@ -131,19 +158,19 @@ service cloud.firestore {
     // ===============================================================
     // Stats Collection
     // ===============================================================
+    // Points and results are written only by functions/lib/scoring.js (Admin SDK). No client —
+    // not even an organizer — writes a scoring field; owners edit their profile fields only.
     match /stats/{userId} {
       allow read: if true;
-      allow create: if isGlobalEventCreator() ||
-        (isOwner(userId) &&
+      allow create: if (isOwner(userId) &&
           request.resource.data.leaguePoints26 == 0 &&
           request.resource.data.wins == 0 &&
           request.resource.data.loses == 0 &&
           request.resource.data.matchesPlayed == 0 &&
           request.resource.data.tournamentsPlayed == 0);
-      allow update: if isGlobalEventCreator() ||
-        (isOwner(userId) &&
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['skill_level', 'tournament_preference', 'name', 'uid', 'league']));
+      allow update: if isOwner(userId) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['skill_level', 'tournament_preference', 'name', 'uid', 'league']);
       allow delete: if false;
     }
 
@@ -152,10 +179,14 @@ service cloud.firestore {
     // ===============================================================
     match /preferences/{userId} {
       allow read: if true;
-      allow create: if isOwner(userId) && request.resource.data.event_creator == false;
+      // Provider role fields are checked with keys()/affectedKeys(), not equality: most docs don't
+      // carry them, and comparing a missing field errors, which would block every profile edit.
+      allow create: if isOwner(userId) && request.resource.data.event_creator == false &&
+        !request.resource.data.keys().hasAny(providerRoleFields());
       allow update: if isSuperAdmin() ||
         (isOwner(userId) &&
-          request.resource.data.event_creator == resource.data.event_creator);
+          request.resource.data.event_creator == resource.data.event_creator &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(providerRoleFields()));
       allow delete: if false;
     }
 
@@ -164,7 +195,13 @@ service cloud.firestore {
     // ===============================================================
     match /events/{eventId} {
       allow read: if true;
-      allow create, update: if isGlobalEventCreator();
+      // Who manages an event (creator_id, organizer_ids) decides who may act on its matches, so only
+      // the super admin may change it; an organizer creates an event with themselves as creator.
+      allow create: if isGlobalEventCreator() &&
+        (isSuperAdmin() || (request.resource.data.get('creator_id', request.auth.uid) == request.auth.uid &&
+          !('organizer_ids' in request.resource.data)));
+      allow update: if isGlobalEventCreator() &&
+        (isSuperAdmin() || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['creator_id', 'organizer_ids']));
       allow delete: if false;
     }
 
@@ -183,6 +220,12 @@ service cloud.firestore {
     // aggregateAdminMetrics.
     // ===============================================================
     match /admin_stats/{docId} {
+      allow read: if isGlobalEventCreator();
+      allow write: if false;
+    }
+
+    // Every result change (any match type), written only by scoreMatch. Organizers review it.
+    match /tournament_result_audit/{docId} {
       allow read: if isGlobalEventCreator();
       allow write: if false;
     }
@@ -223,12 +266,8 @@ service cloud.firestore {
           (
             resource.data.uid == request.auth.uid &&
             request.resource.data.event_id == resource.data.event_id &&
-            // `req_zone_change`/`new_zone` are the live pair. The `zone_change_*` names are legacy
-            // and only listed so the currently-deployed client keeps working; drop them once the
-            // new hosting build is out.
             request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'dateselected', 'req_zone_change', 'new_zone',
-              'zone_change_requested', 'zone_change_requested_at',
               'doubles', 'partner_in_app', 'skill'
             ])
           )
@@ -236,6 +275,27 @@ service cloud.firestore {
 
       allow delete: if isAuthenticated() &&
         (resource.data.uid == request.auth.uid || isCreatorOfEvent(resource.data.event_id));
+    }
+
+    // ===============================================================
+    // Doubles partner pool — subcollections, so each needs its own full-path rule.
+    // ===============================================================
+    // A player lists only themselves; they or an organizer remove the listing.
+    match /partner_pool/{eventId}/members/{uid} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(uid) &&
+        request.resource.data.keys().hasOnly(['uid', 'name', 'category', 'skill', 'created_at']) &&
+        request.resource.data.uid == uid &&
+        request.resource.data.category in ['mens', 'womens', 'mixed'];
+      allow update: if false;
+      allow delete: if isOwner(uid) || isCreatorOfEvent(eventId);
+    }
+
+    // Contact cards written by onPartnerPoolJoin. Readable only by players in the same pool.
+    match /partner_pool/{eventId}/contacts/{uid} {
+      allow read: if isAuthenticated() &&
+        exists(/databases/$(database)/documents/partner_pool/$(eventId)/members/$(request.auth.uid));
+      allow write: if false;
     }
 
     // ===============================================================
@@ -247,100 +307,65 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       allow create: if isAuthenticated() && (
-        // A player opens their own rally / challenge (incl. a proposed conversion).
+        // A player opens their own rally / challenge. A proposed conversion (a played tournament
+        // match offered as a challenge) carries its winner and games; accepting it records them.
         (
           request.resource.data.category in ['rally', 'challenge'] &&
           request.resource.data.player_1_uid == request.auth.uid &&
-          request.resource.data.status == 'open'
+          request.resource.data.status == 'open' &&
+          !request.resource.data.keys().hasAny(resultFields().removeAll(
+            ['winner_uid', 'winner_name', 'set_1_player_1', 'set_1_player_2', 'set_2_player_1',
+             'set_2_player_2', 'set_3_player_1', 'set_3_player_2']))
         ) ||
-        // A player files a score submission for a match they played.
+        // An organizer builds a draw. Matches start unplayed.
         (
-          request.resource.data.category == 'score_submission' &&
-          request.resource.data.submitted_by == request.auth.uid &&
-          request.resource.data.match_id is string
-        ) ||
-        ('event_id' in request.resource.data && isCreatorOfEvent(request.resource.data.event_id))
+          'event_id' in request.resource.data && isCreatorOfEvent(request.resource.data.event_id) &&
+          !(request.resource.data.get('status', 'pending') in ['complete', 'confirmed']) &&
+          !request.resource.data.keys().hasAny(resultFields())
+        )
       );
 
       allow update: if isAuthenticated() && (
-        // Recipient accepts / declines / rejects a still-open rally or challenge.
+        // Recipient accepts or declines a still-open rally or challenge. `declined` is the only
+        // word for a turned-down request. Accepting a proposed conversion goes through scoreMatch.
         (
           resource.data.category in ['rally', 'challenge'] &&
           resource.data.status == 'open' &&
           request.auth.uid == resource.data.player_2_uid &&
-          request.resource.data.status in ['accepted', 'declined', 'rejected'] &&
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['status', 'responded_at'])
+          request.resource.data.status in ['accepted', 'declined'] &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'responded_at'])
         ) ||
-        // Either player reports the result of an accepted challenge; the organizer confirms it.
-        (
-          resource.data.category == 'challenge' &&
-          resource.data.status == 'accepted' &&
-          (request.auth.uid == resource.data.player_1_uid || request.auth.uid == resource.data.player_2_uid) &&
-          request.resource.data.status == 'reported' &&
-          request.resource.data.diff(resource.data).affectedKeys()
-            // Result fields are the tournament shape; the claimed_*/score_line trio is legacy and
-            // stays only until the hosting build that stopped writing them is out.
-            .hasOnly(['status', 'winner_uid', 'winner_name',
-                      'set_1_player_1', 'set_1_player_2', 'set_2_player_1', 'set_2_player_2',
-                      'set_3_player_1', 'set_3_player_2',
-                      'claimed_winner_uid', 'claimed_winner_name', 'score_line',
-                      'court', 'reported_by', 'reported_at'])
-        ) ||
-        // Either player reports the result of an accepted rally (friendly).
-        (
-          resource.data.category == 'rally' &&
-          resource.data.status == 'accepted' &&
-          (request.auth.uid == resource.data.player_1_uid || request.auth.uid == resource.data.player_2_uid) &&
-          request.resource.data.status == 'reported' &&
-          request.resource.data.diff(resource.data).affectedKeys()
-            // Result fields are the tournament shape; the claimed_*/score_line trio is legacy and
-            // stays only until the hosting build that stopped writing them is out.
-            .hasOnly(['status', 'winner_uid', 'winner_name',
-                      'set_1_player_1', 'set_1_player_2', 'set_2_player_1', 'set_2_player_2',
-                      'set_3_player_1', 'set_3_player_2',
-                      'claimed_winner_uid', 'claimed_winner_name', 'score_line',
-                      'court', 'reported_by', 'reported_at'])
-        ) ||
-        // A SECOND party confirms that report — the other player, or any admin. The
-        // `reported_by` check is the whole security of friendly points: without it one player
-        // reports themselves the winner, confirms it, and mints points on demand. Points are paid
-        // by functions/friendlyPoints.js on this transition; no client may write leaguePoints26.
-        (
-          resource.data.category == 'rally' &&
-          resource.data.status == 'reported' &&
-          request.auth.uid != resource.data.reported_by &&
-          (
-            request.auth.uid == resource.data.player_1_uid ||
-            request.auth.uid == resource.data.player_2_uid ||
-            isGlobalEventCreator()
-          ) &&
-          request.resource.data.status in ['confirmed', 'disputed'] &&
-          request.resource.data.diff(resource.data).affectedKeys()
-            // `completed_at` is stamped here too — a confirm is the moment a friendly becomes a
-            // played result. Omitting it rejected every confirm, which is the payout transition.
-            .hasOnly(['status', 'confirmed_at', 'confirmed_by', 'completed_at'])
-        ) ||
-        // Either player proposes / confirms a match time.
+        // Either player proposes / confirms a match time, or asks the other to arrange one.
+        // `schedule_requested_by` names the asker: the trigger needs it to work out who to notify,
+        // and the feed needs it to show that person's contact buttons.
         (
           (request.auth.uid == resource.data.player_1_uid || request.auth.uid == resource.data.player_2_uid) &&
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['schedule_status', 'proposed_date', 'proposed_slot', 'proposed_by', 'schedule_requested'])
+            .hasOnly(['schedule_status', 'proposed_date', 'proposed_slot', 'proposed_by',
+                      'schedule_requested', 'schedule_requested_by'])
         ) ||
-        ('event_id' in resource.data && isCreatorOfEvent(resource.data.event_id))
+        // An organizer edits the draw (players, slots, groups), never a result.
+        (
+          'event_id' in resource.data && isCreatorOfEvent(resource.data.event_id) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(resultFields()) &&
+          request.resource.data.get('status', 'pending') == resource.data.get('status', 'pending')
+        )
       );
 
       allow delete: if isAuthenticated() && (
-        // Sender retracts their own still-open rally / challenge.
+        // Sender retracts their own still-open rally / challenge. Once accepted, EITHER player may
+        // call it off until a score is in (the Player Dash's Cancel). Nothing is paid before a
+        // result, so a delete leaves no points to reverse.
         (
           resource.data.category in ['rally', 'challenge'] &&
-          resource.data.status == 'open' &&
-          request.auth.uid == resource.data.player_1_uid
-        ) ||
-        // Submitter retracts their own score submission (organizer confirm also deletes it).
-        (
-          resource.data.category == 'score_submission' &&
-          request.auth.uid == resource.data.submitted_by
+          (
+            (resource.data.status == 'open' && request.auth.uid == resource.data.player_1_uid) ||
+            (
+              resource.data.status == 'accepted' &&
+              resource.data.get('winner_uid', '') == '' &&
+              (request.auth.uid == resource.data.player_1_uid || request.auth.uid == resource.data.player_2_uid)
+            )
+          )
         ) ||
         ('event_id' in resource.data && isCreatorOfEvent(resource.data.event_id))
       );
@@ -378,7 +403,7 @@ service cloud.firestore {
         request.resource.data.court_key is string &&
         request.resource.data.photo_paths is list &&
         request.resource.data.note is string &&
-        request.resource.data.note.size() > 0 &&
+        (request.resource.data.type != 'condition' || request.resource.data.note.size() > 0) &&
         request.resource.data.status == 'approved' &&
         (
           (isAuthenticated() && request.resource.data.uid == request.auth.uid) ||
@@ -388,13 +413,81 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Mailing List
+    // Volunteer sign-ups
     // ===============================================================
-    match /mailing_list/{id} {
+    // Fed by the homepage "Volunteer with Us" form (src/lib/volunteer.ts). Open to signed-out
+    // visitors, because volunteering is the whole point of the form. The whitelist is what stops
+    // a stranger writing a row in someone else's name: 'uid' may only be present when it equals
+    // the caller's own auth uid.
+    match /volunteer_signups/{signupId} {
       allow create: if
+        request.resource.data.keys().hasOnly(['email', 'activity', 'note', 'uid', 'user_name', 'source', 'created_at']) &&
         request.resource.data.email is string &&
         request.resource.data.email.size() > 0 &&
-        request.resource.data.email.size() < 320;
+        request.resource.data.email.size() < 320 &&
+        request.resource.data.activity is string &&
+        request.resource.data.activity.size() > 0 &&
+        request.resource.data.activity.size() < 60 &&
+        (!('note' in request.resource.data) ||
+          (request.resource.data.note is string && request.resource.data.note.size() < 2000)) &&
+        (!('uid' in request.resource.data) ||
+          (isAuthenticated() && request.resource.data.uid == request.auth.uid));
+      allow read, update, delete: if isGlobalEventCreator();
+    }
+
+    // ===============================================================
+    // Court improvement notes (open to signed-out visitors)
+    // ===============================================================
+    // Same shape as volunteer_signups: create is open so a passer-by can report a broken net
+    // without an account; only organizers read the list. It is NOT a `courts` doc — `courts` is
+    // members-only and pays points, and a stranger's note must not reach that.
+    match /court_improvements/{noteId} {
+      allow create: if
+        request.resource.data.keys().hasOnly(['court', 'note', 'email', 'uid', 'user_name', 'photo_paths', 'source', 'created_at']) &&
+        (!('photo_paths' in request.resource.data) ||
+          (request.resource.data.photo_paths is list && request.resource.data.photo_paths.size() <= 3)) &&
+        request.resource.data.court is string &&
+        request.resource.data.court.size() > 0 &&
+        request.resource.data.court.size() < 200 &&
+        request.resource.data.note is string &&
+        request.resource.data.note.size() > 0 &&
+        request.resource.data.note.size() < 2000 &&
+        (!('email' in request.resource.data) ||
+          (request.resource.data.email is string && request.resource.data.email.size() < 320)) &&
+        (!('uid' in request.resource.data) ||
+          (isAuthenticated() && request.resource.data.uid == request.auth.uid));
+      allow read, update, delete: if isGlobalEventCreator();
+    }
+
+    // ===============================================================
+    // Mailing list — the one list, fed by the homepage Subscribe button (source 'newsletter') and
+    // the court report form (source 'court report submission'). src/lib/newsletter.ts.
+    // Two shapes, kept apart by the field whitelist:
+    //   - a signed-in member owns ONE row keyed by their uid, carrying uid + user_name, so
+    //     re-subscribing overwrites instead of duplicating them;
+    //   - anyone else adds an anonymous auto-id row carrying only an email. That path cannot
+    //     write a uid, so nobody can forge a row in someone else's name.
+    // ===============================================================
+    match /mailing_list/{subscriberId} {
+      function validSubscriber() {
+        return request.resource.data.email is string &&
+          request.resource.data.email.size() > 0 &&
+          request.resource.data.email.size() < 320 &&
+          request.resource.data.source is string;
+      }
+      // Member row: id must be the caller's own uid, and the uid field must match it.
+      allow create, update: if isAuthenticated() &&
+        subscriberId == request.auth.uid &&
+        request.resource.data.keys().hasOnly(['email', 'uid', 'user_name', 'source', 'created_at']) &&
+        request.resource.data.uid == request.auth.uid &&
+        validSubscriber();
+      // Anonymous row: open to signed-out visitors, because subscribing is the whole point of the
+      // form. hasOnly() is a whitelist, not a blacklist — see CLAUDE.md, "Security rules".
+      allow create: if
+        request.resource.data.keys().hasOnly(['email', 'source', 'created_at']) &&
+        validSubscriber();
+      // A member may read their own row only — the app hides Subscribe once it exists.
+      allow get: if isAuthenticated() && subscriberId == request.auth.uid;
       allow read, update, delete: if isGlobalEventCreator();
     }
 
@@ -432,6 +525,21 @@ service cloud.firestore {
     }
 
     // ===============================================================
+    // Bookings
+    // ===============================================================
+    // Written only by the booking callables (functions/bookings.js, rewards.js). Readable by the
+    // member, the booking's provider and organizers; the app queries on uid or provider_id.
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated() &&
+        (
+          resource.data.uid == request.auth.uid ||
+          isProviderFor(resource.data.provider_id) ||
+          isGlobalEventCreator()
+        );
+      allow write: if false;
+    }
+
+    // ===============================================================
     // Marketplace Listings
     // ===============================================================
     match /listings/{id} {
@@ -456,14 +564,6 @@ service cloud.firestore {
         request.resource.data.status == 'pending';
       allow update: if isGlobalEventCreator();
       allow delete: if false;
-    }
-
-    // ===============================================================
-    // Group Lessons (monthly roster — server-only writes)
-    // ===============================================================
-    match /group_lessons/{month} {
-      allow read: if true;
-      allow write: if false;
     }
 
     // ===============================================================

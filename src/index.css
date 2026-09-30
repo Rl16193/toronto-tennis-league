@@ -14,6 +14,11 @@
   /* Clay stays the accent color in both themes — only the neutrals below flip. */
   --color-clay: #FF6B35;
   --color-clay-dark: #E84A27;
+  /* CTA accent — Donate / Subscribe / Volunteer ONLY. The label is always `text-ink` (fixed
+     dark green), never `text-fg`, because the lime fill is light in BOTH themes. Ink on lime
+     measures ~9.5:1 dark and ~5.5:1 light. Do not reach for lime for anything else. */
+  --color-lime: #d4f542;
+  --color-lime-press: #c2e532;
   --color-tennis-dark: #143D34;
   --color-tennis-surface: #143D34;
   --color-tennis-deep: #0B3027;
@@ -48,6 +53,9 @@
   --color-tennis-deep: #DEDED5;
   --color-nav: #EDEDE7;
   --color-fg: #143D34;
+  /* Deepened so the CTA still separates from the light page (#EDEDE7); ink stays readable. */
+  --color-lime: #8fbf1a;
+  --color-lime-press: #7ea814;
   --color-badge: #92400e;
   --color-badge-win: #15803d;
   --color-badge-loss: #b91c1c;
@@ -72,6 +80,11 @@
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-display font-bold;
+  }
+  /* Tailwind's default placeholder is 50% of the text colour, a step dimmer than the two text
+     tiers allow (CLAUDE.md, "Text colour"). Bare inputs get the secondary tier instead. */
+  ::placeholder {
+    color: color-mix(in oklab, currentcolor 70%, transparent);
   }
 }
 
@@ -109,10 +122,10 @@ select, option, optgroup {
   color: var(--color-fg);
 }
 .iti__search-input::placeholder {
-  color: color-mix(in srgb, var(--color-fg) 50%, transparent);
+  color: color-mix(in srgb, var(--color-fg) 70%, transparent);
 }
 .iti__no-results {
-  color: color-mix(in srgb, var(--color-fg) 60%, transparent);
+  color: color-mix(in srgb, var(--color-fg) 70%, transparent);
 }
 .iti__selected-country-primary {
   color: var(--color-fg);

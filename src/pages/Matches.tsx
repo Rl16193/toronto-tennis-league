@@ -1,41 +1,40 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { skillBand } from '../utils/skillLevels';
 import { useSearchParams } from 'react-router-dom';
 import { collection, getDocs } from 'firebase/firestore';
-import { Check, Dices, X } from 'lucide-react';
+import { Check, Dices, Plus, X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { fadeUp, staggerDelay, tapScale } from '../lib/motion';
 import { lazyWithRetry } from '../lib/lazyWithRetry';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/Button';
+import { Fab } from '../components/Fab';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { useUserMatches } from '../features/matches/useUserMatches';
 import { RacquetIcon } from '../components/RacquetIcon';
 import { ContactOpponentButton, pillButtonCls } from '../components/ContactOpponentButton';
 import { PlayerCard, RankMove } from '../components/PlayerCard';
-import { ScoreModal } from './tournament/ScoreModal';
+import { ScoreModal } from '../features/matches/ScoreModal';
 import { ScoreForm } from './tournament/types';
-import { DivTab, LeagueRow, inDivision, pgWinPct, toTitleCase, useStandings } from '../features/leagues/useStandings';
-import { cancelRally, createRally, reportRally, resolveRally, respondRally, useRallies } from '../features/friendlies/rallyService';
-import { fetchEvents } from '../features/events/services/eventService';
-import { isLadderEvent } from '../utils/eventTypes';
-import { TennisEvent } from '../types';
-import { createChallenge, cancelChallenge, respondChallenge, reportChallenge, confirmChallenge, rejectChallenge, LadderChallenge, LadderDivision } from '../features/leagues/ladderService';
-import { useLadder } from '../features/leagues/useLadder';
-import { useCrossEventConflicts } from '../features/leagues/useCrossEventConflicts';
-import { isReadyForMatches } from '../features/leagues/useChallengeRules';
-import { formatSetScores, skillBand } from './tournament/utils';
+import { LeagueRow, abbreviatePlayerName, byLeagueRank, inDivision, pgWinPct, useStandings } from '../features/leagues/useStandings';
+import { cancelRally, createRally, respondRally, useRallies } from '../features/rallies/rallyService';
+import { cancelChallenge, respondChallenge, LadderDivision } from '../features/leagues/ladderService';
+import { useRequestScoring } from '../features/matches/useRequestScoring';
+import { recordScore, resultFromForm } from '../features/matches/scoring';
+import { isReadyForMatches, useChallengeRules } from '../features/leagues/useChallengeRules';
+
 // Lazy: the tournament subsystem (useTournament.ts alone is ~2k lines, plus the draw engine and
 // ~20 components) was the bulk of this route's bundle, shipped even to people who only open
-// Friendlies or Challenges.
+// Rallies or Challenges.
 const Tournament = lazyWithRetry(() => import('./Tournament').then((m) => ({ default: m.Tournament })), 'Tournament');
 import { CompleteProfileModal } from '../features/profile/components/CompleteProfileModal';
 import { AvailabilityModal } from '../features/profile/components/AvailabilityModal';
-import { sharesCourt } from '../utils/courtOverlap';
+import { sharesCourt } from '../components/NearbyPill';
 import { NearbyPill } from '../components/NearbyPill';
 import { AvailabilityPills } from '../components/AvailabilityPills';
 
-type Mode = 'tournament' | 'friendlies' | 'challenges';
+type Mode = 'tournament' | 'rallies' | 'challenges';
 
 // `isReadyForMatches` now lives in features/leagues/useChallengeRules so the Leaderboard's
 // Challenge button gates on exactly the same rule (see the import above).
@@ -89,7 +88,7 @@ const refreshPool = (uid: string, mode: Mode, extended: LeagueRow[], requestedId
   return top;
 };
 
-// Deterministic pseudo-random in [0,1) from a string seed — used to give the Friendlies pool a
+// Deterministic pseudo-random in [0,1) from a string seed — used to give the Rallies pool a
 // stable-for-the-week tiebreak among equally-active players (so the 12 shown can rotate weekly
 // without jittering on every reload).
 const seededRand = (seed: string): number => {
@@ -98,11 +97,11 @@ const seededRand = (seed: string): number => {
   return (h >>> 0) / 4294967296;
 };
 
-// One "Matches" hub: Friendlies (non-competitive) and Challenges (competitive) tabs.
+// One "Matches" hub: Rallies (non-competitive) and Challenges (competitive) tabs.
 //
 // Four explicit filters, not an automatic tier waterfall — "why is this person on my list?" needs
 // an answer the player can see. The BASE POOL differs per tab: Challenges is locked to the
-// viewer's league (points only mean something within a division); Friendlies is cross-league.
+// viewer's league (points only mean something within a division); Rallies is cross-league.
 type PlayerFilter = 'nearby' | 'new' | 'played' | 'rematch';
 const PLAYER_FILTERS: { value: PlayerFilter; label: string }[] = [
   { value: 'new', label: 'New' },
@@ -124,9 +123,10 @@ const ALLOCATION_ORDER: Exclude<PlayerFilter, 'rematch'>[] = ['nearby', 'new', '
 export const Matches: React.FC = () => {
   const { user, profile } = useAuth();
   const [searchParams] = useSearchParams();
-  const initialMode = searchParams.get('mode');
+  // `friendlies` is the tab's old name, still in links sent before the rename.
+  const initialMode = searchParams.get('mode') === 'friendlies' ? 'rallies' : searchParams.get('mode');
   const [mode, setMode] = useState<Mode>(
-    initialMode === 'challenges' || initialMode === 'friendlies' ? initialMode : 'tournament',
+    initialMode === 'challenges' || initialMode === 'rallies' ? initialMode : 'tournament',
   );
   const [showCompleteProfile, setShowCompleteProfile] = useState(false);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
@@ -141,29 +141,29 @@ export const Matches: React.FC = () => {
   const [playerFilter, setPlayerFilter] = useState<PlayerFilter>('nearby');
   const [expandedUid, setExpandedUid] = useState<string | null>(null);
 
-  // The single active league ladder (one per league).
-  const [ladder, setLadder] = useState<TennisEvent | null>(null);
-  const { challenges, myChallenges, incoming, contactMap, stateWith, acceptedPartnerIds: acceptedChallengePartnerIds, activeChallengesLeft } = useLadder(ladder?.id, user?.uid);
+  // The active ladder, the viewer's division and every "may I challenge them?" rule come from
+  // useChallengeRules, the same hook the Leaderboard uses.
+  const { ladder, myDivision, blockReason, challenge, ladderState } = useChallengeRules();
+  const { challenges, myChallenges, incoming, contactMap, stateWith, acceptedPartnerIds: acceptedChallengePartnerIds } = ladderState;
   // Completed matches, for the Re-Match filter's "who have I already played" list.
   const { matches } = useUserMatches(user?.uid);
-  // One ScoreModal serves both flows; `kind` decides what submitting does. A Challenge reports
-  // straight onto the existing challenge doc; a Friendly instead proposes a conversion to a new
-  // Challenge, which the other player has to confirm before it counts.
-  // `viewerIsP1` is captured when the modal opens: the modal is always "me vs them", but the doc
-  // stores sets as player_1/player_2, so the submit handler needs to know which slot I hold.
-  const [scoreTarget, setScoreTarget] = useState<{ kind: 'challenge' | 'friendly'; uid: string; name: string; viewerIsP1: boolean } | null>(null);
-  const [scoreForm, setScoreForm] = useState<ScoreForm | null>(null);
-  const closeScore = () => { setScoreForm(null); setScoreTarget(null); };
-  // Guards the organizer review row so confirm/reject can't be double-fired.
-  const [reviewBusy, setReviewBusy] = useState<string | null>(null);
-  // Anti double-farming: block challenging someone already faced in another still-active event.
-  const conflicts = useCrossEventConflicts(user?.uid, ladder?.id);
+
+  // Organizer-only: record a match two OTHER members already played, as a challenge or a rally.
+  // Two steps — pick the pair, then the same ScoreModal every other result goes through. It is
+  // written complete, so the pair never see an invitation and the points land on write.
+  const [recordStep, setRecordStep] = useState<'closed' | 'players' | 'score'>('closed');
+  const [recordKind, setRecordKind] = useState<'challenge' | 'rally'>('challenge');
+  const [recordPair, setRecordPair] = useState<LeagueRow[]>([]);
+  const [recordSearch, setRecordSearch] = useState('');
+  const [recordForm, setRecordForm] = useState<ScoreForm | null>(null);
+  const [recordMsg, setRecordMsg] = useState<string | null>(null);
+  const closeRecord = () => {
+    setRecordStep('closed'); setRecordPair([]); setRecordSearch('');
+    setRecordForm(null); setRecordMsg(null);
+  };
 
   useEffect(() => { document.title = 'Matches · Racquets & Strings'; }, []);
   useEffect(() => { if (user?.uid) setRand(loadRandState(user.uid, mode)); }, [user?.uid, mode]);
-  useEffect(() => {
-    fetchEvents().then((all) => setLadder(all.filter((e) => isLadderEvent(e))[0] ?? null)).catch(() => {});
-  }, []);
   // Signup date per member, for the "New" filter. `created_at` lives on `users`, which this page
   // didn't otherwise read.
   useEffect(() => {
@@ -178,7 +178,7 @@ export const Matches: React.FC = () => {
     }).catch(() => { /* New falls back to activity ordering */ });
   }, []);
   // Everyone's preferred courts + availability tags — public preferences, read once for the
-  // Friendlies court-overlap check and for showing each row's own availability pills.
+  // Rallies court-overlap check and for showing each row's own availability pills.
   useEffect(() => {
     getDocs(collection(db, 'preferences')).then((snap) => {
       const courts: Record<string, string[]> = {};
@@ -196,28 +196,18 @@ export const Matches: React.FC = () => {
   }, []);
 
   const myName = profile?.user.name || '';
-  const myDivision: DivTab | null = useMemo(() => {
-    const league = profile?.stats?.league || '';
-    if (inDivision(league, 'mens')) return 'mens';
-    if (inDivision(league, 'womens')) return 'womens';
-    return null;
-  }, [profile?.stats?.league]);
+  // One score sheet for both tabs, shared with the Player Dash (features/matches/useRequestScoring).
+  const scoring = useRequestScoring(user ? { uid: user.uid, name: myName } : null);
 
   // Challenges base pool: same league as the viewer only (no cross-league challenges), sorted
   // best-rank-first — also doubles as the rank lookup for the "#12" shown next to skill.
   const divisionRanked = useMemo(
     () => [...rows.filter((r) => !myDivision || inDivision(r.league, myDivision))]
-      .sort((a, b) => b.leaguePoints26 - a.leaguePoints26 || b.matchesPlayed - a.matchesPlayed || a.name.localeCompare(b.name)),
+      .sort(byLeagueRank),
     [rows, myDivision],
   );
-  const rankIndexByUid = useMemo(() => {
-    const m = new Map<string, number>();
-    divisionRanked.forEach((r, i) => m.set(r.user_id, i));
-    return m;
-  }, [divisionRanked]);
-  const myRankIdx = user ? (rankIndexByUid.get(user.uid) ?? -1) : -1;
 
-  // Friendlies base pool: everyone, every league — casual play doesn't care about division.
+  // Rallies base pool: everyone, every league — casual play doesn't care about division.
   const allLeaguesPool = useMemo(
     () => rows.filter((r) => r.user_id && r.user_id !== user?.uid && r.name),
     [rows, user?.uid],
@@ -283,13 +273,13 @@ export const Matches: React.FC = () => {
     return mine;
   }, [playerFilter, isNearby, sortFor, lastPlayedByUid]);
 
-  const friendliesExtended = useMemo(() => applyFilter(allLeaguesPool), [applyFilter, allLeaguesPool]);
+  const ralliesExtended = useMemo(() => applyFilter(allLeaguesPool), [applyFilter, allLeaguesPool]);
   // "Requested" = a rally you've ever sent them, any status — that's what exempts them from the
   // weekly refresh below.
-  const friendliesRequestedIds = useMemo(() => new Set(sent.map((r) => r.player_2_uid)), [sent]);
-  const friendliesPool = useMemo(
-    () => (user ? refreshPool(user.uid, 'friendlies', friendliesExtended, friendliesRequestedIds) : friendliesExtended.slice(0, POOL_SIZE)),
-    [user, friendliesExtended, friendliesRequestedIds, week],
+  const ralliesRequestedIds = useMemo(() => new Set(sent.map((r) => r.player_2_uid)), [sent]);
+  const ralliesPool = useMemo(
+    () => (user ? refreshPool(user.uid, 'rallies', ralliesExtended, ralliesRequestedIds) : ralliesExtended.slice(0, POOL_SIZE)),
+    [user, ralliesExtended, ralliesRequestedIds, week],
   );
 
   // Challenges uses the same filter, just over the viewer's own league.
@@ -307,33 +297,32 @@ export const Matches: React.FC = () => {
     [user, challengesExtended, challengesRequestedIds, week],
   );
 
-  const people = mode === 'challenges' ? challengesPool : friendliesPool;
+  const people = mode === 'challenges' ? challengesPool : ralliesPool;
   // Re-roll source: each tab keeps drawing from its own full tiered candidate list (not just the
   // initial top 12), so a re-roll still respects that tab's pool and tiering.
-  const rerollSource = mode === 'challenges' ? challengesExtended : friendliesExtended;
+  const rerollSource = mode === 'challenges' ? challengesExtended : ralliesExtended;
 
   const rowById = useMemo(() => new Map(rows.map((r) => [r.user_id, r])), [rows]);
 
   /**
-   * Everyone the viewer has a LIVE match with on the current tab — open, accepted or reported.
-   * These used to live in their own list above the player grid; that list is gone and the state
-   * now shows inside the person's own row.
+   * Everyone the viewer has a LIVE match with on the current tab — open or accepted. These used
+   * to live in their own list above the player grid; that list is gone and the state now shows
+   * inside the person's own row.
    *
-   * It must cover every non-terminal state, not just `open`. The row is the only place Score,
-   * Confirm and Dispute exist, so un-pinning at `accepted` made an agreed match unscoreable the
-   * moment it was agreed — the person simply vanished unless they happened to sit in the current
-   * filter's ten. Pinned until the match is confirmed/rejected (challenge) or
-   * confirmed/declined/disputed (rally), or the request is cancelled.
+   * It must cover every non-terminal state, not just `open`. The row is the only place Score
+   * exists, so un-pinning at `accepted` made an agreed match unscoreable the moment it was
+   * agreed — the person simply vanished unless they happened to sit in the current filter's ten.
+   * Pinned until the result is recorded or the request is declined or cancelled.
    */
   const liveMatchUids = useMemo(() => {
     const ids = new Set<string>();
-    if (mode === 'friendlies') {
+    if (mode === 'rallies') {
       // rallyWith is already keyed by opponent and already excludes finished rallies.
       Object.keys(rallyWith).forEach((id) => ids.add(id));
     } else {
       // player_1 is the challenger, player_2 the person challenged — so the "other" person
-      // depends on which list it came from. Both lists are `open` only; accepted and reported
-      // challenges come from acceptedChallengePartnerIds.
+      // depends on which list it came from. Both lists are `open` only; accepted challenges come
+      // from acceptedChallengePartnerIds.
       incoming.forEach((c) => ids.add(c.player_1_uid));
       myChallenges.forEach((c) => ids.add(c.player_2_uid));
       acceptedChallengePartnerIds.forEach((id) => ids.add(id));
@@ -394,65 +383,22 @@ export const Matches: React.FC = () => {
     try { await createRally({ id: user.uid, name: myName }, to); } finally { setBusy(null); }
   };
   const sendChallenge = async (to: LeagueRow) => {
-    if (!ladder || !myDivision) return;
     setBusy(to.user_id);
-    try {
-      await createChallenge({
-        eventId: ladder.id,
-        division: myDivision as LadderDivision,
-        challenger: { id: user.uid, name: myName },
-        opponent: { id: to.user_id, name: to.name },
-      });
-    } finally { setBusy(null); }
+    try { await challenge(to); } finally { setBusy(null); }
   };
 
-  // Same ScoreModal for both tabs — a friendly reports against its rally doc, a challenge against
-  // its challenge doc. Neither pays until a second party confirms.
-  const blankScoreForm = (matchDocId: string): ScoreForm => ({
-    matchDocId,
-    winnerUserId: '',
-    sets: [{ mine: '', opponent: '' }, { mine: '', opponent: '' }, { mine: '', opponent: '' }],
-    court: '',
-  });
-
-  const openFriendlyScore = (opponent: { user_id: string; name: string }) => {
+  // Same score sheet for both tabs — a rally records against its rally doc, a challenge against
+  // its challenge doc. Both pay the moment they are written; the Cloud Function on that
+  // transition is what moves leaguePoints26, since no client may write it.
+  const openRallyScore = (opponent: { user_id: string; name: string }) => {
     // The score is reported against the rally doc itself, so it needs the real id.
     const rally = rallyWith[opponent.user_id];
     if (!rally) return;
-    setScoreTarget({
-      kind: 'friendly', uid: opponent.user_id, name: opponent.name,
+    scoring.open({
+      kind: 'rally', docId: rally.id,
+      opponent: { uid: opponent.user_id, name: opponent.name },
       viewerIsP1: rally.player_1_uid === user.uid,
     });
-    setScoreForm(blankScoreForm(rally.id));
-  };
-
-  /**
-   * The modal always shows the viewer as "mine", but the doc stores sets absolutely as
-   * player_1/player_2 — the same shape a tournament match uses. Orient here, once, so no reader
-   * ever has to know whose viewpoint a score was entered from.
-   */
-  const orientedSets = (sets: ScoreForm['sets'], viewerIsP1: boolean): [number, number][] =>
-    sets
-      .map((s) => ({ mine: Number(s.mine || 0), opponent: Number(s.opponent || 0) }))
-      .filter((s) => s.mine > 0 || s.opponent > 0)
-      .map((s) => (viewerIsP1 ? [s.mine, s.opponent] : [s.opponent, s.mine]) as [number, number]);
-
-  // Reports the score on the rally doc. Pays nothing yet — a second party (the other player, or
-  // an admin) confirms, and functions/friendlyPoints.js pays 2/1 on that transition.
-  const handleFriendlyScoreSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!scoreForm || !scoreTarget || !scoreForm.winnerUserId || !scoreForm.matchDocId) return;
-    const parsedSets = scoreForm.sets.map((s) => ({ mine: Number(s.mine || 0), opponent: Number(s.opponent || 0) }));
-    if (parsedSets.some((s) => !Number.isInteger(s.mine) || !Number.isInteger(s.opponent) || s.mine < 0 || s.opponent < 0)) return;
-    const winnerName = scoreForm.winnerUserId === user.uid ? myName : scoreTarget.name;
-    await reportRally(
-      scoreForm.matchDocId,
-      { id: scoreForm.winnerUserId, name: winnerName },
-      orientedSets(scoreForm.sets, scoreTarget.viewerIsP1),
-      user.uid,
-      scoreForm.court.trim() || undefined,
-    );
-    closeScore();
   };
 
   // Score entry for an accepted challenge — same ScoreModal the tournament bracket uses.
@@ -462,32 +408,51 @@ export const Matches: React.FC = () => {
       ((c.player_1_uid === user.uid && c.player_2_uid === opponent.user_id) ||
         (c.player_2_uid === user.uid && c.player_1_uid === opponent.user_id)));
     if (!ch) return;
-    setScoreTarget({
-      kind: 'challenge', uid: opponent.user_id, name: opponent.name,
+    scoring.open({
+      kind: 'challenge', docId: ch.id,
+      opponent: { uid: opponent.user_id, name: opponent.name },
       viewerIsP1: ch.player_1_uid === user.uid,
     });
-    setScoreForm(blankScoreForm(ch.id));
   };
 
-  const handleChallengeScoreSubmit = async (e: React.FormEvent) => {
+  // Organizer: recording a match two other members played. Settling disputes moved to the
+  // Organizer Dash (/profile?dash=organizer), which is now the only place they are listed.
+  const isOrganizer = profile?.preferences?.event_creator === true;
+
+  const recordCandidates = useMemo(() => {
+    const q = recordSearch.trim().toLowerCase();
+    const chosen = new Set(recordPair.map((r) => r.user_id));
+    return rows
+      .filter((r) => !chosen.has(r.user_id) && (!q || r.name.toLowerCase().includes(q)))
+      .slice(0, 8);
+  }, [rows, recordSearch, recordPair]);
+
+  const handleRecordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!scoreForm || !scoreTarget || !scoreForm.winnerUserId) return;
-    const parsedSets = scoreForm.sets.map((s) => ({ mine: Number(s.mine || 0), opponent: Number(s.opponent || 0) }));
-    if (parsedSets.some((s) => !Number.isInteger(s.mine) || !Number.isInteger(s.opponent) || s.mine < 0 || s.opponent < 0)) return;
-    const winnerName = scoreForm.winnerUserId === user.uid ? myName : scoreTarget.name;
-    await reportChallenge(
-      scoreForm.matchDocId,
-      { id: scoreForm.winnerUserId, name: winnerName },
-      orientedSets(scoreForm.sets, scoreTarget.viewerIsP1),
-      user.uid,
-      scoreForm.court.trim() || undefined,
-    );
-    closeScore();
+    const [p1, p2] = recordPair;
+    if (!recordForm || !p1 || !p2) return;
+    // The organizer is neither player, so the modal's "mine" side IS player 1.
+    const players = {
+      player_1_uid: p1.user_id, player_1_name: p1.name,
+      player_2_uid: p2.user_id, player_2_name: p2.name,
+    };
+    try {
+      if (recordKind === 'rally') {
+        await recordScore({ newMatch: { category: 'rally', ...players } }, resultFromForm(recordForm, true));
+      } else {
+        if (!ladder) { setRecordMsg('There is no active league ladder to record a challenge in.'); return; }
+        // Division follows the players, not the organizer — an organizer records for either league.
+        const division: LadderDivision | null = inDivision(p1.league, 'mens') ? 'mens'
+          : inDivision(p1.league, 'womens') ? 'womens' : null;
+        if (!division) { setRecordMsg(`${abbreviatePlayerName(p1.name)} has no league set, so this can’t be a challenge.`); return; }
+        await recordScore({ newMatch: { category: 'challenge', event_id: ladder.id, division, ...players } }, resultFromForm(recordForm, true));
+      }
+    } catch (err) {
+      setRecordMsg(err instanceof Error ? err.message : 'Could not record that match.');
+      return;
+    }
+    closeRecord();
   };
-
-  // Only OPEN rallies show here — once accepted, the request row disappears from this panel and
-  // a Contact button takes its place inline in the players list below.
-  const reportedChallenges = challenges.filter((c) => c.status === 'reported');
 
   return (
     <div className="max-w-xl mx-auto px-4 pb-20 pt-4">
@@ -497,7 +462,7 @@ export const Matches: React.FC = () => {
         options={[
           { value: 'tournament', label: 'Tournament' },
           { value: 'challenges', label: 'Challenges' },
-          { value: 'friendlies', label: 'Friendlies' },
+          { value: 'rallies', label: 'Rallies' },
         ]}
         value={mode}
         onChange={setMode}
@@ -539,53 +504,11 @@ export const Matches: React.FC = () => {
         </div>
       )}
 
-      {/* Organizer queue — reported results awaiting confirm/reject. */}
-      {mode === 'challenges' && ladder?.creator_id === user.uid && reportedChallenges.length > 0 && (
-        <div className="rounded-3xl border border-amber-400/30 bg-amber-400/5 overflow-hidden divide-y divide-amber-400/10 mb-5">
-          <p className="text-xs font-bold text-badge uppercase tracking-widest px-4 pt-3">Needs your review</p>
-          {reportedChallenges.map((c) => (
-            <div key={c.id} className="flex items-center gap-3 px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-fg truncate">{toTitleCase(c.player_1_name)} vs {toTitleCase(c.player_2_name)}</p>
-                <p className="text-[11px] text-fg/70">
-                  Winner: {toTitleCase(c.winner_name || '—')}{formatSetScores(c) ? ` · ${formatSetScores(c)}` : ''}{c.court ? ` · ${c.court}` : ''}
-                </p>
-              </div>
-              {/* Both actions are disabled while one is in flight. confirmChallenge is now
-                  idempotent server-side too, but a double-tap shouldn't fire two transactions
-                  in the first place — and the review row disappears a beat after confirming. */}
-              <div className="flex gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  disabled={reviewBusy === c.id}
-                  onClick={async () => {
-                    setReviewBusy(c.id);
-                    try { await confirmChallenge(c); } finally { setReviewBusy(null); }
-                  }}
-                  className="p-2.5 rounded-xl bg-green-500/15 text-badge-win hover:bg-green-500/25 transition-colors disabled:opacity-40"
-                  aria-label="Confirm result"
-                ><Check className="w-4 h-4" /></button>
-                <button
-                  type="button"
-                  disabled={reviewBusy === c.id}
-                  onClick={async () => {
-                    setReviewBusy(c.id);
-                    try { await rejectChallenge(c.id); } finally { setReviewBusy(null); }
-                  }}
-                  className="p-2.5 rounded-xl bg-red-500/15 text-badge-loss hover:bg-red-500/25 transition-colors disabled:opacity-40"
-                  aria-label="Reject result"
-                ><X className="w-4 h-4" /></button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-2">
         {budgetLeft} of {RAND_SLOTS_PER_WEEK} randomizes left this week
       </p>
-      {mode === 'friendlies' && (
-        <p className="text-[11px] text-fg/70 mb-2">Submit the score to record a friendly match, both players get points.</p>
+      {mode === 'rallies' && (
+        <p className="text-[11px] text-fg/70 mb-2">Submit the score to record a rally match, both players get points.</p>
       )}
 
       {peopleLoading ? (
@@ -606,40 +529,36 @@ export const Matches: React.FC = () => {
           {slots.map(({ row: p, slot }, i) => {
             const isRandomized = slot >= 0 && rand.slots.includes(slot);
             const canRandomize = slot >= 0 && (isRandomized || budgetLeft > 0);
-            // `rallyAccepted` gates contact and the name link, so it covers 'reported' too — the
-            // pair are still mid-arrangement. Scoring is narrower: only an accepted, unreported
-            // rally can take a score.
+            // `rallyAccepted` gates contact and the name link. Scoring uses the same gate: an
+            // accepted rally takes a score, and recording it is what finishes the rally — there
+            // is no reported-then-confirmed middle state any more.
             const rallyAccepted = acceptedRallyPartnerIds.has(p.user_id);
-            const myRally = mode === 'friendlies' ? rallyWith[p.user_id] : undefined;
+            const myRally = mode === 'rallies' ? rallyWith[p.user_id] : undefined;
             const rallyScorable = myRally?.status === 'accepted';
-            const rallyReported = myRally?.status === 'reported';
-            // Whoever reported can't confirm their own result (firestore.rules enforces it too).
-            const canConfirmRally = rallyReported && myRally?.reported_by !== user.uid;
             const rallyPending = !rallyAccepted && activePartnerIds.has(p.user_id);
             const challengeAccepted = acceptedChallengePartnerIds.has(p.user_id);
             const challengeState = ladder ? stateWith(p.user_id) : 'cooldown';
-            const challengeBlocked = !ladder || !myDivision || challengeState !== 'available'
-              || activeChallengesLeft === 0 || conflicts.has(p.user_id);
+            const challengeBlocked = blockReason(p) !== null;
             // "Connected" is specific to the tab you're on — an accepted Challenge doesn't make
-            // someone's name clickable on the Friendlies tab while their rally is still pending.
-            const isConnected = mode === 'friendlies' ? rallyAccepted : challengeAccepted;
-            const showScore = mode === 'friendlies' ? rallyScorable : challengeAccepted;
+            // someone's name clickable on the Rallies tab while their rally is still pending.
+            const isConnected = mode === 'rallies' ? rallyAccepted : challengeAccepted;
+            const showScore = mode === 'rallies' ? rallyScorable : challengeAccepted;
             const showContact = showScore; // contact only once accepted, same gate as Score
             // "Waiting to reply" — request sent, not yet answered. Lives in the expansion now
             // rather than as a word on the row, matching the leaderboard's compact shape.
-            const isPending = mode === 'friendlies' ? rallyPending : challengeState === 'pending';
+            const isPending = mode === 'rallies' ? rallyPending : challengeState === 'pending';
             // An request THEY sent YOU, still unanswered — the row offers Accept/Decline instead
             // of Cancel. Previously this only existed in a separate list above the grid.
-            const incomingReq = mode === 'friendlies'
+            const incomingReq = mode === 'rallies'
               ? received.find((r) => r.status === 'open' && r.player_1_uid === p.user_id)
               : incoming.find((c) => c.player_1_uid === p.user_id);
             const respondToIncoming = (accept: boolean) => {
               if (!incomingReq) return;
-              if (mode === 'friendlies') respondRally(incomingReq.id, accept);
+              if (mode === 'rallies') respondRally(incomingReq.id, accept);
               else respondChallenge(incomingReq.id, accept);
             };
             const cancelRequest = () => {
-              if (mode === 'friendlies') {
+              if (mode === 'rallies') {
                 const r = sent.find((x) => x.player_2_uid === p.user_id);
                 if (r) cancelRally(r.id);
                 return;
@@ -658,7 +577,7 @@ export const Matches: React.FC = () => {
               >
               <PlayerCard
                 id={p.user_id}
-                name={toTitleCase(p.name)}
+                name={abbreviatePlayerName(p.name)}
                 nameHref={isConnected ? `/players/${p.user_id}` : undefined}
                 subtitle={p.skill_level > 0 ? `Skill ${p.skill_level} · ${skillBand(p.skill_level)}` : undefined}
                 open={expandedUid === p.user_id}
@@ -677,26 +596,20 @@ export const Matches: React.FC = () => {
                         {showContact ? (
                           <ContactOpponentButton
                             name={p.name}
-                            phone={(mode === 'friendlies' ? rallyContactMap : contactMap)[p.user_id]?.phone}
-                            email={(mode === 'friendlies' ? rallyContactMap : contactMap)[p.user_id]?.email}
-                            whatsappContact={(mode === 'friendlies' ? rallyContactMap : contactMap)[p.user_id]?.whatsapp_contact}
-                            whatsappSameAsPhone={(mode === 'friendlies' ? rallyContactMap : contactMap)[p.user_id]?.whatsapp_same_as_phone}
-                            preferred={(mode === 'friendlies' ? rallyContactMap : contactMap)[p.user_id]?.preferred_mode_of_contact}
-                            variant="white"
+                            phone={(mode === 'rallies' ? rallyContactMap : contactMap)[p.user_id]?.phone}
+                            email={(mode === 'rallies' ? rallyContactMap : contactMap)[p.user_id]?.email}
+                            whatsappContact={(mode === 'rallies' ? rallyContactMap : contactMap)[p.user_id]?.whatsapp_contact}
+                            preferred={(mode === 'rallies' ? rallyContactMap : contactMap)[p.user_id]?.preferred_mode_of_contact}
                             size="sm"
                           />
                         ) : incomingReq ? (
                           // Accept/Decline moved to the row itself; this cell just states why.
                           <span className="text-[11px] font-bold text-fg">
-                            {mode === 'friendlies' ? 'Wants to rally' : 'Challenged you'}
+                            {mode === 'rallies' ? 'Wants to rally' : 'Challenged you'}
                           </span>
                         ) : isPending ? (
                           <span className="text-[11px] font-bold text-fg">Waiting to reply</span>
-                        ) : rallyReported ? (
-                          <span className="text-[11px] font-bold text-fg">
-                            {canConfirmRally ? 'Confirm the score' : 'Waiting to confirm'}
-                          </span>
-                        ) : mode === 'friendlies' ? (
+                        ) : mode === 'rallies' ? (
                           <button type="button" className={pillButtonCls('sm', 'clay')} disabled={busy === p.user_id} onClick={() => sendRally({ id: p.user_id, name: p.name })}>
                             <RacquetIcon className="w-3.5 h-3.5" />Rally
                           </button>
@@ -735,13 +648,13 @@ export const Matches: React.FC = () => {
                 action={(
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                   <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                    {/* Once a friendly is accepted, Score takes the dice's slot — no room for both. */}
+                    {/* Once a rally is accepted, Score takes the dice's slot — no room for both. */}
                     {/* No dice on a pinned row (slot < 0): it's there because you have a live
                         match with them, so rerolling it away is exactly what pinning prevents. */}
-                    {slot >= 0 && !(mode === 'friendlies' && (rallyScorable || rallyReported)) && (
+                    {slot >= 0 && !(mode === 'rallies' && rallyScorable) && (
                       <motion.button type="button" onClick={() => randomizeSlot(slot)} disabled={!canRandomize} whileTap={canRandomize ? tapScale.whileTap : undefined} transition={tapScale.transition} title={canRandomize ? 'Randomize this slot' : 'No randomizes left this week'} className="p-2 rounded-xl bg-fg/5 text-fg/70 hover:text-fg transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0" aria-label="Randomize slot"><Dices className="w-4 h-4" /></motion.button>
                     )}
-                    {isRandomized && !(mode === 'friendlies' && (rallyScorable || rallyReported)) && (
+                    {isRandomized && !(mode === 'rallies' && rallyScorable) && (
                       <motion.button type="button" onClick={() => resetSlot(slot)} whileTap={tapScale.whileTap} transition={tapScale.transition} title="Restore original player" className="p-2 rounded-xl bg-fg/5 text-fg/70 hover:text-fg transition-colors shrink-0" aria-label="Reset slot"><X className="w-4 h-4" /></motion.button>
                     )}
                     {/* Row actions are pills, not <Button>, so they match Profile's rows and the
@@ -755,18 +668,15 @@ export const Matches: React.FC = () => {
                         <button type="button" onClick={() => respondToIncoming(true)} title="Accept" className="p-1.5 rounded-lg bg-green-500/15 text-badge-win hover:bg-green-500/25 transition-colors" aria-label="Accept"><Check className="w-3.5 h-3.5" /></button>
                         <button type="button" onClick={() => respondToIncoming(false)} title="Decline" className="p-1.5 rounded-lg bg-red-500/15 text-badge-loss hover:bg-red-500/25 transition-colors" aria-label="Decline"><X className="w-3.5 h-3.5" /></button>
                       </div>
-                    ) : mode === 'friendlies' ? (
+                    ) : mode === 'rallies' ? (
                       rallyScorable ? (
-                        <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => openFriendlyScore(p)}>
+                        // Recording the score IS the result now — it pays on write, with no
+                        // second-party confirm. The opponent may record it too; the narrower
+                        // score wins and a different winner raises a dispute.
+                        <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => openRallyScore(p)}>
                           <RacquetIcon className="w-3.5 h-3.5" />Score
                         </button>
-                      ) : canConfirmRally ? (
-                        // The second party's confirm — this is what pays the points.
-                        <div className="flex items-center gap-1.5">
-                          <button type="button" aria-label="Confirm score" title={`Confirm ${(myRally && formatSetScores(myRally)) || 'the score'}`} onClick={() => resolveRally(myRally!.id, user.uid, true)} className="p-1.5 rounded-lg bg-green-500/15 text-badge-win hover:bg-green-500/25 transition-colors"><Check className="w-3.5 h-3.5" /></button>
-                          <button type="button" aria-label="Dispute score" onClick={() => resolveRally(myRally!.id, user.uid, false)} className="p-1.5 rounded-lg bg-red-500/15 text-badge-loss hover:bg-red-500/25 transition-colors"><X className="w-3.5 h-3.5" /></button>
-                        </div>
-                      ) : rallyReported || rallyPending ? null : (
+                      ) : rallyPending ? null : (
                         <button type="button" className={pillButtonCls('sm', 'clay')} disabled={busy === p.user_id} onClick={() => sendRally({ id: p.user_id, name: p.name })}>
                           <RacquetIcon className="w-3.5 h-3.5" />Rally
                         </button>
@@ -792,19 +702,7 @@ export const Matches: React.FC = () => {
         </div>
       )}
 
-      {scoreForm && scoreTarget && (
-        <ScoreModal
-          matchInfo={{
-            title: scoreTarget.kind === 'challenge' ? 'Challenge' : 'Record Match',
-            player1: { uid: user.uid, name: myName },
-            player2: { uid: scoreTarget.uid, name: scoreTarget.name },
-          }}
-          scoreForm={scoreForm}
-          onChange={setScoreForm}
-          onClose={closeScore}
-          onSubmit={scoreTarget.kind === 'challenge' ? handleChallengeScoreSubmit : handleFriendlyScoreSubmit}
-        />
-      )}
+      {scoring.modalProps && <ScoreModal {...scoring.modalProps} />}
       </>
       )}
 
@@ -827,6 +725,122 @@ export const Matches: React.FC = () => {
 
       {showAvailabilityModal && (
         <AvailabilityModal onClose={() => setShowAvailabilityModal(false)} />
+      )}
+
+      {/* Organizer: record a match two members already played. Same floating + button as Events,
+          Marketplace and Services, and only on the two tabs it can write to — the Tournament tab
+          records its results through the draw. */}
+      {isOrganizer && mode !== 'tournament' && recordStep === 'closed' && (
+        <Fab
+          ariaLabel="Record a played match"
+          onClick={() => { setRecordKind(mode === 'rallies' ? 'rally' : 'challenge'); setRecordStep('players'); }}
+        >
+          <Plus className="w-6 h-6" />
+        </Fab>
+      )}
+
+      {recordStep === 'players' && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Record a played match">
+          <div className="w-full max-w-sm rounded-3xl bg-tennis-surface p-5 max-h-[85vh] overflow-y-auto">
+            <h2 className="text-lg font-bold text-fg mb-1">Record a played match</h2>
+            <p className="text-xs text-fg/70 mb-4">
+              It counts straight away. Neither player is asked to confirm it.
+            </p>
+
+            <SegmentedControl<'challenge' | 'rally'>
+              options={[{ value: 'challenge', label: 'Challenge' }, { value: 'rally', label: 'Rally' }]}
+              value={recordKind}
+              onChange={setRecordKind}
+            />
+
+            <div className="mt-4 space-y-1.5">
+              {[0, 1].map((i) => (
+                <div key={i} className="flex items-center gap-2 min-h-11">
+                  <span className="text-xs font-semibold text-fg/70 w-16 shrink-0">Player {i + 1}</span>
+                  {recordPair[i] ? (
+                    <>
+                      <span className="text-sm font-semibold text-fg truncate flex-1">{abbreviatePlayerName(recordPair[i].name)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setRecordPair(recordPair.filter((_, j) => j !== i))}
+                        className="text-[10px] font-bold text-fg hover:text-badge-loss transition-colors"
+                      >Change</button>
+                    </>
+                  ) : (
+                    <span className="text-sm text-fg/70 flex-1">Not chosen yet</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {recordPair.length < 2 && (
+              <>
+                <input
+                  type="text"
+                  value={recordSearch}
+                  onChange={(e) => setRecordSearch(e.target.value)}
+                  placeholder="Search members"
+                  aria-label="Search members"
+                  className="mt-4 w-full h-11 rounded-2xl bg-fg/5 px-4 text-sm text-fg placeholder:text-fg/70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+                />
+                <div className="mt-2 divide-y divide-fg/5">
+                  {recordCandidates.map((r) => (
+                    <button
+                      key={r.user_id}
+                      type="button"
+                      onClick={() => { setRecordPair([...recordPair, r]); setRecordSearch(''); }}
+                      className="w-full min-h-11 flex items-center justify-between gap-2 px-1 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+                    >
+                      <span className="text-sm font-semibold text-fg truncate">{abbreviatePlayerName(r.name)}</span>
+                      <span className="text-xs text-fg/70 shrink-0">{r.league || '—'}</span>
+                    </button>
+                  ))}
+                  {recordCandidates.length === 0 && (
+                    <p className="py-3 text-sm text-fg/70">Nobody matches that name.</p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {recordMsg && <p role="alert" className="mt-4 text-sm text-badge-loss">{recordMsg}</p>}
+
+            <div className="mt-5 flex gap-2.5">
+              <Button
+                className="flex-1"
+                disabled={recordPair.length < 2}
+                onClick={() => {
+                  setRecordMsg(null);
+                  setRecordForm({
+                    matchDocId: '',
+                    winnerUserId: '',
+                    sets: [{ mine: '', opponent: '' }, { mine: '', opponent: '' }, { mine: '', opponent: '' }],
+                    court: '',
+                  });
+                  setRecordStep('score');
+                }}
+              >Next</Button>
+              <Button variant="outline" className="flex-1" onClick={closeRecord}>Cancel</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {recordStep === 'score' && recordForm && recordPair.length === 2 && (
+        <ScoreModal
+          matchInfo={{
+            title: recordKind === 'challenge' ? 'Record Challenge' : 'Record Rally',
+            player1: { uid: recordPair[0].user_id, name: recordPair[0].name },
+            player2: { uid: recordPair[1].user_id, name: recordPair[1].name },
+          }}
+          scoreForm={recordForm}
+          onChange={(f) => { setRecordMsg(null); setRecordForm(f); }}
+          onClose={closeRecord}
+          onSubmit={handleRecordSubmit}
+          // Labels the two sides with the real names instead of "My score" / "Opponent" — the
+          // organizer is neither player.
+          isCreatorSubmit
+          error={recordMsg}
+        />
       )}
     </div>
   );

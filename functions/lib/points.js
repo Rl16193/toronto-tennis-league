@@ -6,8 +6,8 @@
  * via `Object.assign(exports, require('./x'))` and the Firebase CLI treats every export it finds
  * there as a Cloud Function, so plain values must not be exported from a function module.
  *
- * MIRRORS src/features/tasks/taskCatalog.ts — keep the two in sync by hand, same duplication
- * pattern as scripts/regroup-rr.js mirroring rrGeneration.ts. `earnedRsPoints` below is the
+ * MIRRORS src/features/tasks/taskCatalog.ts — keep the two in sync by hand (the client and the
+ * functions are separate packages). `earnedRsPoints` below is the
  * exact server twin of taskPoints() in src/features/tasks/useTasks.ts.
  */
 
@@ -45,9 +45,7 @@ const ALL_TIERS = [
   { id: 'visit5', title: 'Visit 5 courts', points: 15, counter: 'courtsVisited', need: 5 },
   { id: 'visit10', title: 'Visit 10 courts', points: 25, counter: 'courtsVisited', need: 10 },
   { id: 'visit20', title: 'Visit 20 courts', points: 40, counter: 'courtsVisited', need: 20 },
-  // Nothing bumps `zoneComplete` server-side yet, so this never auto-awards — it's mirrored
-  // from taskCatalog.ts purely so earnedRsPoints() can't under-count a balance the Tasks page
-  // already shows the player. Inert in the award primitives until a zone counter exists.
+  // Awarded by awardZoneCompleteIfDone in taskPoints.js on the check-in that completes a zone.
   { id: 'visitZone', title: 'Visit every court in your zone', points: 30, counter: 'zoneComplete', need: 1 },
 
   { id: 'board1', title: 'Submit 1 waiting board report', points: 5, counter: 'boardPhotos', need: 1 },
@@ -84,7 +82,6 @@ const INITIATION_TASK_IDS = [
   'playMatch', 'courtSuggestion', 'whatsappGroup', 'profilePhoto', 'joinEvent',
 ];
 
-const TIER_POINTS = Object.fromEntries(ALL_TIERS.map((t) => [t.id, t.points]));
 
 // Server twin of taskPoints() in src/features/tasks/useTasks.ts. `progress` is the raw
 // tasks/{uid} document data (or undefined/null if the doc doesn't exist yet).
@@ -96,4 +93,4 @@ function earnedRsPoints(progress) {
   return setup + tiers + bonus;
 }
 
-module.exports = { SETUP_POINTS, ALL_TIERS, INITIATION_TASK_IDS, TIER_POINTS, earnedRsPoints };
+module.exports = { ALL_TIERS, INITIATION_TASK_IDS, earnedRsPoints };

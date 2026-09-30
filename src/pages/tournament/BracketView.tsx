@@ -1,6 +1,6 @@
 ﻿import React, { useMemo } from 'react';
 import { TournamentMatch, TournamentPlayer } from './types';
-import { PLAYER_LOADING, formatDeadline } from './utils';
+import { PLAYER_LOADING, formatDeadline, isPreviewMatch } from './utils';
 import { getRoundLabels } from './bracketImage';
 import { MatchCard } from './MatchCard';
 
@@ -13,9 +13,7 @@ const isPlaceholder = (name?: string) =>
   (name || '').toLowerCase().startsWith('winner of ');
 
 export const getRoundState = (roundMatches: TournamentMatch[]): 'preview' | 'loading' | 'started' | 'finished' => {
-  const real = roundMatches.filter(
-    (m) => !m.id.startsWith('preview_') && !m.id.startsWith('ll_preview_'),
-  );
+  const real = roundMatches.filter((m) => !isPreviewMatch(m));
   if (real.length === 0) return 'preview';
   // Any slot still waiting on a previous-round winner → Loading
   if (real.some((m) => isPlaceholder(m.player_1_name) || isPlaceholder(m.player_2_name))) return 'loading';
@@ -30,7 +28,6 @@ export const getRoundState = (roundMatches: TournamentMatch[]): 'preview' | 'loa
 
 type Props = {
   matches: TournamentMatch[];
-  drawTitle: string;
   editMode?: boolean;
   editPlayers?: TournamentPlayer[];
   onEditPlayer?: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
@@ -38,14 +35,13 @@ type Props = {
   isCreator?: boolean;
   onSubmitScore?: (match: TournamentMatch) => void;
   submittableMatchIds?: Set<string>;
-  pendingMatchIds?: Set<string>;
   roundDeadlines?: Record<string, string>;
   onUpdateDeadline?: (round: string, date: string) => void;
 };
 
 export const BracketView: React.FC<Props> = ({
-  matches, drawTitle, editMode, editPlayers = [], onEditPlayer, onRemovePlayer,
-  isCreator, onSubmitScore, submittableMatchIds, pendingMatchIds,
+  matches, editMode, editPlayers = [], onEditPlayer, onRemovePlayer,
+  isCreator, onSubmitScore, submittableMatchIds,
   roundDeadlines = {}, onUpdateDeadline,
 }) => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
@@ -120,7 +116,6 @@ export const BracketView: React.FC<Props> = ({
                     isCreator={isCreator}
                     onSubmitScore={onSubmitScore}
                     submittableMatchIds={submittableMatchIds}
-                    pendingMatchIds={pendingMatchIds}
                   />
                   {roundIndex < rounds.length - 1 ? (
                     <div className="grid h-full grid-cols-[1fr_1px] items-center">

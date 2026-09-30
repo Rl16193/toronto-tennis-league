@@ -26,7 +26,9 @@ function computeMetrics(data) {
     preferences } = data;
 
   const parts = event_participants.filter((p) => !p.removal);
-  const completed = matches.filter((m) => str(m.status) === 'complete');
+  // A tournament match ends 'complete'; a challenge or rally ends 'confirmed'.
+  const completed = matches.filter((m) => str(m.status) === 'complete'
+    || (['challenge', 'rally'].includes(str(m.category)) && str(m.status) === 'confirmed'));
   const completed7 = completed.filter((m) => after(m.completed_at || m.created_at, cutoff));
   const byCat = (rows, ...cats) => rows.filter((m) => cats.includes(str(m.category)));
 
@@ -141,4 +143,4 @@ function computeMetrics(data) {
   return { headline, byCourt, byZone, byEvent, recentMatches, matchFacts };
 }
 
-module.exports = { computeMetrics, WINDOW_DAYS, RECENT_MATCH_LIMIT };
+module.exports = { computeMetrics, WINDOW_DAYS };

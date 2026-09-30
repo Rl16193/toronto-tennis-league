@@ -5,9 +5,13 @@ import { motion } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 import { RacquetIcon } from './RacquetIcon';
 
-// App-style bottom tab bar. Five thumb-reachable tabs; auth-required tabs route logged-out taps
-// to /login. Hidden on the auth pages. Profile lives behind the header avatar (not a tab).
-// Tournament merged into the "Matches" tab (Tournament/Challenges/Friendlies switch there).
+// App-style bottom tab bar. Five thumb-reachable tabs for a member, three for a visitor.
+// Hidden on the auth pages. Profile lives behind the header avatar (not a tab).
+// Tournament merged into the "Matches" tab (Tournament/Challenges/Rallies switch there).
+//
+// A signed-out visitor sees ONLY the tabs they can actually use — Events, Courts, Marketplace.
+// The members-only tabs are hidden rather than shown and bounced to /login, so the bar never
+// offers a door that opens onto a sign-in wall.
 const TABS = [
   { name: 'Events', path: '/events', icon: Calendar, requiresAuth: false },
   { name: 'Courts', path: '/courts', icon: MapPin, requiresAuth: false },
@@ -24,20 +28,26 @@ export const BottomNav: React.FC = () => {
 
   if (location.pathname === '/login' || location.pathname === '/signup') return null;
 
+  const tabs = TABS.filter((tab) => !!user || !tab.requiresAuth);
+
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 border-t border-fg/8 bg-nav/95 backdrop-blur-xl"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="Primary"
     >
-      <div className="max-w-md mx-auto grid grid-cols-5 items-center px-1 pt-1 pb-0.5">
-        {TABS.map((tab) => {
-          const to = tab.requiresAuth && !user ? '/login' : tab.path;
+      {/* Column count follows the visible tabs — three signed out, five signed in — so the bar
+          stays evenly divided instead of leaving two empty columns. */}
+      <div
+        className="max-w-md mx-auto grid items-center px-1 pt-1 pb-0.5"
+        style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+      >
+        {tabs.map((tab) => {
           const active = location.pathname === tab.path;
           return (
             <Link
               key={tab.name}
-              to={to}
+              to={tab.path}
               className={`min-h-14 flex flex-col items-center justify-center gap-1 transition-colors ${
                 active ? 'text-fg' : 'text-fg/70 hover:text-fg'
               }`}

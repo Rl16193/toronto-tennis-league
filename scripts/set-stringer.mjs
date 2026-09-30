@@ -1,10 +1,9 @@
 /**
- * Links a player's account to a rewards-catalog stringer, so they can confirm their own
- * coupons (mark used / flag) from the Marketplace → Rewards tab.
+ * Links a member's account to a Services catalog provider (stringer or coach, picked from the
+ * catalog entry's own category), so they run that provider's bookings on the Provider Dash.
  *
- * Sets `stringer: true` and `stringer_id: <id>` on `preferences/{uid}`. The stringer id must
- * match `stringer_id` on that shop's `rewards` docs — see scripts/seed-rewards.mjs
- * (currently: karan, fortyforty, pandemic).
+ * Sets `stringer`/`coach: true` and `stringer_id`/`coach_id: <id>` on `preferences/{uid}`. The id
+ * must match the provider on that catalog's `tasks` offer docs — see scripts/seed-rewards.mjs.
  *
  * The flag grants nothing points-related: it only reveals coupons issued against that shop's
  * offers. Marking used / flagging still runs through the Cloud Functions in functions/rewards.js.
@@ -86,7 +85,7 @@ const run = async () => {
   }
 
   const id = arg('id');
-  if (!id || id === true) { console.error('Missing --id (e.g. karan, fortyforty, pandemic, archie).'); process.exit(1); }
+  if (!id || id === true) { console.error('Missing --id (e.g. karan, fortyforty, archie).'); process.exit(1); }
 
   // Warn if the id matches no catalog entry — a typo here silently shows them nothing.
   const offers = await db.collection('tasks')

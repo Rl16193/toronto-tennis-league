@@ -11,7 +11,10 @@
     "hosting:deploy": "npm run build && npx firebase-tools deploy --only hosting",
     "hosting:preview": "npm run build && npx firebase-tools hosting:channel:deploy preview",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:rules": "node scripts/run-emulator-tests.mjs tests/rules/firestore.rules.test.mjs",
+    "emulators": "firebase emulators:start --project demo-ttl",
+    "test:functions": "node scripts/run-emulator-tests.mjs \"functions/test/scoring.test.js functions/test/participantSeat.test.js\""
   },
   "dependencies": {
     "@intl-tel-input/react": "^29.1.2",
@@ -33,6 +36,7 @@
     "vite": "^6.2.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

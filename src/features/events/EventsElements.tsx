@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Calendar, CheckCircle2, MapPin, Pencil, Star } from 'lucide-react';
+import { Calendar, CheckCircle2, ImageUp, MapPin, Pencil, Star } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
+import { SelectField } from '../../components/SelectField';
 import { RacquetIcon } from '../../components/RacquetIcon';
 import { useAuth } from '../../context/AuthContext';
+import { leagueDivision } from '../../utils/skillLevels';
 import { MemberSearchInput, type MemberPick } from '../members/MemberSearchInput';
 import { TennisEvent } from '../../types';
 import { isLadderEvent, isRecurringWeekly, isSeasonOpener, isTournamentEvent } from '../../utils/eventTypes';
@@ -78,19 +80,39 @@ const getJoinLastDateMs = (event: DisplayEvent): number | null => {
 
 const LATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-/** After join_last_date but within the 7-day late-registration window (tournament only). */
-export const isLateRegistration = (event: DisplayEvent): boolean => {
-  const ms = getJoinLastDateMs(event);
-  if (ms === null) return false;
-  const now = Date.now();
-  return now > ms && now <= ms + LATE_WINDOW_MS;
+/**
+ * The instant registration shuts, whichever comes first:
+ *   - the event's own end date, because you cannot join something that has finished;
+ *   - 7 days past join_last_date, the late-registration grace.
+ *
+ * Either may be absent. With neither, registration never closes on a date — the event's
+ * completion does it instead (see `isCurrentEvent`).
+ *
+ * The end date used to play no part here, which let a tournament that finished on Sunday keep
+ * offering a Join button because nobody had filled in a join-last date.
+ */
+const registrationClosesAtMs = (event: DisplayEvent): number | null => {
+  const joinLast = getJoinLastDateMs(event);
+  const graceEnd = joinLast === null ? null : joinLast + LATE_WINDOW_MS;
+  const eventEnd = parseEndInstant(getEventEndDate(event))?.getTime() ?? null;
+  const closes = [graceEnd, eventEnd].filter((v): v is number => v !== null);
+  return closes.length === 0 ? null : Math.min(...closes);
 };
 
-/** Hard close: more than 7 days past join_last_date — no join of any kind. */
+/** Hard close: past whichever deadline came first — no join of any kind. */
 const isJoinHardClosed = (event: DisplayEvent): boolean => {
-  const ms = getJoinLastDateMs(event);
-  if (ms === null) return false;
-  return Date.now() > ms + LATE_WINDOW_MS;
+  const ms = registrationClosesAtMs(event);
+  return ms !== null && Date.now() > ms;
+};
+
+/**
+ * Past join_last_date but not yet hard closed — the late-registration window (tournament only).
+ * Bounded by the hard close, so an event that has already ended never offers late registration.
+ */
+export const isLateRegistration = (event: DisplayEvent): boolean => {
+  const joinLast = getJoinLastDateMs(event);
+  if (joinLast === null) return false;
+  return Date.now() > joinLast && !isJoinHardClosed(event);
 };
 
 interface EventCardProps {
@@ -107,7 +129,10 @@ interface EventCardProps {
 // Event card — display only. The join form lives in JoinEventSheet now, so tapping Join never
 // reflows the grid.
 export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, authLoading, isLoggedIn, onJoin, onEdit }) => {
-  const dateLabel = isTournamentEvent(event) ? formatTournamentRange(event) : formatEventSchedule(event);
+  // The ladder runs the whole season, so a date would imply a deadline that doesn't exist.
+  const dateLabel = isLadderEvent(event)
+    ? 'All Season'
+    : isTournamentEvent(event) ? formatTournamentRange(event) : formatEventSchedule(event);
   const isTournament = isTournamentEvent(event);
   // League Ladder: no registration — the card's action opens the ladder Challenges tab.
   const isLadder = isLadderEvent(event);
@@ -138,34 +163,74 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05 }}
-      className="bg-tennis-surface/30 hover:border-clay/30 rounded-2xl p-5 flex flex-col gap-3 transition-colors"
+      // The Events page scrolls a deep-linked card into view by this id (/events?event=ID).
+      id={`event-${event.id}`}
+      className="bg-tennis-surface/30 rounded-2xl p-5 flex flex-col gap-3 transition-colors scroll-mt-24"
     >
-      {/* Card header */}
-      <div className="flex items-start justify-between gap-2">
-        <span className="px-2.5 py-0.5 bg-clay/10 border border-clay/20 rounded-lg text-[10px] font-bold text-clay uppercase tracking-widest">
-          {isLadder ? 'Challenges' : event.type}
-        </span>
-        <div className="flex items-center gap-2 shrink-0">
-          {isJoined && <CheckCircle2 className="w-4 h-4 text-badge-win" />}
+      {/* Poster banner — a 16:9 crop from the centre of the artwork, which is where the event name
+          is printed. The type and price ride ON it, and the organiser's edit control takes the
+          opposite corner so the three never collide.
+          With no picture there is nothing to sit on, so the same three fall back to a plain row
+          above the title. A shorter card reads as deliberate; an empty grey box reads as broken. */}
+      {event.image ? (
+        <div className="relative">
+          <img
+            src={event.image}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="w-full aspect-video object-cover object-center rounded-xl"
+          />
+          {/* Both get an opaque backing: a poster is busy, and an unfilled chip disappears into it. */}
+          <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-lg bg-tennis-dark/85 backdrop-blur-sm text-[10px] font-bold text-clay uppercase tracking-widest">
+            {isLadder ? 'Challenges' : event.type}
+          </span>
+          <span className="absolute top-2 right-2 rounded-full bg-clay px-3 py-1 text-xs font-bold text-white">
+            Free
+          </span>
           {onEdit && (
             <button
               type="button"
               onClick={() => onEdit(event)}
               aria-label="Edit event"
-              className="text-fg/70 hover:text-fg transition-colors"
+              className="absolute bottom-2 right-2 w-9 h-9 flex items-center justify-center rounded-full
+                         bg-tennis-dark/70 text-fg backdrop-blur-sm transition-colors hover:bg-tennis-dark
+                         focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
             >
               <Pencil className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center justify-between gap-2">
+          <span className="px-2.5 py-0.5 bg-clay/10 border border-clay/20 rounded-lg text-[10px] font-bold text-clay uppercase tracking-widest">
+            {isLadder ? 'Challenges' : event.type}
+          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="rounded-full bg-lime px-3 py-1 text-xs font-bold text-ink">Free</span>
+            {onEdit && (
+              <button
+                type="button"
+                onClick={() => onEdit(event)}
+                aria-label="Edit event"
+                className="w-9 h-9 flex items-center justify-center rounded-full bg-fg/10 text-fg
+                           transition-colors hover:bg-fg/20
+                           focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
-      {/* Title row carries the card's action on the right, sitting directly under the Edit
-          pencil. It used to live in a bordered strip at the very bottom of the card, which put
-          the one thing people came to tap below the description and the detail pills. */}
+      {/* Title, with the card's action on the right where the price used to be. */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-base font-bold text-fg leading-snug">{event.title}</h3>
+          <h3 className="text-base font-bold text-fg leading-snug flex items-center gap-1.5">
+            <span className="min-w-0">{event.title}</span>
+            {isJoined && <CheckCircle2 className="w-4 h-4 shrink-0 text-badge-win" aria-label="Joined" />}
+          </h3>
           {isSeasonOpener(event) && (
             <p className="text-xs font-semibold uppercase tracking-wider text-badge mt-1">First Tournament of 2026</p>
           )}
@@ -178,7 +243,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
               onClick={() => navigate(isLoggedIn ? '/matches?mode=challenges' : '/login')}
               disabled={authLoading}
             >
-              <RacquetIcon className="w-3.5 h-3.5 mr-1" />
+              {isLoggedIn && <RacquetIcon className="w-3.5 h-3.5 mr-1" />}
               {isLoggedIn ? 'Challenge Now' : 'Log In to Challenge'}
             </Button>
           ) : (
@@ -196,7 +261,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
 
       {description && (
         <div>
-          <p className={`text-xs text-fg/70 leading-relaxed ${descExpanded ? '' : 'line-clamp-2'}`}>{description}</p>
+          <p className={`text-xs text-fg/70 leading-relaxed ${descExpanded ? '' : 'line-clamp-3'}`}>{description}</p>
           {description.length > 100 && (
             <button
               type="button"
@@ -229,6 +294,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
           </span>
         )}
       </div>
+
     </motion.div>
   );
 };
@@ -242,8 +308,10 @@ type CreatorEventModalProps = {
   setEventForm: (eventForm: EventFormState) => void;
   eventFormMessage: FormMessage;
   creatingEvent: boolean;
-  organizerPlaceholder: string;
   isEditing?: boolean;
+  /** A newly picked image, not yet uploaded. The stored one lives on eventForm.image. */
+  imageFile: File | null;
+  onImageFileChange: (file: File | null) => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
 };
@@ -252,7 +320,7 @@ type CreatorEventModalProps = {
 // the whole form fits in roughly one phone screen instead of eleven stacked full-width rows.
 const fieldCls =
   'w-full rounded-xl bg-tennis-dark/70 px-3.5 py-2.5 text-sm text-fg ' +
-  'placeholder-fg/30 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
+  'placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
 const labelCls = 'block text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-1.5';
 const req = <span className="text-clay">*</span>;
 
@@ -288,13 +356,39 @@ export const CreatorEventModal: React.FC<CreatorEventModalProps> = ({
   setEventForm,
   eventFormMessage,
   creatingEvent,
-  organizerPlaceholder,
   isEditing,
+  imageFile,
+  onImageFileChange,
   onSubmit,
   onClose,
 }) => {
   const set = (patch: Partial<EventFormState>) => setEventForm({ ...eventForm, ...patch });
   const isTournament = eventForm.type === 'Tournament';
+  const [imageError, setImageError] = useState('');
+
+  // A picked file previews through an object URL, revoked when the file changes or the form closes.
+  const [filePreview, setFilePreview] = useState('');
+  useEffect(() => {
+    if (!imageFile) { setFilePreview(''); return; }
+    const url = URL.createObjectURL(imageFile);
+    setFilePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [imageFile]);
+  // A stored web URL previews directly. A legacy gs:// path would need a Storage lookup, which a
+  // presentation component doesn't make, so that case shows as "Current image" instead.
+  const previewUrl = filePreview || (/^https?:\/\//.test(eventForm.image) ? eventForm.image : '');
+  const hasImage = !!imageFile || !!eventForm.image;
+
+  const pickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { setImageError('Please choose an image file.'); return; }
+    if (file.size > 5 * 1024 * 1024) { setImageError('The image must be under 5 MB.'); return; }
+    setImageError('');
+    onImageFileChange(file);
+  };
+  const removeImage = () => { onImageFileChange(null); set({ image: '' }); setImageError(''); };
 
   return (
     <Sheet maxWidthClassName="max-w-md" onClose={onClose} title={isEditing ? 'Edit Event' : 'Add an Event'}>
@@ -315,21 +409,60 @@ export const CreatorEventModal: React.FC<CreatorEventModalProps> = ({
             className={fieldCls} placeholder="Spring Ladder Tournament" />
         </div>
 
+        {/* Optional. The picked file stays on this device until Save, which uploads it. */}
+        <div>
+          <span className={labelCls}>Image</span>
+          {hasImage ? (
+            <div className="rounded-xl bg-tennis-dark/70 overflow-hidden">
+              {previewUrl
+                ? <img src={previewUrl} alt="" className="w-full aspect-[16/9] object-cover" />
+                : <p className="px-3.5 py-3 text-sm text-fg/70">Current image</p>}
+              <div className="flex gap-2 p-2">
+                <label className="flex-1 cursor-pointer rounded-lg bg-fg/5 py-2 text-center text-xs font-bold text-fg hover:bg-fg/10 transition-colors">
+                  Replace
+                  <input type="file" accept="image/*" onChange={pickImage} className="hidden" />
+                </label>
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  className="flex-1 rounded-lg bg-fg/5 py-2 text-xs font-bold text-badge-loss hover:bg-fg/10 transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ) : (
+            <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-fg/20 cursor-pointer hover:border-fg/40 transition-colors">
+              <ImageUp className="w-5 h-5 text-fg/70 shrink-0" />
+              <span className="text-sm text-fg/70">Add an image</span>
+              <input type="file" accept="image/*" onChange={pickImage} className="hidden" />
+            </label>
+          )}
+          {imageError && <p className="mt-1.5 text-xs text-badge-loss">{imageError}</p>}
+        </div>
+
         {/* Type and Skill are both short selects — pairing them saves a row. */}
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls} htmlFor="ev-type">Type {req}</label>
-            <select id="ev-type" value={eventForm.type} onChange={(e) => set({ type: e.target.value })} className={fieldCls}>
-              {EVENT_TYPE_OPTIONS.map((type) => <option key={type} value={type}>{type}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="ev-skill">Skill level</label>
-            <select id="ev-skill" value={eventForm.skillLevel} onChange={(e) => set({ skillLevel: e.target.value })} className={fieldCls}>
-              {EVENT_SKILL_OPTIONS.map((skill) => <option key={skill} value={skill}>{skill}</option>)}
-            </select>
-          </div>
+          <SelectField label="Type" required value={eventForm.type} options={EVENT_TYPE_OPTIONS}
+            onChange={(type) => set({ type })} />
+          <SelectField label="Skill level" value={eventForm.skillLevel} options={EVENT_SKILL_OPTIONS}
+            onChange={(skillLevel) => set({ skillLevel })} />
         </div>
+
+        {/* Meetups only. A recurring meetup repeats on the START DATE'S weekday until the end date;
+            one that isn't recurring is the special one. Nothing is stored yet — the sub-category
+            field behind this is still being built. See "Recurring meetups" in CLAUDE.md. */}
+        {eventForm.type === 'Meetup' && (
+          <label className="flex items-center gap-2.5 text-sm text-fg cursor-pointer">
+            <input
+              type="checkbox"
+              checked={eventForm.recurring}
+              onChange={(e) => set({ recurring: e.target.checked })}
+              className="accent-clay w-4 h-4 shrink-0"
+            />
+            Recurring
+          </label>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -417,6 +550,8 @@ type JoinEventSheetProps = {
   joining: boolean;
   onSubmitJoin: () => void;
   onClose: () => void;
+  /** Shown when this event needs preferred courts the member hasn't picked; Join stays disabled. */
+  courtsPicker?: React.ReactNode;
 };
 
 const chip = (active: boolean) =>
@@ -430,9 +565,10 @@ const chip = (active: boolean) =>
 export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
   event, isLate, seniorsEligible, joinForm, setJoinForm, joinError,
   slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed,
-  joining, onSubmitJoin, onClose,
+  joining, onSubmitJoin, onClose, courtsPicker,
 }) => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const savedDivision = leagueDivision(profile?.stats.league);
   const currentUserId = user?.uid;
   const isTournament = isTournamentEvent(event);
   const fixedChoice = event.tournament_choice; // set on new events; undefined on old events
@@ -469,7 +605,7 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
                     <button
                       key={choice}
                       type="button"
-                      onClick={() => setJoinForm({ ...joinForm, tournamentChoice: choice, division: '', seniors: false })}
+                      onClick={() => setJoinForm({ ...joinForm, tournamentChoice: choice, division: choice === 'Singles' ? savedDivision : '', seniors: false })}
                       className={`flex-1 ${chip(joinForm.tournamentChoice === choice)}`}
                     >
                       {choice}
@@ -479,8 +615,10 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
               </div>
             )}
 
-            {/* Division */}
-            <div>
+            {/* Division — Singles uses the profile's, so only a member without one is asked. */}
+            {displayChoice === 'Singles' && savedDivision ? (
+              <p className="text-sm text-fg/70 pr-10">Joining the {savedDivision} draw, from your profile.</p>
+            ) : <div>
               <p className="text-xs font-bold text-fg/70 uppercase tracking-widest mb-2">Division</p>
               <div className="flex flex-wrap gap-2">
                 {divisions.map((div) => (
@@ -494,7 +632,7 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
                   </button>
                 ))}
               </div>
-            </div>
+            </div>}
 
             {/* Retired Pro 55+ opt-in — singles only, shown only to eligible players */}
             {displayChoice === 'Singles' && seniorsEligible && (
@@ -540,7 +678,7 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
                   excludeId={currentUserId}
                   allowGuest
                   placeholder="Search for your partner…"
-                  hint="Not on the app yet? Type their full name and pick “not on the app”."
+                  hint="Not on the app yet? Type their full name and pick “not on the app”. No partner yet? Leave it blank to join the partner pool."
                 />
                 <div>
                   <p className="text-xs font-bold text-fg/70 uppercase tracking-widest mb-2">Combined Skill (1–5)</p>
@@ -559,7 +697,7 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
             {isLate && (
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-badge">
                 <p className="font-semibold">Late registration. Limited spots remaining.</p>
-                <p className="mt-0.5 text-badge/70">You'll be placed directly into an open draw slot.</p>
+                <p className="mt-0.5 text-badge/70">If your draw has an open spot you'll be placed in it; otherwise the organizer will place you.</p>
               </div>
             )}
 
@@ -585,6 +723,16 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
           </>
         ) : (
           <p className="text-sm text-fg/70">Reserve your spot in this event.</p>
+        )}
+
+        {courtsPicker && (
+          <div className="space-y-2">
+            <div>
+              <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Courts</p>
+              <p className="text-xs text-fg/70 mt-1">Enter a court, get placed in a zone and match with people who play in your area.</p>
+            </div>
+            {courtsPicker}
+          </div>
         )}
 
         {joinError && <p className="text-xs font-semibold text-badge-loss">{joinError}</p>}

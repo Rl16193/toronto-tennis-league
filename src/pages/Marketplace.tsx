@@ -2,13 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { Fab } from '../components/Fab';
 import { fadeUp } from '../lib/motion';
-import { ContactData } from '../types';
+import { useContacts } from '../features/contacts/useContacts';
 import { ServicesTab } from './services/ServicesElements';
 import { ListingForm, ListingsTab } from './marketplace/MarketplaceElements';
 import { Listing, ListingKind, useListings } from '../features/marketplace/listingService';
@@ -18,34 +16,6 @@ type Tab = 'services' | 'rent' | 'trade';
 
 // URL param values are kept as-is; `trade` is the sell board.
 const KIND_FOR: Record<'rent' | 'trade', ListingKind> = { rent: 'rent', trade: 'sell' };
-
-/**
- * Contact details for everyone with a listing on screen, so the Contact button can offer the
- * poster's real phone/WhatsApp/email rather than making them retype it per listing. One lazy
- * `users/{id}` read per unique seller, same pattern as the Profile page's opponent lookups.
- */
-function useSellers(userIds: string[]) {
-  const [sellers, setSellers] = useState<Record<string, ContactData>>({});
-  const key = [...new Set(userIds)].sort().join(',');
-
-  useEffect(() => {
-    const ids = key ? key.split(',') : [];
-    const missing = ids.filter((id) => id && !sellers[id]);
-    if (missing.length === 0) return;
-    // `contacts`, not `users` — and it's sign-in gated, so a logged-out visitor resolves nothing
-    // and simply sees no Contact button (which is the intended behaviour anyway).
-    Promise.all(missing.map((id) =>
-      getDoc(doc(db, 'contacts', id)).then((s) => [id, s.data() as ContactData | undefined] as const)))
-      .then((entries) => {
-        const found = entries.filter((e): e is [string, ContactData] => !!e[1]);
-        if (found.length) setSellers((prev) => ({ ...prev, ...Object.fromEntries(found) }));
-      })
-      .catch(() => { /* Contact just falls back to hidden if we can't resolve them */ });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-
-  return sellers;
-}
 
 export const Marketplace: React.FC = () => {
   const { user } = useAuth();
@@ -85,7 +55,9 @@ export const Marketplace: React.FC = () => {
     () => [...rentListings, ...sellListings].map((l) => l.uid),
     [rentListings, sellListings],
   );
-  const sellers = useSellers(sellerIds);
+  // The poster's contact details, so Contact offers their real channels. Each read is caught on
+  // its own: one member's denied read must not hide every seller's Contact button.
+  const sellers = useContacts(sellerIds);
   const board = tab === 'rent'
     ? { listings: rentListings, loading: rentLoading }
     : { listings: sellListings, loading: sellLoading };

@@ -9,18 +9,17 @@ import { doc, setDoc } from 'firebase/firestore';
 import { auth, db, setAuthPersistence } from '../lib/firebase';
 import { track } from '../lib/analytics';
 import { useAuth } from '../context/AuthContext';
-import { SELECTABLE_SKILL_LEVELS } from '../utils/skillLevels';
-import { skillBand } from './tournament/utils';
+import { SELECTABLE_SKILL_LEVELS, skillBand } from '../utils/skillLevels';
+
 import { Accordion } from '../components/Accordion';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import {
-  MapPin, CheckCircle2, ChevronRight, ChevronDown, ArrowRight,
+  MapPin, CheckCircle2, ChevronRight, ArrowRight,
   AlertCircle,
   Eye, EyeOff, Chrome, Apple, X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UserData, UserStats, UserPreferences } from '../types';
 import mailcheck from 'mailcheck';
 import { defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts, getCourtSuggestions, mergeCourtOptions } from '../features/signup/utils/courtSearch';
 import { getZoneWithBorderCheck, zoneFromCourts } from '../utils/zones';
@@ -28,6 +27,11 @@ import { formatPhone } from '../utils/formatPhone';
 import { getSignupErrorMessage, signupEmailRegex, emailExistsForSignup } from '../features/signup/signupValidation';
 import { getAuthErrorMessage } from '../features/auth/authMessages';
 import { useAppleSignIn, useGoogleSignIn } from '../features/auth/useOAuthSignIn';
+import { loadCourtsCsv } from '../features/tasks/courtList';
+
+// Off until the Apple provider is configured in Firebase Console → Authentication (it currently
+// fails with "OPERATION_NOT_ALLOWED: Code flow is not enabled for Apple"). Flip to true to restore.
+const APPLE_SIGN_IN_ENABLED = false;
 
 type AuthPhase = 'email' | 'login' | 'account' | 'preferences' | 'done';
 
@@ -126,6 +130,8 @@ export const Signup: React.FC = () => {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Skill must be picked, not left at the 2.0 the form starts on (Racquets-And-Strings TASK-649).
+  const [skillChosen, setSkillChosen] = useState(false);
 
   useEffect(() => { document.title = 'Sign In · Racquets & Strings'; }, []);
 
@@ -170,8 +176,7 @@ export const Signup: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
-    fetch('/Tennis Courts Facilities - 4326.csv')
-      .then((response) => response.ok ? response.text() : '')
+    loadCourtsCsv()
       .then((csvText) => {
         if (!isMounted || !csvText) return;
         setCourtOptions(mergeCourtOptions(extractDropdownCourts(csvText)));
@@ -212,8 +217,17 @@ export const Signup: React.FC = () => {
     if (/\d/.test(formData.name)) newErrors.name = 'Name cannot contain numbers';
     const rawPhone = formData.phone.replace(/\D/g, '');
     if (rawPhone.length > 0 && rawPhone.length !== 10) newErrors.phone = 'Phone number must be exactly 10 digits';
+    // League, courts and skill decide which draw, zone and ladder a member plays in, so an
+    // account can't be finished without them.
+    const missing = [
+      !skillChosen && 'your skill level',
+      !formData.league && 'your league',
+      formData.preferredCourts.length === 0 && 'at least one preferred court',
+    ].filter(Boolean);
+    // Cleared on a passing attempt, or it stays up behind the welcome screen.
+    setError(missing.length ? `Please choose ${missing.join(', ')}.` : '');
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return Object.keys(newErrors).length === 0 && missing.length === 0;
   };
 
   // Email gate: decide between login (existing) and account creation (new)
@@ -603,16 +617,18 @@ export const Signup: React.FC = () => {
                   <Chrome className="mr-2 w-5 h-5" />
                   Google Account
                 </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full"
-                  onClick={handleAppleSignIn}
-                  isLoading={loading}
-                >
-                  <Apple className="mr-2 w-5 h-5" />
-                  Apple Account
-                </Button>
+                {APPLE_SIGN_IN_ENABLED && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full"
+                    onClick={handleAppleSignIn}
+                    isLoading={loading}
+                  >
+                    <Apple className="mr-2 w-5 h-5" />
+                    Apple Account
+                  </Button>
+                  )}
               </div>
             </div>
           )}
@@ -659,7 +675,7 @@ export const Signup: React.FC = () => {
                           onChange={(e) => setLoginPassword(e.target.value)}
                           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleLogin(); } }}
                           autoFocus
-                          className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 pr-10 text-fg placeholder-fg/40 transition-all duration-200 focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
+                          className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 pr-10 text-fg placeholder-fg/70 transition-all duration-200 focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
                         />
                         <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-fg transition-colors" tabIndex={-1}>
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -717,16 +733,18 @@ export const Signup: React.FC = () => {
                         <Chrome className="mr-2 w-5 h-5" />
                         Google Account
                       </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="w-full"
-                        onClick={handleAppleSignIn}
-                        isLoading={loading}
-                      >
-                        <Apple className="mr-2 w-5 h-5" />
-                        Apple Account
-                      </Button>
+                      {APPLE_SIGN_IN_ENABLED && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="w-full"
+                          onClick={handleAppleSignIn}
+                          isLoading={loading}
+                        >
+                          <Apple className="mr-2 w-5 h-5" />
+                          Apple Account
+                        </Button>
+                        )}
                     </div>
                   )}
                 </>
@@ -760,7 +778,7 @@ export const Signup: React.FC = () => {
                         placeholder="••••••••"
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-10 text-fg placeholder-fg/40 transition-all duration-200 focus:ring-2 outline-none ${errors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-fg/10 focus:border-clay focus:ring-clay/20'}`}
+                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-10 text-fg placeholder-fg/70 transition-all duration-200 focus:ring-2 outline-none ${errors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-fg/10 focus:border-clay focus:ring-clay/20'}`}
                       />
                       <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-fg transition-colors" tabIndex={-1}>
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -779,7 +797,7 @@ export const Signup: React.FC = () => {
                         placeholder="••••••••"
                         value={formData.confirmPassword}
                         onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-10 text-fg placeholder-fg/40 transition-all duration-200 focus:ring-2 outline-none ${
+                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-10 text-fg placeholder-fg/70 transition-all duration-200 focus:ring-2 outline-none ${
                           (errors.confirmPassword || (formData.confirmPassword && formData.confirmPassword !== formData.password))
                             ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
                             : 'border-fg/10 focus:border-clay focus:ring-clay/20'
@@ -882,8 +900,8 @@ export const Signup: React.FC = () => {
                 id="skill"
                 title="Skill"
                 right={openCards.has('skill')
-                  ? <span className="text-sm font-black text-clay">{formData.skillLevel.toFixed(1)}</span>
-                  : <CardSummary text={`${formData.skillLevel.toFixed(1)} · ${skillBand(formData.skillLevel)}`} />}
+                  ? <span className="text-sm font-black text-clay">{skillChosen ? formData.skillLevel.toFixed(1) : 'Choose'}</span>
+                  : <CardSummary text={skillChosen ? `${formData.skillLevel.toFixed(1)} · ${skillBand(formData.skillLevel)}` : 'Not chosen yet'} />}
                 open={openCards.has('skill')}
                 onToggle={toggleCard}
               >
@@ -893,12 +911,12 @@ export const Signup: React.FC = () => {
                       first and last boxes had theirs clipped by the card edge. */}
                   <div className="grid grid-cols-7 gap-1.5">
                     {SELECTABLE_SKILL_LEVELS.map((level) => {
-                      const active = formData.skillLevel === level;
+                      const active = skillChosen && formData.skillLevel === level;
                       return (
                         <button
                           key={level}
                           type="button"
-                          onClick={() => setFormData({ ...formData, skillLevel: level })}
+                          onClick={() => { setFormData({ ...formData, skillLevel: level }); setSkillChosen(true); }}
                           className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
                             active ? 'bg-clay/10 text-clay border-clay' : 'bg-fg/5 text-fg border-transparent hover:bg-fg/10'
                           }`}
@@ -1014,51 +1032,53 @@ export const Signup: React.FC = () => {
                 onToggle={toggleCard}
               >
                 <div className="space-y-4 pt-1">
-                  <div className="flex flex-wrap gap-2">
-                    {(["Men's", "Women's"] as const).map((league) => (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                    <div className="flex flex-wrap gap-2">
+                      {(["Men's", "Women's"] as const).map((league) => (
+                        <button
+                          key={league}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, league })}
+                          className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                            formData.league === league
+                              ? 'bg-clay text-white'
+                              : 'bg-fg/5 text-fg hover:bg-fg/10'
+                          }`}
+                        >
+                          {league}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
                       <button
-                        key={league}
                         type="button"
-                        onClick={() => setFormData({ ...formData, league })}
+                        disabled={!formData.league}
+                        onClick={() => setFormData({ ...formData, retiredPro: !formData.retiredPro, juniors: false })}
                         className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
-                          formData.league === league
-                            ? 'bg-clay text-white'
-                            : 'bg-fg/5 text-fg hover:bg-fg/10'
+                          !formData.league
+                            ? 'bg-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
+                            : formData.retiredPro
+                              ? 'bg-clay text-white'
+                              : 'bg-fg/5 text-fg hover:bg-fg/10'
                         }`}
                       >
-                        {league}
+                        Retired Pro <span className="ml-1 opacity-70 font-normal normal-case">(age: 55+)</span>
                       </button>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={!formData.league}
-                      onClick={() => setFormData({ ...formData, retiredPro: !formData.retiredPro, juniors: false })}
-                      className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
-                        !formData.league
-                          ? 'bg-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
-                          : formData.retiredPro
-                            ? 'bg-clay text-white'
-                            : 'bg-fg/5 text-fg hover:bg-fg/10'
-                      }`}
-                    >
-                      Retired Pro <span className="ml-1 opacity-70 font-normal normal-case">(age: 55+)</span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!formData.league}
-                      onClick={() => setFormData({ ...formData, juniors: !formData.juniors, retiredPro: false })}
-                      className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
-                        !formData.league
-                          ? 'bg-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
-                          : formData.juniors
-                            ? 'bg-clay text-white'
-                            : 'bg-fg/5 text-fg hover:bg-fg/10'
-                      }`}
-                    >
-                      Juniors
-                    </button>
+                      <button
+                        type="button"
+                        disabled={!formData.league}
+                        onClick={() => setFormData({ ...formData, juniors: !formData.juniors, retiredPro: false })}
+                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                          !formData.league
+                            ? 'bg-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
+                            : formData.juniors
+                              ? 'bg-clay text-white'
+                              : 'bg-fg/5 text-fg hover:bg-fg/10'
+                        }`}
+                      >
+                        Juniors
+                      </button>
+                    </div>
                   </div>
                   {!formData.league && (
                     <p className="text-[11px] text-fg/70">Choose a league above to unlock Retired Pro / Juniors.</p>

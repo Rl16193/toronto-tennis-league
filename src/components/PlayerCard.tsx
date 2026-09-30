@@ -19,12 +19,12 @@ export const RankMove: React.FC<{ t?: 'up' | 'down' | 'flat'; move?: number }> =
   );
 
 // Where a row came from, as a single letter on the name line: T tournament, C challenge,
-// R friendly (rally). Clay for the two competitive sources, plain foreground for friendlies —
+// R rally. Clay for the two competitive sources, plain foreground for rallies —
 // which is white in dark theme and dark green in light, from the --color-fg token.
 export const SourceLetter: React.FC<{ source: 'tournament' | 'challenge' | 'rally' }> = ({ source }) => (
   <span
     className={`text-[11px] font-black ${source === 'rally' ? 'text-fg' : 'text-clay'}`}
-    aria-label={source === 'tournament' ? 'Tournament' : source === 'challenge' ? 'Challenge' : 'Friendly'}
+    aria-label={source === 'tournament' ? 'Tournament' : source === 'challenge' ? 'Challenge' : 'Rally'}
   >
     {source === 'tournament' ? 'T' : source === 'challenge' ? 'C' : 'R'}
   </span>

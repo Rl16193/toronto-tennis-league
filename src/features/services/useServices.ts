@@ -2,9 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { collection, doc, getDoc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
-import { useTasks } from '../tasks/useTasks';
 import {
-  GroupLesson, Redemption, Reward, ServiceCategory, currentMonthKey,
+  Booking, PINNED_PROVIDERS, Redemption, Reward, ServiceCategory,
 } from './types';
 
 export * from './types';
@@ -13,8 +12,6 @@ export interface Provider {
   id: string;
   name: string;
   area: string;
-  phone?: string;
-  email?: string;
   certified?: boolean;
   /** Their member account, when they have one — used for the profile photo beside their name. */
   uid?: string;
@@ -42,8 +39,8 @@ export function useServicesCatalog() {
       .finally(() => setLoading(false));
   }, [reloadKey]);
 
-  // category → providers → offers. One Contact button per provider, so the phone number isn't
-  // repeated on every offer row.
+  // category → providers → offers. One Contact button per provider, so contacts aren't repeated
+  // on every offer row. The details themselves come from `contacts/{uid}`, never from the offer.
   const byCategory = useMemo(() => {
     const cats = new Map<ServiceCategory, Provider[]>();
     rewards.forEach((r) => {
@@ -55,14 +52,20 @@ export function useServicesCatalog() {
         id: r.provider_id,
         name: r.provider_name,
         area: r.area,
-        phone: r.contact_phone,
-        email: r.contact_email,
         certified: r.certified,
         uid: r.uid,
         offers: [r],
       });
       cats.set(category, list);
     });
+    // Pinned providers first, in PINNED_PROVIDERS order; everyone else keeps catalog order.
+    // Array.sort is stable, so equal ranks don't reshuffle. A distance search in ServicesElements
+    // re-sorts on top of this and drops the pins entirely.
+    const rank = (id: string) => {
+      const at = PINNED_PROVIDERS.indexOf(id);
+      return at === -1 ? PINNED_PROVIDERS.length : at;
+    };
+    cats.forEach((list) => list.sort((a, b) => rank(a.id) - rank(b.id)));
     return cats;
   }, [rewards]);
 
@@ -101,11 +104,11 @@ export function useProviderAvatars(uids: (string | undefined)[]): Record<string,
  * The signed-in player's offers balance. earned = league + RS points; spent comes from
  * offers/{uid}, written only by Cloud Functions. Redeeming moves `spent` and nothing else, so the
  * earning counters and every leaderboard on them are untouched.
- * Mirrors readBalance() in functions/rewards.js — change one, change both.
+ * Mirrors readBalance() in functions/rewards.js — change one, change both. Takes the caller's
+ * useTasks() result so a page that already shows task progress doesn't subscribe to it twice.
  */
-export function useRedeemablePoints() {
+export function useRedeemablePoints({ points: rsPoints, progressLoaded }: { points: number; progressLoaded: boolean }) {
   const { user, profile } = useAuth();
-  const { points: rsPoints, progressLoaded } = useTasks();
   const [spent, setSpent] = useState(0);
   const [spentLoaded, setSpentLoaded] = useState(false);
 
@@ -141,29 +144,28 @@ export function useRedeemablePoints() {
   };
 }
 
-/** The signed-in player's own coupons, newest first. */
-export function useMyRedemptions() {
+// Newest first, sorted here: an orderBy beside the equality filter would need a composite index.
+const newestFirst = (a: Booking, b: Booking) => (b.created_at || '').localeCompare(a.created_at || '');
+
+/** The signed-in member's bookings, live. */
+export function useMyBookings() {
   const { user } = useAuth();
-  const [redemptions, setRedemptions] = useState<Redemption[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) { setRedemptions([]); setLoading(false); return; }
+    if (!user) { setBookings([]); setLoading(false); return; }
     return onSnapshot(
-      query(collection(db, 'redemptions'), where('uid', '==', user.uid)),
+      query(collection(db, 'bookings'), where('uid', '==', user.uid)),
       (snap) => {
-        setRedemptions(
-          snap.docs
-            .map((d) => d.data() as Redemption)
-            .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')),
-        );
+        setBookings(snap.docs.map((d) => d.data() as Booking).sort(newestFirst));
         setLoading(false);
       },
       () => setLoading(false),
     );
   }, [user?.uid]);
 
-  return { redemptions, loading };
+  return { bookings, loading };
 }
 
 /**
@@ -184,31 +186,48 @@ export function useProviderRole() {
   return { providerId: null, role: null };
 }
 
-/** Coupons issued against the signed-in provider's own offers. */
-export function useProviderRedemptions() {
-  const { providerId, role } = useProviderRole();
-  const [redemptions, setRedemptions] = useState<Redemption[]>([]);
+/** Bookings for a provider's own offers, live. */
+export function useProviderBookings(providerId: string | null) {
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!providerId) { setRedemptions([]); setLoading(false); return; }
-    // Sorted client-side rather than with orderBy: pairing orderBy with the id filter would
-    // need a composite index, and this project ships no firestore.indexes.json.
+    if (!providerId) { setBookings([]); setLoading(false); return; }
     return onSnapshot(
-      query(collection(db, 'redemptions'), where('stringer_id', '==', providerId)),
+      query(collection(db, 'bookings'), where('provider_id', '==', providerId)),
       (snap) => {
-        setRedemptions(
-          snap.docs
-            .map((d) => d.data() as Redemption)
-            .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')),
-        );
+        setBookings(snap.docs.map((d) => d.data() as Booking).sort(newestFirst));
         setLoading(false);
       },
       () => setLoading(false),
     );
   }, [providerId]);
 
-  return { providerId, role, redemptions, loading };
+  return { bookings, loading };
+}
+
+/** A provider's own catalog offers, inactive ones included, read once. */
+export function useProviderOffers(providerId: string | null) {
+  const [offers, setOffers] = useState<Reward[]>([]);
+
+  useEffect(() => {
+    if (!providerId) { setOffers([]); return; }
+    let alive = true;
+    getDocs(query(collection(db, 'tasks'), where('provider_id', '==', providerId)))
+      .then((snap) => {
+        if (!alive) return;
+        setOffers(
+          snap.docs
+            .filter((d) => d.data().type === 'offer')
+            .map((d) => ({ id: d.id, ...(d.data() as Omit<Reward, 'id'>) }))
+            .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0)),
+        );
+      })
+      .catch(() => { /* the service rail just stays empty */ });
+    return () => { alive = false; };
+  }, [providerId]);
+
+  return offers;
 }
 
 /** Redemptions needing an organizer decision — flagged by a provider or cancel-requested. */
@@ -225,32 +244,4 @@ export function usePendingRedemptionReviews(enabled: boolean) {
   }, [enabled]);
 
   return items;
-}
-
-/**
- * This month's free group lesson. One doc per month (`group_lessons/{YYYY-MM}`), so spots reset on
- * the 1st with no scheduled job — a new month is simply a doc that doesn't exist yet.
- */
-export function useGroupLesson() {
-  const { user } = useAuth();
-  const month = currentMonthKey();
-  const [lesson, setLesson] = useState<GroupLesson | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    return onSnapshot(
-      doc(db, 'group_lessons', month),
-      (snap) => { setLesson(snap.exists() ? (snap.data() as GroupLesson) : null); setLoading(false); },
-      () => setLoading(false),
-    );
-  }, [month]);
-
-  const players = lesson?.players ?? [];
-  return {
-    month,
-    lesson,
-    players,
-    joined: !!user && players.some((p) => p.uid === user.uid),
-    loading,
-  };
 }

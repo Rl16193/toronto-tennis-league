@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { ArrowLeft, Award, Mail, MapPin, Phone, Star, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import { fadeUp, staggerDelay } from '../lib/motion';
@@ -9,47 +9,13 @@ import { Button } from '../components/Button';
 import { RacquetIcon } from '../components/RacquetIcon';
 import { ContactData, MemberInfo, TennisEvent, UserData, UserPreferences, UserStats } from '../types';
 import type { TournamentMatch } from './tournament/types';
-import { BadgeRow } from '../features/tasks/BadgeRow';
+import { BadgeRow } from '../features/tasks/BadgePicker';
 import { useCommunityStandings } from '../features/tasks/useTasks';
 import { skillTier, leagueDivision, leagueAgeCategory } from '../utils/skillLevels';
 import { contactChannels, pillButtonCls } from '../components/ContactOpponentButton';
 
-// Furthest-round derivation for Best Finish / Best Result from a player's tournament matches.
-const ROUND_ORDER = ['R64', 'R32', 'R16', 'QF', 'SF', 'F'];
-const ROUND_LABEL: Record<string, string> = {
-  R64: 'Round of 64', R32: 'Round of 32', R16: 'Round of 16', QF: 'Quarterfinal', SF: 'Semifinal', F: 'Final',
-};
-
-const deriveResults = (mine: TournamentMatch[], uid: string) => {
-  const completed = mine
-    .filter((m) => m.status === 'complete' && m.winner_uid)
-    .sort((a, b) => (Date.parse(b.completed_at || '') || 0) - (Date.parse(a.completed_at || '') || 0));
-
-  let streak = '—';
-  if (completed.length) {
-    const firstWon = completed[0].winner_uid === uid;
-    let n = 0;
-    for (const m of completed) { if ((m.winner_uid === uid) !== firstWon) break; n += 1; }
-    streak = `${n}${firstWon ? 'W' : 'L'}`;
-  }
-
-  let bestIdx = -1;
-  let wonFinal = false;
-  for (const m of mine) {
-    const idx = ROUND_ORDER.indexOf(m.round);
-    if (idx < 0) continue;
-    if (idx > bestIdx) bestIdx = idx;
-    if (m.round === 'F' && m.status === 'complete' && m.winner_uid === uid) wonFinal = true;
-  }
-  const bestFinish = bestIdx >= 0 ? ROUND_LABEL[ROUND_ORDER[bestIdx]] : '—';
-  let bestResult = '—';
-  if (wonFinal) bestResult = 'Champion';
-  else if (bestIdx >= 0) {
-    const r = ROUND_ORDER[bestIdx];
-    bestResult = r === 'F' ? 'Finalist' : r === 'SF' ? 'Semifinalist' : r === 'QF' ? 'Quarterfinalist' : ROUND_LABEL[r];
-  }
-  return { streak, bestFinish, bestResult };
-};
+import { deriveResults } from '../features/matches/tournamentResults';
+import { playerRecord, useUserMatches } from '../features/matches/useUserMatches';
 
 const SectionLabel: React.FC<{ icon?: React.ReactNode; label: string }> = ({ icon, label }) => (
   <span className="text-xs font-bold text-fg/70 uppercase tracking-widest flex items-center gap-1.5">{icon}{label}</span>
@@ -72,7 +38,13 @@ export const PlayerProfile: React.FC = () => {
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [organizer, setOrganizer] = useState<MemberInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [results, setResults] = useState({ streak: '—', bestFinish: '—', bestResult: '—' });
+  // The same played matches, streak and P/G Won as the Player Dash (useUserMatches, playerRecord).
+  const { matches: played, upcoming } = useUserMatches(userId);
+  const record = playerRecord(played, stats);
+  const results = useMemo(() => deriveResults(
+    [...played, ...upcoming].map((m) => m.tournamentMatch).filter((m): m is TournamentMatch => !!m),
+    userId ?? '',
+  ), [played, upcoming, userId]);
   const { rows: communityRows } = useCommunityStandings();
   const rsPoints = userId ? (communityRows.find((r) => r.uid === userId)?.points ?? 0) : 0;
 
@@ -99,17 +71,6 @@ export const PlayerProfile: React.FC = () => {
         if (playerData?.name) document.title = `${playerData.name} · Racquets & Strings`;
         setStats(statsDoc.exists() ? (statsDoc.data() as UserStats) : null);
         setPreferences(prefsDoc.exists() ? (prefsDoc.data() as UserPreferences) : null);
-
-        // Derive Streak / Best Finish / Best Result from this player's tournament matches.
-        try {
-          const [m1, m2] = await Promise.all([
-            getDocs(query(collection(db, 'matches'), where('player_1_uid', '==', userId))),
-            getDocs(query(collection(db, 'matches'), where('player_2_uid', '==', userId))),
-          ]);
-          const byId = new Map<string, TournamentMatch>();
-          [...m1.docs, ...m2.docs].forEach((d) => byId.set(d.id, { id: d.id, ...d.data() } as TournamentMatch));
-          setResults(deriveResults([...byId.values()], userId));
-        } catch { setResults({ streak: '—', bestFinish: '—', bestResult: '—' }); }
 
         // Reset before resolving — otherwise a previous player's organizer can keep showing
         // if this player has no event/organizer to resolve (switching :userId doesn't remount).
@@ -172,12 +133,17 @@ export const PlayerProfile: React.FC = () => {
 
   const s = stats as (UserStats & { matchesPlayed?: number; leaguePoints26?: number }) | null;
   const statTiles = [
-    { label: 'Streak', value: results.streak, accent: 'text-clay' },
+    { label: 'Streak', value: record.streak ?? '—', accent: 'text-clay' },
     { label: 'RS Points', value: `${rsPoints}`, accent: 'text-fg' },
     { label: 'League Points', value: `${s?.leaguePoints26 ?? 0}`, accent: 'text-fg' },
     { label: 'Matches', value: `${s?.matchesPlayed ?? 0}`, accent: 'text-fg' },
-    { label: 'Best Finish', value: results.bestFinish, accent: 'text-fg' },
-    { label: 'Best Result', value: results.bestResult, accent: 'text-fg' },
+    // Abbreviated to fit the tile; Final stays spelled out.
+    {
+      label: 'Best Finish',
+      value: ({ 'Round of 64': 'R64', 'Round of 32': 'R32', 'Round of 16': 'R16', Quarterfinal: 'QF', Semifinal: 'SF' } as Record<string, string>)[results.bestFinish] ?? results.bestFinish,
+      accent: 'text-fg',
+    },
+    { label: 'P/G Won', value: record.pgWon === null ? '—' : `${record.pgWon}%`, accent: 'text-fg' },
   ];
 
   return (
@@ -297,8 +263,9 @@ export const PlayerProfile: React.FC = () => {
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {statTiles.map((t, i) => (
-            <motion.div key={t.label} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }} className="rounded-2xl bg-white/[0.03] px-3 py-4 text-center">
-              <p className={`text-2xl font-black ${t.accent}`}>{t.value}</p>
+            <motion.div key={t.label} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }} className="min-w-0 rounded-2xl bg-white/[0.03] px-3 py-4 text-center flex flex-col justify-center">
+              {/* Long values (a round name) drop a size so they stay inside the tile. */}
+              <p className={`${t.value.length > 6 ? 'text-lg' : 'text-2xl'} font-black leading-tight break-words ${t.accent}`}>{t.value}</p>
               <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70 mt-1">{t.label}</p>
             </motion.div>
           ))}

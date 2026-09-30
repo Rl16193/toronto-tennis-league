@@ -158,6 +158,8 @@ export interface TennisEvent {
   type: string;
   location: string;
   creator_id?: string;
+  /** Co-organizers of this event (Racquets-And-Strings ADR-001). The creator is implied. */
+  organizer_ids?: string[];
   date?: string | { toDate?: () => Date; seconds?: number; nanoseconds?: number };
   start_date?: string | { toDate?: () => Date; seconds?: number; nanoseconds?: number };
   end_date?: string | { toDate?: () => Date; seconds?: number; nanoseconds?: number };
@@ -173,6 +175,12 @@ export interface TennisEvent {
   about?: string;
   description?: string;
   organizer?: string;
+  /**
+   * Server-written (recordScore in functions/lib/scoring.js) when the event's final is played. This is the
+   * authoritative "this event is over" signal — dates are what somebody typed in weeks earlier.
+   * Never write it from the client.
+   */
+  completed_at?: string;
   round_deadlines?: Record<string, string>; // round → 'YYYY-MM-DD'
   tournament_format?: 'knockout' | 'rr';
   tournament_choice?: 'Singles' | 'Doubles';

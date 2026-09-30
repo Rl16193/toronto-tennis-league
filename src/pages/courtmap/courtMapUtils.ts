@@ -36,6 +36,11 @@ export type PickleballOnlyCourt = {
 
 export type CourtWithCount = CsvCourt & {
   count: number;
+  // Recent-activity totals: check-ins, photo reports and recorded results, each event counted
+  // once. Server-aggregated (functions/courtCounts.js) because /courts is public and both
+  // `courts` and `matches` are auth-only reads.
+  activity7: number;
+  activity30: number;
   hasPrograms: boolean;
   pickleballEntries: PickleballEntry[];
 };
@@ -556,15 +561,20 @@ export const markerSizeBands = (busiestCount: number) => {
 
 const MARKER_SIZES = [16, 22, 28, 34];
 
-export function courtMarkerHtml(court: CourtWithCount, busiestCount = 0): string {
-  const hasPlayers = court.count > 0;
+// `metric` overrides only the number the bubble SHOWS — the Activity view passes the court's event
+// count. Size always follows the member count, so a court is the same size in every view and
+// switching views changes numbers, not the map. A court with activity but no members gets the
+// smallest labelled size rather than the unlabelled dot, so its number still fits.
+export function courtMarkerHtml(court: CourtWithCount, busiestCount = 0, metric?: number): string {
+  const value = metric ?? court.count;
+  const hasPlayers = value > 0;
   const bands = markerSizeBands(busiestCount);
   const tier = court.count <= bands.small ? 0
     : court.count <= bands.medium ? 1
     : court.count <= bands.large ? 2
     : 3;
   const s = !hasPlayers ? 12 : MARKER_SIZES[tier];
-  const label = String(court.count);
+  const label = String(value);
   // Three-digit counts need to shrink to stay inside the circle.
   const fs = label.length >= 3 ? 8 : label.length === 2 ? 10 : 11;
 

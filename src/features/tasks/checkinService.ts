@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, limit, orderBy, query, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, limit, orderBy, query, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { haversineKm } from '../../utils/zones';
 import { courtKey } from '../../utils/courtKey';
@@ -60,7 +60,7 @@ export async function logAttendance(
 }
 
 // What the player is at the court for — captured on check-in so we know the kind of activity.
-export const VISIT_TYPES = ['Practice', 'Friendlies', 'Tournament', 'Other'] as const;
+export const VISIT_TYPES = ['Practice', 'Rallies', 'Tournament', 'Other'] as const;
 export type VisitType = (typeof VISIT_TYPES)[number];
 
 // Most-checked-in courts, computed from a bounded window of recent attendance (newest 300 rows).
@@ -111,12 +111,6 @@ export async function findNearbyCourts(lat: number, lng: number): Promise<Nearby
     .sort((a, b) => a.distM - b.distM);
 }
 
-// Has this player already checked in at this court?
-export async function hasCheckedIn(uid: string, court: CsvCourt): Promise<boolean> {
-  const snap = await getDoc(doc(db, 'courts', `${uid}_${courtKey(court.dropdown)}`));
-  return snap.exists();
-}
-
 // Stamp the passport. Deterministic doc id (uid_courtKey) — firestore.rules deny overwriting an
 // existing check-in, so this can only ever count once per player per court.
 export async function checkIn(
@@ -136,5 +130,5 @@ export async function checkIn(
 
 // "Visit every court in your zone" is now decided server-side in functions/taskPoints.js
 // (awardZoneCompleteIfDone), triggered by the courts check-in write above. It used to be computed
-// here and written straight to task_progress, but that field carries points and the rules
+// here and written straight to tasks/{uid}, but that field carries points and the rules
 // allowlist rejects owner writes to it, so the award never actually landed.

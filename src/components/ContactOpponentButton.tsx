@@ -69,13 +69,11 @@ export const ContactOpponentButton: React.FC<{
   phone?: string;
   email?: string;
   whatsappContact?: string;
-  whatsappSameAsPhone?: boolean;
   /** Their `contacts.preferred_mode_of_contact`. Empty/absent = offer every channel they have. */
   preferred?: ContactMethod[];
   size?: 'sm' | 'md';
-  variant?: 'outline' | 'white';
   className?: string;
-}> = ({ name, phone, email, whatsappContact, preferred, size = 'sm', variant = 'white', className }) => {
+}> = ({ name, phone, email, whatsappContact, preferred, size = 'sm', className }) => {
   const channels = contactChannels({ phone, email, whatsappContact, preferred });
   if (channels.length === 0) return null;
 
@@ -92,7 +90,7 @@ export const ContactOpponentButton: React.FC<{
           rel="noopener noreferrer"
           title={`${c.label} ${name}`}
           aria-label={`${c.label} ${name}`}
-          className={`${pillButtonCls(size, variant)} !px-1.5`}
+          className={`${pillButtonCls(size, 'white')} !px-1.5`}
         >
           <c.icon className="w-3.5 h-3.5" />
         </a>

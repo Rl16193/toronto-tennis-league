@@ -3,9 +3,8 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent } from '../../../types';
-import { isLadderEvent, isTopspinMeetupEvent, isTournamentEvent, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
-import { parseEndInstant, parseValidDate, sortEventsByStartDate } from '../../../utils/eventDates';
-import type { FirestoreDateLike } from '../../../utils/eventDates';
+import { isTopspinMeetupEvent, isTournamentEvent, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
+import { isCurrentEvent, sortEventsByStartDate } from '../../../utils/eventDates';
 import { DisplayEvent, fetchEvents, resolveStorageUrl } from '../services/eventService';
 import type { JoinedRegistration } from '../types';
 
@@ -30,30 +29,48 @@ export function useEvents() {
   // Storage round-trips for n images. `resolvingRef` then keeps a path from being requested twice
   // even as the key legitimately changes, and makes a path that resolves to nothing stay done
   // instead of being retried on every later pass.
+  // "Still mounted?" is a REF, not a per-run `cancelled` local, and that distinction is the whole
+  // bug this once had. A per-run flag meant the FIRST image to come back changed `unresolvedKey`,
+  // which re-ran the effect, whose cleanup then cancelled every other fetch still in flight — and
+  // `resolvingRef` had already marked those paths done, so they never retried. Exactly one event
+  // got its picture and every other card silently rendered blank. Only unmounting may stop a
+  // resolution; a sibling finishing first must not.
   const resolvingRef = useRef(new Set<string>());
+  const aliveRef = useRef(true);
+  // Set on the way IN as well as cleared on the way out. StrictMode mounts, unmounts and
+  // remounts in development, so a cleanup-only effect leaves the flag stuck false after that
+  // cycle and every resolved image is thrown away — no posters at all, which is worse than the
+  // race this replaced.
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; };
+  }, []);
+
   const unresolvedKey = events.filter((e) => e.imagePath && !e.image).map((e) => e.imagePath).join('|');
 
   useEffect(() => {
     const paths = unresolvedKey ? unresolvedKey.split('|') : [];
-    const todo = paths.filter((p) => !resolvingRef.current.has(p));
+    // Deduped: two events can share one poster (both Summer Gauntlet draws do), and that is one
+    // file, not two round-trips.
+    const todo = [...new Set(paths)].filter((p) => !resolvingRef.current.has(p));
     if (todo.length === 0) return;
     todo.forEach((path) => resolvingRef.current.add(path));
 
-    let cancelled = false;
     todo.forEach((path) => {
       resolveStorageUrl(path).then((url) => {
-        if (cancelled || !url) return;
+        if (!aliveRef.current || !url) return;
         setEvents((prev) => prev.map((e) => e.imagePath === path ? { ...e, image: url, imagePath: undefined } : e));
-      }).catch(() => { /* image stays unset; the card renders its placeholder */ });
+      }).catch(() => { /* image stays unset; the card renders without a banner */ });
     });
-    return () => { cancelled = true; };
   }, [unresolvedKey]);
 
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, 'event_participants'), where('uid', '==', user.uid));
     return onSnapshot(q, (snap) => {
-      setJoinedRegistrations(snap.docs.map((d) => {
+      // A row the organizer removed (`removal: true`) no longer counts as joined, so the player can
+      // register again; rejoining adds a fresh row and the removed one stays as the record.
+      setJoinedRegistrations(snap.docs.filter((d) => d.data().removal !== true).map((d) => {
         const data = d.data();
         return { eventId: data.event_id, tournamentChoice: (data.tournament_choice || '') as JoinedRegistration['tournamentChoice'] };
       }));
@@ -66,28 +83,11 @@ export function useEvents() {
     [events],
   );
 
+  // `isCurrentEvent` (eventDates.ts) is shared with the homepage's Upcoming Events strip — it
+  // carries the timezone fix for date-only values, so never re-implement it at a call site.
   const visibleEvents = useMemo(() => {
     const now = Date.now();
-    // These used to hand-roll their own date parsing with `new Date(str)`, which reads a plain
-    // "YYYY-MM-DD" as UTC midnight — in Toronto that's 8pm the previous evening, so an event
-    // disappeared from this page most of a day before it ended. parseValidDate/parseEndInstant
-    // handle the date-only case as local time, and treat an end date as end-of-day.
-    return allDisplayableEvents.filter((e) => {
-      const raw = e as unknown as Record<string, unknown>;
-      const rawEnd = (raw.endDate ?? raw.end_date) as FirestoreDateLike;
-      if (rawEnd) {
-        const endMs = parseEndInstant(rawEnd)?.getTime() ?? null;
-        if (endMs !== null && endMs < now) return false;
-      }
-      if (!isTournamentEvent(e) && !isLadderEvent(e)) {
-        const rawStart = (raw.startDate ?? raw.start_date ?? raw.date) as FirestoreDateLike;
-        if (rawStart) {
-          const startMs = parseValidDate(rawStart)?.getTime() ?? null;
-          if (startMs !== null && startMs < now) return false;
-        }
-      }
-      return true;
-    });
+    return allDisplayableEvents.filter((e) => isCurrentEvent(e, now));
   }, [allDisplayableEvents]);
 
   const getJoinedChoices = (eventId: string) =>

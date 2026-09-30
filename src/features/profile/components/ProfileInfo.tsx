@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Camera, Pencil, X, Check, MapPin, Star, Loader2, Users, Award } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -9,15 +9,12 @@ import { storage } from '../../../lib/firebase';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import { RacquetIcon } from '../../../components/RacquetIcon';
-import { SELECTABLE_SKILL_LEVELS, skillTier, leagueDivision, leagueAgeCategory } from '../../../utils/skillLevels';
-import {
-  defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts,
-  getCourtSuggestions, mergeCourtOptions,
-} from '../../signup/utils/courtSearch';
-import { zoneFromCourts, ZONE_NAMES } from '../../../utils/zones';
+import { skillTier, leagueDivision, leagueAgeCategory } from '../../../utils/skillLevels';
+import { ZONE_NAMES } from '../../../utils/zones';
 import { Sheet } from '../../../components/Sheet';
 import { formatPhone } from '../../../utils/formatPhone';
-import { skillBand } from '../../../pages/tournament/utils';
+import { CourtsEditor } from './CourtsEditor';
+import { LeagueEditor, SkillEditor } from './SkillLeagueEditor';
 import { getFavouritePlayerSuggestions, useFavouritePlayerOptions } from '../favouritePlayers';
 import { BadgePicker } from '../../tasks/BadgePicker';
 import { BADGE_PILL_CLASS } from '../../tasks/badges';
@@ -82,7 +79,8 @@ const SectionHeader: React.FC<{
 // Zone picker. Immediate, not a request: the profile card isn't event-scoped, so there is no
 // organizer attached to review it. A change NEVER unseats them — matches already generated are
 // untouched; the new zone only decides draws not yet made (see functions/zoneMoves.js).
-const ZonePickerSheet: React.FC<{
+// Also opened from the Player Dash.
+export const ZonePickerSheet: React.FC<{
   currentZone: string;
   saving: boolean;
   onClose: () => void;
@@ -148,18 +146,6 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
   const [editing, setEditing] = useState<Row>(null);
   const [showZoneSheet, setShowZoneSheet] = useState(false);
 
-  // Court option list + coords (for the court editor + zone recompute), loaded once.
-  const [courtOptions, setCourtOptions] = useState<string[]>(defaultCourtOptions);
-  const [courtCoords, setCourtCoords] = useState<Map<string, { lat: number; lng: number }>>(new Map());
-  useEffect(() => {
-    let alive = true;
-    fetch('/Tennis Courts Facilities - 4326.csv')
-      .then((r) => (r.ok ? r.text() : ''))
-      .then((csv) => { if (alive && csv) { setCourtOptions(mergeCourtOptions(extractDropdownCourts(csv))); setCourtCoords(extractCourtsWithCoords(csv)); } })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, []);
-
   // Drafts
   const [nameDraft, setNameDraft] = useState('');
   const [phoneDraft, setPhoneDraft] = useState('');
@@ -167,12 +153,6 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
   const [waSameAsPhone, setWaSameAsPhone] = useState(false);
   const [waValid, setWaValid] = useState(true);
   const [bioDraft, setBioDraft] = useState('');
-  const [skillDraft, setSkillDraft] = useState(2);
-  const [leagueDraft, setLeagueDraft] = useState<"Men's" | "Women's" | ''>('');
-  const [ageCategoryDraft, setAgeCategoryDraft] = useState<'Retired Pro' | 'Juniors' | ''>('');
-  const [visibleDraft, setVisibleDraft] = useState(false);
-  const [courtsDraft, setCourtsDraft] = useState<string[]>([]);
-  const [courtInput, setCourtInput] = useState('');
   const [favDraft, setFavDraft] = useState<string[]>([]);
   const [favInput, setFavInput] = useState('');
   // Only read once the editor is open — it's a full pass over `preferences`.
@@ -209,13 +189,8 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
     setWaSameAsPhone(!!contacts.whatsapp_same_as_phone);
     setWaValid(true);
     setBioDraft(user.bio ?? '');
-    setSkillDraft(stats.skill_level);
-    setLeagueDraft(leagueDivision(stats.league));
-    setAgeCategoryDraft(leagueAgeCategory(stats.league));
-    setVisibleDraft(!!user.profile_details_visible);
-    setCourtsDraft(preferences.preferred_courts);
     setFavDraft(preferences.favourite_players);
-    setCourtInput(''); setFavInput(''); setEmailDraft(''); setEmailPassword(''); setEmailSent(false);
+    setFavInput(''); setEmailDraft(''); setEmailPassword(''); setEmailSent(false);
     setEditing(row);
   };
   const save = async (fn: () => Promise<boolean>) => { if (await fn()) setEditing(null); };
@@ -239,24 +214,6 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
     if (await actions.updatePreferredZone(zone)) setShowZoneSheet(false);
   };
 
-  const computeZone = (courts: string[]): string => {
-    // A zone chosen by hand wins over the courts. Recomputing here would silently undo the pick
-    // and move the member between draws the next time they edit their court list.
-    if (preferences.preferred_zone_manual) return preferences.preferred_zone;
-    if (courts.length === 0) return '';
-    // Majority vote across ALL preferred courts (not just the first one) — a player who splits
-    // time across zones should land in whichever zone most of their courts are actually in,
-    // with Downtown as the tiebreaker (see zoneFromCourts).
-    const zone = zoneFromCourts(courts, courtCoords);
-    return zone || preferences.preferred_zone || '';
-  };
-
-  const courtSuggestions = getCourtSuggestions(courtOptions, courtsDraft, courtInput);
-  const addCourt = (court: string) => {
-    const t = court.trim();
-    if (!t || courtsDraft.includes(t)) return;
-    setCourtsDraft([...courtsDraft, t]); setCourtInput('');
-  };
 
   const onPickAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -354,7 +311,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
                   separateDialCode
                   inputProps={{
                     placeholder: 'WhatsApp number',
-                    className: 'w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none',
+                    className: 'w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-fg/70 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none',
                   }}
                 />
               )}
@@ -369,7 +326,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
             </div>
           ) : (
             <p className="text-lg font-bold text-fg mt-0.5">
-              {contacts.whatsapp_same_as_phone ? 'Same as phone number' : (contacts.whatsapp_contact || '—')}
+              {contacts.whatsapp_same_as_phone ? (contacts.phone || '—') : (contacts.whatsapp_contact || '—')}
             </p>
           )}
         </div>
@@ -381,7 +338,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
             <div className="mt-2 space-y-2">
               <textarea value={bioDraft} onChange={(e) => setBioDraft(e.target.value)} rows={3} maxLength={300}
                 placeholder="Your tennis vibe: play times, rally or games, and any other details?"
-                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-gray-500 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none" />
+                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-fg/70 text-sm focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none" />
               <Button size="sm" onClick={() => save(() => actions.updateBio(bioDraft))} isLoading={updateLoading}>Save</Button>
             </div>
           ) : <p className="text-sm text-fg/70 mt-0.5">{user.bio?.trim() || <span className="text-fg/70">No bio yet.</span>}</p>}
@@ -391,33 +348,11 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
         <div className="py-3">
           <SectionHeader icon={<RacquetIcon className="w-3.5 h-3.5 text-clay" />} label="Skill Level" editing={editing === 'skill'} onEdit={() => open('skill')} onCancel={() => setEditing(null)} />
           {editing === 'skill' ? (
-            <div className="mt-3 space-y-3">
-              {/* Same control as signup: one column per level filling the width, an INSET border
-                  for the selected state (a ring paints outside the box and gets clipped by the
-                  card edge), and the band name centred underneath. The range slider this replaced
-                  was hard to land on an exact half-step on a phone. */}
-              <div className="grid grid-cols-7 gap-1.5">
-                {SELECTABLE_SKILL_LEVELS.map((level) => {
-                  const active = skillDraft === level;
-                  return (
-                    <button
-                      key={level}
-                      type="button"
-                      onClick={() => setSkillDraft(level)}
-                      className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
-                        active ? 'bg-clay/10 text-clay border-clay' : 'bg-fg/5 text-fg border-transparent hover:bg-fg/10'
-                      }`}
-                    >
-                      {level.toFixed(1)}
-                    </button>
-                  );
-                })}
-              </div>
-              {/* skillBand is the same function the draw engine groups on, so this label and the
-                  group a player actually lands in can never disagree. */}
-              <p className="text-sm font-bold text-clay text-center">{skillBand(skillDraft)}</p>
-              <Button size="sm" onClick={() => save(() => actions.updateSkills(skillDraft, skillBand(skillDraft)))} isLoading={updateLoading}>Save</Button>
-            </div>
+            <SkillEditor
+              initial={stats.skill_level}
+              saving={updateLoading}
+              onSave={(skill, band) => save(() => actions.updateSkills(skill, band))}
+            />
           ) : (
             <div className="mt-1 flex items-center gap-2">
               <span className="text-lg font-bold text-fg">NTRP {stats.skill_level}</span>
@@ -429,62 +364,12 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
         <div className="py-3">
           <SectionHeader icon={<Users className="w-3.5 h-3.5 text-clay" />} label="League" editing={editing === 'league'} onEdit={() => open('league')} onCancel={() => setEditing(null)} />
           {editing === 'league' ? (
-            <div className="mt-2 space-y-3">
-              <div className="flex flex-wrap gap-2">
-                {(["Men's", "Women's"] as const).map((league) => (
-                  <button
-                    key={league}
-                    type="button"
-                    onClick={() => setLeagueDraft(league)}
-                    className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
-                      leagueDraft === league
-                        ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
-                        : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
-                    }`}
-                  >
-                    {league}
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={!leagueDraft}
-                  onClick={() => setAgeCategoryDraft(ageCategoryDraft === 'Retired Pro' ? '' : 'Retired Pro')}
-                  className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
-                    !leagueDraft
-                      ? 'bg-fg/5 border-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
-                      : ageCategoryDraft === 'Retired Pro'
-                        ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
-                        : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
-                  }`}
-                >
-                  Retired Pro <span className="ml-1 opacity-70 font-normal normal-case">(age: 55+)</span>
-                </button>
-                <button
-                  type="button"
-                  disabled={!leagueDraft}
-                  onClick={() => setAgeCategoryDraft(ageCategoryDraft === 'Juniors' ? '' : 'Juniors')}
-                  className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
-                    !leagueDraft
-                      ? 'bg-fg/5 border-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
-                      : ageCategoryDraft === 'Juniors'
-                        ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
-                        : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
-                  }`}
-                >
-                  Juniors
-                </button>
-              </div>
-              {!leagueDraft && (
-                <p className="text-[11px] text-fg/70">Choose a league above to unlock Retired Pro / Juniors.</p>
-              )}
-              <label className="flex items-center gap-2 cursor-pointer text-sm text-fg/70">
-                <input type="checkbox" checked={visibleDraft} onChange={(e) => setVisibleDraft(e.target.checked)} className="accent-clay" />
-                Make visible to others
-              </label>
-              <Button size="sm" onClick={() => save(() => actions.updateLeagueAgeCategory(leagueDraft, ageCategoryDraft, visibleDraft))} isLoading={updateLoading}>Save</Button>
-            </div>
+            <LeagueEditor
+              league={stats.league}
+              visible={!!user.profile_details_visible}
+              saving={updateLoading}
+              onSave={(league, ageCategory, visible) => save(() => actions.updateLeagueAgeCategory(league, ageCategory, visible))}
+            />
           ) : (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {leagueDivision(stats.league) && (
@@ -523,33 +408,15 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
         <div className="py-3">
           <SectionHeader icon={<MapPin className="w-3.5 h-3.5 text-clay" />} label="Courts" editing={editing === 'courts'} onEdit={() => open('courts')} onCancel={() => setEditing(null)} />
           {editing === 'courts' ? (
-            <div className="mt-2 space-y-2">
-              {courtsDraft.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {courtsDraft.map((c) => (
-                    <button key={c} type="button" onClick={() => setCourtsDraft(courtsDraft.filter((x) => x !== c))}
-                      className="px-2.5 py-1 rounded-lg text-xs font-bold bg-clay text-fg flex items-center gap-1.5">{c} <span className="opacity-70">✕</span></button>
-                  ))}
-                </div>
-              )}
-              <div className="flex gap-2">
-                <Input placeholder="Search courts…" value={courtInput} onChange={(e) => setCourtInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCourt(courtInput); } }} />
-                <Button size="sm" variant="clay" className="px-3 shrink-0" onClick={() => addCourt(courtInput)} disabled={!courtInput.trim()}>Add</Button>
-              </div>
-              {courtSuggestions.length > 0 && (
-                <div className="max-h-40 overflow-y-auto rounded-xl bg-tennis-dark/95 p-1">
-                  {courtSuggestions.map((c) => (
-                    <button key={c} type="button" onClick={() => addCourt(c)} className="w-full text-left px-3 py-2 text-sm text-fg rounded-lg hover:bg-clay/20">{c}</button>
-                  ))}
-                </div>
-              )}
-              <Button size="sm" onClick={() => save(() => actions.updatePreferredCourts(courtsDraft, computeZone(courtsDraft)))} isLoading={updateLoading}>Save</Button>
-            </div>
+            <CourtsEditor
+              preferences={preferences}
+              saving={updateLoading}
+              onSave={(courts, zone) => save(() => actions.updatePreferredCourts(courts, zone))}
+            />
           ) : (
             <div className="mt-1 flex flex-wrap gap-1.5">
-              {preferences.preferred_courts.length > 0
-                ? preferences.preferred_courts.map((c) => <span key={c} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{c}</span>)
+              {(preferences.preferred_courts?.length ?? 0) > 0
+                ? (preferences.preferred_courts ?? []).map((c) => <span key={c} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{c}</span>)
                 : <span className="text-sm text-fg/70">None set.</span>}
             </div>
           )}
@@ -656,8 +523,8 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
             </div>
           ) : (
             <div className="mt-1 flex flex-wrap gap-1.5">
-              {preferences.favourite_players.length > 0
-                ? preferences.favourite_players.map((p) => <span key={p} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{p}</span>)
+              {(preferences.favourite_players?.length ?? 0) > 0
+                ? (preferences.favourite_players ?? []).map((p) => <span key={p} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{p}</span>)
                 : <span className="text-sm text-fg/70">None set.</span>}
             </div>
           )}

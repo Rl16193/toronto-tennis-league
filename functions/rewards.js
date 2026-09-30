@@ -9,14 +9,21 @@
  * twice. Coupon codes ARE the redemption doc id, so uniqueness comes from create-if-absent
  * semantics rather than a query — no race window.
  *
+ * Redeeming also opens a booking (bookings.js). A coupon tied to one moves with the booking: used
+ * when the provider starts the job, and into an organizer's review if the booking is cancelled.
+ *
  * Deploy: firebase deploy --only functions
  */
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
-const { REGION, TZ } = require('./lib/constants');
+const { REGION } = require('./lib/constants');
 const { earnedRsPoints } = require('./lib/points');
 const { notify, organizerUids } = require('./lib/notify');
+const { isOrganizer, providerIdFor } = require('./lib/roles');
+const { normalizeCouponCode, requireAuth, requireDocId } = require('./lib/callable');
+const { recordServiceLead } = require('./lib/serviceLeads');
+const { OPEN_BOOKING_STATUSES, assertNoOpenBooking, newBooking, notifyNewBooking } = require('./lib/bookingState');
 
 const db = () => admin.firestore();
 const nowISO = () => new Date().toISOString();
@@ -30,29 +37,10 @@ const randomCode = () => {
   return `RS-${pick(4)}-${pick(2)}`;
 };
 
+// Coupons still in play. Mirrors OPEN_STATUSES in src/features/services/types.ts.
+const OPEN = ['active', 'flagged', 'cancel_requested'];
+
 // ─── Shared helpers ─────────────────────────────────────────────────────────────────────────
-
-function requireAuth(request) {
-  const uid = request.auth && request.auth.uid;
-  if (!uid) throw new HttpsError('unauthenticated', 'Sign in to continue.');
-  return uid;
-}
-
-async function isOrganizer(uid) {
-  const snap = await db().doc(`preferences/${uid}`).get();
-  return snap.exists && snap.data().event_creator === true;
-}
-
-// A stringer or coach is a normal account with `stringer_id` / `coach_id` on their preferences
-// doc naming the catalog entry they own. Same role-flag shape as `event_creator`.
-async function providerIdFor(uid) {
-  const snap = await db().doc(`preferences/${uid}`).get();
-  if (!snap.exists) return null;
-  const d = snap.data();
-  if (d.stringer === true && typeof d.stringer_id === 'string') return d.stringer_id;
-  if (d.coach === true && typeof d.coach_id === 'string') return d.coach_id;
-  return null;
-}
 
 /** Reads the three inputs to a player's redeemable balance inside a transaction. */
 async function readBalance(tx, uid) {
@@ -73,54 +61,62 @@ async function readBalance(tx, uid) {
 // ─── Redeem ─────────────────────────────────────────────────────────────────────────────────
 
 /**
- * Spend points on a catalog offer. Returns { code, redemption }. Rejects if the offer is inactive,
- * the balance is short, or the player already holds an active coupon for the same offer (one open
- * coupon per offer keeps the stringer's list sane).
+ * Spend points on a catalog offer and open a booking with its provider in the same transaction.
+ * Returns { code, bookingId }. Rejects if the offer can't be booked, the balance is short, or the
+ * player already holds an open coupon or booking for the same offer.
  */
 exports.redeemReward = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
-  const rewardId = request.data && request.data.rewardId;
-  if (typeof rewardId !== 'string' || !rewardId) {
-    throw new HttpsError('invalid-argument', 'Missing reward.');
-  }
-
-  const rewardSnap = await db().doc(`tasks/${rewardId}`).get();
-  if (!rewardSnap.exists) throw new HttpsError('not-found', 'That reward no longer exists.');
-  const reward = rewardSnap.data();
-  if (reward.active === false) throw new HttpsError('failed-precondition', 'That reward is no longer available.');
+  const rewardId = requireDocId(request.data && request.data.rewardId, 'Missing reward.');
+  // The same checks and contact sharing as bookService (lib/serviceLeads.js).
+  const { offer: reward, providerUids, userName } = await recordServiceLead(uid, rewardId, 'You can’t redeem your own service.');
   const cost = typeof reward.points_cost === 'number' ? reward.points_cost : 25;
-
-  // One open coupon per offer, so a stringer's list doesn't fill with duplicates. Two equality
-  // filters only (status is filtered in memory) — adding a third would want a composite index,
-  // and this project ships no firestore.indexes.json.
-  const OPEN = ['active', 'flagged', 'cancel_requested'];
-  const forOffer = await db().collection('redemptions')
-    .where('uid', '==', uid)
-    .where('reward_id', '==', rewardId)
-    .get();
-  if (forOffer.docs.some((d) => OPEN.includes(d.data().status))) {
-    throw new HttpsError('already-exists', 'You already have an open coupon for this offer.');
-  }
-
-  const userSnap = await db().doc(`users/${uid}`).get();
-  const userName = userSnap.exists ? (userSnap.data().name || '') : '';
 
   // Retry on the (vanishingly unlikely) case of a code collision.
   for (let attempt = 0; attempt < 5; attempt++) {
     const code = randomCode();
     const redemptionRef = db().doc(`redemptions/${code}`);
+    const bookingRef = db().collection('bookings').doc();
     try {
       const result = await db().runTransaction(async (tx) => {
         const existing = await tx.get(redemptionRef);
         if (existing.exists) return null; // collision — caller retries with a new code
 
+        // readBalance reads offers/{uid}, which every redeem and booking by this member also
+        // writes, so two taps at once collide and the retry sees the first coupon.
         const { earned, spent, balance } = await readBalance(tx, uid);
+        const forOffer = await tx.get(db().collection('redemptions')
+          .where('uid', '==', uid)
+          .where('reward_id', '==', rewardId));
+        if (forOffer.docs.some((d) => OPEN.includes(d.data().status))) {
+          throw new HttpsError('already-exists', 'You already have an open coupon for this offer.');
+        }
+        await assertNoOpenBooking(tx, uid, reward.id);
+        // A group lesson takes one redeemed booking at a time (lib/bookingState.js releaseRedeem).
+        const offerRef = db().doc(`tasks/${rewardId}`);
+        if (reward.group_lesson) {
+          const held = (await tx.get(offerRef)).get('redeem_booking_id');
+          const holder = held ? await tx.get(db().doc(`bookings/${held}`)) : null;
+          if (holder && holder.exists && OPEN_BOOKING_STATUSES.includes(holder.data().status)) {
+            throw new HttpsError('failed-precondition', 'The discount for this lesson has been redeemed.');
+          }
+        }
         if (balance < cost) {
           throw new HttpsError('failed-precondition',
             `You need ${cost} points to redeem this — you have ${balance}.`);
         }
 
-        const redemption = {
+        const booking = newBooking({
+          id: bookingRef.id,
+          offer: reward,
+          uid,
+          userName,
+          price: typeof reward.discounted_price === 'number' ? reward.discounted_price : reward.total_price,
+          points: cost,
+          code,
+          providerUids,
+        });
+        tx.set(redemptionRef, {
           code,
           reward_id: rewardId,
           stringer_id: reward.provider_id || '',
@@ -131,21 +127,24 @@ exports.redeemReward = onCall({ region: REGION }, async (request) => {
           uid: uid,
           user_name: userName,
           status: 'active',
+          booking_id: bookingRef.id,
           created_at: nowISO(),
-        };
-        tx.set(redemptionRef, redemption);
+        });
+        tx.create(bookingRef, booking);
+        if (reward.group_lesson) tx.update(offerRef, { redeem_booking_id: bookingRef.id });
         tx.set(db().doc(`offers/${uid}`), {
           uid: uid,
           pointsSpent: spent + cost,
           lastEarnedSnapshot: earned,
           updated_at: nowISO(),
         }, { merge: true });
-        return redemption;
+        return booking;
       });
 
       if (result === null) continue; // collided, try another code
-      logger.info(`Redemption ${code} — ${uid} spent ${cost} on ${rewardId}`);
-      return { code, redemption: result };
+      logger.info(`Redemption ${code} — ${uid} spent ${cost} on ${rewardId}, booking ${result.id}`);
+      await notifyNewBooking(providerUids, result);
+      return { code, bookingId: result.id };
     } catch (err) {
       if (err instanceof HttpsError) throw err;
       logger.error('redeemReward failed', err);
@@ -160,11 +159,10 @@ exports.redeemReward = onCall({ region: REGION }, async (request) => {
 /** Burns a coupon — the offer's stringer or an organizer. Transactional, so never used twice. */
 exports.markCouponUsed = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
-  const code = request.data && request.data.code;
-  if (typeof code !== 'string' || !code) throw new HttpsError('invalid-argument', 'Missing coupon code.');
+  const code = normalizeCouponCode(request.data && request.data.code);
 
   const [organizer, myProviderId] = await Promise.all([isOrganizer(uid), providerIdFor(uid)]);
-  const ref = db().doc(`redemptions/${code.trim().toUpperCase()}`);
+  const ref = db().doc(`redemptions/${code}`);
 
   const redemption = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -174,6 +172,8 @@ exports.markCouponUsed = onCall({ region: REGION }, async (request) => {
     if (!organizer && d.stringer_id !== myProviderId) {
       throw new HttpsError('permission-denied', 'That coupon isn’t for your shop.');
     }
+    // A booking's coupon moves with the booking (bookings.js), never on its own.
+    if (d.booking_id) throw new HttpsError('failed-precondition', 'That coupon belongs to a booking. Use the Provider Dash.');
     if (d.status === 'used') throw new HttpsError('failed-precondition', 'That coupon was already used.');
     if (d.status === 'cancelled') throw new HttpsError('failed-precondition', 'That coupon was cancelled.');
 
@@ -196,12 +196,11 @@ exports.markCouponUsed = onCall({ region: REGION }, async (request) => {
 /** Stringer flags a coupon for the organizer to look at — a no-show, a disputed code, etc. */
 exports.flagCoupon = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
-  const code = request.data && request.data.code;
+  const code = normalizeCouponCode(request.data && request.data.code);
   const note = typeof (request.data && request.data.note) === 'string' ? request.data.note.trim() : '';
-  if (typeof code !== 'string' || !code) throw new HttpsError('invalid-argument', 'Missing coupon code.');
 
   const [organizer, myProviderId] = await Promise.all([isOrganizer(uid), providerIdFor(uid)]);
-  const ref = db().doc(`redemptions/${code.trim().toUpperCase()}`);
+  const ref = db().doc(`redemptions/${code}`);
 
   const redemption = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -210,6 +209,7 @@ exports.flagCoupon = onCall({ region: REGION }, async (request) => {
     if (!organizer && d.stringer_id !== myProviderId) {
       throw new HttpsError('permission-denied', 'That coupon isn’t for your shop.');
     }
+    if (d.booking_id) throw new HttpsError('failed-precondition', 'That coupon belongs to a booking. Use the Provider Dash.');
     if (d.status === 'cancelled') throw new HttpsError('failed-precondition', 'That coupon was cancelled.');
     tx.update(ref, {
       status: 'flagged',
@@ -225,7 +225,7 @@ exports.flagCoupon = onCall({ region: REGION }, async (request) => {
     type: 'reward_flagged',
     title: 'Coupon flagged',
     body: `${redemption.stringer_name} flagged ${code} (${redemption.user_name}).`,
-    link: '/tasks?review=claims',
+    link: '/profile?dash=organizer',
   }).catch(() => { /* best-effort */ });
 
   return { ok: true };
@@ -236,16 +236,16 @@ exports.flagCoupon = onCall({ region: REGION }, async (request) => {
 /** Player asks for a redemption to be undone. Only possible while the coupon is unused. */
 exports.requestCancellation = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
-  const code = request.data && request.data.code;
+  const code = normalizeCouponCode(request.data && request.data.code);
   const reason = typeof (request.data && request.data.reason) === 'string' ? request.data.reason.trim() : '';
-  if (typeof code !== 'string' || !code) throw new HttpsError('invalid-argument', 'Missing coupon code.');
 
-  const ref = db().doc(`redemptions/${code.trim().toUpperCase()}`);
+  const ref = db().doc(`redemptions/${code}`);
   const redemption = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'No coupon with that code.');
     const d = snap.data();
     if (d.uid !== uid) throw new HttpsError('permission-denied', 'That isn’t your coupon.');
+    if (d.booking_id) throw new HttpsError('failed-precondition', 'Cancel the booking instead.');
     if (d.status === 'used') throw new HttpsError('failed-precondition', 'That coupon has already been used.');
     if (d.status === 'cancelled') throw new HttpsError('failed-precondition', 'That coupon is already cancelled.');
     if (d.status === 'cancel_requested') throw new HttpsError('failed-precondition', 'A cancellation is already pending.');
@@ -262,7 +262,7 @@ exports.requestCancellation = onCall({ region: REGION }, async (request) => {
     type: 'reward_cancel_requested',
     title: 'Cancellation requested',
     body: `${redemption.user_name} wants to cancel ${code} (${redemption.offer}).`,
-    link: '/tasks?review=claims',
+    link: '/profile?dash=organizer',
   }).catch(() => { /* best-effort */ });
 
   return { ok: true };
@@ -270,152 +270,87 @@ exports.requestCancellation = onCall({ region: REGION }, async (request) => {
 
 /**
  * Organizer decides a cancellation (or resolves a flag). Approving refunds by decrementing
- * pointsSpent — the earning counters were never touched, so nothing else moves.
+ * pointsSpent — the earning counters were never touched, so nothing else moves. For a coupon tied
+ * to a cancelled booking, the decision is recorded on the booking too.
  */
 exports.reviewRedemption = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
   if (!(await isOrganizer(uid))) throw new HttpsError('permission-denied', 'Organizers only.');
 
-  const code = request.data && request.data.code;
+  const code = normalizeCouponCode(request.data && request.data.code);
   const approve = request.data && request.data.approve === true;
   const note = typeof (request.data && request.data.note) === 'string' ? request.data.note.trim() : '';
-  if (typeof code !== 'string' || !code) throw new HttpsError('invalid-argument', 'Missing coupon code.');
 
-  const ref = db().doc(`redemptions/${code.trim().toUpperCase()}`);
+  const ref = db().doc(`redemptions/${code}`);
   const redemption = await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new HttpsError('not-found', 'No coupon with that code.');
     const d = snap.data();
-    if (d.status === 'cancelled') throw new HttpsError('failed-precondition', 'That coupon is already cancelled.');
+    // Approving refunds, so it needs a requested cancellation. Declining also resolves a flag.
+    const reviewable = approve
+      ? d.status === 'cancel_requested'
+      : d.status === 'cancel_requested' || d.status === 'flagged';
+    if (!reviewable) throw new HttpsError('failed-precondition', 'That coupon has nothing waiting for review.');
+
+    const bookingRef = d.booking_id ? db().doc(`bookings/${d.booking_id}`) : null;
+    const bookingSnap = bookingRef ? await tx.get(bookingRef) : null;
+    if (bookingRef) {
+      const b = bookingSnap.exists ? bookingSnap.data() : null;
+      if (!b || b.status !== 'cancelled' || b.refund !== 'pending') {
+        throw new HttpsError('failed-precondition', 'That booking isn’t waiting on a refund.');
+      }
+    }
+    const spentRef = db().doc(`offers/${d.uid}`);
+    const spentSnap = approve ? await tx.get(spentRef) : null;
+    const now = nowISO();
+
+    if (bookingRef) {
+      tx.update(bookingRef, { refund: approve ? 'approved' : 'declined', refund_reviewed_at: now, updated_at: now });
+    }
 
     if (!approve) {
-      // Declined — the coupon goes back to being spendable at the counter.
+      // A legacy coupon goes back to being spendable at the counter. A cancelled booking's coupon
+      // has nothing left to spend on, so it closes with the points kept.
       tx.update(ref, {
-        status: 'active',
-        reviewed_at: nowISO(),
+        status: bookingRef ? 'refund_declined' : 'active',
+        reviewed_at: now,
         reviewed_by: uid,
         ...(note ? { reviewer_note: note } : {}),
       });
       return d;
     }
 
-    // Approved — refund. Read the spend counter inside the same transaction.
-    const spentRef = db().doc(`offers/${d.uid}`);
-    const spentSnap = await tx.get(spentRef);
+    // Approved — refund, from the spend counter read above.
     const spent = spentSnap.exists && typeof spentSnap.data().pointsSpent === 'number'
       ? spentSnap.data().pointsSpent : 0;
     const cost = typeof d.points_cost === 'number' ? d.points_cost : 25;
 
     tx.update(ref, {
       status: 'cancelled',
-      cancelled_at: nowISO(),
+      cancelled_at: now,
       reviewed_by: uid,
       ...(note ? { reviewer_note: note } : {}),
     });
     tx.set(spentRef, {
       uid: d.uid,
       pointsSpent: Math.max(0, spent - cost),
-      updated_at: nowISO(),
+      updated_at: now,
     }, { merge: true });
     return d;
   });
 
+  const forBooking = !!redemption.booking_id;
   await notify(redemption.uid, {
     type: approve ? 'reward_cancelled' : 'reward_cancel_declined',
-    title: approve ? 'Redemption cancelled' : 'Cancellation declined',
+    title: approve ? 'Points refunded' : forBooking ? 'Refund declined' : 'Cancellation declined',
     body: approve
       ? `${redemption.points_cost} points are back in your balance.`
-      : `Your coupon for ${redemption.offer} is still active.`,
+      : forBooking
+        ? `The ${redemption.points_cost} points for ${redemption.offer} stay spent.`
+        : `Your coupon for ${redemption.offer} is still active.`,
     link: '/marketplace',
   }).catch(() => { /* best-effort */ });
 
   return { ok: true };
 });
 
-// ─── Free monthly group lesson ──────────────────────────────────────────────────────────────
-
-// One doc per month (`group_lessons/{YYYY-MM}`), so the 4 spots reset on the 1st with no
-// scheduled job — a new month is simply a doc that doesn't exist yet. Must match
-// currentMonthKey() in src/features/services/types.ts.
-function monthKey() {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ, year: 'numeric', month: '2-digit',
-  }).formatToParts(new Date());
-  const get = (t) => (parts.find((p) => p.type === t) || {}).value || '';
-  return `${get('year')}-${get('month')}`;
-}
-
-const GROUP_LESSON_CAPACITY = 4;
-
-/**
- * Take a spot in this month's free group lesson. Transactional, so two simultaneous Joins can't
- * both claim the last seat. Costs no points.
- */
-exports.joinGroupLesson = onCall({ region: REGION }, async (request) => {
-  const uid = requireAuth(request);
-  const month = monthKey();
-  const ref = db().doc(`group_lessons/${month}`);
-
-  const [userSnap, coachSnap] = await Promise.all([
-    db().doc(`users/${uid}`).get(),
-    db().collection('tasks').where('type', '==', 'offer').get(),
-  ]);
-  const u = userSnap.exists ? userSnap.data() : {};
-  const coachDoc = coachSnap.docs.find((d) => d.data().category === 'coaching');
-  const coach = coachDoc ? coachDoc.data() : {};
-
-  const spotsLeft = await db().runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    const existing = snap.exists ? snap.data() : null;
-    const players = (existing && existing.players) || [];
-
-    if (players.some((p) => p.uid === uid)) {
-      throw new HttpsError('already-exists', 'You already have a spot this month.');
-    }
-    if (players.length >= GROUP_LESSON_CAPACITY) {
-      throw new HttpsError('failed-precondition', 'This month’s group lesson is full.');
-    }
-
-    // Name and uid only. `group_lessons` is world-readable, so snapshotting phone/email here
-    // handed every player's contact details to anyone, signed out, via one getDoc. The coach
-    // resolves them from `contacts/{uid}` instead, which requires a sign-in.
-    const next = players.concat([{
-      uid: uid,
-      name: u.name || '',
-      joined_at: nowISO(),
-    }]);
-
-    tx.set(ref, {
-      month,
-      coach_id: coach.provider_id || '',
-      coach_name: coach.provider_name || '',
-      capacity: GROUP_LESSON_CAPACITY,
-      players: next,
-      updated_at: nowISO(),
-    }, { merge: true });
-
-    return GROUP_LESSON_CAPACITY - next.length;
-  });
-
-  return { ok: true, spotsLeft };
-});
-
-/** Give up your spot, freeing it for someone else this month. */
-exports.leaveGroupLesson = onCall({ region: REGION }, async (request) => {
-  const uid = requireAuth(request);
-  const ref = db().doc(`group_lessons/${monthKey()}`);
-
-  const spotsLeft = await db().runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists) throw new HttpsError('not-found', 'No group lesson this month.');
-    const players = snap.data().players || [];
-    if (!players.some((p) => p.uid === uid)) {
-      throw new HttpsError('failed-precondition', 'You don’t have a spot to give up.');
-    }
-    const next = players.filter((p) => p.uid !== uid);
-    tx.update(ref, { players: next, updated_at: nowISO() });
-    return GROUP_LESSON_CAPACITY - next.length;
-  });
-
-  return { ok: true, spotsLeft };
-});

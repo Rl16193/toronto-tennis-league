@@ -8,6 +8,8 @@ type Props = {
   onDismiss: () => void;
   /** Auto-dismiss delay in ms. */
   duration?: number;
+  /** 'top' pins it under the header instead of above the bottom nav. */
+  placement?: 'bottom' | 'top';
 };
 
 /**
@@ -18,7 +20,7 @@ type Props = {
  * Render it unconditionally with a null `message` when there's nothing to show; the exit
  * animation needs the component to stay mounted.
  */
-export const Toast: React.FC<Props> = ({ message, onDismiss, duration = 5000 }) => {
+export const Toast: React.FC<Props> = ({ message, onDismiss, duration = 5000, placement = 'bottom' }) => {
   useEffect(() => {
     if (!message) return;
     const t = setTimeout(onDismiss, duration);
@@ -31,13 +33,13 @@ export const Toast: React.FC<Props> = ({ message, onDismiss, duration = 5000 }) 
         <motion.div
           role="status"
           aria-live="polite"
-          initial={{ opacity: 0, y: 24 }}
+          initial={{ opacity: 0, y: placement === 'top' ? -24 : 24 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 24 }}
+          exit={{ opacity: 0, y: placement === 'top' ? -24 : 24 }}
           transition={{ type: 'spring', damping: 28, stiffness: 340 }}
-          className="fixed inset-x-4 bottom-24 sm:bottom-8 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2
+          className={`fixed inset-x-4 ${placement === 'top' ? 'top-20' : 'bottom-24 sm:bottom-8'} sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2
                      z-[110] sm:w-[22rem] flex items-center gap-3 rounded-2xl
-                     bg-tennis-surface shadow-2xl px-4 py-3"
+                     bg-tennis-surface shadow-2xl px-4 py-3`}
         >
           <p className="flex-1 text-sm font-semibold text-fg">{message}</p>
           <button

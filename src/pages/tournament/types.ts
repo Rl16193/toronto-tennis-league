@@ -4,7 +4,6 @@ export type DrawTab = 'mens' | 'womens' | 'doubles';
 export type SkillGroup = 'Beginners' | 'Challengers' | 'Masters' | 'Retired Pro' | 'All';
 // Adjacency order for skill-group merging: only neighboring bands may be merged together
 // (Beginners+Challengers, or Challengers+Masters — never Beginners+Masters, never all three).
-export const MATCHES_COL = 'matches';
 export const SKILL_GROUP_ORDER: readonly SkillGroup[] = ['Beginners', 'Challengers', 'Masters'];
 export type SkillMergePair = 'Beginners+Challengers' | 'Challengers+Masters' | 'Beginners+Challengers+Masters';
 
@@ -55,7 +54,7 @@ export type TournamentPlayer = {
 
 export type TournamentMatch = {
   id: string;
-  category?: 'singles' | 'doubles' | 'rally' | 'challenge' | 'score_submission';
+  category?: 'singles' | 'doubles' | 'rally' | 'challenge';
   event_id: string;
   tournament_choice: 'Singles' | 'Doubles';
   division: string;
@@ -108,21 +107,27 @@ export type TournamentMatch = {
    */
   no_show?: boolean;
   court?: string;
+  // Written by the server (functions/lib/scoring.js) on every result it applies: the exact
+  // per-player stat changes, and what the result paid. Undoing a result negates applied_deltas; a
+  // result without them predates the server and is undone with the rules it was paid under.
+  scoring_v2?: boolean;
+  applied_deltas?: Record<string, Record<string, number>>;
+  points_winner?: number;
+  points_loser?: number;
+  score_disputed?: boolean;
   // Scheduling — players may edit only these fields (Firestore rules carve-out); scores stay
   // organizer-only. Absent schedule_status is treated as 'unscheduled'.
   schedule_status?: 'unscheduled' | 'scheduled';
   proposed_date?: string; // YYYY-MM-DD
   proposed_slot?: 'AM' | 'PM';
-  schedule_requested?: boolean; // player asked the organizer to schedule
+  schedule_requested?: boolean; // a player asked their opponent to arrange a time
+  schedule_requested_by?: string;
 };
-
-/** A schedule request in the organizer's cross-tournament queue — hence the event title. */
-export type ScheduleRequest = TournamentMatch & { event_title: string };
 
 /** An empty slot in the current draw that an unplaced player can be seated into. */
 export type OpenDrawSlot = { matchId: string; slot: 'player_1' | 'player_2'; label: string };
 
-/** A registrant seated in no match. `zone` is '' when they've selected no courts — "No zone". */
+/** A registrant seated in no match. `zone` is '' when they've selected no courts — shown as "Unassigned". */
 export type UnplacedEntry = {
   participantId: string;
   uid: string;
@@ -135,49 +140,11 @@ export type UnplacedEntry = {
   zone: string;
 };
 
-export type ScoreSubmission = {
-  claimed_winner_name: string;
-  claimed_winner_uid: string;
-  set_1_player_1: number;
-  set_1_player_2: number;
-  set_2_player_1: number;
-  set_2_player_2: number;
-  set_3_player_1: number;
-  set_3_player_2: number;
-  court?: string;
-};
-
 export type ScoreForm = {
   matchDocId: string;
   winnerUserId: string;
   sets: Array<{ mine: string; opponent: string }>;
   court: string;
-  /** Organizer ticked "Count As No Show" — no winner, 1 point each. RR group stage only. */
-  noShow?: boolean;
-};
-
-// A player-submitted score awaiting the creator's confirmation (stored in the shared matches collection).
-export type ScoreSubmissionDoc = ScoreSubmission & {
-  id: string;
-  category: 'score_submission';
-  event_id: string;
-  match_id: string;
-  match_round: string;
-  draw_label: string;
-  player_1_name: string;
-  player_2_name: string;
-  submitted_by: string;
-  submitted_by_name: string;
-  is_walkover: boolean;
-  created_at: string;
-  /**
-   * Set once actioned; the doc is KEPT rather than deleted so what each player submitted stays on
-   * record. Absent = still awaiting the organizer. 'superseded' means the match was already scored
-   * by the time this one was reached — typically the second player's copy of the same result.
-   */
-  resolved?: 'confirmed' | 'rejected' | 'superseded';
-  resolved_at?: string;
-  resolved_by?: string;
 };
 
 export type TournamentFormat = 'bracket' | 'rr';

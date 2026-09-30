@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { SelectField } from '../../components/SelectField';
 import { RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
-import { PLAYER_LOADING, formatPlayerName, formatSetScores } from './utils';
-import { PLAYER_LOADING_SENTINEL } from './AddPlayerPanel';
+import { PLAYER_LOADING, PLAYER_LOADING_SENTINEL, formatPlayerName, formatSetScores } from './utils';
 import { ContactOpponentButton, pillButtonCls } from '../../components/ContactOpponentButton';
 import { pgWinPct } from '../../features/leagues/useStandings';
 import type { ContactData } from '../../types';
@@ -15,17 +15,12 @@ type Props = {
   standings: RRStandingRow[];
   advancementCount: number;
   isCreator: boolean;
-  isParticipant: boolean;
   // The viewer's own uid — a non-creator only sees their own match(es) in the list below.
   currentUserId?: string;
-  isPastEvent: boolean;
   editMode: boolean;
-  editPlayers: TournamentPlayer[];
   allGroupPlayers: TournamentPlayer[];
-  onEditPlayer: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
   onSubmitScore?: (match: TournamentMatch) => void;
   submittableMatchIds?: Set<string>;
-  pendingMatchIds?: Set<string>;
   onSaveGroupEdit: (groupIndex: number, newPlayers: TournamentPlayer[]) => void;
   onRenameGroup?: (label: string) => void;
   /**
@@ -51,8 +46,8 @@ type Props = {
 
 export const RRGroupCard: React.FC<Props> = ({
   groupIndex, groupLabel, players, matches, standings, advancementCount,
-  isCreator, isParticipant, currentUserId, isPastEvent, editMode, editPlayers, allGroupPlayers,
-  onEditPlayer, onSubmitScore, submittableMatchIds, pendingMatchIds, onSaveGroupEdit, onRenameGroup,
+  isCreator, currentUserId, editMode, allGroupPlayers,
+  onSubmitScore, submittableMatchIds, onSaveGroupEdit, onRenameGroup,
   statsByUid, contactsByUid, onRemovePlayer, onMovePlayerZone, zoneBuckets = [], onAskSchedule,
   onSetGroupBonus,
 }) => {
@@ -154,18 +149,14 @@ export const RRGroupCard: React.FC<Props> = ({
                       who filed a request. Refused server-side if they've already played — their
                       result belongs to this zone's draw. */}
                   {isCreator && editMode && onMovePlayerZone && zoneBuckets.length > 0 && (
-                    <select
+                    <SelectField
                       value=""
-                      onChange={(e) => { if (e.target.value) onMovePlayerZone(row.userId, e.target.value); }}
-                      aria-label={`Move ${formatPlayerName(row.name)} to another zone`}
-                      title="Move to another zone"
-                      className="shrink-0 mr-2 text-[11px] bg-tennis-surface rounded-lg px-2 py-1 text-fg cursor-pointer"
-                    >
-                      <option value="">Zone…</option>
-                      {zoneBuckets.map((b) => (
-                        <option key={b.id} value={b.id}>{b.label}</option>
-                      ))}
-                    </select>
+                      placeholder="Zone…"
+                      title={`Move ${formatPlayerName(row.name)} to another zone`}
+                      options={zoneBuckets.map((b) => ({ value: b.id, label: b.label }))}
+                      onChange={(zone) => { if (zone) onMovePlayerZone(row.userId, zone); }}
+                      className="w-auto shrink-0 mr-2"
+                    />
                   )}
                   {isCreator && editMode && onRemovePlayer && (
                     <button
@@ -173,7 +164,7 @@ export const RRGroupCard: React.FC<Props> = ({
                       aria-label={`Remove ${formatPlayerName(row.name)} from the draw`}
                       title="Remove from draw"
                       onClick={() => {
-                        if (window.confirm(`Remove ${formatPlayerName(row.name)} from this draw?\n\nThey stay registered for the event and keep any matches they've already played.`)) {
+                        if (window.confirm(`Remove ${formatPlayerName(row.name)} ?\n\nPlayer will be removed, matches played will be unaffected, and for future matches the opponent gets a walkover.`)) {
                           onRemovePlayer(row.userId);
                         }
                       }}
@@ -217,10 +208,8 @@ export const RRGroupCard: React.FC<Props> = ({
                         phone={contactsByUid[row.userId]?.phone}
                         email={contactsByUid[row.userId]?.email}
                         whatsappContact={contactsByUid[row.userId]?.whatsapp_contact}
-                        whatsappSameAsPhone={contactsByUid[row.userId]?.whatsapp_same_as_phone}
                         preferred={contactsByUid[row.userId]?.preferred_mode_of_contact}
                         size="sm"
-                        variant="white"
                       />
                     );
 
@@ -248,8 +237,6 @@ export const RRGroupCard: React.FC<Props> = ({
                         </span>
                       ) : isCreator ? (
                         <button type="button" onClick={() => onSubmitScore?.(relevant)} className={pillButtonCls('sm', 'clay')}>Score</button>
-                      ) : pendingMatchIds?.has(relevant.id) ? (
-                        <span className="text-[10px] font-bold text-badge-win uppercase tracking-wider">Submitted ✓</span>
                       ) : submittableMatchIds?.has(relevant.id) ? (
                         <button type="button" onClick={() => onSubmitScore?.(relevant)} className={pillButtonCls('sm', 'clay')}>Score</button>
                       ) : onAskSchedule ? (
@@ -372,30 +359,29 @@ export const RRGroupCard: React.FC<Props> = ({
           )}
           <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70">Reassign Players</p>
           {localPlayers.map((p, idx) => {
-            const hasPlayedMatch = matches.some((m) => m.status === 'complete');
             return (
               <div key={p.uid} className="flex items-center gap-2">
                 <span className="text-fg/70 text-xs w-4">{idx + 1}.</span>
-                <select
+                <SelectField
+                  title={`Player ${idx + 1}`}
                   value={p.uid === PLAYER_LOADING_SENTINEL ? PLAYER_LOADING_SENTINEL : p.uid}
-                  onChange={(e) => {
-                    if (e.target.value === PLAYER_LOADING_SENTINEL) {
+                  options={[
+                    { value: PLAYER_LOADING_SENTINEL, label: '(Player Loading)' },
+                    ...allGroupPlayers.map((pl) => ({ value: pl.uid, label: formatPlayerName(pl.name) })),
+                  ]}
+                  onChange={(value) => {
+                    if (value === PLAYER_LOADING_SENTINEL) {
                       setLocalPlayers((prev) => prev.map((pp, i) => i === idx
                         ? { uid: PLAYER_LOADING_SENTINEL, name: PLAYER_LOADING, participantId: '' }
                         : pp));
                       return;
                     }
-                    const chosen = allGroupPlayers.find((pl) => pl.uid === e.target.value);
+                    const chosen = allGroupPlayers.find((pl) => pl.uid === value);
                     if (!chosen) return;
                     setLocalPlayers((prev) => prev.map((pp, i) => i === idx ? chosen : pp));
                   }}
-                  className="flex-1 bg-tennis-surface rounded px-2 py-1 text-fg text-xs"
-                >
-                  <option value={PLAYER_LOADING_SENTINEL} className="bg-tennis-surface text-fg/70">(Player Loading)</option>
-                  {allGroupPlayers.map((pl) => (
-                    <option key={pl.uid} value={pl.uid} className="bg-tennis-surface text-fg">{formatPlayerName(pl.name)}</option>
-                  ))}
-                </select>
+                  className="flex-1 min-w-0"
+                />
               </div>
             );
           })}
@@ -407,19 +393,17 @@ export const RRGroupCard: React.FC<Props> = ({
             return (
               <div className="flex items-center gap-2">
                 <span className="text-fg/70 text-xs w-4">+</span>
-                <select
+                <SelectField
                   value=""
-                  onChange={(e) => {
-                    const chosen = allGroupPlayers.find((pl) => pl.uid === e.target.value);
+                  placeholder="Add player…"
+                  title="Add player"
+                  options={available.map((pl) => ({ value: pl.uid, label: formatPlayerName(pl.name) }))}
+                  onChange={(value) => {
+                    const chosen = allGroupPlayers.find((pl) => pl.uid === value);
                     if (chosen) setLocalPlayers((prev) => [...prev, chosen]);
                   }}
-                  className="flex-1 bg-tennis-surface rounded px-2 py-1 text-fg text-xs"
-                >
-                  <option value="">Add player…</option>
-                  {available.map((pl) => (
-                    <option key={pl.uid} value={pl.uid} className="bg-tennis-surface text-fg">{formatPlayerName(pl.name)}</option>
-                  ))}
-                </select>
+                  className="flex-1 min-w-0"
+                />
               </div>
             );
           })()}

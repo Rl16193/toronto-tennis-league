@@ -1,24 +1,26 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
 import { ChevronRight, Plus, Trophy } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
-import { Button } from '../components/Button';
 import { Fab } from '../components/Fab';
 import { SegmentedControl } from '../components/SegmentedControl';
-import { createEvent, updateEvent, formFromEvent, DisplayEvent, EventFormState, INITIAL_EVENT_FORM, validateEventForm } from '../features/events/services/eventService';
+import { createEvent, updateEvent, uploadEventImage, formFromEvent, DisplayEvent, EventFormState, INITIAL_EVENT_FORM, validateEventForm } from '../features/events/services/eventService';
 import { useEvents } from '../features/events/hooks/useEvents';
 import { useJoin } from '../features/events/hooks/useJoin';
+import { CourtsEditor } from '../features/profile/components/CourtsEditor';
+import { useProfileActions } from '../features/profile/hooks/useProfileActions';
+import { EventCarousel } from '../features/events/EventCarousel';
 import {
   CreatorEventModal, EventCard, JoinEventSheet, isLateRegistration,
 } from '../features/events/EventsElements';
 import { track } from '../lib/analytics';
-import { getEventDate } from './tournament/utils';
-import { isSeniorsLeague } from '../utils/skillLevels';
-import { isTournamentCategoryEvent, isTournamentCategoryType } from '../utils/eventTypes';
+import { getEventDate, resolveZoneConfig } from './tournament/utils';
+import { isSeniorsLeague, leagueDivision } from '../utils/skillLevels';
+import { isTournamentCategoryEvent, isTournamentCategoryType, isTournamentEvent } from '../utils/eventTypes';
 
 type EventsTab = 'upcoming' | 'completed';
 type EventCategory = 'socials' | 'tournaments';
@@ -28,8 +30,15 @@ export const Events: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
   const isEventCreator = !!profile?.preferences.event_creator;
 
-  const { events, setEvents, loading, visibleEvents, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament, isFullyJoinedEvent } = useEvents();
+  const { setEvents, loading, visibleEvents, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament, isFullyJoinedEvent } = useEvents();
   const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed, handleSubmitJoin } = useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament });
+  // Zone-enabled tournaments need courts to place a player; the join sheet asks for them inline.
+  const { updateLoading: courtsSaving, actions: courtsActions } = useProfileActions();
+  const [pendingCourts, setPendingCourts] = useState<{ courts: string[]; zone: string }>({ courts: [], zone: '' });
+  // Resolved, not raw: an event that never saved a zone config still has zones on by default.
+  const needsCourts = !!selectedEvent && isTournamentEvent(selectedEvent)
+    && resolveZoneConfig(selectedEvent.zone_draw_config).enabled
+    && !profile?.preferences.preferred_courts?.length;
 
   const [category, setCategory] = useState<EventCategory>('tournaments');
   const [tab, setTab] = useState<EventsTab>('upcoming');
@@ -40,8 +49,54 @@ export const Events: React.FC = () => {
   const [eventForm, setEventForm] = useState<EventFormState>(INITIAL_EVENT_FORM);
   const [eventFormMessage, setEventFormMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [creatingEvent, setCreatingEvent] = useState(false);
+  // A picked event image stays local until Save, so abandoning the form uploads nothing.
+  const [eventImageFile, setEventImageFile] = useState<File | null>(null);
+
+  // Deep link from the Player Dash: /events?event=ID opens that event's tab and brings its card
+  // into view. Handled once per id, after the list has loaded. The param is deliberately left in
+  // the URL — changing it re-runs ScrollToTop (App.tsx), which would undo the scroll.
+  const [searchParams] = useSearchParams();
+  const linkedEventId = searchParams.get('event');
+  const [linkMissing, setLinkMissing] = useState(false);
+  const handledLinkRef = useRef<string | null>(null);
 
   useEffect(() => { document.title = 'Events · Racquets & Strings'; }, []);
+
+  useEffect(() => {
+    if (!linkedEventId || loading || handledLinkRef.current === linkedEventId) return;
+    handledLinkRef.current = linkedEventId;
+    const target = visibleEvents.find((e) => e.id === linkedEventId);
+    if (!target) { setLinkMissing(true); return; }
+    setLinkMissing(false);
+    setTab('upcoming');
+    setCategory(isTournamentCategoryEvent(target) ? 'tournaments' : 'socials');
+  }, [linkedEventId, loading, visibleEvents]);
+
+  // Posters load after the text and grow the cards above the target, so keep re-aiming for a
+  // moment, and stop the instant the visitor scrolls or taps. `inline: 'center'` also lands the
+  // phone carousel on the right card, so the carousel needs no knowledge of the link.
+  useEffect(() => {
+    if (!linkedEventId || loading || linkMissing) return;
+    let stopped = false;
+    const aim = () => {
+      if (!stopped) document.getElementById(`event-${linkedEventId}`)?.scrollIntoView({ block: 'start', inline: 'center' });
+    };
+    const stop = () => { stopped = true; };
+    aim();
+    const timer = window.setInterval(aim, 250);
+    const deadline = window.setTimeout(() => { stop(); window.clearInterval(timer); }, 2000);
+    window.addEventListener('wheel', stop, { passive: true });
+    window.addEventListener('touchstart', stop, { passive: true });
+    window.addEventListener('keydown', stop);
+    return () => {
+      stop();
+      window.clearInterval(timer);
+      window.clearTimeout(deadline);
+      window.removeEventListener('wheel', stop);
+      window.removeEventListener('touchstart', stop);
+      window.removeEventListener('keydown', stop);
+    };
+  }, [linkedEventId, loading, linkMissing, category]);
 
   useEffect(() => {
     if (!eventFormMessage) return;
@@ -83,8 +138,33 @@ export const Events: React.FC = () => {
   const categoryCompletedEvents = completedEvents.filter((e) =>
     category === 'tournaments' ? isTournamentCategoryType(e.type) : !isTournamentCategoryType(e.type));
 
+  // Join at once when the sheet would have nothing to ask: a Singles tournament with a division and
+  // courts already on the profile (and no Retired Pro choice or late-registration notice), or any
+  // non-tournament event. The draw is still checked for an open spot before anything is written.
+  const [quickJoinId, setQuickJoinId] = useState<string | null>(null);
+  const quickRunning = useRef(false);
+  const nothingToAsk = (event: DisplayEvent) => !isTournamentEvent(event) || (
+    event.tournament_choice === 'Singles'
+    && !!leagueDivision(profile?.stats.league)
+    && !isSeniorsLeague(profile?.stats.league)
+    && !isLateRegistration(event)
+    && (!resolveZoneConfig(event.zone_draw_config).enabled || !!profile?.preferences.preferred_courts?.length)
+  );
+
+  useEffect(() => {
+    if (!quickJoinId || quickRunning.current || !selectedEvent || selectedEvent.id !== quickJoinId || loadingMatches) return;
+    // A tournament waits for useJoin to seed the division and load the draw.
+    if (isTournamentEvent(selectedEvent) && !joinForm.division) return;
+    if (slotStatus && slotStatus.status !== 'available') { setQuickJoinId(null); return; }
+    quickRunning.current = true;
+    // The confirmation is the "You're in" notification onParticipantJoined sends, not a toast.
+    handleSubmitJoin()
+      .finally(() => { quickRunning.current = false; setQuickJoinId(null); });
+  }, [quickJoinId, selectedEvent, loadingMatches, joinForm.division, slotStatus, handleSubmitJoin]);
+
   const handleJoin = (event: DisplayEvent) => {
     setSelectedEvent(event);
+    if (nothingToAsk(event)) setQuickJoinId(event.id);
     track('select_content', { content_type: 'tennis_event', content_id: event.id });
   };
 
@@ -96,16 +176,21 @@ export const Events: React.FC = () => {
     setCreatingEvent(true);
     setEventFormMessage(null);
     try {
+      // The picked image is uploaded only now, on Save, so a form abandoned midway leaves nothing behind.
+      const image = eventImageFile ? await uploadEventImage(user.uid, eventImageFile) : eventForm.image;
       if (editingEventId) {
-        const patch = await updateEvent(editingEventId, eventForm);
-        setEvents((prev) => prev.map((ev) => (ev.id === editingEventId ? { ...ev, ...patch } : ev)));
+        const patch = await updateEvent(editingEventId, { ...eventForm, image });
+        // Mirror fetchEvents: a legacy gs:// path is shown through imagePath, never as an <img> src.
+        const shown = image.startsWith('gs://') ? { image: '', imagePath: image } : { image, imagePath: undefined };
+        setEvents((prev) => prev.map((ev) => (ev.id === editingEventId ? { ...ev, ...patch, ...shown } : ev)));
         setEventFormMessage({ type: 'success', text: 'Event updated successfully.' });
       } else {
-        const created = await createEvent(user.uid, eventForm, '');
+        const created = await createEvent(user.uid, eventForm, image);
         setEvents((prev) => [...prev, created]);
         setEventFormMessage({ type: 'success', text: 'Event added successfully.' });
       }
       setEventForm(INITIAL_EVENT_FORM);
+      setEventImageFile(null);
       setEditingEventId(null);
       setShowEventForm(false);
     } catch {
@@ -136,6 +221,12 @@ export const Events: React.FC = () => {
         onChange={setTab}
         className="mb-5 max-w-xs"
       />
+
+      {linkMissing && (
+        <div role="status" className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-badge">
+          That event is no longer listed.
+        </div>
+      )}
 
       {eventFormMessage && !showEventForm && (
         <div className={`mb-6 rounded-2xl border px-5 py-4 text-sm ${eventFormMessage.type === 'success' ? 'border-green-500/20 bg-green-500/10 text-badge-win' : 'border-red-500/20 bg-red-500/10 text-badge-loss'}`}>
@@ -181,7 +272,8 @@ export const Events: React.FC = () => {
           {[1, 2, 3].map((i) => <div key={i} className="h-48 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
         </div>
       ) : categoryEvents.length > 0 ? (
-        <div className="space-y-4">
+        // One card per screen with arrows on a phone; the plain stacked list everywhere else.
+        <EventCarousel count={categoryEvents.length}>
           {categoryEvents.map((event, i) => (
             <EventCard
               key={event.id}
@@ -194,7 +286,7 @@ export const Events: React.FC = () => {
               onEdit={!!user && event.creator_id === user.uid ? handleEditEvent : undefined}
             />
           ))}
-        </div>
+        </EventCarousel>
       ) : (
         <div className="text-center py-16">
           <h3 className="text-xl font-bold text-fg">No upcoming events</h3>
@@ -219,7 +311,7 @@ export const Events: React.FC = () => {
 
       {/* Join flow — bottom sheet */}
       <AnimatePresence>
-        {selectedEvent && !isFullyJoinedEvent(selectedEvent) && (
+        {selectedEvent && !quickJoinId && !isFullyJoinedEvent(selectedEvent) && (
           <JoinEventSheet
             event={selectedEvent}
             isLate={isLateRegistration(selectedEvent)}
@@ -232,8 +324,19 @@ export const Events: React.FC = () => {
             slotFallbackConfirmed={slotFallbackConfirmed}
             setSlotFallbackConfirmed={setSlotFallbackConfirmed}
             joining={joining}
-            onSubmitJoin={handleSubmitJoin}
+            onSubmitJoin={() => handleSubmitJoin(needsCourts ? {
+              courts: pendingCourts.courts,
+              save: () => courtsActions.updatePreferredCourts(pendingCourts.courts, pendingCourts.zone),
+            } : undefined)}
             onClose={() => setSelectedEvent(null)}
+            courtsPicker={needsCourts && profile ? (
+              <CourtsEditor
+                preferences={profile.preferences}
+                saving={courtsSaving}
+                onSave={() => {}}
+                onDraftChange={(courts, zone) => setPendingCourts({ courts, zone })}
+              />
+            ) : undefined}
           />
         )}
       </AnimatePresence>
@@ -245,13 +348,15 @@ export const Events: React.FC = () => {
             setEventForm={setEventForm}
             eventFormMessage={eventFormMessage}
             creatingEvent={creatingEvent}
-            organizerPlaceholder={profile?.user.name || 'Organizer name'}
             isEditing={!!editingEventId}
             onSubmit={handleCreateEvent}
-            onClose={() => { setShowEventForm(false); setEditingEventId(null); }}
+            imageFile={eventImageFile}
+            onImageFileChange={setEventImageFile}
+            onClose={() => { setShowEventForm(false); setEditingEventId(null); setEventImageFile(null); }}
           />
         )}
       </AnimatePresence>
+
     </div>
   );
 };

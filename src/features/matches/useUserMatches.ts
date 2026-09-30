@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { TournamentMatch } from '../../pages/tournament/types';
@@ -22,10 +22,21 @@ export type UserMatch = {
   myGames: number;
   oppGames: number;
   scoreLine: string; // e.g. "6-4, 6-3" (user's games first)
+  // Added for the Player Dash's head to head and score edits.
+  category: MatchCategory;
+  /** Tournament round ('RR', 'QF', …); '' for rallies and challenges. */
+  round: string;
+  viewerIsP1: boolean;
+  winnerUid: string;
+  /** Absolute [player_1, player_2] games for all three set slots; an unused set is 0-0. */
+  sets: [number, number][];
+  walkover: boolean;
+  /** The tournament match doc itself, for corrections. Absent for rallies and challenges. */
+  tournamentMatch?: TournamentMatch;
 };
 
 // A match the user is in that hasn't been played/scored yet (status !== 'complete'). Also covers
-// accepted Friendlies rallies and accepted League Ladder challenges — neither has a real match
+// accepted rallies and accepted League Ladder challenges — neither has a real match
 // doc until it's played, but both represent an "upcoming" game the same way a generated-but-
 // unplayed tournament match does. `source` distinguishes them for display; `eventId` is only
 // ever set for tournament matches.
@@ -36,9 +47,30 @@ export type UpcomingMatch = {
   opponentContact: string;
   eventId: string;
   source: 'tournament' | 'rally' | 'challenge';
+  // Added for the Player Dash.
+  category: MatchCategory;
+  /** Tournament round ('RR', 'QF', …); '' for rallies and challenges. */
+  round: string;
+  rrGroupLabel: string;
+  skillGroup: string;
+  division: string;
+  viewerIsP1: boolean;
+  /** When a rally or challenge was accepted; '' for tournament fixtures. */
+  respondedAt: string;
+  /** The tournament match doc itself, for scoring from the dash. Absent for rallies and challenges. */
+  tournamentMatch?: TournamentMatch;
 };
 
 const num = (v: unknown) => (typeof v === 'number' ? v : 0);
+
+type MatchCategory = 'singles' | 'doubles' | 'rally' | 'challenge';
+
+/** Absolute [player_1, player_2] games for all three set slots; an unused set is 0-0. */
+const absoluteSets = (d: Record<string, unknown>): [number, number][] => [
+  [num(d.set_1_player_1), num(d.set_1_player_2)],
+  [num(d.set_2_player_1), num(d.set_2_player_2)],
+  [num(d.set_3_player_1), num(d.set_3_player_2)],
+];
 
 // Opponent slots that aren't a real, contactable person yet.
 const PLACEHOLDER_NAMES = new Set(['bye', 'player loading', '']);
@@ -48,10 +80,15 @@ const isRealOpponent = (name: string) =>
 const isTournamentMatch = (category?: string) => category === 'singles' || category === 'doubles';
 
 
-export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: UpcomingMatch[]; loading: boolean } {
+export function useUserMatches(uid?: string): {
+  matches: UserMatch[]; upcoming: UpcomingMatch[]; loading: boolean; reload: () => void;
+} {
   const [matches, setMatches] = useState<UserMatch[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingMatch[]>([]);
   const [loading, setLoading] = useState(true);
+  // Bumped by reload(): a one-time fetch otherwise never sees a score filed or a match cancelled.
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
   useEffect(() => {
     // Clear BOTH lists on sign-out — leaving `upcoming` populated kept the previous user's
@@ -88,6 +125,14 @@ export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: 
                   opponentContact: '',
                   eventId: m.event_id || '',
                   source: 'tournament',
+                  category: category as MatchCategory,
+                  round: m.round || '',
+                  rrGroupLabel: m.rr_group_label || '',
+                  skillGroup: m.skill_group || '',
+                  division: m.division || '',
+                  viewerIsP1: iAmP1First,
+                  respondedAt: '',
+                  tournamentMatch: m,
                 });
               }
               return;
@@ -114,13 +159,20 @@ export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: 
               myGames: parts.reduce((s, [a]) => s + a, 0),
               oppGames: parts.reduce((s, [, b]) => s + b, 0),
               scoreLine: parts.map(([a, b]) => `${a}-${b}`).join(', '),
+              category: category as MatchCategory,
+              round: m.round || '',
+              viewerIsP1: iAmP1,
+              winnerUid: m.winner_uid,
+              sets: absoluteSets(raw),
+              walkover: !!m.walkover || parts.length === 0,
+              tournamentMatch: m,
             });
             return;
           }
 
           // Challenges and rallies share one lifecycle: accepted = still to play, confirmed = a
           // played, points-paying result. Only 'accepted' used to be handled, so a CONFIRMED
-          // challenge or friendly appeared nowhere at all — not in upcoming, not in history.
+          // challenge or rally appeared nowhere at all — not in upcoming, not in history.
           if (category === 'challenge' || category === 'rally') {
             const iAmP1 = raw.player_1_uid === uid;
             const opponentId = (iAmP1 ? raw.player_2_uid : raw.player_1_uid) || '';
@@ -134,6 +186,13 @@ export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: 
                 opponentContact: '',
                 eventId: '',
                 source: category === 'rally' ? 'rally' : 'challenge',
+                category,
+                round: '',
+                rrGroupLabel: '',
+                skillGroup: '',
+                division: raw.division || '',
+                viewerIsP1: iAmP1,
+                respondedAt: raw.responded_at || '',
               });
               return;
             }
@@ -162,6 +221,12 @@ export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: 
               myGames: pairs.reduce((s, [a]) => s + a, 0),
               oppGames: pairs.reduce((s, [, b]) => s + b, 0),
               scoreLine: pairs.map(([a, b]) => `${a}-${b}`).join(', '),
+              category,
+              round: '',
+              viewerIsP1: iAmP1,
+              winnerUid: raw.winner_uid,
+              sets: absoluteSets(raw),
+              walkover: pairs.length === 0,
             });
           }
         });
@@ -175,7 +240,37 @@ export function useUserMatches(uid?: string): { matches: UserMatch[]; upcoming: 
     })();
 
     return () => { cancelled = true; };
-  }, [uid]);
+  }, [uid, reloadKey]);
 
-  return { matches, upcoming, loading };
+  return { matches, upcoming, loading, reload };
 }
+
+/**
+ * A player's current streak ("3W") and points/games won %, from their played matches (newest
+ * first, as useUserMatches returns them) and their stats doc. The Player Dash and a member's
+ * public profile both show these, so they come from here and can't disagree.
+ */
+export const playerRecord = (
+  all: Pick<UserMatch, 'won' | 'myGames' | 'oppGames' | 'walkover'>[],
+  stats?: { pointswon?: number; totalPointsPlayed?: number } | null,
+) => {
+  // A walkover is nobody's win or loss — no match was played. Filtered HERE rather than at the
+  // call sites so a new caller can't reintroduce it. `stats` already agrees: scoring.js pays a
+  // walkover no matchesPlayed/wins/loses (resultDeltas, `played = !walkover`).
+  const matches = all.filter((m) => !m.walkover);
+  let streak: string | null = null;
+  if (matches.length) {
+    const first = matches[0].won;
+    let n = 0;
+    for (const m of matches) { if (m.won !== first) break; n += 1; }
+    streak = `${n}${first ? 'W' : 'L'}`;
+  }
+  // The stored points pair, with a games fallback for members whose points were never populated.
+  const played = stats?.totalPointsPlayed ?? 0;
+  const mine = matches.reduce((n, m) => n + m.myGames, 0);
+  const theirs = matches.reduce((n, m) => n + m.oppGames, 0);
+  const pgWon = played > 0
+    ? Math.round(((stats?.pointswon ?? 0) / played) * 100)
+    : mine + theirs > 0 ? Math.round((mine / (mine + theirs)) * 100) : null;
+  return { streak, pgWon };
+};

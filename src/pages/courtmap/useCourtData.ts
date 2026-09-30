@@ -3,6 +3,11 @@ import { getDocs, getDoc, doc, collection } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { CourtWithCount, TennisProgram, PickleballOnlyCourt, CsvCourt } from './courtMapUtils';
 import { parseCourts, parsePrograms, getPickleballMappings, matchCourtName, NINETY_DAYS_MS } from './courtMapUtils';
+import { courtKey } from '../../utils/courtKey';
+
+// Shape of the `activity` half of site_stats/court_counts (functions/courtCounts.js).
+type ActivityWindow = { byKey?: Record<string, number>; byName?: Record<string, number> };
+type ActivityAggregate = { d7?: ActivityWindow; d30?: ActivityWindow };
 
 // sessionStorage is ~5 MB per origin, so anything over this simply isn't cached (writing it would
 // just throw QuotaExceededError into the catch below). Both CSVs now fit comfortably: the raw
@@ -65,6 +70,8 @@ export function useCourtData(): {
       // `hasPrograms` starts false and is filled in by the programs pass below.
       setCourts(rawCourts.map((c) => ({
         ...c, count: 0,
+        activity7: 0,
+        activity30: 0,
         hasPrograms: false,
         pickleballEntries: pbByDropdown.get(c.dropdown) ?? [],
       })));
@@ -83,7 +90,42 @@ export function useCourtData(): {
         // than over every user in the app.
         try {
           const aggSnap = await withTimeout(getDoc(doc(db, 'site_stats', 'court_counts')));
-          const raw = aggSnap.exists() ? (aggSnap.data()?.counts as Record<string, number> | undefined) : undefined;
+          const data = aggSnap.exists() ? aggSnap.data() : undefined;
+          const raw = data?.counts as Record<string, number> | undefined;
+
+          // Recent activity rides along in the same document. Its `byKey` half is already keyed
+          // by court_key, so it only needs slugifying our own dropdown to line up; the `byName`
+          // half is free-text court names off match docs and goes through matchCourtName, the
+          // same one-place-only resolution the preference counts use.
+          const activity = data?.activity as ActivityAggregate | undefined;
+          if (activity) {
+            const resolve = (win?: ActivityWindow) => {
+              const m = new Map<string, number>();
+              if (!win) return m;
+              const add = (dropdown: string, n: number) => m.set(dropdown, (m.get(dropdown) ?? 0) + n);
+              const byKeySlug = new Map<string, string>();
+              for (const c of rawCourts) byKeySlug.set(courtKey(c.dropdown), c.dropdown);
+              for (const [key, n] of Object.entries(win.byKey ?? {})) {
+                const dropdown = byKeySlug.get(key);
+                if (dropdown) add(dropdown, n);
+              }
+              for (const [name, n] of Object.entries(win.byName ?? {})) {
+                const matched = matchCourtName(name, byDropdown, byName);
+                if (matched) add(matched.dropdown, n);
+              }
+              return m;
+            };
+            const a7 = resolve(activity.d7);
+            const a30 = resolve(activity.d30);
+            if (!cancelled) {
+              setCourts((prev) => prev.map((c) => ({
+                ...c,
+                activity7: a7.get(c.dropdown) ?? 0,
+                activity30: a30.get(c.dropdown) ?? 0,
+              })));
+            }
+          }
+
           if (raw && Object.keys(raw).length) {
             if (cancelled) return;
             const aggMap = new Map<string, number>();

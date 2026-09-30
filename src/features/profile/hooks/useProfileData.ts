@@ -5,7 +5,13 @@ import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent, EventParticipant } from '../../../types';
 import { resolveStorageUrl } from '../../events/services/eventService';
 
-export type JoinedEventCard = TennisEvent & { participantId: string; dateselected?: string[] };
+export type JoinedEventCard = TennisEvent & {
+  participantId: string;
+  dateselected?: string[];
+  /** The organizer removed this registration (a soft delete). The row stays for the record. */
+  removal?: boolean;
+  tournamentChoice?: 'Singles' | 'Doubles';
+};
 
 const FIRESTORE_IN_QUERY_LIMIT = 10;
 
@@ -78,6 +84,8 @@ export const useProfileData = () => {
               image,
               participantId: participant.id,
               dateselected: participant.dateselected || [],
+              removal: participant.removal === true,
+              tournamentChoice: participant.tournament_choice,
             } as JoinedEventCard;
           })
         );

@@ -16,9 +16,11 @@
 // Requires deploy: `firebase deploy --only functions:aggregateCourtCounts`
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const { TZ, REGION } = require('./lib/constants');
+const { courtKey } = require('./lib/memberLocation');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
@@ -58,18 +60,107 @@ async function computeCourtCounts() {
   return counts;
 }
 
+// Recent activity per court, for the map's Recent Activity view. Every event counts once, so a
+// member who checks in, plays a match and files a report contributes 3 — that is deliberate: the
+// number answers "how busy has this court been", not "how many people".
+//
+// Two key spaces, for the same reason computeCourtCounts stores raw preference strings: `courts`
+// docs already carry a slugified `court_key` (mirror of src/utils/courtKey.ts), while a match
+// carries whatever free-text court name the scorer typed. Resolving that name needs the courts CSV
+// and matchCourtName, which are client-side, so the raw string is passed through untouched.
+async function computeActivity() {
+  const now = Date.now();
+  const iso = (daysAgo) => new Date(now - daysAgo * 24 * 60 * 60 * 1000).toISOString();
+  const cutoff30 = iso(30);
+  const cutoff7 = iso(7);
+
+  const blank = () => ({ byKey: {}, byName: {} });
+  const out = { d7: blank(), d30: blank() };
+  const bump = (bucket, space, key) => {
+    if (!key) return;
+    bucket[space][key] = (bucket[space][key] ?? 0) + 1;
+  };
+
+  // Check-ins, attendance and every kind of photo report all live in `courts`, discriminated by
+  // `type`. All of them are activity, so none is filtered out.
+  const courtsSnap = await db.collection('courts').where('created_at', '>=', cutoff30).get();
+  courtsSnap.forEach((d) => {
+    const { court_key: key, created_at: at } = d.data();
+    if (!key || !at) return;
+    bump(out.d30, 'byKey', key);
+    if (at >= cutoff7) bump(out.d7, 'byKey', key);
+  });
+
+  // A recorded result — tournament match, challenge or rally alike. `completed_at` is pinned
+  // to first scoring, so an edited score never re-dates the activity.
+  const matchSnap = await db.collection('matches').where('completed_at', '>=', cutoff30).get();
+  matchSnap.forEach((d) => {
+    const { court, completed_at: at } = d.data();
+    const name = String(court || '').trim();
+    if (!name || !at) return;
+    bump(out.d30, 'byName', name);
+    if (at >= cutoff7) bump(out.d7, 'byName', name);
+  });
+
+  return out;
+}
+
 // Explicit region + timeZone, like every other scheduled function here. The bare-cron form
 // defaulted the schedule to UTC, so "every 6 hours" drifted against Toronto local time.
 exports.aggregateCourtCounts = onSchedule({ schedule: '0 */6 * * *', timeZone: TZ, region: REGION }, async () => {
   try {
-    const counts = await computeCourtCounts();
+    const [counts, activity] = await Promise.all([computeCourtCounts(), computeActivity()]);
     await db.doc('site_stats/court_counts').set({
       counts,
+      activity,
       updated_at: new Date().toISOString(),
     });
-    logger.info(`[aggregateCourtCounts] wrote ${Object.keys(counts).length} court keys`);
+    logger.info(`[aggregateCourtCounts] wrote ${Object.keys(counts).length} court keys, `
+      + `${Object.keys(activity.d30.byKey).length + Object.keys(activity.d30.byName).length} with 30d activity`);
   } catch (err) {
     logger.error('[aggregateCourtCounts] failed', err);
     throw err;
   }
 });
+
+/**
+ * A homepage court report becomes a court-condition entry, with nobody approving it.
+ *
+ * The report arrives from a signed-out visitor into `court_improvements`, which only organizers may
+ * read. Court conditions live in `courts`, which is members-only — so the browser cannot make this
+ * copy and the server has to. The organizer still sees the original in their dash; this is what
+ * puts it against the court for everyone else.
+ *
+ * It is written as `uid: 'no_account'`, the same marker the anonymous Submit-a-Photo flow uses, and
+ * onPhotoReportAwardPoints returns early on that — so a stranger's report pays nobody. That is
+ * deliberate: do not "fix" it by stamping the reporter's uid, or the homepage button becomes a
+ * points path with no review.
+ *
+ * Requires deploy: `firebase deploy --only functions:onCourtImprovementReported`
+ */
+exports.onCourtImprovementReported = onDocumentCreated(
+  { document: 'court_improvements/{id}', region: REGION },
+  async (event) => {
+    const r = event.data?.data();
+    if (!r?.court || !r?.note) return;
+    try {
+      await db.collection('courts').add({
+        uid: 'no_account',
+        type: 'condition',
+        status: 'open',
+        types: ['other'],
+        court: String(r.court).trim(),
+        // `court_key` is what the activity aggregate above counts by; the free-text name is kept
+        // as typed so the client's own matching still has something to work with.
+        court_key: courtKey(r.court),
+        description: String(r.note).trim(),
+        source: 'homepage_report',
+        created_at: r.created_at || new Date().toISOString(),
+      });
+    } catch (err) {
+      // The report itself is already saved and visible to organizers; failing to mirror it must
+      // not retry forever against a collection the reporter never touched.
+      logger.error('[onCourtImprovementReported] could not mirror to courts', err);
+    }
+  },
+);

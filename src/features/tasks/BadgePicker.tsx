@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Button } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
-import { BADGES, BADGE_PILL_CLASS, MAX_DISPLAY_BADGES, earnedBadges } from './badges';
+import { BADGES, BADGE_BY_ID, BADGE_PILL_CLASS, MAX_DISPLAY_BADGES, earnedBadges } from './badges';
 import { Counters } from './useTasks';
 import { TaskProgress } from '../../types';
 
@@ -11,7 +11,7 @@ import { TaskProgress } from '../../types';
 // `progress`/`counters` come from the caller's own useTasks() call rather than calling it again
 // here — this component always renders alongside a parent that already has one (ProfileInfo, via
 // Profile.tsx), and a second independent listener + auto-award write-effect on the same
-// task_progress/{uid} doc caused visible flicker on first load (two listeners racing each other).
+// tasks/{uid} progress doc caused visible flicker on first load (two listeners racing each other).
 export const BadgePicker: React.FC<{
   selected: string[];
   onSave: (ids: string[]) => Promise<boolean>;
@@ -101,5 +101,24 @@ export const BadgePicker: React.FC<{
         )}
       </AnimatePresence>
     </>
+  );
+};
+
+// ─── Badge row (player profile) ────────────────────────────────────────────────────────────────
+
+// The badges a player chose to display, as text pills. Used on profile cards.
+// Deliberately not rendered beside leaderboard names — three text pills there crowded the
+// player name out of the row on a phone.
+export const BadgeRow: React.FC<{ ids?: string[]; className?: string }> = ({ ids, className }) => {
+  const badges = (ids || []).map((id) => BADGE_BY_ID[id]).filter(Boolean);
+  if (badges.length === 0) return null;
+  return (
+    <span className={`inline-flex flex-wrap items-center gap-1.5 ${className ?? ''}`}>
+      {badges.map((b) => (
+        <span key={b.id} title={b.requirement} className={BADGE_PILL_CLASS}>
+          {b.name}
+        </span>
+      ))}
+    </span>
   );
 };

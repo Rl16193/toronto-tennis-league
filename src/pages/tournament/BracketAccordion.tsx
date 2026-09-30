@@ -20,7 +20,6 @@ type Props = {
   isCreator?: boolean;
   onSubmitScore?: (match: TournamentMatch) => void;
   submittableMatchIds?: Set<string>;
-  pendingMatchIds?: Set<string>;
   roundDeadlines?: Record<string, string>;
   onUpdateDeadline?: (round: string, date: string) => void;
 };
@@ -29,7 +28,7 @@ const STATE_LABEL = { preview: 'Live Preview', loading: 'Loading', started: 'Sta
 
 export const BracketAccordion: React.FC<Props> = ({
   matches, editMode, editPlayers = [], onEditPlayer, onRemovePlayer,
-  isCreator, onSubmitScore, submittableMatchIds, pendingMatchIds,
+  isCreator, onSubmitScore, submittableMatchIds,
   roundDeadlines = {}, onUpdateDeadline,
 }) => {
   const drawSize = Math.max(8, matches[0]?.drawsize || 8);
@@ -117,7 +116,6 @@ export const BracketAccordion: React.FC<Props> = ({
                   isCreator={isCreator}
                   onSubmitScore={onSubmitScore}
                   submittableMatchIds={submittableMatchIds}
-                  pendingMatchIds={pendingMatchIds}
                 />
               ))}
             </div>

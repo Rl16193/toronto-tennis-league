@@ -7,17 +7,16 @@
  *      An existing doc means "skip" — so a bonus is paid exactly once under concurrent writes.
  *   2. Payouts land as `bonusPoints` + a `bonusAwards` list on tasks/{uid}.
  *
- * courts.json is the server-side courtKey → zone roster, GENERATED FROM
- * public/Tennis Courts Facilities - 4326.csv. Regenerate it if the CSV changes.
+ * The court → zone roster is lib/memberLocation.js.
  * Deploy: firebase deploy --only functions
  */
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const { notify } = require('./lib/notify');
-const ROSTER = require('./courts.json'); // { [courtKey]: zoneName }
-
-const { TZ, REGION } = require('./lib/constants');
+const { torontoParts, REGION } = require('./lib/constants');
+const { courtKey: slug, zoneOfCourt, courtsInZone } = require('./lib/memberLocation');
+const { isPlayedResult } = require('./lib/scoring');
 const db = () => admin.firestore();
 
 // ─── Tunable thresholds (all easily adjusted here) ──────────────────────────────────────────
@@ -33,31 +32,10 @@ const BOARD_ZONE_POINTS = 10;     // every court in a zone now has an approved b
 const PIONEER_POINTS = 5;         // first-ever check-in at a court
 const SWEEP_POINTS = 10;          // community checks in at every court in a zone (this cycle)
 
-// zone -> [courtKey, …], built once from the roster.
-const ZONE_COURTS = (() => {
-  const m = {};
-  for (const [key, zone] of Object.entries(ROSTER)) (m[zone] = m[zone] || []).push(key);
-  return m;
-})();
-
-// Doc-id-safe slug (zone names contain spaces / hyphens).
-const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-
-// Toronto-local calendar day (YYYYMMDD) and hour (0..23) for an ISO timestamp.
-function torontoParts(iso) {
-  const d = iso ? new Date(iso) : new Date();
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-CA', {
-      timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false,
-    }).formatToParts(d).map((p) => [p.type, p.value]),
-  );
-  return { day: `${parts.year}${parts.month}${parts.day}`, hour: parseInt(parts.hour, 10) % 24 };
-}
 
 // ─── Payout primitive ───────────────────────────────────────────────────────────────────────
-// recipients: [{ uid, name }]. Returns true if anyone got paid. One-shot awards (the default) pay
-// exactly once; `allowTopUp` awards (Matchday) may pay again on the SAME id but only to recipients
-// who haven't received it, so a late finisher still collects and nobody is paid twice.
+// recipients: [{ uid, name }]. Returns true if anyone got paid. Each recipient is paid at most once
+// per award id, so a later qualifier on the same id (a late Matchday finisher) still collects.
 // Friendly label per award type, used only for the notification copy below.
 const AWARD_LABELS = {
   matchday: 'Matchday',
@@ -68,7 +46,7 @@ const AWARD_LABELS = {
   zone_sweep: 'Full Zone Sweep',
 };
 
-async function payGroupAward(awardId, { type, key, pointsEach, recipients, allowTopUp = false }) {
+async function payGroupAward(awardId, { type, pointsEach, recipients }) {
   const clean = recipients.filter((r) => r && r.uid);
   if (clean.length === 0) return false;
   const nowISO = new Date().toISOString();
@@ -77,11 +55,7 @@ async function payGroupAward(awardId, { type, key, pointsEach, recipients, allow
     for (const r of clean) {
       const entryRef = db().doc(`tasks/${awardId}_${r.uid}`);
       const entrySnap = await tx.get(entryRef);
-      // One-shot: skip recipients already paid for this award id.
-      // allowTopUp (Matchday) has the same per-recipient check — new recipients to a
-      // still-active award day get paid, but nobody is ever paid twice.
-      if (entrySnap.exists && !allowTopUp) continue;
-      if (entrySnap.exists && allowTopUp) continue;
+      if (entrySnap.exists) continue; // already paid for this award id
       // Write the per-recipient ledger entry
       tx.set(entryRef, {
         uid: r.uid,
@@ -108,7 +82,7 @@ async function payGroupAward(awardId, { type, key, pointsEach, recipients, allow
   if (newOnes.length === 0) return false;
   await notify(newOnes.map((r) => r.uid), {
     type: 'group_award_received',
-    title: `You earned a ${AWARD_LABELS[type] || 'group'} bonus — +${pointsEach} points`,
+    title: `You earned a ${AWARD_LABELS[type] || 'group'} bonus: +${pointsEach} points`,
     body: '',
     link: '/tasks',
   });
@@ -138,10 +112,8 @@ exports.onMatchCompletedMatchdayBonus = onDocumentUpdated(
   async (event) => {
     const before = event.data?.before.data() || {};
     const after = event.data?.after.data() || {};
-    if (after.category !== 'singles' && after.category !== 'doubles') return;
-    if (before.status === 'complete' || after.status !== 'complete') return;
-    if (after.walkover === true) return;
-    if (after.set_1_player_1 == null || after.set_1_player_2 == null) return;
+    const isPlayedTournament = (m) => (m.category === 'singles' || m.category === 'doubles') && isPlayedResult(m);
+    if (!isPlayedTournament(after) || isPlayedTournament(before)) return;
 
     const { day } = torontoParts(after.completed_at);
 
@@ -163,9 +135,7 @@ exports.onMatchCompletedMatchdayBonus = onDocumentUpdated(
     const byUid = new Map();
     snap.forEach((d) => {
       const m = d.data();
-      if (m.status !== 'complete') return;
-      if (m.walkover === true) return;
-      if (m.set_1_player_1 == null || m.set_1_player_2 == null) return;
+      if (!isPlayedTournament(m)) return;
       if (torontoParts(m.completed_at).day !== day) return;
       dayMatches += 1;
       if (m.player_1_uid && !byUid.has(m.player_1_uid)) byUid.set(m.player_1_uid, m.player_1_name || '');
@@ -174,7 +144,7 @@ exports.onMatchCompletedMatchdayBonus = onDocumentUpdated(
     if (dayMatches < MATCHDAY_MIN_MATCHES) return;
     const recipients = [...byUid].map(([uid, name]) => ({ uid, name }));
     await payGroupAward(`matchday_${day}`, {
-      type: 'matchday', key: day, pointsEach: MATCHDAY_POINTS, recipients, allowTopUp: true,
+      type: 'matchday', pointsEach: MATCHDAY_POINTS, recipients,
     });
   },
 );
@@ -203,7 +173,7 @@ exports.onQueueReportHourlyBonus = onDocumentCreated(
     }
     const recipients = [...byUid].map(([uid, name]) => ({ uid, name }));
     await payGroupAward(`hourly_${day}_${r.court_key}`, {
-      type: 'hourly_coverage', key: r.court_key, pointsEach: HOURLY_POINTS, recipients,
+      type: 'hourly_coverage', pointsEach: HOURLY_POINTS, recipients,
     });
   },
 );
@@ -220,7 +190,7 @@ exports.onCourtVisitPioneer = onDocumentCreated(
     const v = event.data?.data();
     if (!v?.uid || v.type !== 'check-in' || !v.court_key) return;
     await payGroupAward(`pioneer_${v.court_key}`, {
-      type: 'pioneer', key: v.court_key, pointsEach: PIONEER_POINTS,
+      type: 'pioneer', pointsEach: PIONEER_POINTS,
       recipients: [{ uid: v.uid, name: v.user_name || '' }],
     });
   },
@@ -239,12 +209,12 @@ exports.onBoardApprovedGroupBonus = onDocumentCreated(
 
     const submitter = { uid: after.uid, name: after.user_name || '' };
     await payGroupAward(`board_new_${after.court_key}`, {
-      type: 'board_new', key: after.court_key, pointsEach: BOARD_NEW_POINTS, recipients: [submitter],
+      type: 'board_new', pointsEach: BOARD_NEW_POINTS, recipients: [submitter],
     });
 
-    const zone = ROSTER[after.court_key];
-    if (!zone || !ZONE_COURTS[zone]) return;
-    const rosterKeys = ZONE_COURTS[zone];
+    const zone = zoneOfCourt(after.court_key);
+    if (!zone || !courtsInZone(zone).length) return;
+    const rosterKeys = courtsInZone(zone);
     const ref = db().doc(`site_stats/board_zone_${slug(zone)}`);
     const acc = await db().runTransaction(async (tx) => {
       const snap = await tx.get(ref);
@@ -261,7 +231,7 @@ exports.onBoardApprovedGroupBonus = onDocumentCreated(
     if (!rosterKeys.every((k) => acc.covered.includes(k))) return;
     const recipients = acc.contributors.map((uid) => ({ uid, name: acc.names[uid] || '' }));
     await payGroupAward(`board_zone_${slug(zone)}`, {
-      type: 'board_zone', key: zone, pointsEach: BOARD_ZONE_POINTS, recipients,
+      type: 'board_zone', pointsEach: BOARD_ZONE_POINTS, recipients,
     });
   },
 );
@@ -270,9 +240,9 @@ exports.onBoardApprovedGroupBonus = onDocumentCreated(
 // record the cycle duration, then RESET to 0 so the next cycle starts fresh. Driven by attendance
 // (repeatable) — passport visits are once-forever and could never seed a second sweep.
 async function zoneSweepCheck(a) {
-  const zone = ROSTER[a.court_key] || a.zone;
-  if (!zone || !ZONE_COURTS[zone]) return;
-  const rosterKeys = ZONE_COURTS[zone];
+  const zone = zoneOfCourt(a.court_key) || a.zone;
+  if (!zone || !courtsInZone(zone).length) return;
+  const rosterKeys = courtsInZone(zone);
   const ref = db().doc(`site_stats/zone_sweep_${slug(zone)}`);
   const nowISO = new Date().toISOString();
 
@@ -300,7 +270,7 @@ async function zoneSweepCheck(a) {
   if (!result.complete) return;
   const recipients = result.contributors.map((uid) => ({ uid, name: result.names[uid] || '' }));
   const paid = await payGroupAward(`sweep_${slug(zone)}_${result.sweepIndex}`, {
-    type: 'zone_sweep', key: zone, pointsEach: SWEEP_POINTS, recipients,
+    type: 'zone_sweep', pointsEach: SWEEP_POINTS, recipients,
   });
   if (paid) {
     const days = Math.max(0, Math.round((Date.parse(nowISO) - Date.parse(result.startedAt)) / 86400000));

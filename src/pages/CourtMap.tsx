@@ -10,7 +10,6 @@ import { ZONE_NAMES, ZONE_COLORS, getZone, haversineKm, zoneOverlayGeoJSON } fro
 import type { CourtWithCount, PickleballOnlyCourt, NearestCourt, NearestProgram, SuggestionItem } from './courtmap/courtMapUtils';
 import {
   TORONTO_CENTER,
-  formatDist,
   parseDateStr,
   getProgramStatus,
   geocodeQuery, geocodeLocationId,
@@ -19,7 +18,7 @@ import {
   locationGeoCache,
 } from './courtmap/courtMapUtils';
 import {
-  Badge, CourtPopup, CourtResultsList, FilterSelect, MultiFilterSelect, PickleballBadges,
+  CourtPopup, CourtResultsList, FilterSelect, MultiFilterSelect, PickleballBadges,
   ProgramResultsList,
 } from './courtmap/CourtMapElements';
 import { useCourtData } from './courtmap/useCourtData';
@@ -39,9 +38,9 @@ const PhotoSubmitModal = lazyWithRetry(() =>
 // ~600 markers rebuilt its SVG string and its onClick closure on every one of those renders.
 // Memoizing needs the marker's props to be stable, which is why the click handlers are passed in
 // (handleSelectCourt is already a useCallback) rather than written inline at the call site.
-const CourtMarker = React.memo<{ court: CourtWithCount; busiestCount: number; onSelect: (c: CourtWithCount) => void }>(
-  ({ court, busiestCount, onSelect }) => {
-    const html = useMemo(() => courtMarkerHtml(court, busiestCount), [court, busiestCount]);
+const CourtMarker = React.memo<{ court: CourtWithCount; busiestCount: number; metric?: number; onSelect: (c: CourtWithCount) => void }>(
+  ({ court, busiestCount, metric, onSelect }) => {
+    const html = useMemo(() => courtMarkerHtml(court, busiestCount, metric), [court, busiestCount, metric]);
     return (
       <Marker longitude={court.lng} latitude={court.lat} anchor="center">
         <div
@@ -73,6 +72,17 @@ const PickleballMarker = React.memo<{ pb: PickleballOnlyCourt; onSelect: (p: Pic
 // every search keystroke), handing FilterSelect a new array identity each time.
 // FilterSelect renders its own "All" entry for the empty value, so it isn't listed here.
 // Every option except Pickleball is a tennis-court filter — see displayedPickleballOnly.
+// One button cycles the map's three views, so the order lives here rather than in the handler.
+// The activity button owns one idea and cycles through its own three states; Members Only / All
+// Courts is back to being a plain two-way toggle beside it.
+type ActivityWindow = '' | 'd7' | 'd30';
+const ACTIVITY_NEXT: Record<ActivityWindow, ActivityWindow> = { '': 'd7', d7: 'd30', d30: '' };
+const ACTIVITY_LABEL: Record<ActivityWindow, string> = {
+  '': 'Activity',
+  d7: '7D Activity',
+  d30: '30D Activity',
+};
+
 const COURT_TYPE_OPTIONS = [
   { value: 'Tennis',     label: 'Tennis'                  },
   { value: 'Pickleball', label: 'Pickleball'              },
@@ -123,9 +133,15 @@ export const CourtMap: React.FC = () => {
   // Drives the marker size bands. Taken from every court, not just the filtered set, so a marker
   // doesn't change size just because the user narrowed the filters.
   const busiestCount = useMemo(() => courts.reduce((n, c) => Math.max(n, c.count), 0), [courts]);
-  // Default view: only courts where members are currently present. "Show all courts" reveals
-  // the rest (empty courts, programs-only, etc.) as a deliberate opt-in layer toggle.
+  // Members Only (the default) shows courts members prefer; All Courts reveals the rest (empty
+  // courts, programs-only, pickleball). Activity is its own button and its own idea: while it is
+  // on, only courts that saw a check-in, report or recorded result in the chosen window are
+  // shown, ranked by how many. Pickleball-only sites belong to All Courts alone, since activity
+  // is a narrowing view rather than a widening one.
   const [showAllCourts, setShowAllCourts] = useState(false);
+  const [activityWindow, setActivityWindow] = useState<ActivityWindow>('');
+  const activityOf = (c: CourtWithCount) => (activityWindow === 'd7' ? c.activity7 : c.activity30);
+
 
   const [progStatusFilter, setProgStatusFilter] = useState('');
   const [progLocationFilter, setProgLocationFilter] = useState('');
@@ -177,16 +193,21 @@ export const CourtMap: React.FC = () => {
         (courtCountFilters.has('5to8') && c.numCourts >= 5 && c.numCourts <= 8) ||
         (courtCountFilters.has('gt8')  && c.numCourts > 8));
     }
-    if (!showAllCourts) list = list.filter((c) => c.count > 0);
+    // Activity takes the map over while it is on: only courts busy in that window.
+    if (activityWindow) list = list.filter((c) => activityOf(c) > 0);
+    else if (!showAllCourts) list = list.filter((c) => c.count > 0);
 
     return list
       .map((c) => ({ ...c, distKm: userCoords ? haversineKm(userCoords.lat, userCoords.lng, c.lat, c.lng) : 0 }))
       .sort((a, b) => {
+        // Recent Activity ranks by how busy a court has been — that is the point of the view, so
+        // it outranks proximity here. The other two views keep nearest-first.
+        if (activityWindow && activityOf(b) !== activityOf(a)) return activityOf(b) - activityOf(a);
         if (userCoords) return a.distKm - b.distKm;
         if (b.count !== a.count) return b.count - a.count;
         return a.dropdown.localeCompare(b.dropdown);
       });
-  }, [courts, zoneFilters, courtTypeFilter, courtLightsFilter, courtCountFilters, userCoords, showAllCourts]);
+  }, [courts, zoneFilters, courtTypeFilter, courtLightsFilter, courtCountFilters, userCoords, showAllCourts, activityWindow]);
 
   const displayedPickleballOnly = useMemo((): PickleballOnlyCourt[] => {
     // Pickleball-only sites belong to All and Pickleball alone — every other Type is a tennis-court
@@ -494,8 +515,9 @@ export const CourtMap: React.FC = () => {
         )}
 
         {/* Zone overlay toggle + legend — sits BELOW the Search/Members Only/Filters bar (which
-            is top-3 left-3 right-3, full width) so the two don't paint on top of each other. */}
-        <div className="absolute top-16 left-3 z-10 flex flex-col items-start gap-2">
+            is top-3 left-3 right-3, full width) so the two don't paint on top of each other. That
+            bar is two rows below `sm` (search on its own line), hence the taller offset there. */}
+        <div className="absolute top-28 sm:top-16 left-3 z-10 flex flex-col items-start gap-2">
           <button
             type="button"
             onClick={() => { setShowZones((v) => !v); trackMap('filter', { filter_name: 'show_zones', filter_value: String(!showZones) }); }}
@@ -510,7 +532,7 @@ export const CourtMap: React.FC = () => {
               {ZONE_NAMES.map((z) => (
                 <div key={z} className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: ZONE_COLORS[z] }} />
-                  <span className="text-[10px] font-semibold text-ink/80 leading-tight">{z}</span>
+                  <span className="text-[10px] font-semibold text-ink leading-tight">{z}</span>
                 </div>
               ))}
             </div>
@@ -546,7 +568,13 @@ export const CourtMap: React.FC = () => {
           )}
 
           {displayedCourts.map((court, i) => (
-            <CourtMarker key={i} court={court} busiestCount={busiestCount} onSelect={handleSelectCourt} />
+            <CourtMarker
+              key={i}
+              court={court}
+              busiestCount={busiestCount}
+              metric={activityWindow ? activityOf(court) : undefined}
+              onSelect={handleSelectCourt}
+            />
           ))}
 
           {displayedPickleballOnly
@@ -624,8 +652,11 @@ export const CourtMap: React.FC = () => {
         </MapGL>
 
         {/* Search + Filters float OVER the map (wireframe 1j) ── */}
-        <div className="absolute top-3 left-3 right-3 z-10 flex items-start gap-2">
-          <div className="flex-1 min-w-0">
+        {/* On a phone the search box shares this row with three buttons that can't shrink, which
+            left it about 90px wide — too narrow to read an address back. Below `sm` it takes a row
+            of its own and the buttons sit under it. */}
+        <div className="absolute top-3 left-3 right-3 z-10 flex flex-col gap-2 sm:flex-row sm:items-start">
+          <div className="min-w-0 sm:flex-1">
             <div className={`h-10 flex items-center gap-2 px-3 bg-tennis-dark/95 backdrop-blur shadow-xl transition-colors focus-within:border-clay/50 ${suggestions.length > 0 ? 'rounded-t-2xl' : 'rounded-2xl'}`}>
               <Search className="w-3.5 h-3.5 text-fg/70 shrink-0 pointer-events-none" />
               <input
@@ -634,7 +665,7 @@ export const CourtMap: React.FC = () => {
                 onChange={(e) => handleSearchInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(e); }}
                 placeholder="Search courts or an address…"
-                className="flex-1 bg-transparent text-fg placeholder-fg/30 text-sm outline-none min-w-0"
+                className="flex-1 bg-transparent text-fg placeholder-fg/70 text-sm outline-none min-w-0"
               />
               {searching
                 ? <Loader2 className="w-3.5 h-3.5 text-clay animate-spin shrink-0" />
@@ -661,6 +692,7 @@ export const CourtMap: React.FC = () => {
             )}
             {searchError && <p className="text-badge-loss text-xs mt-1.5 bg-tennis-dark/80 rounded-lg px-2 py-1">{searchError}</p>}
           </div>
+          <div className="flex items-start gap-2 sm:contents">
           <button
             type="button"
             onClick={() => setShowAllCourts((v) => !v)}
@@ -670,7 +702,18 @@ export const CourtMap: React.FC = () => {
                 : 'bg-tennis-dark/95 border-fg/10 text-fg hover:border-clay/50'
             }`}
           >
-            {showAllCourts ? 'All Courts' : 'Members Only'}
+            {showAllCourts ? 'All Courts' : 'Members'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActivityWindow((v) => ACTIVITY_NEXT[v])}
+            className={`h-10 shrink-0 px-3.5 rounded-2xl backdrop-blur border shadow-xl text-xs font-bold transition-colors ${
+              activityWindow
+                ? 'bg-clay/15 border-clay/40 text-clay'
+                : 'bg-tennis-dark/95 border-fg/10 text-fg hover:border-clay/50'
+            }`}
+          >
+            {ACTIVITY_LABEL[activityWindow]}
           </button>
           <button
             type="button"
@@ -679,6 +722,7 @@ export const CourtMap: React.FC = () => {
           >
             Filters
           </button>
+          </div>
         </div>
 
         {/* Join CTA — floats just above the pull-up handle for logged-out visitors; goes away
@@ -713,7 +757,7 @@ export const CourtMap: React.FC = () => {
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-fg/70 pointer-events-none">
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#15803d] inline-block shrink-0" />Active</span>
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#eab308] inline-block shrink-0" />Programs</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#3b82f6] inline-block shrink-0" />Open hours</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#3b82f6] inline-block shrink-0" />Public hours</span>
                 </div>
                 <button
                   type="button"

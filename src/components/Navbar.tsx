@@ -8,6 +8,7 @@ import { HeaderMenu } from './HeaderMenu';
 // Slim top bar: brand (→ Home) + the header hamburger (About Us / How It Works always;
 // Notifications / Profile / Logout when signed in — see HeaderMenu). Primary navigation lives
 // in the bottom tab bar (BottomNav), app-style.
+
 export const Navbar: React.FC = () => {
   const { user, profile } = useAuth();
   const { theme, toggleTheme } = useTheme();

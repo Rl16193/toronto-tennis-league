@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Camera, CheckCircle2, ImageUp, X } from 'lucide-react';
-import { addDoc, collection } from 'firebase/firestore';
 import { Sheet } from '../../components/Sheet';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
-import { db } from '../../lib/firebase';
+import { subscribeVisitorToNewsletter } from '../../lib/newsletter';
 import { useAuth } from '../../context/AuthContext';
 import { loadCourtList } from './courtList';
 import type { CsvCourt } from '../../pages/courtmap/courtMapUtils';
@@ -44,9 +43,11 @@ function queueWaitTable(numCourts: number): { courtsPerBoard: 2 | 4; bands: Wait
 // organizer review — every report auto-approves immediately (automated image moderation still
 // runs and can remove an unsafe photo after the fact). Anonymous submitters are welcome;
 // logged-out reporters may optionally leave an email to get updates.
-export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+// `initialType` opens the form on a given pill (a Tasks card deep link); omitted, it opens on
+// Improvements/Poor Conditions as it always has.
+export const PhotoSubmitModal: React.FC<{ onClose: () => void; initialType?: ReportType }> = ({ onClose, initialType }) => {
   const { user, profile } = useAuth();
-  const [type, setType] = useState<ReportType>('condition');
+  const [type, setType] = useState<ReportType>(initialType ?? 'condition');
   const [courtList, setCourtList] = useState<CsvCourt[]>([]);
   const [courts, setCourts] = useState<string[]>([]);
   const [court, setCourt] = useState('');
@@ -54,6 +55,17 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
   const [showDropdown, setShowDropdown] = useState(false);
   const [note, setNote] = useState('');
   const [racquetsInQueue, setRacquetsInQueue] = useState('');
+  // When the queue was seen, typed as 24-hour HH:MM. Prefilled with now, since most reports are
+  // filed on the spot; the reporter only edits it when posting later.
+  const [queueTime, setQueueTime] = useState(() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  });
+  // The day the queue was seen, YYYY-MM-DD, prefilled with today like the time above.
+  const [queueDate, setQueueDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
   const [waitingBoards, setWaitingBoards] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [progress, setProgress] = useState(0);
@@ -70,11 +82,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
     const addr = email.trim();
     if (!addr || subscribed) return;
     try {
-      await addDoc(collection(db, 'mailing_list'), {
-        email: addr,
-        source: 'submit_a_photo',
-        created_at: new Date().toISOString(),
-      });
+      await subscribeVisitorToNewsletter(addr, 'court report submission');
       setSubscribed(true);
     } catch { /* never blocks the report itself */ }
   };
@@ -114,8 +122,14 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
 
   const handleSubmit = async () => {
     if (!court) { setError('Please select a court.'); return; }
-    if (!note.trim()) { setError('Please add a note.'); return; }
+    // Only a condition report needs words; a queue or board count speaks for itself.
+    if (type === 'condition' && !note.trim()) { setError('Please add a note.'); return; }
     if (type === 'queue' && !racquetsInQueue.trim()) { setError('Please enter the number of racquets in queue.'); return; }
+    if (type === 'queue' && !/^([01]\d|2[0-3]):[0-5]\d$/.test(queueTime)) {
+      setError('Please enter the time as HH:MM in 24-hour format, e.g. 18:30.');
+      return;
+    }
+    if (type === 'queue' && !/^d{4}-d{2}-d{2}$/.test(queueDate)) { setError('Please choose the date.'); return; }
     if (type === 'waiting_board' && !waitingBoards.trim()) { setError('Please enter the number of waiting boards.'); return; }
 
     setSubmitting(true);
@@ -129,6 +143,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
         files,
         note,
         ...(type === 'queue' && racquetsInQueue.trim() ? { racquetsInQueue: Number(racquetsInQueue) } : {}),
+        ...(type === 'queue' ? { queueTime, queueDate } : {}),
         ...(type === 'waiting_board' && waitingBoards.trim() ? { waitingBoards: Number(waitingBoards) } : {}),
         onProgress: setProgress,
       });
@@ -202,7 +217,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
                 onChange={(e) => { setCourt(''); setCourtSearch(e.target.value); setShowDropdown(true); }}
                 onFocus={() => setShowDropdown(true)}
                 onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
-                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
               />
               {showDropdown && courtMatches.length > 0 && (
                 <div className="absolute left-0 right-0 top-full mt-1 z-10 max-h-48 overflow-y-auto rounded-2xl bg-tennis-dark/95 p-1 shadow-2xl">
@@ -269,23 +284,57 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
                   value={waitingBoards}
                   onChange={(e) => setWaitingBoards(e.target.value)}
                   placeholder="e.g. 2"
-                  className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                  className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
                 />
               </div>
             )}
 
             {type === 'queue' && (
               <div className="space-y-3">
+                {/* Count and time side by side to keep the card compact. */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Racquets <span className="text-clay">*</span></p>
+                    <input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      value={racquetsInQueue}
+                      onChange={(e) => setRacquetsInQueue(e.target.value)}
+                      placeholder="e.g. 3"
+                      aria-label="Racquets in queue"
+                      className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Time (24h) <span className="text-clay">*</span></p>
+                    {/* Plain text, not type="time": a native time picker follows the phone's locale and
+                        shows AM/PM on most Canadian and US devices. Digits only; the colon is added. */}
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={5}
+                      value={queueTime}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, '').slice(0, 4);
+                        setQueueTime(digits.length > 2 ? `${digits.slice(0, 2)}:${digits.slice(2)}` : digits);
+                      }}
+                      placeholder="HH:MM"
+                      aria-label="Time seen, 24-hour HH:MM"
+                      className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                    />
+                  </div>
+                </div>
+
                 <div className="space-y-1.5">
-                  <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Racquets in Queue <span className="text-clay">*</span></p>
+                  <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Date <span className="text-clay">*</span></p>
                   <input
-                    type="number"
-                    min={0}
-                    inputMode="numeric"
-                    value={racquetsInQueue}
-                    onChange={(e) => setRacquetsInQueue(e.target.value)}
-                    placeholder="e.g. 3"
-                    className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                    type="date"
+                    value={queueDate}
+                    onChange={(e) => setQueueDate(e.target.value)}
+                    aria-label="Date seen"
+                    className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
                   />
                 </div>
 
@@ -307,13 +356,13 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void }> = ({ onClose })
             )}
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-fg/70 uppercase tracking-widest">Note <span className="text-clay">*</span></label>
+              <label className="block text-xs font-bold text-fg/70 uppercase tracking-widest">Note {type === 'condition' && <span className="text-clay">*</span>}</label>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 rows={2}
-                placeholder="Tell us what's going on…"
-                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-gray-500 text-sm outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+                placeholder={type === 'condition' ? 'e.g. North Side Court 2 @ Trinity Bellwoods has a broken net.' : 'Optional'}
+                className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-fg/70 text-sm outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
               />
             </div>
 

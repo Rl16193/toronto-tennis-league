@@ -3,8 +3,8 @@ import { AlertTriangle, Check } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
 import { Stepper } from '../../components/Stepper';
-import { loadCourtList } from '../../features/tasks/courtList';
-import { ScoreForm } from './types';
+import { loadCourtList } from '../tasks/courtList';
+import { ScoreForm } from '../../pages/tournament/types';
 
 // A player, and a title, is all ScoreModal needs to know about the thing being scored — it
 // doesn't care whether that's a tournament `matches` doc or a ladder challenge doc, so both
@@ -26,25 +26,28 @@ type Props = {
   // a Challenge" option. Generic so any caller can attach one extra choice without a new modal.
   extraCheckbox?: { label: string; checked: boolean; onChange: (checked: boolean) => void };
   /**
-   * "Count As No Show" — its own prop rather than a second extraCheckbox because it isn't just a
-   * flag: it removes the winner and the games from the result entirely, so it has to switch the
-   * form's other controls off. Only passed for an organizer scoring an RR group match.
-   */
-  noShow?: { checked: boolean; onChange: (checked: boolean) => void };
-  /**
    * Organizer-only, and only for a match that already has a score: wipe the result and the points
    * it awarded, returning the match to unplayed. Omitted for an unplayed match — there is nothing
    * to reset — and for players, who can't write the official record at all.
    */
   onReset?: () => Promise<void> | void;
+  /** Why the score was refused, shown above the buttons. Cleared by the caller on the next edit. */
+  error?: string | null;
+  /**
+   * Replaces the line under the title. Challenges and rallies count the moment they're submitted,
+   * so the default "the organizer will confirm it" would be wrong for them.
+   */
+  note?: string;
+  /** Correcting a recorded score: the winner shows but can't change, only the games can. */
+  lockedWinnerUid?: string;
 };
 
 // Mobile-first score entry (wireframe 1d): winner picked with two large tap-cards instead of a
 // native dropdown, games entered with +/− steppers instead of the number keyboard. Set values
 // stay strings in ScoreForm ('' means untouched → 0 downstream), so submit semantics — including
 // the all-0-0 walkover convention — are unchanged.
-export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, onClose, onSubmit, isCreatorSubmit, extraCheckbox, noShow, onReset }) => {
-  const isNoShow = !!noShow?.checked;
+export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, onClose, onSubmit, isCreatorSubmit, extraCheckbox, onReset, error, note, lockedWinnerUid }) => {
+  const winnerLocked = !!lockedWinnerUid;
   const [submitting, setSubmitting] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [courts, setCourts] = useState<string[]>([]);
@@ -87,30 +90,38 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
     <Sheet onClose={onClose} maxWidthClassName="max-w-xl">
       <form onSubmit={handleSubmit} className="p-6">
         <div className="text-center mb-4 pr-10">
-          <p className="text-xs uppercase tracking-widest text-clay font-black mb-2">Submit Score</p>
+          <p className="text-xs uppercase tracking-widest text-clay font-black mb-2">{winnerLocked ? 'Edit Score' : 'Submit Score'}</p>
           <h2 className="text-2xl font-black text-fg">{matchInfo.title}</h2>
         </div>
 
         <div className="flex items-center gap-2 mb-5 px-3 py-2.5 text-sm text-clay">
           <AlertTriangle className="w-4 h-4 shrink-0" />
-          {isCreatorSubmit
+          {note ?? (isCreatorSubmit
             ? 'Entering score as event organizer. This will be accepted immediately.'
-            : 'Pick the winner, enter the games, and submit. The organizer will confirm it.'}
+            : 'Pick the winner, enter the games, and submit. The organizer will confirm it.')}
         </div>
 
         {/* Winner — two large tap-cards. A no-show has no winner, so they switch off. */}
-        <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-2">Winner</p>
-        <div className={`flex gap-2.5 mb-6 ${isNoShow ? 'opacity-50 pointer-events-none' : ''}`} role="radiogroup" aria-label="Winner">
+        <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-2">
+          Winner{winnerLocked ? ' · stays as recorded' : ''}
+        </p>
+        {/* A correction keeps the recorded winner, so the cards show it but take no input. */}
+        <div
+          className={`flex gap-2.5 mb-6 ${winnerLocked ? 'pointer-events-none' : ''}`}
+          role="radiogroup"
+          aria-label="Winner"
+          aria-readonly={winnerLocked || undefined}
+        >
           {winnerOptions.map((p) => {
-            const selected = !isNoShow && scoreForm.winnerUserId === p.uid;
+            const selected = scoreForm.winnerUserId === p.uid;
             return (
               <button
                 key={p.uid}
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                disabled={isNoShow}
-                onClick={() => onChange({ ...scoreForm, winnerUserId: p.uid || '' })}
+                tabIndex={winnerLocked ? -1 : undefined}
+                onClick={() => { if (!winnerLocked) onChange({ ...scoreForm, winnerUserId: p.uid || '' }); }}
                 className={`flex-1 rounded-2xl border-2 px-3 py-4 text-center transition-colors ${
                   selected ? 'border-clay bg-clay/10' : 'border-fg/10 bg-fg/5 hover:border-fg/25'
                 }`}
@@ -138,7 +149,7 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
             onChange={(e) => { onChange({ ...scoreForm, court: '' }); setCourtSearch(e.target.value); setShowCourtDropdown(true); }}
             onFocus={() => setShowCourtDropdown(true)}
             onBlur={() => setTimeout(() => setShowCourtDropdown(false), 150)}
-            className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-gray-500 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
+            className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
           />
           {showCourtDropdown && courtMatches.length > 0 && (
             <div className="absolute left-0 right-0 top-full mt-1 z-10 max-h-48 overflow-y-auto rounded-2xl bg-tennis-dark/95 p-1 shadow-2xl">
@@ -157,7 +168,7 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
         </div>
 
         {/* Sets — +/− steppers, no number keyboard. Nothing was played on a no-show. */}
-        <div className={`space-y-4 ${isNoShow ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div className="space-y-4">
           {scoreForm.sets.map((set, index) => (
             <div key={index}>
               <p className="text-fg font-bold text-sm mb-2">Set {index + 1}</p>
@@ -191,39 +202,26 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
               rather than forcing the row wider than the modal. */}
           <div className="flex flex-wrap items-start gap-x-5 gap-y-2 px-1">
             {extraCheckbox && (
-              <label className={`flex items-start gap-2.5 min-w-0 select-none ${isNoShow ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
+              <label className="flex items-start gap-2.5 min-w-0 select-none cursor-pointer">
                 <input
                   type="checkbox"
                   checked={extraCheckbox.checked}
-                  disabled={isNoShow}
                   onChange={(e) => extraCheckbox.onChange(e.target.checked)}
                   className="accent-clay w-4 h-4 mt-0.5 shrink-0"
                 />
                 <span className="text-sm font-semibold text-fg">{extraCheckbox.label}</span>
               </label>
             )}
-            {noShow && (
-              <label className="flex items-start gap-2.5 min-w-0 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={noShow.checked}
-                  onChange={(e) => noShow.onChange(e.target.checked)}
-                  className="accent-clay w-4 h-4 mt-0.5 shrink-0"
-                />
-                <span className="text-sm font-semibold text-fg">Count As No Show</span>
-              </label>
-            )}
           </div>
-          {isNoShow && (
-            <p className="px-1 text-xs text-fg/70">
-              Recorded as unplayed: no winner, no games, and 1 point to each player.
-            </p>
-          )}
         </div>
+
+        {error && (
+          <p role="alert" className="mt-4 px-1 text-sm text-badge-loss">{error}</p>
+        )}
 
         <div className="mt-6 flex gap-2.5">
           <Button type="submit" className="flex-1" isLoading={submitting} disabled={submitting || resetting}>
-            {isNoShow ? 'Record No Show' : isCreatorSubmit ? 'Record Score' : 'Submit Score'}
+            {isCreatorSubmit ? 'Record Score' : winnerLocked ? 'Save Score' : 'Submit Score'}
           </Button>
           {onReset && (
             <Button

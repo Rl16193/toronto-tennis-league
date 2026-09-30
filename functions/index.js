@@ -4,22 +4,20 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onObjectFinalized } = require('firebase-functions/v2/storage');
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
-const { defineSecret } = require('firebase-functions/params');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const vision = require('@google-cloud/vision');
-const { Resend } = require('resend');
 const path = require('path');
-// The welcome email shares its shell with the rally/challenge/digest templates.
-const { LINK, buildWelcomeEmail } = require('./lib/emailTemplates');
-const { htmlToText } = require('./lib/htmlToText');
-const { EMAIL_FROM, EMAIL_REPLY_TO } = require('./lib/constants');
+// The welcome email shares its shell with the rally/challenge/digest templates, and goes out
+// through the same sender as every other email (lib/notify.js), like Racquets-And-Strings.
+const { buildWelcomeEmail } = require('./lib/emailTemplates');
+const { notify, sendEmail, resendApiKey } = require('./lib/notify');
+const { SPREADSHEET_ID } = require('./lib/constants');
 
 admin.initializeApp();
 
 // Lazy-load Vision client to prevent initialization timeouts
 let visionClient;
-const resendApiKey = defineSecret('RESEND_API_KEY');
 
 // Bell-icon notification triggers + scheduled reminders
 Object.assign(exports, require('./notifications'));
@@ -30,11 +28,14 @@ Object.assign(exports, require('./taskPoints'));
 // Group / community bonuses
 Object.assign(exports, require('./groupAwards'));
 
-// Weekly ranking snapshot + public site_stats counters (was a manual script)
+// Weekly ranking snapshot + public site_stats counters
 Object.assign(exports, require('./rankSnapshot'));
 
 // Redeemable points: redeem / mark used / flag / cancellation review
 Object.assign(exports, require('./rewards'));
+
+// Service bookings: book at the regular price, then each step of the job
+Object.assign(exports, require('./bookings'));
 
 // Per-court player counts for the public /courts page (replaces three full-collection reads
 // that ran in the browser on every visit)
@@ -50,11 +51,17 @@ Object.assign(exports, require('./connections'));
 // Admin dashboard metrics (Sun + Wed) — Firestore doc, Google Sheets tabs, BigQuery history.
 Object.assign(exports, require('./adminMetrics'));
 
-// Friendly (rally) match points — paid when a second party confirms the reported score.
-Object.assign(exports, require('./friendlyPoints'));
+// Scoring: the one scoreMatch call (record, settle, reset, cancel, group bonus) for every match
+// type. All points go through lib/scoring.js's single writer; a played final marks its event over.
+Object.assign(exports, require('./scoring'));
 
-// Profile zone changes — takes the member out of a live draw belonging to the zone they left.
+// Registration: late-joiner seating (knockout), member-partner registration, doubles partner pool.
+Object.assign(exports, require('./participantWorkflow'));
+Object.assign(exports, require('./partnerPool'));
+
+// Zone changes — tells the organizers of every live tournament the player is in (never unseats).
 Object.assign(exports, require('./zoneMoves'));
+
 
 // Likelihood levels we treat as unsafe.
 const UNSAFE = new Set(['LIKELY', 'VERY_LIKELY']);
@@ -139,18 +146,12 @@ exports.moderateUploadedImage = onObjectFinalized(
             photo_moderation_note: 'A photo on this listing was removed by our automatic image check.',
           });
         }
-        const uid = filePath.split('/')[1];
-        if (uid) {
-          await admin.firestore().collection('notifications').add({
-            uid: uid,
-            type: 'photo_removed',
-            title: 'A listing photo was removed',
-            body: 'It didn’t pass our automatic image check. Please upload a different photo.',
-            link: '/marketplace',
-            read: false,
-            created_at: new Date().toISOString(),
-          }).catch((e) => logger.error('notify failed', e));
-        }
+        await notify(filePath.split('/')[1], {
+          type: 'photo_removed',
+          title: 'A listing photo was removed',
+          body: 'It didn’t pass our automatic image check. Please upload a different photo.',
+          link: '/marketplace',
+        });
       }
       return;
     }
@@ -160,15 +161,12 @@ exports.moderateUploadedImage = onObjectFinalized(
       await admin.storage().bucket(bucketName).file(filePath).delete().catch((e) => logger.error('delete failed', e));
       if (uid) {
         await admin.firestore().doc(`users/${uid}`).update({ avatar: '' }).catch((e) => logger.error('avatar clear failed', e));
-        await admin.firestore().collection('notifications').add({
-          uid: uid,
+        await notify(uid, {
           type: 'photo_removed',
           title: 'Your profile photo was removed',
           body: 'It didn’t pass our automatic image check. Please upload a different photo.',
           link: '/profile',
-          read: false,
-          created_at: new Date().toISOString(),
-        }).catch((e) => logger.error('notify failed', e));
+        });
       }
     }
   },
@@ -182,35 +180,15 @@ exports.sendWelcomeEmail = onDocumentUpdated(
 
     if (before.welcomeEmailSent === true || after.welcomeEmailSent !== true) return;
 
-    // Still triggered by the users doc (that's where welcomeEmailSent flips), but the address is
-    // read from contacts/{uid} — email moved off `users` when contact details were split out.
-    const contactsSnap = await admin.firestore().doc(`contacts/${event.params.uid}`).get();
-    const email = contactsSnap.exists ? contactsSnap.data().email : '';
-    if (!email) return;
+    // Triggered by the users doc, where welcomeEmailSent flips. sendEmail reads the address from
+    // contacts/{uid} and honours the member's email opt-out.
     const firstName = (after.name || '').split(' ')[0] || 'there';
-
-    try {
-      const resend = new Resend(resendApiKey.value());
-      const welcomeHtml = buildWelcomeEmail(firstName);
-      await resend.emails.send({
-        from: EMAIL_FROM,
-        to: email,
-        replyTo: EMAIL_REPLY_TO,
-        subject: 'Welcome to Racquets & Strings 🎾',
-        html: welcomeHtml,
-        text: htmlToText(welcomeHtml),
-        headers: { 'List-Unsubscribe': `<${LINK.profile}>` },
-      });
-      logger.info('Welcome email sent', { email });
-    } catch (err) {
-      logger.error('Failed to send welcome email:', err);
-    }
+    await sendEmail(event.params.uid, 'Welcome to Racquets & Strings 🎾', buildWelcomeEmail(firstName));
   },
 );
 
 
 // ─── Google Sheets Weekly Sync (Saturdays, midnight America/Toronto) ──────
-const SPREADSHEET_ID = '1RpEowUk-fN08Y-zpZwIWL5XVbDESc7L_ZYRoUcbHkvI';
 
 // Export-only mirror of the real collections. Field names are the actual Firestore fields (the
 // header row upper-cases them). Adjust the `fields` lists to add/remove columns.

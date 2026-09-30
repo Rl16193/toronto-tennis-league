@@ -8,8 +8,21 @@
 // Scheduling/formatting timezone for every scheduled function and day-key calculation.
 const TZ = 'America/Toronto';
 
+/** Toronto-local parts of an ISO time (now if absent): day 'YYYYMMDD', month 'YYYY-MM', hour 0..23. */
+function torontoParts(iso) {
+  const d = iso ? new Date(iso) : new Date();
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false,
+  }).formatToParts(d).map((x) => [x.type, x.value]));
+  return { day: `${p.year}${p.month}${p.day}`, month: `${p.year}-${p.month}`, hour: parseInt(p.hour, 10) % 24 };
+}
+
 // Deployment region for every trigger.
 const REGION = 'us-central1';
+const SUPER_ADMIN_UID = '7PvfzNtDmsOq5GLMieId7QRT7wH3';
+
+// The Google Sheet both the weekly collection sync and the admin metrics write to.
+const SPREADSHEET_ID = '1RpEowUk-fN08Y-zpZwIWL5XVbDESc7L_ZYRoUcbHkvI';
 
 // Outgoing address for every email. `notifications@` is a real Hostinger mailbox, not a black
 // hole — the old `noreply@` was unroutable, which reads badly to spam filters and to people.
@@ -28,4 +41,4 @@ const INSTAGRAM = 'https://www.instagram.com/racqnstringstoronto';
 const WHATSAPP = 'https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX';
 const FAQ = 'https://docs.google.com/document/d/17lyP5f62iuXRIiwDtrcn4EZo6vnx0jbr87kxdkEIzYY/edit?tab=t.0';
 
-module.exports = { TZ, REGION, EMAIL_FROM, EMAIL_REPLY_TO, SITE, INSTAGRAM, WHATSAPP, FAQ };
+module.exports = { TZ, torontoParts, REGION, SUPER_ADMIN_UID, SPREADSHEET_ID, EMAIL_FROM, EMAIL_REPLY_TO, SITE, INSTAGRAM, WHATSAPP, FAQ };

@@ -5,6 +5,7 @@ import { ImagePlus, MapPin, Package, Pencil, Trash2, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
+import { SelectField } from '../../components/SelectField';
 import { ContactOpponentButton } from '../../components/ContactOpponentButton';
 import { fadeUp, staggerDelay } from '../../lib/motion';
 import {
@@ -98,7 +99,6 @@ const ListingCard: React.FC<{
                 whatsappContact={seller?.whatsapp_contact}
                 preferred={seller?.preferred_mode_of_contact}
                 size="sm"
-                variant="white"
               />
             )
           )}
@@ -185,7 +185,7 @@ const ExistingPhoto: React.FC<{ path: string; onRemove: () => void }> = ({ path,
 // Shared field chrome, sized to keep the form within one or two phone screens.
 const fieldCls =
   'w-full rounded-xl bg-tennis-dark/70 px-3.5 py-2.5 text-sm text-fg ' +
-  'placeholder-fg/30 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
+  'placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
 const labelCls = 'block text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-1.5';
 
 export const ListingForm: React.FC<{ kind: ListingKind; editingListing?: Listing; onClose: () => void }> = ({ kind, editingListing, onClose }) => {
@@ -272,14 +272,8 @@ export const ListingForm: React.FC<{ kind: ListingKind; editingListing?: Listing
 
         {/* Paired two-up — both are short values, saving a row on a phone. */}
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls} htmlFor="l-cond">Condition</label>
-            <select id="l-cond" value={draft.condition}
-              onChange={(e) => set('condition', e.target.value as ListingDraft['condition'])}
-              className={fieldCls}>
-              {CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
+          <SelectField label="Condition" value={draft.condition} options={CONDITIONS}
+            onChange={(c) => set('condition', c as ListingDraft['condition'])} />
           <div>
             <label className={labelCls} htmlFor="l-price">Price</label>
             <input id="l-price" type="number" inputMode="decimal" min="0" step="1"

@@ -1,6 +1,6 @@
 import { addDoc, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { fetchCompletedTournamentMatches } from './matchHistory';
+import { fetchCompletedTournamentMatches } from './useTasks';
 
 // Volunteer / Ambassador / Host all work the same way: a player submits a claim, an organizer
 // approves or rejects it in the review queue, and only an approval awards the points.

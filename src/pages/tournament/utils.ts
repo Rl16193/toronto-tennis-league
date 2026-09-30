@@ -1,7 +1,9 @@
+import { abbreviatePlayerName, toTitleCase } from '../../features/leagues/useStandings';
+import { skillBand } from '../../utils/skillLevels';
 import { EventParticipant, MemberInfo, UserData, UserStats } from '../../types';
 import { parseValidDate, type FirestoreDateLike } from '../../utils/eventDates';
 import { EMAIL_REGEX } from '../../utils/emailRegex';
-import { DrawConfig, SkillGroup, SKILL_GROUP_ORDER, TemplateMatch, TournamentMatch, TournamentPlayer, UNASSIGNED_ZONE_ID, ZoneBucket, ZoneDrawConfig } from './types';
+import { DrawConfig, SkillGroup, SkillMergePair, SKILL_GROUP_ORDER, TemplateMatch, TournamentMatch, TournamentPlayer, UNASSIGNED_ZONE_ID, ZoneBucket, ZoneDrawConfig } from './types';
 import { ZONE_NAMES } from '../../utils/zones';
 
 // Format a scheduled match date+slot as e.g. "Jul 4th, 6pm". Shared by the bracket and
@@ -16,7 +18,7 @@ export const formatScheduledDate = (d?: string, slot?: string) => {
   return `${month} ${day}${sfx}${slot ? `, ${slot}` : ''}`;
 };
 
-// Any doc shape carrying the six set-score fields — a TournamentMatch or a ScoreSubmission(Doc).
+// Any doc shape carrying the six set-score fields.
 type ScoredSets = {
   set_1_player_1?: number; set_1_player_2?: number;
   set_2_player_1?: number; set_2_player_2?: number;
@@ -42,43 +44,15 @@ export const setFieldsFrom = (pairs: [number, number][]) => ({
   set_3_player_1: pairs[2]?.[0] ?? 0, set_3_player_2: pairs[2]?.[1] ?? 0,
 });
 
-/** Paid to BOTH players of a group match the organizer marks a no show. */
-export const NO_SHOW_POINTS = 1;
+/** How long after a result lands the player who entered it may still fix its games. */
+export const SCORE_EDIT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
-/**
- * What one match awards, and to whom — the single source of truth for match scoring, read by both
- * the stats writer (useTournament) and the group table (computeGroupStandings).
- * Rules and history: CLAUDE.md, "Stats data flow".
- */
-export const matchAward = (m: Pick<TournamentMatch,
-  'format' | 'round' | 'no_show' | 'winner_uid' | 'player_1_uid' | 'player_2_uid'>) => {
-  const isRRGroupStage = m.format === 'rr' && m.round === 'RR';
-  const isFinal = m.round === 'F';
-
-  // Must be tested first — a no show has no winner, so every branch below mis-handles it.
-  if (m.no_show) {
-    return {
-      noShow: true, isRRGroupStage, isFinal,
-      winnerUid: null as string | null, loserUid: null as string | null,
-      winnerPts: NO_SHOW_POINTS, loserPts: NO_SHOW_POINTS, winnerPointsApply: true,
-    };
-  }
-
-  const LOSER_PTS: Record<string, number> = { R32: 1, R16: 2, QF: 3, RR: 1, SF: 5, F: 10 };
-  const winnerUid = m.winner_uid || null;
-  const loserUid = winnerUid
-    ? (winnerUid === m.player_1_uid ? m.player_2_uid : m.player_1_uid) || null
-    : null;
-  return {
-    noShow: false, isRRGroupStage, isFinal, winnerUid, loserUid,
-    winnerPts: isRRGroupStage ? 3 : 20,
-    loserPts: LOSER_PTS[m.round] ?? 1,
-    // RR group winners score live; a knockout winner only scores by taking the final.
-    winnerPointsApply: isFinal || isRRGroupStage,
-  };
-};
+/** A match drawn client-side before the draw is generated (not a Firestore doc). */
+export const isPreviewMatch = (m: Pick<TournamentMatch, 'id'>) => m.id.startsWith('preview_');
 
 export const PLAYER_LOADING = 'Player Loading';
+// The picker value for "add a Player Loading placeholder" (never a real uid).
+export const PLAYER_LOADING_SENTINEL = '__player_loading__';
 export const BYE = 'BYE';
 
 export type MatchDisplayFlags = {
@@ -92,12 +66,10 @@ export type MatchDisplayFlags = {
   showDot: boolean;
   showCreatorSubmit: boolean;
   showPlayerSubmit: boolean;
-  alreadySubmitted: boolean;
 };
 
-// Derived per-match display state shared by the desktop bracket grid (BracketView) and the
-// mobile round accordion (BracketAccordion) — keeps preview/editable/submit-button logic
-// identical between the two layouts.
+// Derived per-match display state for MatchCard, which both bracket layouts (BracketView and
+// BracketAccordion) render — keeps preview/editable/submit-button logic identical between them.
 export const getMatchDisplayFlags = (
   match: TournamentMatch,
   opts: {
@@ -106,12 +78,11 @@ export const getMatchDisplayFlags = (
     isCreator?: boolean;
     hasSubmitHandler: boolean;
     submittableMatchIds?: Set<string>;
-    pendingMatchIds?: Set<string>;
   },
 ): MatchDisplayFlags => {
-  const { editMode, hasEditHandler, isCreator, hasSubmitHandler, submittableMatchIds, pendingMatchIds } = opts;
+  const { editMode, hasEditHandler, isCreator, hasSubmitHandler, submittableMatchIds } = opts;
 
-  const isPreview = match.id.startsWith('preview_') || match.id.startsWith('ll_preview_');
+  const isPreview = isPreviewMatch(match);
   const isPreviewFirstRound = isPreview &&
     typeof match.player_1_slot === 'number' && typeof match.player_2_slot === 'number';
   const isEditable = !!editMode && hasEditHandler && (!isPreview || isPreviewFirstRound);
@@ -130,11 +101,10 @@ export const getMatchDisplayFlags = (
   // Player submit: current user is in this match (or doubles teammate), not yet complete.
   const showPlayerSubmit = !isCreator && hasSubmitHandler && hasRealPlayers && !editMode &&
     !!submittableMatchIds?.has(match.id) && match.status !== 'complete';
-  const alreadySubmitted = !!pendingMatchIds?.has(match.id);
 
   return {
     isPreview, isPreviewFirstRound, isEditable, scoreText, hasBye, hasRealPlayers,
-    hasPlayableSlots, showDot, showCreatorSubmit, showPlayerSubmit, alreadySubmitted,
+    hasPlayableSlots, showDot, showCreatorSubmit, showPlayerSubmit,
   };
 };
 
@@ -149,16 +119,24 @@ export const formatDeadline = (iso?: string): string => {
   return `${months[m - 1]} ${d}`;
 };
 
-export const formatPlayerName = (value?: string) => {
+/**
+ * A player's name as the app shows it, abbreviated to "Juan D" by default.
+ *
+ * Pass `{ full: true }` where the whole name belongs — a profile page or the profile card. A
+ * doubles label arrives as "A / B" and each side is abbreviated separately, which is what this was
+ * needed for: two full names joined never fit a row.
+ *
+ * Placeholders (Player Loading, BYE, "Winner of SF1") are returned untouched.
+ */
+export const formatPlayerName = (value?: string, opts: { full?: boolean } = {}) => {
   const trimmed = (value || '').trim();
   if (!trimmed) return '';
   if (trimmed === PLAYER_LOADING || trimmed === BYE) return trimmed;
   if (trimmed.toLowerCase().startsWith('winner of ')) return trimmed;
-  return trimmed
-    .toLowerCase()
-    .split(/\s+/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
+  const one = (s: string) => (opts.full ? toTitleCase(s.split(/\s+/).join(' ')) : abbreviatePlayerName(s));
+  return trimmed.includes('/')
+    ? trimmed.split('/').map((side) => one(side.trim())).filter(Boolean).join(' / ')
+    : one(trimmed);
 };
 
 const isEmailLike = (value?: string) => !!value && EMAIL_REGEX.test(value);
@@ -222,8 +200,8 @@ export const buildZoneAwareDrawConfigs = (draws: DrawConfig[], zoneConfig: ZoneD
   });
 };
 
-// The zone everyone falls back to: players who never set preferred courts, players whose zone
-// isn't covered by any bucket, and players whose zone was merged into another for this tournament.
+// The zone a zone-less MATCH belongs to (pre-zone groups, see effectiveZone). Players no longer fall
+// back to it: a player whose courts give no Toronto zone plays in the Unassigned draw.
 export const DEFAULT_ZONE = 'Downtown - Midtown';
 
 // One bucket per real zone. Zones are a fixed dimension of every tournament now, not something a
@@ -261,13 +239,14 @@ export const resolveZoneConfig = (cfg: ZoneDrawConfig | undefined): ZoneDrawConf
   ...(cfg ?? { includeUnassigned: false }),
   enabled: cfg?.enabled ?? true,
   buckets: cfg?.buckets?.length ? cfg.buckets : DEFAULT_ZONE_BUCKETS,
-  includeUnassigned: cfg?.includeUnassigned ?? false,
+  // Always on: it is where players with no Toronto zone (a non-Toronto court) are drawn.
+  includeUnassigned: true,
   merges: cfg?.merges ?? {},
 });
 
 // Which zone bucket a participant's `preferred_zone` falls into, given the event's zone config.
-// Never returns undefined once zones are on — an unmatched player goes to the bucket holding
-// DEFAULT_ZONE, falling back to the explicit Unassigned bucket only if no bucket covers it.
+// Never returns undefined once zones are on — a player whose zone matches no bucket (no courts, or
+// only non-Toronto courts) goes to the Unassigned bucket. There is no Downtown default for players.
 export const zoneBucketFor = (preferredZone: string | undefined, zoneConfig: ZoneDrawConfig | undefined): string | undefined => {
   if (!zoneConfig?.enabled) return undefined;
   const merges = zoneConfig.merges ?? {};
@@ -277,15 +256,9 @@ export const zoneBucketFor = (preferredZone: string | undefined, zoneConfig: Zon
   const all = zoneConfig.buckets.length ? zoneConfig.buckets : DEFAULT_ZONE_BUCKETS;
   const bucket = zone ? all.find((b) => b.zones.includes(zone)) : undefined;
   if (bucket) return resolveMergedZone(bucket.id, merges);
-  const fallback = all.find((b) => b.zones.includes(DEFAULT_ZONE));
-  if (fallback) return resolveMergedZone(fallback.id, merges);
-  return zoneConfig.includeUnassigned ? UNASSIGNED_ZONE_ID : undefined;
+  return UNASSIGNED_ZONE_ID;
 };
 
-// Skill band used to sub-group players within a draw (the TOURNAMENT_OPTIONS tiers):
-// Beginners 2–2.5, Challengers 3–3.5, Masters 4–5.
-export const skillBand = (skill: number): 'Beginners' | 'Challengers' | 'Masters' =>
-  skill < 3 ? 'Beginners' : skill < 4 ? 'Challengers' : 'Masters';
 
 // Derive the display state of a match's scheduling for a given viewer.
 export type ScheduleState = {
@@ -572,4 +545,49 @@ export const buildPlayerList = (
   }
   return mapParticipantsToPlayers([...drawParticipants].sort(seedCompare(statsMap)), userMap)
     .filter((p) => p.name);
+};
+
+// ─── Draw configs ──────────────────────────────────────────────────────────────────────────────
+
+export const VISIBLE_DRAWS: DrawConfig[] = [
+  { tab: 'mens', label: "Men's Beginners", tournamentChoice: 'Singles', division: "Men's", skillGroup: 'Beginners' },
+  { tab: 'mens', label: "Men's Challengers", tournamentChoice: 'Singles', division: "Men's", skillGroup: 'Challengers' },
+  { tab: 'mens', label: "Men's Masters", tournamentChoice: 'Singles', division: "Men's", skillGroup: 'Masters' },
+  { tab: 'mens', label: "Men's Retired Pro", tournamentChoice: 'Singles', division: "Men's", skillGroup: 'Retired Pro' },
+  { tab: 'womens', label: "Women's Beginners", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'Beginners' },
+  { tab: 'womens', label: "Women's Challengers", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'Challengers' },
+  { tab: 'womens', label: "Women's Masters", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'Masters' },
+  { tab: 'womens', label: "Women's Retired Pro", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'Retired Pro' },
+  { tab: 'doubles', label: "Men's Doubles", tournamentChoice: 'Doubles', division: "Men's", skillGroup: 'All' },
+  { tab: 'doubles', label: "Women's Doubles", tournamentChoice: 'Doubles', division: "Women's", skillGroup: 'All' },
+  { tab: 'doubles', label: 'Mixed Doubles', tournamentChoice: 'Doubles', division: 'Mixed Doubles', skillGroup: 'All' },
+];
+
+// The strongest band in a merge — Beginners+Challengers is a Challengers draw, anything including
+// Masters is a Masters draw. SKILL_GROUP_ORDER runs weakest → strongest, so the highest index wins.
+export const highestBandIn = (pair: SkillMergePair): SkillGroup =>
+  (pair.split('+') as SkillGroup[])
+    .reduce((best, b) => (SKILL_GROUP_ORDER.indexOf(b) > SKILL_GROUP_ORDER.indexOf(best) ? b : best));
+
+// A merged singles skill draw for one adjacent pair (Beginners+Challengers, or
+// Challengers+Masters). Replaces the old static MENS/WOMENS_MERGED_DRAW constants now that
+// there's more than one possible pair per division.
+//
+// Named after the strongest band rather than every band glued together: a merged draw plays as
+// that band, and "Men's Beginners + Challengers + Masters" was both a mouthful and misleading.
+export const buildMergedSkillDraw = (tab: 'mens' | 'womens', division: "Men's" | "Women's", pair: SkillMergePair): DrawConfig => ({
+  tab,
+  label: `${division} ${highestBandIn(pair)}`,
+  tournamentChoice: 'Singles',
+  division,
+  skillGroup: 'All',
+  mergedFrom: pair,
+});
+
+export const CONSOLIDATED_DOUBLES_DRAW: DrawConfig = {
+  tab: 'doubles',
+  label: 'Doubles',
+  tournamentChoice: 'Doubles',
+  division: 'All',
+  skillGroup: 'All',
 };

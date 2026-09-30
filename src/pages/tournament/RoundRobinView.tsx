@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trophy, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
 import { formatPlayerName } from './utils';
@@ -18,16 +18,13 @@ type Props = {
   knockoutMatches: TournamentMatch[];
   advancementCount: number;
   isCreator: boolean;
-  isParticipant: boolean;
   // The viewer's own uid — lets a non-creator's group card show only their own match(es).
   currentUserId?: string;
-  isPastEvent: boolean;
   editMode: boolean;
   editPlayers: TournamentPlayer[];
   onEditPlayer: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
   onSubmitScore: (match: TournamentMatch) => void;
   submittableMatchIds?: Set<string>;
-  pendingMatchIds?: Set<string>;
   onSaveGroupEdit: (rrGroup: number, newPlayers: TournamentPlayer[]) => void;
   onRenameGroup?: (rrGroup: number, label: string) => void;
   /** Organizer pays/takes back one group's bonus. Passed even to players — the card shows it disabled. */
@@ -40,7 +37,6 @@ type Props = {
   zoneBuckets?: { id: string; label: string }[];
   onCreateGroup?: (players: TournamentPlayer[], label?: string) => void;
   unplacedPlayers?: TournamentPlayer[];
-  rrKnockoutReady: boolean;
   generatingKnockout: boolean;
   onGenerateKnockout: (size?: number) => void;
   rrView: 'groups' | 'knockout';
@@ -143,10 +139,10 @@ const AddGroupForm: React.FC<{
 
 export const RoundRobinView: React.FC<Props> = ({
   groups, groupLabels, groupIndices, standingsByGroup, groupMatches, knockoutMatches,
-  advancementCount, isCreator, isParticipant, currentUserId, isPastEvent, editMode, editPlayers,
-  onEditPlayer, onSubmitScore, submittableMatchIds, pendingMatchIds, onSaveGroupEdit,
+  advancementCount, isCreator, currentUserId, editMode, editPlayers,
+  onEditPlayer, onSubmitScore, submittableMatchIds, onSaveGroupEdit,
   onRenameGroup, onSetGroupBonus, onRemovePlayer, onMovePlayerZone, zoneBuckets, onAskSchedule, onCreateGroup, unplacedPlayers,
-  rrKnockoutReady, generatingKnockout, onGenerateKnockout, rrView,
+  generatingKnockout, onGenerateKnockout, rrView,
   roundDeadlines, onUpdateDeadline,
 }) => {
   // HOOKS FIRST — every hook below has to run on every render. These used to sit further down,
@@ -191,7 +187,6 @@ export const RoundRobinView: React.FC<Props> = ({
           <BracketErrorBoundary onDownload={() => {}}>
             <BracketView
               matches={knockoutMatches}
-              drawTitle="Knockout"
               editMode={editMode}
               editPlayers={editMode ? editPlayers : []}
               onEditPlayer={onEditPlayer}
@@ -199,7 +194,6 @@ export const RoundRobinView: React.FC<Props> = ({
               isCreator={isCreator}
               onSubmitScore={onSubmitScore}
               submittableMatchIds={submittableMatchIds}
-              pendingMatchIds={pendingMatchIds}
               roundDeadlines={roundDeadlines}
               onUpdateDeadline={onUpdateDeadline}
             />
@@ -235,16 +229,11 @@ export const RoundRobinView: React.FC<Props> = ({
               statsByUid={statsByUid}
               advancementCount={advancementCount}
               isCreator={isCreator}
-              isParticipant={isParticipant}
               currentUserId={currentUserId}
-              isPastEvent={isPastEvent}
               editMode={editMode}
-              editPlayers={editPlayers}
               allGroupPlayers={allGroupPlayers}
-              onEditPlayer={onEditPlayer}
               onSubmitScore={onSubmitScore}
               submittableMatchIds={submittableMatchIds}
-              pendingMatchIds={pendingMatchIds}
               // Translate the card's array position (gi) to the real rr_group value so
               // saves/renames target the correct group even when indices are non-contiguous.
               onSaveGroupEdit={(_, newPlayers) => onSaveGroupEdit(groupIndices?.[gi] ?? gi, newPlayers)}

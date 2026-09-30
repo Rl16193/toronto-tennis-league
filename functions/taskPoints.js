@@ -9,28 +9,17 @@
  *
  * Deploy: firebase deploy --only functions
  */
-const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const { notify, organizerUids } = require('./lib/notify');
-const ROSTER = require('./courts.json'); // { [courtKey]: zoneName } — see groupAwards.js header
-
-const { TZ, REGION } = require('./lib/constants');
+const { torontoParts, REGION } = require('./lib/constants');
+const { courtKey: toCourtKey, zoneOfCourt, courtsInZone } = require('./lib/memberLocation');
+const { isPlayedResult } = require('./lib/scoring');
 const db = () => admin.firestore();
 
-// Same normalization as src/utils/courtKey.ts — keep in sync.
-const courtKeySlug = (name) =>
-  String(name).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-
 // Same YYYYMMDD format as src/features/tasks/checkinService.ts's torontoDayKey().
-function torontoDay(iso) {
-  const d = iso ? new Date(iso) : new Date();
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' })
-      .formatToParts(d).map((p) => [p.type, p.value]),
-  );
-  return `${parts.year}${parts.month}${parts.day}`;
-}
+const torontoDay = (iso) => torontoParts(iso).day;
 
 // A tournament match with a court selected is proof of presence — no GPS check needed. Stamps the
 // once-forever passport and the daily attendance log in `courts` (types 'check-in'/'attendance'),
@@ -38,9 +27,9 @@ function torontoDay(iso) {
 // self-write-only client rules — the one place either player can be checked in by the scorer.
 async function checkInFromMatch(uid, name, courtName, whenISO) {
   if (!uid || !courtName) return;
-  const courtKey = courtKeySlug(courtName);
+  const courtKey = toCourtKey(courtName);
   if (!courtKey) return;
-  const zone = ROSTER[courtKey] || '';
+  const zone = zoneOfCourt(courtKey);
   const now = whenISO || new Date().toISOString();
   const base = { uid, user_name: name || '', court_key: courtKey, court_name: courtName, zone, dist_m: 0 };
 
@@ -59,8 +48,8 @@ const { ALL_TIERS, INITIATION_TASK_IDS } = require('./lib/points');
 
 // ─── Award primitives (transactional read-modify-write on tasks/{uid}) ──────────────
 
-// Tournament / ladder results — streaks and "active months" span both sources, matching the
-// client's own useTasks.ts semantics.
+// Match results: tournament matches and rallies count as matches, challenges as challenges.
+// Streaks and "active months" span every source, matching the client's own useTasks.ts semantics.
 async function recordPlayResult(uid, name, { source, won, whenISO }) {
   const ref = db().collection('tasks').doc(uid);
 
@@ -116,11 +105,11 @@ async function bumpCounterAndAward(uid, name, counterField, incrementBy, initTas
     const snap = await tx.get(ref);
     const data = snap.exists ? snap.data() : {};
 
-    const newVal = (data[counterField] || 0) + incrementBy;
-    const update = { uid, name, category: 'progress', updatedAt: new Date().toISOString(), [counterField]: newVal };
+    const newVal = counterField ? (data[counterField] || 0) + incrementBy : 0;
+    const update = { uid, name, category: 'progress', updatedAt: new Date().toISOString(), ...(counterField ? { [counterField]: newVal } : {}) };
 
     for (const tier of ALL_TIERS) {
-      if (tier.counter !== counterField || data[tier.id]) continue;
+      if (!counterField || tier.counter !== counterField || data[tier.id]) continue;
       if (newVal >= tier.need) update[tier.id] = true;
     }
 
@@ -135,7 +124,7 @@ async function bumpCounterAndAward(uid, name, counterField, incrementBy, initTas
 
 // joinEvent has no tier of its own — just the Initiation checkbox.
 async function markInitiationTask(uid, name, taskId) {
-  await bumpCounterAndAward(uid, name, '__none__', 0, taskId);
+  await bumpCounterAndAward(uid, name, null, 0, taskId);
 }
 
 // ─── Organizer digest: totals only, never names ─────────────────────────────
@@ -157,8 +146,7 @@ async function notifyOrganizersOfQueue(link) {
 // Triggers
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Shared by both result triggers below: records the play result for both participants, then
-// (if a court was recorded) checks them both in — same two-pass order both triggers used.
+// Records the play result for both participants, then (if a court was recorded) checks them both in.
 async function awardPairPoints(after, { source, uidA, nameA, uidB, nameB, wonUid, whenISO }) {
   const pairs = [[uidA, nameA], [uidB, nameB]].filter(([uid]) => uid);
   for (const [uid, name] of pairs) {
@@ -172,40 +160,21 @@ async function awardPairPoints(after, { source, uidA, nameA, uidB, nameB, wonUid
   }
 }
 
-// Tournament match completed with a real score (walkovers don't count — matches the client gate).
-exports.onMatchCompletedAwardPoints = onDocumentUpdated(
+// Any match played for the first time: a tournament match with games, a challenge or a rally,
+// whether a player or an organizer recorded it (an organizer's creates the doc already played,
+// hence onDocumentWritten). Walkovers don't count. Challenges feed the challenge tiers; tournament
+// matches and rallies feed "Play N matches".
+exports.onMatchCompletedAwardPoints = onDocumentWritten(
   { document: 'matches/{matchId}', region: REGION },
   async (event) => {
-    const before = event.data?.before.data() || {};
-    const after = event.data?.after.data() || {};
-    if (after.category !== 'singles' && after.category !== 'doubles') return;
-    if (before.status === 'complete' || after.status !== 'complete') return;
-    // A walkover is recorded as sets of 0-0 — still non-null, so it must be excluded explicitly.
-    if (after.walkover === true) return;
-    if (after.set_1_player_1 == null || after.set_1_player_2 == null) return;
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    if (!isPlayedResult(after) || isPlayedResult(before)) return;
     await awardPairPoints(after, {
-      source: 'tournament',
+      source: after.category === 'challenge' ? 'ladder' : 'tournament',
       uidA: after.player_1_uid, nameA: after.player_1_name,
       uidB: after.player_2_uid, nameB: after.player_2_name,
-      wonUid: after.winner_uid,
-      whenISO: after.completed_at || new Date().toISOString(),
-    });
-  },
-);
-
-// Ladder challenge confirmed by the organizer.
-exports.onLadderConfirmedAwardPoints = onDocumentUpdated(
-  { document: 'matches/{id}', region: REGION },
-  async (event) => {
-    const before = event.data?.before.data() || {};
-    const after = event.data?.after.data() || {};
-    if (after.category !== 'challenge') return;
-    if (before.status === 'confirmed' || after.status !== 'confirmed') return;
-    await awardPairPoints(after, {
-      source: 'ladder',
-      uidA: after.player_1_uid, nameA: after.player_1_name,
-      uidB: after.player_2_uid, nameB: after.player_2_name,
-      // New field first, legacy second — see friendlyPoints.js for why both are read.
+      // New field first, legacy second: older challenges carry only claimed_winner_uid.
       wonUid: after.winner_uid || after.claimed_winner_uid,
       whenISO: after.completed_at || after.confirmed_at || new Date().toISOString(),
     });
@@ -228,7 +197,7 @@ exports.onEventJoinedAwardPoints = onDocumentCreated(
  *
  * Belongs here, not the browser: the write carries points, so the owner-field allowlist in
  * firestore.rules rejects it client-side — and a bare catch swallowed that, leaving the tier
- * permanently unreachable. ROSTER (courts.json) is the authoritative courtKey → zoneName map.
+ * permanently unreachable. The roster (lib/memberLocation.js) is the authoritative court → zone map.
  */
 async function awardZoneCompleteIfDone(uid, name, visitedCourtKey) {
   const progressRef = db().collection('tasks').doc(uid);
@@ -239,10 +208,10 @@ async function awardZoneCompleteIfDone(uid, name, visitedCourtKey) {
   // Already earned — bumpCounterAndAward would keep incrementing the counter past 1.
   if (progressSnap.exists && progressSnap.data().zoneComplete) return;
 
-  const zone = (prefsSnap.exists && prefsSnap.data().preferred_zone) || ROSTER[visitedCourtKey];
+  const zone = (prefsSnap.exists && prefsSnap.data().preferred_zone) || zoneOfCourt(visitedCourtKey);
   if (!zone) return;
 
-  const zoneKeys = Object.keys(ROSTER).filter((k) => ROSTER[k] === zone);
+  const zoneKeys = courtsInZone(zone);
   if (zoneKeys.length === 0) return;
 
   // `courts` also holds attendance + photo reports — narrow to the once-forever passport docs.
@@ -263,7 +232,7 @@ exports.onCourtVisitAwardPoints = onDocumentCreated(
     await bumpCounterAndAward(v.uid, v.user_name || '', 'courtsVisited', 1, 'courtVisit');
     await awardZoneCompleteIfDone(v.uid, v.user_name || '', v.court_key)
       .catch((e) => logger.error('zoneComplete check failed', e));
-    // Community-wide coverage tally (no auto "everyone gets 50" yet — see README note below).
+    // Community-wide coverage tally (no auto "everyone gets 50" yet — see the TODO at the end).
     await db().doc('site_stats/court_coverage').set(
       { visited_keys: admin.firestore.FieldValue.arrayUnion(v.court_key), updated_at: new Date().toISOString() },
       { merge: true },
@@ -350,7 +319,7 @@ exports.onClaimReviewed = onDocumentUpdated(
 exports.onTaskClaimCreated = onDocumentCreated(
   { document: 'task_claims/{id}', region: REGION },
   async () => {
-    await notifyOrganizersOfQueue('/tasks?review=claims');
+    await notifyOrganizersOfQueue('/profile?dash=organizer');
   },
 );
 

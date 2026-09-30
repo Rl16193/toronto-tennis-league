@@ -109,8 +109,8 @@ export const updatePreferredCourts = async (userId: string, courts: string[], zo
   await updateDoc(doc(db, 'preferences', userId), { preferred_courts: courts, preferred_zone: zone });
 };
 
-// Picked by hand on the profile card. Never unseats them: matches already generated are left
-// alone, and `onZoneChanged` (functions/zoneMoves.js) only tells the organizer.
+// Picked by hand on the profile card. `onZoneChanged` (functions/zoneMoves.js) keeps every match
+// with a real opponent, gives up old-zone seats without one, and tells the organizer.
 export const updatePreferredZone = async (userId: string, zone: string) => {
   await updateDoc(doc(db, 'preferences', userId), { preferred_zone: zone, preferred_zone_manual: true });
 };

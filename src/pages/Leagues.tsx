@@ -2,10 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { AnimatePresence, motion } from 'motion/react';
-import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
-import { LeagueRow, pgWinPct, toTitleCase, useStandings } from '../features/leagues/useStandings';
-import { useUserMatches } from '../features/matches/useUserMatches';
+import { abbreviatePlayerName, byLeagueRank, pgWinPct, useStandings } from '../features/leagues/useStandings';
 import { TOTAL_MILESTONES, TOTAL_TASKS, useCommunityStandings } from '../features/tasks/useTasks';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { Button } from '../components/Button';
@@ -17,55 +15,11 @@ import { fadeUp, staggerDelay } from '../lib/motion';
 // divisions) and Community (the "Community Member Starter" — completing it awards SETUP_POINTS).
 type Board = 'tournament' | 'community';
 
-export type TrendSeries = { label: string; color: string; data: number[] };
-
-// Small dependency-free multi-line trend chart with a colored legend row below it. Lived in a
-// pages/home/ folder that Home.tsx never imported from — this page is its only consumer.
-const AreaChart: React.FC<{ series: TrendSeries[]; className?: string }> = ({ series, className }) => {
-  const longest = Math.max(0, ...series.map((s) => s.data.length));
-  if (longest < 2) {
-    return <div className={`flex items-center justify-center text-fg/70 text-xs ${className ?? ''}`}>Not enough matches yet</div>;
-  }
-
-  const W = 300, H = 80, PAD = 6;
-  const allValues = series.flatMap((s) => s.data);
-  const min = Math.min(...allValues);
-  const max = Math.max(...allValues);
-  const range = max - min || 1;
-
-  const lineFor = (data: number[]) => {
-    const pts = data.map((v, i) => {
-      const x = PAD + (i / (longest - 1)) * (W - 2 * PAD);
-      const y = PAD + (1 - (v - min) / range) * (H - 2 * PAD);
-      return [x, y] as const;
-    });
-    return pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  };
-
-  return (
-    <div className={`flex flex-col ${className ?? ''}`}>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full flex-1 min-h-0" preserveAspectRatio="none" role="img" aria-label="Progress trend">
-        {series.map((s) => (
-          <path key={s.label} d={lineFor(s.data)} fill="none" stroke={s.color} strokeWidth="2" vectorEffect="non-scaling-stroke" />
-        ))}
-      </svg>
-      <div className="flex items-center justify-center gap-4 pt-1.5 shrink-0">
-        {series.map((s) => (
-          <span key={s.label} className="flex items-center gap-1.5 text-[10px] text-fg/70">
-            <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: s.color }} />
-            {s.label}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-};
-
+// A member's own progress (rank move, form, head to head) lives in the Player Dash on /profile.
 export const Leagues: React.FC = () => {
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { rows, loading } = useStandings();
-  const { matches: userMatches } = useUserMatches(user?.uid);
-  const { rows: communityRows, loading: communityLoading, reload: reloadCommunity } = useCommunityStandings();
+  const { rows: communityRows, loading: communityLoading } = useCommunityStandings();
 
   useEffect(() => { document.title = 'Leaderboard · Racquets & Strings'; }, []);
   const [board, setBoard] = useState<Board>('tournament');
@@ -80,7 +34,6 @@ export const Leagues: React.FC = () => {
   };
   const { blockReason, challenge } = useChallengeRules();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [progressOpen, setProgressOpen] = useState(true);
 
   // The "still in an active tournament" lookup that used to live here has been removed along with
   // the asterisk it fed. It read the whole `events` collection plus every participant and
@@ -93,31 +46,11 @@ export const Leagues: React.FC = () => {
   // leaderboard.
   const flatRows = useMemo(
     () => rows.filter((r) => r.leaguePoints26 > 0)
-      .sort((a, b) => b.leaguePoints26 - a.leaguePoints26 || b.matchesPlayed - a.matchesPlayed || a.name.localeCompare(b.name)),
+      .sort(byLeagueRank),
     [rows],
   );
   const shownRows = user ? flatRows : flatRows.slice(0, 15);
   const communityVisible = user ? communityRows : communityRows.slice(0, 15);
-
-  // Your Progress (signed-in): rank in the flat board + own stats + trend chart.
-  const userRankIdx = user ? flatRows.findIndex((r) => r.user_id === user.uid) : -1;
-  const userStats = profile?.stats;
-  // Running (cumulative) versions of the same P/G Win % stat shown in the cards above — walked
-  // match-by-match instead of only totaled at the end, to plot how it's changed over time.
-  const { pgWonSeries, winPctSeries } = useMemo(() => {
-    const asc = [...userMatches].sort((a, b) => a.completedAt - b.completedAt);
-    let gamesWon = 0, gamesTotal = 0, wins = 0;
-    const pg: number[] = [];
-    const wp: number[] = [];
-    asc.forEach((m, i) => {
-      gamesWon += m.myGames;
-      gamesTotal += m.myGames + m.oppGames;
-      if (m.won) wins += 1;
-      pg.push(gamesTotal > 0 ? (gamesWon / gamesTotal) * 100 : 0);
-      wp.push((wins / (i + 1)) * 100);
-    });
-    return { pgWonSeries: pg, winPctSeries: wp };
-  }, [userMatches]);
 
   const toggle = (uid: string) => setExpanded((prev) => {
     const next = new Set(prev);
@@ -148,55 +81,6 @@ export const Leagues: React.FC = () => {
       </div>
 
       {board === 'tournament' && (<>
-      {/* Your Progress — collapsible so the list sits higher up */}
-      {user && userStats && userRankIdx >= 0 && (
-        <div className="bg-tennis-surface/30 rounded-3xl p-5 mb-6">
-          <button
-            type="button"
-            onClick={() => setProgressOpen((v) => !v)}
-            className="w-full flex items-center justify-between text-left"
-            aria-expanded={progressOpen}
-          >
-            <h2 className="text-lg font-bold text-fg">Progress</h2>
-            <span className="text-xs font-bold text-fg/70">{progressOpen ? 'hide ▴' : 'show ▾'}</span>
-          </button>
-          <AnimatePresence initial={false}>
-            {progressOpen && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25, ease: 'easeInOut' }}
-                className="overflow-hidden"
-              >
-                <div className="mt-4">
-                  <div className="grid grid-cols-3 gap-3 mb-4">
-                    {[
-                      { label: 'Rank', value: userRankIdx >= 0 ? `#${userRankIdx + 1}` : '—' },
-                      { label: 'Matches', value: `${userStats.matchesPlayed ?? 0}` },
-                      { label: 'P/G Win %', value: (userStats.totalPointsPlayed ?? 0) > 0
-                          ? `${Math.round(((userStats.pointswon ?? 0) / (userStats.totalPointsPlayed ?? 1)) * 100)}%` : '—' },
-                    ].map((t) => (
-                      <div key={t.label} className="rounded-2xl bg-fg/[0.03] px-3 py-3 text-center">
-                        <p className="text-2xl font-black text-fg">{t.value}</p>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70 mt-1">{t.label}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <AreaChart
-                    series={[
-                      { label: 'P/G Won %', color: '#3b82f6', data: pgWonSeries },
-                      { label: 'Win %', color: '#FF6B35', data: winPctSeries },
-                    ]}
-                    className="w-full h-24"
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      )}
-
       {loading ? (
         <div className="space-y-2">
           {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-12 bg-tennis-surface/30 rounded-xl animate-pulse" />)}
@@ -217,7 +101,7 @@ export const Leagues: React.FC = () => {
               >
                 <PlayerCard
                   id={row.user_id}
-                  name={toTitleCase(row.name)}
+                  name={abbreviatePlayerName(row.name)}
                   subtitle={`Skill ${row.skill_level}`}
                   rank={i + 1}
                   isYou={isUser}
@@ -308,7 +192,7 @@ export const Leagues: React.FC = () => {
                 >
                   <PlayerCard
                     id={row.uid}
-                    name={toTitleCase(row.name || '')}
+                    name={abbreviatePlayerName(row.name || '')}
                     subtitle={`${row.tasksCompleted} tasks · ${row.milestones} milestones`}
                     rank={i + 1}
                     isYou={isUser}

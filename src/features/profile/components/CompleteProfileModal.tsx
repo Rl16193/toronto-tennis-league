@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { Sheet } from '../../../components/Sheet';
 import { Button } from '../../../components/Button';
-import { Input } from '../../../components/Input';
 import { useAuth } from '../../../context/AuthContext';
 import { useProfileActions } from '../hooks/useProfileActions';
 import { SELECTABLE_SKILL_LEVELS, SKILL_LEVEL_TIERS, leagueAgeCategory, leagueDivision } from '../../../utils/skillLevels';
-import { defaultCourtOptions, getCourtSuggestions } from '../../../features/signup/utils/courtSearch';
+import { CourtsEditor } from './CourtsEditor';
 
-// Blocks Challenges/Friendlies until the 3 fields real matching needs are set: preferred courts,
+// Blocks Challenges/Rallies until the 3 fields real matching needs are set: preferred courts,
 // skill level, league. Reuses the same profileService update functions (and refreshProfile) as
 // the Profile page, so this writes to the player's real profile, not a separate store.
 export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () => void }> = ({ onClose, onDone }) => {
@@ -17,21 +16,19 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
   const [skillLevel, setSkillLevel] = useState(profile?.stats.skill_level || 2);
   const [league, setLeague] = useState<"Men's" | "Women's" | ''>(leagueDivision(profile?.stats.league));
   const [ageCategory, setAgeCategory] = useState<'Retired Pro' | 'Juniors' | ''>(leagueAgeCategory(profile?.stats.league));
-  const [courts, setCourts] = useState<string[]>(profile?.preferences.preferred_courts || []);
-  const [courtQuery, setCourtQuery] = useState('');
+  // The shared courts editor reports its draft here; its own Save is hidden, Save & Continue saves.
+  const [courts, setCourts] = useState<{ list: string[]; zone: string }>({
+    list: profile?.preferences.preferred_courts || [], zone: profile?.preferences.preferred_zone || '',
+  });
   const [error, setError] = useState('');
-
-  const suggestions = getCourtSuggestions(defaultCourtOptions, courts, courtQuery);
-  const addCourt = (court: string) => { setCourts((prev) => [...new Set([...prev, court])]); setCourtQuery(''); };
-  const removeCourt = (court: string) => setCourts((prev) => prev.filter((c) => c !== court));
 
   const handleSave = async () => {
     if (!league) { setError('Please choose your league.'); return; }
-    if (courts.length === 0) { setError('Please add at least one preferred court.'); return; }
+    if (courts.list.length === 0) { setError('Please add at least one preferred court.'); return; }
     setError('');
     const ok1 = await actions.updateSkills(skillLevel, profile?.stats.tournament_preference || 'Challengers');
     const ok2 = await actions.updateLeagueAgeCategory(league, ageCategory, true);
-    const ok3 = await actions.updatePreferredCourts(courts, profile?.preferences.preferred_zone || '');
+    const ok3 = await actions.updatePreferredCourts(courts.list, courts.zone);
     if (ok1 && ok2 && ok3) onDone();
   };
 
@@ -114,38 +111,13 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
 
         <div className="space-y-2">
           <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Preferred Courts</p>
-          {courts.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {courts.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => removeCourt(c)}
-                  className="px-3 py-1 rounded-xl text-xs font-bold bg-clay text-white flex items-center gap-1.5"
-                >
-                  {c} <span className="opacity-70">✕</span>
-                </button>
-              ))}
-            </div>
-          )}
-          <Input
-            placeholder="Search courts by name…"
-            value={courtQuery}
-            onChange={(e) => setCourtQuery(e.target.value)}
-          />
-          {suggestions.length > 0 && (
-            <div className="max-h-40 overflow-y-auto rounded-2xl bg-tennis-dark/95 p-2 shadow-2xl">
-              {suggestions.map((court) => (
-                <button
-                  key={court}
-                  type="button"
-                  onClick={() => addCourt(court)}
-                  className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
-                >
-                  {court}
-                </button>
-              ))}
-            </div>
+          {profile && (
+            <CourtsEditor
+              preferences={profile.preferences}
+              saving={updateLoading}
+              onSave={() => {}}
+              onDraftChange={(list, zone) => setCourts({ list, zone })}
+            />
           )}
         </div>
 

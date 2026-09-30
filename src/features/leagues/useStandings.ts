@@ -1,3 +1,4 @@
+import { leagueDivision } from '../../utils/skillLevels';
 import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -23,21 +24,40 @@ export type LeagueRow = {
 };
 
 // Points-or-games win rate. Shared because every player row in the app now shows this same tile —
-// leaderboard, challenges, friendlies, upcoming matches and the RR groups.
+// leaderboard, challenges, rallies, upcoming matches and the RR groups.
 export const pgWinPct = (r: { pointswon: number; totalPointsPlayed: number }) =>
   r.totalPointsPlayed > 0 ? `${Math.round((r.pointswon / r.totalPointsPlayed) * 100)}%` : '—';
+
+/** Leaderboard order: points, then matches played, then name. */
+export const byLeagueRank = (a: LeagueRow, b: LeagueRow) =>
+  b.leaguePoints26 - a.leaguePoints26 || b.matchesPlayed - a.matchesPlayed || a.name.localeCompare(b.name);
 
 export type DivTab = 'mens' | 'womens' | 'doubles';
 
 export const toTitleCase = (s: string) =>
   s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 
+/**
+ * "Juan Diego Albarracin" → "Juan D", "Erick Mata" → "Erick M". First word, then the initial of the
+ * next one; anything after that is dropped, so a three-part name is no longer than a two-part one.
+ *
+ * Used for names in lists, tables and match rows, where a doubles label is two of these joined and
+ * was truncating. A profile shows the full name — see `formatPlayerName`'s `full` option.
+ *
+ * A single-word name ("Kai") is returned as-is: there is no initial to add, and "Kai" is already
+ * as short as it gets.
+ */
+export const abbreviatePlayerName = (s: string) => {
+  const parts = toTitleCase(s.trim()).split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return parts[0] ?? '';
+  return `${parts[0]} ${parts[1].charAt(0).toUpperCase()}`;
+};
+
 export const inDivision = (league: string, tab: DivTab): boolean => {
+  if (tab === 'mens') return leagueDivision(league) === "Men's";
+  if (tab === 'womens') return leagueDivision(league) === "Women's";
   const l = (league || '').toLowerCase();
-  if (tab === 'mens') return (l.includes('men') || l.includes('male')) && !l.includes('women') && !l.includes('female');
-  if (tab === 'womens') return l.includes('wom') || l.includes('female');
-  if (tab === 'doubles') return l.includes('double') || l.includes('mixed');
-  return false;
+  return l.includes('double') || l.includes('mixed');
 };
 
 // Public leaderboard — `stats` is world-readable, so this loads with or without an account.

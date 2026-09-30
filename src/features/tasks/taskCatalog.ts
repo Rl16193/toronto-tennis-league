@@ -34,8 +34,25 @@ export const EMPTY_COUNTERS: Counters = {
   queueUpdates: 0, volunteerEvents: 0, invites: 0, meetups: 0,
 };
 
+// What a counter counts, for the "3 more matches" / "1 more event" line on a category card.
+export const COUNTER_NOUN: Record<CounterKey, { one: string; many: string }> = {
+  matchesPlayed: { one: 'match', many: 'matches' },
+  challengesPlayed: { one: 'challenge', many: 'challenges' },
+  challengesWon: { one: 'win', many: 'wins' },
+  bestStreak: { one: 'win in a row', many: 'wins in a row' },
+  monthsActive: { one: 'active month', many: 'active months' },
+  suggestions: { one: 'suggestion', many: 'suggestions' },
+  courtsVisited: { one: 'court', many: 'courts' },
+  zoneComplete: { one: 'zone', many: 'zones' },
+  boardPhotos: { one: 'board photo', many: 'board photos' },
+  queueUpdates: { one: 'queue update', many: 'queue updates' },
+  volunteerEvents: { one: 'event', many: 'events' },
+  invites: { one: 'invite', many: 'invites' },
+  meetups: { one: 'meetup', many: 'meetups' },
+};
+
 export interface TierDef {
-  id: string;        // field name on task_progress
+  id: string;        // field name on the tasks/{uid} progress doc
   title: string;
   points: number;
   counter: CounterKey;
@@ -66,7 +83,7 @@ export const CATEGORIES: CategoryDef[] = [
   {
     id: 'ladder',
     title: 'League Ladder',
-    to: '/tournament',
+    to: '/matches?mode=challenges',
     tiers: [
       { id: 'chal1', title: 'Play a challenge', points: 2, counter: 'challengesPlayed', need: 1 },
       { id: 'chal5', title: 'Play 5 challenges', points: 8, counter: 'challengesPlayed', need: 5 },
@@ -80,7 +97,6 @@ export const CATEGORIES: CategoryDef[] = [
   {
     id: 'streaks',
     title: 'Streaks',
-    to: '/tournament',
     tiers: [
       { id: 'streak3', title: '3 wins in a row', points: 5, counter: 'bestStreak', need: 3 },
       { id: 'streak5', title: '5 wins in a row', points: 15, counter: 'bestStreak', need: 5 },
@@ -91,7 +107,6 @@ export const CATEGORIES: CategoryDef[] = [
   {
     id: 'seasonRegular',
     title: 'Season Regular',
-    to: '/events',
     tiers: [
       { id: 'months3', title: 'Play in 3 different months', points: 10, counter: 'monthsActive', need: 3 },
       { id: 'months6', title: 'Play in 6 different months', points: 25, counter: 'monthsActive', need: 6 },
@@ -101,7 +116,7 @@ export const CATEGORIES: CategoryDef[] = [
   {
     id: 'courtCare',
     title: 'Court Care',
-    to: '/courts',
+    to: '/tasks?photo=condition',
     tiers: [
       { id: 'sugg5', title: 'Submit 5 court improvements', points: 10, counter: 'suggestions', need: 5 },
       { id: 'sugg10', title: 'Submit 10 court improvements', points: 20, counter: 'suggestions', need: 10 },
@@ -122,7 +137,7 @@ export const CATEGORIES: CategoryDef[] = [
   {
     id: 'courtInfo',
     title: 'Court Information',
-    to: '/tasks?photo=1',
+    to: '/tasks?photo=waiting_board',
     tiers: [
       { id: 'board1', title: 'Submit 1 waiting board report', points: 5, counter: 'boardPhotos', need: 1 },
       { id: 'board5', title: 'Submit 5 waiting board reports', points: 15, counter: 'boardPhotos', need: 5 },
@@ -133,7 +148,7 @@ export const CATEGORIES: CategoryDef[] = [
   {
     id: 'liveUpdates',
     title: 'Live Updates',
-    to: '/tasks?photo=1',
+    to: '/tasks?photo=queue',
     tiers: [
       { id: 'queue10', title: 'Submit 10 queue updates', points: 10, counter: 'queueUpdates', need: 10 },
       { id: 'queue25', title: 'Submit 25 queue updates', points: 20, counter: 'queueUpdates', need: 25 },
@@ -232,9 +247,6 @@ export const ALL_TIERS: TierDef[] = CATEGORIES.flatMap((c) => c.tiers);
 export const TIER_POINTS: Record<string, number> = Object.fromEntries(ALL_TIERS.map((t) => [t.id, t.points]));
 
 export const categoryTotal = (c: CategoryDef): number => c.tiers.reduce((n, t) => n + t.points, 0);
-// 970 = every tier + the Initiation's flat award. (Was 1,050 before the three "Climb N spots"
-// tiers were removed — nothing ever flipped their flags, so those 80 points were unreachable.)
-export const TOTAL_AVAILABLE = CATEGORIES.reduce((n, c) => n + categoryTotal(c), 0) + SETUP_POINTS;
 
 // Badge grouping: "playing tasks" spans the three match-based categories.
 export const PLAYING_CATEGORY_IDS = ['tournament', 'ladder', 'streaks'];

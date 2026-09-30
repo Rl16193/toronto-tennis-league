@@ -77,11 +77,15 @@ export async function submitPhotoReport(args: {
   files: File[];
   note: string;
   racquetsInQueue?: number;
+  /** When the queue was seen, 24-hour "HH:MM" local time. Queue reports only. */
+  queueTime?: string;
+  /** YYYY-MM-DD the queue was seen. */
+  queueDate?: string;
   waitingBoards?: number;
   onProgress?: (pct: number) => void;
 }): Promise<void> {
-  const { uid, userName, type, courtName, files, note, racquetsInQueue, waitingBoards, onProgress } = args;
-  if (!note.trim()) throw new Error('Please add a note.');
+  const { uid, userName, type, courtName, files, note, racquetsInQueue, queueTime, queueDate, waitingBoards, onProgress } = args;
+  if (type === 'condition' && !note.trim()) throw new Error('Please add a note.');
   if (files.find((f) => !f.type.startsWith('image/'))) throw new Error('Please choose image files only.');
   if (files.find((f) => f.size > MAX_IMAGE_BYTES)) throw new Error('Each image must be under 5 MB.');
 
@@ -115,6 +119,8 @@ export async function submitPhotoReport(args: {
     user_name: userName,
     note: note.trim(),
     ...(type === 'queue' && racquetsInQueue != null ? { racquets_in_queue: racquetsInQueue } : {}),
+    ...(type === 'queue' && queueTime ? { queue_time: queueTime } : {}),
+    ...(type === 'queue' && queueDate ? { queue_date: queueDate } : {}),
     ...(type === 'waiting_board' && waitingBoards != null ? { waiting_boards: waitingBoards } : {}),
     status: 'approved',
     created_at: new Date().toISOString(),

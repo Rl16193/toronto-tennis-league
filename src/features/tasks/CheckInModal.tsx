@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MapPin, CheckCircle2, Loader2, Navigation } from 'lucide-react';
+import { CheckCircle2, Loader2, Navigation } from 'lucide-react';
 import { Sheet } from '../../components/Sheet';
 import { Button } from '../../components/Button';
 import { useAuth } from '../../context/AuthContext';
@@ -73,7 +73,7 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
   };
 
   return (
-    <Sheet onClose={onClose} title="Court Check-In" maxWidthClassName="max-w-md">
+    <Sheet onClose={onClose} title="Record Activity" maxWidthClassName="max-w-md">
       <div className="p-6 pt-2 space-y-5">
         {step === 'start' && (
           <div className="space-y-5">
@@ -149,7 +149,7 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                       <p className="text-fg/70 text-xs">{Math.round(c.distM)} m away</p>
                     </div>
                     {here ? (
-                      <Button size="sm" onClick={() => doCheckIn(c)} isLoading={busy}>Court</Button>
+                      <Button size="sm" onClick={() => doCheckIn(c)} isLoading={busy}>Select</Button>
                     ) : (
                       <span className="text-[11px] text-fg/70 shrink-0">Get closer</span>
                     )}

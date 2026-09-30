@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import { useId } from 'react';
 import { motion } from 'motion/react';
 
 // Two-or-three-way toggle (Groups/Knockout, Upcoming/Completed, Tournament/Community).

@@ -80,9 +80,6 @@ exports.onMatchConnection = onDocumentWritten(
     const b = after.player_2_uid;
     if (!a || !b) return;
 
-    // Score submissions are bookkeeping about a match, not a fixture of their own.
-    if (after.category === 'score_submission') return;
-
     if (after.category === 'rally' || after.category === 'challenge') {
       // Only an ACCEPTED request earns contact access. An open request must not — otherwise
       // anyone could harvest a phone number by firing off a challenge nobody answers.

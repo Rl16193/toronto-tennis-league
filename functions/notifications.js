@@ -7,16 +7,17 @@
  *
  * Deploy with: firebase deploy --only functions
  */
-const { onDocumentCreated, onDocumentUpdated, onDocumentDeleted } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
-const { notify, sendEmailOnce, resendApiKey } = require('./lib/notify');
+const { notify, organizerUids, sendEmailOnce, resendApiKey } = require('./lib/notify');
+const { eventOrganizerUids } = require('./lib/roles');
 const {
   buildRallyEmail, buildRallyAcceptedEmail, buildChallengeEmail, buildChallengeAcceptedEmail, buildIncompleteMatchesEmail,
 } = require('./lib/emailTemplates');
 
-const { TZ, REGION } = require('./lib/constants');
+const { TZ, REGION, SITE } = require('./lib/constants');
 const db = () => admin.firestore();
 
 // "6-4, 6-3" from the absolute per-set fields every result now carries. Falls back to the legacy
@@ -113,55 +114,11 @@ exports.onMatchUpdated = onDocumentUpdated(
   },
 );
 
-// ─── Scores ─────────────────────────────────────────────────────────────────
-
-// A player submitted a score: alert the organizer to confirm, and the opponent that a result
-// was claimed against them.
-exports.onScoreSubmitted = onDocumentCreated(
-  { document: 'matches/{id}', region: REGION },
-  async (event) => {
-    const s = event.data?.data();
-    if (!s || s.category !== 'score_submission') return;
-    if (!s.event_id) return;
-    const eventDoc = await db().doc(`events/${s.event_id}`).get();
-    const creatorId = eventDoc.exists ? eventDoc.data().creator_id : null;
-    const link = `/tournament?event=${s.event_id}`;
-
-    await notify(creatorId, {
-      type: 'organizer_score_pending',
-      title: 'A score needs your approval',
-      body: `${s.player_1_name || ''} vs ${s.player_2_name || ''}`.trim(),
-      link,
-    });
-  },
-);
-
-// Submissions are deleted on both confirm and reject. A confirm also flips the match to
-// complete (covered by onMatchUpdated), so only tell the submitter when it was NOT applied.
-exports.onScoreSubmissionResolved = onDocumentDeleted(
-  { document: 'matches/{id}', region: REGION },
-  async (event) => {
-    const s = event.data?.data();
-    if (!s || s.category !== 'score_submission') return;
-    if (!s.submitted_by || !s.match_id) return;
-    const matchDoc = await db().doc(`matches/${s.match_id}`).get();
-    if (!matchDoc.exists) return;
-    const m = matchDoc.data();
-    // Applied => the match now has this winner recorded. Otherwise it was rejected.
-    if (m.status === 'complete' && m.winner_uid === s.claimed_winner_uid) return;
-
-    await notify(s.submitted_by, {
-      type: 'score_rejected',
-      title: 'Your score submission was rejected',
-      body: 'The organizer didn’t accept the reported result. Please re-submit the correct score.',
-      link: `/tournament?event=${s.event_id}`,
-    });
-  },
-);
-
 // ─── Scheduling assistance ──────────────────────────────────────────────────
 
-// Replaces the old client-side write: the player's request now notifies the organizer here.
+// One player asked the OTHER to sort out a time. The organizer is not in the middle of this: the
+// two arrange it between themselves, which is why the notification carries the asker's uid — the
+// feed renders their contact buttons on the row, the app's substitute for in-app messaging.
 exports.onScheduleRequested = onDocumentUpdated(
   { document: 'matches/{matchId}', region: REGION },
   async (event) => {
@@ -171,36 +128,23 @@ exports.onScheduleRequested = onDocumentUpdated(
     if (before.schedule_requested === true || after.schedule_requested !== true) return;
     if (!isRealMatch(event.params.matchId, after)) return;
 
-    const eventDoc = await db().doc(`events/${after.event_id}`).get();
-    if (!eventDoc.exists) return;
-    await notify(eventDoc.data().creator_id, {
-      type: 'organizer_schedule_request',
-      title: 'A player asked you to schedule a match',
-      body: `${after.player_1_name || ''} vs ${after.player_2_name || ''}`.trim(),
-      link: `/tournament?event=${after.event_id}`,
-    });
-  },
-);
+    // Written by the client alongside the flag. Without it there is no way to tell which of the
+    // two players asked, so there is nobody to notify and nobody to offer contact details for.
+    const askerUid = after.schedule_requested_by;
+    if (!askerUid) return;
+    const isP1 = askerUid === after.player_1_uid;
+    const otherUid = isP1 ? after.player_2_uid : after.player_1_uid;
+    const askerName = isP1 ? after.player_1_name : after.player_2_name;
+    if (!otherUid) return;
 
-// Notify-only, mirrors onScheduleRequested above — the organizer resolves the actual zone move
-// manually outside the app; this just tells them a player asked.
-exports.onZoneChangeRequested = onDocumentUpdated(
-  { document: 'event_participants/{participantId}', region: REGION },
-  async (event) => {
-    const before = event.data?.before.data() || {};
-    const after = event.data?.after.data() || {};
-    const wasReq = before.req_zone_change === true;
-    const isReq = after.req_zone_change === true;
-    if (wasReq || !isReq) return;
-    if (!after.event_id) return;
-
-    const eventDoc = await db().doc(`events/${after.event_id}`).get();
-    if (!eventDoc.exists) return;
-    await notify(eventDoc.data().creator_id, {
-      type: 'organizer_zone_change_request',
-      title: 'A player asked about a zone change',
-      body: after.user_name || 'A player',
-      link: `/tournament?event=${after.event_id}`,
+    await notify(otherUid, {
+      type: 'opponent_schedule_request',
+      title: `${askerName || 'Your opponent'} wants to arrange your match`,
+      body: 'Pick a time between you.',
+      link: matchLink(after),
+      // Read by the notifications feed to render this person's contact buttons on the row.
+      counterpart_uid: askerUid,
+      counterpart_name: askerName || 'Your opponent',
     });
   },
 );
@@ -213,23 +157,24 @@ exports.onLadderChallengeCreated = onDocumentCreated(
     const c = event.data?.data();
     if (!c || c.category !== 'challenge') return;
     if (!c.player_2_uid) return;
-    // A conversion proposal (source set) is a distinct ask from a from-scratch challenge —
-    // the opponent already played the match and is being asked to confirm it counts.
-    if (c.source) {
-      await notify(c.player_2_uid, {
-        type: 'challenge_conversion_proposed',
-        title: `${c.player_1_name || 'A player'} converted your match to a challenge`,
-        body: 'Review and confirm the result to register it as a challenge.',
+
+    // An organizer recording a match two members already played creates the doc COMPLETE. Telling
+    // the pair they have been "challenged" would invite them to a match they finished, so that
+    // case gets its own notice below instead.
+    if (c.status === 'confirmed') {
+      const winnerName = c.winner_name || c.claimed_winner_name;
+      await notify([c.player_1_uid, c.player_2_uid].filter(Boolean), {
+        type: 'ladder_reported',
+        title: 'Your organizer recorded a challenge for you',
+        body: winnerName ? `Winner: ${winnerName}${scoreLineOf(c) ? ` · ${scoreLineOf(c)}` : ''}` : '',
         link: '/matches?mode=challenges',
       });
-    } else {
-      await notify(c.player_2_uid, {
-        type: 'ladder_challenged',
-        title: `${c.player_1_name || 'A player'} challenged you`,
-        body: 'Arrange a time and report the result when you’ve played.',
-        link: '/matches?mode=challenges',
-      });
+      return;
     }
+    if (c.status !== 'open') return;
+
+    // No in-app notification: an open challenge (or a proposed conversion) appears as the request
+    // itself under Needs you on the Player Dash (/profile). The email still goes out.
     const eventDoc = await db().doc(`events/${c.event_id}`).get();
     const ladderName = eventDoc.exists ? (eventDoc.data().title || 'League Ladder') : 'League Ladder';
     await sendEmailOnce(
@@ -251,15 +196,11 @@ exports.onLadderChallengeUpdated = onDocumentUpdated(
     const link = '/matches?mode=challenges';
     const both = [after.player_1_uid, after.player_2_uid];
 
-    // Opponent accepted a from-scratch challenge (not a conversion — those go straight from
-    // 'open' to 'reported' and already have their own "conversion proposed" notification).
+    // Opponent accepted a from-scratch challenge. A conversion is excluded: accepting one records
+    // the match outright (scoreMatch), and the "result recorded" branch below covers it.
     if (before.status === 'open' && after.status === 'accepted' && !after.source) {
-      await notify(after.player_1_uid, {
-        type: 'ladder_accepted',
-        title: `${after.player_2_name || 'Your opponent'} accepted your challenge`,
-        body: 'Arrange a time and report the result when you’ve played.',
-        link,
-      });
+      // No in-app notification: the accepted challenge moves into Matches to play on both players'
+      // Player Dash. The email still goes out.
       const eventDoc = await db().doc(`events/${after.event_id}`).get();
       const ladderName = eventDoc.exists ? (eventDoc.data().title || 'League Ladder') : 'League Ladder';
       await sendEmailOnce(
@@ -271,57 +212,56 @@ exports.onLadderChallengeUpdated = onDocumentUpdated(
       return;
     }
 
-    if (after.status === 'reported') {
-      // Tell whoever didn't report it.
-      const reporter = after.reported_by;
-      const other = reporter === after.player_1_uid ? after.player_2_uid : after.player_1_uid;
-      await notify(other || both, {
+    // A declined challenge sends no in-app notification: it leaves the challenger's "waiting for a
+    // reply" list on the Player Dash.
+    if (before.status === 'open' && after.status === 'declined') return;
+
+    // The result landed. It counts already — there is no confirmation step — so this tells the
+    // player who did NOT record it. Telling the person who just typed it in is noise. An
+    // organizer recording the match for a pair is the exception: neither of them typed it.
+    if (after.status === 'confirmed') {
+      const recorder = after.recorded_by_organizer ? null : after.reported_by;
+      const audience = recorder
+        ? [recorder === after.player_1_uid ? after.player_2_uid : after.player_1_uid]
+        : both;
+      const winnerName = after.winner_name || after.claimed_winner_name;
+      await notify(audience.filter(Boolean), {
         type: 'ladder_reported',
-        title: 'A ladder result was reported',
-        body: (after.winner_name || after.claimed_winner_name)
-          ? `Reported winner: ${after.winner_name || after.claimed_winner_name}` : '',
+        title: 'A challenge result was recorded',
+        body: winnerName ? `Winner: ${winnerName}${scoreLineOf(after) ? ` · ${scoreLineOf(after)}` : ''}` : '',
         link,
       });
-      const eventDoc = await db().doc(`events/${after.event_id}`).get();
-      if (eventDoc.exists) {
-        await notify(eventDoc.data().creator_id, {
-          type: 'organizer_ladder_pending',
-          title: 'A ladder result needs confirming',
-          body: `${after.player_1_name || ''} vs ${after.player_2_name || ''}`.trim(),
-          link,
-        });
-      }
       return;
     }
 
-    // A conversion proposal (source set) that got declined while still 'open' — tell the
-    // proposer specifically, since they're the one who won't otherwise hear back.
-    if (before.status === 'open' && after.status === 'rejected' && after.source) {
-      await notify(after.player_1_uid, {
-        type: 'challenge_conversion_rejected',
-        title: `${after.player_2_name || 'The other player'} declined your challenge conversion`,
-        body: '',
-        link,
-      });
-    }
+    // Legacy `rejected` rows (a second word for `declined`) likewise send nothing now.
   },
 );
 
-// Challenger cancelled an open challenge — the opponent's pending challenge disappeared.
-exports.onLadderChallengeDeleted = onDocumentDeleted(
+// A player recorded a different winner from the one on record, on any match type. The first
+// result stands until an organizer approves or rejects the disputing score.
+exports.onResultDisputed = onDocumentUpdated(
   { document: 'matches/{id}', region: REGION },
   async (event) => {
-    const c = event.data?.data();
-    if (!c || c.category !== 'challenge' || c.status !== 'open' || !c.player_2_uid) return;
-    await notify(c.player_2_uid, {
-      type: 'ladder_cancelled',
-      title: `${c.player_1_name || 'A player'} cancelled their challenge`,
-      link: '/matches?mode=challenges',
+    const before = event.data?.before.data() || {};
+    const after = event.data?.after.data() || {};
+    if (before.score_disputed === true || after.score_disputed !== true) return;
+    const eventDoc = after.event_id ? await db().doc(`events/${after.event_id}`).get() : null;
+    const managers = eventDoc && eventDoc.exists ? eventOrganizerUids(eventDoc.data()) : [];
+    // Every kind of dispute is settled in one place now — the Organizer Dash. The per-category
+    // panels on Matches and the Tournament page are gone, so those links would land nowhere.
+    const link = '/profile?dash=organizer';
+    await notify(managers.length ? managers : await organizerUids(), {
+      type: 'organizer_score_disputed',
+      title: 'Two players disagree about a result',
+      body: `${after.player_1_name || ''} vs ${after.player_2_name || ''}`.trim(),
+      link,
     });
   },
 );
 
-// ─── Rallies (friendlies) ───────────────────────────────────────────────────
+
+// ─── Rallies ───────────────────────────────────────────────────
 // Same shape as the ladder-challenge triggers, minus points/organizer steps.
 
 exports.onRallyCreated = onDocumentCreated(
@@ -330,12 +270,22 @@ exports.onRallyCreated = onDocumentCreated(
     const r = event.data?.data();
     if (!r || r.category !== 'rally') return;
     if (!r.player_2_uid) return;
-    await notify(r.player_2_uid, {
-      type: 'rally_requested',
-      title: `${r.player_1_name || 'A player'} wants to rally`,
-      body: 'Accept to set up a friendly match.',
-      link: '/matches?mode=friendlies',
-    });
+
+    // An organizer recording a rally the pair already played creates it COMPLETE — no invitation.
+    if (r.status === 'confirmed') {
+      const winner = r.winner_uid || r.claimed_winner_uid;
+      await Promise.all([r.player_1_uid, r.player_2_uid].filter(Boolean).map((uid) => notify(uid, {
+        type: 'rally_confirmed',
+        title: 'Your organizer recorded a rally for you',
+        body: `${scoreLineOf(r) ? `${scoreLineOf(r)}. ` : ''}${uid === winner ? 'You picked up 2 points.' : 'You picked up 1 point.'}`,
+        link: '/matches?mode=rallies',
+      })));
+      return;
+    }
+    if (r.status !== 'open') return;
+
+    // No in-app notification: an open rally appears as the request itself under Needs you on the
+    // Player Dash (/profile). The email still goes out.
     await sendEmailOnce(
       r.player_2_uid,
       `rally-invite:${event.params.id}`,
@@ -352,61 +302,34 @@ exports.onRallyUpdated = onDocumentUpdated(
     const after = event.data?.after.data() || {};
     if (after.category !== 'rally') return;
     if (before.status === after.status || !after.player_1_uid) return;
+    // Accepted and declined rallies send no in-app notification: the Player Dash shows the rally
+    // moving into Matches to play, or leaving the sender's "waiting for a reply" list.
     if (after.status === 'accepted') {
-      await notify(after.player_1_uid, {
-        type: 'rally_accepted',
-        title: `${after.player_2_name || 'Your rally partner'} is in — rally on!`,
-        body: 'Arrange a time and court together.',
-        link: '/matches?mode=friendlies',
-      });
       await sendEmailOnce(
         after.player_1_uid,
         `rally-accepted:${event.params.id}`,
         `${after.player_2_name || 'Your rally partner'} accepted your rally invite!`,
         buildRallyAcceptedEmail(after.player_2_name || 'Your rally partner'),
       );
-    } else if (after.status === 'declined') {
-      await notify(after.player_1_uid, {
-        type: 'rally_declined',
-        title: `${after.player_2_name || 'That player'} can’t rally right now`,
-        link: '/matches?mode=friendlies',
-      });
-    } else if (after.status === 'reported') {
-      // Points only land once the OTHER player confirms, so tell whoever that is.
-      const other = after.reported_by === after.player_1_uid ? after.player_2_uid : after.player_1_uid;
-      const reporterName = after.reported_by === after.player_1_uid ? after.player_1_name : after.player_2_name;
-      if (other) {
-        await notify(other, {
-          type: 'rally_reported',
-          title: `${reporterName || 'Your rally partner'} submitted your match score`,
-          body: `${scoreLineOf(after) || 'Confirm the result'} — confirm it and you both get points.`,
-          link: '/matches?mode=friendlies',
-        });
-      }
     } else if (after.status === 'confirmed') {
+      // The score counts as soon as one player records it, so this tells the OTHER player. The
+      // person who just typed it in already knows. An organizer recording the match for a pair is
+      // the exception — neither of them typed it, so both hear.
       const winner = after.winner_uid || after.claimed_winner_uid;
-      await Promise.all([after.player_1_uid, after.player_2_uid].filter(Boolean).map((uid) => notify(uid, {
+      const recorder = after.recorded_by_organizer ? null : after.reported_by;
+      const audience = recorder
+        ? [recorder === after.player_1_uid ? after.player_2_uid : after.player_1_uid]
+        : [after.player_1_uid, after.player_2_uid];
+      await Promise.all(audience.filter(Boolean).map((uid) => notify(uid, {
         type: 'rally_confirmed',
-        title: 'Friendly match recorded',
-        body: uid === winner ? 'You picked up 2 points.' : 'You picked up 1 point.',
-        link: '/matches?mode=friendlies',
+        title: 'Rally recorded',
+        body: `${scoreLineOf(after) ? `${scoreLineOf(after)}. ` : ''}${uid === winner ? 'You picked up 2 points.' : 'You picked up 1 point.'}`,
+        link: '/matches?mode=rallies',
       })));
     }
   },
 );
 
-exports.onRallyDeleted = onDocumentDeleted(
-  { document: 'matches/{id}', region: REGION },
-  async (event) => {
-    const r = event.data?.data();
-    if (!r || r.category !== 'rally' || r.status !== 'open' || !r.player_2_uid) return;
-    await notify(r.player_2_uid, {
-      type: 'rally_cancelled',
-      title: `${r.player_1_name || 'A player'} withdrew their rally request`,
-      link: '/matches?mode=friendlies',
-    });
-  },
-);
 
 // ─── Tasks ──────────────────────────────────────────────────────────────────
 
@@ -420,7 +343,7 @@ exports.onTaskProgressUpdated = onDocumentUpdated(
     if (!before.setupComplete && after.setupComplete) {
       await notify(uid, {
         type: 'initiation_complete',
-        title: 'Community Member Initiation complete — 25 points',
+        title: 'Community Member Initiation complete: 25 points',
         body: 'Your points are on the Community leaderboard.',
         link: '/leagues',
       });
@@ -456,14 +379,72 @@ exports.onParticipantJoined = onDocumentCreated(
 
     await notify(p.uid, {
       type: 'task_completed',
-      title: `You're in — ${e.title || 'event'}`,
+      title: `You're in: ${e.title || 'event'}`,
       body: 'We’ll let you know when the draw is out.',
       link,
     });
-    await notify(e.creator_id, {
+    await notify(eventOrganizerUids(e), {
       type: 'organizer_event_roster',
       title: `${p.user_name || 'A player'} joined ${e.title || 'your event'}`,
       link,
+    });
+  },
+);
+
+// ─── Newsletter ─────────────────────────────────────────────────────────────
+
+// A member's own row (doc id = uid) confirms by notification; visitor rows have no uid to tell.
+exports.onNewsletterSubscribed = onDocumentCreated(
+  { document: 'mailing_list/{id}', region: REGION },
+  async (event) => {
+    const s = event.data?.data();
+    if (!s?.uid || s.uid !== event.params.id) return;
+    await notify(s.uid, {
+      type: 'newsletter_subscribed',
+      title: 'You’ve been added to the list',
+      body: 'Check your email for the latest issue.',
+      link: '/',
+    });
+  },
+);
+
+// ─── Courts ─────────────────────────────────────────────────────────────────
+
+// Name + Dropdown of every court in the hosted courts CSV, lower-cased. Cached per instance.
+let courtNames = null;
+async function knownCourtNames() {
+  if (courtNames) return courtNames;
+  const text = await fetch(`${SITE}/${encodeURIComponent('Tennis Courts Facilities - 4326.csv')}`).then((r) => (r.ok ? r.text() : ''));
+  const [header, ...lines] = text.split(/\r?\n/).filter(Boolean);
+  if (!header) return null;
+  // Quote-aware split: some club names ("Nyta …,The Don Mills …") carry commas.
+  const cells = (line) => (line.match(/("([^"]|"")*"|[^,]*)(,|$)/g) || []).map((c) => c.replace(/,$/, '').replace(/^"|"$/g, ''));
+  const cols = cells(header);
+  const iName = cols.indexOf('Name'), iDropdown = cols.indexOf('Dropdown');
+  courtNames = new Set(lines.flatMap((l) => { const c = cells(l); return [c[iName], c[iDropdown]]; })
+    .map((n) => String(n || '').trim().toLowerCase()).filter(Boolean));
+  return courtNames;
+}
+
+// A member saved a court that isn't in the courts list: tell the super admin and organizers, so
+// a typo can be added to scripts/fix-court-names.mjs. Only newly added entries alert.
+exports.onCustomCourtEntered = onDocumentWritten(
+  { document: 'preferences/{uid}', region: REGION },
+  async (event) => {
+    const before = new Set(event.data?.before?.data()?.preferred_courts || []);
+    const added = (event.data?.after?.data()?.preferred_courts || []).filter((c) => c && !before.has(c));
+    if (added.length === 0) return;
+    const known = await knownCourtNames().catch((e) => { logger.error('courts CSV fetch failed', e); return null; });
+    if (!known) return;
+    const custom = added.filter((c) => !known.has(String(c).trim().toLowerCase()));
+    if (custom.length === 0) return;
+    const uid = event.params.uid;
+    const name = (await db().doc(`users/${uid}`).get()).get('name') || 'A member';
+    await notify(await organizerUids(), {
+      type: 'custom_court',
+      title: 'Court not in the list',
+      body: `${name} entered ${custom.map((c) => `"${c}"`).join(', ')}.`,
+      link: '/profile?dash=organizer',
     });
   },
 );
@@ -500,23 +481,12 @@ exports.weeklyReminders = onSchedule(
     // (Event titles used to be fetched here to itemise the digest by tournament. The template
     // now shows a single total, so that per-event read is gone.)
 
-    // Accepted rallies/challenges — "still needs to be played." A rally already converted to a
-    // Challenge (source: 'friendly') is excluded, since it's no longer an unresolved friendly.
-    const [acceptedRallies, acceptedChallenges, friendlyChallenges] = await Promise.all([
-      db().collection('matches').where('category', '==', 'rally').where('status', '==', 'accepted').get(),
-      db().collection('matches').where('category', '==', 'challenge').where('status', '==', 'accepted').get(),
-      db().collection('matches').where('category', '==', 'challenge').where('source', '==', 'friendly').get(),
-    ]);
-    const resolvedFriendlyPairs = new Set(
-      friendlyChallenges.docs.map((d) => [d.data().player_1_uid, d.data().player_2_uid].sort().join('|')),
-    );
-    const friendlyCountByUser = new Map();
-    acceptedRallies.docs.forEach((d) => {
-      const r = d.data();
-      if (!r.player_1_uid || !r.player_2_uid) return;
-      if (resolvedFriendlyPairs.has([r.player_1_uid, r.player_2_uid].sort().join('|'))) return;
-      [r.player_1_uid, r.player_2_uid].forEach((uid) => friendlyCountByUser.set(uid, (friendlyCountByUser.get(uid) || 0) + 1));
-    });
+    // Accepted challenges — "still needs to be played." Rallies are deliberately NOT counted:
+    // a rally carries no points, no standings and no organizer step, so chasing one is noise.
+    // Only tournament fixtures and ladder challenges belong in this digest. (The rally query and
+    // its source: 'rally' de-duplication went with it — nothing else read either.)
+    const acceptedChallenges = await db().collection('matches')
+      .where('category', '==', 'challenge').where('status', '==', 'accepted').get();
     const challengeCountByUser = new Map();
     acceptedChallenges.docs.forEach((d) => {
       const c = d.data();
@@ -524,17 +494,16 @@ exports.weeklyReminders = onSchedule(
       [c.player_1_uid, c.player_2_uid].forEach((uid) => challengeCountByUser.set(uid, (challengeCountByUser.get(uid) || 0) + 1));
     });
 
-    // One digest email per player who has anything pending across all three categories. Keyed
-    // by today's date so a retry of this same run doesn't double-send (next week's date differs).
+    // One digest email per player who has anything pending across both categories. Keyed by
+    // today's date so a retry of this same run doesn't double-send (next week's date differs).
     const weekKey = new Date().toISOString().slice(0, 10);
-    const allUids = new Set([...pendingByUserEvent.keys(), ...friendlyCountByUser.keys(), ...challengeCountByUser.keys()]);
+    const allUids = new Set([...pendingByUserEvent.keys(), ...challengeCountByUser.keys()]);
     await Promise.all([...allUids].map((uid) => {
       // The digest reports a single total — the per-category breakdown it used to itemise was
       // dropped from the template, so only the count is summed here.
       let total = 0;
       const byEvent = pendingByUserEvent.get(uid);
       if (byEvent) byEvent.forEach((count) => { total += count; });
-      total += friendlyCountByUser.get(uid) || 0;
       total += challengeCountByUser.get(uid) || 0;
       if (total === 0) return Promise.resolve();
       return sendEmailOnce(
@@ -555,7 +524,7 @@ exports.weeklyReminders = onSchedule(
       type: 'ladder_challenges_reset',
       title: 'Your ladder challenges have reset',
       body: 'You have 3 challenges available this week.',
-      link: '/tournament',
+      link: '/matches?mode=challenges',
     });
   },
 );

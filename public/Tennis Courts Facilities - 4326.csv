@@ -83,7 +83,7 @@ _id,ID,Name,Type,Lights,Courts,Phone,ClubName,Dropdown,ClubWebsite,ClubInfo,Loca
 82,847,Lambton - Kingsway Park,Public,No,2,311,,Lambton - Kingsway Park,,,37 Marquis Ave ,,"{""coordinates"": [[-79.5078062917, 43.6575825508]], ""type"": ""MultiPoint""}"
 83,674,Lanyard Park,Public,No,3,311,,Lanyard Park,,,138  Lanyard Rd. ,Yes,"{""coordinates"": [[-79.5486740564, 43.7475157958]], ""type"": ""MultiPoint""}"
 84,119,Lawrence Park Ravine,Club,Yes,3,311,Lawrence Park Tennis Club,Lawrence Park Tennis Club,http://www.lawrenceparktennisclub.ca,,51 Alexander Muir Rd. ,,"{""coordinates"": [[-79.3999718915, 43.7222056878]], ""type"": ""MultiPoint""}"
-85,425,Leaside Park,Club,Yes,6,416-429-7108,Thorncliffe Park Tennis Club,Thorncliffe Park Tennis Club,http://www.tptc.ca,,5  Leaside Park Dr ,,"{""coordinates"": [[-79.35009806, 43.7021962957]], ""type"": ""MultiPoint""}"
+85,425,Leaside Park,Club,Yes,6,416-429-7108,Thorncliffe Park Tennis Club,Thorncliffe Park Tennis Club,http://www.tptc.ca,Public Hours: 8 PM - 11 PM (Saturday & Sunday),5  Leaside Park Dr ,,"{""coordinates"": [[-79.35009806, 43.7021962957]], ""type"": ""MultiPoint""}"
 86,681,Lillian Park,Club,Yes,3,416-512-7432,Newtonbrook Tennis Club,Newtonbrook Tennis Club,http://www.newtonbrooktennis.com,Public Hours: 12 PM - 3 PM (Saturday & Sunday),227  Otonabee Ave ,,"{""coordinates"": [[-79.4079395846, 43.7976883865]], ""type"": ""MultiPoint""}"
 87,922,Lora Hill Park,Public,Yes,2,311,,Lora Hill Park,,,36 Fernalroy Blvd ,Yes,"{""coordinates"": [[-79.5148294637, 43.6383335775]], ""type"": ""MultiPoint""}"
 88,138,Lytton Park,Club,Yes,3,416-312-5300,Lytton Park,Lytton Park,http://www.lyttonparktennis.com,,200  Lytton Blvd ,,"{""coordinates"": [[-79.4108232766, 43.7149211094]], ""type"": ""MultiPoint""}"

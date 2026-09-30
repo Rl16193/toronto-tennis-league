@@ -3,14 +3,16 @@ import { initializeAnalytics, isSupported } from 'firebase/analytics';
 import {
   browserLocalPersistence,
   browserSessionPersistence,
+  connectAuthEmulator,
   getAuth,
   GoogleAuthProvider,
   OAuthProvider,
   setPersistence,
+  signInWithCustomToken,
 } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getFunctions } from 'firebase/functions';
-import { getStorage } from 'firebase/storage';
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore';
+import { connectFunctionsEmulator, getFunctions } from 'firebase/functions';
+import { connectStorageEmulator, getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -36,6 +38,19 @@ export const storage = getStorage(app);
 export const functions = getFunctions(app, 'us-central1');
 export const googleProvider = new GoogleAuthProvider();
 export const appleProvider = new OAuthProvider('apple.com');
+
+/**
+ * Point the app at the local emulators. Off unless VITE_USE_EMULATORS=true, so production and
+ * `npm run dev` are untouched — this exists only to walk a flow end to end without production
+ * data (the booking lifecycle needs both a member and a provider signed in).
+ */
+if (import.meta.env.VITE_USE_EMULATORS === 'true') {
+  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
+  connectFirestoreEmulator(db, 'localhost', 8080);
+  connectFunctionsEmulator(functions, 'localhost', 5001);
+  connectStorageEmulator(storage, 'localhost', 9199);
+  (window as unknown as { __emulatorAuth?: unknown }).__emulatorAuth = { auth, signInWithCustomToken };
+}
 
 export const analyticsPromise = isSupported().then((supported) =>
   supported

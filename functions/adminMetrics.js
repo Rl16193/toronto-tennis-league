@@ -21,15 +21,13 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
-const { TZ, REGION } = require('./lib/constants');
+const { TZ, REGION, SPREADSHEET_ID } = require('./lib/constants');
 // Metric definitions live in lib/ so they can be run against an export without credentials.
 const { computeMetrics, WINDOW_DAYS } = require('./lib/adminMetricsCompute');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 
-// Same spreadsheet the weekly collection sync writes to.
-const SPREADSHEET_ID = '1RpEowUk-fN08Y-zpZwIWL5XVbDESc7L_ZYRoUcbHkvI';
 const BQ_DATASET = 'rs_analytics';
 
 // ── data load ────────────────────────────────────────────────────────────────

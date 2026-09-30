@@ -4,7 +4,7 @@ import { cn } from '../lib/cn';
 import { tapScale } from '../lib/motion';
 
 interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onDrag' | 'onDragStart' | 'onDragEnd' | 'onAnimationStart'> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'clay' | 'white';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'clay' | 'white' | 'lime';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
 }
@@ -23,9 +23,11 @@ export const Button: React.FC<ButtonProps> = ({
     secondary: 'bg-tennis-surface hover:bg-tennis-surface/80 text-fg',
     outline: 'border-2 border-clay text-clay hover:bg-clay hover:text-white',
     ghost: 'hover:bg-fg/10 text-fg',
-    danger: 'bg-red-500 hover:bg-red-600 text-white',
     clay: 'bg-clay hover:bg-clay-dark text-white shadow-lg shadow-clay/20',
     white: 'bg-white hover:bg-white/90 text-ink shadow-lg shadow-black/10',
+    // Support CTAs only (Donate / Subscribe / Volunteer). `text-ink` is deliberate and fixed:
+    // the lime fill is light in BOTH themes, so `text-fg` would go invisible in dark. See index.css.
+    lime: 'bg-lime hover:bg-lime-press text-ink shadow-lg shadow-lime/20',
   };
 
   const sizes = {
