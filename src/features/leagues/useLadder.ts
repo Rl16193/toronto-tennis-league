@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useContacts } from '../contacts/useContacts';
+import { useResultsFor } from '../matches/results';
+import { toMillis } from '../../utils/eventDates';
 import { LADDER_COOLDOWN_DAYS, LADDER_ACTIVE_CHALLENGE_CAP, LadderChallenge } from './ladderService';
 
 export type ChallengeState = 'available' | 'pending' | 'cooldown';
@@ -20,9 +22,8 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
     });
   }, [eventId]);
 
-  // Open (awaiting accept/decline) challenges only — same as Rallies rallies, once accepted
-  // a challenge drops out of this "needs a response" panel; the players list below shows a
-  // Contact button for it instead.
+  // Open (awaiting accept/decline) challenges only — same as rallies, once accepted a challenge
+  // drops out of this "needs a response" panel; the players list shows a Contact button instead.
   const myChallenges = useMemo(
     () => challenges.filter((c) => c.player_1_uid === uid && c.status === 'open'),
     [challenges, uid],
@@ -31,9 +32,6 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
     () => challenges.filter((c) => c.player_2_uid === uid && c.status === 'open'),
     [challenges, uid],
   );
-  // Results the two players disagree about (creator queue). A challenge counts the moment either
-  // player records it, so there is no confirmation queue any more — the only thing an organizer
-  // has to settle is a genuine disagreement about who won.
 
   // Players I have an ACCEPTED challenge with — these get a Contact button instead of "Pending"
   // in the players list.
@@ -61,8 +59,15 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
   // Contact details for the counterparts of my accepted challenges (a denied read is normal).
   const contactMap = useContacts([...acceptedPartnerIds]);
 
-  // Challenge state vs a given opponent: an active challenge blocks; a recent confirmed one
-  // enforces the cooldown; otherwise available.
+  // Results of my played challenges: the cooldown counts from each result's completed_at.
+  const myCompleteIds = useMemo(
+    () => challenges.filter((c) => c.status === 'complete' && (c.player_1_uid === uid || c.player_2_uid === uid)).map((c) => c.id),
+    [challenges, uid],
+  );
+  const results = useResultsFor(myCompleteIds);
+
+  // Challenge state vs a given opponent: an active challenge blocks; a recent played one enforces
+  // the cooldown; otherwise available.
   const stateWith = useMemo(() => {
     const cutoff = Date.now() - LADDER_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
     return (opponentId: string): ChallengeState => {
@@ -72,15 +77,11 @@ export function useLadder(eventId: string | undefined, uid: string | undefined) 
           (c.player_2_uid === uid && c.player_1_uid === opponentId),
       );
       if (between.some((c) => c.status === 'open' || c.status === 'accepted')) return 'pending';
-      if (
-        between.some(
-          (c) => c.status === 'confirmed' && c.confirmed_at && new Date(c.confirmed_at).getTime() > cutoff,
-        )
-      )
-        return 'cooldown';
+      // Until its result has loaded, a played challenge counts from its own last update.
+      if (between.some((c) => c.status === 'complete' && toMillis(results.get(c.id)?.completed_at ?? c.updated_at) > cutoff)) return 'cooldown';
       return 'available';
     };
-  }, [challenges, uid]);
+  }, [challenges, uid, results]);
 
-  return { challenges, myChallenges, incoming, contactMap, stateWith, acceptedPartnerIds, activeChallengesLeft };
+  return { challenges, myChallenges, incoming, contactMap, stateWith, acceptedPartnerIds, activeChallengesLeft, results };
 }

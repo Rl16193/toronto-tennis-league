@@ -1,8 +1,8 @@
-import { addDoc, collection, doc, getDocs, updateDoc } from 'firebase/firestore';
+import { Timestamp, addDoc, collection, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../../../lib/firebase';
 import { TennisEvent } from '../../../types';
-import { sortEventsByStartDate } from '../../../utils/eventDates';
+import { sortEventsByStartDate, toDate } from '../../../utils/eventDates';
 
 export type DisplayEvent = TennisEvent & {
   imagePath?: string;
@@ -10,6 +10,7 @@ export type DisplayEvent = TennisEvent & {
 
 export type EventFormState = {
   title: string;
+  /** The form's Type; categoryOf() maps it (with the fields below) to category + sub_category. */
   type: string;
   location: string;
   about: string;
@@ -20,8 +21,7 @@ export type EventFormState = {
   skillLevel: string;
   tournamentFormat: 'knockout' | 'rr';
   tournamentChoice: 'Singles' | 'Doubles';
-  /** Meetup only, and NOT persisted yet — the sub-category field it will drive is still being
-   *  built on the database side. See "Recurring meetups" in CLAUDE.md. */
+  /** Meetup only: on = a weekly meetup (sub_category 'meetup'), off = a one-off special. */
   recurring: boolean;
   /** The image already stored on the event (a URL or a legacy gs:// path), or '' for none. A newly
    *  picked file is held by the page until Save and uploaded then, never kept here. */
@@ -45,7 +45,30 @@ export const INITIAL_EVENT_FORM: EventFormState = {
 };
 
 export const EVENT_SKILL_OPTIONS = ['All', '2.5+', '3.0+', '3.5+', '4.0+', '4.5+', '5.0+'];
-export const EVENT_TYPE_OPTIONS = ['Tournament', 'League Ladder', 'Meetup', 'Social'];
+export const EVENT_TYPE_OPTIONS = ['Tournament', 'League Ladder', 'Meetup', 'Coaching Clinic'];
+
+/** The form's Type (plus format / participants / recurring) as the event's category and sub_category. */
+const categoryOf = (f: EventFormState): Pick<TennisEvent, 'category' | 'sub_category'> => {
+  if (f.type === 'Tournament') {
+    return { category: f.tournamentChoice === 'Doubles' ? 'doubles_tournament' : 'singles_tournament', sub_category: f.tournamentFormat };
+  }
+  if (f.type === 'League Ladder') return { category: 'ladder', sub_category: 'challenge' };
+  if (f.type === 'Coaching Clinic') return { category: 'coaching_clinic', sub_category: 'one_off' };
+  return { category: 'social', sub_category: f.recurring ? 'meetup' : 'special' };
+};
+
+/** A date input's "YYYY-MM-DD" as a local Timestamp: 00:00, or 23:59:59 for an end or a cutoff. */
+const dateInputToTimestamp = (value: string, endOfDay: boolean) => {
+  const [y, m, d] = value.split('-').map(Number);
+  return Timestamp.fromDate(endOfDay ? new Date(y, m - 1, d, 23, 59, 59) : new Date(y, m - 1, d));
+};
+
+/** The dated fields a form save writes. */
+const datesOf = (f: EventFormState) => ({
+  start_date: dateInputToTimestamp(f.startDate, false),
+  end_date: dateInputToTimestamp(f.endDate, true),
+  join_last_date: f.joinLastDate ? dateInputToTimestamp(f.joinLastDate, true) : null,
+});
 
 export const fetchEvents = async () => {
   const snapshot = await getDocs(collection(db, 'events'));
@@ -96,72 +119,70 @@ export const validateEventForm = (eventForm: EventFormState) => {
   return '';
 };
 
-export const createEvent = async (userId: string, eventForm: EventFormState, imageUrl: string) => {
+export const createEvent = async (userId: string, organizerName: string, eventForm: EventFormState, imageUrl: string) => {
+  // Every field of the event shape, typed empties where unused. organizer_ids is the creator only
+  // (firestore.rules); only the super admin changes it.
   const newEvent = {
+    ...categoryOf(eventForm),
     title: eventForm.title.trim(),
-    type: eventForm.type.trim(),
-    location: eventForm.location.trim(),
     about: eventForm.about.trim(),
+    location: eventForm.location.trim(),
     image: imageUrl,
-    start_date: eventForm.startDate,
-    end_date: eventForm.endDate,
-    join_last_date: eventForm.joinLastDate,
-    time: eventForm.time.trim(),
     skill_level: eventForm.skillLevel,
-    creator_id: userId,
-    created_at: new Date().toISOString(),
-    ...(eventForm.type.trim() === 'Tournament' && {
-      tournament_format: eventForm.tournamentFormat,
-      tournament_choice: eventForm.tournamentChoice,
-    }),
+    organizer: organizerName,
+    organizer_ids: [userId],
+    ...datesOf(eventForm),
+    time: eventForm.time.trim(),
+    round_deadlines: {},
+    zone_draw_config: {},
+    completed_at: null,
+    created_at: Timestamp.now(),
   };
 
   const created = await addDoc(collection(db, 'events'), newEvent);
   return { id: created.id, ...newEvent } as DisplayEvent;
 };
 
-/** Creator edits their own event's details. Never touches creator_id or created_at. */
+/** An organizer edits the event's details. Never touches organizer_ids or created_at. */
 export const updateEvent = async (eventId: string, eventForm: EventFormState) => {
   const patch = {
+    ...categoryOf(eventForm),
     title: eventForm.title.trim(),
-    type: eventForm.type.trim(),
     location: eventForm.location.trim(),
     about: eventForm.about.trim(),
-    description: eventForm.about.trim(),
     image: eventForm.image,
-    start_date: eventForm.startDate,
-    end_date: eventForm.endDate,
-    join_last_date: eventForm.joinLastDate,
+    ...datesOf(eventForm),
     time: eventForm.time.trim(),
     skill_level: eventForm.skillLevel,
-    ...(eventForm.type.trim() === 'Tournament' && {
-      tournament_format: eventForm.tournamentFormat,
-      tournament_choice: eventForm.tournamentChoice,
-    }),
   };
   await updateDoc(doc(db, 'events', eventId), patch);
   return patch;
 };
 
-// Plain "YYYY-MM-DD"/"" only — a Firestore Timestamp on a legacy/admin-imported event doc isn't
-// editable through this date-input-backed form, so it's dropped rather than guessed at.
-const asDateInputValue = (v: TennisEvent['start_date']) => (typeof v === 'string' ? v : '');
+/** A stored date as the date input's local "YYYY-MM-DD" ('' when absent). */
+const asDateInputValue = (v: TennisEvent['start_date'] | undefined) => {
+  const d = toDate(v);
+  return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '';
+};
+
+const FORM_TYPE: Record<TennisEvent['category'], string> = {
+  singles_tournament: 'Tournament', doubles_tournament: 'Tournament', ladder: 'League Ladder', social: 'Meetup', coaching_clinic: 'Coaching Clinic',
+};
 
 /** Prefills the edit form from an existing event. */
 export const formFromEvent = (event: DisplayEvent): EventFormState => ({
   title: event.title || '',
-  type: event.type || 'Tournament',
+  type: FORM_TYPE[event.category] || 'Tournament',
   location: event.location || '',
-  about: event.about || event.description || '',
-  startDate: asDateInputValue(event.start_date ?? event.startDate),
-  endDate: asDateInputValue(event.end_date ?? event.endDate),
+  about: event.about || '',
+  startDate: asDateInputValue(event.start_date),
+  endDate: asDateInputValue(event.end_date),
   joinLastDate: asDateInputValue(event.join_last_date),
   time: event.time || '',
   skillLevel: event.skill_level || 'All',
-  tournamentFormat: event.tournament_format || 'knockout',
-  // Nothing is stored yet, so an edit always opens with Recurring unticked.
-  recurring: false,
-  tournamentChoice: event.tournament_choice || 'Singles',
+  tournamentFormat: event.sub_category === 'rr' ? 'rr' : 'knockout',
+  recurring: event.sub_category === 'meetup',
+  tournamentChoice: event.category === 'doubles_tournament' ? 'Doubles' : 'Singles',
   // fetchEvents moves a gs:// path out of `image` into `imagePath`; hand back whichever is stored,
   // so saving an edit without touching the image writes the same value back.
   image: event.imagePath || event.image || '',

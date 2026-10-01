@@ -1,7 +1,6 @@
-import type { TaskProgress } from '../../types';
-import { Counters, LADDER_TIER_IDS, PLAYING_TIER_IDS } from './taskCatalog';
+import { Counters, LADDER_TIER_IDS, PLAYING_TIER_IDS, type TaskProgress } from './taskCatalog';
 
-// Badges are earned automatically from tier progress and counters, and never lost. Players
+// Badges are earned automatically from the stats counters (tiers are derived from them). Players
 // choose up to MAX_DISPLAY_BADGES to show on their profile card and beside their name on the
 // leaderboards (stored as `display_badges` on the users doc).
 
@@ -11,7 +10,7 @@ export interface BadgeDef {
   id: string;
   name: string;
   requirement: string;
-  earned: (p: Partial<TaskProgress>, c: Counters, tierCount: (ids: string[]) => number) => boolean;
+  earned: (p: TaskProgress, c: Counters, tierCount: (ids: string[]) => number) => boolean;
 }
 
 export const BADGES: BadgeDef[] = [
@@ -61,11 +60,6 @@ export const BADGES: BadgeDef[] = [
     earned: (_p, c) => c.courtsVisited >= 10,
   },
   {
-    id: 'explorer', name: 'Explorer',
-    requirement: 'Every court in Toronto visited',
-    earned: (p) => !!p.visitedAllCourts,
-  },
-  {
     id: 'infoGatherer', name: 'Information Gatherer',
     requirement: '15 photos submitted',
     earned: (_p, c) => c.boardPhotos + c.queueUpdates >= 15,
@@ -78,17 +72,17 @@ export const BADGES: BadgeDef[] = [
   {
     id: 'volunteer', name: 'Volunteer',
     requirement: 'Volunteer at 10 events',
-    earned: (_p, c) => c.volunteerEvents >= 10,
+    earned: (_p, c) => c.volunteerApproved >= 10,
   },
   {
     id: 'ambassador', name: 'Ambassador',
     requirement: '10 players invited',
-    earned: (_p, c) => c.invites >= 10,
+    earned: (_p, c) => c.inviteApproved >= 10,
   },
   {
     id: 'host', name: 'Host',
     requirement: '10 meetups hosted',
-    earned: (_p, c) => c.meetups >= 10,
+    earned: (_p, c) => c.hostApproved >= 10,
   },
   {
     id: 'seasonRegular', name: 'Season Regular',
@@ -109,8 +103,8 @@ export const BADGE_PILL_CLASS =
 
 export const BADGE_BY_ID = Object.fromEntries(BADGES.map((b) => [b.id, b])) as Record<string, BadgeDef>;
 
-export const earnedBadges = (p: Partial<TaskProgress> | null | undefined, c: Counters): BadgeDef[] => {
+export const earnedBadges = (p: TaskProgress | null | undefined, c: Counters): BadgeDef[] => {
   const progress = p || {};
-  const tierCount = (ids: string[]) => ids.reduce((n, id) => n + ((progress as Record<string, unknown>)[id] ? 1 : 0), 0);
+  const tierCount = (ids: string[]) => ids.reduce((n, id) => n + (progress[id] ? 1 : 0), 0);
   return BADGES.filter((b) => b.earned(progress, c, tierCount));
 };

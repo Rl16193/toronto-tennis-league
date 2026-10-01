@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { addDoc, collection, doc, getDoc, setDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from './firebase';
 
 export type NewsletterSource = 'newsletter' | 'court report submission';
@@ -10,8 +10,8 @@ export type NewsletterSource = 'newsletter' | 'court report submission';
  *
  * - A signed-in member owns exactly ONE row, keyed by their uid, carrying `uid` and `user_name`.
  *   Re-subscribing overwrites that row, so a member can never be listed twice.
- * - A signed-out visitor adds an anonymous auto-id row carrying only an email. The rules' field
- *   whitelist forbids a `uid` on that path, so nobody can write a row claiming to be someone else.
+ * - A signed-out visitor adds an auto-id row with uid 'not_a_member' and user_name 'anonymous'. The
+ *   rules accept only those values on that path, so nobody can write a row claiming to be someone else.
  *
  * `source` says where they signed up: the homepage button or the court report form.
  */
@@ -26,11 +26,11 @@ export const subscribeMemberToNewsletter = async (
   source: NewsletterSource = 'newsletter',
 ) => {
   await setDoc(doc(db, NEWSLETTER_COLLECTION, uid), {
-    uid,
     email: email.trim().toLowerCase(),
+    uid,
     user_name: userName.trim(),
     source,
-    created_at: new Date().toISOString(),
+    created_at: Timestamp.now(),
   });
 };
 
@@ -57,14 +57,16 @@ export const useMemberNewsletter = (uid?: string, email?: string | null, userNam
   return { subscribed, subscribe };
 };
 
-/** Signed-out visitor. No uid — the rules reject one on this path. */
+/** Signed-out visitor. Always 'not_a_member' / 'anonymous' — the rules reject anything else here. */
 export const subscribeVisitorToNewsletter = async (
   email: string,
   source: NewsletterSource = 'newsletter',
 ) => {
   await addDoc(collection(db, NEWSLETTER_COLLECTION), {
     email: email.trim().toLowerCase(),
+    uid: 'not_a_member',
+    user_name: 'anonymous',
     source,
-    created_at: new Date().toISOString(),
+    created_at: Timestamp.now(),
   });
 };

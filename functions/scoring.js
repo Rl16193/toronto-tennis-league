@@ -2,7 +2,7 @@
  * `scoreMatch`: the one way in to scoring, for every match type. `action` picks what to do:
  *   record  a result (player or organizer; `newMatch` = organizer records a played challenge/rally)
  *   settle  a disputed result: approve or reject the disputing score (organizer)
- *   reset   one tournament match back to unplayed (organizer)
+ *   reset   one played match (tournament, challenge or rally) back to unplayed (organizer)
  *   cancel  a draw's matches (organizer)
  *   bonus   a round-robin group's bonus on or off (organizer)
  * Everything happens in lib/scoring.js; this only checks the caller and turns refusals into

@@ -1,11 +1,11 @@
-import { doc, setDoc, updateDoc, getDocs, query, where, collection, writeBatch } from 'firebase/firestore';
+import { Timestamp, doc, setDoc, updateDoc, getDocs, query, where, collection, writeBatch } from 'firebase/firestore';
 import { EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail, type User } from 'firebase/auth';
 import { db } from '../../../lib/firebase';
 import type { ContactMethod } from '../../../types';
 
-// Sync the display name onto stats/preferences and every event_participants doc.
+// Sync the display name onto stats and every event_participants doc (user_name is owner-writable).
 const syncName = async (userId: string, name: string) => {
-  await updateDoc(doc(db, 'stats', userId), { name });
+  await updateDoc(doc(db, 'stats', userId), { name, updated_at: Timestamp.now() });
   const snap = await getDocs(query(collection(db, 'event_participants'), where('uid', '==', userId)));
   if (!snap.empty) {
     const batch = writeBatch(db);
@@ -30,21 +30,30 @@ export const updatePhone = async (userId: string, phone: string) => {
   if (digits.length !== 10) throw new Error('Phone number must be exactly 10 digits.');
   await setDoc(doc(db, 'contacts', userId), {
     phone: `(${digits.slice(0, 3)})-${digits.slice(3, 6)}-${digits.slice(6, 10)}`,
-    updated_at: new Date().toISOString(),
+    updated_at: Timestamp.now(),
   }, { merge: true });
 };
 
-export const updateWhatsappContact = async (userId: string, whatsappContact: string, sameAsPhone: boolean) => {
-  if (!sameAsPhone && whatsappContact && !/^\+[1-9]\d{6,14}$/.test(whatsappContact)) {
-    throw new Error('Enter a valid WhatsApp number.');
+/** A stored phone as E.164: a 10-digit number is North American (+1XXXXXXXXXX). */
+export const phoneAsWhatsapp = (phone: string) => {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  return digits ? `+${digits}` : '';
+};
+
+/**
+ * "Same as phone" copies the phone into whatsapp_contact on save — there is no separate flag.
+ * Consent is implied by giving a reachable messaging number; clearing it withdraws it.
+ */
+export const updateWhatsappContact = async (userId: string, whatsappContact: string, sameAsPhone: boolean, phone: string) => {
+  const number = sameAsPhone ? phoneAsWhatsapp(phone) : whatsappContact;
+  if (number && !/^\+[1-9]\d{6,14}$/.test(number)) {
+    throw new Error(sameAsPhone ? 'Save a valid phone number first.' : 'Enter a valid WhatsApp number.');
   }
   await setDoc(doc(db, 'contacts', userId), {
-    whatsapp_contact: sameAsPhone ? '' : whatsappContact,
-    whatsapp_same_as_phone: sameAsPhone,
-    // Consent is implied by giving a reachable messaging number, either by saying the phone
-    // doubles as WhatsApp or by supplying a separate one. Clearing both withdraws it.
-    contactable: sameAsPhone || !!whatsappContact,
-    updated_at: new Date().toISOString(),
+    whatsapp_contact: number,
+    contactable: !!number,
+    updated_at: Timestamp.now(),
   }, { merge: true });
 };
 
@@ -57,7 +66,7 @@ export const updateWhatsappContact = async (userId: string, whatsappContact: str
 export const updateContactMethods = async (userId: string, methods: ContactMethod[]) => {
   await setDoc(doc(db, 'contacts', userId), {
     preferred_mode_of_contact: methods,
-    updated_at: new Date().toISOString(),
+    updated_at: Timestamp.now(),
   }, { merge: true });
 };
 
@@ -69,12 +78,13 @@ export const updateAvatar = async (userId: string, avatar: string) => {
   await updateDoc(doc(db, 'users', userId), { avatar });
 };
 
-export const updateSkills = async (userId: string, skillLevel: number, tournamentPreference: string) => {
+// Skill also syncs onto the member's active singles registrations (owners may update `skill`).
+export const updateSkills = async (userId: string, skillLevel: number) => {
   if (Number.isNaN(skillLevel)) throw new Error('Please select a valid skill level.');
-  await updateDoc(doc(db, 'stats', userId), { skill_level: skillLevel, tournament_preference: tournamentPreference });
+  await updateDoc(doc(db, 'stats', userId), { skill_level: skillLevel, updated_at: Timestamp.now() });
 
   const snap = await getDocs(query(collection(db, 'event_participants'), where('uid', '==', userId)));
-  const toSync = snap.docs.filter((d) => (d.data().tournament_choice || '') !== 'Doubles');
+  const toSync = snap.docs.filter((d) => d.data().category === 'singles_tournament' && d.data().status === 'active');
   if (toSync.length > 0) {
     const batch = writeBatch(db);
     toSync.forEach((d) => batch.update(d.ref, { skill: skillLevel }));
@@ -84,19 +94,16 @@ export const updateSkills = async (userId: string, skillLevel: number, tournamen
 
 // League (gender + optional Retired Pro/Juniors age category) lives on stats.league as one
 // string, e.g. "Men's Retired Pro" — the same field the Leagues page and League Ladder split on
-// (see leagueDivision/leagueAgeCategory in utils/skillLevels.ts). The "visible to others" flag
-// lives on the users doc.
+// (see leagueDivision/leagueAgeCategory in utils/skillLevels.ts). It is always visible to others.
 export const updateLeagueAndAgeCategory = async (
   userId: string,
   league: "Men's" | "Women's" | '',
   ageCategory: 'Retired Pro' | 'Juniors' | '',
-  visible: boolean,
 ) => {
-  await updateDoc(doc(db, 'users', userId), { profile_details_visible: visible });
   // Only write the league when one is chosen — never clobber an existing value with ''.
   if (league) {
     const leagueValue = ageCategory ? `${league} ${ageCategory}` : league;
-    await updateDoc(doc(db, 'stats', userId), { league: leagueValue });
+    await updateDoc(doc(db, 'stats', userId), { league: leagueValue, updated_at: Timestamp.now() });
   }
 };
 
@@ -109,10 +116,11 @@ export const updatePreferredCourts = async (userId: string, courts: string[], zo
   await updateDoc(doc(db, 'preferences', userId), { preferred_courts: courts, preferred_zone: zone });
 };
 
-// Picked by hand on the profile card. `onZoneChanged` (functions/zoneMoves.js) keeps every match
-// with a real opponent, gives up old-zone seats without one, and tells the organizer.
+// Picked by hand on the profile card; the next court edit recomputes it. `onZoneChanged`
+// (functions/zoneMoves.js) keeps every match with a real opponent, gives up old-zone seats without
+// one, and tells the organizer.
 export const updatePreferredZone = async (userId: string, zone: string) => {
-  await updateDoc(doc(db, 'preferences', userId), { preferred_zone: zone, preferred_zone_manual: true });
+  await updateDoc(doc(db, 'preferences', userId), { preferred_zone: zone });
 };
 
 export const updateFavouritePlayers = async (userId: string, players: string[]) => {
@@ -133,6 +141,3 @@ export const changeEmail = async (user: User, newEmail: string, password: string
   await verifyBeforeUpdateEmail(user, newEmail.trim());
 };
 
-export const updateEventParticipantDates = async (participantId: string, dateselected: string[]) => {
-  await updateDoc(doc(db, 'event_participants', participantId), { dateselected });
-};

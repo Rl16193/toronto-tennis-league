@@ -45,7 +45,7 @@ export const Leagues: React.FC = () => {
   // Matches page can surface brand-new signups, but a leaderboard of people on 0 points isn't a
   // leaderboard.
   const flatRows = useMemo(
-    () => rows.filter((r) => r.leaguePoints26 > 0)
+    () => rows.filter((r) => r.leaguePoints > 0)
       .sort(byLeagueRank),
     [rows],
   );
@@ -105,7 +105,7 @@ export const Leagues: React.FC = () => {
                   subtitle={`Skill ${row.skill_level}`}
                   rank={i + 1}
                   isYou={isUser}
-                  primary={row.leaguePoints26}
+                  primary={row.leaguePoints}
                   trailing={<RankMove t={row.rankTrend} move={row.rankMove} />}
                   open={isOpen}
                   onToggle={() => toggle(row.user_id)}

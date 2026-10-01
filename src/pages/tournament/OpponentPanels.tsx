@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { TournamentMatch } from './types';
 import type { ContactMethod } from '../../types';
-import { formatScheduledDate, getScheduleState } from './utils';
 import { ScheduleControls, type ScheduleApi } from './TournamentElements';
 import { ContactOpponentButton, pillButtonCls } from '../../components/ContactOpponentButton';
 import { sharesCourt } from '../../components/NearbyPill';
@@ -20,19 +19,16 @@ export type OpponentRow = {
   email: string;
   phone: string;
   whatsappContact: string;
-  whatsappSameAsPhone: boolean;
   preferredContactMethods?: ContactMethod[];
   skill: number | null;
   wins: number;
   losses: number;
 };
 
-// Shared scheduling status badge for a match — used by both the bracket (Your Match) and the
-// round-robin (Your Group) panels so they read identically. A completed match reads "Win"/"Loss"
+// Result badge for a match (Your Match). A completed match reads "Win"/"Loss"
 // from the given viewer's perspective (falls back to "Completed" if no viewer/winner is known —
-// shouldn't normally happen here, both call sites always pass the signed-in user). No badge at
-// all once unscheduled — that's the default state, so showing it just crowds the row and
-// squeezes the player's name.
+// shouldn't normally happen here, the call site always passes the signed-in user). No badge while
+// unplayed.
 const scheduleBadge = (m: TournamentMatch, viewerUid?: string): { text: string; cls: string } | null => {
   if (m.status === 'complete') {
     if (viewerUid && m.winner_uid) {
@@ -42,10 +38,6 @@ const scheduleBadge = (m: TournamentMatch, viewerUid?: string): { text: string; 
         : { text: 'Loss', cls: 'bg-red-500/15 text-badge-loss border-red-500/25' };
     }
     return { text: 'Completed', cls: 'bg-green-500/15 text-badge-win border-green-500/25' };
-  }
-  const st = getScheduleState(m);
-  if (st?.status === 'scheduled') {
-    return { text: `Scheduled on ${formatScheduledDate(st.date, st.slot ?? '')}`, cls: 'bg-green-500/15 text-badge-win border-green-500/25' };
   }
   return null;
 };
@@ -72,7 +64,6 @@ export const OpponentCard: React.FC<{
   const canSchedule = !!currentMatch && !!schedule && !currentMatch.id.startsWith('preview_');
   const isComplete = currentMatch?.status === 'complete';
   const badge = canSchedule ? scheduleBadge(currentMatch!, viewerUid) : null;
-  const showAskInline = canSchedule && !isComplete && !getScheduleState(currentMatch!).requested;
   const showSubmitInline = canSchedule && !!schedule!.onSubmitScore && (
     isCreator || (!isComplete && !!schedule!.submittableMatchIds?.has(currentMatch!.id))
   );
@@ -138,9 +129,6 @@ export const OpponentCard: React.FC<{
                   {badge && (
                     <span className={`max-w-[9rem] truncate px-2 py-0.5 rounded-lg text-[9px] font-bold border ${badge.cls}`}>{badge.text}</span>
                   )}
-                  {showAskInline && (
-                    <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => schedule!.onAskOpponent(currentMatch!)}>Schedule</button>
-                  )}
                   {showSubmitInline && (
                     <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => schedule!.onSubmitScore!(currentMatch!)}>{submitLabel}</button>
                   )}
@@ -149,8 +137,8 @@ export const OpponentCard: React.FC<{
             </div>
           </div>
 
-          {/* Scheduling is locked once the match is complete. Ask-organizer + Submit Score live inline above. */}
-          {canSchedule && !isComplete && <ScheduleControls match={currentMatch!} api={schedule!} hideBadge hideAskButton hideSubmitButton />}
+          {/* The matchday rule, until the match is complete. Submit Score lives inline above. */}
+          {canSchedule && !isComplete && <ScheduleControls match={currentMatch!} api={schedule!} hideBadge hideSubmitButton />}
         </div>
       )}
     </div>

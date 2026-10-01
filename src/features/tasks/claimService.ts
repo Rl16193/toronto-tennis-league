@@ -1,69 +1,66 @@
-import { addDoc, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { Timestamp, addDoc, collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import { fetchCompletedTournamentMatches } from './useTasks';
 
 // Volunteer / Ambassador / Host all work the same way: a player submits a claim, an organizer
-// approves or rejects it in the review queue, and only an approval awards the points.
+// approves or rejects it in the review queue, and only an approval moves the stats counter.
 
 export type ClaimType = 'volunteer' | 'ambassador' | 'host';
 export type ClaimStatus = 'pending' | 'approved' | 'rejected';
 
 export interface TaskClaim {
   id: string;
-  type: ClaimType;
+  category: ClaimType;
+  sub_category: ClaimType;
+  status: ClaimStatus;
   uid: string;
   user_name: string;
-  event_id?: string;
-  event_title?: string;
-  invitee_id?: string;
-  invitee_name?: string;
-  meetup_title?: string;
-  meetup_date?: string;
-  note?: string;
-  status: ClaimStatus;
-  created_at: string;
-  reviewed_at?: string;
-  reviewer_note?: string;
+  event_title: string;
+  meetup_title: string;
+  meetup_date: string;
+  invitee_uid: string;
+  invitee_name: string;
+  reviewer_note: string;
+  reviewed_at: Timestamp | null;
+  created_at: Timestamp | null;
 }
 
-export async function createVolunteerClaim(
-  uid: string, name: string, eventId: string, eventTitle: string, note: string,
-): Promise<void> {
-  await addDoc(collection(db, 'task_claims'), {
-    type: 'volunteer',
-    uid: uid,
-    user_name: name,
-    event_id: eventId,
-    event_title: eventTitle,
-    ...(note.trim() ? { note: note.trim() } : {}),
-    status: 'pending',
-    created_at: new Date().toISOString(),
-  });
+/** The full claim shape; whatever doesn't apply to this kind is a typed empty. */
+const newClaim = (category: ClaimType, uid: string, name: string, fields: Partial<TaskClaim>) => ({
+  category,
+  sub_category: category,
+  status: 'pending' as const,
+  uid,
+  user_name: name,
+  event_title: '',
+  meetup_title: '',
+  meetup_date: '',
+  invitee_uid: '',
+  invitee_name: '',
+  reviewer_note: '',
+  reviewed_at: null,
+  created_at: Timestamp.now(),
+  ...fields,
+});
+
+export async function createVolunteerClaim(uid: string, name: string, eventTitle: string): Promise<void> {
+  await addDoc(collection(db, 'task_claims'), newClaim('volunteer', uid, name, { event_title: eventTitle }));
 }
 
-export async function createHostClaim(
-  uid: string, name: string, meetupTitle: string, meetupDate: string, note: string,
-): Promise<void> {
-  await addDoc(collection(db, 'task_claims'), {
-    type: 'host',
-    uid: uid,
-    user_name: name,
-    meetup_title: meetupTitle,
-    ...(meetupDate ? { meetup_date: meetupDate } : {}),
-    ...(note.trim() ? { note: note.trim() } : {}),
-    status: 'pending',
-    created_at: new Date().toISOString(),
-  });
+export async function createHostClaim(uid: string, name: string, meetupTitle: string, meetupDate: string): Promise<void> {
+  await addDoc(collection(db, 'task_claims'), newClaim('host', uid, name, { meetup_title: meetupTitle, meetup_date: meetupDate }));
 }
 
-// Real matches only (walkovers/score-less completions don't count) — mirrors the Initiation's
-// own "played a match" gate in useTasks.ts so the two definitions of "played" stay identical.
-const hasPlayedAMatch = async (uid: string): Promise<boolean> =>
-  (await fetchCompletedTournamentMatches(uid)).length > 0;
+// Played matches only (walkovers don't count) — the same matchesPlayed counter the Initiation's
+// "Play 1 match" reads, so the two definitions of "played" stay identical.
+const hasPlayedAMatch = async (uid: string): Promise<boolean> => {
+  const snap = await getDoc(doc(db, 'stats', uid));
+  const played = snap.exists() ? snap.data().matchesPlayed : 0;
+  return typeof played === 'number' && played > 0;
+};
 
-const alreadyClaimed = async (inviteeId: string): Promise<boolean> => {
+const alreadyClaimed = async (inviteeUid: string): Promise<boolean> => {
   const snap = await getDocs(
-    query(collection(db, 'task_claims'), where('type', '==', 'ambassador'), where('invitee_id', '==', inviteeId)),
+    query(collection(db, 'task_claims'), where('category', '==', 'ambassador'), where('invitee_uid', '==', inviteeUid)),
   );
   return snap.docs.some((d) => ['pending', 'approved'].includes(d.data().status));
 };
@@ -72,29 +69,21 @@ const alreadyClaimed = async (inviteeId: string): Promise<boolean> => {
 // gate, and the server enforces "one inviter per member" authoritatively at that point too.
 // Returns an error message on failure, or null on success.
 export async function createAmbassadorClaim(
-  uid: string, name: string, inviteeId: string, inviteeName: string,
+  uid: string, name: string, inviteeUid: string, inviteeName: string,
 ): Promise<string | null> {
-  if (inviteeId === uid) return 'You can’t invite yourself.';
-  const played = await hasPlayedAMatch(inviteeId);
+  if (inviteeUid === uid) return 'You can’t invite yourself.';
+  const played = await hasPlayedAMatch(inviteeUid);
   if (!played) return `${inviteeName} hasn’t played a match yet — you can claim this once they have.`;
-  const claimed = await alreadyClaimed(inviteeId);
+  const claimed = await alreadyClaimed(inviteeUid);
   if (claimed) return `Someone has already claimed ${inviteeName}.`;
-  await addDoc(collection(db, 'task_claims'), {
-    type: 'ambassador',
-    uid: uid,
-    user_name: name,
-    invitee_id: inviteeId,
-    invitee_name: inviteeName,
-    status: 'pending',
-    created_at: new Date().toISOString(),
-  });
+  await addDoc(collection(db, 'task_claims'), newClaim('ambassador', uid, name, { invitee_uid: inviteeUid, invitee_name: inviteeName }));
   return null;
 }
 
 export async function reviewClaim(id: string, approve: boolean, reviewerNote?: string): Promise<void> {
   await updateDoc(doc(db, 'task_claims', id), {
     status: approve ? 'approved' : 'rejected',
-    reviewed_at: new Date().toISOString(),
+    reviewed_at: Timestamp.now(),
     ...(reviewerNote?.trim() ? { reviewer_note: reviewerNote.trim() } : {}),
   });
 }

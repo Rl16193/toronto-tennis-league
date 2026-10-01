@@ -24,7 +24,7 @@ export const Notifications: React.FC = () => {
   }, [loading, unreadCount, markAllRead]);
 
   const openItem = (n: AppNotification) => {
-    if (!n.read) markRead(n.id);
+    if (!n.read_at) markRead(n.id);
     if (n.link) navigate(n.link);
   };
 
@@ -92,7 +92,7 @@ export const Notifications: React.FC = () => {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}
-                className={n.read ? '' : 'bg-clay/[0.07]'}
+                className={n.read_at ? '' : 'bg-clay/[0.07]'}
               >
                 <motion.button
                   type="button"
@@ -101,8 +101,8 @@ export const Notifications: React.FC = () => {
                   className="w-full text-left px-4 py-3.5 hover:bg-white/[0.04] transition-colors"
                 >
                   <div className="flex items-start gap-2">
-                    {!n.read && <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-clay shrink-0" />}
-                    <div className={`min-w-0 flex-1 ${n.read ? 'pl-3.5' : ''}`}>
+                    {!n.read_at && <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-clay shrink-0" />}
+                    <div className={`min-w-0 flex-1 ${n.read_at ? 'pl-3.5' : ''}`}>
                       <p className="text-sm font-semibold text-fg leading-snug">{n.title}</p>
                       {n.body && <p className="text-xs text-fg/70 mt-0.5 leading-snug">{n.body}</p>}
                       <p className="text-[10px] text-fg/70 mt-1">{timeAgo(n.created_at)}</p>
@@ -110,7 +110,7 @@ export const Notifications: React.FC = () => {
                   </div>
                 </motion.button>
                 {contact && (
-                  <div className={`px-4 pb-3 ${n.read ? 'pl-[1.875rem]' : 'pl-[1.875rem]'}`}>
+                  <div className={`px-4 pb-3 ${n.read_at ? 'pl-[1.875rem]' : 'pl-[1.875rem]'}`}>
                     <ContactOpponentButton
                       name={n.counterpart_name || 'Your opponent'}
                       phone={contact.phone}

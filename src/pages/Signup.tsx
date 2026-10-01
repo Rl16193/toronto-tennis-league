@@ -5,10 +5,11 @@ import {
   signInWithEmailAndPassword, sendPasswordResetEmail,
   linkWithCredential, type OAuthCredential,
 } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, Timestamp, updateDoc } from 'firebase/firestore';
 import { auth, db, setAuthPersistence } from '../lib/firebase';
 import { track } from '../lib/analytics';
 import { useAuth } from '../context/AuthContext';
+import { ensureUserProfileDocuments } from '../lib/profileBootstrap';
 import { SELECTABLE_SKILL_LEVELS, skillBand } from '../utils/skillLevels';
 
 import { Accordion } from '../components/Accordion';
@@ -124,7 +125,6 @@ export const Signup: React.FC = () => {
     preferredCourts: [] as string[],
     customCourtEntry: '',
     organizer: false,
-    schedulingPreference: 'I will schedule matches on my own' as any,
     preferredZone: '',
     pendingZoneChoice: null as { primary: string; adjacent: string } | null,
   });
@@ -356,27 +356,31 @@ export const Signup: React.FC = () => {
     try {
       const u = auth.currentUser!;
       await updateProfile(u, { displayName: formData.name });
-      await setDoc(doc(db, 'users', u.uid), { name: formData.name }, { merge: true });
+      // profileBootstrap creates the full docs (the rules refuse a partial stats create); the
+      // writes below only update owner-writable fields.
+      await ensureUserProfileDocuments(u);
+      await updateDoc(doc(db, 'users', u.uid), { name: formData.name });
       // Contact details go to `contacts`, never `users` — that collection is world-readable.
-      await setDoc(doc(db, 'contacts', u.uid), {
+      await updateDoc(doc(db, 'contacts', u.uid), {
         email: u.email || formData.email || '',
         phone: formData.phone,
         // WhatsApp is no longer asked at signup — it's on the Profile page, where the
         // "Same as phone number" control already lives. Giving a phone number here IS the
         // consent to be contacted; members refine the channel later.
         contactable: !!formData.phone,
-        updated_at: new Date().toISOString(),
-      }, { merge: true });
+        updated_at: Timestamp.now(),
+      });
       const ageCategory = formData.retiredPro ? ' Retired Pro' : formData.juniors ? ' Juniors' : '';
       const leagueValue = formData.league ? `${formData.league}${ageCategory}` : '';
-      await setDoc(doc(db, 'stats', u.uid), { name: formData.name, skill_level: formData.skillLevel, ...(leagueValue ? { league: leagueValue } : {}) }, { merge: true });
-      await setDoc(doc(db, 'preferences', u.uid), {
+      await updateDoc(doc(db, 'stats', u.uid), {
+        name: formData.name, skill_level: formData.skillLevel, ...(leagueValue ? { league: leagueValue } : {}), updated_at: Timestamp.now(),
+      });
+      await updateDoc(doc(db, 'preferences', u.uid), {
         preferred_courts: formData.preferredCourts,
         // Favourite players moved to the Profile page — signup no longer asks. profileBootstrap
         // already defaults this to [], so it isn't written here at all.
         preferred_zone: formData.preferredZone,
-        scheduling_preference: formData.schedulingPreference,
-      }, { merge: true });
+      });
       await refreshProfile(u);
       track('signup_step', { step_number: 3, step_name: 'preferences', action: 'complete' });
       track('complete_profile', { method: 'email' });

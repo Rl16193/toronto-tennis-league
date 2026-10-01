@@ -3,8 +3,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { Camera, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
 import { ContactLink, InstagramLink } from '../components/FooterElements';
-import { motion } from 'motion/react';
-import { tapScale } from '../lib/motion';
 import { INITIATION_OPEN_UNTIL, TASKS, initiationDoneCount, useTasks } from '../features/tasks/useTasks';
 import { useAuth } from '../context/AuthContext';
 import { useProfileData } from '../features/profile/hooks/useProfileData';
@@ -28,7 +26,7 @@ import { subscribeVisitorToNewsletter, useMemberNewsletter } from '../lib/newsle
 export const Profile: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const { joinedEvents, loading: eventsLoading } = useProfileData();
+  const { joinedEvents } = useProfileData();
   const { updateLoading, message, actions } = useProfileActions();
   const { points: rsPoints, progress, progressLoaded, counters } = useTasks();
   const [quickAction, setQuickAction] = useState<null | 'checkin' | 'photo'>(null);
@@ -70,11 +68,8 @@ export const Profile: React.FC = () => {
 
   const { toast: badgeToast, dismissToast } = useBadgeToast(progress, counters, progressLoaded);
 
-  // `setupComplete` is only ever written by a Cloud Function trigger, so someone who finished the
-  // checklist stays unflagged until a match/photo/event happens to fire one. Deriving it from the
-  // ticks themselves means the section disappears the moment the last task lands.
-  const initiationDone = !!progress?.setupComplete
-    || TASKS.every((t) => !!(progress as unknown as Record<string, unknown> | null)?.[t.id]);
+  // Derived from the stats doc (taskState), so the section disappears the moment the last task lands.
+  const initiationDone = !!progress?.setupComplete;
 
   useEffect(() => { document.title = 'My Profile · Racquets & Strings'; }, []);
 
@@ -178,7 +173,7 @@ export const Profile: React.FC = () => {
         <>
           {/* Community Member Initiation checklist — hidden once finished, and its box with it.
               Gated on the read having completed, NOT on the document existing: a brand-new
-              account has no tasks doc until something writes one, and `!!progress`
+              account may have no stats doc yet, and `!!progress`
               therefore hid the checklist from exactly the people who still need it. A missing
               doc simply means nothing is ticked yet. */}
           {progressLoaded && !initiationDone && (
@@ -196,7 +191,7 @@ export const Profile: React.FC = () => {
               {showTasks && (
                 <div className="divide-y divide-white/5 rounded-2xl overflow-hidden px-3.5">
                   {TASKS.map((t) => {
-                    const done = !!(progress as unknown as Record<string, unknown> | null)?.[t.id];
+                    const done = !!progress?.[t.id];
                     return (
                       <div key={t.id} className="flex items-center gap-2.5 py-2.5">
                         <span className={`w-4 h-4 shrink-0 rounded-full border ${done ? 'bg-clay border-clay' : 'border-fg/20'}`} />
@@ -210,104 +205,6 @@ export const Profile: React.FC = () => {
           )}
 
           <ProfileInfo actions={actions} updateLoading={updateLoading} message={message} progress={progress} counters={counters} />
-
-          {eventsLoading ? (
-            <div className="h-48 bg-tennis-surface/30 rounded-3xl md:rounded-[2.5rem] animate-pulse" />
-          ) : (() => {
-                const parseMayKey = (val: unknown): string | null => {
-                  if (typeof val === 'string') return val.startsWith('May') ? val : null;
-                  if (typeof val !== 'object' || val === null) return null;
-                  let d: Date | null = null;
-                  const obj = val as Record<string, unknown>;
-                  if (typeof obj['toDate'] === 'function') d = (obj['toDate'] as () => Date)();
-                  else if (typeof obj['seconds'] === 'number') d = new Date(obj['seconds'] * 1000);
-                  if (!d) return null;
-                  return d.getFullYear() === 2026 && d.getMonth() === 4 ? `May ${d.getDate()}, 2026` : null;
-                };
-
-                const tournamentEvent = joinedEvents.find(
-                  (e) => !e.removal && (e.type === 'tournament' || e.title.toLowerCase().includes('tournament'))
-                );
-                const matchdaysEvent = joinedEvents.find(
-                  (e) => !e.removal && e.title.toLowerCase().includes('weekend matchdays')
-                );
-
-                if (!tournamentEvent && !matchdaysEvent) return null;
-
-                const participantId = tournamentEvent?.participantId ?? matchdaysEvent?.participantId;
-
-                const savedDates = new Set<string>();
-                joinedEvents.forEach((e) => {
-                  const dateselected = (e as unknown as Record<string, unknown>)['dateselected'];
-                  (Array.isArray(dateselected) ? dateselected : []).forEach((v: unknown) => {
-                    const k = parseMayKey(v);
-                    if (k) savedDates.add(k);
-                  });
-                });
-
-                const tournamentStartKey = tournamentEvent?.start_date ? parseMayKey(tournamentEvent.start_date) : null;
-                const isDateSelected = (day: number) => savedDates.has(`May ${day}, 2026`);
-                const isDefaultDate = (day: number) =>
-                  !!tournamentStartKey && tournamentStartKey === `May ${day}, 2026` && !savedDates.has(tournamentStartKey);
-                const isPast = (day: number) => {
-                  const now = new Date();
-                  return new Date(2026, 4, day) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                };
-
-                const handleToggleDate = async (day: number) => {
-                  if (!participantId || isPast(day)) return;
-                  const dateKey = `May ${day}, 2026`;
-                  const current = new Set(savedDates);
-                  if (current.has(dateKey)) current.delete(dateKey); else current.add(dateKey);
-                  await actions.updateEventDates(participantId, [...current]);
-                };
-
-                const calendarDays: number[] = [];
-                for (let day = 9; day <= 31; day++) calendarDays.push(day);
-
-                return (
-                  <div className="bg-tennis-surface/30 rounded-3xl md:rounded-[2.5rem] shadow-xl p-4 md:p-8">
-                    <h2 className="text-xl md:text-2xl font-bold text-fg mb-1">Events Calendar</h2>
-                    <p className="text-fg/70 text-sm mb-1">Mark availability during the tournament</p>
-                    <p className="text-fg/70 text-xs mb-4">May 9 – May 31, 2026</p>
-                    <div className="grid grid-cols-7 gap-2">
-                      {['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((d) => (
-                        <div key={d} className="text-fg/70 text-xs font-medium text-center py-1">{d}</div>
-                      ))}
-                      {calendarDays.map((day) => {
-                        const selected = isDateSelected(day);
-                        const deflt = isDefaultDate(day);
-                        const past = isPast(day);
-                        return (
-                          <motion.button
-                            key={day}
-                            disabled={past || !participantId}
-                            onClick={() => handleToggleDate(day)}
-                            whileTap={past || !participantId ? undefined : tapScale.whileTap}
-                            transition={tapScale.transition}
-                            className={`p-2 text-xs rounded-lg transition-colors ${
-                              // text-white, not text-fg: the fill is always clay, so in light theme
-                              // text-fg would put dark green on orange. Same rule as a filled button.
-                              selected ? 'bg-clay text-white font-bold'
-                                : deflt ? 'border border-clay/60 text-clay font-semibold hover:bg-clay/20 cursor-pointer'
-                                : past ? 'text-fg/70 bg-fg/5 opacity-50 cursor-not-allowed'
-                                : participantId ? 'text-fg bg-fg/5 hover:bg-fg/10 cursor-pointer'
-                                : 'text-fg/70 bg-fg/5'
-                            }`}
-                          >
-                            {day}
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-                    {savedDates.size > 0 && (
-                      <div className="mt-4 pt-4 border-t border-fg/5">
-                        <p className="text-fg/70 text-xs">Selected: {[...savedDates].sort().join(', ')}</p>
-                      </div>
-                    )}
-                  </div>
-                );
-          })()}
         </>
       )}
 

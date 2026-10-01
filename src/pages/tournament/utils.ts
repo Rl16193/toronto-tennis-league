@@ -1,3 +1,4 @@
+import { Timestamp } from 'firebase/firestore';
 import { abbreviatePlayerName, toTitleCase } from '../../features/leagues/useStandings';
 import { skillBand } from '../../utils/skillLevels';
 import { EventParticipant, MemberInfo, UserData, UserStats } from '../../types';
@@ -6,17 +7,33 @@ import { EMAIL_REGEX } from '../../utils/emailRegex';
 import { DrawConfig, SkillGroup, SkillMergePair, SKILL_GROUP_ORDER, TemplateMatch, TournamentMatch, TournamentPlayer, UNASSIGNED_ZONE_ID, ZoneBucket, ZoneDrawConfig } from './types';
 import { ZONE_NAMES } from '../../utils/zones';
 
-// Format a scheduled match date+slot as e.g. "Jul 4th, 6pm". Shared by the bracket and
-// round-robin opponent panels and the schedule controls so they read identically.
-export const formatScheduledDate = (d?: string, slot?: string) => {
-  if (!d) return slot ?? '';
-  const dt = new Date(`${d}T00:00:00`);
-  if (Number.isNaN(dt.getTime())) return slot ?? d;
-  const day = dt.getDate();
-  const sfx = ['th', 'st', 'nd', 'rd'][((day % 100) - 20) % 10] ?? ['th', 'st', 'nd', 'rd'][day % 100] ?? 'th';
-  const month = dt.toLocaleDateString(undefined, { month: 'short' });
-  return `${month} ${day}${sfx}${slot ? `, ${slot}` : ''}`;
+/** 'Singles' | 'Doubles' of a registration — the draw key's first segment. */
+export const choiceOf = (p: Pick<EventParticipant, 'category'>): 'Singles' | 'Doubles' =>
+  (p.category === 'doubles_tournament' ? 'Doubles' : 'Singles');
+
+/** 'Singles' | 'Doubles' of a match. */
+export const choiceOfMatch = (m: Pick<TournamentMatch, 'sub_category'>): 'Singles' | 'Doubles' =>
+  (m.sub_category === 'doubles' ? 'Doubles' : 'Singles');
+
+// MIRRORS registrationId in functions/lib/participantSeat.js and the event_participants id rule.
+const DOUBLES_ID: Record<string, string> = { "men's": 'mensdoubles', "women's": 'womensdoubles', 'mixed doubles': 'mixeddoubles' };
+/** `{eventId}_{uid}`; doubles `{eventId}_{uid}_{mensdoubles|womensdoubles|mixeddoubles}`. */
+export const registrationId = (eventId: string, uid: string, category: string, division?: string) =>
+  `${eventId}_${uid}${category === 'doubles_tournament' ? `_${DOUBLES_ID[(division || '').toLowerCase()] || 'doubles'}` : ''}`;
+
+/** A doubles partner who is not on the app. */
+export const guestUid = () => `guest_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+// MIRRORS drawKeyOf / awardIdForGroup in functions/lib/scoring.js: change together, or the Group
+// Bonus switch reads a different award doc from the one the server writes.
+/** `{eventId}_{drawKey}_{matchId}` → drawKey. */
+export const drawKeyOfDoc = (m: Pick<TournamentMatch, 'id' | 'event_id' | 'match_id'>) => {
+  const e = m.event_id || '';
+  const mid = m.match_id || '';
+  return m.id.startsWith(`${e}_`) && m.id.endsWith(`_${mid}`) ? m.id.slice(e.length + 1, -mid.length - 1) : '';
 };
+export const groupBonusAwardId = (m: Pick<TournamentMatch, 'id' | 'event_id' | 'match_id' | 'group_label'>) =>
+  `rr_group_bonus_${m.event_id}_${drawKeyOfDoc(m)}_${String(m.group_label).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
 
 // Any doc shape carrying the six set-score fields.
 type ScoredSets = {
@@ -83,11 +100,10 @@ export const getMatchDisplayFlags = (
   const { editMode, hasEditHandler, isCreator, hasSubmitHandler, submittableMatchIds } = opts;
 
   const isPreview = isPreviewMatch(match);
-  const isPreviewFirstRound = isPreview &&
-    typeof match.player_1_slot === 'number' && typeof match.player_2_slot === 'number';
+  const isPreviewFirstRound = isPreview && match.player_1_slot > 0 && match.player_2_slot > 0;
   const isEditable = !!editMode && hasEditHandler && (!isPreview || isPreviewFirstRound);
 
-  const scoreText = !isPreview && match.status === 'complete' ? formatSetScores(match) : '';
+  const scoreText = !isPreview && match.status === 'complete' ? formatSetScores(match.result ?? {}) : '';
   const hasBye = match.player_1_name === BYE || match.player_2_name === BYE;
   const hasRealPlayers = !isPreview && !hasBye && !!match.player_1_uid && !!match.player_2_uid;
   // For the creator, also allow submitting when a slot is PLAYER_LOADING (winner pending).
@@ -148,17 +164,17 @@ export const getParticipantDisplayName = (participant: EventParticipant, userDat
   if (participant.user_name) {
     return isEmailLike(participant.user_name) ? participant.user_name : formatPlayerName(participant.user_name);
   }
-  return formatPlayerName(userData?.name || participant.doubles || participant.uid || 'Player');
+  return formatPlayerName(userData?.name || participant.uid || 'Player');
 };
 
 // Kept as a thin alias over the canonical parser so the two Firestore-date shapes are handled
 // in one place (src/utils/eventDates.ts). Callers pass raw event fields, hence the `unknown`.
 export const parseDateValue = (value: unknown) => parseValidDate(value as FirestoreDateLike);
 
-export const getEventDate = (event: { startDate?: unknown; start_date?: unknown; date?: unknown; endDate?: unknown; end_date?: unknown }) =>
-  parseDateValue(event.startDate || event.start_date || event.date || event.endDate || event.end_date);
+export const getEventDate = (event: { start_date?: unknown; end_date?: unknown }) =>
+  parseDateValue(event.start_date || event.end_date);
 
-export const isTournamentStarted = (event: { startDate?: unknown; start_date?: unknown; date?: unknown; endDate?: unknown; end_date?: unknown } | null) => {
+export const isTournamentStarted = (event: { start_date?: unknown; end_date?: unknown } | null) => {
   const start = event ? getEventDate(event) : null;
   return !!start && start.getTime() <= Date.now();
 };
@@ -235,7 +251,7 @@ export const resolveMergedZone = (bucketId: string, merges: Record<string, strin
  * to match a bucket before `zoneBucketFor` can redirect them. Sources are dropped later, in
  * `buildZoneAwareDrawConfigs`, which is what makes them produce no draws.
  */
-export const resolveZoneConfig = (cfg: ZoneDrawConfig | undefined): ZoneDrawConfig => ({
+export const resolveZoneConfig = (cfg: Partial<ZoneDrawConfig> | undefined): ZoneDrawConfig => ({
   ...(cfg ?? { includeUnassigned: false }),
   enabled: cfg?.enabled ?? true,
   buckets: cfg?.buckets?.length ? cfg.buckets : DEFAULT_ZONE_BUCKETS,
@@ -258,21 +274,6 @@ export const zoneBucketFor = (preferredZone: string | undefined, zoneConfig: Zon
   if (bucket) return resolveMergedZone(bucket.id, merges);
   return UNASSIGNED_ZONE_ID;
 };
-
-
-// Derive the display state of a match's scheduling for a given viewer.
-export type ScheduleState = {
-  status: 'unscheduled' | 'scheduled';
-  date?: string;
-  slot?: 'AM' | 'PM';
-  requested: boolean;
-};
-export const getScheduleState = (m: TournamentMatch): ScheduleState => ({
-  status: m.schedule_status ?? 'unscheduled',
-  date: m.proposed_date,
-  slot: m.proposed_slot,
-  requested: !!m.schedule_requested,
-});
 
 export const getDrawSize = (count: number, _tournamentChoice: 'Singles' | 'Doubles') => {
   if (count <= 8) return 8;
@@ -350,13 +351,10 @@ export const getWinnerPlaceholder = (slot: number | string, matches: TemplateMat
   return `Winner of ${sourceMatch.round}${pos}`;
 };
 
-// Normalise a name string for fuzzy partner matching (case, whitespace, punctuation)
-const normalizeForMatch = (name?: string) =>
-  (name || '').trim().toLowerCase().replace(/\s+/g, ' ');
-
 /**
- * Doubles: collapses mutual partner pairs into one entry and normalises `doubles` to the
- * partner's registered name. Participants with an unregistered (external) partner are kept as-is.
+ * Doubles: collapses mutual partner pairs (each row's partner_uid names the other) into one entry,
+ * with `partner_name` set to the partner's registered name. A guest partner has no row of their
+ * own, so that entry is kept as-is.
  */
 export const deduplicateDoublesTeams = (participants: EventParticipant[]): EventParticipant[] => {
   const processed = new Set<string>();
@@ -365,24 +363,16 @@ export const deduplicateDoublesTeams = (participants: EventParticipant[]): Event
   for (const p of participants) {
     if (processed.has(p.id)) continue;
 
-    const myNorm = normalizeForMatch(p.user_name);
-    const partnerNorm = normalizeForMatch(p.doubles);
-
-    // Find the matching partner registration (both must name each other)
-    const partner = partnerNorm
+    const partner = p.partner_uid
       ? participants.find(
-          (o) =>
-            !processed.has(o.id) &&
-            o.id !== p.id &&
-            normalizeForMatch(o.user_name) === partnerNorm &&
-            normalizeForMatch(o.doubles) === myNorm,
+          (o) => !processed.has(o.id) && o.id !== p.id && o.uid === p.partner_uid && o.partner_uid === p.uid,
         )
       : undefined;
 
     // Use the partner's actual registered name so the bracket shows the real spelling
     result.push(
       partner
-        ? { ...p, doubles: formatPlayerName(partner.user_name) || p.doubles }
+        ? { ...p, partner_name: formatPlayerName(partner.user_name) || p.partner_name }
         : p,
     );
     processed.add(p.id);
@@ -400,25 +390,21 @@ export const filterParticipantsForDraw = (
   zoneConfig?: ZoneDrawConfig,
 ): EventParticipant[] => {
   const filtered = participants.filter((p) => {
-    // Soft-deleted by the organizer — keeps the row for the record, out of every future draw.
-    if (p.removal) return false;
-    if (p.tournament_choice !== draw.tournamentChoice) return false;
+    // Withdrawn by the organizer (or cancelled) — the row stays for the record, out of every draw.
+    if (p.status !== 'active') return false;
+    if (choiceOf(p) !== draw.tournamentChoice) return false;
     if (draw.tournamentChoice === 'Doubles' && draw.division === 'All') return true;
+    // Retired Pro is its own division ("Men's Retired Pro"), so this also keeps it out of the
+    // Beginners/Challengers/Masters draws.
     if (p.division !== draw.division) return false;
     if (draw.tournamentChoice === 'Doubles') return true;
-    // ANDed with everything else below — a draw with no `zone` (zones never enabled, or doubles)
-    // skips this check. An organizer-set zone_override beats the zone derived from preferred
-    // courts, so a moved player stays put even if they later change court preferences.
-    if (draw.zone && (p.zone_override ?? zoneBucketFor(zoneMap[p.uid], zoneConfig)) !== draw.zone) return false;
-    // Retired Pro is opt-in at join time (age 55+), not skill-derived: a Retired Pro participant
-    // belongs ONLY to the Retired Pro draw, and never falls into Beginners/Challengers/Masters.
-    if (p.skill_group === 'Retired Pro') return draw.skillGroup === 'Retired Pro';
-    if (draw.skillGroup === 'Retired Pro') return false;
+    // ANDed with everything else below — a draw with no `zone` (doubles) skips this check.
+    if (draw.zone && zoneBucketFor(zoneMap[p.uid], zoneConfig) !== draw.zone) return false;
     const effectiveSkill = statsMap[p.uid]?.skill_level ?? Number(p.skill || 0);
     // A merged draw only includes the band(s) it was actually merged from — NOT every band —
     // now that there are three real bands instead of one binary split.
     if (draw.skillGroup === 'All') {
-      if (!draw.mergedFrom) return true; // consolidated doubles-style merge with no skill dimension
+      if (!draw.mergedFrom) return true; // no skill dimension (a Retired Pro division draw)
       const bands = draw.mergedFrom.split('+') as SkillGroup[];
       return bands.includes(skillBand(effectiveSkill));
     }
@@ -439,7 +425,7 @@ export const seedCompare = (statsMap: Record<string, UserStats>) =>
   (a: EventParticipant, b: EventParticipant): number => {
     const sa = statsMap[a.uid ?? ''];
     const sb = statsMap[b.uid ?? ''];
-    const points = (sb?.leaguePoints26 ?? 0) - (sa?.leaguePoints26 ?? 0);
+    const points = (sb?.leaguePoints ?? 0) - (sa?.leaguePoints ?? 0);
     if (points !== 0) return points;
     const played = (sb?.matchesPlayed ?? 0) - (sa?.matchesPlayed ?? 0);
     if (played !== 0) return played;
@@ -474,14 +460,19 @@ export const mapParticipantsToPlayers = (participants: EventParticipant[], userM
   participants.map((p) => {
     const userData = userMap[p.uid];
     const baseName = getParticipantDisplayName(p, userData) || 'Player';
-    const partnerName = p.doubles ? formatPlayerName(p.doubles) : null;
+    const partnerName = p.partner_name ? formatPlayerName(p.partner_name) : null;
     const name = partnerName ? `${baseName} / ${partnerName}` : baseName;
     return {
       uid: p.uid,
       name,
       participantId: p.id,
+      partnerUid: p.partner_uid || undefined,
     };
   });
+
+/** Every uid on a match: both slots and, for doubles, their partners. */
+export const matchUids = (...players: Array<Pick<TournamentPlayer, 'uid' | 'partnerUid'> | null | undefined>) =>
+  [...new Set(players.flatMap((p) => [p?.uid, p?.partnerUid]).filter((u): u is string => !!u))];
 
 export const deleteKey = <T extends Record<string, unknown>>(obj: T, key: string): T => {
   const next = { ...obj };
@@ -501,32 +492,41 @@ export const buildMatchFields = (
     zone?: string;
     drawsize: number;
     allMatches: TemplateMatch[];
+    started: boolean;
   },
 ) => {
   const p1 = typeof tm.player_1 === 'number' ? (slotMap.get(tm.player_1) ?? null) : null;
   const p2 = typeof tm.player_2 === 'number' ? (slotMap.get(tm.player_2) ?? null) : null;
-  const p1Uid = p1?.uid || '';
-  const p2Uid = p2?.uid || '';
+  const now = Timestamp.now();
+  // The full v3 match shape: every field present, typed empties where unused.
   return {
-    category: (cfg.tournamentChoice === 'Doubles' ? 'doubles' : 'singles') as 'singles' | 'doubles',
+    category: 'tournament' as const,
+    sub_category: (cfg.tournamentChoice === 'Doubles' ? 'doubles' : 'singles') as 'singles' | 'doubles',
+    status: 'accepted' as const,
+    player_1_uid: p1?.uid || '',
+    player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_1, cfg.allMatches)),
+    player_2_uid: p2?.uid || '',
+    player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_2, cfg.allMatches)),
+    participant_uids: matchUids(p1, p2),
     event_id: cfg.eventId,
-    tournament_choice: cfg.tournamentChoice,
-    division: cfg.division,
-    skill_group: cfg.skillGroup,
-    ...(cfg.zone ? { zone: cfg.zone } : {}),
-    drawsize: cfg.drawsize,
+    winner_uid: '',
+    responded_at: null,
+    created_at: now,
+    updated_at: now,
     match_id: tm.match_id,
     round: tm.round,
     position: index + 1,
-    player_1_slot: tm.player_1,
-    player_2_slot: tm.player_2,
-    player_1_name: p1?.name || (typeof tm.player_1 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_1, cfg.allMatches)),
-    player_1_uid: p1Uid,
-    player_2_name: p2?.name || (typeof tm.player_2 === 'number' ? PLAYER_LOADING : getWinnerPlaceholder(tm.player_2, cfg.allMatches)),
-    player_2_uid: p2Uid,
+    drawsize: cfg.drawsize,
+    division: cfg.division,
+    skill_group: cfg.skillGroup,
+    zone: cfg.zone ?? '',
+    format: 'knockout' as const,
+    player_1_slot: typeof tm.player_1 === 'number' ? tm.player_1 : 0,
+    player_2_slot: typeof tm.player_2 === 'number' ? tm.player_2 : 0,
     next_match_id: tm.next_match_id || '',
     next_slot: (tm.next_slot ?? '') as 'player_1' | 'player_2' | '',
-    status: 'pending' as const,
+    started: cfg.started,
+    group_label: 'knockout',
   };
 };
 
@@ -553,11 +553,11 @@ export const VISIBLE_DRAWS: DrawConfig[] = [
   { tab: 'mens', label: "Men's Beginners", tournamentChoice: 'Singles', division: "Men's", skillGroup: 'Beginners' },
   { tab: 'mens', label: "Men's Challengers", tournamentChoice: 'Singles', division: "Men's", skillGroup: 'Challengers' },
   { tab: 'mens', label: "Men's Masters", tournamentChoice: 'Singles', division: "Men's", skillGroup: 'Masters' },
-  { tab: 'mens', label: "Men's Retired Pro", tournamentChoice: 'Singles', division: "Men's", skillGroup: 'Retired Pro' },
+  { tab: 'mens', label: "Men's Retired Pro", tournamentChoice: 'Singles', division: "Men's Retired Pro", skillGroup: 'All' },
   { tab: 'womens', label: "Women's Beginners", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'Beginners' },
   { tab: 'womens', label: "Women's Challengers", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'Challengers' },
   { tab: 'womens', label: "Women's Masters", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'Masters' },
-  { tab: 'womens', label: "Women's Retired Pro", tournamentChoice: 'Singles', division: "Women's", skillGroup: 'Retired Pro' },
+  { tab: 'womens', label: "Women's Retired Pro", tournamentChoice: 'Singles', division: "Women's Retired Pro", skillGroup: 'All' },
   { tab: 'doubles', label: "Men's Doubles", tournamentChoice: 'Doubles', division: "Men's", skillGroup: 'All' },
   { tab: 'doubles', label: "Women's Doubles", tournamentChoice: 'Doubles', division: "Women's", skillGroup: 'All' },
   { tab: 'doubles', label: 'Mixed Doubles', tournamentChoice: 'Doubles', division: 'Mixed Doubles', skillGroup: 'All' },

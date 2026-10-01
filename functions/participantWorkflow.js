@@ -1,48 +1,49 @@
 /**
- * Server-side steps when someone registers for a tournament (event_participants create).
- * Ported from Racquets-And-Strings' participantWorkflow.js, narrowed to this repo's rules:
+ * Server-side steps when a registration is written (event_participants). Ported from
+ * Racquets-And-Strings' participantWorkflow.js, narrowed to this repo's rules:
  *
- * 0. Counts the tournament entered (stats.tournamentsPlayed), once per player per event, through
- *    lib/scoring.js's points writer.
- * 1. Late-joiner seating, KNOCKOUT ONLY. The join sheet picks the open spot (right draw, skill
- *    and zone, with the player's fallback confirmation) and records it on the registration as
- *    `requested_match_id` / `requested_slot`. This trigger re-checks that spot inside a
- *    transaction and seats the player, so two joiners can never take the same spot. A player can
- *    no longer write a match, which is why this moved server-side. Round-robin placement stays
- *    manual (CLAUDE.md "Placement is manual"); an RR match is never seated here.
- * 2. Doubles partner who is a member: registering with a member partner also registers that
- *    partner (pointing back at the joiner), unless they already have a doubles registration.
+ * 0. Recounts the member's entries (stats.eventsJoined / tournamentsPlayed) on every create,
+ *    status change or delete — set, never incremented, so re-joining can't double-count.
+ * 1. Late-joiner seating, KNOCKOUT ONLY: finds the open seat in the draw the player belongs to
+ *    and seats them in a transaction (lib/participantSeat.js). Round-robin placement stays manual
+ *    (CLAUDE.md "Placement is manual"); an RR match is never seated here.
+ * 2. Doubles with a member partner: the partner gets their own registration (pointing back).
+ * 3. Doubles with no partner: the partner pool (connections to others looking in that division).
+ *    Steps 2 and 3 also run when partner_uid changes after joining (a teammate named later).
  *
  * Deploy: firebase deploy --only functions:onParticipantSeat
  */
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 
 const { REGION } = require('./lib/constants');
-const { seatRequested, registerMemberPartner } = require('./lib/participantSeat');
-const { countTournamentEntry } = require('./lib/scoring');
+const { seatJoiner, registerMemberPartner, joinPartnerPool } = require('./lib/participantSeat');
+const { recountEntries } = require('./lib/scoring');
+const { linkPlayers } = require('./connections');
 
-exports.onParticipantSeat = onDocumentCreated(
+const safely = async (what, id, fn) => {
+  try { return await fn(); } catch (err) { logger.error(`${what} failed`, { participantId: id, err: String(err) }); return null; }
+};
+
+exports.onParticipantSeat = onDocumentWritten(
   { document: 'event_participants/{participantId}', region: REGION },
   async (event) => {
-    const p = event.data?.data();
-    if (!p || !p.event_id || !p.uid || String(p.uid).startsWith('__loading_')) return;
-    try {
-      await countTournamentEntry(admin.firestore(), event.params.participantId);
-    } catch (err) {
-      logger.error('tournament entry count failed', { participantId: event.params.participantId, err: String(err) });
+    const id = event.params.participantId;
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+    const p = after || before;
+    if (!p || !p.event_id || !p.uid) return;
+    const created = !before && !!after;
+    const statusChanged = !!before && !!after && before.status !== after.status;
+    if (created || statusChanged || !after) await safely('entry recount', id, () => recountEntries(admin.firestore(), p.uid));
+    const partnerChanged = !!before && !!after && (before.partner_uid || '') !== (after.partner_uid || '');
+    if (!after || after.status !== 'active' || !(created || statusChanged || partnerChanged)) return;
+    if (created || statusChanged) {
+      const outcome = await safely('late joiner seating', id, () => seatJoiner(after));
+      if (outcome) logger.info('late joiner seating', { participantId: id, outcome });
     }
-    try {
-      const outcome = await seatRequested(p);
-      if (outcome) logger.info('late joiner seating', { participantId: event.params.participantId, outcome });
-    } catch (err) {
-      logger.error('late joiner seating failed', { participantId: event.params.participantId, err: String(err) });
-    }
-    try {
-      await registerMemberPartner(event.params.participantId, p);
-    } catch (err) {
-      logger.error('partner registration failed', { participantId: event.params.participantId, err: String(err) });
-    }
+    await safely('partner registration', id, () => registerMemberPartner(after));
+    await safely('partner pool', id, () => joinPartnerPool(after, linkPlayers));
   },
 );

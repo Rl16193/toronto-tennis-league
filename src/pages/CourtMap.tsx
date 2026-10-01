@@ -457,6 +457,7 @@ export const CourtMap: React.FC = () => {
       loading={loading}
       userCoords={userCoords}
       onSelectCourt={handleSelectCourt}
+      activityWindow={activityWindow}
       onViewPrograms={(c) => {
         setProgLocationFilter(c.dropdown || c.name);
         setMobileResultsOpen(true);

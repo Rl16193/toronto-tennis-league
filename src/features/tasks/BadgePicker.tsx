@@ -4,14 +4,14 @@ import { Button } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
 import { BADGES, BADGE_BY_ID, BADGE_PILL_CLASS, MAX_DISPLAY_BADGES, earnedBadges } from './badges';
 import { Counters } from './useTasks';
-import { TaskProgress } from '../../types';
+import type { TaskProgress } from './taskCatalog';
 
 // Profile section: shows the badges the player chose to feature, with an Edit button that opens
 // the full earned list in a sheet.
 // `progress`/`counters` come from the caller's own useTasks() call rather than calling it again
 // here — this component always renders alongside a parent that already has one (ProfileInfo, via
 // Profile.tsx), and a second independent listener + auto-award write-effect on the same
-// tasks/{uid} progress doc caused visible flicker on first load (two listeners racing each other).
+// stats/{uid} doc caused visible flicker on first load (two listeners racing each other).
 export const BadgePicker: React.FC<{
   selected: string[];
   onSave: (ids: string[]) => Promise<boolean>;

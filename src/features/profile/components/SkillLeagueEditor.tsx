@@ -8,8 +8,7 @@ import { SELECTABLE_SKILL_LEVELS, leagueAgeCategory, leagueDivision, skillBand }
 export const SkillEditor: React.FC<{
   initial: number;
   saving: boolean;
-  /** `band` is skillBand(skill), saved as the tournament preference alongside it. */
-  onSave: (skill: number, band: string) => void;
+  onSave: (skill: number) => void;
 }> = ({ initial, saving, onSave }) => {
   const [skillDraft, setSkillDraft] = useState(initial || 2);
   return (
@@ -38,7 +37,7 @@ export const SkillEditor: React.FC<{
       {/* skillBand is the same function the draw engine groups on, so this label and the
           group a player actually lands in can never disagree. */}
       <p className="text-sm font-bold text-clay text-center">{skillBand(skillDraft)}</p>
-      <Button size="sm" onClick={() => onSave(skillDraft, skillBand(skillDraft))} isLoading={saving}>Save</Button>
+      <Button size="sm" onClick={() => onSave(skillDraft)} isLoading={saving}>Save</Button>
     </div>
   );
 };
@@ -46,13 +45,11 @@ export const SkillEditor: React.FC<{
 export const LeagueEditor: React.FC<{
   /** stats.league — the division plus an optional Retired Pro / Juniors suffix. */
   league: string;
-  visible: boolean;
   saving: boolean;
-  onSave: (league: "Men's" | "Women's" | '', ageCategory: 'Retired Pro' | 'Juniors' | '', visible: boolean) => void;
-}> = ({ league, visible, saving, onSave }) => {
+  onSave: (league: "Men's" | "Women's" | '', ageCategory: 'Retired Pro' | 'Juniors' | '') => void;
+}> = ({ league, saving, onSave }) => {
   const [leagueDraft, setLeagueDraft] = useState<"Men's" | "Women's" | ''>(leagueDivision(league));
   const [ageCategoryDraft, setAgeCategoryDraft] = useState<'Retired Pro' | 'Juniors' | ''>(leagueAgeCategory(league));
-  const [visibleDraft, setVisibleDraft] = useState(visible);
   return (
     <div className="mt-2 space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
@@ -106,11 +103,7 @@ export const LeagueEditor: React.FC<{
       {!leagueDraft && (
         <p className="text-xs text-fg/70">Choose a league above to unlock Retired Pro / Juniors.</p>
       )}
-      <label className="flex items-center gap-2 cursor-pointer text-sm text-fg/70">
-        <input type="checkbox" checked={visibleDraft} onChange={(e) => setVisibleDraft(e.target.checked)} className="accent-clay" />
-        Make visible to others
-      </label>
-      <Button size="sm" onClick={() => onSave(leagueDraft, ageCategoryDraft, visibleDraft)} isLoading={saving}>Save</Button>
+      <Button size="sm" onClick={() => onSave(leagueDraft, ageCategoryDraft)} isLoading={saving}>Save</Button>
     </div>
   );
 };

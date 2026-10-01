@@ -15,7 +15,7 @@ import type { useProfileActions } from '../../features/profile/hooks/useProfileA
 import type { UserProfile } from '../../types';
 import { leagueAgeCategory, leagueDivision } from '../../utils/skillLevels';
 import type {
-  BookingAskRow, DashEventRow, HeadToHeadRow, NeedsYouRow, PastMatchRow, ScheduleAskRow, TaskGroupRow, ToPlayRow,
+  BookingAskRow, DashEventRow, HeadToHeadRow, NeedsYouRow, PastMatchRow, TaskGroupRow, ToPlayRow,
   usePlayerDash,
 } from './usePlayerDash';
 
@@ -228,19 +228,6 @@ const CancelButton: React.FC<{ data: PlayerDashData; id: string; category: 'rall
   </Button>
 );
 
-const DoneSchedulingButton: React.FC<{ data: PlayerDashData; r: ScheduleAskRow }> = ({ data, r }) => (
-  <Button
-    variant="clay"
-    size="sm"
-    className={`shrink-0 ${focusRing}`}
-    isLoading={data.busyId === r.id}
-    disabled={!!data.busyId}
-    onClick={() => data.doneScheduling(r.id)}
-  >
-    Done
-  </Button>
-);
-
 /** The provider's contacts, on every step of a live job — arranging it is the whole point. */
 const BookingContacts: React.FC<{ r: BookingAskRow }> = ({ r }) =>
   r.contact ? (
@@ -410,22 +397,6 @@ const NeedsYouList: React.FC<{ data: PlayerDashData }> = ({ data }) => (
         <RowError show={data.rowError?.id === r.id} text={data.rowError?.text} />
       </div>
     ))}
-    {data.scheduleAsks.map((r) => (
-      <div key={r.id} className="border-t border-fg/10 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-baseline gap-1.5">
-              <SourceLetter source="tournament" />
-              <p className="min-w-0 truncate text-sm font-semibold text-fg"><PlayerLink uid={r.opponent.uid} name={r.opponent.name} /></p>
-            </div>
-            <p className="mt-0.5 truncate text-xs text-fg/70">{r.line}</p>
-          </div>
-          <DoneSchedulingButton data={data} r={r} />
-        </div>
-        {r.contact && <div className="mt-2.5"><Contacts r={r} /></div>}
-        <RowError show={data.rowError?.id === r.id} text={data.rowError?.text} />
-      </div>
-    ))}
     {data.bookingAsks.map((r) => (
       <div key={r.id} className="border-t border-fg/10 px-4 py-3">
         <div className="flex items-center gap-2">
@@ -482,19 +453,6 @@ const NeedsYouCards: React.FC<{ data: PlayerDashData }> = ({ data }) => (
                 <RequestButtons data={data} r={r} whiteRally />
               </div>
             </div>
-            <RowError show={data.rowError?.id === r.id} text={data.rowError?.text} />
-          </div>
-        ))}
-        {data.scheduleAsks.map((r) => (
-          <div key={r.id} className="rounded-2xl bg-fg/5 p-3">
-            <div className="flex items-center justify-between gap-2.5">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-fg"><PlayerLink uid={r.opponent.uid} name={r.opponent.name} /></p>
-                <p className="mt-0.5 truncate text-xs text-fg/70">{r.line}</p>
-              </div>
-              <DoneSchedulingButton data={data} r={r} />
-            </div>
-            {r.contact && <div className="mt-2.5"><Contacts r={r} /></div>}
             <RowError show={data.rowError?.id === r.id} text={data.rowError?.text} />
           </div>
         ))}
@@ -975,7 +933,7 @@ const PrefRow: React.FC<{ label: string; value: string; onEdit: () => void }> = 
 const PreferencesCard: React.FC<{ profile: UserProfile; actions: ProfileActions; saving: boolean }> = ({ profile, actions, saving }) => {
   const [editing, setEditing] = useState(false);
   const [editor, setEditor] = useState<Editor>(null);
-  const { preferences, stats, user } = profile;
+  const { preferences, stats } = profile;
   const close = () => setEditor(null);
   const save = async (fn: () => Promise<boolean>) => { if (await fn()) close(); };
   const league = [leagueDivision(stats.league), leagueAgeCategory(stats.league)].filter(Boolean).join(' · ');
@@ -1037,7 +995,7 @@ const PreferencesCard: React.FC<{ profile: UserProfile; actions: ProfileActions;
         {editor === 'skill' && (
           <Sheet key="skill" onClose={close} title="Skill Level" maxWidthClassName="max-w-md">
             <div className="p-6 pt-3">
-              <SkillEditor initial={stats.skill_level} saving={saving} onSave={(s, b) => save(() => actions.updateSkills(s, b))} />
+              <SkillEditor initial={stats.skill_level} saving={saving} onSave={(s) => save(() => actions.updateSkills(s))} />
             </div>
           </Sheet>
         )}
@@ -1046,9 +1004,8 @@ const PreferencesCard: React.FC<{ profile: UserProfile; actions: ProfileActions;
             <div className="p-6 pt-3">
               <LeagueEditor
                 league={stats.league}
-                visible={!!user.profile_details_visible}
                 saving={saving}
-                onSave={(l, a, v) => save(() => actions.updateLeagueAgeCategory(l, a, v))}
+                onSave={(l, a) => save(() => actions.updateLeagueAgeCategory(l, a))}
               />
             </div>
           </Sheet>

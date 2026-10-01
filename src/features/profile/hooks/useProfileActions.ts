@@ -4,13 +4,12 @@ import { useAuth } from '../../../context/AuthContext';
 import {
   updateName, updatePhone, updateWhatsappContact, updateBio, updateAvatar, updateSkills,
   updateLeagueAndAgeCategory, updateDisplayBadges, updatePreferredCourts, updatePreferredZone, updateFavouritePlayers,
-  updateEmailNotifications, updateAvailabilityTags, changeEmail, updateEventParticipantDates,
-  updateContactMethods,
+  updateEmailNotifications, updateAvailabilityTags, changeEmail, updateContactMethods,
 } from '../services/profileService';
 import type { ContactMethod } from '../../../types';
 
 export const useProfileActions = () => {
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [updateLoading, setUpdateLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', type: 'success' as 'success' | 'error' });
 
@@ -65,16 +64,6 @@ export const useProfileActions = () => {
     }
   };
 
-  const handleUpdateEventDates = async (participantId: string, dateselected: string[]) => {
-    try {
-      await updateEventParticipantDates(participantId, dateselected);
-      showMessage('Matchday dates updated!', 'success');
-    } catch (error) {
-      console.error('Error updating dates:', error);
-      showMessage('Could not update dates right now.', 'error');
-    }
-  };
-
   return {
     updateLoading,
     message,
@@ -82,12 +71,12 @@ export const useProfileActions = () => {
       updateName: (name: string) => withProfileUpdate(() => updateName(user!.uid, name)),
       updatePhone: (phone: string) => withProfileUpdate(() => updatePhone(user!.uid, phone)),
       updateWhatsappContact: (whatsappContact: string, sameAsPhone: boolean) =>
-        withProfileUpdate(() => updateWhatsappContact(user!.uid, whatsappContact, sameAsPhone)),
+        withProfileUpdate(() => updateWhatsappContact(user!.uid, whatsappContact, sameAsPhone, profile?.contacts.phone ?? '')),
       updateBio: (bio: string) => withProfileUpdate(() => updateBio(user!.uid, bio)),
       updateAvatar: (url: string) => withProfileUpdate(() => updateAvatar(user!.uid, url)),
-      updateSkills: (skillLevel: number, tournamentPreference: string) => withProfileUpdate(() => updateSkills(user!.uid, skillLevel, tournamentPreference)),
-      updateLeagueAgeCategory: (league: "Men's" | "Women's" | '', ageCategory: 'Retired Pro' | 'Juniors' | '', visible: boolean) =>
-        withProfileUpdate(() => updateLeagueAndAgeCategory(user!.uid, league, ageCategory, visible)),
+      updateSkills: (skillLevel: number) => withProfileUpdate(() => updateSkills(user!.uid, skillLevel)),
+      updateLeagueAgeCategory: (league: "Men's" | "Women's" | '', ageCategory: 'Retired Pro' | 'Juniors' | '') =>
+        withProfileUpdate(() => updateLeagueAndAgeCategory(user!.uid, league, ageCategory)),
       updateDisplayBadges: (badgeIds: string[]) => withProfileUpdate(() => updateDisplayBadges(user!.uid, badgeIds)),
       updatePreferredCourts: (courts: string[], zone: string) => withProfileUpdate(() => updatePreferredCourts(user!.uid, courts, zone)),
       updatePreferredZone: (zone: string) => withProfileUpdate(() => updatePreferredZone(user!.uid, zone)),
@@ -97,7 +86,6 @@ export const useProfileActions = () => {
       updateAvailabilityTags: (tags: string[]) => withProfileUpdate(() => updateAvailabilityTags(user!.uid, tags)),
       changeEmail: handleChangeEmail,
       refreshEmailChange: handleRefreshEmailChange,
-      updateEventDates: handleUpdateEventDates,
     },
   };
 };

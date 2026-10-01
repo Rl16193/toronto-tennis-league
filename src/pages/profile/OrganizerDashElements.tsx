@@ -4,10 +4,13 @@ import { RotateCcw } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { ReviewQueue } from '../../features/tasks/ReviewQueue';
 import { CountBadge, Empty, Group, PlayerLink, RowError, focusRing, squareBtn } from './PlayerDashElements';
-import { REMOVAL_REASONS, type RecordedRow, type RemovalReason, type SignupRow, type EventStatRow, type useOrganizerDash } from './useOrganizerDash';
+import {
+  REMOVAL_REASONS, type CourtReportRow, type RecordedRow, type RemovalReason, type SignupRow, type EventStatRow,
+  type useOrganizerDash,
+} from './useOrganizerDash';
 import type { UnplacedEntry } from '../tournament/types';
-import type { CourtImprovementRow } from '../../lib/courtImprovements';
 import type { DisputeRow } from '../../features/matches/scoring';
+import { type FirestoreDateLike, toDate } from '../../utils/eventDates';
 
 /**
  * Presentation for the Organizer Dash on /profile. Props in, callbacks out: every read and write is
@@ -121,23 +124,17 @@ const UnplacedCard: React.FC<{ data: OrganizerDashData; row: UnplacedEntry }> = 
 // ── Court issue reports ───────────────────────────────────────────────────────
 // Read-only: a report needs no approval, and there is nothing to tick off. `line-clamp-2` rather
 // than truncate — a note is prose, and one line of it says nothing useful.
-const CourtIssueCard: React.FC<{ row: CourtImprovementRow }> = ({ row }) => (
+const CourtIssueCard: React.FC<{ row: CourtReportRow }> = ({ row }) => (
   <div className={CARD}>
-    <p className={TITLE}>{row.court}</p>
+    <p className={TITLE}>{row.court_name}</p>
     <p className="mt-0.5 text-xs text-fg/70 line-clamp-2">{row.note}</p>
     <p className="mt-1 truncate text-xs text-fg/70">
-      {[row.user_name || (row.email ? '' : 'Anonymous'), agoLabel(row.created_at)].filter(Boolean).join(' · ')}
-      {row.email && (
-        <>
-          {' '}
-          <a href={`mailto:${row.email}`} className={`font-bold text-clay hover:underline ${focusRing}`}>{row.email}</a>
-        </>
-      )}
+      {[row.uid === 'not_a_member' ? 'Anonymous' : row.user_name, agoLabel(row.created_at)].filter(Boolean).join(' · ')}
     </p>
   </div>
 );
 
-const agoLabel = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('en-CA', { day: 'numeric', month: 'short' }) : '');
+const agoLabel = (at?: FirestoreDateLike) => toDate(at)?.toLocaleDateString('en-CA', { day: 'numeric', month: 'short' }) ?? '';
 
 // ── Recently recorded ─────────────────────────────────────────────────────────
 // Undo is two taps, the way the Provider Dash's Decline is — never window.confirm.
@@ -217,7 +214,7 @@ const EventStatCard: React.FC<{ row: EventStatRow }> = ({ row }) => (
 // One column of sections, in priority order. Both layouts render the same sections; the wide one
 // splits them into a queue column and an awareness rail.
 /**
- * One queue, the way the Player Dash has one. Disputes, claims and coupons, unplaced players and
+ * One queue, the way the Player Dash has one. Disputes, claims and refunds, unplaced players and
  * court reports are all "something an organizer has to do", and splitting them into four headed
  * sections meant four empty boxes on a quiet day. Order is most-urgent first.
  */
@@ -236,13 +233,29 @@ const Queues: React.FC<{ data: OrganizerDashData }> = ({ data }) => (
   </Group>
 );
 
-const Recorded: React.FC<{ data: OrganizerDashData }> = ({ data }) => (
-  <Group title="Recently recorded" count={0}>
-    {data.recorded.length === 0
-      ? <Nothing>Nothing recorded in the last week.</Nothing>
-      : data.recorded.map((r) => <RecordedCard key={r.id} data={data} row={r} />)}
-  </Group>
-);
+/** Rows shown before "Show N more", the Services pattern. */
+const RECORDED_SHOWN = 10;
+
+const Recorded: React.FC<{ data: OrganizerDashData }> = ({ data }) => {
+  const [all, setAll] = useState(false);
+  const extra = data.recorded.length - RECORDED_SHOWN;
+  return (
+    <Group title="Recently recorded" count={0}>
+      {data.recorded.length === 0
+        ? <Nothing>Nothing recorded yet.</Nothing>
+        : (all ? data.recorded : data.recorded.slice(0, RECORDED_SHOWN)).map((r) => <RecordedCard key={r.id} data={data} row={r} />)}
+      {extra > 0 && (
+        <button
+          type="button"
+          onClick={() => setAll((v) => !v)}
+          className="w-full min-h-11 rounded-2xl bg-fg/[0.03] text-xs font-bold text-clay hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+        >
+          {all ? 'Show less' : `Show ${extra} more`}
+        </button>
+      )}
+    </Group>
+  );
+};
 
 const Awareness: React.FC<{ data: OrganizerDashData }> = ({ data }) => (
   <>

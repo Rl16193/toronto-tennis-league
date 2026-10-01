@@ -3,7 +3,7 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent } from '../../../types';
-import { isTopspinMeetupEvent, isTournamentEvent, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
+import { isTopspinMeetupEvent, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
 import { isCurrentEvent, sortEventsByStartDate } from '../../../utils/eventDates';
 import { DisplayEvent, fetchEvents, resolveStorageUrl } from '../services/eventService';
 import type { JoinedRegistration } from '../types';
@@ -68,11 +68,10 @@ export function useEvents() {
     if (!user) return;
     const q = query(collection(db, 'event_participants'), where('uid', '==', user.uid));
     return onSnapshot(q, (snap) => {
-      // A row the organizer removed (`removal: true`) no longer counts as joined, so the player can
-      // register again; rejoining adds a fresh row and the removed one stays as the record.
-      setJoinedRegistrations(snap.docs.filter((d) => d.data().removal !== true).map((d) => {
+      // Only an active registration counts as joined; a withdrawn one may join again (useJoin).
+      setJoinedRegistrations(snap.docs.filter((d) => d.data().status === 'active').map((d) => {
         const data = d.data();
-        return { eventId: data.event_id, tournamentChoice: (data.tournament_choice || '') as JoinedRegistration['tournamentChoice'] };
+        return { eventId: data.event_id, category: data.category } as JoinedRegistration;
       }));
     });
     // `user?.uid`: a new User object arrives on every token refresh, needlessly re-subscribing.
@@ -90,24 +89,12 @@ export function useEvents() {
     return allDisplayableEvents.filter((e) => isCurrentEvent(e, now));
   }, [allDisplayableEvents]);
 
-  const getJoinedChoices = (eventId: string) =>
-    new Set(joinedRegistrations.filter((r) => r.eventId === eventId && r.tournamentChoice).map((r) => r.tournamentChoice));
+  // A tournament event is singles OR doubles, so any active registration means joined.
+  const hasJoinedEvent = (eventId: string) => joinedRegistrations.some((r) => r.eventId === eventId);
 
-  const hasJoinedRegularEvent = (eventId: string) =>
-    joinedRegistrations.some((r) => r.eventId === eventId && !r.tournamentChoice);
+  const hasJoinedAnyTournament = () => joinedRegistrations.some((r) => /_tournament$/.test(r.category));
 
-  const hasJoinedTournamentChoice = (eventId: string, choice: 'Singles' | 'Doubles') =>
-    joinedRegistrations.some((r) => r.eventId === eventId && r.tournamentChoice === choice);
-
-  const hasJoinedAnyTournament = () =>
-    joinedRegistrations.some((r) => r.tournamentChoice === 'Singles' || r.tournamentChoice === 'Doubles');
-
-  const isFullyJoinedEvent = (event: TennisEvent) => {
-    if (!isTournamentEvent(event)) return hasJoinedRegularEvent(event.id);
-    if (event.tournament_choice === 'Singles') return hasJoinedTournamentChoice(event.id, 'Singles');
-    if (event.tournament_choice === 'Doubles') return hasJoinedTournamentChoice(event.id, 'Doubles');
-    return getJoinedChoices(event.id).has('Singles') && getJoinedChoices(event.id).has('Doubles');
-  };
+  const isFullyJoinedEvent = (event: TennisEvent) => hasJoinedEvent(event.id);
 
   return {
     events,
@@ -116,10 +103,10 @@ export function useEvents() {
     loading,
     allDisplayableEvents,
     visibleEvents,
-    getJoinedChoices,
-    hasJoinedRegularEvent,
-    hasJoinedTournamentChoice,
+    hasJoinedEvent,
     hasJoinedAnyTournament,
     isFullyJoinedEvent,
   };
 }
+
+

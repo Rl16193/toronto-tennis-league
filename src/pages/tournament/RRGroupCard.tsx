@@ -6,6 +6,7 @@ import { PLAYER_LOADING, PLAYER_LOADING_SENTINEL, formatPlayerName, formatSetSco
 import { ContactOpponentButton, pillButtonCls } from '../../components/ContactOpponentButton';
 import { pgWinPct } from '../../features/leagues/useStandings';
 import type { ContactData } from '../../types';
+import { isWalkover } from '../../features/matches/results';
 
 type Props = {
   groupIndex: number;
@@ -13,7 +14,6 @@ type Props = {
   players: TournamentPlayer[];
   matches: TournamentMatch[];
   standings: RRStandingRow[];
-  advancementCount: number;
   isCreator: boolean;
   // The viewer's own uid — a non-creator only sees their own match(es) in the list below.
   currentUserId?: string;
@@ -37,19 +37,19 @@ type Props = {
   onMovePlayerZone?: (uid: string, bucketId: string) => void;
   /** Zone buckets offered in that picker. Empty hides the control entirely. */
   zoneBuckets?: { id: string; label: string }[];
-  /** Participant asks the organizer to schedule an unplayed match. */
-  onAskSchedule?: (match: TournamentMatch) => void;
   /** Organizer pays/takes back this group's bonus. Players see the switch but can't move it. */
   onSetGroupBonus?: (award: boolean) => Promise<void>;
+  /** Whether this group's bonus award exists (the switch's state). */
+  bonusAwarded?: boolean;
 };
 
 
 export const RRGroupCard: React.FC<Props> = ({
-  groupIndex, groupLabel, players, matches, standings, advancementCount,
+  groupIndex, groupLabel, players, matches, standings,
   isCreator, currentUserId, editMode, allGroupPlayers,
   onSubmitScore, submittableMatchIds, onSaveGroupEdit, onRenameGroup,
-  statsByUid, contactsByUid, onRemovePlayer, onMovePlayerZone, zoneBuckets = [], onAskSchedule,
-  onSetGroupBonus,
+  statsByUid, contactsByUid, onRemovePlayer, onMovePlayerZone, zoneBuckets = [],
+  onSetGroupBonus, bonusAwarded = false,
 }) => {
   // Which standings row is expanded to show the full stat line (wireframe 1c: Pts is the one
   // primary number; MP/MW/GW/GL are a tap away — same disclosure the Leaderboard uses).
@@ -62,9 +62,6 @@ export const RRGroupCard: React.FC<Props> = ({
   const [labelDraft, setLabelDraft] = useState(groupLabel);
   // Group bonus in flight — the switch is frozen until the batch lands.
   const [awarding, setAwarding] = useState(false);
-
-  // The paid stamp lives on the match docs, so every viewer reads the same state off the live feed.
-  const bonusAwarded = matches.some((m) => m.rr_group_bonus_v2);
 
   // Sync local state when the roster actually changes (e.g. after a save completes) — NOT on
   // every new `players` array reference. `players` is derived from the live matches feed, so an
@@ -122,7 +119,8 @@ export const RRGroupCard: React.FC<Props> = ({
                 an empty row nobody can act on, so it's hidden here (a knockout keeps its empty
                 slot visible, because that's where a replacement gets dropped). */}
             {standings.filter((row) => row.userId && row.name !== PLAYER_LOADING).map((row, i) => {
-              const isAdvancing = i < advancementCount;
+              // One winner per group advances.
+              const isAdvancing = i === 0;
               const expanded = expandedRow === row.userId;
               return (
                 <div key={row.userId} className="border-b border-fg/[0.04] last:border-0">
@@ -144,10 +142,8 @@ export const RRGroupCard: React.FC<Props> = ({
                     )}
                     <span className="text-clay font-black text-sm tabular-nums shrink-0">{row.points} pts</span>
                   </button>
-                  {/* Move this player to another zone. Same organizer action the zone-change
-                      queue offers, but reachable for ANYONE in the draw rather than only players
-                      who filed a request. Refused server-side if they've already played — their
-                      result belongs to this zone's draw. */}
+                  {/* Move this player to another zone: writes their preferred_zone. The server
+                      keeps every match they have with a real opponent. */}
                   {isCreator && editMode && onMovePlayerZone && zoneBuckets.length > 0 && (
                     <SelectField
                       value=""
@@ -224,23 +220,19 @@ export const RRGroupCard: React.FC<Props> = ({
                     ) : !relevant ? <span className="text-fg/70">—</span>
                       : played ? (
                         <span className="inline-flex items-center gap-1.5">
-                          {/* A no show has no winner, so neither player gets a W/L pill — without
-                              this exclusion both of them are shown a red L. */}
-                          {!!mine && !relevant.no_show && (
+                          {!!mine && (
                             <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${wonIt ? 'bg-green-500/15 text-badge-win' : 'bg-red-500/15 text-badge-loss'}`}>
                               {wonIt ? 'W' : 'L'}
                             </span>
                           )}
                           <span className="text-xs font-bold text-fg">
-                            {relevant.no_show ? 'No show' : formatSetScores(relevant) || 'Recorded'}
+                            {formatSetScores(relevant.result ?? {}) || (isWalkover(relevant.result) ? 'Walkover' : 'Recorded')}
                           </span>
                         </span>
                       ) : isCreator ? (
                         <button type="button" onClick={() => onSubmitScore?.(relevant)} className={pillButtonCls('sm', 'clay')}>Score</button>
                       ) : submittableMatchIds?.has(relevant.id) ? (
                         <button type="button" onClick={() => onSubmitScore?.(relevant)} className={pillButtonCls('sm', 'clay')}>Score</button>
-                      ) : onAskSchedule ? (
-                        <button type="button" onClick={() => onAskSchedule(relevant)} className={pillButtonCls('sm', 'clay')}>Schedule</button>
                       ) : <span className="text-fg/70">—</span>;
 
                     return (
@@ -277,7 +269,7 @@ export const RRGroupCard: React.FC<Props> = ({
       </div>
 
       {/* Every pairing in the group — CREATOR ONLY. A participant's own match is fully handled in
-          their player row above (contact, result, score/schedule), so the list would just repeat
+          their player row above (contact, result, score), so the list would just repeat
           it; an organizer still needs one place to see and score every pairing at once. */}
       {isCreator && !editMode && matches.length > 0 && (
         <div className="border-t border-fg/10">
@@ -299,7 +291,7 @@ export const RRGroupCard: React.FC<Props> = ({
             <div>
               {matches.slice().sort((a, b) => a.position - b.position).map((m) => {
                 const isDone = m.status === 'complete';
-                const scoreStr = formatSetScores(m);
+                const scoreStr = formatSetScores(m.result ?? {});
                 return (
                   <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 border-t border-fg/[0.04]">
                     <div className="min-w-0 flex-1">
@@ -313,9 +305,7 @@ export const RRGroupCard: React.FC<Props> = ({
                         </span>
                       </p>
                       {isDone && scoreStr && <p className="text-xs text-fg/70 mt-0.5">{scoreStr}</p>}
-                      {m.no_show
-                        ? <p className="text-[10px] text-badge/70 mt-0.5">No show · 1 pt each</p>
-                        : m.walkover && <p className="text-[10px] text-badge/70 mt-0.5">Walkover</p>}
+                      {isWalkover(m.result) && <p className="text-[10px] text-badge/70 mt-0.5">Walkover</p>}
                     </div>
                     <div className="shrink-0 flex items-center gap-2">
                       {isDone && (

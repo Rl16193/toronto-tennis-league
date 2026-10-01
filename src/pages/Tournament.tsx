@@ -7,16 +7,15 @@ import { Lock, Menu } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { Sheet } from '../components/Sheet';
 import { useTournament } from './tournament/useTournament';
-import { getEventDate, isPreviewMatch, zoneBucketFor } from './tournament/utils';
-import { parseValidDate } from '../utils/eventDates';
-import type { FirestoreDateLike } from '../utils/eventDates';
+import { choiceOfMatch, getEventDate, isPreviewMatch, zoneBucketFor } from './tournament/utils';
+import { toDate } from '../utils/eventDates';
 import { buildDrawSlides, downloadSlide, loadBrandMark } from './tournament/bracketImage';
 import { BracketView } from './tournament/BracketView';
 import { BracketAccordion } from './tournament/BracketAccordion';
 import {
   BracketErrorBoundary, ChangeZoneModal, DrawSlideshow, DrawTabs, RRConfigModal,
   ChangeZoneButton, PartnerPoolPanel, TournamentHeader, UnplacedPlayersPanel,
-  ZoneChangeRequestsPanel, ZoneDrawConfigPanel,
+  ZoneDrawConfigPanel,
 } from './tournament/TournamentElements';
 import { OpponentCard } from './tournament/OpponentPanels';
 import { ScoreModal } from '../features/matches/ScoreModal';
@@ -28,22 +27,13 @@ import { LoadingBar } from '../components/LoadingBar';
 import { TennisEvent } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useContacts } from '../features/contacts/useContacts';
-import { joinPool, leavePool, poolCategoryForDivision, usePool, usePoolContacts } from '../features/events/services/partnerPool';
-import { useActiveLadder } from '../features/leagues/useChallengeRules';
-import { leagueDivision } from '../utils/skillLevels';
-import { proposeConversion, LadderDivision } from '../features/leagues/ladderService';
 
 type EventStatus = 'active' | 'completed';
 
 
 const formatEventRange = (e: TennisEvent): string => {
   const start = getEventDate(e);
-  // Parsed with the same helper as the start date above (getEventDate → parseDateValue, which is
-  // local-time). Hand-rolling `new Date(str)` here read a date-only end as UTC midnight while the
-  // start stayed local, so a single-day event rendered as "Aug 10–9".
-  const rawEnd = ((e as unknown as Record<string, unknown>).endDate
-    || (e as unknown as Record<string, unknown>).end_date) as FirestoreDateLike;
-  const end: Date | null = parseValidDate(rawEnd);
+  const end: Date | null = toDate(e.end_date);
   if (!start) return '';
   const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
   const s = start.toLocaleDateString('en-CA', opts);
@@ -69,8 +59,6 @@ export const Tournament: React.FC = () => {
   // so the organizer's Manage Draw sheet no longer carries a download of its own.
   const [showSlideshow, setShowSlideshow] = useState(false);
   const [brandMark, setBrandMark] = useState('');
-  const [alsoConvertToChallenge, setAlsoConvertToChallenge] = useState(false);
-  const ladder = useActiveLadder();
   const { profile } = useAuth();
 
   const {
@@ -95,16 +83,15 @@ export const Tournament: React.FC = () => {
     submittableMatchIds,
     currentDrawFormat, drawFormat,
     showRRConfig, setShowRRConfig, generatingRR,
-    rrGroups, previewRRGroups, previewRRLabels, rrStandingsByGroup, rrGroupMatches, rrKnockoutMatches, rrConfig,
-    rrGroupLabels, rrGroupIndices,
+    rrGroups, previewRRGroups, previewRRLabels, rrStandingsByGroup, rrGroupMatches, rrKnockoutMatches,
+    rrGroupLabels, rrGroupBonus,
     rrUnplacedPlayers,
     rrView, setRRView,
     handleGenerateRR, handleResetRR, handleGenerateRRKnockout, handleSaveGroupEdit,
     handleCreateRRGroup, handleRenameGroup, handleSetGroupBonus, handleResetMatchScore,
     visibleUserMatch,
     unplacedParticipants, openDrawSlots, handleSeatParticipant,
-    handleAskOpponentSchedule,
-    zoneChangeRequests, handleChangeZone, handleClearZoneChangeRequest, handleMovePlayerZone, handleMoveZoneByUid,
+    handleChangeZone, handleMoveZoneByUid,
     handleMergeZone, handleUnmergeZone, handleSetZoneDrawsEnabled, zoneConfig,
     handleAddTeammate, savingTeammate,
   } = useTournament(eventId);
@@ -112,11 +99,9 @@ export const Tournament: React.FC = () => {
   // Viewer's own preferred courts — for the "Nearby" pill shown against an opponent who shares one.
   const myCourts = useMemo(() => new Set(profile?.preferences.preferred_courts ?? []), [profile]);
 
-  // Scheduling API passed to the current-match panels (Request Scheduling Assistance; scores via
-  // the existing submit flow). Undefined when logged out.
+  // Score API passed to the current-match panel (the existing submit flow). Undefined when logged out.
   const scheduleApi = user
     ? {
-        onAskOpponent: handleAskOpponentSchedule,
         onSubmitScore: handleOpenScoreForm,
         submittableMatchIds,
       }
@@ -134,7 +119,7 @@ export const Tournament: React.FC = () => {
     if (!user) { setMyEventIds(new Set()); return; }
     getDocs(query(collection(db, 'event_participants'), where('uid', '==', user.uid)))
       .then((snap) => setMyEventIds(new Set(snap.docs
-        .filter((d) => d.data().removal !== true) // a removed registration isn't a tournament you're in
+        .filter((d) => d.data().status === 'active') // a withdrawn registration isn't a tournament you're in
         .map((d) => (d.data().event_id as string)).filter(Boolean))))
       .catch(() => {});
   }, [user?.uid]);
@@ -161,7 +146,7 @@ export const Tournament: React.FC = () => {
   // Tournaments the user joined or created. League Ladder events live on their own page
   // (/matches, Challenges tab) now — this page shows only bracket/RR tournaments.
   const myEvents = useMemo(
-    () => allTournamentEvents.filter((e) => !!user && (e.creator_id === user.uid || myEventIds.has(e.id))),
+    () => allTournamentEvents.filter((e) => !!user && (e.organizer_ids?.includes(user.uid) || myEventIds.has(e.id))),
     [allTournamentEvents, user, myEventIds],
   );
   // Completed tournaments are reached from History via ?event= deep links — no Past mode here.
@@ -201,8 +186,7 @@ export const Tournament: React.FC = () => {
   // so it honours zones being on by default and follows any merge to the target zone.
   const userZoneLabel = useMemo(() => {
     if (!zoneConfig.enabled || !userParticipant) return '';
-    // An organizer's move wins over the zone derived from preferred courts.
-    const bucketId = userParticipant.zone_override ?? zoneBucketFor(zoneMap[userParticipant.uid], zoneConfig);
+    const bucketId = zoneBucketFor(zoneMap[userParticipant.uid], zoneConfig);
     return zoneConfig.buckets.find((b) => b.id === bucketId)?.label ?? 'Unassigned';
   }, [zoneConfig, userParticipant, zoneMap]);
 
@@ -256,31 +240,17 @@ export const Tournament: React.FC = () => {
   const hasGeneratedMatches = displayMatches.some((m) => !isPreviewMatch(m));
 
   // Hooks: must stay above the loading early return below.
-  // Doubles partner pool. A player sees their own division's pool; an organizer sees every pool.
-  const needsPartner = userParticipant?.tournament_choice === 'Doubles' && !userParticipant.doubles?.trim();
-  const poolCategory = poolCategoryForDivision(userParticipant?.division);
-  const poolMembers = usePool(event?.id, isCreator ? undefined : poolCategory);
-  const inPool = !!user && poolMembers.some((m) => m.uid === user.uid);
-  const poolContacts = usePoolContacts(event?.id, inPool);
-  const [poolBusy, setPoolBusy] = useState(false);
-  const togglePool = async (join: boolean) => {
-    if (!event || !user) return;
-    setPoolBusy(true);
-    try {
-      if (join) {
-        await joinPool(event.id, {
-          uid: user.uid, name: profile?.user.name || userParticipant?.user_name || 'Player',
-          category: poolCategory, skill: Number(profile?.stats.skill_level || 0),
-        });
-      } else {
-        await leavePool(event.id, user.uid);
-      }
-    } catch (err) {
-      console.error('Partner pool update failed:', err);
-    } finally {
-      setPoolBusy(false);
-    }
-  };
+  // Doubles partner pool: active doubles registrations with no partner. A player sees their own
+  // division's pool; an organizer sees every pool. A doubles entry with no partner IS in the pool,
+  // so there is nothing to join or leave. Contacts are per-uid reads (the server connects pool
+  // members), each allowed or denied on its own.
+  const needsPartner = userParticipant?.category === 'doubles_tournament' && !userParticipant.partner_uid;
+  const poolMembers = useMemo(() => participants
+    .filter((p) => p.category === 'doubles_tournament' && p.status === 'active' && !p.partner_uid && p.uid
+      && (isCreator || p.division === userParticipant?.division))
+    .map((p) => ({ uid: p.uid, name: p.user_name || 'Player', skill: Number(p.skill || 0) })),
+  [participants, isCreator, userParticipant?.division]);
+  const poolContacts = useContacts(needsPartner || isCreator ? poolMembers.map((m) => m.uid) : []);
 
   const initialLoading = authLoading || (loading && allTournamentEvents.length === 0);
   const eventSwitching = !initialLoading && allTournamentEvents.length > 0 && !eventDataReady;
@@ -316,7 +286,7 @@ export const Tournament: React.FC = () => {
   // Pro or Doubles draw in a season opener. Live events keep every draw so setup stays visible.
   const drawHasCompleted = (d: { tournamentChoice: string; division: string; skillGroup: string }) =>
     matches.some((m) =>
-      m.tournament_choice === d.tournamentChoice && m.division === d.division &&
+      choiceOfMatch(m) === d.tournamentChoice && m.division === d.division &&
       m.skill_group === d.skillGroup && m.status === 'complete');
   const playedDraws = pastMode ? visibleDraws.filter(drawHasCompleted) : visibleDraws;
   const shownDraws = playedDraws.length > 0 ? playedDraws : visibleDraws;
@@ -371,11 +341,10 @@ export const Tournament: React.FC = () => {
     <RoundRobinView
       groups={rrGroups.length > 0 ? rrGroups : previewRRGroups}
       groupLabels={rrGroups.length > 0 ? rrGroupLabels : previewRRLabels}
-      groupIndices={rrGroupIndices}
+      groupBonus={rrGroups.length > 0 ? rrGroupBonus : undefined}
       standingsByGroup={rrGroups.length > 0 ? rrStandingsByGroup : previewRRGroups.map(() => [])}
       groupMatches={rrGroupMatches}
       knockoutMatches={rrKnockoutMatches}
-      advancementCount={rrConfig?.advancementCount ?? 1}
       isCreator={readOnly ? false : canEdit}
       currentUserId={user?.uid}
       editMode={readOnly ? false : effEditMode}
@@ -390,7 +359,6 @@ export const Tournament: React.FC = () => {
       onSetGroupBonus={handleSetGroupBonus}
       onRemovePlayer={handleRemovePlayer}
       onMovePlayerZone={handleMoveZoneByUid}
-      onAskSchedule={handleAskOpponentSchedule}
       zoneBuckets={zoneConfig.buckets}
       onCreateGroup={handleCreateRRGroup}
       unplacedPlayers={rrUnplacedPlayers}
@@ -421,22 +389,8 @@ export const Tournament: React.FC = () => {
           onSeat={handleSeatParticipant}
         />
       )}
-      {!pastMode && isCreator && (
-        <ZoneChangeRequestsPanel
-          requests={zoneChangeRequests}
-          buckets={zoneConfig.buckets}
-          onMoveZone={handleMovePlayerZone}
-          // The request stores a zone NAME (what the player picked); the move takes a bucket id.
-          onApprove={(id, zoneName) => {
-            const bucket = zoneConfig.buckets.find((b) => b.label === zoneName || b.zones.includes(zoneName));
-            if (bucket) handleMovePlayerZone(id, bucket.id);
-          }}
-          onClear={handleClearZoneChangeRequest}
-        />
-      )}
 
-      {/* Zone is worth stating outright: it decides which draw you're in, and changing your
-          preferred courts deliberately does NOT move you — the request button is the only way.
+      {/* Zone is worth stating outright: it decides which draw you're in.
           Gated on the RESOLVED config, not `event.zone_draw_config`. No event has ever stored that
           field, while `resolveZoneConfig` defaults `enabled` to true — so reading the raw field
           made this whole row (and the only way a player can ask to move) permanently invisible. */}
@@ -445,10 +399,7 @@ export const Tournament: React.FC = () => {
           <span className="text-xs text-fg/70">
             Your zone: <span className="font-bold text-fg">{userZoneLabel}</span>
           </span>
-          <ChangeZoneButton
-            changed={!!userParticipant.req_zone_change}
-            onChange={() => setShowChangeZone(true)}
-          />
+          <ChangeZoneButton onChange={() => setShowChangeZone(true)} />
         </div>
       )}
 
@@ -457,36 +408,26 @@ export const Tournament: React.FC = () => {
           <ChangeZoneModal
             currentZone={userZoneLabel}
             onClose={() => setShowChangeZone(false)}
-            onSubmit={(zone) => handleChangeZone(userParticipant.id, zone)}
+            onSubmit={(zone) => handleChangeZone(zone)}
           />
         )}
       </AnimatePresence>
 
       {/* A doubles registration with no partner recorded can't be placed in a draw — let the
           player finish the pairing themselves rather than re-register. */}
-      {!pastMode && userParticipant
-        && userParticipant.tournament_choice === 'Doubles'
-        && !userParticipant.doubles?.trim() && (
+      {!pastMode && userParticipant && needsPartner && (
         <AddTeammatePanel
           currentUserId={userParticipant.uid}
           saving={savingTeammate}
-          onSave={async (name, inApp, skill) => {
-            await handleAddTeammate(userParticipant.id, name, inApp, skill);
-            if (inPool && event && user) await leavePool(event.id, user.uid).catch(() => {});
-          }}
+          onSave={(name, partnerUid, skill) => handleAddTeammate(userParticipant.id, name, partnerUid, skill)}
         />
       )}
 
-      {!pastMode && user && (needsPartner || inPool || (isCreator && poolMembers.length > 0)) && (
+      {!pastMode && user && (needsPartner || (isCreator && poolMembers.length > 0)) && (
         <PartnerPoolPanel
           members={poolMembers}
           contacts={poolContacts}
           viewerUid={user.uid}
-          inPool={inPool}
-          canJoin={needsPartner}
-          busy={poolBusy}
-          onJoin={() => { void togglePool(true); }}
-          onLeave={() => { void togglePool(false); }}
         />
       )}
 
@@ -602,49 +543,6 @@ export const Tournament: React.FC = () => {
 
       <AnimatePresence>
         {scoreForm && scoreFormMatch && (() => {
-          // A converted match still needs the same round-based tournament points it always got —
-          // this only ever ADDS the flat ±3 challenge points on top once the other player and the
-          // organizer both confirm; bracket advancement is completely unaffected either way.
-          const canConvert = !!ladder && !!profile &&
-            scoreFormMatch.tournament_choice === 'Singles' &&
-            !!scoreFormMatch.player_1_uid && !!scoreFormMatch.player_2_uid;
-
-          const handleSubmitWithConversion = async (e: React.FormEvent<HTMLFormElement>) => {
-            // Snapshot before handleSubmitScore clears the form state on success.
-            const match = scoreFormMatch;
-            const form = scoreForm;
-            const convert = alsoConvertToChallenge;
-            await handleSubmitScore(e);
-            if (!convert || !canConvert || !match || !form?.winnerUserId || !ladder || !user) return;
-            const isP1Winner = form.winnerUserId === match.player_1_uid;
-            const winner = isP1Winner
-              ? { id: match.player_1_uid, name: match.player_1_name }
-              : { id: match.player_2_uid, name: match.player_2_name };
-            const other = isP1Winner
-              ? { id: match.player_2_uid, name: match.player_2_name }
-              : { id: match.player_1_uid, name: match.player_1_name };
-            const proposer = user.uid === winner.id ? winner : other;
-            // The creator enters a tournament score as player_1 vs player_2 of the MATCH, but the
-            // challenge doc makes the PROPOSER its player_1. Reorder so the converted challenge's
-            // sets are absolute for its own slots rather than inheriting the match's ordering.
-            const proposerIsMatchP1 = proposer.id === match.player_1_uid;
-            const sets = form.sets
-              .map((s) => ({ mine: Number(s.mine || 0), opponent: Number(s.opponent || 0) }))
-              .filter((s) => s.mine > 0 || s.opponent > 0)
-              .map((s) => (proposerIsMatchP1 ? [s.mine, s.opponent] : [s.opponent, s.mine]) as [number, number]);
-            await proposeConversion({
-              eventId: ladder.id,
-              division: (leagueDivision(match.division) === "Women's" ? 'womens' : 'mens') as LadderDivision,
-              source: 'tournament',
-              sourceId: match.id,
-              proposer: { id: proposer.id, name: proposer.name },
-              other: proposer.id === winner.id ? other : winner,
-              winner,
-              sets,
-            }).catch(() => { /* conversion is best-effort — the tournament score itself already landed */ });
-            setAlsoConvertToChallenge(false);
-          };
-
           return (
             <ScoreModal
               matchInfo={{
@@ -654,14 +552,9 @@ export const Tournament: React.FC = () => {
               }}
               scoreForm={scoreForm}
               onChange={setScoreForm}
-              onClose={() => { setScoreForm(null); setAlsoConvertToChallenge(false); }}
-              onSubmit={handleSubmitWithConversion}
+              onClose={() => setScoreForm(null)}
+              onSubmit={handleSubmitScore}
               isCreatorSubmit={isCreator}
-              extraCheckbox={canConvert ? {
-                label: 'Also count as a Challenge',
-                checked: alsoConvertToChallenge,
-                onChange: setAlsoConvertToChallenge,
-              } : undefined}
               // Only for an organizer, and only once there's a result to undo.
               onReset={isCreator && scoreFormMatch.status === 'complete'
                 ? () => handleResetMatchScore(scoreFormMatch)

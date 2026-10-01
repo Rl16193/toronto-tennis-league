@@ -1,30 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
-import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, type Timestamp } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
-import type { ContactData, TaskProgress } from '../../types';
+import type { ContactData } from '../../types';
 import { useContacts } from '../../features/contacts/useContacts';
 import { cancelRally, respondRally, useRallies } from '../../features/rallies/rallyService';
 import { cancelChallenge, respondChallenge } from '../../features/leagues/ladderService';
 import { useLadder } from '../../features/leagues/useLadder';
 import { useActiveLadder } from '../../features/leagues/useChallengeRules';
 import { useRequestScoring } from '../../features/matches/useRequestScoring';
-import { bookingStage, useMyBookings } from '../../features/services/useServices';
+import { bookingStage, isGroupLesson, useMyBookings } from '../../features/services/useServices';
 import { cancelBooking, confirmBooking } from '../../features/services/servicesApi';
 import { type UserMatch, playerRecord, useUserMatches } from '../../features/matches/useUserMatches';
 import { ROUND_LABEL, deriveResults } from '../../features/matches/tournamentResults';
 import type { JoinedEventCard } from '../../features/profile/hooks/useProfileData';
-import { CATEGORIES, COUNTER_NOUN, type Counters } from '../../features/tasks/taskCatalog';
+import { CATEGORIES, COUNTER_NOUN, type Counters, type TaskProgress } from '../../features/tasks/taskCatalog';
 import { timeAgo } from '../../features/notifications/useNotifications';
 import { SCORE_EDIT_WINDOW_MS, formatPlayerName } from '../tournament/utils';
 import type { TournamentMatch } from '../tournament/types';
-import { getEventEndDate, isCurrentEvent, parseEndInstant } from '../../utils/eventDates';
+import { type FirestoreDateLike, getEventEndDate, isCurrentEvent, parseEndInstant, toMillis } from '../../utils/eventDates';
 import { isLadderEvent, isTournamentEvent } from '../../utils/eventTypes';
 import { leagueDivision, skillBand } from '../../utils/skillLevels';
 
 // Data for the Player Dash on /profile. Profile mounts this whether the dash is switched on or not,
 // because the switch shows a count. Every read here reuses an existing hook; the only new query is
-// useNeedsYou's and useScheduleAsks' live listeners. Presentation lives in PlayerDashElements.tsx.
+// useNeedsYou's live listener. Presentation lives in PlayerDashElements.tsx.
 
 export type DashKind = 'tournament' | 'challenge' | 'rally';
 type RequestCategory = 'rally' | 'challenge';
@@ -36,14 +36,6 @@ export type NeedsYouRow = {
   age: string;
   /** What they're asking for, e.g. "Ladder challenge". */
   line: string;
-};
-
-/** A tournament opponent asked this member to arrange a time. Done clears the request. */
-export type ScheduleAskRow = {
-  id: string;
-  opponent: { uid: string; name: string };
-  line: string;
-  contact?: ContactData;
 };
 
 /**
@@ -132,8 +124,8 @@ const kindOf = (category: string): DashKind =>
 const requestCategoryOf = (kind: DashKind): RequestCategory => (kind === 'rally' ? 'rally' : 'challenge');
 
 /** "2d ago", "just now", or '' when there's no date. */
-const agoText = (iso?: string) => {
-  const age = timeAgo(iso);
+const agoText = (at?: FirestoreDateLike) => {
+  const age = timeAgo(at);
   return age === 'now' ? 'just now' : age ? `${age} ago` : '';
 };
 
@@ -154,7 +146,6 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
   const myName = profile?.user.name || '';
 
   const needs = useNeedsYou(uid);
-  const asks = useScheduleAsks(uid);
   const { bookings } = useMyBookings();
   const { sent, received, contactMap: rallyContacts } = useRallies();
   const ladder = useActiveLadder();
@@ -181,25 +172,17 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
     category: n.category,
     from: { uid: n.fromUid, name: formatPlayerName(n.fromName) },
     age: timeAgo(n.createdAt),
-    line: n.category === 'rally' ? 'Rally request' : n.isConversion ? 'Count a played match' : 'Ladder challenge',
+    line: n.category === 'rally' ? 'Rally request' : 'Ladder challenge',
   })), [needs]);
 
-  // The asker is this member's fixture opponent, so their contacts are already in fixtureContacts.
-  const scheduleAsks: ScheduleAskRow[] = useMemo(() => asks.map((a) => ({
-    id: a.id,
-    opponent: { uid: a.fromUid, name: formatPlayerName(a.fromName) },
-    line: ['Schedule match', eventTitle.get(a.eventId), 'requested to schedule'].filter(Boolean).join(' · '),
-    contact: fixtureContacts[a.fromUid],
-  })), [asks, eventTitle, fixtureContacts]);
-
-  // Every live job, from New onwards. Booking connects the two accounts, so contacts/{provider} is
-  // readable and the row always carries their phone and email.
+  // Every live job, from New onwards. Booking connects the two accounts, so contacts/{provider_id}
+  // is readable and the row always carries their phone and email.
   const liveBookings = useMemo(
     () => bookings.filter((b) => ['new', 'in_progress', 'confirming'].includes(bookingStage(b))),
     [bookings],
   );
   const bookingProviderIds = useMemo(
-    () => [...new Set(liveBookings.flatMap((b) => b.provider_uids ?? []))].sort().join(','),
+    () => [...new Set(liveBookings.map((b) => b.provider_id).filter(Boolean))].sort().join(','),
     [liveBookings],
   );
   const bookingContacts = useContacts(bookingProviderIds ? bookingProviderIds.split(',') : []);
@@ -208,20 +191,21 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
     const ask = bookingStage(b) === 'confirming';
     const fresh = bookingStage(b) === 'new';
     const when = agoText(ask ? b.completion_requested_at : fresh ? b.created_at : b.started_at);
-    const provider = b.provider_name || 'the provider';
+    const provider = b.providerName;
+    const group = isGroupLesson(b);
     return {
       id: b.id,
-      title: fresh ? (b.group_lesson ? `Waiting for ${provider} to add you to a group` : `Waiting for ${provider} to confirm`)
+      title: fresh ? (group ? `Waiting for ${provider} to add you to a group` : `Waiting for ${provider} to confirm`)
         : ask
         ? b.category === 'coaching' ? 'Did your lesson happen?' : 'Your racquet is ready for pickup. Did you collect it?'
-        : b.group_lesson ? `You're in ${provider}'s group lesson`
+        : group ? `You're in ${provider}'s group lesson`
         : b.category === 'coaching' ? 'Lesson confirmed' : 'Your racquet is with the provider',
-      line: [b.provider_name, b.offer, when && `${ask ? 'ready' : fresh ? 'booked' : 'since'} ${when}`].filter(Boolean).join(' · '),
+      line: [b.providerName, b.offer, when && `${ask ? 'ready' : fresh ? 'booked' : 'since'} ${when}`].filter(Boolean).join(' · '),
       ask,
       // A group lesson member may leave until the coach marks it done (functions/lib/bookingState.js).
-      cancellable: fresh || (!!b.group_lesson && !ask),
-      provider: b.provider_name || 'Provider',
-      contact: (b.provider_uids ?? []).map((u) => bookingContacts[u]).find(Boolean),
+      cancellable: fresh || (group && !ask),
+      provider: b.providerName,
+      contact: bookingContacts[b.provider_id],
     };
   }), [liveBookings, bookingContacts]);
 
@@ -243,8 +227,8 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
     const rows: ToPlayRow[] = [];
     const seen = new Set<string>();
 
-    // Tournament fixtures with no submission waiting on the organizer — once either player files a
-    // score, the match leaves this list. Knockout rounds sort ahead of group matches.
+    // Unplayed tournament fixtures — once either player records a score, the match is complete and
+    // leaves this list. Knockout rounds sort ahead of group matches.
     upcoming
       .filter((u) => u.source === 'tournament')
       .sort((a, b) => Number(a.round === 'RR') - Number(b.round === 'RR'))
@@ -322,10 +306,10 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
     const pastRow = (m: UserMatch): PastMatchRow => {
       const kind = kindOf(m.category);
       // One rule for every kind; the server decides whether the correction replaces the score.
-      const editable = !m.walkover && !m.tournamentMatch?.no_show && !!m.winnerUid &&
+      const editable = !m.walkover && !!m.winnerUid &&
         m.completedAt > 0 && now - m.completedAt <= SCORE_EDIT_WINDOW_MS;
       const context = kind === 'tournament'
-        ? [eventTitle.get(m.eventId) || 'Tournament', stageOf(m.round, m.tournamentMatch?.rr_group_label)].filter(Boolean).join(' · ')
+        ? [eventTitle.get(m.eventId) || 'Tournament', stageOf(m.round, m.tournamentMatch?.group_label)].filter(Boolean).join(' · ')
         : kind === 'challenge' ? 'Ladder challenge' : 'Rally';
       return {
         id: m.id, kind, won: m.won, scoreLine: m.walkover ? 'W/O' : m.scoreLine,
@@ -367,7 +351,6 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
       const d = new Date(m.completedAt);
       return `${d.getFullYear()}-${d.getMonth()}`;
     })).size;
-    const trend = profile?.stats.rankTrend;
     return {
       streak,
       wins,
@@ -376,7 +359,7 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
       pgWon,
       rsPoints,
       rankPosition: profile?.stats.rankPosition,
-      rankTrend: (trend === 'same' ? 'flat' : trend) as 'up' | 'down' | 'flat' | undefined,
+      rankTrend: profile?.stats.rankTrend,
       rankMove: profile?.stats.rankMove ?? 0,
       bestStreak,
       activeMonths,
@@ -384,7 +367,7 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
   }, [matches, profile, rsPoints]);
 
   const taskGroups: TaskGroupRow[] = useMemo(() => {
-    const rec = (progress ?? {}) as unknown as Record<string, unknown>;
+    const rec = progress ?? {};
     return CATEGORIES
       .filter((c) => !c.locked)
       .map((c): TaskGroupRow | null => {
@@ -417,9 +400,9 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
       ...matches.map((m) => m.tournamentMatch),
       ...upcoming.map((u) => u.tournamentMatch),
     ].filter((m): m is TournamentMatch => !!m);
-    // One registration row per division or partner, so an event can appear twice; a removed
-    // registration (the organizer's soft delete) doesn't count.
-    const unique = [...new Map(joinedEvents.filter((e) => !e.removal).map((e) => [e.id, e])).values()];
+    // One registration row per division or partner, so an event can appear twice. Only active
+    // registrations reach here (useProfileData).
+    const unique = [...new Map(joinedEvents.map((e) => [e.id, e])).values()];
     return unique
       .map((e) => {
         const live = isCurrentEvent(e);
@@ -475,10 +458,9 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
 
   return {
     identity,
-    count: needsYou.length + scheduleAsks.length + bookingAsks.length + toPlay.length,
-    needsYouCount: needsYou.length + scheduleAsks.length + bookingAsks.length,
+    count: needsYou.length + bookingAsks.length + toPlay.length,
+    needsYouCount: needsYou.length + bookingAsks.length,
     needsYou,
-    scheduleAsks,
     bookingAsks,
     outgoing,
     toPlay,
@@ -491,12 +473,6 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
     busyId,
     rowError,
     scoring,
-    // Players may write `schedule_requested` (firestore.rules match carve-out).
-    doneScheduling: (id: string) => run(
-      id,
-      () => updateDoc(doc(db, 'matches', id), { schedule_requested: false }),
-      'Could not clear that. Try again.',
-    ),
     // Yes completes the job; Not yet sends it back to the provider (functions/bookings.js).
     cancelBooking: (id: string) => run(
       id,
@@ -537,7 +513,7 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
   };
 }
 
-// ─── Needs you: open requests and schedule asks ────────────────────────────────────────────────
+// ─── Needs you: open requests ─────────────────────────────────────────────────────────────────
 
 /** A rally or challenge request waiting on the signed-in member's answer. */
 export type NeedsYouItem = {
@@ -545,17 +521,10 @@ export type NeedsYouItem = {
   category: 'rally' | 'challenge';
   fromUid: string;
   fromName: string;
-  createdAt: string;
-  /** Challenges only: the ladder division, 'mens' | 'womens'. */
+  createdAt: Timestamp | null;
+  /** Challenges only: the ladder division. */
   division?: string;
-  /** A match already played, proposed as a challenge. It arrives with its result on it. */
-  isConversion: boolean;
-  winnerUid?: string;
-  /** Absolute [player_1, player_2] games of the played sets, for a conversion's proposed score. */
-  sets: [number, number][];
 };
-
-const num = (v: unknown) => (typeof v === 'number' ? v : 0);
 
 /**
  * Requests the member has to answer: open rallies and challenges where they are player_2.
@@ -578,64 +547,14 @@ export function useNeedsYou(uid?: string): NeedsYouItem[] {
             category: raw.category,
             fromUid: raw.player_1_uid || '',
             fromName: raw.player_1_name || 'A player',
-            createdAt: raw.created_at || '',
+            createdAt: raw.created_at ?? null,
             division: raw.division,
-            isConversion: !!raw.source && !!raw.winner_uid,
-            winnerUid: raw.winner_uid,
-            sets: ([
-              [num(raw.set_1_player_1), num(raw.set_1_player_2)],
-              [num(raw.set_2_player_1), num(raw.set_2_player_2)],
-              [num(raw.set_3_player_1), num(raw.set_3_player_2)],
-            ] as [number, number][]).filter(([a, b]) => a > 0 || b > 0),
           }))
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+          .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt)),
       ),
       () => setItems([]),
     );
   }, [uid]);
 
   return items;
-}
-
-/** A tournament match whose opponent asked the signed-in member to arrange a time. */
-export type ScheduleAskItem = {
-  id: string;
-  eventId: string;
-  fromUid: string;
-  fromName: string;
-};
-
-/**
- * Tournament matches flagged `schedule_requested` by the member's opponent. One listener per side
- * (player_1 / player_2) since Firestore can't OR two fields; each keeps its own half of the list.
- */
-export function useScheduleAsks(uid?: string): ScheduleAskItem[] {
-  const [sides, setSides] = useState<Record<'player_1' | 'player_2', ScheduleAskItem[]>>({ player_1: [], player_2: [] });
-
-  useEffect(() => {
-    if (!uid) { setSides({ player_1: [], player_2: [] }); return; }
-    const listen = (me: 'player_1' | 'player_2') => {
-      const them = me === 'player_1' ? 'player_2' : 'player_1';
-      return onSnapshot(
-        query(collection(db, 'matches'), where(`${me}_uid`, '==', uid), where('schedule_requested', '==', true)),
-        (snap) => setSides((prev) => ({
-          ...prev,
-          [me]: snap.docs
-            .map((d) => ({ id: d.id, raw: d.data() }))
-            .filter(({ raw }) => raw.status !== 'complete' && raw.schedule_requested_by && raw.schedule_requested_by !== uid)
-            .map(({ id, raw }): ScheduleAskItem => ({
-              id,
-              eventId: raw.event_id || '',
-              fromUid: raw[`${them}_uid`] || '',
-              fromName: raw[`${them}_name`] || 'Your opponent',
-            })),
-        })),
-        () => setSides((prev) => ({ ...prev, [me]: [] })),
-      );
-    };
-    const offs = [listen('player_1'), listen('player_2')];
-    return () => offs.forEach((off) => off());
-  }, [uid]);
-
-  return [...sides.player_1, ...sides.player_2];
 }

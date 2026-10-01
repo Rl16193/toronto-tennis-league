@@ -3,7 +3,7 @@ import { collection, documentId, getDocs, query, where } from 'firebase/firestor
 import { db } from '../../lib/firebase';
 import type { EventParticipant, TennisEvent } from '../../types';
 import { skillBand } from '../../utils/skillLevels';
-import { effectiveZone, resolveZoneConfig, zoneBucketFor } from './utils';
+import { choiceOf, choiceOfMatch, effectiveZone, resolveZoneConfig, zoneBucketFor } from './utils';
 import type { TournamentMatch, UnplacedEntry } from './types';
 
 /**
@@ -52,12 +52,12 @@ export function useUnplacedParticipants({ events, enabled, refreshKey }: {
         const drawsByEvent = new Map<string, Map<string, Draw>>();
         mSnaps.forEach((s) => s.forEach((d) => {
           const m = d.data() as TournamentMatch;
-          if (m.category !== 'singles' && m.category !== 'doubles') return;
+          if (m.category !== 'tournament') return;
           const draws = drawsByEvent.get(m.event_id) ?? new Map<string, Draw>();
           const zone = effectiveZone(m.zone);
-          const key = `${m.tournament_choice}|${m.division}|${m.skill_group}|${zone}`;
+          const key = `${choiceOfMatch(m)}|${m.division}|${m.skill_group}|${zone}`;
           const draw = draws.get(key) ?? {
-            tc: m.tournament_choice, division: m.division, band: m.skill_group as string,
+            tc: choiceOfMatch(m), division: m.division, band: m.skill_group as string,
             zone, done: false, seats: new Set<string>(),
           };
           [m.player_1_uid, m.player_2_uid].forEach((id) => id && draw.seats.add(id));
@@ -71,7 +71,7 @@ export function useUnplacedParticipants({ events, enabled, refreshKey }: {
         pSnaps.forEach((s) => s.forEach((d) => {
           const p = { id: d.id, ...d.data() } as EventParticipant;
           const key = `${p.event_id}|${p.uid}`;
-          if (!p.uid || p.removal || seen.has(key)) return;
+          if (!p.uid || p.status !== 'active' || !/_tournament$/.test(p.category) || seen.has(key)) return;
           seen.add(key);
           candidates.push(p);
         }));
@@ -82,14 +82,12 @@ export function useUnplacedParticipants({ events, enabled, refreshKey }: {
         // "Unassigned" — effectiveZone's Downtown default exists for PLACEMENT only, and showing
         // it would report a choice the player never made.
         const uids = [...new Set(candidates.map((r) => r.uid))];
-        const prefs = new Map<string, { courts: string[]; zone: string; manual: boolean }>();
+        const prefs = new Map<string, { zone: string }>();
         const prefSnaps = uids.length === 0 ? [] : await Promise.all(
           chunk(uids, 30).map((c) => getDocs(query(collection(db, 'preferences'), where(documentId(), 'in', c)))),
         );
         prefSnaps.forEach((s) => s.forEach((d) => prefs.set(d.id, {
-          courts: (d.data().preferred_courts ?? []) as string[],
           zone: (d.data().preferred_zone ?? '') as string,
-          manual: d.data().preferred_zone_manual === true,
         })));
         const configById = new Map(myEvents.map((e) => [e.id, resolveZoneConfig(e.zone_draw_config)]));
 
@@ -97,8 +95,9 @@ export function useUnplacedParticipants({ events, enabled, refreshKey }: {
         // in the two cases below, and folding it in here listed players the creator had moved
         // across skill groups (a 3.5 seated in the Masters draw looked "missing" from Challengers).
         const covering = (dr: Draw, p: EventParticipant) => {
-          const band = p.skill_group === 'Retired Pro' ? 'Retired Pro' : skillBand(Number(p.skill || 0));
-          return dr.tc === p.tournament_choice
+          // Retired Pro is a division, so its draw (skill 'All') is matched by division alone.
+          const band = skillBand(Number(p.skill || 0));
+          return dr.tc === choiceOf(p)
             && (dr.division === p.division || dr.division === 'All')
             && (dr.band === band || dr.band === 'All');
         };
@@ -114,7 +113,7 @@ export function useUnplacedParticipants({ events, enabled, refreshKey }: {
           // could put them, whatever its zone.
           if (seats.length === 0) return true;
           // Zone isn't a doubles draw dimension, so a placed doubles player never resurfaces.
-          if (p.tournament_choice === 'Doubles') return false;
+          if (choiceOf(p) === 'Doubles') return false;
           // Already placed. The ONE thing that brings them back is a zone change: every seat they
           // hold is in another zone AND the zone they moved to already has a draw they belong to.
           // They keep every match that has a real opponent (functions/zoneMoves.js gives up the
@@ -132,9 +131,9 @@ export function useUnplacedParticipants({ events, enabled, refreshKey }: {
             eventId: p.event_id,
             eventTitle: titleById.get(p.event_id) ?? '',
             division: p.division,
-            tournamentChoice: p.tournament_choice,
+            tournamentChoice: choiceOf(p),
             skill: p.skill,
-            zone: pref && (pref.manual || pref.courts.length > 0) ? pref.zone : '',
+            zone: pref?.zone ?? '',
           };
         }));
       } catch (err) {

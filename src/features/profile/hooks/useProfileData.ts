@@ -5,12 +5,9 @@ import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent, EventParticipant } from '../../../types';
 import { resolveStorageUrl } from '../../events/services/eventService';
 
+/** An event the member is actively registered in (withdrawn and cancelled rows are left out). */
 export type JoinedEventCard = TennisEvent & {
   participantId: string;
-  dateselected?: string[];
-  /** The organizer removed this registration (a soft delete). The row stays for the record. */
-  removal?: boolean;
-  tournamentChoice?: 'Singles' | 'Doubles';
 };
 
 const FIRESTORE_IN_QUERY_LIMIT = 10;
@@ -47,7 +44,9 @@ export const useProfileData = () => {
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const mine = ++generation;
       const isStale = () => cancelled || mine !== generation;
-      const participantData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as EventParticipant));
+      const participantData = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as EventParticipant))
+        .filter((p) => p.status === 'active');
 
       if (participantData.length === 0) {
         if (isStale()) return;
@@ -83,9 +82,6 @@ export const useProfileData = () => {
               ...event,
               image,
               participantId: participant.id,
-              dateselected: participant.dateselected || [],
-              removal: participant.removal === true,
-              tournamentChoice: participant.tournament_choice,
             } as JoinedEventCard;
           })
         );

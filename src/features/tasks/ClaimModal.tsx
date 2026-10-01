@@ -26,7 +26,6 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
   const [eventId, setEventId] = useState('');
   const [meetupTitle, setMeetupTitle] = useState('');
   const [meetupDate, setMeetupDate] = useState('');
-  const [note, setNote] = useState('');
 
   const [selected, setSelected] = useState<{ id: string; name: string } | null>(null);
 
@@ -54,10 +53,10 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
     try {
       if (type === 'volunteer') {
         const ev = events.find((e) => e.id === eventId);
-        await createVolunteerClaim(user.uid, name, eventId, ev?.title || '', note);
+        await createVolunteerClaim(user.uid, name, ev?.title || '');
         setSuccess(true);
       } else if (type === 'host') {
-        await createHostClaim(user.uid, name, meetupTitle.trim(), meetupDate, note);
+        await createHostClaim(user.uid, name, meetupTitle.trim(), meetupDate);
         setSuccess(true);
       } else if (selected) {
         const errorMsg = await createAmbassadorClaim(user.uid, name, selected.id, selected.name);
@@ -119,19 +118,7 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
               />
             )}
 
-            {/* Ambassador claims have no note: createAmbassadorClaim takes no `note` argument and
-                never writes the field, so the box was collecting text that went nowhere. */}
-            {type !== 'ambassador' && (
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-fg/70 uppercase tracking-widest">Note</label>
-                <textarea
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  rows={2}
-                  className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 text-fg placeholder-fg/70 text-sm outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
-                />
-              </div>
-            )}
+            {/* No note box: a claim carries no note field (task_claims shape). */}
 
             <div className="flex gap-3 pt-1">
               <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>

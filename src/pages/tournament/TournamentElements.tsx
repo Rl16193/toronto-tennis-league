@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Check, ChevronDown, ChevronUp, Download, Image as ImageIcon, Pencil, Play, Settings2, UserPlus, Users, X, XCircle } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronUp, Download, Image as ImageIcon, Pencil, Play, Settings2, UserPlus, Users, X, XCircle } from 'lucide-react';
 import { EventCarousel } from '../../features/events/EventCarousel';
 import { DrawSlide, downloadSlide } from './bracketImage';
 import { Button } from '../../components/Button';
@@ -10,15 +10,13 @@ import { Tree, TreeGroup, TreeRow } from '../../components/Tree';
 import { EventParticipant, UserStats } from '../../types';
 import { ZONE_NAMES, ZoneName } from '../../utils/zones';
 import { ContactOpponentButton, pillButtonCls } from '../../components/ContactOpponentButton';
-import type { PoolMember } from '../../features/events/services/partnerPool';
 import type { ContactData } from '../../types';
-import type { DisputeRow } from '../../features/matches/scoring';
 import {
-  DOUBLES_DIVISIONS, DrawConfig, DrawTab, OpenDrawSlot, RRConfig, SkillGroup,
+  DOUBLES_DIVISIONS, DrawConfig, DrawTab, OpenDrawSlot, SkillGroup,
   SkillMergePair, TournamentFormat, TournamentMatch, UnplacedEntry, ZoneDrawConfig,
 } from './types';
 import {
-  PLAYER_LOADING, PLAYER_LOADING_SENTINEL, formatPlayerName, formatScheduledDate, getScheduleState, zoneBucketFor,
+  PLAYER_LOADING, PLAYER_LOADING_SENTINEL, formatPlayerName, zoneBucketFor,
 } from './utils';
 import { skillBand } from '../../utils/skillLevels';
 import { MemberSearchInput, type MemberPick } from '../../features/members/MemberSearchInput';
@@ -58,16 +56,12 @@ export class BracketErrorBoundary extends React.Component<BoundaryProps, Boundar
 
 // ─── Player-facing zone controls ──────────────────────────────────────────────────────────────
 
-// Changes the member's zone outright. Nothing is requested and nobody approves it — the organizer
-// is NOTIFIED, and only has to act in the one case where the new zone already has a generated draw
-// (see ZoneChangeRequestsPanel, and CLAUDE.md's three zone-change cases).
+// Changes the member's zone outright (preferences.preferred_zone). Nothing is requested and nobody
+// approves it — the organizer is NOTIFIED by the server, and only has to act when the new zone
+// already has a generated draw (see CLAUDE.md's zone-change cases).
 export const ChangeZoneButton: React.FC<{
-  changed: boolean;
   onChange: () => void;
-}> = ({ changed, onChange }) => {
-  if (changed) {
-    return <span className={`${pillButtonCls('sm', 'outline')} opacity-60 pointer-events-none`}>Zone changed</span>;
-  }
+}> = ({ onChange }) => {
   return (
     <button type="button" className={pillButtonCls('sm', 'outline')} onClick={onChange}>
       Change Your Zone
@@ -251,125 +245,20 @@ export const UnplacedPlayersPanel: React.FC<{
   </QueueDropdown>
 );
 
-// Creator-only queue, and it is a NOTICE, not an approval step — the member has already changed
-// their zone. Seating them pins `zone_override`; dismissing only clears the notice. Either way
-// this changes which draw they route to and never touches matches they are already in.
-export const ZoneChangeRequestsPanel: React.FC<{
-  requests: EventParticipant[];
-  buckets?: { id: string; label: string }[];
-  onMoveZone?: (participantId: string, bucketId: string) => void;
-  /** Seat them in the zone they moved to. Only offered when we can resolve it. */
-  onApprove?: (participantId: string, newZone: string) => void;
-  /** Dismiss — clear the notice, leaving the player where they are seated. */
-  onClear: (participantId: string) => void;
-}> = ({ requests, buckets = [], onMoveZone, onApprove, onClear }) => {
-  if (requests.length === 0) return null;
-  return (
-    <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
-      <p className="text-xs font-bold uppercase tracking-widest text-badge mb-2">
-        Zone changed ({requests.length})
-      </p>
-      {requests.map((p) => (
-        <div key={p.id} className="flex flex-wrap items-center gap-2 py-2 border-b border-fg/5 last:border-0">
-          <span className="flex-1 min-w-[140px]">
-            <span className="block text-sm text-fg">{formatPlayerName(p.user_name || 'Player')}</span>
-            {p.new_zone && (
-              <span className="block text-[11px] text-fg/70">moved to: {p.new_zone}</span>
-            )}
-          </span>
-          {!!buckets.length && onMoveZone && (
-            <SelectField
-              value=""
-              placeholder="Move to zone…"
-              title={`Move ${formatPlayerName(p.user_name || 'Player')} to a zone`}
-              options={buckets.map((b) => ({ value: b.id, label: b.label }))}
-              onChange={(zone) => { if (zone) onMoveZone(p.id, zone); }}
-              className="w-auto"
-            />
-          )}
-          {/* Hidden when the row carries no target zone — a notice raised before the picker
-              existed names no zone to seat them into. */}
-          {onApprove && p.new_zone && (
-            <button
-              type="button"
-              aria-label={`Seat them in ${p.new_zone}`}
-              title={`Seat them in ${p.new_zone}`}
-              onClick={() => onApprove(p.id, p.new_zone!)}
-              className="shrink-0 p-2 rounded-lg bg-green-500/10 text-badge-win hover:bg-green-500/20 transition-colors"
-            >
-              <Check className="w-4 h-4" />
-            </button>
-          )}
-          <button
-            type="button"
-            aria-label="Dismiss zone change notice"
-            title="Dismiss — leave them where they are seated"
-            onClick={() => onClear(p.id)}
-            className="shrink-0 p-2 rounded-lg bg-red-500/10 text-badge-loss hover:bg-red-500/20 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-/**
- * Results two players disagree about, for the organizer: the recorded result stands until they
- * approve the disputing score (it applies and points follow) or reject it. Shared by the
- * Tournament page and Matches (challenges and rallies).
- */
-export const DisputedResultsPanel: React.FC<{
-  rows: DisputeRow[];
-  onSettle: (matchId: string, approve: boolean) => Promise<void> | void;
-}> = ({ rows, onSettle }) => {
-  const [busy, setBusy] = useState<string | null>(null);
-  if (rows.length === 0) return null;
-  const settle = async (id: string, approve: boolean) => {
-    setBusy(id);
-    try { await onSettle(id, approve); } finally { setBusy(null); }
-  };
-  return (
-    <div className="mb-6 rounded-2xl bg-fg/5 overflow-hidden">
-      <p className="px-4 pt-3 text-sm font-bold text-fg">Disputed result{rows.length !== 1 ? 's' : ''}</p>
-      <div className="divide-y divide-fg/10">
-        {rows.map((r) => (
-          <div key={r.id} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-fg truncate">{r.players}</p>
-              <p className="text-xs text-fg/70 mt-0.5">Recorded: {r.standing}</p>
-              <p className="text-xs text-fg/70">Disputed: {r.disputing}</p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button size="sm" disabled={busy === r.id} onClick={() => settle(r.id, true)}>Approve</Button>
-              <Button size="sm" variant="secondary" disabled={busy === r.id} onClick={() => settle(r.id, false)}>Reject</Button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// ─── Per-match scheduling ─────────────────────────────────────────────────────────────────────
+// ─── Per-match controls ───────────────────────────────────────────────────────────────────────
 
 export type ScheduleApi = {
-  onAskOpponent: (match: TournamentMatch) => void;
   onSubmitScore?: (match: TournamentMatch) => void;
   submittableMatchIds?: Set<string>;
 };
 
-// One match's scheduling block: status badge, ask-organizer fallback, submit-score, no-show rule.
-// Contacting the opponent directly is the primary path; asking the organizer is the fallback.
+// One match's block: result badge, submit-score, the matchday rule.
 // The hide* flags let OpponentPanels render individual buttons inline in its own row instead.
 export const ScheduleControls: React.FC<{
   match: TournamentMatch;
   api: ScheduleApi;
   hideRule?: boolean;
   hideBadge?: boolean;
-  /** The ask-organizer button is shown inline in the row above instead (OpponentPanels.tsx). */
-  hideAskButton?: boolean;
   /** The submit-score button is shown inline in the row above instead (OpponentPanels.tsx). */
   hideSubmitButton?: boolean;
   className?: string;
@@ -377,8 +266,7 @@ export const ScheduleControls: React.FC<{
   buttonLayout?: 'flex' | 'grid-2';
   /** Signed-in user, so a completed match reads "Win"/"Loss" instead of a generic "Completed". */
   viewerUid?: string;
-}> = ({ match, api, hideRule, hideBadge, hideAskButton, hideSubmitButton, className, buttonLayout = 'flex', viewerUid }) => {
-  const s = getScheduleState(match);
+}> = ({ match, api, hideRule, hideBadge, hideSubmitButton, className, buttonLayout = 'flex', viewerUid }) => {
   const isComplete = match.status === 'complete';
 
   const badge = isComplete
@@ -387,30 +275,21 @@ export const ScheduleControls: React.FC<{
         ? { text: 'Win', cls: 'bg-green-500/15 text-badge-win border-green-500/25' }
         : { text: 'Loss', cls: 'bg-red-500/15 text-badge-loss border-red-500/25' })
       : { text: 'Completed', cls: 'bg-green-500/15 text-badge-win border-green-500/25' })
-    : s.status === 'scheduled'
-      ? { text: `Scheduled on ${formatScheduledDate(s.date, s.slot ?? '')}`, cls: 'bg-green-500/15 text-badge-win border-green-500/25' }
-      : { text: 'Unscheduled', cls: 'bg-fg/5 text-fg/70 border-fg/10' };
+    : null;
 
   const showSubmit = !!api.onSubmitScore && !!api.submittableMatchIds?.has(match.id) && !isComplete && !hideSubmitButton;
-  const showAsk = !isComplete && !hideAskButton && !s.requested;
 
   return (
     <div className={className ?? 'mt-3 rounded-2xl bg-tennis-dark/40 p-3 space-y-2.5'}>
-      {!hideBadge && (
+      {!hideBadge && badge && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${badge.cls}`}>{badge.text}</span>
-          {!isComplete && s.requested && <span className="text-[11px] text-fg/70">Organizer asked to schedule</span>}
         </div>
       )}
 
-      {(showAsk || showSubmit) && (
+      {showSubmit && (
         <div className={buttonLayout === 'grid-2' ? 'grid grid-cols-2 gap-2' : 'flex flex-wrap gap-2'}>
-          {showAsk && (
-            <Button size="sm" variant="clay" onClick={() => api.onAskOpponent(match)}>Schedule</Button>
-          )}
-          {showSubmit && (
-            <Button size="sm" variant="clay" className="px-3" onClick={() => api.onSubmitScore!(match)}>Submit Score</Button>
-          )}
+          <Button size="sm" variant="clay" className="px-3" onClick={() => api.onSubmitScore!(match)}>Submit Score</Button>
         </div>
       )}
       {!hideRule && !isComplete && (
@@ -428,7 +307,7 @@ export const RRConfigModal: React.FC<{
   playerCount: number;
   isConversion?: boolean;
   isLoading?: boolean;
-  onConfirm: (config: RRConfig) => void;
+  onConfirm: () => void;
   onClose: () => void;
 }> = ({ playerCount, isConversion = false, isLoading = false, onConfirm, onClose }) => {
   const [convertConfirmed, setConvertConfirmed] = useState(false);
@@ -494,7 +373,7 @@ export const RRConfigModal: React.FC<{
             Cancel
           </Button>
           <Button
-            onClick={() => onConfirm({ advancementCount: 1 })}
+            onClick={() => onConfirm()}
             disabled={!canConfirm || isLoading}
             isLoading={isLoading}
             className="flex-1"
@@ -535,34 +414,26 @@ export const ZoneDrawConfigPanel: React.FC<{
   const counts = useMemo(() => {
     const map = new Map<string, number>();
     participants
-      .filter((p) => p.tournament_choice === 'Singles' && !p.removal)
+      .filter((p) => p.category === 'singles_tournament' && p.status === 'active')
       .forEach((p) => {
-        const id = p.zone_override ?? zoneBucketFor(zoneMap[p.uid], config);
+        const id = zoneBucketFor(zoneMap[p.uid], config);
         if (id) map.set(id, (map.get(id) ?? 0) + 1);
       });
     return map;
   }, [participants, zoneMap, config]);
 
   /**
-   * Where people actually PREFER to play: zone derived from their own courts, with
-   * `zone_override` deliberately ignored. The counts above are the opposite — they honour the
-   * override, because that is the zone the player will really be drawn into. Reading the two
-   * together is the point: a zone that is busy here but empty above is one whose players have
-   * all been moved by hand.
+   * Where people play, by division → zone → band: the zone is the member's own preferred_zone
+   * (a merged zone counts under its target). Retired Pro is its own division.
    */
   const preferred = useMemo(() => {
-    const bandOf = (p: EventParticipant) =>
-      p.skill_group === 'Retired Pro'
-        ? 'Retired Pro'
-        : skillBand(statsMap[p.uid]?.skill_level ?? Number(p.skill || 0));
+    const bandOf = (p: EventParticipant) => skillBand(statsMap[p.uid]?.skill_level ?? Number(p.skill || 0));
 
     const divisions = new Map<string, Map<string, Map<string, number>>>();
-    let moved = 0;
     participants
-      .filter((p) => p.tournament_choice === 'Singles' && !p.removal && p.uid)
+      .filter((p) => p.category === 'singles_tournament' && p.status === 'active' && p.uid)
       .forEach((p) => {
         const zone = zoneBucketFor(zoneMap[p.uid], config) ?? '';
-        if (p.zone_override && p.zone_override !== zone) moved += 1;
         const division = p.division ?? '';
         const zones = divisions.get(division) ?? new Map<string, Map<string, number>>();
         const bands = zones.get(zone) ?? new Map<string, number>();
@@ -587,7 +458,7 @@ export const ZoneDrawConfigPanel: React.FC<{
           }))
           .sort((x, y) => y.count - x.count),
       }));
-    return { rows, moved };
+    return { rows };
   }, [participants, zoneMap, statsMap, config]);
 
   const sourcesMergedInto = (targetId: string) =>
@@ -705,14 +576,9 @@ export const ZoneDrawConfigPanel: React.FC<{
           <div className="space-y-2">
             <p className="text-xs font-bold uppercase tracking-widest text-fg/70">Preferred zones</p>
             <p className="text-xs text-fg/70">
-              Where players say they want to play, from their own court choices. Hand placements are
-              ignored here, so this can differ from the counts above.
+              Where players say they want to play, from their own zone.
             </p>
-            <Tree
-              footnote={preferred.moved > 0
-                ? `${preferred.moved} player${preferred.moved === 1 ? ' is' : 's are'} placed in a different zone by hand.`
-                : undefined}
-            >
+            <Tree>
               {preferred.rows.map((d) => (
                 <TreeGroup
                   key={d.division}
@@ -821,8 +687,9 @@ export const DrawTabs: React.FC<{
 
   const select = (d: DrawConfig) => {
     onTabChange(d.tab);
-    if (d.tab === 'doubles') onDoublesChange(d.division);
-    else onSkillChange(d.skillGroup);
+    // The division on every tab: it tells a Retired Pro draw from a merged one (both skill 'All').
+    onDoublesChange(d.division);
+    if (d.tab !== 'doubles') onSkillChange(d.skillGroup);
     onZoneChange(d.zone);
   };
 
@@ -984,7 +851,7 @@ export const TournamentHeader: React.FC<{
 
   if (!isCreator) return null;
 
-  const canMerge = !started && (currentDrawFormat === 'bracket' || currentDrawFormat === 'rr');
+  const canMerge = !started && (currentDrawFormat === 'knockout' || currentDrawFormat === 'rr');
   // Only adjacent pairs, or all three — Beginners+Masters skipping Challengers is never offered.
   const MERGE_PAIR_OPTIONS: { label: string; pair: SkillMergePair }[] = [
     { label: 'All (Beginners + Challengers + Masters)', pair: 'Beginners+Challengers+Masters' },
@@ -1121,32 +988,20 @@ export const TournamentHeader: React.FC<{
 };
 
 /**
- * Doubles partner pool: players who joined doubles without a partner. Members see each other's
- * contact details (cards written server-side) and pair up; saving a teammate leaves the pool.
+ * Doubles partner pool: the event's active doubles registrations with no partner, in one division
+ * (an organizer sees every division). The server connects pool members, so their contacts become
+ * readable; saving a teammate is what leaves the pool.
  */
+export type PoolMember = { uid: string; name: string; skill: number };
 export const PartnerPoolPanel: React.FC<{
   members: PoolMember[];
   contacts: Record<string, ContactData>;
   viewerUid: string;
-  inPool: boolean;
-  canJoin: boolean;
-  busy: boolean;
-  onJoin: () => void;
-  onLeave: () => void;
-}> = ({ members, contacts, viewerUid, inPool, canJoin, busy, onJoin, onLeave }) => (
+}> = ({ members, contacts, viewerUid }) => (
   <section className="mb-6 rounded-3xl bg-fg/5 p-4" aria-label="Partner pool">
-    <div className="flex items-center justify-between gap-3">
-      <div className="min-w-0">
-        <h2 className="text-sm font-bold text-fg">Partner pool</h2>
-        <p className="mt-0.5 text-xs text-fg/70">
-          {inPool ? 'Players looking for a doubles partner. Contact one to team up.' : 'Players looking for a doubles partner.'}
-        </p>
-      </div>
-      {inPool ? (
-        <Button size="sm" variant="outline" className="shrink-0" isLoading={busy} onClick={onLeave}>Leave pool</Button>
-      ) : canJoin ? (
-        <Button size="sm" className="shrink-0" isLoading={busy} onClick={onJoin}>Join pool</Button>
-      ) : null}
+    <div className="min-w-0">
+      <h2 className="text-sm font-bold text-fg">Partner pool</h2>
+      <p className="mt-0.5 text-xs text-fg/70">Players looking for a doubles partner. Contact one to team up.</p>
     </div>
     {members.length === 0 ? (
       <p className="mt-3 text-sm text-fg">Nobody is waiting yet.</p>
@@ -1207,7 +1062,8 @@ const ZONE_COURT_COUNTS: Record<ZoneName, { courts: number; sites: number }> = {
 type AddTeammatePanelProps = {
   currentUserId?: string;
   saving: boolean;
-  onSave: (partnerName: string, partnerInApp: 'yes' | 'no', combinedSkill: number | null) => void;
+  /** `partnerUid` is null for someone not on the app. */
+  onSave: (partnerName: string, partnerUid: string | null, combinedSkill: number | null) => void;
 };
 
 /**
@@ -1245,7 +1101,7 @@ export const AddTeammatePanel: React.FC<AddTeammatePanelProps> = ({ currentUserI
       combined = n;
     }
     setError('');
-    onSave(name, pick.memberId ? 'yes' : 'no', combined);
+    onSave(name, pick.memberId ?? null, combined);
   };
 
   return (

@@ -5,16 +5,16 @@ import {
   defaultCourtOptions, extractCourtsWithCoords, extractDropdownCourts,
   getCourtSuggestions, mergeCourtOptions,
 } from '../../signup/utils/courtSearch';
-import { zoneFromCourts } from '../../../utils/zones';
+import { getZone, zoneFromCourts } from '../../../utils/zones';
 import { UserPreferences } from '../../../types';
 import { loadCourtsCsv } from '../../tasks/courtList';
 
 /**
- * The preferred-courts editor, shared by the profile card and the Player Dash. Saving also
- * recomputes the zone from the courts, unless the member picked their zone by hand.
+ * The preferred-courts editor, shared by the profile card and the Player Dash. Saving always
+ * recomputes the zone, limited to the zones of the chosen courts.
  */
 export const CourtsEditor: React.FC<{
-  preferences: Pick<UserPreferences, 'preferred_courts' | 'preferred_zone' | 'preferred_zone_manual'>;
+  preferences: Pick<UserPreferences, 'preferred_courts' | 'preferred_zone'>;
   saving: boolean;
   onSave: (courts: string[], zone: string) => void;
   /** Set when another button saves (the join sheet's Join): reports the draft and hides Save. */
@@ -35,9 +35,6 @@ export const CourtsEditor: React.FC<{
   const [courtInput, setCourtInput] = useState('');
 
   const computeZone = (courts: string[]): string => {
-    // A zone chosen by hand wins over the courts. Recomputing here would silently undo the pick
-    // and move the member between draws the next time they edit their court list.
-    if (preferences.preferred_zone_manual) return preferences.preferred_zone;
     if (courts.length === 0) return '';
     // Majority vote across ALL preferred courts (not just the first one) — a player who splits
     // time across zones should land in whichever zone most of their courts are actually in,
@@ -45,8 +42,13 @@ export const CourtsEditor: React.FC<{
     // No Toronto zone from the courts (a non-Toronto court) means '' — the Unassigned draw. The old
     // zone is kept only until the court coordinates have loaded, so an early save can't wipe it.
     const zone = zoneFromCourts(courts, courtCoords);
-    if (zone) return zone;
-    return courtCoords.size > 0 ? '' : preferences.preferred_zone || '';
+    if (!zone) return courtCoords.size > 0 ? '' : preferences.preferred_zone || '';
+    // The current zone stays while one of the chosen courts is in it; otherwise the majority wins.
+    const courtZones = courts
+      .map((c) => courtCoords.get(c.trim().toLowerCase()))
+      .filter((c): c is { lat: number; lng: number } => !!c)
+      .map((c) => getZone(c.lat, c.lng) as string);
+    return courtZones.includes(preferences.preferred_zone) ? preferences.preferred_zone : zone;
   };
 
   // Re-reported once the court coordinates load, so the zone isn't computed from an empty map.

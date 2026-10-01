@@ -1,7 +1,7 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
-import type { ScoreForm, TournamentMatch } from '../../pages/tournament/types';
-import { formatSetScores } from '../../pages/tournament/utils';
+import type { ScoreForm } from '../../pages/tournament/types';
+import { type Submission, scoreLine } from './results';
 import { toTitleCase } from '../leagues/useStandings';
 
 // Every score, for every match type, goes through the one `scoreMatch` Cloud Function
@@ -39,7 +39,7 @@ export const recordScore = (target: { matchId: string } | { newMatch: PlayedMatc
   call<RecordResponse>('record', { ...target, ...payload });
 /** Organizer: approve (the disputing score applies) or reject (the recorded one stands). */
 export const settleDispute = (matchId: string, approve: boolean) => call<RecordResponse>('settle', { matchId, approve });
-/** Organizer: one tournament match back to unplayed, undoing exactly what it paid. */
+/** Organizer: one scored match (tournament, challenge or rally) back to unplayed ('accepted'), undoing exactly what it paid. */
 export const resetScore = (matchId: string) => call<boolean>('reset', { matchId });
 /** Organizer: deletes a draw's matches and undoes everything they and their groups' bonuses paid. */
 export const cancelDraw = (eventId: string, matchIds: string[]) => call<number>('cancel', { eventId, matchIds });
@@ -68,27 +68,22 @@ export const resultNotice = (r: RecordResponse): string | null => {
 /** A disputed match as the organizer's panel shows it: the standing result and the disputing one. */
 export type DisputeRow = { id: string; players: string; standing: string; disputing: string };
 
-type DisputedMatch = Pick<TournamentMatch, 'id' | 'player_1_uid' | 'player_1_name' | 'player_2_name' | 'winner_name'> &
-  Partial<Pick<TournamentMatch, 'set_1_player_1' | 'set_1_player_2' | 'set_2_player_1' | 'set_2_player_2' | 'set_3_player_1' | 'set_3_player_2'>> & {
-    dispute_uid?: string;
-    result_submissions?: Record<string, { winner_uid: string; sets?: Record<string, { player_1: number; player_2: number }> }>;
-  };
-
-export const disputeRow = (m: DisputedMatch): DisputeRow => {
-  const sub = m.dispute_uid ? m.result_submissions?.[m.dispute_uid] : undefined;
+/**
+ * `disputing` is the match's `submissions` entry with status 'disputed'; `standing` is its applied
+ * result (results.ts). The row id is the match id, which is what settleDispute takes.
+ */
+export const disputeRow = (
+  m: { id: string; player_1_uid: string; player_1_name: string; player_2_name: string },
+  standing: Submission | undefined,
+  disputing: Submission,
+): DisputeRow => {
   const nameOf = (uid?: string) => toTitleCase((uid === m.player_1_uid ? m.player_1_name : m.player_2_name) || '—');
-  const subScore = sub?.sets
-    ? formatSetScores(Object.fromEntries([1, 2, 3].flatMap((i) => [
-      [`set_${i}_player_1`, sub.sets?.[`set_${i}`]?.player_1 ?? 0],
-      [`set_${i}_player_2`, sub.sets?.[`set_${i}`]?.player_2 ?? 0],
-    ])))
-    : '';
+  const standingScore = scoreLine(standing);
+  const disputingScore = scoreLine(disputing);
   return {
     id: m.id,
     players: `${toTitleCase(m.player_1_name)} vs ${toTitleCase(m.player_2_name)}`,
-    standing: `${toTitleCase(m.winner_name || '—')} won${formatSetScores(m) ? ` · ${formatSetScores(m)}` : ''}`,
-    disputing: sub
-      ? `${nameOf(m.dispute_uid)} says ${nameOf(sub.winner_uid)} won${subScore ? ` · ${subScore}` : ''}`
-      : 'Entered before this change, so the other score was not saved. Reject it and ask the players to re-enter.',
+    standing: standing ? `${toTitleCase(standing.winner_name || '—')} won${standingScore ? ` · ${standingScore}` : ''}` : '—',
+    disputing: `${toTitleCase(disputing.user_name || nameOf(disputing.uid))} says ${nameOf(disputing.winner_uid)} won${disputingScore ? ` · ${disputingScore}` : ''}`,
   };
 };

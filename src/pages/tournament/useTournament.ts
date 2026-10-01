@@ -1,30 +1,40 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  addDoc, arrayUnion, collection, doc, documentId, getDocs, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
+  Timestamp, arrayUnion, collection, doc, documentId, getDocs, onSnapshot, query, setDoc, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { ContactData, EventParticipant, MemberInfo, TennisEvent, UserData, UserStats } from '../../types';
-import { DrawConfig, DrawTab, OpenDrawSlot, RRConfig, RRStandingRow, ScoreForm, SkillGroup, SkillMergePair, TournamentFormat, TournamentMatch, TournamentPlayer } from './types';
+import { DrawConfig, DrawTab, OpenDrawSlot, RRStandingRow, ScoreForm, SkillGroup, SkillMergePair, TournamentFormat, TournamentMatch, TournamentPlayer } from './types';
 import { useUnplacedParticipants } from './useUnplacedParticipants';
 import {
   autoLabel, buildRRGroupMatchFields, buildRRKnockoutDocs, buildSafeGroupRewrite, buildZoneTierGroups,
   computeGroupStandings,
-  deriveRRConfig, generateGroupPairings, selectGroupWinners, sharedBand, sharedZone,
+  generateGroupPairings, groupIndexOf, selectGroupWinners, sharedBand, sharedZone,
 } from './rrGeneration';
 import {
-  BYE, PLAYER_LOADING, PLAYER_LOADING_SENTINEL, buildMatchFields, buildPlayerList, buildZoneAwareDrawConfigs, deleteKey, fallbackTemplate, filterParticipantsForDraw, resolveZoneConfig, formatPlayerName, getDrawKey, getDrawSize, getEventDate, isTournamentStarted, normalizeTemplateMatches, zoneBucketFor, effectiveZone,
+  BYE, PLAYER_LOADING, PLAYER_LOADING_SENTINEL, buildMatchFields, buildPlayerList, buildZoneAwareDrawConfigs, choiceOf, choiceOfMatch, deleteKey, fallbackTemplate, filterParticipantsForDraw, resolveZoneConfig, formatPlayerName, getDrawKey, getDrawSize, groupBonusAwardId, guestUid, isTournamentStarted, normalizeTemplateMatches, registrationId, zoneBucketFor, effectiveZone,
 } from './utils';
 import { skillBand } from '../../utils/skillLevels';
 import { CONSOLIDATED_DOUBLES_DRAW, VISIBLE_DRAWS, buildMergedSkillDraw } from './utils';
-import { isEventManager } from '../../utils/eventTypes';
+import { isDoublesEvent, isEventManager, isTournamentEvent } from '../../utils/eventTypes';
+import { toMillis } from '../../utils/eventDates';
+import { useEventResults } from '../../features/matches/results';
 import {
   cancelDraw, recordScore, resetScore, resultFromForm, resultNotice, setGroupBonus,
 } from '../../features/matches/scoring';
 
 // Stand-in for a contacts doc whose matching users doc is missing — a data anomaly rather than a
 // normal state, but the merge below shouldn't drop the contact details over it.
-const EMPTY_MEMBER: UserData = { name: '', created_at: '' };
+const EMPTY_MEMBER: UserData = { name: '', created_at: null };
+
+// Group labels are group identity (group_label), so a new or renamed one must not repeat another.
+const uniqueLabel = (label: string, taken: Set<string>) => {
+  let out = label;
+  for (let n = 2; taken.has(out); n += 1) out = `${label} (${n})`;
+  taken.add(out);
+  return out;
+};
 
 // Hard ceiling on an RR group. Guards the manual paths — the only way anyone is seated now.
 export const RR_GROUP_MAX = 5;
@@ -40,10 +50,17 @@ export const useTournament = (eventIdOverride?: string) => {
   const [allTournamentEvents, setAllTournamentEvents] = useState<TennisEvent[]>([]);
   const [event, setEvent] = useState<TennisEvent | null>(null);
   const [participants, setParticipants] = useState<EventParticipant[]>([]);
-  // Registrations the organizer hasn't removed. Removed rows stay as the record, and a player who
-  // re-joined has both, so anything about a player's CURRENT registration reads this, not participants.
-  const activeParticipants = useMemo(() => participants.filter((p) => !p.removal), [participants]);
-  const [matches, setMatches] = useState<TournamentMatch[]>([]);
+  // Active registrations. Withdrawn rows stay as the record, so anything about a player's CURRENT
+  // registration reads this, not participants.
+  const activeParticipants = useMemo(() => participants.filter((p) => p.status === 'active'), [participants]);
+  const [rawMatches, setMatches] = useState<TournamentMatch[]>([]);
+  // A match doc carries only status + winner_uid; its score, walkover and points are the applied
+  // submission, merged on here so every view reads `m.result`.
+  const results = useEventResults(event?.id);
+  const matches = useMemo(
+    () => rawMatches.map((m) => ({ ...m, result: results.get(m.id) ?? null })),
+    [rawMatches, results],
+  );
   // Has each onSnapshot delivered once since `event` changed? Reset per event switch, so the UI
   // shows a loading state instead of flashing the previous event's data.
   const [participantsReady, setParticipantsReady] = useState(false);
@@ -85,18 +102,17 @@ export const useTournament = (eventIdOverride?: string) => {
   const [availabilityMap, setAvailabilityMap] = useState<Record<string, string[]>>({});
   // Round Robin 3rd-level view: group stage vs knockout.
   const [rrView, setRRView] = useState<'groups' | 'knockout'>('groups');
-  // Server-persisted RR draft for the current draw (edited groups + withdrawn players) — lets the
+  // Server-persisted RR draft for the current draw (edited groups + their labels) — lets the
   // creator arrange groups before generation without writing matches, surviving refresh.
-  const [rrDraft, setRRDraft] = useState<{ groups: string[][]; custom: boolean[]; customLabels: string[]; withdrawn: string[] } | null>(null);
+  const [rrDraft, setRRDraft] = useState<{ groups: string[][]; labels: string[] } | null>(null);
+  // Group Bonus switch state: award doc id → exists.
+  const [bonusAwards, setBonusAwards] = useState<Record<string, boolean>>({});
 
   // Round Robin state
   const [showRRConfig, setShowRRConfig] = useState(false);
   const [generatingRR, setGeneratingRR] = useState(false);
 
   const activeEventIdRef = useRef<string | undefined>(undefined);
-  // Players the creator intentionally replaced with PLAYER_LOADING — kept out of the unplaced pool
-  // so removing someone doesn't immediately offer them straight back.
-  const manuallyUnplacedIdsRef = useRef<Set<string>>(new Set());
 
   /**
    * Every seating path is manual now, so this is the only thing bounding group size.
@@ -139,13 +155,11 @@ export const useTournament = (eventIdOverride?: string) => {
   const mergeZoneKey = (zone?: string | null) => (zoneConfig.enabled ? effectiveZone(zone) : undefined);
 
   const effectiveDraws = useMemo<DrawConfig[]>(() => {
-    const eventChoice = event?.tournament_choice;
+    // A tournament is singles OR doubles.
+    const eventChoice = event ? (isDoublesEvent(event) ? 'Doubles' : 'Singles') : undefined;
     let draws = VISIBLE_DRAWS.filter((d) => {
       if (consolidateDoubles && d.tab === 'doubles') return false;
-      if (eventChoice === 'Singles' && d.tournamentChoice !== 'Singles') return false;
-      if (eventChoice === 'Doubles' && d.tournamentChoice !== 'Doubles') return false;
-      if (event?.hide_seniors && d.skillGroup === 'Retired Pro') return false;
-      if (event?.hide_beginners && (d.tab === 'mens' || d.tab === 'womens') && d.skillGroup === 'Beginners') return false;
+      if (eventChoice && d.tournamentChoice !== eventChoice) return false;
       return true;
     });
     if (consolidateDoubles) draws = [...draws, CONSOLIDATED_DOUBLES_DRAW];
@@ -177,7 +191,7 @@ export const useTournament = (eventIdOverride?: string) => {
 
     const tabOrder = { mens: 0, womens: 1, doubles: 2 };
     return out.sort((a, b) => tabOrder[a.tab] - tabOrder[b.tab]);
-  }, [skillMerges, consolidateDoubles, event?.tournament_choice, event?.hide_seniors, event?.hide_beginners, zoneConfig, zoneLabelFor]);
+  }, [skillMerges, consolidateDoubles, event?.category, zoneConfig, zoneLabelFor]);
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -190,8 +204,8 @@ export const useTournament = (eventIdOverride?: string) => {
           .map((d) => ({ id: d.id, ...d.data() } as TennisEvent))
           // League Ladder events have no draw — ladder matches are a match type surfaced in
           // Matches/Challenges instead, so they don't belong on the Tournament page at all.
-          .filter((e) => e.type?.toLowerCase().includes('tournament'))
-          .sort((a, b) => (getEventDate(b)?.getTime() || 0) - (getEventDate(a)?.getTime() || 0));
+          .filter((e) => isTournamentEvent(e))
+          .sort((a, b) => toMillis(b.start_date) - toMillis(a.start_date));
         setAllTournamentEvents(tournamentEvents);
       } finally {
         setLoading(false);
@@ -234,7 +248,7 @@ export const useTournament = (eventIdOverride?: string) => {
   useEffect(() => {
     if (!event) return;
     return onSnapshot(
-      query(collection(db, 'matches'), where('event_id', '==', event.id), where('category', 'in', ['singles', 'doubles'])),
+      query(collection(db, 'matches'), where('event_id', '==', event.id), where('category', '==', 'tournament')),
       (snap) => {
         const loaded = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TournamentMatch));
         setMatches(loaded);
@@ -251,7 +265,7 @@ export const useTournament = (eventIdOverride?: string) => {
     // Merged matches are now inferred per (division, zone) — a merged draw exists in one zone
     // without implying anything about the same division in another.
     const merged = matches.filter((m) =>
-      m.tournament_choice === 'Singles' && m.skill_group === 'All' &&
+      m.sub_category === 'singles' && m.skill_group === 'All' &&
       (m.division === "Men's" || m.division === "Women's"));
     if (merged.length > 0) {
       const next: Record<string, SkillMergePair> = {};
@@ -267,27 +281,34 @@ export const useTournament = (eventIdOverride?: string) => {
       }
       setSkillMerges((prev) => ({ ...prev, ...next }));
     }
-    if (matches.some((m) => m.tournament_choice === 'Doubles' && m.division === 'All'))
+    if (matches.some((m) => m.sub_category === 'doubles' && m.division === 'All'))
       setConsolidateDoubles(true);
   }, [matches, statsMap]);
 
 
+  // Doubles: registrant uid → partner uid, from the active registrations (the same map the server
+  // uses to let a partner score and to credit them).
+  const partnerByUid = useMemo(() => new Map(activeParticipants
+    .filter((p) => p.category === 'doubles_tournament' && p.uid && p.partner_uid)
+    .map((p) => [p.uid, p.partner_uid as string])), [activeParticipants]);
+
+  // A match's participant_uids after a slot change: both slots plus their doubles partners.
+  const slotPatch = (m: TournamentMatch, slot: 'player_1' | 'player_2', uid: string, name: string) => {
+    const other = slot === 'player_1' ? m.player_2_uid : m.player_1_uid;
+    const uids = [uid, other].filter(Boolean);
+    return {
+      [`${slot}_uid`]: uid,
+      [`${slot}_name`]: name,
+      participant_uids: [...new Set([...uids, ...uids.map((u) => partnerByUid.get(u) ?? '')].filter(Boolean))],
+      updated_at: Timestamp.now(),
+    };
+  };
+
   // Match ids the current user may submit a score for: a slot player, or (doubles) the
-  // mutually-registered teammate of a slot player. Empty for the creator (they use Enter score).
+  // registered partner of a slot player. Empty for the creator (they use Enter score).
   const submittableMatchIds = useMemo(() => {
     if (!user || isCreator) return new Set<string>();
-    const norm = (s?: string) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
-    const byName = new Map<string, EventParticipant>();
-    activeParticipants.forEach((p) => byName.set(norm(p.user_name), p));
-    // Map each registrant uid → their mutually-registered teammate uid (doubles).
-    const teammateByUid = new Map<string, string>();
-    for (const p of activeParticipants) {
-      if (!p.doubles || !p.uid) continue;
-      const partner = byName.get(norm(p.doubles));
-      if (partner && partner.uid && norm(partner.doubles) === norm(p.user_name)) {
-        teammateByUid.set(p.uid, partner.uid);
-      }
-    }
+    const teammateByUid = partnerByUid;
     const ids = new Set<string>();
     for (const m of matches) {
       const slotUids = [m.player_1_uid, m.player_2_uid].filter(Boolean);
@@ -295,7 +316,7 @@ export const useTournament = (eventIdOverride?: string) => {
       if (authorized) ids.add(m.id);
     }
     return ids;
-  }, [user, isCreator, participants, matches]);
+  }, [user, isCreator, partnerByUid, matches]);
 
   // Reload all registered users every time the creator enters edit mode. Names come from `users`,
   // contact details from `contacts` — merged into one MemberInfo map so consumers see one object.
@@ -393,7 +414,7 @@ export const useTournament = (eventIdOverride?: string) => {
   const zoneMap = useMemo(() => {
     const out = { ...prefZoneMap };
     for (const m of matches) {
-      if (m.tournament_choice !== 'Singles') continue;
+      if (m.sub_category !== 'singles') continue;
       const label = zoneConfig.buckets.find((b) => b.id === effectiveZone(m.zone))?.zones[0];
       if (!label) continue;
       for (const uid of [m.player_1_uid, m.player_2_uid]) {
@@ -432,7 +453,7 @@ export const useTournament = (eventIdOverride?: string) => {
       ];
       const all = buildZoneAwareDrawConfigs(baseDraws, zoneConfig);
       const found = all.find(
-        (d) => d.tournamentChoice === placement.tournament_choice &&
+        (d) => d.tournamentChoice === choiceOfMatch(placement) &&
           d.division === placement.division &&
           d.skillGroup === placement.skill_group &&
           // Effective, not raw: a placement generated before zones has no `zone`, and would
@@ -453,7 +474,7 @@ export const useTournament = (eventIdOverride?: string) => {
     // zone draw until someone is in it. One that already has matches always stays visible. Keyed
     // on the EFFECTIVE zone so a pre-zone match keeps the default zone's draw visible.
     const zonesWithMatches = new Set(
-      matches.map((m) => `${m.tournament_choice}|${m.division}|${m.skill_group}|${effectiveZone(m.zone)}`),
+      matches.map((m) => `${choiceOfMatch(m)}|${m.division}|${m.skill_group}|${effectiveZone(m.zone)}`),
     );
     const populated = effectiveDraws.filter((d) => {
       // Doubles carries no zone dimension at all — it never gets a zone draw, so it always shows.
@@ -491,16 +512,19 @@ export const useTournament = (eventIdOverride?: string) => {
     appliedUserDrawRef.current = target;
 
     setActiveTab(userDraw.tab);
-    if (userDraw.tab === 'doubles') setActiveDoubles(userDraw.division);
-    else setActiveSkill(userDraw.skillGroup as SkillGroup);
+    setActiveDoubles(userDraw.division);
+    if (userDraw.tab !== 'doubles') setActiveSkill(userDraw.skillGroup as SkillGroup);
     setActiveZone(zone);
   }, [userDraw, zoneMap, userParticipant, zoneConfig, event?.id]);
 
+  // `activeDoubles` is the selected draw's division on every tab: a Retired Pro draw and a merged
+  // draw are both skill 'All' in the same zone, and only the division tells them apart.
   const currentDraw = useMemo<DrawConfig | undefined>(() => {
     if (activeTab === 'doubles')
       return effectiveDraws.find((d) => d.tab === 'doubles' && d.division === activeDoubles)
         ?? effectiveDraws.find((d) => d.tab === 'doubles');
-    return effectiveDraws.find((d) => d.tab === activeTab && d.skillGroup === activeSkill && d.zone === activeZone)
+    return effectiveDraws.find((d) => d.tab === activeTab && d.skillGroup === activeSkill && d.zone === activeZone && d.division === activeDoubles)
+      ?? effectiveDraws.find((d) => d.tab === activeTab && d.skillGroup === activeSkill && d.zone === activeZone)
       ?? effectiveDraws.find((d) => d.tab === activeTab && d.skillGroup === activeSkill)
       ?? effectiveDraws.find((d) => d.tab === activeTab);
   }, [activeDoubles, activeSkill, activeTab, activeZone, effectiveDraws]);
@@ -520,7 +544,7 @@ export const useTournament = (eventIdOverride?: string) => {
     if (!currentDraw) return [];
     return matches
       .filter((m) =>
-        m.tournament_choice === currentDraw.tournamentChoice &&
+        choiceOfMatch(m) === currentDraw.tournamentChoice &&
         m.division === currentDraw.division &&
         m.skill_group === currentDraw.skillGroup &&
         // `effectiveZone` treats a missing zone as the default one, so groups generated before
@@ -581,11 +605,10 @@ export const useTournament = (eventIdOverride?: string) => {
       skillGroup: currentDraw.skillGroup,
       drawsize,
       allMatches: templateMatches,
+      started,
     };
     return templateMatches.map<TournamentMatch>((tm, index) => ({
       id: `preview_${currentDraw.label}_${tm.match_id}`,
-      bracket: null,
-      started,
       ...buildMatchFields(tm, index, slotMap, cfg),
     }));
   }, [currentDraw, currentDrawAllPlayers, currentMatches, event?.id, previewDrawSize, previewSlotOverrides, started]);
@@ -609,7 +632,7 @@ export const useTournament = (eventIdOverride?: string) => {
   const editPlayers = useMemo(() => {
     if (!editMode || !currentDraw) return [];
     const divisionParticipants = activeParticipants.filter((p) => {
-      if (p.tournament_choice !== currentDraw.tournamentChoice) return false;
+      if (choiceOf(p) !== currentDraw.tournamentChoice) return false;
       if (currentDraw.division !== 'All' && p.division !== currentDraw.division) return false;
       return true;
     });
@@ -640,7 +663,7 @@ export const useTournament = (eventIdOverride?: string) => {
         const snapshotName = isP1 ? visibleUserMatch.player_2_name : visibleUserMatch.player_1_name;
         // Prefer the live user-doc name (fall back to the match snapshot) so a re-seated or
         // renamed opponent shows current info. Singles only — doubles names embed the partner.
-        const isDoubles = visibleUserMatch.tournament_choice === 'Doubles';
+        const isDoubles = visibleUserMatch.sub_category === 'doubles';
         return {
           name: !isDoubles && opponentUser?.name ? formatPlayerName(opponentUser.name) : snapshotName,
           userId: opponentUid,
@@ -648,12 +671,11 @@ export const useTournament = (eventIdOverride?: string) => {
           email: opponentUser?.email ?? '',
           phone: opponentUser?.phone ?? '',
           whatsappContact: opponentUser?.whatsapp_contact ?? '',
-          whatsappSameAsPhone: !!opponentUser?.whatsapp_same_as_phone,
           preferredContactMethods: opponentUser?.preferred_mode_of_contact,
           round: visibleUserMatch.round,
           skill: opponentStats?.skill_level ?? null,
           wins: opponentStats?.wins ?? 0,
-          losses: opponentStats?.loses ?? 0,
+          losses: (opponentStats?.matchesPlayed ?? 0) - (opponentStats?.wins ?? 0),
         };
       })()
     : null;
@@ -661,7 +683,7 @@ export const useTournament = (eventIdOverride?: string) => {
   // ── Round Robin derived data ──────────────────────────────────────────────
 
   const drawFormat = useMemo<TournamentFormat>(
-    () => event?.type === 'Tournament' && event?.tournament_format === 'rr' ? 'rr' : 'bracket',
+    () => (event?.sub_category === 'rr' ? 'rr' : 'knockout'),
     [event],
   );
 
@@ -670,7 +692,7 @@ export const useTournament = (eventIdOverride?: string) => {
     [currentMatches, drawFormat],
   );
 
-  // Live-subscribe to the current draw's RR draft doc (edited pre-generation groups + withdrawals).
+  // Live-subscribe to the current draw's RR draft doc (edited pre-generation groups + labels).
   useEffect(() => {
     if (!event || currentDrawFormat !== 'rr' || !currentDraw) { setRRDraft(null); return; }
     const drawKey = currentDrawKey;
@@ -683,9 +705,7 @@ export const useTournament = (eventIdOverride?: string) => {
           groups: Array.isArray(d.groups)
             ? d.groups.map((g: unknown) => typeof g === 'string' ? g.split(',').filter(Boolean) : Array.isArray(g) ? g : [])
             : [],
-          custom: Array.isArray(d.custom) ? d.custom : [],
-          customLabels: Array.isArray(d.labels) ? d.labels : [],
-          withdrawn: Array.isArray(d.withdrawn) ? d.withdrawn : [],
+          labels: Array.isArray(d.labels) ? d.labels : [],
         });
       },
       () => setRRDraft(null),
@@ -694,18 +714,6 @@ export const useTournament = (eventIdOverride?: string) => {
     // Depend on currentDrawKey itself, not its parts: the key includes zone, so listing only
     // choice/division/skillGroup meant switching zones kept the previous zone's draft loaded.
   }, [event?.id, currentDrawFormat, currentDrawKey]);
-
-  // Players the creator withdrew from this draw (persisted) — never auto-placed back.
-  // A removed player who registered again after the removal is back in the pool; players can't
-  // write the draft, so the stale withdrawn entry is ignored here rather than cleared.
-  const rrWithdrawn = useMemo(() => {
-    const removedAt = new Map<string, string>();
-    participants.forEach((p) => { if (p.removal && p.uid) removedAt.set(p.uid, String((p as { removal_at?: string }).removal_at ?? '')); });
-    const rejoined = new Set(participants
-      .filter((p) => !p.removal && p.uid && removedAt.has(p.uid) && String(p.created_at ?? '') > (removedAt.get(p.uid) ?? ''))
-      .map((p) => p.uid));
-    return new Set((rrDraft?.withdrawn ?? []).filter((uid) => !rejoined.has(uid)));
-  }, [rrDraft, participants]);
 
   // Shared band/zone auto-label computation — used by both the pre-generation preview labels
   // (previewRRLabels) and the post-generation group labels (buildRRLabelsFrom).
@@ -718,10 +726,11 @@ export const useTournament = (eventIdOverride?: string) => {
 
   // Preview groups shown before any RR matches are generated. When the creator has saved a draft
   // arrangement, that (server-persisted) grouping is used; otherwise the SAME skill-first grouping
-  // as generation (buildZoneTierGroups). Withdrawn players are excluded either way.
+  // as generation (buildZoneTierGroups). Withdrawn registrations are excluded either way
+  // (currentDrawAllPlayers holds active registrations only).
   const previewRRGroups = useMemo<TournamentPlayer[][]>(() => {
     if (currentDrawFormat !== 'rr' || currentMatches.length > 0) return [];
-    const available = currentDrawAllPlayers.filter((p) => !rrWithdrawn.has(p.uid));
+    const available = currentDrawAllPlayers;
     if (rrDraft && rrDraft.groups.length > 0) {
       const byId = new Map(available.map((p) => [p.uid, p]));
       return rrDraft.groups.map((uids) =>
@@ -733,14 +742,12 @@ export const useTournament = (eventIdOverride?: string) => {
       skillMap[p.uid] = statsMap[p.uid]?.skill_level ?? p.skillLevel ?? 0;
     }
     return buildZoneTierGroups(available, zoneMap, skillMap).map((g) => g.players);
-  }, [currentDrawFormat, currentMatches, currentDrawAllPlayers, statsMap, zoneMap, rrDraft, rrWithdrawn]);
+  }, [currentDrawFormat, currentMatches, currentDrawAllPlayers, statsMap, zoneMap, rrDraft]);
 
-  // Labels for the preview/draft groups (custom rename shown verbatim, else auto band/zone).
+  // Labels for the preview/draft groups: a stored draft label verbatim, else auto band/zone.
   const previewRRLabels = useMemo<string[]>(() =>
-    previewRRGroups.map((players, i) => {
-      if (rrDraft?.custom[i]) return rrDraft.customLabels[i] || `Group ${String.fromCharCode(65 + i)}`;
-      return autoLabelFor(i, players);
-    }), [previewRRGroups, rrDraft, autoLabelFor]);
+    previewRRGroups.map((players, i) => rrDraft?.labels[i] || autoLabelFor(i, players)),
+    [previewRRGroups, rrDraft, autoLabelFor]);
 
 
   const rrGroupMatches = useMemo(
@@ -753,71 +760,79 @@ export const useTournament = (eventIdOverride?: string) => {
     [currentMatches],
   );
 
-  // Sorted unique rr_group values for the current draw. Used to translate a group card's
-  // array position (gi) back to its real rr_group value when editing/saving a group.
-  const rrGroupIndices = useMemo<number[]>(
-    () => [...new Set(rrGroupMatches.map((m) => m.rr_group ?? 0))].sort((a, b) => a - b),
-    [rrGroupMatches],
-  );
+  // The current draw's groups, in card order. A group IS its group_label (every match of a group
+  // carries it). Ordered by the group number in the doc ids (`rr_g{N}_…`): positions restart at 1
+  // in every group, so the lowest position can't order them.
+  const rrGroupKeys = useMemo<string[]>(() => {
+    const order = new Map<string, number>();
+    rrGroupMatches.forEach((m) => {
+      const n = groupIndexOf(m);
+      if (!order.has(m.group_label) || n < (order.get(m.group_label) ?? 0)) order.set(m.group_label, n);
+    });
+    return [...order.entries()].sort((a, b) => a[1] - b[1]).map(([label]) => label);
+  }, [rrGroupMatches]);
 
   // Reconstruct group player lists from a set of RR group matches (current or sibling draw).
   // Names resolve live from userMap (fallback to the match-doc snapshot); singles names are
   // overridden, doubles keep the embedded "A / B" value.
-  const buildRRGroupsFrom = useCallback((groupMatches: TournamentMatch[], indices: number[]): TournamentPlayer[][] => {
-    const isDoubles = groupMatches[0]?.tournament_choice === 'Doubles';
+  const buildRRGroupsFrom = useCallback((groupMatches: TournamentMatch[], keys: string[]): TournamentPlayer[][] => {
+    const isDoubles = groupMatches[0]?.sub_category === 'doubles';
     const liveName = (uid: string, snapshot: string) => {
       const u = userMap[uid];
       return !isDoubles && u?.name ? formatPlayerName(u.name) : snapshot;
     };
-    return indices.map((gi) => {
-      const groupMs = groupMatches.filter((m) => (m.rr_group ?? 0) === gi);
+    return keys.map((key) => {
+      const groupMs = groupMatches.filter((m) => m.group_label === key);
       const seen = new Set<string>();
       const players: TournamentPlayer[] = [];
       for (const m of groupMs) {
         if (m.player_1_uid && !seen.has(m.player_1_uid)) {
           seen.add(m.player_1_uid);
-          players.push({ uid: m.player_1_uid, name: liveName(m.player_1_uid, m.player_1_name), participantId: '' });
+          players.push({ uid: m.player_1_uid, name: liveName(m.player_1_uid, m.player_1_name), participantId: '', partnerUid: partnerByUid.get(m.player_1_uid) });
         }
         if (m.player_2_uid && !seen.has(m.player_2_uid)) {
           seen.add(m.player_2_uid);
-          players.push({ uid: m.player_2_uid, name: liveName(m.player_2_uid, m.player_2_name), participantId: '' });
+          players.push({ uid: m.player_2_uid, name: liveName(m.player_2_uid, m.player_2_name), participantId: '', partnerUid: partnerByUid.get(m.player_2_uid) });
         }
       }
       return players;
     });
-  }, [userMap]);
-
-  // Positional letter (always A, B, C… by display order) re-prefixed onto the stored
-  // "band · zone" suffix, recomputed from the group's CURRENT players so it survives any edit.
-  // A creator-renamed label (rr_label_custom) is shown verbatim.
-  const buildRRLabelsFrom = useCallback((groupMatches: TournamentMatch[], indices: number[]): string[] =>
-    indices.map((gi, idx) => {
-      const first = groupMatches.find((m) => (m.rr_group ?? 0) === gi);
-      const letter = String.fromCharCode(65 + idx);
-      if (first?.rr_label_custom) return first.rr_group_label || `Group ${letter}`;
-      const players = buildRRGroupsFrom(groupMatches, [gi])[0] ?? [];
-      return autoLabelFor(idx, players);
-    }), [buildRRGroupsFrom, autoLabelFor]);
+  }, [userMap, partnerByUid]);
 
   const rrGroups = useMemo<TournamentPlayer[][]>(
-    () => (rrGroupMatches.length === 0 ? [] : buildRRGroupsFrom(rrGroupMatches, rrGroupIndices)),
-    [rrGroupMatches, rrGroupIndices, buildRRGroupsFrom],
+    () => (rrGroupMatches.length === 0 ? [] : buildRRGroupsFrom(rrGroupMatches, rrGroupKeys)),
+    [rrGroupMatches, rrGroupKeys, buildRRGroupsFrom],
   );
 
   const rrStandingsByGroup = useMemo<RRStandingRow[][]>(
-    () => rrGroups.map((players) => {
-      const ids = new Set(players.map((p) => p.uid));
-      return computeGroupStandings(rrGroupMatches.filter((m) => ids.has(m.player_1_uid) || ids.has(m.player_2_uid)));
+    () => rrGroupKeys.map((key) => computeGroupStandings(rrGroupMatches.filter((m) => m.group_label === key))),
+    [rrGroupKeys, rrGroupMatches],
+  );
+
+  // Stored verbatim at generation; a rename overwrites it. Letters no longer re-letter on render.
+  const rrGroupLabels = rrGroupKeys;
+
+  // Group Bonus switch per group: on exactly while the group's `awards` doc exists (the server
+  // writes and deletes it, functions/lib/scoring.js groupBonus).
+  const rrGroupAwardIds = useMemo(
+    () => rrGroupKeys.map((key) => {
+      const first = rrGroupMatches.find((m) => m.group_label === key);
+      return first ? groupBonusAwardId(first) : '';
     }),
-    [rrGroups, rrGroupMatches],
+    [rrGroupKeys, rrGroupMatches],
   );
-
-  const rrConfig = useMemo(() => deriveRRConfig(currentMatches), [currentMatches]);
-
-  const rrGroupLabels = useMemo<string[]>(
-    () => (rrGroupMatches.length === 0 ? [] : buildRRLabelsFrom(rrGroupMatches, rrGroupIndices)),
-    [rrGroupMatches, rrGroupIndices, buildRRLabelsFrom],
-  );
+  const awardIdsKey = rrGroupAwardIds.join('|');
+  useEffect(() => {
+    const ids = awardIdsKey ? awardIdsKey.split('|').filter(Boolean) : [];
+    if (ids.length === 0) { setBonusAwards({}); return; }
+    const unsubs = ids.map((id) => onSnapshot(
+      doc(db, 'awards', id),
+      (snap) => setBonusAwards((prev) => ({ ...prev, [id]: snap.exists() })),
+      () => setBonusAwards((prev) => ({ ...prev, [id]: false })),
+    ));
+    return () => unsubs.forEach((u) => u());
+  }, [awardIdsKey]);
+  const rrGroupBonus = useMemo(() => rrGroupAwardIds.map((id) => !!bonusAwards[id]), [rrGroupAwardIds, bonusAwards]);
 
   // Registered for THIS DRAW and not yet in a group — the "Add Group" picker's pool. Deliberately
   // not the same list as `unplacedParticipants`, which spans every tournament for organizer
@@ -838,7 +853,7 @@ export const useTournament = (eventIdOverride?: string) => {
   // The logic moved to useUnplacedParticipants so the Organizer Dash can show the same list
   // without mounting this hook; see CLAUDE.md, "Two unplaced lists, deliberately".
   const myTournamentEvents = useMemo(
-    () => (user ? allTournamentEvents.filter((e) => e.creator_id === user.uid) : []),
+    () => (user ? allTournamentEvents.filter((e) => e.organizer_ids?.includes(user.uid)) : []),
     [allTournamentEvents, user],
   );
   // A token, not the arrays: the original effect depended on `matches` and `participants`
@@ -886,19 +901,19 @@ export const useTournament = (eventIdOverride?: string) => {
       const seated = new Set(
         matches
           .filter((m) => m.format === 'rr' && m.round === 'RR'
-            && (m.rr_group ?? 0) === (target.rr_group ?? 0)
+            && m.group_label === target.group_label
             && m.event_id === target.event_id
-            && m.tournament_choice === target.tournament_choice
+            && m.sub_category === target.sub_category
             && m.division === target.division
             && m.skill_group === target.skill_group
-            && (m.zone ?? null) === (target.zone ?? null))
+            && effectiveZone(m.zone) === effectiveZone(target.zone))
           .flatMap((m) => [m.player_1_uid, m.player_2_uid])
           .filter((id): id is string => !!id && id !== uid),
       );
       if (overGroupCap(seated.size + 1)) return;
     }
     try {
-      await updateDoc(doc(db, 'matches', matchId), { [`${slot}_name`]: name, [`${slot}_uid`]: uid });
+      await updateDoc(doc(db, 'matches', matchId), slotPatch(target, slot, uid, name));
       setMessage({ type: 'success', text: `${formatPlayerName(name)} placed in the draw.` });
     } catch (err) {
       console.error('Seat player failed:', err);
@@ -906,13 +921,24 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  // Participants who asked the organizer for a different zone (creator-only queue) — notify-only. The organizer resolves it manually outside the app.
-  const zoneChangeRequests = useMemo<EventParticipant[]>(
-    () => (isCreator ? activeParticipants.filter((p) => p.req_zone_change) : []),
-    [isCreator, activeParticipants],
-  );
-
-
+  // A full v3 event_participants row for this event, on its deterministic id.
+  const registrationFor = (uid: string, name: string, division: string, skill: number, partner?: { uid: string; name: string }) => {
+    const category = event!.category;
+    return {
+      id: registrationId(event!.id, uid, category, division),
+      data: {
+        uid, user_name: name, event_id: event!.id, event_name: event!.title,
+        category, sub_category: event!.sub_category, division, skill,
+        partner_uid: partner?.uid ?? '', partner_name: partner?.name ?? '',
+        status: 'active', withdrawn_reason: '', withdrawn_at: null, withdrawn_by: '',
+        created_at: Timestamp.now(),
+      },
+    };
+  };
+  // An organizer's removal: the row stays, withdrawn (registrations are never deleted).
+  const withdrawal = () => ({
+    status: 'withdrawn', withdrawn_reason: '', withdrawn_at: Timestamp.now(), withdrawn_by: user?.uid ?? '',
+  });
 
   // ── Internal helpers ──────────────────────────────────────────────────────
 
@@ -944,11 +970,12 @@ export const useTournament = (eventIdOverride?: string) => {
       zone: draw.zone,
       drawsize,
       allMatches: templateMatches,
+      started,
     };
     templateMatches.forEach((tm, index) => {
       batch.set(
         doc(db, 'matches', `${event.id}_${drawKey}_${tm.match_id}`),
-        { ...buildMatchFields(tm, index, slotMap, cfg), bracket: null, started, created_at: new Date().toISOString() },
+        buildMatchFields(tm, index, slotMap, cfg),
         { merge: true },
       );
     });
@@ -980,6 +1007,8 @@ export const useTournament = (eventIdOverride?: string) => {
         advBatch.update(doc(db, 'matches', nextMatchId), {
           [`${slot}_name`]: player.name,
           [`${slot}_uid`]: player.uid,
+          participant_uids: arrayUnion(...[player.uid, player.partnerUid].filter((u): u is string => !!u)),
+          updated_at: Timestamp.now(),
         });
       });
       await advBatch.commit();
@@ -987,7 +1016,7 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   // Results are recorded by the scoreMatch Cloud Function (functions/lib/scoring.js): match, stats,
-  // advancement and audit in one server transaction. There is no client writer.
+  // advancement and the submission history in one server transaction. There is no client writer.
 
   // ── Action handlers ───────────────────────────────────────────────────────
 
@@ -997,7 +1026,7 @@ export const useTournament = (eventIdOverride?: string) => {
     setEvent(updated);
     setAllTournamentEvents((prev) => prev.map((e) => (e.id === event.id ? updated : e)));
     try {
-      await updateDoc(doc(db, 'events', event.id), { zone_draw_config: config ?? null });
+      await updateDoc(doc(db, 'events', event.id), { zone_draw_config: config ?? {} });
     } catch (err) {
       console.error('Failed to save zone draw config:', err);
     }
@@ -1061,7 +1090,7 @@ export const useTournament = (eventIdOverride?: string) => {
       setPreviewDrawSize((prev) => deleteKey(prev, currentDraw.label));
       // Clear the merge for THIS zone only — cancelling Downtown's merged draw shouldn't unmerge
       // the same division in another zone.
-      if (currentDraw.skillGroup === 'All' && currentDraw.tournamentChoice === 'Singles') {
+      if (currentDraw.mergedFrom) {
         setSkillMerges((prev) => ({ ...prev, [skillMergeKey(currentDraw.division, currentDraw.zone)]: null }));
       }
       if (currentDraw.tournamentChoice === 'Doubles' && currentDraw.division === 'All') setConsolidateDoubles(false);
@@ -1079,7 +1108,7 @@ export const useTournament = (eventIdOverride?: string) => {
       const match = displayMatches.find((m) => m.id === matchId);
       if (!match || !currentDraw) return;
       const slotNum = slot === 'player_1' ? match.player_1_slot : match.player_2_slot;
-      if (typeof slotNum !== 'number') return;
+      if (!slotNum) return;
       setPreviewSlotOverrides((prev) => ({
         ...prev,
         [currentDraw.label]: { ...(prev[currentDraw.label] ?? {}), [slotNum]: player },
@@ -1092,28 +1121,24 @@ export const useTournament = (eventIdOverride?: string) => {
       // Self-heal here regardless of how they became selectable. No-op when already a
       // participant, so the normal Add Player → Move Players flow is unaffected.
       if (player?.uid && event && currentDraw &&
-          !participants.some((p) => p.uid === player.uid)) {
+          !activeParticipants.some((p) => p.uid === player.uid)) {
         let skillLevel = statsMap[player.uid]?.skill_level ?? 0;
         if (!statsMap[player.uid]) {
           const statsSnap = await getDocs(query(collection(db, 'stats'), where('__name__', '==', player.uid)));
           skillLevel = (statsSnap.docs[0]?.data() as UserStats | undefined)?.skill_level ?? 0;
         }
-        await addDoc(collection(db, 'event_participants'), {
-          uid: player.uid,
-          user_name: player.name,
-          event_id: event.id,
-          event_name: event.title,
-          tournament_choice: currentDraw.tournamentChoice,
-          division: currentDraw.division !== 'All' ? currentDraw.division : "Men's",
-          skill: skillLevel,
-          created_at: new Date().toISOString(),
-        });
+        const reg = registrationFor(player.uid, player.name, currentDraw.division !== 'All' ? currentDraw.division : "Men's", skillLevel);
+        // A withdrawn row on the same id is re-activated; otherwise a new full row.
+        if (participants.some((p) => p.id === reg.id)) {
+          await updateDoc(doc(db, 'event_participants', reg.id), { status: 'active', withdrawn_reason: '', withdrawn_at: null, withdrawn_by: '' });
+        } else {
+          await setDoc(doc(db, 'event_participants', reg.id), reg.data);
+        }
       }
 
-      await updateDoc(doc(db, 'matches', matchId), {
-        [`${slot}_name`]: player?.name || BYE,
-        [`${slot}_uid`]: player?.uid || '',
-      });
+      const target = matches.find((m) => m.id === matchId);
+      if (!target) return;
+      await updateDoc(doc(db, 'matches', matchId), slotPatch(target, slot, player?.uid || '', player?.name || BYE));
     } catch (err) {
       console.error('Edit player failed:', err);
       setMessage({ type: 'error', text: 'Could not update player.' });
@@ -1179,16 +1204,9 @@ export const useTournament = (eventIdOverride?: string) => {
     if (userId === PLAYER_LOADING_SENTINEL) {
       const division = divisionOverride ?? (currentDraw.division !== 'All' ? currentDraw.division : "Men's");
       try {
-        await addDoc(collection(db, 'event_participants'), {
-          uid: `__loading_${Date.now()}`,
-          user_name: PLAYER_LOADING,
-          event_id: event.id,
-          event_name: event.title,
-          tournament_choice: currentDraw.tournamentChoice,
-          division,
-          skill: 0,
-          created_at: new Date().toISOString(),
-        });
+        // `__loading_<time>` still fits the {eventId}_{uid} id rule.
+        const reg = registrationFor(`__loading_${Date.now()}`, PLAYER_LOADING, division, 0);
+        await setDoc(doc(db, 'event_participants', reg.id), reg.data);
         setMessage({ type: 'success', text: 'Player Loading placeholder added.' });
       } catch (err) {
         setMessage({ type: 'error', text: 'Could not add placeholder.' });
@@ -1204,23 +1222,18 @@ export const useTournament = (eventIdOverride?: string) => {
         skillLevel = (statsSnap.docs[0]?.data() as UserStats | undefined)?.skill_level ?? 0;
       }
       const division = divisionOverride ?? (currentDraw.division !== 'All' ? currentDraw.division : "Men's");
-      await addDoc(collection(db, 'event_participants'), {
-        uid: userId,
-        user_name: userData.name,
-        event_id: event.id,
-        event_name: event.title,
-        tournament_choice: currentDraw.tournamentChoice,
-        division,
-        skill: skillLevel,
-        ...(partnerName ? { doubles: partnerName, partner_in_app: 'no' } : {}),
-        created_at: new Date().toISOString(),
-      });
-      // Re-adding a player clears any prior withdrawal so they can be grouped again.
-      if (currentDrawFormat === 'rr') { manuallyUnplacedIdsRef.current.delete(userId); await setRRWithdrawnMembership([], [userId]); }
-      // A previously removed player who is re-added becomes active again.
-      const priorRemoved = participants.filter((p) => p.uid === userId && p.removal);
-      await Promise.all(priorRemoved.map((p) =>
-        updateDoc(doc(db, 'event_participants', p.id), { removal: false })));
+      // A typed partner name is someone not on the app: a guest partner.
+      const partner = partnerName ? { uid: guestUid(), name: partnerName } : undefined;
+      const reg = registrationFor(userId, userData.name, division, skillLevel, partner);
+      // A previously withdrawn player who is re-added becomes active again on the same row.
+      if (participants.some((p) => p.id === reg.id)) {
+        await updateDoc(doc(db, 'event_participants', reg.id), {
+          status: 'active', withdrawn_reason: '', withdrawn_at: null, withdrawn_by: '',
+          ...(partner ? { partner_uid: partner.uid, partner_name: partner.name } : {}),
+        });
+      } else {
+        await setDoc(doc(db, 'event_participants', reg.id), reg.data);
+      }
       setMessage({ type: 'success', text: `${userData.name} added. Use Move Players to assign their bracket.` });
     } catch (err) {
       console.error('Add player failed:', err);
@@ -1229,12 +1242,12 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   /**
-   * Soft delete: the `event_participants` row survives with `removal: true`, and completed
+   * Soft delete: the `event_participants` row survives with status 'withdrawn', and completed
    * matches and earned stats are left as they are. Their slot becomes Player Loading — shown in a
    * knockout so there's somewhere to drop a replacement, hidden in RR groups where it's noise.
    */
   const handleRemovePlayer = async (uid: string) => {
-    if (!isCreator || !event || !uid) return;
+    if (!isCreator || !event || !uid || !user) return;
     try {
       // Their unplayed generated matches against a real opponent become walkovers for that
       // opponent. Recorded first: the server refuses a result once a side is blank.
@@ -1248,23 +1261,18 @@ export const useTournament = (eventIdOverride?: string) => {
       }
       const walkedOver = new Set(walkovers.map((m) => m.id));
 
-      const rows = participants.filter((p) => p.uid === uid);
+      const rows = activeParticipants.filter((p) => p.uid === uid);
       const batch = writeBatch(db);
-      rows.forEach((p) => batch.update(doc(db, 'event_participants', p.id), {
-        removal: true,
-        removal_at: new Date().toISOString(),
-      }));
+      rows.forEach((p) => batch.update(doc(db, 'event_participants', p.id), withdrawal()));
       // Blank them out of any other unplayed match in this draw (no real opponent yet). Played
       // matches keep their record — rewriting a completed result would orphan the score.
       currentMatches
         .filter((m) => m.status !== 'complete' && !walkedOver.has(m.id))
         .forEach((m) => {
-          if (m.player_1_uid === uid) batch.update(doc(db, 'matches', m.id), { player_1_uid: '', player_1_name: PLAYER_LOADING });
-          if (m.player_2_uid === uid) batch.update(doc(db, 'matches', m.id), { player_2_uid: '', player_2_name: PLAYER_LOADING });
+          if (m.player_1_uid === uid) batch.update(doc(db, 'matches', m.id), slotPatch(m, 'player_1', '', PLAYER_LOADING));
+          if (m.player_2_uid === uid) batch.update(doc(db, 'matches', m.id), slotPatch(m, 'player_2', '', PLAYER_LOADING));
         });
       await batch.commit();
-      // RR auto-placement would otherwise seat them again on the next pass.
-      if (currentDrawFormat === 'rr') { manuallyUnplacedIdsRef.current.add(uid); await setRRWithdrawnMembership([uid]); }
       setMessage({ type: 'success', text: walkovers.length
         ? `Player removed. ${walkovers.length} walkover${walkovers.length === 1 ? '' : 's'} recorded for their opponents.`
         : 'Player removed.' });
@@ -1285,7 +1293,7 @@ export const useTournament = (eventIdOverride?: string) => {
       matchDocId: match.id,
       winnerUserId: match.player_1_uid,
       sets: [{ mine: '', opponent: '' }, { mine: '', opponent: '' }, { mine: '', opponent: '' }],
-      court: match.court ?? '',
+      court: match.result?.court ?? '',
     });
   };
 
@@ -1295,37 +1303,22 @@ export const useTournament = (eventIdOverride?: string) => {
     ? currentDrawKey : '';
 
   // Persist an edited pre-generation grouping to the draft doc (no matches written). Empty groups
-  // are dropped so groups/labels/custom stay aligned; players placed back into a group are removed
-  // from the withdrawn list.
-  const saveRRDraft = async (groups: TournamentPlayer[][], labels: string[], custom: boolean[], withdrawnExtra: string[] = []) => {
+  // are dropped so groups and labels stay aligned. Labels are stored verbatim.
+  const saveRRDraft = async (groups: TournamentPlayer[][], labels: string[]) => {
     if (!event || !currentDraw) return;
     const rows = groups
-      .map((g, i) => ({ uids: g.map((p) => p.uid), label: labels[i] ?? '', c: custom[i] ?? false }))
+      .map((g, i) => ({ uids: g.map((p) => p.uid), label: labels[i] ?? '' }))
       .filter((r) => r.uids.length > 0);
-    const placed = new Set(rows.flatMap((r) => r.uids));
-    const withdrawn = [...new Set([...(rrDraft?.withdrawn ?? []), ...withdrawnExtra])].filter((uid) => !placed.has(uid));
     await setDoc(doc(db, 'events', event.id, 'rr_drafts', rrDraftKey()), {
       event_id: event.id,
       draw_key: rrDraftKey(),
       groups: rows.map((r) => r.uids.join(',')),
       labels: rows.map((r) => r.label),
-      custom: rows.map((r) => r.c),
-      withdrawn,
-      updated_at: new Date().toISOString(),
+      updated_at: Timestamp.now(),
     });
   };
 
-  // Merge/remove withdrawn uids on the draft doc without disturbing the group arrangement — used
-  // post-generation (Player Loading = durable removal) and by Add Player (un-withdraw).
-  const setRRWithdrawnMembership = async (add: string[], remove: string[] = []) => {
-    if (!event || !currentDraw) return;
-    const next = [...new Set([...(rrDraft?.withdrawn ?? []), ...add])].filter((u) => !remove.includes(u));
-    await setDoc(doc(db, 'events', event.id, 'rr_drafts', rrDraftKey()), {
-      event_id: event.id, draw_key: rrDraftKey(), withdrawn: next, updated_at: new Date().toISOString(),
-    }, { merge: true });
-  };
-
-  const handleGenerateRR = async (config: RRConfig) => {
+  const handleGenerateRR = async () => {
     if (!isCreator || !event || !currentDraw) return;
     setGeneratingRR(true);
     setMessage(null);
@@ -1334,7 +1327,9 @@ export const useTournament = (eventIdOverride?: string) => {
       // Generate from what the creator sees (the draft arrangement if they edited one, else the
       // computed preview), so the confirmed groups + names match the preview exactly.
       const groups = previewRRGroups;
-      const labels = previewRRLabels;
+      // The label becomes the group's identity, so two groups can't share one.
+      const taken = new Set<string>();
+      const labels = groups.map((_, gi) => uniqueLabel(previewRRLabels[gi] || `Group ${String.fromCharCode(65 + gi)}`, taken));
       const batch = writeBatch(db);
       // Clear any existing RR docs for this draw first so re-generating can't leave
       // orphaned groups/matches behind (deterministic doc IDs only overwrite a matching
@@ -1344,10 +1339,8 @@ export const useTournament = (eventIdOverride?: string) => {
         const pairings = players.length >= 2 ? generateGroupPairings(players.length) : [[0, 1]] as [number, number][];
         buildRRGroupMatchFields({
           eventId: event.id, drawKey, draw: currentDraw,
-          groupIndex: gi, groupLabel: labels[gi] ?? `Group ${String.fromCharCode(65 + gi)}`,
-          labelCustom: !!rrDraft?.custom[gi],
-          groupPlayers: players, pairings,
-          advancementCount: config.advancementCount, started,
+          groupIndex: gi, groupLabel: labels[gi],
+          groupPlayers: players, pairings, started,
         }).forEach(({ docId, fields }) => {
           batch.set(doc(db, 'matches', docId), fields);
         });
@@ -1364,13 +1357,11 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  // `rrGroup` is the real rr_group value (not the card's array position) — the caller
-  // translates via rrGroupIndices so non-contiguous group indices resolve correctly.
-  const handleSaveGroupEdit = async (rrGroup: number, newPlayers: TournamentPlayer[]) => {
+  // `gi` is the group card's position: a draft group before generation, rrGroupKeys[gi] after.
+  const handleSaveGroupEdit = async (gi: number, newPlayers: TournamentPlayer[]) => {
     if (!isCreator || !event || !currentDraw) return;
     if (overGroupCap(newPlayers.length)) return;
     const drawKey = currentDrawKey;
-    const advCount = rrConfig?.advancementCount ?? 1;
 
     // Draft state (no matches yet): apply the edit to the preview arrangement and persist it as a
     // draft — nothing is generated. Moved players are removed from their source groups.
@@ -1378,11 +1369,10 @@ export const useTournament = (eventIdOverride?: string) => {
       try {
         const real = newPlayers.filter((p) => p.uid && p.uid !== PLAYER_LOADING_SENTINEL);
         const movedIn = new Set(real.map((p) => p.uid));
-        const nextGroups = previewRRGroups.map((groupPlayers, gi) =>
-          gi === rrGroup ? real : groupPlayers.filter((p) => !movedIn.has(p.uid)),
+        const nextGroups = previewRRGroups.map((groupPlayers, i) =>
+          i === gi ? real : groupPlayers.filter((p) => !movedIn.has(p.uid)),
         );
-        const nextCustom = previewRRGroups.map((_, i) => !!rrDraft?.custom[i]);
-        await saveRRDraft(nextGroups, previewRRLabels, nextCustom);
+        await saveRRDraft(nextGroups, previewRRLabels);
         setMessage({ type: 'success', text: 'Group updated.' });
       } catch (err) {
         console.error('Group draft save failed:', err);
@@ -1391,10 +1381,9 @@ export const useTournament = (eventIdOverride?: string) => {
       return;
     }
 
+    const groupKey = rrGroupKeys[gi];
+    if (groupKey === undefined) return;
     let removedUids: string[] = [];
-    // drawKey → uids to withdraw there too, for a removed player who also has leftover match
-    // docs in a draw other than the one being edited (a sibling skill draw, most commonly).
-    const extraWithdrawnByDrawKey = new Map<string, Set<string>>();
     try {
       const batch = writeBatch(db);
       const queuedDeleteIds = new Set<string>();
@@ -1403,24 +1392,21 @@ export const useTournament = (eventIdOverride?: string) => {
         queuedDeleteIds.add(id);
         batch.delete(doc(db, 'matches', id));
       };
+      const matchesOf = (key: string) => rrGroupMatches.filter((m) => m.group_label === key);
 
       {
         // Rewrite the target group and atomically update source groups for players moved in.
         // A move protects someone who has already played here (below), but an outright removal
         // always proceeds — a departed player can't sensibly keep a match here.
-        const oldMatches = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === rrGroup);
-        const groupLabel = oldMatches[0]?.rr_group_label ?? `Group ${String.fromCharCode(65 + rrGroup)}`;
-        const labelCustom = oldMatches[0]?.rr_label_custom ?? false;
+        const oldMatches = matchesOf(groupKey);
 
         // Strip PLAYER_LOADING sentinels — they must not generate match pairings.
         const realNewPlayers = newPlayers.filter((p) => p.uid !== PLAYER_LOADING_SENTINEL);
-        // Players replaced with PLAYER_LOADING are withdrawn — persisted below so auto-placement
-        // never re-adds them (even after a refresh).
-        const prevPlayers = buildRRGroupsFrom(oldMatches, [rrGroup])[0] ?? [];
+        // Players replaced with PLAYER_LOADING are withdrawn from the event below.
+        const prevPlayers = buildRRGroupsFrom(oldMatches, [groupKey])[0] ?? [];
         removedUids = prevPlayers
           .filter((p) => p.uid && !realNewPlayers.some((np) => np.uid === p.uid))
           .map((p) => p.uid);
-        removedUids.forEach((uid) => manuallyUnplacedIdsRef.current.add(uid));
 
         const existingIds = new Set<string>();
         oldMatches.forEach((m) => {
@@ -1430,45 +1416,38 @@ export const useTournament = (eventIdOverride?: string) => {
 
         // Collect edits needed on source groups for cross-group moves. Only a player who has
         // personally played a match in their current group is protected from being moved out.
-        const srcEdits = new Map<number, { players: TournamentPlayer[]; label: string; labelCustom: boolean }>();
+        const srcEdits = new Map<string, TournamentPlayer[]>();
         for (const p of newPlayers) {
           if (!p.uid || existingIds.has(p.uid)) continue;
-          for (const srcGi of rrGroupIndices) {
-            if (srcGi === rrGroup) continue;
-            const srcMs = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === srcGi);
-            const srcPlayers = buildRRGroupsFrom(srcMs, [srcGi])[0] ?? [];
+          for (const srcKey of rrGroupKeys) {
+            if (srcKey === groupKey) continue;
+            const srcMs = matchesOf(srcKey);
+            const srcPlayers = buildRRGroupsFrom(srcMs, [srcKey])[0] ?? [];
             if (!srcPlayers.some((sp) => sp.uid === p.uid)) continue;
             if (srcMs.some((m) => m.status === 'complete' && (m.player_1_uid === p.uid || m.player_2_uid === p.uid))) {
               setMessage({ type: 'error', text: 'Cannot move: this player has already played a match in their current group.' });
               return;
             }
-            const prevSrcEdit = srcEdits.get(srcGi);
-            const basePlayers = prevSrcEdit ? prevSrcEdit.players : srcPlayers;
-            srcEdits.set(srcGi, {
-              players: basePlayers.filter((sp) => sp.uid !== p.uid),
-              label: srcMs[0]?.rr_group_label ?? `Group ${String.fromCharCode(65 + srcGi)}`,
-              labelCustom: srcMs[0]?.rr_label_custom ?? false,
-            });
+            const basePlayers = srcEdits.get(srcKey) ?? srcPlayers;
+            srcEdits.set(srcKey, basePlayers.filter((sp) => sp.uid !== p.uid));
             break;
           }
         }
 
         const rewrite = buildSafeGroupRewrite({
           eventId: event.id, drawKey, draw: currentDraw,
-          groupIndex: rrGroup, groupLabel, labelCustom,
-          oldMatches, newPlayers: realNewPlayers,
-          advancementCount: advCount, started,
+          groupIndex: Math.min(...oldMatches.map(groupIndexOf)), groupLabel: groupKey,
+          oldMatches, newPlayers: realNewPlayers, started,
         });
         rewrite.toDelete.forEach((id) => queueDelete(id));
         rewrite.toWrite.forEach(({ docId, fields }) => batch.set(doc(db, 'matches', docId), fields));
 
-        for (const [srcGi, srcEdit] of srcEdits) {
-          const srcMs = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === srcGi);
+        for (const [srcKey, srcPlayers] of srcEdits) {
+          const srcMs = matchesOf(srcKey);
           const srcRewrite = buildSafeGroupRewrite({
             eventId: event.id, drawKey, draw: currentDraw,
-            groupIndex: srcGi, groupLabel: srcEdit.label, labelCustom: srcEdit.labelCustom,
-            oldMatches: srcMs, newPlayers: srcEdit.players,
-            advancementCount: advCount, started,
+            groupIndex: Math.min(...srcMs.map(groupIndexOf)), groupLabel: srcKey,
+            oldMatches: srcMs, newPlayers: srcPlayers, started,
           });
           srcRewrite.toDelete.forEach((id) => queueDelete(id));
           srcRewrite.toWrite.forEach(({ docId, fields }) => batch.set(doc(db, 'matches', docId), fields));
@@ -1477,51 +1456,18 @@ export const useTournament = (eventIdOverride?: string) => {
 
       // Purge the player from the WHOLE event, not just this group — any match doc still listing
       // them (another RR group, a sibling skill draw, the knockout) is deleted, played or not.
-      // One leftover doc keeps reconstructing their name on the group card and lets the
-      // late-joiner effect re-seat them the moment they look "unplaced but registered".
+      // One leftover doc keeps reconstructing their name on the group card.
+      // Then withdraw their registration (status, never a delete): that row is what routes a player
+      // into a draw by skill. Same batch as the match-doc changes, so both commit atomically and the
+      // removal can't be seen half-done. Re-adding goes through Add Player.
       if (removedUids.length) {
         const removedSet = new Set(removedUids);
         matches.forEach((m) => {
-          if (!removedSet.has(m.player_1_uid ?? '') && !removedSet.has(m.player_2_uid ?? '')) return;
-          queueDelete(m.id);
-          if (m.format === 'rr' && m.round === 'RR' && m.tournament_choice && m.division && m.skill_group) {
-            const otherDrawKey = getDrawKey(m.tournament_choice, m.division, m.skill_group, m.zone);
-            if (otherDrawKey === drawKey) return;
-            if (!extraWithdrawnByDrawKey.has(otherDrawKey)) extraWithdrawnByDrawKey.set(otherDrawKey, new Set());
-            const uidsHere = extraWithdrawnByDrawKey.get(otherDrawKey)!;
-            if (removedSet.has(m.player_1_uid ?? '')) uidsHere.add(m.player_1_uid!);
-            if (removedSet.has(m.player_2_uid ?? '')) uidsHere.add(m.player_2_uid!);
-          }
+          if (removedSet.has(m.player_1_uid) || removedSet.has(m.player_2_uid)) queueDelete(m.id);
         });
-      }
-
-      // Deregister from the event entirely — this is what stops the late-joiner effect finding
-      // them again. Withdrawing only in the draws with a leftover match doc isn't enough:
-      // `event_participants` is what routes a player into a draw by skill, so while it exists
-      // they can be auto-placed into a DIFFERENT draw. Re-adding goes through Add Player.
-      if (removedUids.length) {
-        const removedSet = new Set(removedUids);
-        participants.forEach((p) => {
-          if (removedSet.has(p.uid)) batch.delete(doc(db, 'event_participants', p.id));
+        activeParticipants.forEach((p) => {
+          if (removedSet.has(p.uid)) batch.update(doc(db, 'event_participants', p.id), withdrawal());
         });
-      }
-
-      // Same batch as the match-doc changes, so both commit atomically. Written separately, the
-      // matches change reaches onSnapshot (and the late-joiner effect) before the withdrawn
-      // list's round trip finishes, so the just-removed player could be re-seated before the
-      // withdrawal was ever visible — persisting across a reload.
-      if (removedUids.length) {
-        const nextWithdrawn = [...new Set([...(rrDraft?.withdrawn ?? []), ...removedUids])];
-        batch.set(doc(db, 'events', event.id, 'rr_drafts', rrDraftKey()), {
-          event_id: event.id, draw_key: rrDraftKey(), withdrawn: nextWithdrawn, updated_at: new Date().toISOString(),
-        }, { merge: true });
-      }
-      // A different draw's rr_drafts doc isn't loaded client-side, so its existing withdrawn
-      // list is unknown here — arrayUnion appends without needing (or risking clobbering) it.
-      for (const [otherDrawKey, uids] of extraWithdrawnByDrawKey) {
-        batch.set(doc(db, 'events', event.id, 'rr_drafts', otherDrawKey), {
-          event_id: event.id, draw_key: otherDrawKey, withdrawn: arrayUnion(...uids), updated_at: new Date().toISOString(),
-        }, { merge: true });
       }
 
       await batch.commit();
@@ -1538,9 +1484,12 @@ export const useTournament = (eventIdOverride?: string) => {
     if (!isCreator || !event || !currentDraw) return;
     if (overGroupCap(newPlayers.length)) return;
     const drawKey = currentDrawKey;
-    const nextIndex = (rrGroupIndices.length ? Math.max(...rrGroupIndices) : -1) + 1;
-    const advCount = rrConfig?.advancementCount ?? 1;
     const trimmed = (label ?? '').trim();
+    const taken = new Set(rrGroupMatches.length === 0 ? previewRRLabels : rrGroupKeys);
+    if (trimmed && taken.has(trimmed)) {
+      setMessage({ type: 'error', text: 'Another group already has that name.' });
+      return;
+    }
 
     // Draft state: append a new group to the draft (no matches written).
     if (rrGroupMatches.length === 0) {
@@ -1549,10 +1498,7 @@ export const useTournament = (eventIdOverride?: string) => {
         if (real.length === 0) return;
         const movedIn = new Set(real.map((p) => p.uid));
         const base = previewRRGroups.map((g) => g.filter((p) => !movedIn.has(p.uid)));
-        const nextGroups = [...base, real];
-        const nextLabels = [...previewRRLabels, trimmed];
-        const nextCustom = [...previewRRGroups.map((_, i) => !!rrDraft?.custom[i]), !!trimmed];
-        await saveRRDraft(nextGroups, nextLabels, nextCustom);
+        await saveRRDraft([...base, real], [...previewRRLabels, trimmed]);
         setMessage({ type: 'success', text: 'Group created.' });
       } catch (err) {
         console.error('RR draft group create failed:', err);
@@ -1561,6 +1507,7 @@ export const useTournament = (eventIdOverride?: string) => {
       return;
     }
 
+    const nextIndex = Math.max(-1, ...rrGroupMatches.map(groupIndexOf)) + 1;
     // 0 or 1 player → placeholder match so the empty/solo group remains visible.
     const pairings: [number, number][] = newPlayers.length >= 2 ? generateGroupPairings(newPlayers.length) : [[0, 1]];
     try {
@@ -1568,11 +1515,10 @@ export const useTournament = (eventIdOverride?: string) => {
       buildRRGroupMatchFields({
         eventId: event.id, drawKey, draw: currentDraw,
         groupIndex: nextIndex,
-        groupLabel: trimmed || `Group ${String.fromCharCode(65 + nextIndex)}`,
-        labelCustom: !!trimmed,
+        groupLabel: trimmed || uniqueLabel(`Group ${String.fromCharCode(65 + rrGroupKeys.length)}`, taken),
         groupPlayers: newPlayers,
         pairings,
-        advancementCount: advCount, started,
+        started,
       }).forEach(({ docId, fields }) => batch.set(doc(db, 'matches', docId), fields));
       await batch.commit();
       setMessage({ type: 'success', text: 'Group created.' });
@@ -1582,19 +1528,22 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  // Rename a group. A non-empty label is stored as a custom label (shown verbatim); empty is a
-  // no-op (labels revert to auto only when the group is regenerated).
-  const handleRenameGroup = async (rrGroup: number, label: string) => {
+  // Rename a group: the new label overwrites group_label on every match of the group (it is the
+  // group's identity, so it must stay unique in the draw). Empty is a no-op.
+  const handleRenameGroup = async (gi: number, label: string) => {
     if (!isCreator || !event || !currentDraw) return;
     const trimmed = label.trim();
     if (!trimmed) return;
+    const labels = rrGroupMatches.length === 0 ? previewRRLabels : rrGroupKeys;
+    if (labels.some((l, i) => i !== gi && l === trimmed)) {
+      setMessage({ type: 'error', text: 'Another group already has that name.' });
+      return;
+    }
 
-    // Draft state: store the custom label on the draft (no matches yet).
+    // Draft state: store the label on the draft (no matches yet).
     if (rrGroupMatches.length === 0) {
       try {
-        const nextLabels = previewRRLabels.map((l, i) => (i === rrGroup ? trimmed : l));
-        const nextCustom = previewRRGroups.map((_, i) => (i === rrGroup ? true : !!rrDraft?.custom[i]));
-        await saveRRDraft(previewRRGroups, nextLabels, nextCustom);
+        await saveRRDraft(previewRRGroups, previewRRLabels.map((l, i) => (i === gi ? trimmed : l)));
         setMessage({ type: 'success', text: 'Group renamed.' });
       } catch (err) {
         console.error('RR draft rename failed:', err);
@@ -1603,11 +1552,17 @@ export const useTournament = (eventIdOverride?: string) => {
       return;
     }
 
-    const groupMatches = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === rrGroup);
-    if (groupMatches.length === 0) return;
+    const groupKey = rrGroupKeys[gi];
+    const groupMatches = rrGroupMatches.filter((m) => m.group_label === groupKey);
+    if (groupMatches.length === 0 || groupKey === trimmed) return;
+    // The bonus award's id is built from the group name; renaming would orphan it.
+    if (rrGroupBonus[gi]) {
+      setMessage({ type: 'error', text: 'Turn the group bonus off before renaming this group.' });
+      return;
+    }
     try {
       const batch = writeBatch(db);
-      groupMatches.forEach((m) => batch.update(doc(db, 'matches', m.id), { rr_group_label: trimmed, rr_label_custom: true }));
+      groupMatches.forEach((m) => batch.update(doc(db, 'matches', m.id), { group_label: trimmed, updated_at: Timestamp.now() }));
       await batch.commit();
       setMessage({ type: 'success', text: 'Group renamed.' });
     } catch (err) {
@@ -1617,14 +1572,14 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   // Organizer's Group Bonus switch: pays every player in one RR group, or takes it back. This is the ONLY way the bonus moves — scoring a group's last match awards nothing.
-  // `rr_group_bonus_v2` on every match in the group IS the switch's state; the server pays and
-  // takes it back (setGroupBonus in functions/lib/scoring.js).
-  const handleSetGroupBonus = async (rrGroup: number, award: boolean) => {
+  // The group's `awards` doc IS the switch's state; the server pays and takes it back
+  // (groupBonus in functions/lib/scoring.js).
+  const handleSetGroupBonus = async (gi: number, award: boolean) => {
     if (!isCreator || !event || !currentDraw) return;
-    const groupMatches = rrGroupMatches.filter((m) => (m.rr_group ?? 0) === rrGroup);
+    const groupMatches = rrGroupMatches.filter((m) => m.group_label === rrGroupKeys[gi]);
     if (groupMatches.length === 0) return;
     // Already in the requested state — nothing to pay or refund.
-    if (groupMatches.some((m) => m.rr_group_bonus_v2) === award) return;
+    if (rrGroupBonus[gi] === award) return;
     const recipients = computeGroupStandings(groupMatches).filter((r) => r.userId);
     if (recipients.length === 0) return;
     const pending = groupMatches.filter((m) => m.status !== 'complete').length;
@@ -1643,57 +1598,23 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  // ── Match scheduling ──────────────────────────────────────────────────────
-  // Players may write only the scheduling fields (Firestore rules carve-out); scores stay
-  // organizer-only. Preview (ungenerated) matches have no doc, so they're guarded out.
-  const writeSchedule = async (matchId: string, patch: Record<string, unknown>, successText: string) => {
-    if (!matchId || matchId.startsWith('preview_')) return;
-    try {
-      await updateDoc(doc(db, 'matches', matchId), patch);
-      setMessage({ type: 'success', text: successText });
-    } catch (err) {
-      console.error('Schedule update failed:', err);
-      setMessage({ type: 'error', text: 'Could not update the schedule.' });
-    }
-  };
-
   /**
-   * A player asks their OPPONENT to arrange a time. The organizer is not in the middle of this any
-   * more: the flag goes straight to the other player as a notification carrying this player's
-   * contact buttons, and the two sort the time out between themselves. That matches how the rest
-   * of the app works — there is no in-app messaging, contact details are what get shared.
-   *
-   * Setting the flag is all the client does. A Cloud Function watches for it and writes the
-   * notification, because clients cannot write to `notifications` at all.
-   */
-  const handleAskOpponentSchedule = async (match: TournamentMatch) => {
-    if (!user) return;
-    // `schedule_requested_by` is what tells the trigger which of the two players to notify.
-    // Without it the function cannot work out who to send it to.
-    await writeSchedule(
-      match.id,
-      { schedule_requested: true, schedule_requested_by: user.uid },
-      'Your opponent has been asked to sort out a time.',
-    );
-  };
-
-  /**
-   * A doubles participant fills in the partner their registration is missing. Writes exactly the
-   * fields the join flow writes (`doubles`, `partner_in_app`, and the combined `skill` when the
-   * partner isn't an app member), so `deduplicateDoublesTeams` pairs them up the same way.
+   * A doubles participant fills in the partner their registration is missing (an owner may write
+   * only partner_uid, partner_name and skill). A member partner carries their uid; someone not on
+   * the app gets a guest uid, and their `skill` is the combined estimate.
    */
   const [savingTeammate, setSavingTeammate] = useState(false);
   const handleAddTeammate = async (
     participantId: string,
     partnerName: string,
-    partnerInApp: 'yes' | 'no',
+    partnerUid: string | null,
     combinedSkill: number | null,
   ) => {
     setSavingTeammate(true);
     try {
       await updateDoc(doc(db, 'event_participants', participantId), {
-        doubles: partnerName,
-        partner_in_app: partnerInApp,
+        partner_uid: partnerUid ?? guestUid(),
+        partner_name: partnerName,
         ...(combinedSkill !== null ? { skill: combinedSkill } : {}),
       });
       setMessage({ type: 'success', text: 'Teammate saved.' });
@@ -1706,35 +1627,23 @@ export const useTournament = (eventIdOverride?: string) => {
   };
 
   /**
-   * The member changes their own zone. There is no approval step: this writes
-   * `preferences.preferred_zone` straight away, exactly as the profile card's zone picker does,
-   * so the two paths can no longer disagree about whether a zone change needs permission.
-   *
-   * `req_zone_change` is still written, and still only as a NOTICE — the Cloud Function watching
-   * event_participants is what tells the organizer. They act on it only in the one case that
-   * needs a hand: the zone the member moved to already has a generated draw, so somebody has to
-   * seat them. Matches they already have are never touched. See CLAUDE.md's three zone cases.
+   * A zone change is the member's `preferences.preferred_zone` — the member's own, or an
+   * organizer's Change Zone (rules let an organizer change only that field). No approval step.
+   * The server (functions/zoneMoves.js onZoneChanged) gives up only old-zone draws where the member
+   * has no real opponent, and alerts the organizers when a generated draw is affected.
    */
-  const handleChangeZone = async (participantId: string, newZone?: string) => {
-    if (!user) return;
+  const writePreferredZone = async (uid: string, zone: string) => {
+    await updateDoc(doc(db, 'preferences', uid), { preferred_zone: zone });
+    setZoneMap((prev) => ({ ...prev, [uid]: zone }));
+  };
+
+  const handleChangeZone = async (newZone: string) => {
+    if (!user || !newZone) return;
     try {
-      if (newZone) {
-        // `preferred_zone_manual` stops a later court edit silently recomputing the zone and
-        // moving them between draws — same flag the profile card sets on an explicit pick.
-        await setDoc(doc(db, 'preferences', user.uid), {
-          preferred_zone: newZone,
-          preferred_zone_manual: true,
-        }, { merge: true });
-      }
-      await updateDoc(doc(db, 'event_participants', participantId), {
-        req_zone_change: true,
-        ...(newZone ? { new_zone: newZone } : {}),
-      });
+      await writePreferredZone(user.uid, newZone);
       setMessage({
         type: 'success',
-        text: newZone
-          ? `You're in ${newZone} now. Your organizer has been told, and your existing matches are unchanged.`
-          : 'Your organizer has been told about your zone.',
+        text: `You're in ${newZone} now. Your organizer has been told, and your existing matches are unchanged.`,
       });
     } catch (err) {
       console.error('Zone change failed:', err);
@@ -1742,61 +1651,17 @@ export const useTournament = (eventIdOverride?: string) => {
     }
   };
 
-  /**
-   * Same move, addressed by uid rather than participant doc id — group cards know a player by uid.
-   * Lets an organizer move anyone in the draw they're viewing, not only those who filed a request.
-   */
+  /** Organizer: move any player in the draw to another zone (a bucket id → its zone name). */
   const handleMoveZoneByUid = async (uid: string, bucketId: string) => {
-    const participant = participants.find((p) => p.uid === uid);
-    if (!participant?.id) {
-      setMessage({ type: 'error', text: 'Could not find that player’s registration.' });
-      return;
-    }
-    await handleMovePlayerZone(participant.id, bucketId);
-  };
-
-  /**
-   * Pins `zone_override` on the participant (beating their derived zone) and clears any
-   * outstanding request in the same write. Zones are how a full draw gains capacity, so this is
-   * the release valve when a bracket fills up.
-   *
-   * Existing matches are left alone — this changes where they route next, not where they are.
-   */
-  const handleMovePlayerZone = async (participantId: string, bucketId: string) => {
     if (!isCreator) return;
-    const target = participants.find((p) => p.id === participantId);
-    if (!target?.uid) return;
-
-    // Scoped to THIS player, not the whole division. Checking the division meant that once any
-    // draw was generated — i.e. for most of a tournament — no zone change could ever be approved.
-    const theirMatches = matches.filter((m) =>
-      m.player_1_uid === target.uid || m.player_2_uid === target.uid);
-    // A played match is the one genuine blocker: its result belongs to the old zone's draw, and
-    // moving them would leave that result stranded somewhere they no longer play.
-    if (theirMatches.some((m) => m.status === 'complete')) {
-      setMessage({ type: 'error', text: 'This player has already played a match. They can only change zone once the event is over.' });
+    const zone = zoneConfig.buckets.find((b) => b.id === bucketId)?.zones[0];
+    if (!zone) {
+      setMessage({ type: 'error', text: 'That zone could not be found.' });
       return;
     }
-
     try {
-      const batch = writeBatch(db);
-      batch.update(doc(db, 'event_participants', participantId), {
-        zone_override: bucketId,
-        req_zone_change: false,
-      });
-      // Vacate their unplayed slots so they actually leave the old zone's draw. Without this
-      // they'd be routed to the new zone while still sitting in the old one's bracket.
-      theirMatches.forEach((m) => {
-        if (m.player_1_uid === target.uid) batch.update(doc(db, 'matches', m.id), { player_1_uid: '', player_1_name: PLAYER_LOADING });
-        if (m.player_2_uid === target.uid) batch.update(doc(db, 'matches', m.id), { player_2_uid: '', player_2_name: PLAYER_LOADING });
-      });
-      await batch.commit();
-      setMessage({
-        type: 'success',
-        text: theirMatches.length > 0
-          ? `Player moved. ${theirMatches.length} unplayed slot${theirMatches.length === 1 ? '' : 's'} freed up in their old draw.`
-          : 'Player moved to the new zone.',
-      });
+      await writePreferredZone(uid, zone);
+      setMessage({ type: 'success', text: `Player moved to ${zone}. Matches with a real opponent are kept.` });
     } catch (err) {
       console.error('Zone move failed:', err);
       setMessage({ type: 'error', text: 'Could not move the player.' });
@@ -1805,9 +1670,7 @@ export const useTournament = (eventIdOverride?: string) => {
 
   /**
    * Merge one zone into another. The source stops producing draws; its players route to the target.
-   *
-   * Recorded in two places on purpose: on the event's zone config, so later signups route
-   * automatically; and stamped per participant, for a record of who moved. Unmerge clears both.
+   * Recorded only on the event's zone config — a merge never changes a member's zone.
    */
   const handleMergeZone = async (sourceId: string, targetId: string) => {
     if (!isCreator || !event || sourceId === targetId) return;
@@ -1819,15 +1682,7 @@ export const useTournament = (eventIdOverride?: string) => {
     try {
       const nextMerges = { ...(zoneConfig.merges ?? {}), [sourceId]: targetId };
       await handleSaveZoneDrawConfig({ ...zoneConfig, merges: nextMerges });
-      const affected = participants.filter((p) =>
-        (p.zone_override ?? zoneBucketFor(zoneMap[p.uid], zoneConfig)) === sourceId);
-      if (affected.length > 0) {
-        const batch = writeBatch(db);
-        affected.forEach((p) => batch.update(doc(db, 'event_participants', p.id), {
-          merged_zone: true, merged_into: targetId,
-        }));
-        await batch.commit();
-      }
+      const affected = activeParticipants.filter((p) => zoneBucketFor(zoneMap[p.uid], zoneConfig) === sourceId);
       setMessage({ type: 'success', text: `Zone merged: ${affected.length} player${affected.length === 1 ? '' : 's'} moved.` });
     } catch (err) {
       console.error('Zone merge failed:', err);
@@ -1848,37 +1703,17 @@ export const useTournament = (eventIdOverride?: string) => {
     await handleSaveZoneDrawConfig({ ...zoneConfig, enabled });
   };
 
-  /** Undo one merge — the source runs on its own again and its players' stamps are cleared. */
+  /** Undo one merge — the source runs on its own again. */
   const handleUnmergeZone = async (sourceId: string) => {
     if (!isCreator || !event) return;
     try {
       const nextMerges = { ...(zoneConfig.merges ?? {}) };
       delete nextMerges[sourceId];
       await handleSaveZoneDrawConfig({ ...zoneConfig, merges: nextMerges });
-      const stamped = participants.filter((p) => p.merged_zone && p.zone_override !== sourceId
-        && zoneBucketFor(zoneMap[p.uid], { ...zoneConfig, merges: {} }) === sourceId);
-      if (stamped.length > 0) {
-        const batch = writeBatch(db);
-        stamped.forEach((p) => batch.update(doc(db, 'event_participants', p.id), {
-          merged_zone: false, merged_into: '',
-        }));
-        await batch.commit();
-      }
       setMessage({ type: 'success', text: 'Zone unmerged.' });
     } catch (err) {
       console.error('Zone unmerge failed:', err);
       setMessage({ type: 'error', text: 'Could not unmerge the zone.' });
-    }
-  };
-
-  // Organizer housekeeping — clears the flag once they've followed up with the player. Doesn't
-  // move the player itself; that's done manually via the existing edit-group/move tools.
-  const handleClearZoneChangeRequest = async (participantId: string) => {
-    if (!isCreator) return;
-    try {
-      await updateDoc(doc(db, 'event_participants', participantId), { req_zone_change: false });
-    } catch (err) {
-      console.error('Failed to clear zone change request:', err);
     }
   };
 
@@ -2016,9 +1851,8 @@ export const useTournament = (eventIdOverride?: string) => {
     rrStandingsByGroup,
     rrGroupMatches,
     rrKnockoutMatches,
-    rrConfig,
     rrGroupLabels,
-    rrGroupIndices,
+    rrGroupBonus,
     rrUnplacedPlayers,
     rrView,
     setRRView,
@@ -2029,15 +1863,11 @@ export const useTournament = (eventIdOverride?: string) => {
     handleCreateRRGroup,
     handleRenameGroup,
     handleSetGroupBonus,
-    // Scheduling
     visibleUserMatch,
     unplacedParticipants,
     openDrawSlots,
     handleSeatParticipant,
-    handleAskOpponentSchedule,
-    zoneChangeRequests,
     handleChangeZone,
-    handleMovePlayerZone,
     handleMoveZoneByUid,
     handleMergeZone,
     handleSetZoneDrawsEnabled,
@@ -2045,6 +1875,5 @@ export const useTournament = (eventIdOverride?: string) => {
     zoneConfig,
     handleAddTeammate,
     savingTeammate,
-    handleClearZoneChangeRequest,
   };
 };

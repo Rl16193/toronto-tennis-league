@@ -1,3 +1,5 @@
+import type { Timestamp } from 'firebase/firestore';
+
 // Services = things members can spend points on, or just browse and book at regular price.
 export type ServiceCategory = 'stringing' | 'coaching' | 'others';
 
@@ -30,12 +32,8 @@ export const CATEGORY_IMAGE: Record<ServiceCategory, string> = {
 
 /**
  * Providers pinned to the top of their category, in this order. Everyone else follows in catalog
- * order.
- *
- * Ranking belongs to the provider, not to an offer: an offer row repeats provider_id,
- * provider_name and area, so a rank kept there would be stored several times per provider and
- * drift the moment one row is edited. `Reward.sort` orders offers WITHIN a provider and should
- * keep doing only that.
+ * order. Matched against the slug their offer ids start with (`fortyforty-…`), since a provider's
+ * id is now their uid.
  *
  * This is the DEFAULT order only. Once a member searches an address the list sorts purely by
  * distance and the pins lose their place.
@@ -74,130 +72,90 @@ export const areaCoords = (area?: string): { lat: number; lng: number } | null =
   return key ? AREA_COORDS[key] ?? null : null;
 };
 
-// Collection: tasks, where type === 'offer' — the Services offer catalog.
-// Seeded by scripts/seed-rewards.mjs. Offer doc ids must stay stable because issued
-// coupons store them in redemptions.reward_id.
+// Collection: services — the Services catalog. Bare slug ids, stable because bookings store them
+// in service_id. Organizers write it (the offer form); nothing else does.
+export type ServiceSubCategory = 'stringing' | 'private' | 'group' | 'others';
+
 export interface Reward {
   id: string;
   category: ServiceCategory;
-  /** Groups offers under one provider. Matches preferences.stringer_id / coach_id. */
+  /** Coaching: private | group (a group lesson). Otherwise the category. */
+  sub_category: ServiceSubCategory;
+  /** The provider's uid (their providers doc id and member account). */
   provider_id: string;
+  /** Business name shown on the card. */
   provider_name: string;
-  /**
-   * The provider's own account, so their profile photo can be shown beside their name. Optional:
-   * a provider who isn't a member (or hasn't been linked yet) simply falls back to an initial.
-   * Without it the only way to resolve provider_id → uid is a full scan of `preferences`.
-   */
-  uid?: string;
-  contact_phone?: string;
-  contact_email?: string;
   area: string;
   offer: string;
   /** Free text, e.g. "Head, Kirschbaum, MSV" — rendered as chips. Blank for coaching. */
-  brands?: string;
+  brands: string;
   discount: number;
   total_price: number;
   discounted_price: number;
   points_cost: number;
-  /** Coaching only — shown as a credential badge on the provider row. */
-  certified?: boolean;
-  /**
-   * Coaching only. Members book a group lesson like any offer; only the coach sees who booked, and
-   * puts the ones they choose into groups on the Provider Dash (functions/bookings.js lessonGroup).
-   */
-  group_lesson?: boolean;
+  /** Shown as a credential badge on the provider row. */
+  certified: boolean;
   /** Group lesson only: the one open redeemed booking. Redeem is blocked for others while set. */
-  redeem_booking_id?: string;
+  redeem_booking_id: string;
   /** Coaching only. 1 for a private lesson, more for a group: a guide, never a limit. Shown as a pill. */
-  capacity?: number;
+  capacity: number;
   /** Coaching only, free text, e.g. "1 hr" or "30 min". Shown as a pill. */
-  duration?: string;
-  active?: boolean;
-  sort?: number;
+  duration: string;
+  active: boolean;
+  created_at: Timestamp | null;
+  updated_at: Timestamp | null;
 }
 
-export type RedemptionStatus =
-  | 'active'            // coupon issued, not yet used
-  | 'used'              // provider or organizer burned it
-  | 'flagged'           // provider raised a problem — organizer decides
-  | 'cancel_requested'  // player asked to undo it — organizer decides
-  | 'cancelled'         // undone, points refunded
-  | 'refund_declined';  // its booking was cancelled and an organizer kept the points
-
-// Collection: redemptions — doc id IS the coupon code, which is what makes codes unique.
-// Written only by the Cloud Functions in functions/rewards.js; read-only to everyone else.
-export interface Redemption {
-  code: string;
-  reward_id: string;
-  /** Legacy field name on existing docs; holds the provider id for both categories. */
-  stringer_id: string;
-  stringer_name: string;
-  offer: string;
-  discounted_price: number | null;
-  points_cost: number;
-  uid: string;
-  user_name: string;
-  status: RedemptionStatus;
-  created_at: string;
-  used_at?: string;
-  used_by?: string;
-  flagged_at?: string;
-  flag_note?: string;
-  cancel_requested_at?: string;
-  cancel_reason?: string;
-  cancelled_at?: string;
-  reviewer_note?: string;
-  /** The booking this coupon opened. The coupon moves with it (functions/bookings.js). */
-  booking_id?: string;
-}
+/** A group lesson: members book it, the coach groups them on the Provider Dash (lessonGroup). */
+export const isGroupLesson = (x: { sub_category?: string }) => x.sub_category === 'group';
 
 // ─── Bookings ───────────────────────────────────────────────────────────────────────────────
 
 export type BookingStatus = 'lead' | 'in_progress' | 'completed' | 'cancelled';
-export type BookingRefund = 'pending' | 'approved' | 'declined';
+export type BookingRefund = 'pending' | 'approved' | 'declined' | 'none';
 
 // Collection: bookings — one job with a provider, opened by Book (regular price) or Redeem
-// (points). Written only by functions/bookings.js and rewards.js; the lifecycle is
-// functions/lib/bookingState.js.
+// (points; the coupon is `redemption_code`). Written only by functions/bookings.js and rewards.js;
+// the lifecycle is functions/lib/bookingState.js.
 export interface Booking {
   id: string;
-  service_id: string;
-  offer: string;
   category: 'stringing' | 'coaching';
+  sub_category: ServiceSubCategory;
+  service_id: string;
+  /** The provider's uid; their contacts are contacts/{provider_id}. */
   provider_id: string;
-  provider_name: string;
-  /** The provider's member accounts, stamped at creation. Older bookings don't carry it. */
-  provider_uids?: string[];
-  /** Booked from a group lesson offer. */
-  group_lesson?: boolean;
-  /** The coach's group (1, 2, …) while in progress; absent while New. */
-  lesson_group?: number;
   uid: string;
   user_name: string;
+  payment: 'price' | 'points';
   price: number;
   points: number;
-  redemption_code?: string;
+  redemption_code: string;
   status: BookingStatus;
-  created_at: string;
-  updated_at: string;
-  started_at?: string;
-  /** Stringing only: marked ready, waiting for the member to confirm. */
-  completion_requested_at?: string;
-  reminded_at?: string;
-  completed_at?: string;
-  cancelled_at?: string;
-  cancelled_by?: 'member' | 'provider';
-  /** Only on a cancelled redeemed booking: where the organizer's refund review stands. */
-  refund?: BookingRefund;
-  refund_reviewed_at?: string;
+  /** The coach's group (1, 2, …) while in progress; 0 while New. */
+  lesson_group: number;
+  started_at: Timestamp | null;
+  /** Marked ready / done, waiting for the member to confirm. */
+  completion_requested_at: Timestamp | null;
+  completed_at: Timestamp | null;
+  cancelled_at: Timestamp | null;
+  cancelled_by: 'member' | 'provider' | '';
+  cancel_reason: string;
+  /** A cancelled booking paid by points: where the organizer's refund review stands. */
+  refund: BookingRefund;
+  reviewed_by: string;
+  created_at: Timestamp | null;
+  updated_at: Timestamp | null;
 }
+
+/** A booking with the labels read from its service (the booking itself stores neither). */
+export type BookingRow = Booking & { offer: string; providerName: string };
 
 export const OPEN_BOOKING_STATUSES: BookingStatus[] = ['lead', 'in_progress'];
 
 export type BookingStage = 'new' | 'in_progress' | 'confirming' | 'completed' | 'cancelled';
 
 /** The step a booking is at, as both dashes show it. */
-export const bookingStage = (b: Booking): BookingStage => {
+export const bookingStage = (b: Pick<Booking, 'status' | 'completion_requested_at'>): BookingStage => {
   if (b.status === 'lead') return 'new';
   if (b.status === 'in_progress') return b.completion_requested_at ? 'confirming' : 'in_progress';
   return b.status;

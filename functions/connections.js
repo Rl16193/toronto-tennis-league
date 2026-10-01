@@ -3,7 +3,8 @@
  *
  * `contacts/{uid}` is readable only by the owner or by someone holding a connection, and a
  * connection is only ever created here, never by a client. Earned by an accepted rally or
- * challenge (either direction), or by being drawn against each other in a tournament match.
+ * challenge (either direction), by being drawn against each other in a tournament match, by a
+ * booking, or by both looking for a doubles partner in the same event and division (the pool).
  *
  * Doc id is the two uids sorted and joined with `__`, so a pair yields exactly one doc.
  * firestore.rules recomputes the same id with its own pairId() — the two MUST stay in sync or
@@ -15,6 +16,7 @@
 const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
+const { Timestamp } = require('firebase-admin/firestore');
 
 const { REGION } = require('./lib/constants');
 const db = () => admin.firestore();
@@ -29,7 +31,7 @@ async function linkPlayers(a, b, reason) {
     await db().collection('connections').doc(pairId(a, b)).create({
       uids: [a, b].sort(),
       reason,
-      created_at: new Date().toISOString(),
+      created_at: Timestamp.now(),
     });
     return true;
   } catch (err) {
@@ -62,7 +64,7 @@ exports.onListingContact = onDocumentWritten(
       logger.info('public_contacts cleared', { uid });
       return;
     }
-    await ref.set({ uid, reason: 'listing', updated_at: new Date().toISOString() });
+    await ref.set({ uid, reason: 'listing', updated_at: Timestamp.now() });
   },
 );
 

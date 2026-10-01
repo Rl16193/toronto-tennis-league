@@ -8,9 +8,17 @@
 // Scheduling/formatting timezone for every scheduled function and day-key calculation.
 const TZ = 'America/Toronto';
 
-/** Toronto-local parts of an ISO time (now if absent): day 'YYYYMMDD', month 'YYYY-MM', hour 0..23. */
-function torontoParts(iso) {
-  const d = iso ? new Date(iso) : new Date();
+/** A Firestore Timestamp, Date, ISO string or millis as a Date (null when absent or invalid). */
+function toDate(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v.toDate === 'function') return v.toDate();
+  const d = v instanceof Date ? v : new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Toronto-local parts of a time (now if absent): day 'YYYYMMDD', month 'YYYY-MM', hour 0..23. */
+function torontoParts(when) {
+  const d = toDate(when) || new Date();
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
     timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false,
   }).formatToParts(d).map((x) => [x.type, x.value]));
@@ -41,4 +49,4 @@ const INSTAGRAM = 'https://www.instagram.com/racqnstringstoronto';
 const WHATSAPP = 'https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX';
 const FAQ = 'https://docs.google.com/document/d/17lyP5f62iuXRIiwDtrcn4EZo6vnx0jbr87kxdkEIzYY/edit?tab=t.0';
 
-module.exports = { TZ, torontoParts, REGION, SUPER_ADMIN_UID, SPREADSHEET_ID, EMAIL_FROM, EMAIL_REPLY_TO, SITE, INSTAGRAM, WHATSAPP, FAQ };
+module.exports = { TZ, toDate, torontoParts, REGION, SUPER_ADMIN_UID, SPREADSHEET_ID, EMAIL_FROM, EMAIL_REPLY_TO, SITE, INSTAGRAM, WHATSAPP, FAQ };

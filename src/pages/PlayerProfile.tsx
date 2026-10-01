@@ -10,7 +10,6 @@ import { RacquetIcon } from '../components/RacquetIcon';
 import { ContactData, MemberInfo, TennisEvent, UserData, UserPreferences, UserStats } from '../types';
 import type { TournamentMatch } from './tournament/types';
 import { BadgeRow } from '../features/tasks/BadgePicker';
-import { useCommunityStandings } from '../features/tasks/useTasks';
 import { skillTier, leagueDivision, leagueAgeCategory } from '../utils/skillLevels';
 import { contactChannels, pillButtonCls } from '../components/ContactOpponentButton';
 
@@ -45,8 +44,8 @@ export const PlayerProfile: React.FC = () => {
     [...played, ...upcoming].map((m) => m.tournamentMatch).filter((m): m is TournamentMatch => !!m),
     userId ?? '',
   ), [played, upcoming, userId]);
-  const { rows: communityRows } = useCommunityStandings();
-  const rsPoints = userId ? (communityRows.find((r) => r.uid === userId)?.points ?? 0) : 0;
+  // Server-computed on the stats doc (tiers reached + initiation + task awards).
+  const rsPoints = stats?.rsPoints ?? 0;
 
   useEffect(() => { document.title = 'Player Profile · Racquets & Strings'; }, []);
 
@@ -78,11 +77,12 @@ export const PlayerProfile: React.FC = () => {
         if (eventId) {
           const eventDoc = await getDoc(doc(db, 'events', eventId));
           if (eventDoc.exists()) {
-            const eventData = eventDoc.data() as TennisEvent;
-            if (eventData.creator_id) {
+            // The creator is the first of the event's organizers.
+            const creatorId = (eventDoc.data() as TennisEvent).organizer_ids?.[0];
+            if (creatorId) {
               const [creatorDoc, creatorContacts] = await Promise.all([
-                getDoc(doc(db, 'users', eventData.creator_id)),
-                getDoc(doc(db, 'contacts', eventData.creator_id)).catch(() => null),
+                getDoc(doc(db, 'users', creatorId)),
+                getDoc(doc(db, 'contacts', creatorId)).catch(() => null),
               ]);
               if (creatorDoc.exists()) {
                 setOrganizer({
@@ -131,11 +131,11 @@ export const PlayerProfile: React.FC = () => {
   const courts = preferences?.preferred_courts ?? [];
   const favourites = preferences?.favourite_players ?? [];
 
-  const s = stats as (UserStats & { matchesPlayed?: number; leaguePoints26?: number }) | null;
+  const s = stats;
   const statTiles = [
     { label: 'Streak', value: record.streak ?? '—', accent: 'text-clay' },
     { label: 'RS Points', value: `${rsPoints}`, accent: 'text-fg' },
-    { label: 'League Points', value: `${s?.leaguePoints26 ?? 0}`, accent: 'text-fg' },
+    { label: 'League Points', value: `${s?.leaguePoints ?? 0}`, accent: 'text-fg' },
     { label: 'Matches', value: `${s?.matchesPlayed ?? 0}`, accent: 'text-fg' },
     // Abbreviated to fit the tile; Final stays spelled out.
     {
@@ -229,8 +229,8 @@ export const PlayerProfile: React.FC = () => {
             </div>
           </div>
 
-          {/* League — only when the player opted in ("Make visible to others"). */}
-          {player.profile_details_visible && leagueDivision(stats?.league) && (
+          {/* League — always shown. */}
+          {leagueDivision(stats?.league) && (
             <div className="py-3">
               <SectionLabel icon={<Users className="w-3.5 h-3.5 text-clay" />} label="League" />
               <div className="mt-1 flex flex-wrap gap-1.5">

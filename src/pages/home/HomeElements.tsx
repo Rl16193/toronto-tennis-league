@@ -9,12 +9,11 @@ import { Input, field, fieldLabelCls } from '../../components/Input';
 import { SelectField } from '../../components/SelectField';
 import { DONATE_URL } from '../../components/FooterElements';
 import { VOLUNTEER_ACTIVITIES, VolunteerSignup } from '../../lib/volunteer';
-import { CourtImprovement } from '../../lib/courtImprovements';
-import { loadCourtList } from '../../features/tasks/courtList';
 import { AlertMessage } from '../../components/AlertMessage';
 import { TennisEvent } from '../../types';
 import { getEventEndDate, parseValidDate } from '../../utils/eventDates';
-import { isLadderEvent } from '../../utils/eventTypes';
+import { isLadderEvent, isRecurringWeekly } from '../../utils/eventTypes';
+import { eventTypeLabel, nextOccurrence } from '../../features/events/EventsElements';
 import { fadeUp } from '../../lib/motion';
 
 /**
@@ -232,7 +231,8 @@ export const StatsStrip: React.FC<{ stats: { value: string; label: string; to: s
  */
 const eventDateChip = (event: TennisEvent) => {
   if (isLadderEvent(event)) return 'ALL SEASON';
-  const date = parseValidDate(getEventEndDate(event));
+  // A weekly meetup shows its next occurrence instead ("Recurring meetups" in CLAUDE.md).
+  const date = isRecurringWeekly(event) ? nextOccurrence(event) : parseValidDate(getEventEndDate(event));
   if (!date) return 'Date TBC';
   return date.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
 };
@@ -245,7 +245,7 @@ const typeChipCls = 'px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase trac
  * the full card and the real Join control live.
  */
 const UpcomingEventCard: React.FC<{ event: TennisEvent }> = ({ event }) => {
-  const typeLabel = isLadderEvent(event) ? 'Challenges' : event.type;
+  const typeLabel = eventTypeLabel(event);
   return (
     <Link
       to="/events"
@@ -543,147 +543,6 @@ export const SubscribeSheet: React.FC<{
   );
 };
 
-const MAX_NOTE_PHOTOS = 3;
-
-// ── Court improvement sheet ──────────────────────────────────────────────────
-// Signed-out visitors only (members get PhotoSubmitModal). Laid out like Submit a Report. Photos go
-// to the anonymous upload path; there are no points without an account. The join line is the only nudge.
-export const CourtNoteSheet: React.FC<{
-  onClose: () => void;
-  onSubmit: (note: CourtImprovement) => Promise<void>;
-}> = ({ onClose, onSubmit }) => {
-  const [courts, setCourts] = useState<string[]>([]);
-  const [court, setCourt] = useState('');
-  const [courtSearch, setCourtSearch] = useState('');
-  const [showCourts, setShowCourts] = useState(false);
-  const [note, setNote] = useState('');
-  const [email, setEmail] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
-  const [status, setStatus] = useState<'idle' | 'saving' | 'done'>('idle');
-  const [error, setError] = useState('');
-
-  // Same limits as the anonymous upload rule in storage.rules: images only, under 5 MB, 3 at most.
-  const addFiles = (picked: File[]) => {
-    if (picked.some((f) => !f.type.startsWith('image/'))) { setError('Please choose image files only.'); return; }
-    if (picked.some((f) => f.size >= 5 * 1024 * 1024)) { setError('Each image must be under 5 MB.'); return; }
-    setError('');
-    setFiles((prev) => [...prev, ...picked].slice(0, MAX_NOTE_PHOTOS));
-  };
-
-  useEffect(() => {
-    loadCourtList().then((list) => setCourts([...new Set(list.map((c) => c.dropdown))].sort((a, b) => a.localeCompare(b))));
-  }, []);
-  const q = courtSearch.trim().toLowerCase();
-  const courtMatches = (q ? courts.filter((c) => c.toLowerCase().includes(q)) : courts).slice(0, 8);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!court) { setError('Please select a court.'); return; }
-    if (!note.trim()) { setError('Please add a note.'); return; }
-    if (email.trim() && !EMAIL_RE.test(email.trim())) { setError('Please enter a valid email address.'); return; }
-    setError('');
-    setStatus('saving');
-    try {
-      await onSubmit({ court, note, email: email.trim() || undefined, files });
-      setStatus('done');
-    } catch {
-      setStatus('idle');
-      setError('Could not send that just now. Please try again.');
-    }
-  };
-
-  return (
-    <Sheet onClose={onClose} title="Submit a Report" maxWidthClassName="max-w-md">
-      <div className="p-6 pt-3 space-y-4">
-        {status === 'done' ? (
-          <>
-            <AlertMessage tone="success">We have received the report and will forward it to the City of Toronto hoping they take necessary action.</AlertMessage>
-            <Button variant="clay" className={`${ctlCls} w-full`} onClick={onClose}>Done</Button>
-          </>
-        ) : (
-          <form onSubmit={submit} className="space-y-4">
-            {error && <AlertMessage tone="error">{error}</AlertMessage>}
-            <div className="relative">
-              <label className={fieldLabelCls} htmlFor="court-note-court">Select Court <span className="text-clay">*</span></label>
-              <input
-                id="court-note-court"
-                type="text"
-                autoComplete="off"
-                placeholder="Search courts…"
-                className={field}
-                value={court || courtSearch}
-                onChange={(e) => { setCourt(''); setCourtSearch(e.target.value); setShowCourts(true); }}
-                onFocus={() => setShowCourts(true)}
-                onBlur={() => setTimeout(() => setShowCourts(false), 150)}
-              />
-              {showCourts && courtMatches.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-1 z-10 max-h-48 overflow-y-auto rounded-2xl bg-tennis-dark/95 p-1 shadow-2xl">
-                  {courtMatches.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onMouseDown={() => { setCourt(c); setCourtSearch(''); setShowCourts(false); }}
-                      className="w-full min-h-11 rounded-2xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div>
-              <label className={fieldLabelCls} htmlFor="court-note">Note <span className="text-clay">*</span></label>
-              <textarea
-                id="court-note"
-                rows={3}
-                className={`${field} resize-none`}
-                placeholder="e.g. North Side Court 2 @ Trinity Bellwoods has a broken net."
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-            </div>
-            <div>
-              <p className={fieldLabelCls}>Photos <span className="font-normal text-fg/70">(up to {MAX_NOTE_PHOTOS})</span></p>
-              <label className={`${field} flex cursor-pointer items-center justify-center gap-2 border-dashed ${files.length >= MAX_NOTE_PHOTOS ? 'opacity-50 pointer-events-none' : ''}`}>
-                <Camera className="w-4 h-4 shrink-0" />
-                <span className="text-sm">Add photos</span>
-                <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
-              </label>
-              {files.length > 0 && (
-                <ul className="mt-2 space-y-1">
-                  {files.map((f, i) => (
-                    <li key={`${f.name}-${i}`} className="flex items-center gap-2 text-xs text-fg/70">
-                      <span className="flex-1 truncate">{f.name}</span>
-                      <button type="button" className="font-bold text-clay hover:underline" onClick={() => setFiles((prev) => prev.filter((_, k) => k !== i))}>Remove</button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <Input
-              label="Email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <div className="flex gap-3">
-              <Button type="button" variant="outline" className={`${ctlCls} flex-1`} onClick={onClose}>Cancel</Button>
-              <Button type="submit" variant="clay" className={`${ctlCls} flex-1`} isLoading={status === 'saving'}>
-                Submit
-              </Button>
-            </div>
-            <p className="text-xs text-fg/70 text-center">
-              Please join our community to collect points and redeem discounts.{' '}
-              <Link to="/signup" className="font-bold text-clay hover:underline">Join</Link>
-            </p>
-          </form>
-        )}
-      </div>
-    </Sheet>
-  );
-};
 
 // ── Volunteer sheet ──────────────────────────────────────────────────────────
 // Always shown, member or not: unlike the newsletter, an account cannot answer which activity you

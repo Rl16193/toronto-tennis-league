@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, limit, orderBy, query, setDoc } from 'firebase/firestore';
+import { Timestamp, collection, doc, getDocs, limit, orderBy, query, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { haversineKm } from '../../utils/zones';
 import { courtKey } from '../../utils/courtKey';
@@ -24,57 +24,61 @@ export function torontoDayKey(d: Date = new Date()): string {
   return `${parts.year}${parts.month}${parts.day}`;
 }
 
-// Shared by logAttendance/checkIn below — both stamp a player's presence at a court, just to
-// different id-schemes (deterministic {uid}_{courtKey} vs {uid}_{courtKey}_{day}) with one extra
-// field each. `type` discriminates the doc's kind inside the consolidated `courts` collection.
-const baseVisitDoc = (uid: string, name: string, court: CsvCourt, coords: { lat: number; lng: number; distM: number }) => ({
-  uid,
-  type: 'attendance' as const,
-  user_name: name,
-  court_key: courtKey(court.dropdown),
-  court_name: court.dropdown,
-  zone: court.zone,
-  lat: coords.lat,
-  lng: coords.lng,
-  dist_m: Math.round(coords.distM),
-  created_at: new Date().toISOString(),
-});
+// What the player is at the court for — the visit's sub_category.
+export const VISIT_TYPES = ['Practice', 'Rallies', 'Tournament', 'Other'] as const;
+export type VisitType = (typeof VISIT_TYPES)[number];
+const VISIT_SUB: Record<VisitType, 'practice' | 'rally' | 'tournament' | 'other'> = {
+  Practice: 'practice', Rallies: 'rally', Tournament: 'tournament', Other: 'other',
+};
 
-// Append-only daily attendance (distinct from the once-forever passport). Deterministic id
-// `{uid}_{courtKey}_{day}` so a second check-in the same day at the same court just overwrites —
-// Matchday counts distinct players, so one entry per player per court per day is what we want.
-export async function logAttendance(
+/**
+ * A check-in: ONE visit per player per court per Toronto day, id `{uid}_{courtKey}_{YYYYMMDD}`, so
+ * a repeat check-in the same day overwrites. Any visit to a court is "visited this court"; the
+ * courtsVisited counter and zone tier are the server's (onCourtVisitAwardPoints). The rules require
+ * the id pattern, dist_m ≤ 400 and a Timestamp created_at. Report fields carry typed empties.
+ */
+export async function checkIn(
   uid: string,
   name: string,
   court: CsvCourt,
   coords: { lat: number; lng: number; distM: number },
   visitType: VisitType,
 ): Promise<void> {
-  const day = torontoDayKey();
-  const id = `${uid}_${courtKey(court.dropdown)}_${day}`;
-  await setDoc(doc(db, 'courts', id), {
-    ...baseVisitDoc(uid, name, court, coords),
-    day,
-    match_type: visitType,
+  const key = courtKey(court.dropdown);
+  const now = Timestamp.now();
+  await setDoc(doc(db, 'courts', `${uid}_${key}_${torontoDayKey()}`), {
+    category: 'visit',
+    sub_category: VISIT_SUB[visitType],
+    uid,
+    user_name: name,
+    court_key: key,
+    court_name: court.dropdown,
+    zone: court.zone || '',
+    created_at: now,
+    updated_at: now,
+    lat: coords.lat,
+    lng: coords.lng,
+    dist_m: Math.round(coords.distM),
+    note: '',
+    photo_paths: [],
+    photos_meta: [],
+    waiting_boards: 0,
+    racquets_in_queue: 0,
+    queue_time: '',
   });
 }
 
-// What the player is at the court for — captured on check-in so we know the kind of activity.
-export const VISIT_TYPES = ['Practice', 'Rallies', 'Tournament', 'Other'] as const;
-export type VisitType = (typeof VISIT_TYPES)[number];
-
-// Most-checked-in courts, computed from a bounded window of recent attendance (newest 300 rows).
+// Most-checked-in courts, computed from a bounded window of recent visits (newest 300 rows).
 // Best-effort "what's busy lately" list for the check-in start screen — not an all-time tally.
 export type TopCheckIn = { court: string; zone: string; count: number };
 export async function getTopCheckIns(max = 5): Promise<TopCheckIn[]> {
-  // Newest 300 docs in `courts`, then narrowed to attendance in memory. `courts` now also holds
-  // check-ins and photo reports; the single-field `created_at` index keeps this query free of a
-  // composite index, and filtering 300 rows in JS is cheap for a best-effort "what's busy" list.
+  // Newest 300 docs in `courts`, then narrowed to visits in memory: the single-field `created_at`
+  // index keeps this free of a composite index, and filtering 300 rows is cheap.
   const snap = await getDocs(query(collection(db, 'courts'), orderBy('created_at', 'desc'), limit(300)));
   const counts = new Map<string, TopCheckIn>();
   snap.docs.forEach((d) => {
     const data = d.data();
-    if (data.type !== 'attendance') return;
+    if (data.category !== 'visit') return;
     const court = (data.court_name as string) || '';
     if (!court) return;
     const cur = counts.get(court) ?? { court, zone: (data.zone as string) || '', count: 0 };
@@ -110,25 +114,3 @@ export async function findNearbyCourts(lat: number, lng: number): Promise<Nearby
     .filter((c) => c.distM <= CHECKIN_NEARBY_M)
     .sort((a, b) => a.distM - b.distM);
 }
-
-// Stamp the passport. Deterministic doc id (uid_courtKey) — firestore.rules deny overwriting an
-// existing check-in, so this can only ever count once per player per court.
-export async function checkIn(
-  uid: string,
-  name: string,
-  court: CsvCourt,
-  coords: { lat: number; lng: number; distM: number },
-  visitType: VisitType,
-): Promise<void> {
-  const id = `${uid}_${courtKey(court.dropdown)}`;
-  await setDoc(doc(db, 'courts', id), {
-    ...baseVisitDoc(uid, name, court, coords),
-    type: 'check-in',
-    visit_type: visitType,
-  });
-}
-
-// "Visit every court in your zone" is now decided server-side in functions/taskPoints.js
-// (awardZoneCompleteIfDone), triggered by the courts check-in write above. It used to be computed
-// here and written straight to tasks/{uid}, but that field carries points and the rules
-// allowlist rejects owner writes to it, so the award never actually landed.

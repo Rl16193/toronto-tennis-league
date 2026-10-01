@@ -7,7 +7,7 @@ import { fadeUp, staggerDelay } from '../lib/motion';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useUserMatches } from '../features/matches/useUserMatches';
-import { getEventDate } from './tournament/utils';
+import { toDate, toMillis } from '../utils/eventDates';
 
 type PastEvent = { id: string; title: string; when: Date | null };
 
@@ -21,7 +21,7 @@ export const History: React.FC = () => {
 
   useEffect(() => { document.title = 'History · Racquets & Strings'; }, []);
 
-  // A tournament is "past" once its final has a confirmed winner — same rule the Tournament
+  // A tournament is "past" once its final has a winner — same rule the Tournament
   // page uses to classify events.
   useEffect(() => {
     if (!user) return;
@@ -40,9 +40,9 @@ export const History: React.FC = () => {
           .map((d) => ({
             id: d.id,
             title: (d.data().title as string) || 'Tournament',
-            when: getEventDate(d.data() as Record<string, unknown>),
+            when: toDate(d.data().start_date),
           }))
-          .sort((a, b) => (b.when?.getTime() ?? 0) - (a.when?.getTime() ?? 0));
+          .sort((a, b) => toMillis(b.when) - toMillis(a.when));
         setPastEvents(rows);
       })
       .catch(() => {})

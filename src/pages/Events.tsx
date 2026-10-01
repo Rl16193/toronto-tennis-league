@@ -18,20 +18,21 @@ import {
   CreatorEventModal, EventCard, JoinEventSheet, isLateRegistration,
 } from '../features/events/EventsElements';
 import { track } from '../lib/analytics';
-import { getEventDate, resolveZoneConfig } from './tournament/utils';
+import { resolveZoneConfig } from './tournament/utils';
+import { toDate, toMillis } from '../utils/eventDates';
 import { isSeniorsLeague, leagueDivision } from '../utils/skillLevels';
-import { isTournamentCategoryEvent, isTournamentCategoryType, isTournamentEvent } from '../utils/eventTypes';
+import { isEventManager, isOrganizerProfile, isTournamentCategoryEvent, isTournamentCategoryType, isTournamentEvent } from '../utils/eventTypes';
 
 type EventsTab = 'upcoming' | 'completed';
 type EventCategory = 'socials' | 'tournaments';
-type CompletedEvent = { id: string; title: string; type: string; when: Date | null };
+type CompletedEvent = { id: string; title: string; category: string; when: Date | null };
 
 export const Events: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
-  const isEventCreator = !!profile?.preferences.event_creator;
+  const isEventCreator = isOrganizerProfile(profile);
 
-  const { setEvents, loading, visibleEvents, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament, isFullyJoinedEvent } = useEvents();
-  const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed, handleSubmitJoin } = useJoin({ user, profile, hasJoinedRegularEvent, hasJoinedTournamentChoice, hasJoinedAnyTournament });
+  const { setEvents, loading, visibleEvents, hasJoinedEvent, hasJoinedAnyTournament, isFullyJoinedEvent } = useEvents();
+  const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed, handleSubmitJoin } = useJoin({ user, profile, hasJoinedEvent, hasJoinedAnyTournament });
   // Zone-enabled tournaments need courts to place a player; the join sheet asks for them inline.
   const { updateLoading: courtsSaving, actions: courtsActions } = useProfileActions();
   const [pendingCourts, setPendingCourts] = useState<{ courts: string[]; zone: string }>({ courts: [], zone: '' });
@@ -123,10 +124,10 @@ export const Events: React.FC = () => {
             .map((d) => ({
               id: d.id,
               title: (d.data().title as string) || 'Tournament',
-              type: (d.data().type as string) || '',
-              when: getEventDate(d.data() as Record<string, unknown>),
+              category: (d.data().category as string) || '',
+              when: toDate(d.data().start_date),
             }))
-            .sort((a, b) => (b.when?.getTime() ?? 0) - (a.when?.getTime() ?? 0)),
+            .sort((a, b) => toMillis(b.when) - toMillis(a.when)),
         );
       })
       .catch(() => {})
@@ -136,7 +137,7 @@ export const Events: React.FC = () => {
   const categoryEvents = visibleEvents.filter((e) =>
     category === 'tournaments' ? isTournamentCategoryEvent(e) : !isTournamentCategoryEvent(e));
   const categoryCompletedEvents = completedEvents.filter((e) =>
-    category === 'tournaments' ? isTournamentCategoryType(e.type) : !isTournamentCategoryType(e.type));
+    category === 'tournaments' ? isTournamentCategoryType(e.category) : !isTournamentCategoryType(e.category));
 
   // Join at once when the sheet would have nothing to ask: a Singles tournament with a division and
   // courts already on the profile (and no Retired Pro choice or late-registration notice), or any
@@ -144,7 +145,7 @@ export const Events: React.FC = () => {
   const [quickJoinId, setQuickJoinId] = useState<string | null>(null);
   const quickRunning = useRef(false);
   const nothingToAsk = (event: DisplayEvent) => !isTournamentEvent(event) || (
-    event.tournament_choice === 'Singles'
+    event.category === 'singles_tournament'
     && !!leagueDivision(profile?.stats.league)
     && !isSeniorsLeague(profile?.stats.league)
     && !isLateRegistration(event)
@@ -185,7 +186,7 @@ export const Events: React.FC = () => {
         setEvents((prev) => prev.map((ev) => (ev.id === editingEventId ? { ...ev, ...patch, ...shown } : ev)));
         setEventFormMessage({ type: 'success', text: 'Event updated successfully.' });
       } else {
-        const created = await createEvent(user.uid, eventForm, image);
+        const created = await createEvent(user.uid, profile?.user.name || '', eventForm, image);
         setEvents((prev) => [...prev, created]);
         setEventFormMessage({ type: 'success', text: 'Event added successfully.' });
       }
@@ -283,7 +284,7 @@ export const Events: React.FC = () => {
               authLoading={authLoading}
               isLoggedIn={!!user}
               onJoin={handleJoin}
-              onEdit={!!user && event.creator_id === user.uid ? handleEditEvent : undefined}
+              onEdit={isEventManager(event, user?.uid) ? handleEditEvent : undefined}
             />
           ))}
         </EventCarousel>

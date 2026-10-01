@@ -16,8 +16,8 @@ import { ContactOpponentButton } from '../../components/ContactOpponentButton';
 import { useContacts } from '../../features/contacts/useContacts';
 import { fadeUp } from '../../lib/motion';
 import {
-  Booking, CATEGORY_IMAGE, CATEGORY_LABEL, GROUP_LESSON_CAPACITY, MIN_REWARD_COST, OPEN_BOOKING_STATUSES, Provider,
-  Reward, ServiceCategory, areaCoords, bookingStage, useMyBookings, useProviderAvatars,
+  BookingRow, CATEGORY_IMAGE, CATEGORY_LABEL, GROUP_LESSON_CAPACITY, MIN_REWARD_COST, OPEN_BOOKING_STATUSES, Provider,
+  Reward, ServiceCategory, areaCoords, bookingStage, isGroupLesson, useMyBookings, useProviderAvatars,
   useProviderRole, useRedeemablePoints, useServicesCatalog,
 } from '../../features/services/useServices';
 import { useTasks } from '../../features/tasks/useTasks';
@@ -50,9 +50,9 @@ export const AddServiceForm: React.FC<{
   const isEditing = !!editingReward;
   const [category, setCategory] = useState<ServiceCategory>(editingReward?.category ?? 'stringing');
   // Every provider is a member. Searching a name here IS choosing the provider: saving flags their
-  // account (coach/stringer + the provider id) the way scripts/set-stringer.mjs used to. There is
-  // no unlinked-provider path, so there is no separate "link an account" step either.
-  const [providerUid, setProviderUid] = useState(editingReward?.uid ?? '');
+  // account (a coach/stringer role on providers/{uid}). There is no unlinked-provider path, so there
+  // is no separate "link an account" step either.
+  const [providerUid, setProviderUid] = useState(editingReward?.provider_id ?? '');
   const [memberName, setMemberName] = useState('');
   // The business name, when it differs from the member's own — "TIVORYX" for Karan Tiwari.
   // Blank means they trade under their own name.
@@ -61,7 +61,7 @@ export const AddServiceForm: React.FC<{
   const [certified, setCertified] = useState(!!editingReward?.certified);
   // Coaching only. A group lesson is booked like any offer and grouped by the coach on their dash.
   // Capacity defaults to 4 when ticked and 1 when not; it is a guide to group size, never a limit.
-  const [groupLesson, setGroupLesson] = useState(!!editingReward?.group_lesson);
+  const [groupLesson, setGroupLesson] = useState(!!editingReward && isGroupLesson(editingReward));
   const [capacity, setCapacity] = useState(editingReward?.capacity ? String(editingReward.capacity) : '');
   const [duration, setDuration] = useState(editingReward?.duration ?? '');
 
@@ -96,12 +96,6 @@ export const AddServiceForm: React.FC<{
     .filter((c) => c.name.toLowerCase().includes(search.trim().toLowerCase()))
     .slice(0, 6);
 
-  // A member who already sells in this category keeps their existing provider row, so a second
-  // offer groups under the same name instead of starting a duplicate provider.
-  const existingProvider = useMemo(
-    () => providersInCategory.find((p) => !!p.uid && p.uid === providerUid),
-    [providersInCategory, providerUid],
-  );
   const pickedLabel = memberName || (isEditing ? editingReward!.provider_name : '');
 
   const addBrand = () => {
@@ -139,44 +133,28 @@ export const AddServiceForm: React.FC<{
       : capacity.trim() ? Math.max(1, Math.round(Number(capacity)))
       : groupLesson ? GROUP_LESSON_CAPACITY : 1;
 
+    // Brands are a stringing idea: empty for the other two, so switching an offer to coaching
+    // clears what it used to carry.
+    const input = {
+      category,
+      providerUid,
+      providerName: name,
+      businessName: alias.trim(),
+      area: area.trim(),
+      certified: category === 'coaching' && certified,
+      offer: offer.trim(),
+      brands: category === 'stringing' ? brands.join(', ') : '',
+      totalPrice: priceNum,
+      discount: discountNum,
+      pointsCost: pointsNum,
+      groupLesson: category === 'coaching' && groupLesson,
+      capacity: capacityNum,
+      duration: category === 'coaching' ? duration.trim() : '',
+    };
     setSaving(true);
     try {
-      if (isEditing) {
-        await updateOffer(editingReward!.id, editingReward!.provider_id, {
-          category,
-          providerName: name,
-          area: area.trim(),
-          certified: category === 'coaching' && certified,
-          offer: offer.trim(),
-          // Brands are a stringing idea. Passed empty for the other two so switching an offer to
-          // coaching clears what it used to carry (updateOffer writes this one unconditionally).
-          brands: category === 'stringing' && brands.length > 0 ? brands.join(', ') : undefined,
-          totalPrice: priceNum,
-          discount: discountNum,
-          pointsCost: pointsNum,
-          groupLesson: category === 'coaching' && groupLesson,
-          capacity: capacityNum,
-          duration: category === 'coaching' ? duration.trim() || undefined : undefined,
-          linkUid: providerUid,
-        });
-      } else {
-        await createOffer({
-          category,
-          providerId: existingProvider?.id,
-          providerName: name,
-          area: area.trim(),
-          certified: category === 'coaching' && certified,
-          offer: offer.trim(),
-          brands: category === 'stringing' && brands.length > 0 ? brands.join(', ') : undefined,
-          totalPrice: priceNum,
-          discount: discountNum,
-          pointsCost: pointsNum,
-          groupLesson: category === 'coaching' && groupLesson,
-          capacity: capacityNum,
-          duration: category === 'coaching' ? duration.trim() || undefined : undefined,
-          linkUid: providerUid,
-        });
-      }
+      if (isEditing) await updateOffer(editingReward!.id, input);
+      else await createOffer(input);
       onCreated();
       onClose();
     } catch {
@@ -237,7 +215,7 @@ export const AddServiceForm: React.FC<{
                         setSearch('');
                         // A second offer keeps the area already entered for that provider rather
                         // than asking for it again.
-                        const already = providersInCategory.find((p) => p.uid === c.uid);
+                        const already = providersInCategory.find((p) => p.id === c.uid);
                         if (already && !area.trim()) setArea(already.area);
                       }}
                       className="w-full text-left px-3.5 py-2 text-sm text-fg hover:bg-clay/20 transition-colors">
@@ -394,7 +372,7 @@ const OfferCard: React.FC<{
 }> = ({ reward, balance, signedIn, bookable, booked, busy, onBook, onRedeem, onEdit, onDelete }) => {
   const affordable = balance >= reward.points_cost;
   // A group lesson takes one redeemed booking at a time (functions/lib/bookingState.js).
-  const redeemTaken = !!reward.group_lesson && !!reward.redeem_booking_id;
+  const redeemTaken = isGroupLesson(reward) && !!reward.redeem_booking_id;
   // Nothing to redeem: no discount and no points. The card says so and offers Book alone.
   const regularPriceOnly = reward.discount === 0 && reward.points_cost === 0;
   const pills = [
@@ -481,9 +459,8 @@ const OfferCard: React.FC<{
 
 // ─── Provider photo ─────────────────────────────────────────────────────────────────────────
 
-// The provider's own uploaded profile photo, resolved through the uid stamped on their offers.
-// Falls back to their initial, so a provider without a member account (or without a photo) still
-// gets the same round marker and the rows stay aligned.
+// The provider's own uploaded profile photo (their id is their uid). Falls back to their initial,
+// so a provider without a photo still gets the same round marker and the rows stay aligned.
 const ProviderAvatar: React.FC<{ name: string; src?: string }> = ({ name, src }) => (
   src ? (
     <img
@@ -502,11 +479,11 @@ const ProviderAvatar: React.FC<{ name: string; src?: string }> = ({ name, src })
 // ─── One of the member's bookings ───────────────────────────────────────────────────────────
 
 // Where the job is, in the member's words. The provider's side is ProviderDashElements.tsx.
-const memberStep = (b: Booking) => {
+const memberStep = (b: BookingRow) => {
   const stage = bookingStage(b);
-  if (stage === 'new') return b.group_lesson ? 'Waiting for the coach to add you to a group' : 'Waiting for the provider to confirm';
+  if (stage === 'new') return isGroupLesson(b) ? 'Waiting for the coach to add you to a group' : 'Waiting for the provider to confirm';
   if (stage === 'in_progress') {
-    return b.group_lesson ? 'You’re in the coach’s group lesson'
+    return isGroupLesson(b) ? 'You’re in the coach’s group lesson'
       : b.category === 'coaching' ? 'Lesson confirmed' : 'Your racquet is with the provider';
   }
   if (stage === 'cancelled' && b.refund === 'pending') {
@@ -516,18 +493,18 @@ const memberStep = (b: Booking) => {
   return '';
 };
 
-const BookingCard: React.FC<{ b: Booking; busy: boolean; onCancel: () => void }> = ({ b, busy, onCancel }) => {
+const BookingCard: React.FC<{ b: BookingRow; busy: boolean; onCancel: () => void }> = ({ b, busy, onCancel }) => {
   const [confirming, setConfirming] = useState(false);
   const stage = bookingStage(b);
   // A group lesson member may leave until the coach marks it done (functions/lib/bookingState.js).
-  const cancellable = stage === 'new' || (!!b.group_lesson && stage === 'in_progress');
+  const cancellable = stage === 'new' || (isGroupLesson(b) && stage === 'in_progress');
   return (
     <div className="rounded-2xl bg-fg/5 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-fg">{b.offer}</p>
           <p className="mt-0.5 truncate text-xs text-fg/70">
-            {[b.provider_name, money(b.price), b.points ? `${b.points} points` : ''].filter(Boolean).join(' · ')}
+            {[b.providerName, money(b.price), b.points ? `${b.points} points` : ''].filter(Boolean).join(' · ')}
           </p>
         </div>
         {cancellable && (confirming ? (
@@ -650,7 +627,7 @@ export const ServicesTab: React.FC = () => {
   const [editingReward, setEditingReward] = useState<Reward | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const isSuperAdmin = user?.uid === SUPER_ADMIN_UID;
-  const providerAvatars = useProviderAvatars(rewards.map((r) => r.uid));
+  const providerAvatars = useProviderAvatars(rewards.map((r) => r.provider_id));
   const { balance, loading: balanceLoading } = useRedeemablePoints(useTasks());
   const { bookings } = useMyBookings();
   const { providerId } = useProviderRole();
@@ -692,7 +669,7 @@ export const ServicesTab: React.FC = () => {
   // number stored on it was fetchable before booking however the page chose to hide it; `contacts`
   // is permitted only once the booking has created the connection, so the gate is the rules'.
   const providerContacts = useContacts(
-    rewards.filter((r) => r.uid && contactableProviderIds.has(r.provider_id)).map((r) => r.uid as string),
+    [...new Set(rewards.filter((r) => contactableProviderIds.has(r.provider_id)).map((r) => r.provider_id))],
   );
 
   const pct = Math.min(100, (Math.max(0, balance) / MIN_REWARD_COST) * 100);
@@ -860,7 +837,7 @@ export const ServicesTab: React.FC = () => {
                     onToggle={toggleSet(setOpenProviders)}
                     label={
                       <span className="flex items-center gap-2">
-                        <ProviderAvatar name={p.name} src={p.uid ? providerAvatars[p.uid] : undefined} />
+                        <ProviderAvatar name={p.name} src={providerAvatars[p.id]} />
                         <span className="min-w-0">
                           <span className="flex items-center gap-1.5">
                             {p.name}
@@ -877,13 +854,13 @@ export const ServicesTab: React.FC = () => {
                     }
                     // Contacts are shared by booking, so the catalogue shows a provider's phone and
                     // email only once this member has booked them (never to a signed-out visitor).
-                    right={user && p.uid && contactableProviderIds.has(p.id) && providerContacts[p.uid]
+                    right={user && contactableProviderIds.has(p.id) && providerContacts[p.id]
                       ? (
                         <ContactOpponentButton
                           name={p.name}
-                          phone={providerContacts[p.uid]?.phone}
-                          email={providerContacts[p.uid]?.email}
-                          whatsappContact={providerContacts[p.uid]?.whatsapp_contact}
+                          phone={providerContacts[p.id]?.phone}
+                          email={providerContacts[p.id]?.email}
+                          whatsappContact={providerContacts[p.id]?.whatsapp_contact}
                           // Deliberately no `preferred`: a provider is offering a service, so every
                           // channel they have filled in is on, whatever they set for ordinary play.
                           size="sm"
@@ -898,9 +875,8 @@ export const ServicesTab: React.FC = () => {
                         reward={r}
                         balance={balance}
                         signedIn={!!user}
-                        // Only a provider with a linked account can take the job, and nobody books
-                        // their own. bookService and redeemReward check both again.
-                        bookable={!!r.uid && r.uid !== user?.uid && r.provider_id !== providerId}
+                        // Nobody books their own offer; bookService and redeemReward check it again.
+                        bookable={r.provider_id !== user?.uid}
                         booked={bookedIds.has(r.id)}
                         busy={busyId === `book:${r.id}` ? 'book' : busyId === `redeem:${r.id}` ? 'redeem' : null}
                         onBook={() => run(`book:${r.id}`, () => bookService({ serviceId: r.id }))}

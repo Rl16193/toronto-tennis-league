@@ -1,20 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import { collection, deleteDoc, doc, limit, onSnapshot, query, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, doc, limit, onSnapshot, query, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
+import { FirestoreDateLike, toMillis } from '../../utils/eventDates';
 
 // Bell-icon feed. Notifications are created server-side (Cloud Functions) and addressed to a
-// single recipient; the client only reads its own and marks them read.
+// single recipient; the client only reads its own and marks them read (read_at, nothing else).
 
-export type NotificationType =
+export type NotificationSubCategory =
   // matches
   | 'match_scheduled' | 'draw_published' | 'match_advanced' | 'match_bye'
-  | 'opponent_schedule_request'
   | 'group_assigned' | 'draw_cancelled'
-  // ladder / challenges
+  // doubles partners
+  | 'partner_registered' | 'partner_pool_joined'
+  // ladder / challenges / rallies
   | 'ladder_challenged' | 'ladder_reported' | 'ladder_declined'
-  | 'ladder_cancelled' | 'ladder_challenges_reset' | 'ladder_cooldown_expired'
-  | 'challenge_conversion_proposed' | 'challenge_conversion_rejected'
+  | 'ladder_cancelled' | 'ladder_challenges_reset' | 'ladder_cooldown_expired' | 'rally_confirmed'
   // tasks
   | 'task_completed' | 'initiation_complete' | 'task_revoked' | 'tasks_unlocked'
   | 'claim_approved' | 'claim_rejected' | 'group_award_received'
@@ -26,7 +27,6 @@ export type NotificationType =
   | 'reminder_pending_matches' | 'reminder_round_deadline'
   | 'reminder_event_tomorrow' | 'reminder_signup_closing'
   // organizer
-  | 'organizer_schedule_request'
   | 'organizer_score_disputed' | 'organizer_event_roster' | 'organizer_review_pending'
   // service bookings (functions/bookings.js)
   | 'booking_created' | 'booking_started' | 'booking_declined' | 'booking_cancelled'
@@ -35,28 +35,23 @@ export type NotificationType =
 export interface AppNotification {
   id: string;
   uid: string;
-  type: NotificationType | string;
+  /** The area (match, challenge, task, booking, …) — `categoryOf` in functions/lib/notify.js. */
+  category: string;
+  /** The specific alert. */
+  sub_category: NotificationSubCategory | string;
   title: string;
-  body?: string;
-  link?: string; // in-app route to open on tap
-  read?: boolean;
-  read_at?: string; // set when marked read — read items are purged 24h after this
-  created_at: string;
+  body: string;
+  link: string; // in-app route to open on tap ('' = none)
+  read_at: Timestamp | null; // null = unread; read items are purged 24h after this
+  created_at: Timestamp | null;
   /**
    * The other person this notification is about. When present the feed offers their contact
    * buttons on the row, which is how "arrange it between yourselves" actually happens in an app
    * with no messaging. Reading their `contacts` doc still needs a connection, so the buttons can
    * legitimately come back empty — see CLAUDE.md, "Contact details are opponent-only".
    */
-  counterpart_uid?: string;
-  counterpart_name?: string;
-  // Legacy fields from the pre-bell schedule_request docs (no title/body/link).
-  event_id?: string;
-  event_title?: string;
-  match_round?: string;
-  player_1_name?: string;
-  player_2_name?: string;
-  requested_by_name?: string;
+  counterpart_uid: string;
+  counterpart_name: string;
 }
 
 const FEED_LIMIT = 30;
@@ -67,31 +62,7 @@ const READ_TTL_MS = 24 * 60 * 60 * 1000; // read notifications are deleted 24h a
 const DASH_TYPES = new Set([
   'ladder_challenged', 'ladder_accepted', 'ladder_declined', 'ladder_cancelled',
   'rally_requested', 'rally_accepted', 'rally_declined', 'rally_cancelled',
-  'challenge_conversion_proposed', 'challenge_conversion_rejected',
 ]);
-
-// Fallback wording for notifications written before the bell existed (they carry a `type` and
-// raw fields but no title/body/link). Keeps old items readable instead of blank rows.
-const normalize = (n: AppNotification): AppNotification => {
-  if (n.title) return n;
-  const players = [n.player_1_name, n.player_2_name].filter(Boolean).join(' vs ');
-  const link = n.link || (n.event_id ? `/tournament?event=${n.event_id}` : undefined);
-
-  if (n.type === 'schedule_request') {
-    return {
-      ...n,
-      link,
-      title: `${n.requested_by_name || 'A player'} asked you to schedule a match`,
-      body: [players, n.match_round].filter(Boolean).join(' · ') || n.event_title || '',
-    };
-  }
-  return {
-    ...n,
-    link,
-    title: 'Notification',
-    body: players || n.event_title || '',
-  };
-};
 
 export function useNotifications() {
   const { user } = useAuth();
@@ -106,12 +77,12 @@ export function useNotifications() {
     return onSnapshot(
       query(collection(db, 'notifications'), where('uid', '==', user.uid), limit(100)),
       (snap) => {
-        const all = snap.docs.map((d) => normalize({ id: d.id, ...d.data() } as AppNotification));
+        const all = snap.docs.map((d) => ({ id: d.id, ...d.data() } as AppNotification));
 
         // Sweep: read notifications older than 24h (since being read) are deleted for good.
         // Best-effort, client-driven — whichever client next loads the feed does the cleanup.
         const now = Date.now();
-        const expired = all.filter((n) => n.read && n.read_at && now - new Date(n.read_at).getTime() > READ_TTL_MS);
+        const expired = all.filter((n) => n.read_at && now - toMillis(n.read_at) > READ_TTL_MS);
         if (expired.length > 0) {
           expired.forEach((n) => { deleteDoc(doc(db, 'notifications', n.id)).catch(() => {}); });
         }
@@ -119,15 +90,15 @@ export function useNotifications() {
 
         // Leftover request alerts are marked read once, so the sweep above clears them, and are
         // never shown or counted in the meantime.
-        const moved = all.filter((n) => DASH_TYPES.has(n.type) && !n.read);
+        const moved = all.filter((n) => DASH_TYPES.has(n.sub_category) && !n.read_at);
         if (moved.length > 0) {
-          const readAt = new Date().toISOString();
-          moved.forEach((n) => { updateDoc(doc(db, 'notifications', n.id), { read: true, read_at: readAt }).catch(() => {}); });
+          const readAt = Timestamp.now();
+          moved.forEach((n) => { updateDoc(doc(db, 'notifications', n.id), { read_at: readAt }).catch(() => {}); });
         }
 
         const rows = all
-          .filter((n) => !expiredIds.has(n.id) && !DASH_TYPES.has(n.type))
-          .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+          .filter((n) => !expiredIds.has(n.id) && !DASH_TYPES.has(n.sub_category))
+          .sort((a, b) => toMillis(b.created_at) - toMillis(a.created_at))
           .slice(0, FEED_LIMIT);
         setItems(rows);
         setLoading(false);
@@ -136,19 +107,20 @@ export function useNotifications() {
     );
   }, [user?.uid]);
 
-  const unreadCount = items.filter((n) => !n.read).length;
+  const unreadCount = items.filter((n) => !n.read_at).length;
 
+  // The rules allow a recipient to change read_at only.
   const markRead = useCallback(async (id: string) => {
-    try { await updateDoc(doc(db, 'notifications', id), { read: true, read_at: new Date().toISOString() }); } catch { /* best-effort */ }
+    try { await updateDoc(doc(db, 'notifications', id), { read_at: Timestamp.now() }); } catch { /* best-effort */ }
   }, []);
 
   const markAllRead = useCallback(async () => {
-    const unread = items.filter((n) => !n.read);
+    const unread = items.filter((n) => !n.read_at);
     if (unread.length === 0) return;
     try {
       const batch = writeBatch(db);
-      const readAt = new Date().toISOString();
-      unread.forEach((n) => batch.update(doc(db, 'notifications', n.id), { read: true, read_at: readAt }));
+      const readAt = Timestamp.now();
+      unread.forEach((n) => batch.update(doc(db, 'notifications', n.id), { read_at: readAt }));
       await batch.commit();
     } catch { /* best-effort */ }
   }, [items]);
@@ -157,10 +129,10 @@ export function useNotifications() {
 }
 
 // "3m", "2h", "5d" — compact relative age for the feed.
-export const timeAgo = (iso?: string): string => {
-  if (!iso) return '';
-  const diff = Date.now() - new Date(iso).getTime();
-  if (Number.isNaN(diff)) return '';
+export const timeAgo = (at?: FirestoreDateLike | Date | number): string => {
+  const ms = toMillis(at ?? null);
+  if (!ms) return '';
+  const diff = Date.now() - ms;
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'now';
   if (mins < 60) return `${mins}m`;

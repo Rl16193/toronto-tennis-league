@@ -26,8 +26,8 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
     if (!league) { setError('Please choose your league.'); return; }
     if (courts.list.length === 0) { setError('Please add at least one preferred court.'); return; }
     setError('');
-    const ok1 = await actions.updateSkills(skillLevel, profile?.stats.tournament_preference || 'Challengers');
-    const ok2 = await actions.updateLeagueAgeCategory(league, ageCategory, true);
+    const ok1 = await actions.updateSkills(skillLevel);
+    const ok2 = await actions.updateLeagueAgeCategory(league, ageCategory);
     const ok3 = await actions.updatePreferredCourts(courts.list, courts.zone);
     if (ok1 && ok2 && ok3) onDone();
   };

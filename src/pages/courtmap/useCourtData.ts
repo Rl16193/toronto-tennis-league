@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { getDocs, getDoc, doc, collection } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import type { CourtWithCount, TennisProgram, PickleballOnlyCourt, CsvCourt } from './courtMapUtils';
-import { parseCourts, parsePrograms, getPickleballMappings, matchCourtName, NINETY_DAYS_MS } from './courtMapUtils';
+import type { ActivityBreakdown, CourtWithCount, TennisProgram, PickleballOnlyCourt, CsvCourt } from './courtMapUtils';
+import { EMPTY_ACTIVITY, parseCourts, parsePrograms, getPickleballMappings, matchCourtName, NINETY_DAYS_MS } from './courtMapUtils';
 import { courtKey } from '../../utils/courtKey';
+import { toMillis } from '../../utils/eventDates';
 
 // Shape of the `activity` half of site_stats/court_counts (functions/courtCounts.js).
-type ActivityWindow = { byKey?: Record<string, number>; byName?: Record<string, number> };
+// byKey: court_key → { checkins, waiting_board, queue, condition }; byName: typed court name → scores.
+type ActivityWindow = { byKey?: Record<string, Partial<ActivityBreakdown> | number>; byName?: Record<string, number> };
+const activityTotal = (b: ActivityBreakdown) => b.scores + b.checkins + b.waiting_board + b.queue + b.condition;
 type ActivityAggregate = { d7?: ActivityWindow; d30?: ActivityWindow };
 
 // sessionStorage is ~5 MB per origin, so anything over this simply isn't cached (writing it would
@@ -72,6 +75,8 @@ export function useCourtData(): {
         ...c, count: 0,
         activity7: 0,
         activity30: 0,
+        activityBreakdown7: EMPTY_ACTIVITY,
+        activityBreakdown30: EMPTY_ACTIVITY,
         hasPrograms: false,
         pickleballEntries: pbByDropdown.get(c.dropdown) ?? [],
       })));
@@ -100,29 +105,38 @@ export function useCourtData(): {
           const activity = data?.activity as ActivityAggregate | undefined;
           if (activity) {
             const resolve = (win?: ActivityWindow) => {
-              const m = new Map<string, number>();
+              const m = new Map<string, ActivityBreakdown>();
               if (!win) return m;
-              const add = (dropdown: string, n: number) => m.set(dropdown, (m.get(dropdown) ?? 0) + n);
+              const row = (dropdown: string) => {
+                if (!m.has(dropdown)) m.set(dropdown, { ...EMPTY_ACTIVITY });
+                return m.get(dropdown)!;
+              };
               const byKeySlug = new Map<string, string>();
               for (const c of rawCourts) byKeySlug.set(courtKey(c.dropdown), c.dropdown);
-              for (const [key, n] of Object.entries(win.byKey ?? {})) {
+              for (const [key, kinds] of Object.entries(win.byKey ?? {})) {
                 const dropdown = byKeySlug.get(key);
-                if (dropdown) add(dropdown, n);
+                // A plain number is the pre-breakdown shape (function not yet redeployed): no pills.
+                if (!dropdown || typeof kinds !== 'object') continue;
+                const r = row(dropdown);
+                r.checkins += kinds.checkins ?? 0;
+                r.waiting_board += kinds.waiting_board ?? 0;
+                r.queue += kinds.queue ?? 0;
+                r.condition += kinds.condition ?? 0;
               }
               for (const [name, n] of Object.entries(win.byName ?? {})) {
                 const matched = matchCourtName(name, byDropdown, byName);
-                if (matched) add(matched.dropdown, n);
+                if (matched) row(matched.dropdown).scores += n;
               }
               return m;
             };
             const a7 = resolve(activity.d7);
             const a30 = resolve(activity.d30);
             if (!cancelled) {
-              setCourts((prev) => prev.map((c) => ({
-                ...c,
-                activity7: a7.get(c.dropdown) ?? 0,
-                activity30: a30.get(c.dropdown) ?? 0,
-              })));
+              setCourts((prev) => prev.map((c) => {
+                const b7 = a7.get(c.dropdown) ?? EMPTY_ACTIVITY;
+                const b30 = a30.get(c.dropdown) ?? EMPTY_ACTIVITY;
+                return { ...c, activity7: activityTotal(b7), activity30: activityTotal(b30), activityBreakdown7: b7, activityBreakdown30: b30 };
+              }));
             }
           }
 
@@ -148,12 +162,11 @@ export function useCourtData(): {
         if (cancelled) return;
 
         const statsMap = new Map<string, number>();
-        statsSnap.forEach((d) => statsMap.set(d.id, (d.data().leaguePoints26 as number) || 0));
+        statsSnap.forEach((d) => statsMap.set(d.id, (d.data().leaguePoints as number) || 0));
 
         const lastActiveMap = new Map<string, number>();
         usersSnap.forEach((d) => {
-          const raw = d.data().lastActive;
-          if (raw && typeof raw.toMillis === 'function') lastActiveMap.set(d.id, raw.toMillis());
+          lastActiveMap.set(d.id, toMillis(d.data().lastActive));
         });
 
         const now = Date.now();

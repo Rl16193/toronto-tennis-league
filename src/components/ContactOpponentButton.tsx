@@ -47,7 +47,8 @@ export const contactChannels = (c: {
   if (c.email) out.push({ key: 'email', label: 'Email', href: `mailto:${c.email}`, icon: Mail });
   if (phoneE164) out.push({ key: 'text', label: 'SMS', href: `sms:${phoneE164}`, icon: MessageSquare });
   if (waNumber) out.push({ key: 'whatsapp', label: 'WhatsApp', href: `https://wa.me/${waNumber.replace('+', '')}`, icon: WhatsAppIcon });
-  const preferred = c.preferred ?? [];
+  // A non-array value is treated as no preference.
+  const preferred = Array.isArray(c.preferred) ? c.preferred : [];
   if (preferred.length === 0) return out;
   const picked = out.filter((ch) => preferred.includes(ch.key as ContactMethod));
   // A preference naming only channels they've since removed would leave nobody able to reach them.

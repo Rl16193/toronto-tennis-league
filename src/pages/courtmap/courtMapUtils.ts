@@ -34,13 +34,18 @@ export type PickleballOnlyCourt = {
   lng?: number;
 };
 
+/** One window's activity at a court, each record counted once (functions/courtCounts.js). */
+export type ActivityBreakdown = { scores: number; checkins: number; waiting_board: number; queue: number; condition: number };
+export const EMPTY_ACTIVITY: ActivityBreakdown = { scores: 0, checkins: 0, waiting_board: 0, queue: 0, condition: 0 };
+
 export type CourtWithCount = CsvCourt & {
   count: number;
-  // Recent-activity totals: check-ins, photo reports and recorded results, each event counted
-  // once. Server-aggregated (functions/courtCounts.js) because /courts is public and both
-  // `courts` and `matches` are auth-only reads.
+  // Recent activity: the total (the map bubble) and its breakdown (the list pills). Server-aggregated
+  // (functions/courtCounts.js) because /courts is public and `courts` and `submissions` are auth-only reads.
   activity7: number;
   activity30: number;
+  activityBreakdown7: ActivityBreakdown;
+  activityBreakdown30: ActivityBreakdown;
   hasPrograms: boolean;
   pickleballEntries: PickleballEntry[];
 };

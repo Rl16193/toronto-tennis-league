@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import { setAnalyticsUser, clearAnalyticsUser } from '../lib/analytics';
 import { emptyContacts, ensureUserProfileDocuments } from '../lib/profileBootstrap';
-import { ContactData, UserProfile, UserData, UserStats, UserPreferences } from '../types';
+import { ContactData, ProviderDoc, UserProfile, UserData, UserStats, UserPreferences } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -46,11 +46,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProfileError(null);
       await ensureUserProfileDocuments(activeUser);
 
-      const [userDataDoc, statsDoc, preferencesDoc, contactsDoc] = await Promise.all([
+      const [userDataDoc, statsDoc, preferencesDoc, contactsDoc, providerDoc] = await Promise.all([
         getDoc(doc(db, 'users', activeUser.uid)),
         getDoc(doc(db, 'stats', activeUser.uid)),
         getDoc(doc(db, 'preferences', activeUser.uid)),
         getDoc(doc(db, 'contacts', activeUser.uid)),
+        getDoc(doc(db, 'providers', activeUser.uid)),
       ]);
 
       if (!userDataDoc.exists()) {
@@ -64,8 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setProfileError('Your preferences document is missing from Firestore.');
       } else {
         const userData = userDataDoc.data() as UserData;
-        // Deliberately NOT part of the existence checks above: legacy accounts have no contacts
-        // doc until the backfill runs, and treating that as fatal would lock them out entirely.
+        // Not part of the existence checks: a missing contacts doc must never lock a member out.
         const contacts: ContactData = contactsDoc.exists()
           ? { ...emptyContacts(), ...(contactsDoc.data() as ContactData) }
           : emptyContacts();
@@ -74,7 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (activeUser.email && contacts.email !== activeUser.email) {
           await setDoc(
             doc(db, 'contacts', activeUser.uid),
-            { email: activeUser.email, updated_at: new Date().toISOString() },
+            { email: activeUser.email, updated_at: Timestamp.now() },
             { merge: true },
           ).catch(() => { /* non-fatal; the next sign-in retries */ });
           contacts.email = activeUser.email;
@@ -82,29 +82,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const stats = statsDoc.data() as UserStats;
         const preferences = preferencesDoc.data() as UserPreferences;
+        // Roles (stringer | coach | organizer) live on providers/{uid}; most members have none.
+        const roles = providerDoc.exists() ? ((providerDoc.data() as ProviderDoc).roles ?? []) : [];
         setProfile({
           id: activeUser.uid,
           user: userData,
           stats,
           preferences,
           contacts,
+          roles,
         });
         // GA4 non-PII user properties for segmentation (User-ID set in onAuthStateChanged).
         setAnalyticsUser(activeUser.uid, {
           skill_level: stats.skill_level,
-          membership_status: preferences.event_creator ? 'organizer' : 'member',
+          membership_status: roles.includes('organizer') ? 'organizer' : 'member',
         });
-        updateDoc(doc(db, 'users', activeUser.uid), { lastActive: serverTimestamp() }).catch(() => {});
-
-        // Email verification was removed from signup, so any signed-in user is trusted: mark
-        // them verified and trigger the one-shot welcome email (Cloud Function fires when
-        // welcomeEmailSent flips false → true). Both flags are idempotent.
-        const updates: Record<string, boolean> = {};
-        if (!(userData as { isVerified?: boolean }).isVerified) updates.isVerified = true;
-        if (!(userData as { welcomeEmailSent?: boolean }).welcomeEmailSent) updates.welcomeEmailSent = true;
-        if (Object.keys(updates).length > 0) {
-          updateDoc(doc(db, 'users', activeUser.uid), updates).catch(() => {});
-        }
+        // The welcome email is sent server-side when the users doc is created (sendWelcomeEmail).
+        updateDoc(doc(db, 'users', activeUser.uid), { lastActive: Timestamp.now() }).catch(() => {});
       }
     } catch (error) {
       console.error("Error fetching user profile:", error);

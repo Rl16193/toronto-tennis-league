@@ -1,5 +1,5 @@
 import { User } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { ContactData, UserData, UserPreferences, UserStats } from '../types';
 
@@ -10,31 +10,67 @@ export const emptyContacts = (): ContactData => ({
   // that would silently hide a new member's phone and WhatsApp the moment they add them.
   preferred_mode_of_contact: [],
   whatsapp_contact: '',
-  whatsapp_same_as_phone: false,
   contactable: false,
+  secondary_email: '',
+  updated_at: null,
 });
 
+// The full stats shape with every server-written counter at zero (firestore.rules requires it).
 const createDefaultStats = (user: User): UserStats => ({
+  uid: user.uid,
   name: user.displayName?.trim() || '',
   skill_level: 2,
-  tournament_preference: 'Challengers',
+  league: '',
+  leaguePoints: 0,
+  leaguePointsPrev: 0,
   matchesPlayed: 0,
   wins: 0,
-  loses: 0,
-  leaguePoints26: 0,
-  tournamentsPlayed: 0,
-  league: '',
   pointswon: 0,
   totalPointsPlayed: 0,
+  tournamentsPlayed: 0,
+  rankPosition: 0,
+  rankTrend: 'flat',
+  rankMove: 0,
+  rankUpdatedAt: null,
+  profilePhoto: false,
+  profileComplete: false,
+  whatsappGroup: false,
+  followSocial: false,
+  tagPost: false,
+  eventsJoined: 0,
+  challengesPlayed: 0,
+  challengesWon: 0,
+  courtsVisited: 0,
+  zoneComplete: 0,
+  suggestions: 0,
+  boardPhotos: 0,
+  queueUpdates: 0,
+  currentStreak: 0,
+  bestStreak: 0,
+  monthsActive: 0,
+  active_months: [],
+  volunteerClaimed: 0,
+  volunteerApproved: 0,
+  latestVolunteerStatus: 'none',
+  inviteClaimed: 0,
+  inviteApproved: 0,
+  latestInviteStatus: 'none',
+  hostClaimed: 0,
+  hostApproved: 0,
+  latestHostStatus: 'none',
+  rsPoints: 0,
+  pointsSpent: 0,
+  updated_at: Timestamp.now(),
 });
 
-const createDefaultPreferences = (): UserPreferences => ({
-  availability_tags: [],
+const createDefaultPreferences = (uid: string): UserPreferences => ({
+  uid,
   preferred_courts: [],
-  favourite_players: [],
-  scheduling_preference: 'I will schedule matches on my own',
-  event_creator: false,
+  custom_courts: [],
   preferred_zone: '',
+  favourite_players: [],
+  availability_tags: [],
+  email_notifications: true,
 });
 
 export const ensureUserProfileDocuments = async (user: User) => {
@@ -50,34 +86,27 @@ export const ensureUserProfileDocuments = async (user: User) => {
   ]);
 
   const writes: Promise<void>[] = [];
+  const now = Timestamp.now();
 
   if (!userSnap.exists()) {
     const userData: UserData = {
+      uid: user.uid,
       name: user.displayName?.trim() || '',
       avatar: user.photoURL || '',
-      created_at: new Date().toISOString(),
+      bio: '',
+      display_badges: [],
+      created_at: now,
+      lastActive: now,
     };
-    writes.push(setDoc(userRef, { ...userData, uid: user.uid }));
+    writes.push(setDoc(userRef, userData));
   }
 
-  if (!statsSnap.exists()) {
-    writes.push(setDoc(statsRef, { ...createDefaultStats(user), uid: user.uid }));
-  }
+  if (!statsSnap.exists()) writes.push(setDoc(statsRef, createDefaultStats(user)));
+  if (!preferencesSnap.exists()) writes.push(setDoc(preferencesRef, createDefaultPreferences(user.uid)));
 
-  if (!preferencesSnap.exists()) {
-    writes.push(setDoc(preferencesRef, { ...createDefaultPreferences(), uid: user.uid }));
-  }
-
-  // Created for every account, including legacy ones signing in for the first time after the
-  // contacts split — the backfill handles the rest. Seeded with the auth email so notification
-  // emails keep working before the member touches their profile.
+  // Seeded with the auth email so notification emails work before the member touches their profile.
   if (!contactsSnap.exists()) {
-    writes.push(setDoc(contactsRef, {
-      ...emptyContacts(),
-      email: user.email || '',
-      updated_at: new Date().toISOString(),
-      uid: user.uid,
-    }));
+    writes.push(setDoc(contactsRef, { ...emptyContacts(), email: user.email || '', updated_at: now }));
   }
 
   await Promise.all(writes);

@@ -2,25 +2,24 @@ import React, { useState } from 'react';
 import { Check, X } from 'lucide-react';
 import type { TaskClaim } from './claimService';
 import { reviewClaim } from './claimService';
-import type { Redemption } from '../services/types';
-import { markCouponUsed, reviewRedemption, serviceErrorMessage } from '../services/servicesApi';
+import type { BookingRow } from '../services/types';
+import { reviewRedemption, serviceErrorMessage } from '../services/servicesApi';
 
-const CLAIM_LABEL: Record<TaskClaim['type'], string> = {
+const CLAIM_LABEL: Record<TaskClaim['category'], string> = {
   volunteer: 'Volunteered',
   ambassador: 'Invited a player',
   host: 'Hosted a meetup',
 };
 
 /**
- * Volunteer/ambassador/host claims waiting for approval, plus reward coupons needing a decision —
- * a provider flagged one, or a member asked to cancel one. Photo reports auto-approve, so they are
- * never here.
+ * Volunteer/ambassador/host claims waiting for approval, plus cancelled bookings paid by points
+ * whose refund an organizer decides. Photo reports auto-approve, so they are never here.
  *
  * Presentation only. The Organizer Dash owns both listeners, so its single "Needs you" count can
  * include these, and renders this inside that group — which is why there is no card, no heading
  * and no collapsing here. Rows match the dash idiom.
  */
-export const ReviewQueue: React.FC<{ claims: TaskClaim[]; coupons: Redemption[] }> = ({ claims, coupons }) => {
+export const ReviewQueue: React.FC<{ claims: TaskClaim[]; coupons: BookingRow[] }> = ({ claims, coupons }) => {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
 
@@ -40,13 +39,12 @@ export const ReviewQueue: React.FC<{ claims: TaskClaim[]; coupons: Redemption[] 
         <div key={c.id} className="rounded-2xl bg-fg/5 p-3">
           <div className="flex items-center gap-2.5">
             <div className="min-w-0 flex-1">
-              <p className="min-w-0 truncate text-sm font-bold text-fg">{c.user_name} — {CLAIM_LABEL[c.type]}</p>
+              <p className="min-w-0 truncate text-sm font-bold text-fg">{c.user_name} — {CLAIM_LABEL[c.category]}</p>
               <p className="mt-0.5 truncate text-xs text-fg/70">
-                {c.type === 'volunteer' && c.event_title}
-                {c.type === 'ambassador' && c.invitee_name}
-                {c.type === 'host' && [c.meetup_title, c.meetup_date].filter(Boolean).join(' · ')}
+                {c.category === 'volunteer' && c.event_title}
+                {c.category === 'ambassador' && c.invitee_name}
+                {c.category === 'host' && [c.meetup_title, c.meetup_date].filter(Boolean).join(' · ')}
               </p>
-              {c.note && <p className="truncate text-xs text-fg/70">{c.note}</p>}
             </div>
             <button disabled={busy === c.id} onClick={() => run(c.id, () => reviewClaim(c.id, true))}
               className={yes} aria-label={`Approve ${c.user_name}'s claim`}>
@@ -60,53 +58,37 @@ export const ReviewQueue: React.FC<{ claims: TaskClaim[]; coupons: Redemption[] 
         </div>
       ))}
 
-      {/* A cancel request approves into a refund; a flag is resolved by burning the coupon (it was
-          used) or declining, which puts it back to active. A coupon whose booking was cancelled
-          only asks for a refund, and declining keeps its points. */}
-      {coupons.map((r) => {
-        const cancelling = r.status === 'cancel_requested';
-        const booking = !!r.booking_id;
-        return (
-          <div key={r.code} className="rounded-2xl bg-fg/5 p-3">
-            <div className="flex items-center gap-2.5">
-              <div className="min-w-0 flex-1">
-                <p className="min-w-0 truncate text-sm font-bold text-fg">
-                  <span className="font-mono tracking-wider">{r.code}</span> — {booking ? 'refund requested' : cancelling ? 'cancel requested' : 'flagged'}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-fg/70">{r.user_name} · {r.offer} · {r.stringer_name}</p>
-                {(r.cancel_reason || r.flag_note) && (
-                  <p className="truncate text-xs text-fg/70">{r.cancel_reason || r.flag_note}</p>
-                )}
-              </div>
-              <button
-                disabled={busy === r.code}
-                onClick={() => run(r.code, () => (
-                  cancelling ? reviewRedemption({ code: r.code, approve: true }) : markCouponUsed({ code: r.code })
-                ))}
-                className={yes}
-                aria-label={booking ? 'Approve the refund' : cancelling ? 'Approve cancellation and refund' : 'Mark coupon used'}
-              >
-                <Check className="w-4 h-4" />
-              </button>
-              <button
-                disabled={busy === r.code}
-                onClick={() => run(r.code, () => reviewRedemption({ code: r.code, approve: false }))}
-                className={no}
-                aria-label={booking ? 'Decline the refund' : 'Decline, leave the coupon active'}
-              >
-                <X className="w-4 h-4" />
-              </button>
+      {/* Approving returns the points; declining keeps them spent (functions/rewards.js). */}
+      {coupons.map((b) => (
+        <div key={b.id} className="rounded-2xl bg-fg/5 p-3">
+          <div className="flex items-center gap-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="min-w-0 truncate text-sm font-bold text-fg">
+                <span className="font-mono tracking-wider">{b.redemption_code}</span> — refund requested
+              </p>
+              <p className="mt-0.5 truncate text-xs text-fg/70">{b.user_name} · {b.offer} · {b.providerName}</p>
+              {b.cancel_reason && <p className="truncate text-xs text-fg/70">{b.cancel_reason}</p>}
             </div>
-            <p className="mt-1.5 text-xs text-fg/70">
-              {booking
-                ? `Approving returns ${r.points_cost} points. Declining keeps them spent.`
-                : cancelling
-                  ? `Approving refunds ${r.points_cost} points. Declining leaves the coupon active.`
-                  : 'Approving marks it used. Declining puts it back to active.'}
-            </p>
+            <button
+              disabled={busy === b.id}
+              onClick={() => run(b.id, () => reviewRedemption({ code: b.redemption_code, approve: true }))}
+              className={yes}
+              aria-label="Approve the refund"
+            >
+              <Check className="w-4 h-4" />
+            </button>
+            <button
+              disabled={busy === b.id}
+              onClick={() => run(b.id, () => reviewRedemption({ code: b.redemption_code, approve: false }))}
+              className={no}
+              aria-label="Decline the refund"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-        );
-      })}
+          <p className="mt-1.5 text-xs text-fg/70">Approving returns {b.points} points. Declining keeps them spent.</p>
+        </div>
+      ))}
 
       {error && <p role="alert" className="text-xs text-badge-loss">{error}</p>}
     </>

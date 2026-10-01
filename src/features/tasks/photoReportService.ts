@@ -1,21 +1,16 @@
-import { addDoc, collection } from 'firebase/firestore';
+import { Timestamp, addDoc, collection } from 'firebase/firestore';
 import { ref, uploadBytesResumable } from 'firebase/storage';
 import exifr from 'exifr';
 import { db, storage } from '../../lib/firebase';
 import { courtKey } from '../../utils/courtKey';
 
-// "Submit a Photo" — one unified report flow (formerly split across "Submit a Photo" and
-// "Suggest an Improvement"). No organizer review: every report auto-approves immediately.
-// Automated Vision SafeSearch moderation (functions/index.js) still runs on upload and can flip a
-// report to 'rejected' after the fact if the image is unsafe.
-
-// Report categories inside the consolidated `courts` collection. `type` is the discriminator that
-// separates these from `check-in` / `attendance` docs; anonymous submitters use uid: 'no_account'.
+// "Submit a Report" — one report flow, members and signed-out visitors alike. No organizer review.
+// A report is a `courts` row with category 'report' and the report type as its sub_category.
 export type ReportType = 'condition' | 'waiting_board' | 'queue';
 
-// Sentinel uid for logged-out (anonymous) court reports. A real auth uid never starts with `no_`,
-// so cloud functions and rules can gate on it to skip award/ownership logic for anonymous writers.
-export const NO_ACCOUNT_UID = 'no_account';
+// A signed-out reporter's uid / user_name. The rules accept exactly this pair, and it pays nobody.
+export const NOT_A_MEMBER_UID = 'not_a_member';
+const ANONYMOUS_NAME = 'anonymous';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_PHOTOS = 3;
@@ -28,8 +23,8 @@ export type PhotoMetadata = {
   file_name: string;
   file_size: number;
   file_type: string;
-  file_last_modified: string | null; // ISO — when the file was last saved on the device
-  exif_taken_at: string | null;      // ISO — EXIF DateTimeOriginal (capture time), if present
+  file_last_modified: Timestamp | null; // when the file was last saved on the device
+  exif_taken_at: Timestamp | null;      // EXIF DateTimeOriginal (capture time), if present
   exif_camera: string | null;        // "Apple iPhone 14", etc., if present
   exif_gps_lat: number | null;
   exif_gps_lng: number | null;
@@ -41,7 +36,7 @@ async function extractPhotoMetadata(file: File): Promise<PhotoMetadata> {
     file_name: file.name,
     file_size: file.size,
     file_type: file.type,
-    file_last_modified: Number.isFinite(file.lastModified) ? new Date(file.lastModified).toISOString() : null,
+    file_last_modified: Number.isFinite(file.lastModified) ? Timestamp.fromMillis(file.lastModified) : null,
     exif_taken_at: null,
     exif_camera: null,
     exif_gps_lat: null,
@@ -56,7 +51,7 @@ async function extractPhotoMetadata(file: File): Promise<PhotoMetadata> {
     if (tags) {
       base.exif_present = true;
       const taken = (tags.DateTimeOriginal || tags.CreateDate) as Date | undefined;
-      if (taken instanceof Date && !Number.isNaN(taken.getTime())) base.exif_taken_at = taken.toISOString();
+      if (taken instanceof Date && !Number.isNaN(taken.getTime())) base.exif_taken_at = Timestamp.fromDate(taken);
       const camera = [tags.Make, tags.Model].filter(Boolean).join(' ').trim();
       if (camera) base.exif_camera = camera;
     }
@@ -70,21 +65,21 @@ async function extractPhotoMetadata(file: File): Promise<PhotoMetadata> {
 }
 
 export async function submitPhotoReport(args: {
-  uid: string | null; // null → anonymous (logged-out) report
+  uid: string | null; // null → signed-out report
   userName: string;
   type: ReportType;
   courtName: string;
+  /** The court's zone ('' when unknown). */
+  zone: string;
   files: File[];
   note: string;
   racquetsInQueue?: number;
   /** When the queue was seen, 24-hour "HH:MM" local time. Queue reports only. */
   queueTime?: string;
-  /** YYYY-MM-DD the queue was seen. */
-  queueDate?: string;
   waitingBoards?: number;
   onProgress?: (pct: number) => void;
 }): Promise<void> {
-  const { uid, userName, type, courtName, files, note, racquetsInQueue, queueTime, queueDate, waitingBoards, onProgress } = args;
+  const { uid, userName, type, courtName, zone, files, note, racquetsInQueue, queueTime, waitingBoards, onProgress } = args;
   if (type === 'condition' && !note.trim()) throw new Error('Please add a note.');
   if (files.find((f) => !f.type.startsWith('image/'))) throw new Error('Please choose image files only.');
   if (files.find((f) => f.size > MAX_IMAGE_BYTES)) throw new Error('Each image must be under 5 MB.');
@@ -109,20 +104,26 @@ export async function submitPhotoReport(args: {
   }
   onProgress?.(100);
 
+  // Every field on every report; what doesn't apply to this type is a typed empty.
+  const now = Timestamp.now();
   await addDoc(collection(db, 'courts'), {
-    type,
+    category: 'report',
+    sub_category: type,
+    uid: uid ?? NOT_A_MEMBER_UID,
+    user_name: uid ? userName : ANONYMOUS_NAME,
     court_key: courtKey(courtName),
     court_name: courtName,
+    zone,
+    note: note.trim(),
     photo_paths: photoPaths,
     photos_meta: photosMeta,
-    uid: uid ?? NO_ACCOUNT_UID,
-    user_name: userName,
-    note: note.trim(),
-    ...(type === 'queue' && racquetsInQueue != null ? { racquets_in_queue: racquetsInQueue } : {}),
-    ...(type === 'queue' && queueTime ? { queue_time: queueTime } : {}),
-    ...(type === 'queue' && queueDate ? { queue_date: queueDate } : {}),
-    ...(type === 'waiting_board' && waitingBoards != null ? { waiting_boards: waitingBoards } : {}),
-    status: 'approved',
-    created_at: new Date().toISOString(),
+    waiting_boards: type === 'waiting_board' ? waitingBoards ?? 0 : 0,
+    racquets_in_queue: type === 'queue' ? racquetsInQueue ?? 0 : 0,
+    queue_time: type === 'queue' ? queueTime ?? '' : '',
+    created_at: now,
+    updated_at: now,
+    lat: 0,
+    lng: 0,
+    dist_m: 0,
   });
 }

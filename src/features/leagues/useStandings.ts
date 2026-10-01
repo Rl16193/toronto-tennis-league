@@ -13,8 +13,7 @@ export type LeagueRow = {
   tournamentsPlayed: number;
   matchesPlayed: number;
   wins: number;
-  loses: number;
-  leaguePoints26: number;
+  leaguePoints: number;
   league: string;
   pointswon: number;
   totalPointsPlayed: number;
@@ -30,7 +29,7 @@ export const pgWinPct = (r: { pointswon: number; totalPointsPlayed: number }) =>
 
 /** Leaderboard order: points, then matches played, then name. */
 export const byLeagueRank = (a: LeagueRow, b: LeagueRow) =>
-  b.leaguePoints26 - a.leaguePoints26 || b.matchesPlayed - a.matchesPlayed || a.name.localeCompare(b.name);
+  b.leaguePoints - a.leaguePoints || b.matchesPlayed - a.matchesPlayed || a.name.localeCompare(b.name);
 
 export type DivTab = 'mens' | 'womens' | 'doubles';
 
@@ -97,12 +96,11 @@ export function useStandings(): {
           tournamentsPlayed: s.tournamentsPlayed ?? 0,
           matchesPlayed: mp,
           wins: s.wins ?? 0,
-          loses: s.loses ?? 0,
-          leaguePoints26: s.leaguePoints26 ?? 0,
+          leaguePoints: s.leaguePoints ?? 0,
           league: s.league || '',
           pointswon: s.pointswon ?? 0,
           totalPointsPlayed: s.totalPointsPlayed ?? 0,
-          rankTrend: (s.rankTrend === 'up' || s.rankTrend === 'down') ? s.rankTrend : 'flat',
+          rankTrend: s.rankTrend ?? 'flat',
           rankMove: typeof s.rankMove === 'number' ? s.rankMove : 0,
         });
       });

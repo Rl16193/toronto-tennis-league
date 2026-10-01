@@ -12,11 +12,11 @@ import { BracketErrorBoundary } from './TournamentElements';
 type Props = {
   groups: TournamentPlayer[][];
   groupLabels: string[];
-  groupIndices?: number[];
+  /** Per group: whether its bonus award exists. */
+  groupBonus?: boolean[];
   standingsByGroup: RRStandingRow[][];
   groupMatches: TournamentMatch[];
   knockoutMatches: TournamentMatch[];
-  advancementCount: number;
   isCreator: boolean;
   // The viewer's own uid — lets a non-creator's group card show only their own match(es).
   currentUserId?: string;
@@ -25,15 +25,14 @@ type Props = {
   onEditPlayer: (matchId: string, slot: 'player_1' | 'player_2', player: TournamentPlayer | null) => void;
   onSubmitScore: (match: TournamentMatch) => void;
   submittableMatchIds?: Set<string>;
-  onSaveGroupEdit: (rrGroup: number, newPlayers: TournamentPlayer[]) => void;
-  onRenameGroup?: (rrGroup: number, label: string) => void;
+  /** Group handlers take the card's position; useTournament resolves the group from it. */
+  onSaveGroupEdit: (gi: number, newPlayers: TournamentPlayer[]) => void;
+  onRenameGroup?: (gi: number, label: string) => void;
   /** Organizer pays/takes back one group's bonus. Passed even to players — the card shows it disabled. */
-  onSetGroupBonus?: (rrGroup: number, award: boolean) => Promise<void>;
+  onSetGroupBonus?: (gi: number, award: boolean) => Promise<void>;
   onRemovePlayer?: (uid: string) => void;
   /** Organizer moves a player into another zone’s draw (see handleMoveZoneByUid). */
   onMovePlayerZone?: (uid: string, bucketId: string) => void;
-  /** Participant asks the organizer to schedule one of their unplayed matches. */
-  onAskSchedule?: (match: TournamentMatch) => void;
   zoneBuckets?: { id: string; label: string }[];
   onCreateGroup?: (players: TournamentPlayer[], label?: string) => void;
   unplacedPlayers?: TournamentPlayer[];
@@ -138,10 +137,10 @@ const AddGroupForm: React.FC<{
 };
 
 export const RoundRobinView: React.FC<Props> = ({
-  groups, groupLabels, groupIndices, standingsByGroup, groupMatches, knockoutMatches,
-  advancementCount, isCreator, currentUserId, editMode, editPlayers,
+  groups, groupLabels, groupBonus, standingsByGroup, groupMatches, knockoutMatches,
+  isCreator, currentUserId, editMode, editPlayers,
   onEditPlayer, onSubmitScore, submittableMatchIds, onSaveGroupEdit,
-  onRenameGroup, onSetGroupBonus, onRemovePlayer, onMovePlayerZone, zoneBuckets, onAskSchedule, onCreateGroup, unplacedPlayers,
+  onRenameGroup, onSetGroupBonus, onRemovePlayer, onMovePlayerZone, zoneBuckets, onCreateGroup, unplacedPlayers,
   generatingKnockout, onGenerateKnockout, rrView,
   roundDeadlines, onUpdateDeadline,
 }) => {
@@ -221,28 +220,22 @@ export const RoundRobinView: React.FC<Props> = ({
               groupIndex={gi}
               groupLabel={groupLabels[gi] ?? `Group ${String.fromCharCode(65 + gi)}`}
               players={players}
-              matches={groupMatches.filter((m) => {
-                const ids = new Set(players.map((p) => p.uid));
-                return ids.has(m.player_1_uid) || ids.has(m.player_2_uid);
-              })}
+              matches={groupMatches.filter((m) => m.group_label === groupLabels[gi])}
               standings={standingsByGroup[gi] ?? []}
               statsByUid={statsByUid}
-              advancementCount={advancementCount}
               isCreator={isCreator}
               currentUserId={currentUserId}
               editMode={editMode}
               allGroupPlayers={allGroupPlayers}
               onSubmitScore={onSubmitScore}
               submittableMatchIds={submittableMatchIds}
-              // Translate the card's array position (gi) to the real rr_group value so
-              // saves/renames target the correct group even when indices are non-contiguous.
-              onSaveGroupEdit={(_, newPlayers) => onSaveGroupEdit(groupIndices?.[gi] ?? gi, newPlayers)}
-              onRenameGroup={onRenameGroup ? (label) => onRenameGroup(groupIndices?.[gi] ?? gi, label) : undefined}
-              onSetGroupBonus={onSetGroupBonus ? (award) => onSetGroupBonus(groupIndices?.[gi] ?? gi, award) : undefined}
+              onSaveGroupEdit={(_, newPlayers) => onSaveGroupEdit(gi, newPlayers)}
+              onRenameGroup={onRenameGroup ? (label) => onRenameGroup(gi, label) : undefined}
+              onSetGroupBonus={onSetGroupBonus ? (award) => onSetGroupBonus(gi, award) : undefined}
+              bonusAwarded={!!groupBonus?.[gi]}
               onRemovePlayer={onRemovePlayer}
               onMovePlayerZone={onMovePlayerZone}
               zoneBuckets={zoneBuckets}
-              onAskSchedule={onAskSchedule}
               contactsByUid={contactsByUid}
             />
           ))}

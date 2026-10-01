@@ -2,18 +2,18 @@
  * Scoring: the ONE module that decides points and writes them to `stats`.
  *
  * - `POINTS` is the only copy of the points rules. A match's type picks its row.
- * - `recordScore` records a result on any match (tournament, challenge, rally); `settleDispute`,
- *   `resetScore`, `cancelDraw` and `groupBonus` are the organizer's actions. The `scoreMatch`
- *   callable (../scoring.js) is the only way in.
- * - `commitPoints` is the only function in the codebase that writes points to `stats`.
- * - Points already paid never move: every payment stores exactly what it paid on the match
- *   (`applied_deltas`, `rr_group_bonus_uids`), and undoing negates exactly that. A payment made
- *   before this module existed is undone with the rules it was paid under (`legacyDeltas`).
+ * - Every score entry is a `submissions` doc, kept forever. The match carries only its lifecycle
+ *   `status` and `winner_uid`; the result (sets, walkover, points, ledger) lives on the applied entry.
+ * - `commitPoints` is the only function in the codebase that writes league points to `stats`.
+ * - Points already paid never move: the applied entry stores exactly what it paid
+ *   (`applied_deltas`) and undoing negates exactly that. A reset is its own entry carrying the negation.
+ * - The round-robin group bonus is an `awards` doc (sub_category league); it pays leaguePoints.
  *
  * Helpers only (no Cloud Function exports): see notify.js for why helpers live under lib/.
  */
-const { FieldValue } = require('firebase-admin/firestore');
+const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { isOrganizer } = require('./roles');
+const { toDate } = require('./constants');
 
 // ── The points table ───────────────────────────────────────────────────────────
 const POINTS = {
@@ -22,7 +22,6 @@ const POINTS = {
   group: { win: 3, loss: 1, walkoverWin: 1 },
   knockout: { win: 0, finalWin: 20, walkoverWin: 0, lossByRound: { R32: 1, R16: 2, QF: 3, SF: 5, F: 10 } },
   groupBonus: 5,
-  legacyNoShow: 1, // paid to both by the old client; nothing new pays it
 };
 
 const MAX_GAME_SCORE = 99;
@@ -32,6 +31,8 @@ const SCORE_FIELDS = [
   ['set_2_player_1', 'set_2_player_2'],
   ['set_3_player_1', 'set_3_player_2'],
 ];
+// A submission is the current result when applied and not a reset row.
+const RESULT_KINDS = ['result', 'correction', 'walkover'];
 
 class ResultError extends Error {
   constructor(code, message) {
@@ -41,22 +42,21 @@ class ResultError extends Error {
 }
 const fail = (message, code = 'invalid-argument') => { throw new ResultError(code, message); };
 
-const isTournament = (m) => m.category === 'singles' || m.category === 'doubles';
+const isTournament = (m) => m.category === 'tournament';
+const isDoubles = (m) => m.sub_category === 'doubles';
 const isGroupMatch = (m) => m.format === 'rr' && m.round === 'RR';
+const kindOf = (m) => (isTournament(m) ? (isGroupMatch(m) ? 'group' : 'knockout') : m.category);
 
 /**
- * A result that was actually played: a tournament match with games (not a walkover or an old no
- * show), or a recorded challenge or rally. Task progress and the Matchday bonus both use it.
+ * A result that was actually played: an applied tournament entry with games (not a walkover), or
+ * an applied challenge/rally entry. Task progress and the Matchday bonus both use it.
  */
-const isPlayedResult = (m) => {
-  if (!m) return false;
-  if (isTournament(m)) {
-    return m.status === 'complete' && !!m.winner_uid && m.walkover !== true && !m.no_show &&
-      SCORE_FIELDS.some(([a, b]) => (m[a] ?? 0) + (m[b] ?? 0) > 0);
-  }
-  return ['challenge', 'rally'].includes(m.category) && m.status === 'confirmed' && !!(m.winner_uid || m.claimed_winner_uid);
+const isPlayedResult = (sub) => {
+  if (!sub || sub.status !== 'applied' || !RESULT_KINDS.includes(sub.sub_category) || !sub.winner_uid) return false;
+  if (sub.sub_category === 'walkover') return false;
+  if (sub.category !== 'tournament') return true;
+  return SCORE_FIELDS.some(([a, b]) => (sub[a] ?? 0) + (sub[b] ?? 0) > 0);
 };
-const kindOf = (m) => (isTournament(m) ? (isGroupMatch(m) ? 'group' : 'knockout') : m.category);
 
 /** League points a result pays, from the table. */
 function pointsFor(match, walkover) {
@@ -124,16 +124,10 @@ function normalizeResult(input, match) {
   return { winnerUid, scores, walkover, court, margin: marginOf(scores, winnerUid, match) };
 }
 
-/** The result currently stored on a match. */
-function storedResult(match) {
-  const scores = SCORE_FIELDS.map(([a, b]) => [match[a] ?? 0, match[b] ?? 0]);
-  const winnerUid = match.winner_uid || match.claimed_winner_uid || '';
-  return {
-    winnerUid, scores,
-    walkover: match.walkover === true,
-    court: typeof match.court === 'string' ? match.court : '',
-    margin: marginOf(scores, winnerUid, match),
-  };
+/** The result an entry records. */
+function resultOf(sub, match) {
+  const scores = SCORE_FIELDS.map(([a, b]) => [sub[a] ?? 0, sub[b] ?? 0]);
+  return { winnerUid: sub.winner_uid || '', scores, walkover: sub.sub_category === 'walkover', court: sub.court || '', margin: marginOf(scores, sub.winner_uid, match) };
 }
 
 const scoreFieldPatch = (scores) =>
@@ -153,34 +147,23 @@ const creditedUids = (uid, partners) => {
   return p && p !== uid ? [uid, p] : [uid];
 };
 
-/**
- * Stat changes a result makes, per uid. `loserBalance`: a challenge takes at most what the loser
- * has. The other options exist only for payments made before this module: `walkoverPlayed` (the
- * old client counted a walkover as played), `counted` (whether a challenge counted as a match) and
- * `legacy` (results used to add tournamentsPlayed; it is now counted once, at registration).
- */
-function resultDeltas(match, result, { partners = new Map(), loserBalance = Infinity, walkoverPlayed = false, counted, legacy = false } = {}) {
+/** Stat changes a result makes, per uid. `loserBalance`: a challenge takes at most what the loser has. */
+function resultDeltas(match, result, { partners = new Map(), loserBalance = Infinity } = {}) {
   const deltas = new Map();
   const kind = kindOf(match);
   const tournament = kind === 'group' || kind === 'knockout';
-  const walkover = result.walkover && !walkoverPlayed;
-  const pts = pointsFor(match, walkover);
+  const pts = pointsFor(match, result.walkover);
   if (kind === 'challenge') pts.loser = -Math.min(-pts.loser, Math.max(0, loserBalance));
-  // A challenge converted from a scored tournament match already counted the match.
-  const played = counted ?? (!walkover && !(kind === 'challenge' && match.source === 'tournament'));
+  const played = !result.walkover;
 
   const winnerIsP1 = result.winnerUid === match.player_1_uid;
   const loserUid = winnerIsP1 ? match.player_2_uid : match.player_1_uid;
   const p1 = result.scores.reduce((s, [a]) => s + a, 0);
   const p2 = result.scores.reduce((s, [, b]) => s + b, 0);
   const side = (won) => ({
-    leaguePoints26: won ? pts.winner : pts.loser,
+    leaguePoints: won ? pts.winner : pts.loser,
     ...(played ? { matchesPlayed: 1, [won ? 'wins' : 'loses']: 1 } : {}),
-    ...(played && tournament ? {
-      pointswon: won === winnerIsP1 ? p1 : p2,
-      totalPointsPlayed: p1 + p2,
-      ...(legacy ? { tournamentsPlayed: won ? (match.round === 'F' ? 1 : 0) : 1 } : {}),
-    } : {}),
+    ...(played && tournament ? { pointswon: won === winnerIsP1 ? p1 : p2, totalPointsPlayed: p1 + p2 } : {}),
   });
   const credited = (uid) => (tournament ? creditedUids(uid, partners) : [uid]);
   credited(result.winnerUid).forEach((uid) => addDelta(deltas, uid, side(true)));
@@ -188,114 +171,39 @@ function resultDeltas(match, result, { partners = new Map(), loserBalance = Infi
   return deltas;
 }
 
-/** What a payment made BEFORE this module paid, so it can be undone exactly. */
-function legacyDeltas(match, partners = new Map()) {
-  if (match.category === 'rally' || match.category === 'challenge') {
-    if (match.applied !== true) return new Map();
-    const winnerUid = match.applied_winner_uid || match.winner_uid || match.claimed_winner_uid;
-    return resultDeltas(match, { ...storedResult(match), winnerUid, walkover: false }, {
-      loserBalance: match.applied_loser_delta !== undefined ? Number(match.applied_loser_delta) || 0 : -POINTS.challenge.loss,
-      counted: match.applied_counted_match !== undefined ? match.applied_counted_match !== false : undefined,
-      legacy: true,
-    });
-  }
-  if (match.status !== 'complete') return new Map();
-  if (match.no_show) {
-    const deltas = new Map();
-    [match.player_1_uid, match.player_2_uid].forEach((uid) => addDelta(deltas, uid, { leaguePoints26: POINTS.legacyNoShow }));
-    return deltas;
-  }
-  if (!match.winner_uid) return new Map();
-  return resultDeltas(match, storedResult(match), { partners, walkoverPlayed: true, legacy: true });
-}
-
-/** The stat changes this match currently stands for: stored if paid here, else legacy. */
-function standingDeltas(match, partners = new Map()) {
-  if (match.applied_deltas && typeof match.applied_deltas === 'object') {
-    return new Map(Object.entries(match.applied_deltas));
-  }
-  return legacyDeltas(match, partners);
-}
+const negate = (deltas) => new Map([...deltas].map(([u, d]) => [u, Object.fromEntries(Object.entries(d).map(([k, v]) => [k, -v]))]));
+const ledgerOf = (sub) => new Map(Object.entries((sub && sub.applied_deltas) || {}));
 
 /**
- * THE ONLY FUNCTION THAT WRITES POINTS TO `stats`. Undoes `undo`, applies `apply`, one net
- * increment per player, inside the caller's transaction. Never call tx.set on stats elsewhere.
+ * THE ONLY FUNCTION THAT WRITES LEAGUE POINTS TO `stats`. Undoes `undo`, applies `apply`, one net
+ * increment per player, inside the caller's transaction. `loses` is never stored (losses derive as
+ * matchesPlayed - wins), so it is dropped here.
  */
-function commitPoints(tx, db, { undo = new Map(), apply = new Map(), league } = {}) {
+function commitPoints(tx, db, { undo = new Map(), apply = new Map() } = {}) {
   const net = new Map();
   for (const [uid, d] of undo) addDelta(net, uid, Object.fromEntries(Object.entries(d).map(([k, v]) => [k, -v])));
   for (const [uid, d] of apply) addDelta(net, uid, d);
   for (const [uid, delta] of net) {
     const values = {};
-    Object.entries(delta).forEach(([k, v]) => { if (typeof v === 'number' && v) values[k] = FieldValue.increment(v); });
+    Object.entries(delta).forEach(([k, v]) => { if (k !== 'loses' && typeof v === 'number' && v) values[k] = FieldValue.increment(v); });
     if (Object.keys(values).length === 0) continue;
-    if (league) values.league = league;
-    tx.set(db.collection('stats').doc(uid), values, { merge: true });
+    tx.set(db.collection('stats').doc(uid), { ...values, updated_at: FieldValue.serverTimestamp() }, { merge: true });
   }
-}
-
-/**
- * Records a result on any match, or clears it (`result: null`), and moves the points to match,
- * in the caller's transaction. Reads first, then writes, so the caller must do its own reads
- * before calling and its own writes after.
- */
-async function applyMatchResult(tx, db, { matchRef, match, result, partners = new Map(), extra = {} }) {
-  const undo = standingDeltas(match, partners);
-  let apply = new Map();
-  if (result) {
-    let loserBalance = Infinity;
-    if (match.category === 'challenge') {
-      const loserUid = result.winnerUid === match.player_1_uid ? match.player_2_uid : match.player_1_uid;
-      const snap = await tx.get(db.collection('stats').doc(loserUid));
-      loserBalance = (snap.exists ? snap.data().leaguePoints26 ?? 0 : 0) - (undo.get(loserUid)?.leaguePoints26 ?? 0);
-    }
-    apply = resultDeltas(match, result, { partners, loserBalance });
-  }
-  const league = isTournament(match) ? (match.tournament_choice === 'Doubles' ? 'Doubles' : match.division) : undefined;
-  commitPoints(tx, db, { undo, apply, league });
-
-  const paid = result ? pointsFor(match, result.walkover) : null;
-  const stamp = result
-    ? {
-      applied_deltas: Object.fromEntries(apply),
-      scoring_v2: true,
-      applied: true,
-      applied_at: new Date().toISOString(),
-      applied_winner_uid: result.winnerUid,
-      ...(isTournament(match) ? { points_winner: paid.winner, points_loser: paid.loser } : {}),
-    }
-    : {
-      applied_deltas: FieldValue.delete(), scoring_v2: FieldValue.delete(), applied: FieldValue.delete(),
-      applied_at: FieldValue.delete(), applied_winner_uid: FieldValue.delete(),
-      applied_loser_delta: FieldValue.delete(), applied_counted_match: FieldValue.delete(),
-      points_winner: FieldValue.delete(), points_loser: FieldValue.delete(),
-    };
-  tx.set(matchRef, { ...stamp, ...extra }, { merge: true });
-  return apply;
-}
-
-// ── Round-robin group bonus ────────────────────────────────────────────────────
-
-const groupPlayers = (matches) =>
-  [...new Set(matches.flatMap((m) => [m.player_1_uid, m.player_2_uid]).filter(Boolean))];
-
-/**
- * Who currently holds this group's bonus (empty if it isn't paid). The paid players are stored
- * (`rr_group_bonus_uids`); a bonus paid before that stored nobody, so it is the group's players.
- */
-function paidBonusUids(matches) {
-  if (!matches.some((m) => m.rr_group_bonus_v2)) return [];
-  return matches.find((m) => Array.isArray(m.rr_group_bonus_uids))?.rr_group_bonus_uids ?? groupPlayers(matches);
 }
 
 // ── Draw helpers ───────────────────────────────────────────────────────────────
 
 const sameDraw = (a, b) =>
-  (a.bracket ?? null) === (b.bracket ?? null) &&
-  a.tournament_choice === b.tournament_choice &&
+  a.sub_category === b.sub_category &&
   a.division === b.division &&
   a.skill_group === b.skill_group &&
-  (a.zone ?? null) === (b.zone ?? null);
+  (a.zone || '') === (b.zone || '');
+
+/** `{eventId}_{drawKey}_{matchId}` → drawKey. */
+const drawKeyOf = (docId, match) => {
+  const e = match.event_id || '', mid = match.match_id || '';
+  return docId.startsWith(`${e}_`) && docId.endsWith(`_${mid}`) ? docId.slice(e.length + 1, -mid.length - 1) : '';
+};
 
 async function nextTarget(tx, db, match, matchId) {
   if (!match.next_match_id) return null;
@@ -313,57 +221,86 @@ async function nextTarget(tx, db, match, matchId) {
   return { ref: next.ref, data: next.data(), slot };
 }
 
+/** uid → partner uid for a doubles match, from the active registrations in its division. */
 async function partnersFor(tx, db, match) {
   const partners = new Map();
-  if (match.tournament_choice !== 'Doubles') return partners;
+  if (!isDoubles(match) || !match.event_id) return partners;
   const snap = await tx.get(db.collection('event_participants').where('event_id', '==', match.event_id));
-  snap.docs.map((d) => d.data()).filter((p) => p.uid && p.partner_uid).forEach((p) => partners.set(p.uid, p.partner_uid));
+  snap.docs.map((d) => d.data())
+    .filter((p) => p.category === 'doubles_tournament' && p.status === 'active' && p.uid && p.partner_uid &&
+      (!match.division || match.division === 'All' || p.division === match.division))
+    .forEach((p) => partners.set(p.uid, p.partner_uid));
   return partners;
 }
 
-const audit = (tx, db, row) =>
-  tx.create(db.collection('tournament_result_audit').doc(), { ...row, recorded_at: new Date().toISOString() });
+/** A match's participant_uids once `slot` holds `uid`: both sides plus their doubles partners (as the draw editor keeps it). */
+const onCourtAfter = (data, slot, uid, partners) => {
+  const sides = [slot === 'player_1' ? uid : data.player_1_uid, slot === 'player_2' ? uid : data.player_2_uid].filter(Boolean);
+  return [...new Set([...sides, ...sides.map((u) => partners.get(u) || '')].filter(Boolean))];
+};
 
-// ── Recording a result ─────────────────────────────────────────────────────────
+/** The applied result entry of a match (null when unplayed), read inside the transaction. */
+async function currentEntry(tx, db, matchId) {
+  const snap = await tx.get(db.collection('submissions').where('match_id', '==', matchId).where('status', '==', 'applied'));
+  const docs = snap.docs.filter((d) => RESULT_KINDS.includes(d.data().sub_category));
+  return docs.length ? { ref: docs[0].ref, id: docs[0].id, data: docs[0].data() } : null;
+}
 
-/** A match an organizer records for two other members (Matches' + button): challenge or rally. */
+/** A full submissions doc: every field present (uniform shape), typed empties where not used. */
+function entryDoc(match, matchId, fields) {
+  const now = Timestamp.now();
+  return {
+    category: match.category, sub_category: 'result', status: 'applied', match_id: matchId, event_id: match.event_id || '',
+    uid: '', user_name: '', winner_uid: '', winner_name: '', ...scoreFieldPatch([[0, 0], [0, 0], [0, 0]]), court: '',
+    replaces_id: '', points_winner: 0, points_loser: 0, applied_deltas: {}, applied_at: null, completed_at: null,
+    resolved_by: '', resolved_at: null, created_at: now, updated_at: now,
+    ...fields,
+  };
+}
+
+/** A full matches doc for a challenge/rally an organizer records for two other members. */
 function playedMatchFor(input) {
   const n = input && typeof input === 'object' ? input : {};
   if (!['rally', 'challenge'].includes(n.category)) fail('Only a challenge or a rally can be recorded this way.');
   const uids = [n.player_1_uid, n.player_2_uid];
   if (!uids.every((u) => typeof u === 'string' && u) || uids[0] === uids[1]) fail('Pick two different players.');
   if (n.category === 'challenge' && (typeof n.event_id !== 'string' || !n.event_id)) fail('There is no active league ladder to record a challenge in.');
+  const now = Timestamp.now();
   return {
-    category: n.category,
-    ...(n.category === 'challenge' ? { event_id: n.event_id, division: String(n.division || '') } : {}),
+    category: n.category, sub_category: 'singles', status: 'accepted',
     player_1_uid: uids[0], player_1_name: String(n.player_1_name || ''),
     player_2_uid: uids[1], player_2_name: String(n.player_2_name || ''),
-    status: 'accepted',
-    created_at: new Date().toISOString(),
+    participant_uids: uids, event_id: n.category === 'challenge' ? n.event_id : '', winner_uid: '',
+    responded_at: now, created_at: now, updated_at: now,
+    match_id: '', round: '', position: 0, drawsize: 0, division: n.category === 'challenge' ? String(n.division || '') : '',
+    skill_group: '', zone: '', format: '', player_1_slot: 0, player_2_slot: 0, next_match_id: '', next_slot: '', started: false,
+    group_label: n.category,
   };
 }
 
-const submissionOf = (result, now) => ({
-  winner_uid: result.winnerUid, walkover: result.walkover, margin: result.margin, submitted_at: now,
-  sets: Object.fromEntries(result.scores.map(([a, b], i) => [`set_${i + 1}`, { player_1: a, player_2: b }])),
-});
+const nameOf = async (tx, db, uid) => {
+  if (!uid) return '';
+  const s = await tx.get(db.collection('users').doc(uid));
+  return (s.exists && s.data().name) || '';
+};
 
 /**
  * Records a result on a tournament match, challenge or rally, by a player or an organizer, in one
- * transaction: the result, its points (applyMatchResult), advancement, event completion, audit.
+ * transaction: the entry, its points, advancement and event completion.
  *
  * - Nothing recorded yet: it counts at once.
- * - A player naming a different winner from the recorded one: a dispute (organizer approves or
- *   rejects it with settleDispute). Nothing moves.
+ * - A player naming a different winner from the recorded one: a `disputed` entry (organizer
+ *   approves or rejects it with settleDispute). Nothing moves.
  * - A player naming the same winner: the one who entered it may fix it within 7 days; anyone
- *   else's replaces it only if closer.
+ *   else's replaces it only if closer. Otherwise the entry is kept as `superseded`.
  * - An organizer: replaces anything, except a winner change once the next round is played.
  *
  * `newMatch` creates a challenge/rally two other members already played (organizer only).
+ * `applyEntryId` (settleDispute) applies an existing disputed entry instead of writing a new one.
  */
-async function recordScore(db, { callerUid, matchId, input, newMatch }) {
+async function recordScore(db, { callerUid, matchId, input, newMatch, applyEntryId }) {
   return db.runTransaction(async (tx) => {
-    const now = new Date().toISOString();
+    const now = Timestamp.now();
     let matchRef;
     let match;
     if (newMatch) {
@@ -383,46 +320,47 @@ async function recordScore(db, { callerUid, matchId, input, newMatch }) {
     if (tournament && !match.event_id) fail('That match has no event.');
 
     const eventSnap = match.event_id ? await tx.get(db.collection('events').doc(match.event_id)) : null;
-    const event = eventSnap && eventSnap.exists ? eventSnap.data() : {};
+    const event = eventSnap && eventSnap.exists ? eventSnap.data() : null;
     const organizer = await isOrganizer(callerUid, event);
     const partners = tournament ? await partnersFor(tx, db, match) : new Map();
     const sides = [match.player_1_uid, match.player_2_uid];
     const isPlayer = sides.includes(callerUid) || sides.some((uid) => partners.get(uid) === callerUid);
     if (newMatch && !organizer) fail('Only an organizer can record a match for two other players.', 'permission-denied');
     if (!organizer && !isPlayer) fail('Only the two players or an organizer can record this score.', 'permission-denied');
-
-    // Accepting a challenge converted from a played match records the result it was proposed with.
-    const conversion = !tournament && match.status === 'open' && !!match.source && !!match.winner_uid && callerUid === match.player_2_uid;
-    if (!tournament && !newMatch && !conversion && !['accepted', 'confirmed'].includes(match.status)) {
+    if (!tournament && !newMatch && !['accepted', 'complete'].includes(match.status)) {
       fail('That match is not ready for a score yet.', 'failed-precondition');
     }
-    const stored = storedResult(match);
-    const result = normalizeResult(conversion ? { winnerUid: stored.winnerUid, scores: stored.scores, court: stored.court } : input, match);
+
+    const current = newMatch ? null : await currentEntry(tx, db, matchRef.id);
+    const pending = applyEntryId ? await tx.get(db.collection('submissions').doc(applyEntryId)) : null;
+    const result = pending ? resultOf(pending.data(), match) : normalizeResult(input, match);
     if (result.walkover && !tournament) fail('Walkovers are only for tournament matches.');
     if (result.walkover && !organizer) fail('Only the organizer can record a walkover.', 'permission-denied');
 
-    const recorded = tournament
-      ? match.status === 'complete' && !!(match.winner_uid || match.no_show)
-      : match.status === 'confirmed' && !!stored.winnerUid;
-    const old = recorded ? stored : null;
-    const submissions = { ...(match.result_submissions || {}), [callerUid]: submissionOf(result, now) };
-    if (old && !match.no_show && old.winnerUid === result.winnerUid && old.walkover === result.walkover &&
+    const callerName = await nameOf(tx, db, callerUid);
+    const winnerName = result.winnerUid === match.player_1_uid ? match.player_1_name : match.player_2_name;
+    const entryFields = {
+      uid: callerUid, user_name: callerName, winner_uid: result.winnerUid, winner_name: winnerName,
+      ...scoreFieldPatch(result.scores), court: result.court, sub_category: result.walkover ? 'walkover' : 'result',
+    };
+    const old = current ? resultOf(current.data, match) : null;
+    const keep = (status) => { tx.set(db.collection('submissions').doc(), entryDoc(match, matchRef.id, { ...entryFields, status })); };
+
+    if (old && !pending && old.winnerUid === result.winnerUid && old.walkover === result.walkover &&
       JSON.stringify(old.scores) === JSON.stringify(result.scores)) {
-      tx.update(matchRef, { result_submissions: submissions });
+      keep('superseded');
       return { duplicate: true, matchId: matchRef.id };
     }
     if (old && !organizer) {
-      if (match.no_show || old.walkover) fail('Only the organizer can change this result.', 'permission-denied');
+      if (old.walkover) fail('Only the organizer can change this result.', 'permission-denied');
       if (result.winnerUid !== old.winnerUid) {
-        tx.update(matchRef, {
-          result_submissions: submissions, score_disputed: true, dispute_uid: callerUid,
-          score_disputed_at: match.score_disputed_at || now,
-        });
+        keep('disputed');
         return { inDispute: true, matchId: matchRef.id };
       }
-      const ownFix = callerUid === match.reported_by && Date.now() - (Date.parse(match.completed_at || '') || 0) <= EDIT_WINDOW_MS;
+      const enteredAt = toDate(current.data.created_at);
+      const ownFix = callerUid === current.data.uid && enteredAt && Date.now() - enteredAt.getTime() <= EDIT_WINDOW_MS;
       if (!ownFix && result.margin >= old.margin) {
-        tx.update(matchRef, { result_submissions: submissions });
+        keep('superseded');
         return { recordedOnly: true, matchId: matchRef.id };
       }
     }
@@ -436,35 +374,44 @@ async function recordScore(db, { callerUid, matchId, input, newMatch }) {
       fail('The next-round spot already holds another player. Fix the draw first.', 'failed-precondition');
     }
 
-    const winnerName = result.winnerUid === match.player_1_uid ? match.player_1_name : match.player_2_name;
-    await applyMatchResult(tx, db, {
-      matchRef, match, result, partners,
-      extra: {
-        ...(newMatch ? match : {}),
-        winner_uid: result.winnerUid,
-        winner_name: winnerName,
-        ...scoreFieldPatch(result.scores),
-        ...(result.court ? { court: result.court } : {}),
-        score_disputed: false,
-        score_disputed_at: FieldValue.delete(),
-        dispute_uid: FieldValue.delete(),
-        result_submissions: submissions,
-        ...(old
-          ? { score_edited_at: now }
-          : { completed_at: now, reported_by: callerUid, reported_at: now, ...(organizer && !isPlayer ? { recorded_by_organizer: true } : {}) }),
-        ...(tournament
-          ? { status: 'complete', walkover: result.walkover, no_show: false, ...(isGroupMatch(match) ? { rr_winner_pts_v2: true } : {}) }
-          : { status: 'confirmed', ...(old ? {} : { confirmed_at: now }), ...(conversion ? { responded_at: now } : {}) }),
-      },
-    });
-    audit(tx, db, {
-      event_id: match.event_id || null, match_id: matchRef.id, category: match.category,
-      actor_uid: callerUid, as_organizer: organizer, action: old ? 'rescore' : 'apply',
-      before: old ? { winner_uid: old.winnerUid, walkover: old.walkover, no_show: !!match.no_show, scores: scoreFieldPatch(old.scores) } : null,
-      after: { winner_uid: result.winnerUid, walkover: result.walkover, scores: scoreFieldPatch(result.scores) },
-    });
+    // Points: undo exactly what the current entry paid, pay the new result.
+    let loserBalance = Infinity;
+    if (match.category === 'challenge') {
+      const loserUid = result.winnerUid === match.player_1_uid ? match.player_2_uid : match.player_1_uid;
+      const s = await tx.get(db.collection('stats').doc(loserUid));
+      loserBalance = (s.exists ? s.data().leaguePoints ?? 0 : 0) - (ledgerOf(current && current.data).get(loserUid)?.leaguePoints ?? 0);
+    }
+    const apply = resultDeltas(match, result, { partners, loserBalance });
+    commitPoints(tx, db, { undo: ledgerOf(current && current.data), apply });
+    const loserUid = result.winnerUid === match.player_1_uid ? match.player_2_uid : match.player_1_uid;
+    const paid = tournament ? pointsFor(match, result.walkover) : {
+      winner: apply.get(result.winnerUid)?.leaguePoints ?? 0, loser: apply.get(loserUid)?.leaguePoints ?? 0,
+    };
+    const appliedFields = {
+      status: 'applied',
+      sub_category: result.walkover ? 'walkover' : old ? 'correction' : 'result',
+      replaces_id: current ? current.id : '',
+      points_winner: paid.winner, points_loser: paid.loser,
+      applied_deltas: Object.fromEntries(apply), applied_at: now,
+      // Pinned to the first scoring of the match: corrections carry the original time.
+      completed_at: current ? current.data.completed_at || now : now,
+      updated_at: now,
+    };
+    if (pending) {
+      tx.update(pending.ref, { ...appliedFields, resolved_by: callerUid, resolved_at: now });
+    } else {
+      tx.set(db.collection('submissions').doc(), entryDoc(match, matchRef.id, { ...entryFields, ...appliedFields }));
+    }
+    if (current) tx.update(current.ref, { status: 'superseded', updated_at: now });
+
+    if (newMatch) tx.set(matchRef, { ...match, status: 'complete', winner_uid: result.winnerUid, updated_at: now });
+    else tx.update(matchRef, { status: 'complete', winner_uid: result.winnerUid, updated_at: now });
+
     if (target && target.data.status !== 'complete') {
-      tx.update(target.ref, { [`${target.slot}_uid`]: result.winnerUid, [`${target.slot}_name`]: winnerName });
+      tx.update(target.ref, {
+        [`${target.slot}_uid`]: result.winnerUid, [`${target.slot}_name`]: winnerName,
+        participant_uids: onCourtAfter(target.data, target.slot, result.winnerUid, partners), updated_at: now,
+      });
     }
     // A played final means the event is over, as far as the public homepage is concerned. Each
     // new final pushes the stamp forward, so an event with several draws stays listed until the last.
@@ -478,44 +425,42 @@ async function recordScore(db, { callerUid, matchId, input, newMatch }) {
 // ── Organizer actions ──────────────────────────────────────────────────────────
 
 async function requireOrganizer(db, uid, eventId) {
-  const event = eventId ? (await db.doc(`events/${eventId}`).get()).data() : {};
+  const event = eventId ? (await db.doc(`events/${eventId}`).get()).data() : null;
   if (eventId && !event) fail('Event not found.', 'not-found');
   if (!(await isOrganizer(uid, event))) fail('Only the organizer can do that.', 'permission-denied');
 }
 
+/** The newest disputed entry of a match. */
+async function disputedEntry(db, matchId) {
+  const snap = await db.collection('submissions').where('match_id', '==', matchId).where('status', '==', 'disputed').get();
+  return snap.docs.sort((a, b) => (toDate(b.data().created_at)?.getTime() ?? 0) - (toDate(a.data().created_at)?.getTime() ?? 0))[0] || null;
+}
+
 /**
- * Organizer: a disputed result. Approve applies the disputing player's score (points follow);
- * reject keeps the recorded result. Either way the dispute is closed.
+ * Organizer: a disputed result. Approve applies the disputing entry (points follow); reject marks
+ * it rejected and the recorded result stands.
  */
 async function settleDispute(db, { uid, matchId, approve }) {
   const snap = await db.doc(`matches/${matchId}`).get();
   if (!snap.exists) fail('Match not found.', 'not-found');
   const match = snap.data();
   await requireOrganizer(db, uid, match.event_id);
-  if (match.score_disputed !== true) fail('That result is not disputed.', 'failed-precondition');
-  if (approve) {
-    const sub = match.result_submissions?.[match.dispute_uid];
-    if (!sub) fail('The disputing score was entered before this change and was not saved. Reject it and ask the players to re-enter it.', 'failed-precondition');
-    const scores = [1, 2, 3].map((i) => [sub.sets?.[`set_${i}`]?.player_1 ?? 0, sub.sets?.[`set_${i}`]?.player_2 ?? 0]);
-    return recordScore(db, { callerUid: uid, matchId, input: { winnerUid: sub.winner_uid, scores, walkover: sub.walkover === true } });
-  }
-  return db.runTransaction(async (tx) => {
-    tx.update(snap.ref, { score_disputed: false, score_disputed_at: FieldValue.delete(), dispute_uid: FieldValue.delete() });
-    audit(tx, db, { event_id: match.event_id || null, match_id: matchId, category: match.category, actor_uid: uid, as_organizer: true, action: 'dispute_rejected' });
-    return { applied: false };
-  });
+  const entry = await disputedEntry(db, matchId);
+  if (!entry) fail('That result is not disputed.', 'failed-precondition');
+  if (approve) return recordScore(db, { callerUid: uid, matchId, applyEntryId: entry.id });
+  const now = Timestamp.now();
+  await entry.ref.update({ status: 'rejected', resolved_by: uid, resolved_at: now, updated_at: now });
+  return { applied: false };
 }
 
 /**
- * Organizer: send one scored match back to unplayed, undoing what it paid.
- *
- * Works for a tournament fixture, a challenge and a rally. It stays ORGANIZER-ONLY for all three:
- * the players can correct a score (games, inside the edit window) or dispute a winner, but only an
- * organizer can take a result away. A rally carries no event, so the organizer test falls back to
- * the `event_creator` flag exactly as `recordScore` does.
+ * Organizer: send one scored match back to unplayed. The applied entry becomes superseded and a
+ * reset entry records the negated points. Works for a tournament fixture, a challenge and a rally;
+ * only an organizer can take a result away.
  */
 async function resetScore(db, { uid, matchId }) {
   return db.runTransaction(async (tx) => {
+    const now = Timestamp.now();
     const matchRef = db.collection('matches').doc(matchId);
     const snap = await tx.get(matchRef);
     if (!snap.exists) fail('Match not found.', 'not-found');
@@ -523,117 +468,127 @@ async function resetScore(db, { uid, matchId }) {
     const tournament = isTournament(match);
     if (!tournament && !['challenge', 'rally'].includes(match.category)) fail('That match cannot be reset.');
     const eventSnap = match.event_id ? await tx.get(db.doc(`events/${match.event_id}`)) : null;
-    const event = eventSnap && eventSnap.exists ? eventSnap.data() : {};
+    const event = eventSnap && eventSnap.exists ? eventSnap.data() : null;
     if (!(await isOrganizer(uid, event))) fail('Only the organizer can reset a score.', 'permission-denied');
-    // A played tournament fixture is 'complete'; a played challenge or rally is 'confirmed'.
-    if (match.status !== (tournament ? 'complete' : 'confirmed')) return false;
-    const partners = tournament ? await partnersFor(tx, db, match) : new Map();
+    if (match.status !== 'complete') return false;
+    const current = await currentEntry(tx, db, matchId);
     const target = tournament ? await nextTarget(tx, db, match, matchId) : null;
-    await applyMatchResult(tx, db, {
-      matchRef, match, result: null, partners,
-      extra: {
-        // Back to the state each kind was in before the score: a fixture waiting to be played,
-        // or an accepted request either player can record again.
-        status: tournament ? 'pending' : 'accepted',
-        winner_uid: '', winner_name: '', ...scoreFieldPatch([[0, 0], [0, 0], [0, 0]]),
-        walkover: false, no_show: false, score_disputed: false, result_submissions: FieldValue.delete(),
-        dispute_uid: FieldValue.delete(), reported_by: FieldValue.delete(),
-        // A rally/challenge is sorted and listed by these; left behind they read as still played.
-        ...(tournament ? {} : {
-          completed_at: FieldValue.delete(), confirmed_at: FieldValue.delete(), reported_at: FieldValue.delete(),
-        }),
-      },
-    });
+    const partners = target ? await partnersFor(tx, db, match) : new Map();
+    const callerName = await nameOf(tx, db, uid);
+    const undo = ledgerOf(current && current.data);
+    commitPoints(tx, db, { undo });
+    if (current) {
+      tx.update(current.ref, { status: 'superseded', updated_at: now });
+      tx.set(db.collection('submissions').doc(), entryDoc(match, matchId, {
+        sub_category: 'reset', status: 'applied', uid, user_name: callerName, replaces_id: current.id,
+        applied_deltas: Object.fromEntries(negate(undo)), applied_at: now,
+      }));
+    }
+    tx.update(matchRef, { status: 'accepted', winner_uid: '', updated_at: now });
     // Pull the winner back out of the next round, unless that match has already been played.
     if (target && target.data.status !== 'complete' && target.data[`${target.slot}_uid`] === match.winner_uid) {
-      tx.update(target.ref, { [`${target.slot}_uid`]: '', [`${target.slot}_name`]: 'Player Loading' });
+      tx.update(target.ref, {
+        [`${target.slot}_uid`]: '', [`${target.slot}_name`]: 'Player Loading',
+        participant_uids: onCourtAfter(target.data, target.slot, '', partners), updated_at: now,
+      });
     }
-    audit(tx, db, {
-      event_id: match.event_id || null, match_id: matchId, category: match.category, actor_uid: uid, as_organizer: true, action: 'reset',
-      before: { winner_uid: match.winner_uid || '', walkover: !!match.walkover, no_show: !!match.no_show }, after: null,
-    });
     return true;
   });
 }
+
+const awardIdForGroup = (eventId, drawKey, groupLabel) =>
+  `rr_group_bonus_${eventId}_${drawKey}_${String(groupLabel).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
 
 /** Organizer: delete a draw's matches, undoing everything they and their groups' bonuses paid. */
 async function cancelDraw(db, { uid, eventId, matchIds }) {
   await requireOrganizer(db, uid, eventId);
   return db.runTransaction(async (tx) => {
+    const now = Timestamp.now();
     const snaps = (await tx.getAll(...matchIds.map((id) => db.collection('matches').doc(id)))).filter((s) => s.exists);
     if (snaps.some((s) => s.data().event_id !== eventId)) fail('Those matches belong to another event.');
-    const doubles = snaps.find((s) => s.data().tournament_choice === 'Doubles');
-    const partners = doubles ? await partnersFor(tx, db, doubles.data()) : new Map();
+    const entries = await Promise.all(snaps.map((s) => currentEntry(tx, db, s.id)));
+    const groupAwards = new Map();
+    snaps.filter((s) => isGroupMatch(s.data())).forEach((s) => {
+      const id = awardIdForGroup(eventId, drawKeyOf(s.id, s.data()), s.data().group_label);
+      groupAwards.set(id, db.collection('awards').doc(id));
+    });
+    const awardSnaps = groupAwards.size ? await tx.getAll(...groupAwards.values()) : [];
     const undo = new Map();
-    snaps.forEach((s) => standingDeltas(s.data(), partners).forEach((d, u) => addDelta(undo, u, d)));
-    const groups = new Map();
-    snaps.map((s) => s.data()).filter(isGroupMatch)
-      .forEach((m) => groups.set(m.rr_group ?? 0, [...(groups.get(m.rr_group ?? 0) || []), m]));
-    groups.forEach((gm) => paidBonusUids(gm).forEach((u) => addDelta(undo, u, { leaguePoints26: POINTS.groupBonus })));
+    entries.forEach((e) => e && ledgerOf(e.data).forEach((d, u) => addDelta(undo, u, d)));
+    awardSnaps.filter((a) => a.exists).forEach((a) => (a.data().awardees || []).forEach((u) => addDelta(undo, u, { leaguePoints: POINTS.groupBonus })));
     commitPoints(tx, db, { undo });
+    entries.forEach((e) => e && tx.update(e.ref, { status: 'superseded', updated_at: now }));
+    awardSnaps.filter((a) => a.exists).forEach((a) => tx.delete(a.ref));
     snaps.forEach((s) => tx.delete(s.ref));
-    audit(tx, db, { event_id: eventId, actor_uid: uid, as_organizer: true, action: 'cancel_draw', match_ids: snaps.map((s) => s.id) });
     return snaps.length;
   });
 }
 
 /**
- * Organizer: turn one round-robin group's bonus on or off. On pays every player in the group;
- * off takes it back only from those it was paid to. Returns how many players it moved.
+ * Organizer: turn one round-robin group's bonus on or off. On writes the group's award (every player
+ * in the group) and pays leaguePoints; off deletes it and takes the points back only from its awardees.
  */
 async function groupBonus(db, { uid, eventId, matchIds, award }) {
   await requireOrganizer(db, uid, eventId);
   return db.runTransaction(async (tx) => {
     const snaps = (await tx.getAll(...matchIds.map((id) => db.collection('matches').doc(id)))).filter((s) => s.exists);
-    const groupKeys = new Set(snaps.map((s) => s.data().rr_group ?? 0));
-    if (snaps.length === 0 || groupKeys.size !== 1 || !snaps.every((s) => s.data().event_id === eventId && isGroupMatch(s.data()))) {
+    const labels = new Set(snaps.map((s) => s.data().group_label));
+    if (snaps.length === 0 || labels.size !== 1 || !snaps.every((s) => s.data().event_id === eventId && isGroupMatch(s.data()))) {
       fail('Give the matches of exactly one group.');
     }
-    const matches = snaps.map((s) => s.data());
-    const players = groupPlayers(matches);
-    const paidUids = paidBonusUids(matches);
-    if (matches.some((m) => m.rr_group_bonus_v2) === (award === true)) return 0;
-    const bonus = (uids) => new Map(uids.map((u) => [u, { leaguePoints26: POINTS.groupBonus }]));
-    commitPoints(tx, db, award ? { apply: bonus(players) } : { undo: bonus(paidUids) });
-    snaps.forEach((s) => tx.set(s.ref, award
-      ? { rr_group_bonus_v2: true, rr_group_bonus_uids: players }
-      : { rr_group_bonus_v2: false, rr_group_bonus_uids: FieldValue.delete() }, { merge: true }));
-    return award ? players.length : paidUids.length;
+    const first = snaps[0];
+    const drawKey = drawKeyOf(first.id, first.data());
+    const ref = db.collection('awards').doc(awardIdForGroup(eventId, drawKey, first.data().group_label));
+    const existing = await tx.get(ref);
+    if (existing.exists === (award === true)) return 0;
+    const bonus = (uids) => new Map(uids.map((u) => [u, { leaguePoints: POINTS.groupBonus }]));
+    if (award) {
+      const players = [...new Set(snaps.flatMap((s) => [s.data().player_1_uid, s.data().player_2_uid]).filter(Boolean))];
+      commitPoints(tx, db, { apply: bonus(players) });
+      const now = Timestamp.now();
+      tx.set(ref, {
+        category: 'rr_group_bonus', sub_category: 'league', key: `${eventId}_${drawKey}_${first.data().group_label}`,
+        points_each: POINTS.groupBonus, awardees: players, started_at: null, created_at: now, updated_at: now,
+      });
+      return players.length;
+    }
+    const paid = existing.data().awardees || [];
+    commitPoints(tx, db, { undo: bonus(paid) });
+    tx.delete(ref);
+    return paid.length;
   });
 }
 
 /**
- * Counts one tournament entered (`tournamentsPlayed`), once per player per event, at registration
- * (Racquets-And-Strings' rule; results no longer count it). A removed player who re-joins is not
- * counted again: the registration that counted carries `tournament_counted`.
+ * Recounts a member's registrations: `eventsJoined` = distinct events with an active registration,
+ * `tournamentsPlayed` = those that are tournaments. Set, never incremented, so a re-join can't
+ * double-count and no marker is needed. Returns the counts.
  */
-async function countTournamentEntry(db, participantId) {
-  return db.runTransaction(async (tx) => {
-    const ref = db.collection('event_participants').doc(participantId);
-    const snap = await tx.get(ref);
-    const p = snap.exists ? snap.data() : null;
-    if (!p || !p.uid || !p.event_id || String(p.uid).startsWith('__loading_') || p.tournament_counted) return false;
-    const [eventSnap, mine] = await Promise.all([
-      tx.get(db.collection('events').doc(p.event_id)),
-      tx.get(db.collection('event_participants').where('event_id', '==', p.event_id).where('uid', '==', p.uid)),
-    ]);
-    if (!eventSnap.exists || !String(eventSnap.data().type || '').toLowerCase().includes('tournament')) return false;
-    if (mine.docs.some((d) => d.data().tournament_counted === true)) return false;
-    commitPoints(tx, db, { apply: new Map([[p.uid, { tournamentsPlayed: 1 }]]) });
-    tx.update(ref, { tournament_counted: true });
-    return true;
+async function recountEntries(db, uid) {
+  if (!uid || String(uid).startsWith('guest_')) return null;
+  const regs = await db.collection('event_participants').where('uid', '==', uid).where('status', '==', 'active').get();
+  const events = [...new Set(regs.docs.map((d) => d.data().event_id).filter(Boolean))];
+  const tournaments = new Set(regs.docs.filter((d) => /_tournament$/.test(d.data().category || '')).map((d) => d.data().event_id));
+  const { rsPointsPatch } = require('./points');
+  await db.runTransaction(async (tx) => {
+    const patch = await rsPointsPatch(tx, db, uid, { eventsJoined: events.length, tournamentsPlayed: tournaments.size });
+    tx.set(db.collection('stats').doc(uid), { ...patch, updated_at: FieldValue.serverTimestamp() }, { merge: true });
   });
+  return { eventsJoined: events.length, tournamentsPlayed: tournaments.size };
 }
 
 module.exports = {
   POINTS,
+  RESULT_KINDS,
   ResultError,
   cancelDraw,
-  countTournamentEntry,
+  recountEntries,
   groupBonus,
   isPlayedResult,
   pointsFor,
   recordScore,
   resetScore,
   settleDispute,
+  awardIdForGroup,
+  drawKeyOf,
 };

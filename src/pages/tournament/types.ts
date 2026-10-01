@@ -1,7 +1,9 @@
+import type { Timestamp } from 'firebase/firestore';
+import type { Submission } from '../../features/matches/results';
+
 export type DrawTab = 'mens' | 'womens' | 'doubles';
-// 'Retired Pro' is age-based (55+, chosen at join time via participant.skill_group), not derived
-// from skill_level like Challengers/Masters.
-export type SkillGroup = 'Beginners' | 'Challengers' | 'Masters' | 'Retired Pro' | 'All';
+// Retired Pro is a division ("Men's Retired Pro"), not a skill group: its draw is skill_group 'All'.
+export type SkillGroup = 'Beginners' | 'Challengers' | 'Masters' | 'All';
 // Adjacency order for skill-group merging: only neighboring bands may be merged together
 // (Beginners+Challengers, or Challengers+Masters — never Beginners+Masters, never all three).
 export const SKILL_GROUP_ORDER: readonly SkillGroup[] = ['Beginners', 'Challengers', 'Masters'];
@@ -32,7 +34,8 @@ export type ZoneDrawConfig = {
 // Reserved id for players with no preferred_zone set — always available as a bucket when
 // includeUnassigned is true, regardless of what the creator picked for real zones.
 export const UNASSIGNED_ZONE_ID = 'unassigned';
-export type MatchStatus = 'pending' | 'complete';
+// A fixture is created 'accepted' (unplayed); scoreMatch makes it 'complete'.
+export type MatchStatus = 'accepted' | 'complete';
 
 export type TemplateMatch = {
   match_id: string;
@@ -50,78 +53,45 @@ export type TournamentPlayer = {
   participantId: string;
   skillLevel?: number;
   preferredCourts?: string[];
+  /** Doubles: the partner's uid, so a match's participant_uids carries both of the team. */
+  partnerUid?: string;
 };
 
+/** A tournament `matches` doc (v3). The result is its applied submission, merged in as `result`. */
 export type TournamentMatch = {
   id: string;
-  category?: 'singles' | 'doubles' | 'rally' | 'challenge';
+  category: 'tournament';
+  sub_category: 'singles' | 'doubles';
+  status: MatchStatus;
+  player_1_uid: string;
+  player_1_name: string;
+  player_2_uid: string;
+  player_2_name: string;
+  participant_uids: string[];
   event_id: string;
-  tournament_choice: 'Singles' | 'Doubles';
-  division: string;
-  skill_group: SkillGroup;
-  // Zone bucket id this match belongs to (see ZoneDrawConfig) — absent for events that never
-  // enabled zone draws, or for draws with no zone dimension (doubles).
-  zone?: string;
-  drawsize: number;
+  winner_uid: string;
+  responded_at?: Timestamp | null;
+  created_at?: Timestamp | null;
+  updated_at?: Timestamp | null;
   match_id: string;
   round: string;
   position: number;
-  player_1_slot: number | string;
-  player_2_slot: number | string;
-  player_1_name: string;
-  player_1_uid: string;
-  player_2_name: string;
-  player_2_uid: string;
-  winner_name?: string;
-  winner_uid?: string;
-  set_1_player_1?: number;
-  set_1_player_2?: number;
-  set_2_player_1?: number;
-  set_2_player_2?: number;
-  set_3_player_1?: number;
-  set_3_player_2?: number;
-  next_match_id?: string;
-  next_slot?: 'player_1' | 'player_2' | '';
-  status: MatchStatus;
-  bracket?: string | null;
+  drawsize: number;
+  division: string;
+  skill_group: SkillGroup;
+  // Zone bucket id; '' for doubles. A zone-less match reads as the default zone (effectiveZone).
+  zone: string;
+  format: TournamentFormat;
+  // Template seed slot; 0 for a slot fed by an earlier round.
+  player_1_slot: number;
+  player_2_slot: number;
+  next_match_id: string;
+  next_slot: 'player_1' | 'player_2' | '';
   started: boolean;
-  created_at?: string;
-  completed_at?: string;
-  score_edited_at?: string;
-  format?: TournamentFormat;
-  rr_group?: number;
-  rr_round?: number;
-  rr_advancement_count?: number;
-  rr_group_label?: string;
-  rr_label_custom?: boolean;
-  // Idempotency stamp written on every match of a group in the same batch that pays the group's
-  // +5 completion bonus. Its presence is the only proof the bonus was actually paid (the bonus
-  // is a separate, best-effort commit) — reversal must check it.
-  rr_group_bonus_v2?: boolean;
-  walkover?: boolean;
-  /**
-   * Neither player showed / the group match was never played. Pays 1 point to BOTH and has no
-   * winner — distinct from a walkover, which still pays 3/1 to a winner. Both are all-zero
-   * scores, so this flag is what tells them apart; it must be checked before `walkover`.
-   * RR group stage only, organizer only.
-   */
-  no_show?: boolean;
-  court?: string;
-  // Written by the server (functions/lib/scoring.js) on every result it applies: the exact
-  // per-player stat changes, and what the result paid. Undoing a result negates applied_deltas; a
-  // result without them predates the server and is undone with the rules it was paid under.
-  scoring_v2?: boolean;
-  applied_deltas?: Record<string, Record<string, number>>;
-  points_winner?: number;
-  points_loser?: number;
-  score_disputed?: boolean;
-  // Scheduling — players may edit only these fields (Firestore rules carve-out); scores stay
-  // organizer-only. Absent schedule_status is treated as 'unscheduled'.
-  schedule_status?: 'unscheduled' | 'scheduled';
-  proposed_date?: string; // YYYY-MM-DD
-  proposed_slot?: 'AM' | 'PM';
-  schedule_requested?: boolean; // a player asked their opponent to arrange a time
-  schedule_requested_by?: string;
+  /** RR group name (the group's identity, shown verbatim); 'knockout' otherwise. */
+  group_label: string;
+  /** In memory only: the applied result entry (useEventResults); null while unplayed. */
+  result?: Submission | null;
 };
 
 /** An empty slot in the current draw that an unplaced player can be seated into. */
@@ -147,11 +117,7 @@ export type ScoreForm = {
   court: string;
 };
 
-export type TournamentFormat = 'bracket' | 'rr';
-
-export type RRConfig = {
-  advancementCount: 1 | 2;
-};
+export type TournamentFormat = 'knockout' | 'rr';
 
 export type RRStandingRow = {
   name: string;

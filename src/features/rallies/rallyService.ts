@@ -1,21 +1,20 @@
-import { addDoc, collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { Timestamp, addDoc, collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { useContacts } from '../contacts/useContacts';
+import { toMillis } from '../../utils/eventDates';
 
 // Rallies — rally-match requests, modelled on the ladder-challenge loop. The recipient accepts
 // or declines; either player then records the score through the scoreMatch Cloud Function
-// (features/matches/scoring.ts) and it counts straight away: winner +2, loser +1 leaguePoints26,
+// (features/matches/scoring.ts) and it counts straight away: winner +2, loser +1 leaguePoints,
 // and a match each way. A rally never costs points.
 //
 // Recording a score is OPTIONAL by design: a rally is a way to earn extra points, and choosing not
 // to enter one is a normal outcome. An unplayed rally pays nothing and nobody is chased for it.
-//
 
-// `reported` and `disputed` are gone with the handshake — `disputed` was a dead end nothing ever
-// transitioned out of. A disagreement is now `score_disputed` on a result that already counted.
-export type RallyStatus = 'open' | 'accepted' | 'declined' | 'confirmed';
+// A played rally is `complete`; its result is its applied `submissions` entry (results.ts).
+export type RallyStatus = 'open' | 'accepted' | 'declined' | 'complete';
 
 export interface Rally {
   id: string;
@@ -24,53 +23,45 @@ export interface Rally {
   player_2_uid: string;
   player_2_name: string;
   status: RallyStatus;
-  created_at: string;
-  responded_at?: string;
-  // Result fields are the SAME shape a tournament match uses — winner_uid/name plus absolute
-  // per-set games — so one formatter and one history mapping serve every kind of result.
-  winner_uid?: string;
-  winner_name?: string;
-  set_1_player_1?: number; set_1_player_2?: number;
-  set_2_player_1?: number; set_2_player_2?: number;
-  set_3_player_1?: number; set_3_player_2?: number;
-  /** Stamped when the result lands, matching a tournament match, so history sorts on one field. */
-  completed_at?: string;
-  court?: string;
-  /** Who recorded the result. Kept so a second submission can tell the two apart. */
-  reported_by?: string;
-  reported_at?: string;
-  confirmed_by?: string;
-  confirmed_at?: string;
-  /**
-   * Both players recorded a score and named different winners. The first result stays applied and
-   * showing; an organizer resolves it. Never set by the same player submitting twice.
-   */
-  score_disputed?: boolean;
-  /** Stamped by the server when it pays the result. Never written by a client. */
-  applied?: boolean;
+  /** '' until played; the score itself is on the result entry. */
+  winner_uid: string;
+  created_at: Timestamp | null;
+  responded_at: Timestamp | null;
+  updated_at: Timestamp | null;
 }
 
 export async function createRally(
   from: { id: string; name: string },
   to: { id: string; name: string },
 ): Promise<void> {
+  const now = Timestamp.now();
+  // The full matches shape; a rally belongs to no event and tournament-only fields hold typed empties.
   await addDoc(collection(db, 'matches'), {
     category: 'rally',
+    sub_category: 'singles',
+    status: 'open',
     player_1_uid: from.id,
     player_1_name: from.name,
     player_2_uid: to.id,
     player_2_name: to.name,
-    status: 'open',
-    created_at: new Date().toISOString(),
+    participant_uids: [from.id, to.id],
+    event_id: '',
+    winner_uid: '',
+    responded_at: null,
+    created_at: now,
+    updated_at: now,
+    match_id: '', round: '', position: 0, drawsize: 0, division: '',
+    skill_group: '', zone: '', format: '',
+    player_1_slot: 0, player_2_slot: 0, next_match_id: '', next_slot: '', started: false,
+    group_label: 'rally',
   });
 }
 
 // Recipient responds.
-export const respondRally = (id: string, accept: boolean) =>
-  updateDoc(doc(db, 'matches', id), {
-    status: accept ? 'accepted' : 'declined',
-    responded_at: new Date().toISOString(),
-  });
+export const respondRally = (id: string, accept: boolean) => {
+  const now = Timestamp.now();
+  return updateDoc(doc(db, 'matches', id), { status: accept ? 'accepted' : 'declined', responded_at: now, updated_at: now });
+};
 
 // Calls off a rally with no score yet: the sender while it's open, either player once it's accepted
 // (firestore.rules). Nothing is paid before a result, so there is nothing to reverse.
@@ -89,7 +80,7 @@ export function useRallies() {
     const toRows = (snap: { docs: { id: string; data: () => unknown }[] }) =>
       snap.docs
         .map((d) => ({ id: d.id, ...(d.data() as Omit<Rally, 'id'>) }))
-        .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+        .sort((a, b) => toMillis(b.created_at) - toMillis(a.created_at));
     const un1 = onSnapshot(
       query(collection(db, 'matches'), where('category', '==', 'rally'), where('player_1_uid', '==', user.uid)),
       (s) => { setSent(toRows(s)); setLoading(false); },
@@ -102,8 +93,8 @@ export function useRallies() {
   }, [user?.uid]);
 
   // Rallies still in flight — used to disable duplicate Rally buttons. A finished one (declined
-  // or confirmed) frees the pairing so the two can arrange another rally.
-  const FINISHED: RallyStatus[] = ['declined', 'confirmed'];
+  // or complete) frees the pairing so the two can arrange another rally.
+  const FINISHED: RallyStatus[] = ['declined', 'complete'];
   const activePartnerIds = useMemo(() => {
     const ids = new Set<string>();
     [...sent, ...received].forEach((r) => {

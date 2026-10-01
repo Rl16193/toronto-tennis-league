@@ -5,7 +5,7 @@ import { Button } from '../../components/Button';
 import { useAuth } from '../../context/AuthContext';
 import {
   CHECKIN_RADIUS_M, NearbyCourt, TopCheckIn, VISIT_TYPES, VisitType,
-  checkIn, findNearbyCourts, getCurrentPosition, getTopCheckIns, logAttendance,
+  checkIn, findNearbyCourts, getCurrentPosition, getTopCheckIns,
 } from './checkinService';
 
 type Step = 'start' | 'locating' | 'pick' | 'success' | 'error';
@@ -52,17 +52,8 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
       const name = profile?.user.name || '';
       const full = { ...coords, distM: court.distM };
 
-      // Always log daily attendance — the repeatable signal (feeds Matchday + zone sweeps).
-      await logAttendance(user.uid, name, court, full, visitType);
-
-      {
-        // Writing the `courts` check-in doc is all the client does. `courtVisit`, `courtsVisited`
-        // and `zoneComplete` are all awarded by onCourtVisitAwardPoints, which this write triggers.
-        // The client used to set them directly, but those fields carry spendable points, so the
-        // rules allowlist (correctly) rejects owner writes to them — the calls were failing
-        // silently behind a bare catch, which is what made the 30-point zone tier unreachable.
-        await checkIn(user.uid, name, court, full, visitType);
-      }
+      // One visit doc is all the client writes; courtsVisited and the zone tier are the server's.
+      await checkIn(user.uid, name, court, full, visitType);
       setCheckedInto(court);
       setStep('success');
     } catch {

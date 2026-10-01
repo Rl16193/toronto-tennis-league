@@ -3,7 +3,7 @@
  * requiring a manual `node scripts/snapshot-ranks.mjs --key serviceAccount.json` run. The
  * manual script is kept for ad-hoc/dry-run use; keep both in sync if this logic changes.
  *
- * Per division (Men's / Women's / Doubles) ranks players by `leaguePoints26`, updates
+ * Per division (Men's / Women's / Doubles) ranks players by `leaguePoints`, updates
  * `rankPosition`/`rankTrend` on `stats` and appends `ranking_history` on a change. Also
  * refreshes the public `site_stats/summary` counters (Players = distinct event_participants
  * user_id, Matches = completed tournament matches + 70) — neither source collection is
@@ -12,6 +12,7 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
+const { Timestamp } = require('firebase-admin/firestore');
 
 const { TZ, REGION } = require('./lib/constants');
 const db = () => admin.firestore();
@@ -33,17 +34,17 @@ exports.weeklyRankSnapshot = onSchedule(
     const players = [];
     snap.forEach((d) => {
       const s = d.data();
-      if (!s.leaguePoints26 || s.leaguePoints26 <= 0) return;
+      if (!s.leaguePoints || s.leaguePoints <= 0) return;
       players.push({
         uid: d.id,
         league: s.league || '',
-        points: s.leaguePoints26,
+        points: s.leaguePoints,
         rankPosition: typeof s.rankPosition === 'number' ? s.rankPosition : null,
         rankTrend: s.rankTrend ?? 'flat',
       });
     });
 
-    const date = new Date().toISOString();
+    const date = Timestamp.now();
     const ops = []; // { uid, position, trend, move, historyDir | null }
 
     for (const tab of DIV_TABS) {
@@ -61,8 +62,8 @@ exports.weeklyRankSnapshot = onSchedule(
     }
 
     const active = new Set();
-    (await db().collection('event_participants').get()).forEach((d) => { const r = d.data(); if (r.uid && r.removal !== true) active.add(r.uid); });
-    const completed = await db().collection('matches').where('category', 'in', ['singles', 'doubles']).where('status', '==', 'complete').count().get();
+    (await db().collection('event_participants').get()).forEach((d) => { const r = d.data(); if (r.uid && r.status === 'active' && !String(r.uid).startsWith('guest_')) active.add(r.uid); });
+    const completed = await db().collection('matches').where('category', '==', 'tournament').where('status', '==', 'complete').count().get();
     // snake_case, matching every other site_stats doc — this one was the lone camelCase holdout.
     const siteStats = { active_players: active.size, matches_organized: completed.data().count + 70, updated_at: date };
 
@@ -71,12 +72,13 @@ exports.weeklyRankSnapshot = onSchedule(
       for (const op of ops.slice(i, i + 400)) {
         batch.set(db().collection('stats').doc(op.uid), { rankPosition: op.position, rankTrend: op.trend, rankMove: op.move, rankUpdatedAt: date }, { merge: true });
         if (op.historyDir) {
-          batch.set(db().collection('ranking_history').doc(op.uid).collection('entries').doc(), { date, position: op.position, direction: op.historyDir });
+          batch.set(db().collection('ranking_history').doc(op.uid).collection('entries').doc(), { position: op.position, direction: op.historyDir, created_at: date });
         }
       }
       await batch.commit();
     }
-    await db().collection('site_stats').doc('summary').set(siteStats, { merge: true });
+    // Overwrite, not merge: the doc has one fixed shape (the camelCase twins retired).
+    await db().collection('site_stats').doc('summary').set(siteStats);
     logger.info(`weeklyRankSnapshot: ${ops.length} rank update(s), site_stats active_players=${siteStats.active_players} matches_organized=${siteStats.matches_organized}`);
   },
 );

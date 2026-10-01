@@ -10,11 +10,10 @@ import { useAuth } from '../../context/AuthContext';
 import { leagueDivision } from '../../utils/skillLevels';
 import { MemberSearchInput, type MemberPick } from '../members/MemberSearchInput';
 import { TennisEvent } from '../../types';
-import { isLadderEvent, isRecurringWeekly, isSeasonOpener, isTournamentEvent } from '../../utils/eventTypes';
+import { isDoublesEvent, isLadderEvent, isRecurringWeekly, isSeasonOpener, isTournamentEvent } from '../../utils/eventTypes';
 import {
   getEventEndDate, getEventStartDate, parseEndInstant, parseValidDate,
 } from '../../utils/eventDates';
-import type { FirestoreDateLike } from '../../utils/eventDates';
 import { DOUBLES_DIVISIONS } from '../../pages/tournament/types';
 import { JoinFormState, SlotResult } from './types';
 import {
@@ -26,36 +25,24 @@ import {
 
 // ─── Schedule formatting ─────────────────────────────────────────────────────────────────────────
 
-const WEEKDAY_MAP: Record<string, number> = {
-  sunday: 0, sun: 0,
-  monday: 1, mon: 1,
-  tuesday: 2, tue: 2, tues: 2,
-  wednesday: 3, wed: 3,
-  thursday: 4, thu: 4, thurs: 4,
-  friday: 5, fri: 5,
-  saturday: 6, sat: 6,
-};
-
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-export const getEventDays = (event: TennisEvent): number[] => {
-  const raw = event.day;
-  const parts = Array.isArray(raw)
-    ? raw
-    : typeof raw === 'string'
-      ? raw.split(/,|&|and|\//i).map((p) => p.trim()).filter(Boolean)
-      : [];
-  return parts.map((d) => WEEKDAY_MAP[d.toLowerCase()]).filter((d): d is number => d !== undefined);
+/**
+ * A weekly meetup's next occurrence: start_date's weekday, on or after today. Today's counts until
+ * the day is over, then it reads as next week's. Display only — start_date is never rewritten.
+ */
+export const nextOccurrence = (event: TennisEvent, now = new Date()): Date | null => {
+  const start = parseValidDate(getEventStartDate(event));
+  if (!start || !isRecurringWeekly(event)) return start;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (start >= today) return start;
+  const next = new Date(today);
+  next.setDate(today.getDate() + ((start.getDay() - today.getDay() + 7) % 7));
+  return next;
 };
 
 export const formatEventSchedule = (event: TennisEvent): string | null => {
-  const days = getEventDays(event);
-  const dayLabel = days.length > 0 ? days.map((d) => DAY_LABELS[d]).join(', ') : null;
-  if (isRecurringWeekly(event) && dayLabel && event.time) return `Every ${dayLabel} • ${event.time}`;
-  if (isRecurringWeekly(event) && dayLabel) return `Every ${dayLabel}`;
-  const start = parseValidDate(getEventStartDate(event));
+  const start = nextOccurrence(event);
   if (start) {
-    const dateLabel = start.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    const dateLabel = start.toLocaleDateString('en-US', { ...(isRecurringWeekly(event) && { weekday: 'short' }), month: 'long', day: 'numeric' });
     return event.time ? `${dateLabel} • ${event.time}` : dateLabel;
   }
   return event.time || null;
@@ -71,12 +58,16 @@ export const formatTournamentRange = (event: TennisEvent): string | null => {
 
 // ─── Event card ──────────────────────────────────────────────────────────────────────────────────
 
-// End-of-day: "join by 2026-08-10" means you can still join during Aug 10. Parsing the date-only
-// string with `new Date()` made it UTC midnight, closing registration ~28h early in Toronto.
-const getJoinLastDateMs = (event: DisplayEvent): number | null => {
-  const raw = (event as unknown as Record<string, unknown>).join_last_date as FirestoreDateLike;
-  return parseEndInstant(raw)?.getTime() ?? null;
+/** The event's kind as its chip reads. */
+export const eventTypeLabel = (event: Pick<TennisEvent, 'category' | 'sub_category'>) => {
+  if (isTournamentEvent(event)) return 'Tournament';
+  if (isLadderEvent(event)) return 'Challenges';
+  if (event.category === 'coaching_clinic') return 'Coaching Clinic';
+  return event.sub_category === 'meetup' ? 'Meetup' : 'Special Event';
 };
+
+// join_last_date is stored at 23:59:59 local of the cutoff day, so it can still be joined that day.
+const getJoinLastDateMs = (event: DisplayEvent): number | null => parseEndInstant(event.join_last_date)?.getTime() ?? null;
 
 const LATE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -139,7 +130,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
   const navigate = useNavigate();
 
   const [descExpanded, setDescExpanded] = useState(false);
-  const description = event.about || event.description;
+  const description = event.about;
 
   const isLate = isLateRegistration(event);
   const isHardClosed = isJoinHardClosed(event);
@@ -183,7 +174,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
           />
           {/* Both get an opaque backing: a poster is busy, and an unfilled chip disappears into it. */}
           <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-lg bg-tennis-dark/85 backdrop-blur-sm text-[10px] font-bold text-clay uppercase tracking-widest">
-            {isLadder ? 'Challenges' : event.type}
+            {eventTypeLabel(event)}
           </span>
           <span className="absolute top-2 right-2 rounded-full bg-clay px-3 py-1 text-xs font-bold text-white">
             Free
@@ -204,7 +195,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
       ) : (
         <div className="flex items-center justify-between gap-2">
           <span className="px-2.5 py-0.5 bg-clay/10 border border-clay/20 rounded-lg text-[10px] font-bold text-clay uppercase tracking-widest">
-            {isLadder ? 'Challenges' : event.type}
+            {eventTypeLabel(event)}
           </span>
           <div className="flex items-center gap-2 shrink-0">
             <span className="rounded-full bg-lime px-3 py-1 text-xs font-bold text-ink">Free</span>
@@ -450,8 +441,7 @@ export const CreatorEventModal: React.FC<CreatorEventModalProps> = ({
         </div>
 
         {/* Meetups only. A recurring meetup repeats on the START DATE'S weekday until the end date;
-            one that isn't recurring is the special one. Nothing is stored yet — the sub-category
-            field behind this is still being built. See "Recurring meetups" in CLAUDE.md. */}
+            one that isn't recurring is the special one (sub_category 'meetup' / 'special'). */}
         {eventForm.type === 'Meetup' && (
           <label className="flex items-center gap-2.5 text-sm text-fg cursor-pointer">
             <input
@@ -571,22 +561,11 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
   const savedDivision = leagueDivision(profile?.stats.league);
   const currentUserId = user?.uid;
   const isTournament = isTournamentEvent(event);
-  const fixedChoice = event.tournament_choice; // set on new events; undefined on old events
-
-  // ONE source of truth. This used to be `fixedChoice ?? joinForm.tournamentChoice` for display
-  // while validation and the Firestore write both read `joinForm.tournamentChoice`, reconciled
-  // only by an effect that wrote back a stale copy of the form — and the parent resets that same
-  // form to Singles on every event change. When the two drifted apart a player filled in a
-  // Doubles-looking form and Singles was saved, with the partner-name check (keyed on the other
-  // value) never firing. That's how four Zephyr Open Doubles signups ended up invisible.
-  // `useJoin` now seeds the form from the event, and the submit path re-derives it from the
-  // event too, so a locked event cannot save the wrong format.
-  const displayChoice = joinForm.tournamentChoice;
+  // The event's category decides singles or doubles; there is no choice to make.
+  const displayChoice = isDoublesEvent(event) ? 'Doubles' : 'Singles';
   const divisions = displayChoice === 'Doubles' ? DOUBLES_DIVISIONS : SINGLES_DIVISIONS;
 
-  // The picked partner. Only the name and "is a member" reach Firestore (`doubles` /
-  // `partner_in_app`), so the member id is transient and lives here rather than in joinForm.
-  // The sheet remounts per event alongside the form reset, so the two can't drift.
+  // The picked partner, for the search box. The sheet remounts per event alongside the form reset.
   const [partnerPick, setPartnerPick] = useState<MemberPick | null>(null);
 
   // No visible title — the event name already reads on the card behind this sheet. ariaLabel keeps
@@ -596,25 +575,6 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
       <div className="p-6 pt-3 space-y-4">
         {isTournament ? (
           <>
-            {/* Format — only for old events without a locked tournament_choice */}
-            {!fixedChoice && (
-              <div>
-                <p className="text-xs font-bold text-fg/70 uppercase tracking-widest mb-2">Format</p>
-                <div className="flex gap-2">
-                  {(['Singles', 'Doubles'] as const).map((choice) => (
-                    <button
-                      key={choice}
-                      type="button"
-                      onClick={() => setJoinForm({ ...joinForm, tournamentChoice: choice, division: choice === 'Singles' ? savedDivision : '', seniors: false })}
-                      className={`flex-1 ${chip(joinForm.tournamentChoice === choice)}`}
-                    >
-                      {choice}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Division — Singles uses the profile's, so only a member without one is asked. */}
             {displayChoice === 'Singles' && savedDivision ? (
               <p className="text-sm text-fg/70 pr-10">Joining the {savedDivision} draw, from your profile.</p>
@@ -659,10 +619,8 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
             {/* Doubles-only fields */}
             {displayChoice === 'Doubles' && (
               <>
-                {/* Autosearch instead of free text. A doubles team is only recognised when both
-                    partners name each other exactly (deduplicateDoublesTeams), so a typo here
-                    silently leaves two half-teams. Picking from the roster also answers "is your
-                    partner in the app?" by itself, so that manual Yes/No question is gone. */}
+                {/* Autosearch: a member partner is linked by uid (the server registers them too);
+                    someone not on the app gets a guest id. Blank = the partner pool. */}
                 <MemberSearchInput
                   label="Partner"
                   value={partnerPick}
@@ -671,7 +629,6 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
                     setJoinForm({
                       ...joinForm,
                       partnerName: pick?.name ?? '',
-                      partnerInApp: pick && pick.memberId ? 'yes' : 'no',
                       partnerUid: pick?.memberId ?? '',
                     });
                   }}

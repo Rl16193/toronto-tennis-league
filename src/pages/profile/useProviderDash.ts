@@ -3,9 +3,10 @@ import { useAuth } from '../../context/AuthContext';
 import type { ContactData } from '../../types';
 import { useContacts } from '../../features/contacts/useContacts';
 import {
-  type Booking, type BookingStage, OPEN_BOOKING_STATUSES, bookingStage,
+  type BookingRow, type BookingStage, OPEN_BOOKING_STATUSES, bookingStage, isGroupLesson,
   useProviderBookings, useProviderOffers, useProviderRole,
 } from '../../features/services/useServices';
+import { toMillis } from '../../utils/eventDates';
 import {
   declineBooking, finishBooking, lessonGroup, serviceErrorMessage, startBooking,
 } from '../../features/services/servicesApi';
@@ -17,7 +18,7 @@ import { formatPlayerName } from '../tournament/utils';
 // ProviderDashElements.tsx.
 
 export type ProviderJob = {
-  booking: Booking;
+  booking: BookingRow;
   stage: BookingStage;
   member: { uid: string; name: string };
   contact?: ContactData;
@@ -65,7 +66,7 @@ export function useProviderDash() {
 
   // Open group lesson bookings leave the one-row-per-booking list: they show under their offer,
   // as the players waiting to be grouped and each group (functions/bookings.js lessonGroup).
-  const inLesson = (j: ProviderJob) => !!j.booking.group_lesson
+  const inLesson = (j: ProviderJob) => isGroupLesson(j.booking)
     && (j.stage === 'new' || j.stage === 'in_progress' || j.stage === 'confirming');
   const lessons: LessonRow[] = [...new Set(jobs.filter(inLesson).map((j) => j.booking.service_id))].map((id) => {
     const open = jobs.filter((j) => inLesson(j) && j.booking.service_id === id);
@@ -85,11 +86,11 @@ export function useProviderDash() {
   const needsYou = jobs
     .filter((j) => !inLesson(j) && (j.stage === 'new' || j.stage === 'in_progress'))
     .sort((a, b) => Number(a.stage !== 'new') - Number(b.stage !== 'new')
-      || (a.booking.created_at || '').localeCompare(b.booking.created_at || ''));
+      || toMillis(a.booking.created_at) - toMillis(b.booking.created_at));
   const waiting = jobs.filter((j) => !inLesson(j) && j.stage === 'confirming');
   const closed = jobs
     .filter((j) => j.stage === 'completed' || j.stage === 'cancelled')
-    .sort((a, b) => (b.booking.updated_at || '').localeCompare(a.booking.updated_at || ''));
+    .sort((a, b) => toMillis(b.booking.updated_at) - toMillis(a.booking.updated_at));
 
   const completed = bookings.filter((b) => b.status === 'completed');
   const stats = {
@@ -120,10 +121,11 @@ export function useProviderDash() {
   const first = offers[0];
   const identity = providerId
     ? {
-      name: first?.provider_name || bookings[0]?.provider_name || providerId,
+      name: first?.provider_name || bookings[0]?.providerName || formatPlayerName(profile?.user.name || ''),
       category: role === 'coach' ? 'coaching' as const : 'stringing' as const,
       area: first?.area || '',
-      phone: first?.contact_phone || '',
+      // Their own number (contacts/{uid}); offers carry no contact details.
+      phone: profile?.contacts.phone || '',
       manager: formatPlayerName(profile?.user.name || ''),
       active: offers.some((o) => o.active !== false),
     }

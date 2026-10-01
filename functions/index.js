@@ -3,7 +3,7 @@
  */
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onObjectFinalized } = require('firebase-functions/v2/storage');
-const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const vision = require('@google-cloud/vision');
@@ -57,7 +57,6 @@ Object.assign(exports, require('./scoring'));
 
 // Registration: late-joiner seating (knockout), member-partner registration, doubles partner pool.
 Object.assign(exports, require('./participantWorkflow'));
-Object.assign(exports, require('./partnerPool'));
 
 // Zone changes — tells the organizers of every live tournament the player is in (never unseats).
 Object.assign(exports, require('./zoneMoves'));
@@ -92,24 +91,7 @@ exports.moderateUploadedImage = onObjectFinalized(
       return;
     }
 
-    if (isSuggestion) {
-      // Legacy "Suggest an Improvement" docs were folded into the consolidated `courts`
-      // collection (type 'condition'); match them by their single image_path field.
-      const snap = await admin.firestore()
-        .collection('courts')
-        .where('image_path', '==', filePath)
-        .limit(1)
-        .get();
-      if (unsafe) {
-        await admin.storage().bucket(bucketName).file(filePath).delete().catch((e) => logger.error('delete failed', e));
-        if (!snap.empty) await snap.docs[0].ref.update({ image_status: 'rejected', image_path: admin.firestore.FieldValue.delete() });
-      } else if (!snap.empty) {
-        await snap.docs[0].ref.update({ image_status: 'ok' });
-      }
-      return;
-    }
-
-    if (isReport) {
+    if (isReport || isSuggestion) {
       // A report can carry multiple photos (photo_paths array). The note is the substantive
       // content now (photos are optional evidence) — an unsafe photo just gets pulled from the
       // report, it no longer rejects the whole thing (points already awarded on the note stand).
@@ -122,8 +104,8 @@ exports.moderateUploadedImage = onObjectFinalized(
         await admin.storage().bucket(bucketName).file(filePath).delete().catch((e) => logger.error('delete failed', e));
         if (!snap.empty) {
           await snap.docs[0].ref.update({
-            photo_paths: admin.firestore.FieldValue.arrayRemove(filePath),
-            photo_moderation_note: 'A photo on this report was removed by our automatic image check.',
+            photo_paths: FieldValue.arrayRemove(filePath),
+            updated_at: Timestamp.now(),
           });
         }
       }
@@ -142,8 +124,8 @@ exports.moderateUploadedImage = onObjectFinalized(
           .get();
         if (!snap.empty) {
           await snap.docs[0].ref.update({
-            photo_paths: admin.firestore.FieldValue.arrayRemove(filePath),
-            photo_moderation_note: 'A photo on this listing was removed by our automatic image check.',
+            photo_paths: FieldValue.arrayRemove(filePath),
+            updated_at: Timestamp.now(),
           });
         }
         await notify(filePath.split('/')[1], {
@@ -172,16 +154,12 @@ exports.moderateUploadedImage = onObjectFinalized(
   },
 );
 
-exports.sendWelcomeEmail = onDocumentUpdated(
+// Sent once, when the member's public profile is first created (the welcomeEmailSent/isVerified flags
+// retired with v3). sendEmail reads the address from contacts/{uid} and honours the email opt-out.
+exports.sendWelcomeEmail = onDocumentCreated(
   { document: 'users/{uid}', region: 'us-central1', secrets: [resendApiKey] },
   async (event) => {
-    const before = event.data.before.data() || {};
-    const after = event.data.after.data() || {};
-
-    if (before.welcomeEmailSent === true || after.welcomeEmailSent !== true) return;
-
-    // Triggered by the users doc, where welcomeEmailSent flips. sendEmail reads the address from
-    // contacts/{uid} and honours the member's email opt-out.
+    const after = event.data.data() || {};
     const firstName = (after.name || '').split(' ')[0] || 'there';
     await sendEmail(event.params.uid, 'Welcome to Racquets & Strings 🎾', buildWelcomeEmail(firstName));
   },
@@ -200,15 +178,13 @@ const COLLECTION_MAP = [
   {
     collection: 'matches', sheetTab: 'Matches',
     fields: [
-      'player_1_name', 'player_2_name',
-      'set_1_player_1', 'set_1_player_2', 'set_2_player_1', 'set_2_player_2', 'set_3_player_1', 'set_3_player_2',
-      'status', 'round',
+      'player_1_name', 'player_2_name', 'winner_uid', 'status', 'round',
     ],
-    where: ['category', 'in', ['singles', 'doubles']],
+    where: ['category', '==', 'tournament'],
   },
   {
     collection: 'matches', sheetTab: 'Challenges',
-    fields: ['player_1_name', 'player_2_name', 'winner_name', 'set_1_player_1', 'set_1_player_2', 'set_2_player_1', 'set_2_player_2', 'set_3_player_1', 'set_3_player_2', 'status', 'division'],
+    fields: ['player_1_name', 'player_2_name', 'winner_uid', 'status', 'division'],
     where: ['category', '==', 'challenge'],
   },
 ];
@@ -239,7 +215,7 @@ exports.syncFirestoreAndSheets = onSchedule(
     logger.info(`Created missing sheet tab(s): ${missingTabs.join(', ')}.`);
   }
 
-  const { where: fWhere } = require('firebase-admin/firestore');
+  const { FieldValue, Timestamp, where: fWhere } = require('firebase-admin/firestore');
 
   for (const config of COLLECTION_MAP) {
     const { collection, sheetTab, fields, where: wh } = config;

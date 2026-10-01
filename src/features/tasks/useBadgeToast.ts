@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { TaskProgress } from '../../types';
+import type { TaskProgress } from './taskCatalog';
 import { earnedBadges } from './badges';
 import type { Counters } from './useTasks';
 
@@ -20,7 +20,7 @@ const writeSeen = (ids: string[]) => {
  * Fires a one-line toast the first time a badge is earned, instead of expanding the badges
  * section or otherwise moving the page under the player.
  *
- * `progressLoaded` matters: before the tasks read resolves, `earnedBadges` returns an
+ * `progressLoaded` matters: before the stats read resolves, `earnedBadges` returns an
  * empty list, and treating that as "nothing earned" would wipe the seen-list and then re-toast
  * every badge a moment later.
  *

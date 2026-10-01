@@ -156,8 +156,8 @@ export const MatchCard: React.FC<Props> = ({
 
       {scoreText && <div className={v.score}>{scoreText}</div>}
 
-      {isFinal && match.winner_name ? (
-        <div className={v.winner}>Winner: {formatPlayerName(match.winner_name)}</div>
+      {isFinal && match.result?.winner_name ? (
+        <div className={v.winner}>Winner: {formatPlayerName(match.result.winner_name)}</div>
       ) : null}
 
       {showCreatorSubmit && (

@@ -14,35 +14,36 @@ const str = (v) => String(v ?? '').trim();
 const isoDaysAgo = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
 /** ISO strings sort lexicographically, so a plain >= is a valid date filter. */
 const after = (v, cutoff) => !!v && str(v) >= cutoff;
-/** Court `type` is inconsistent in the data ('waitingBoard' vs 'waiting_board'). */
-const ctype = (row) => str(row.type).replace(/[^a-z]/gi, '').toLowerCase();
 
 
 // ── metrics ──────────────────────────────────────────────────────────────────
 
 function computeMetrics(data) {
   const cutoff = isoDaysAgo(WINDOW_DAYS);
-  const { users, stats, events, event_participants, matches, courts, tasks, listings, connections,
+  const { users, stats, events, event_participants, matches, submissions, courts, listings, connections,
     preferences } = data;
 
-  const parts = event_participants.filter((p) => !p.removal);
-  // A tournament match ends 'complete'; a challenge or rally ends 'confirmed'.
-  const completed = matches.filter((m) => str(m.status) === 'complete'
-    || (['challenge', 'rally'].includes(str(m.category)) && str(m.status) === 'confirmed'));
+  const parts = event_participants.filter((p) => str(p.status) === 'active');
+  // A played match is 'complete'; its result (sets, walkover, first-scored time) is the applied entry.
+  const applied = new Map(submissions
+    .filter((s) => str(s.status) === 'applied' && ['result', 'correction', 'walkover'].includes(str(s.sub_category)))
+    .map((s) => [str(s.match_id), s]));
+  const completed = matches.filter((m) => str(m.status) === 'complete')
+    .map((m) => { const s = applied.get(m._id) || {}; return { ...s, ...m, completed_at: s.completed_at || '', walkover: str(s.sub_category) === 'walkover' }; });
   const completed7 = completed.filter((m) => after(m.completed_at || m.created_at, cutoff));
   const byCat = (rows, ...cats) => rows.filter((m) => cats.includes(str(m.category)));
 
-  const checkins = courts.filter((c) => ['checkin', 'attendance'].includes(ctype(c)));
-  const reports = courts.filter((c) => ['condition', 'waitingboard', 'queue'].includes(ctype(c)));
+  const checkins = courts.filter((c) => str(c.category) === 'visit');
+  const reports = courts.filter((c) => str(c.category) === 'report');
   const checkins7 = checkins.filter((c) => after(c.created_at, cutoff));
 
   const requests = byCat(matches, 'rally', 'challenge');
-  const progress = tasks.filter((t) => !str(t.type));       // per-member progress docs
+  const progress = stats.filter((s) => Number(s.rsPoints) > 0); // members with task progress
 
   const headline = {
     // — activity, rolling 7 days —
     matches_completed_7d: completed7.length,
-    matches_tournament_7d: byCat(completed7, 'singles', 'doubles').length,
+    matches_tournament_7d: byCat(completed7, 'tournament').length,
     matches_challenge_7d: byCat(completed7, 'challenge').length,
     matches_rally_7d: byCat(completed7, 'rally').length,
     new_members_7d: users.filter((u) => after(u.created_at, cutoff)).length,
@@ -96,13 +97,10 @@ function computeMetrics(data) {
   const byEvent = [...eventAgg.entries()].map(([event, entries]) => ({ event, entries }))
     .sort((a, b) => b.entries - a.entries);
 
-  // A walkover and a no-show are both stored as an ALL-ZERO score (see CLAUDE.md), so printing the
-  // raw sets renders a match nobody played as "0-0, 0-0, 0-0". Name the outcome instead, and check
-  // no_show first — it is the one case with no winner at all.
-  const truthy = (v) => v === true || str(v).toLowerCase() === 'true';
+  // A walkover is stored as an ALL-ZERO score, so printing the raw sets renders a match nobody
+  // played as "0-0, 0-0, 0-0". Name the outcome instead.
   const setScore = (m) => {
-    if (truthy(m.no_show)) return 'No show';
-    if (truthy(m.walkover)) return 'Walkover';
+    if (m.walkover) return 'Walkover';
     const sets = [1, 2, 3]
       .map((n) => [m[`set_${n}_player_1`], m[`set_${n}_player_2`]])
       .filter(([a, b]) => a !== undefined && a !== '' && b !== undefined && b !== '');

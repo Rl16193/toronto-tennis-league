@@ -5,7 +5,7 @@ import { tapScale } from '../../lib/motion';
 import { Sheet } from '../../components/Sheet';
 import { Button } from '../../components/Button';
 import type {
-  CourtWithCount, NearestCourt, NearestProgram, PickleballEntry,
+  ActivityBreakdown, CourtWithCount, NearestCourt, NearestProgram, PickleballEntry,
 } from './courtMapUtils';
 import { formatDateRange, formatDist, getProgramStatus, hasPublicHours } from './courtMapUtils';
 
@@ -284,10 +284,21 @@ interface CourtResultsProps {
   onSelectCourt: (court: CourtWithCount) => void;
   /** Drill into this court's programs. Same action as the map popup's button. */
   onViewPrograms: (court: CourtWithCount) => void;
+  /** 7D / 30D Activity on: each row shows that window's breakdown as pills. '' = off. */
+  activityWindow: '' | 'd7' | 'd30';
 }
 
 // Memoized — CourtMap re-renders on every search keystroke.
-export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ courts, loading, userCoords, onSelectCourt, onViewPrograms }) => {
+// The Activity breakdown pills, in the order the user reads a court's day: play, then reports.
+const ACTIVITY_PILLS: { kind: keyof ActivityBreakdown; label: string }[] = [
+  { kind: 'scores', label: 'User Playing Matches' },
+  { kind: 'checkins', label: 'Check-ins' },
+  { kind: 'waiting_board', label: 'Waiting board' },
+  { kind: 'queue', label: 'Racquet queue' },
+  { kind: 'condition', label: 'Court conditions' },
+];
+
+export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ courts, loading, userCoords, onSelectCourt, onViewPrograms, activityWindow }) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-32">
@@ -327,6 +338,14 @@ export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ court
                   <PickleballBadges entries={c.pickleballEntries} />
                 </div>
                 {c.clubInfo && <p className="text-fg text-xs mt-1 leading-snug">{c.clubInfo}</p>}
+                {activityWindow && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {ACTIVITY_PILLS.map(({ kind, label }) => {
+                      const n = (activityWindow === 'd7' ? c.activityBreakdown7 : c.activityBreakdown30)[kind];
+                      return n > 0 ? <Badge key={kind} bg="#3b1f12" color="#fdba74">{label} {n}</Badge> : null;
+                    })}
+                  </div>
+                )}
               </motion.button>
               {/* Distance, then the same actions the map bubble offers, stacked beneath it. */}
               <div className="shrink-0 flex flex-col items-end gap-1">

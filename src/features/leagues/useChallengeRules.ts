@@ -8,6 +8,8 @@ import { LADDER_COOLDOWN_DAYS, LadderDivision, createChallenge } from './ladderS
 import { useLadder } from './useLadder';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { fetchResultsFor } from '../matches/results';
+import { toMillis } from '../../utils/eventDates';
 
 /**
  * The one place that decides whether you may challenge someone. Previously this logic lived
@@ -91,7 +93,7 @@ export function useChallengeRules() {
     const state = stateWith(opponent.user_id);
     if (state === 'pending') return 'pending';
     // A tournament match you have already played counts towards the rematch cooldown, the same
-    // way a confirmed ladder challenge does.
+    // way a played ladder challenge does.
     if (state === 'cooldown' || conflicts.recentlyPlayed.has(opponent.user_id)) return 'cooldown';
     if (activeChallengesLeft === 0) return 'active-limit';
     return null;
@@ -147,10 +149,9 @@ export function useCrossEventConflicts(uid: string | undefined, ladderEventId: s
         getDocs(query(collection(db, 'matches'), where('player_1_uid', '==', uid))),
         getDocs(query(collection(db, 'matches'), where('player_2_uid', '==', uid))),
       ]);
-      const snap = { docs: [...s1.docs, ...s2.docs].filter((d) => {
-        const cat = d.data().category;
-        return cat === 'singles' || cat === 'doubles';
-      }) };
+      const snap = { docs: [...s1.docs, ...s2.docs].filter((d) => d.data().category === 'tournament') };
+      // When each played fixture was first scored lives on its result entry.
+      const results = await fetchResultsFor(snap.docs.filter((d) => d.data().status === 'complete').map((d) => d.id));
 
       // Unplayed fixtures, event_id → opponent uids. Played ones go to `playedAt` instead: a
       // walkover counts as played (it has a winner and pays points), so the test is a complete
@@ -163,7 +164,7 @@ export function useCrossEventConflicts(uid: string | undefined, ladderEventId: s
         const opp = m.player_1_uid === uid ? m.player_2_uid : m.player_1_uid;
         if (!opp) return; // BYE / unfilled slot
         if (m.status === 'complete' && m.winner_uid) {
-          const when = Date.parse(m.completed_at || '') || 0;
+          const when = toMillis(results.get(d.id)?.completed_at);
           playedAt.set(opp, Math.max(playedAt.get(opp) ?? 0, when));
           return;
         }

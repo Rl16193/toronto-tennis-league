@@ -9,7 +9,7 @@ import { SelectField } from '../../components/SelectField';
 import { ContactOpponentButton } from '../../components/ContactOpponentButton';
 import { fadeUp, staggerDelay } from '../../lib/motion';
 import {
-  CONDITIONS, Listing, ListingDraft, ListingKind, MAX_LISTING_PHOTOS, STATUS_LABEL,
+  CONDITIONS, Listing, ListingDraft, ListingCategory, MAX_LISTING_PHOTOS, STATUS_LABEL,
   createListing, deleteListing, emptyDraft, formatListingPrice, setListingStatus, updateListing,
   useImageUrl,
 } from '../../features/marketplace/listingService';
@@ -39,7 +39,7 @@ const ListingCard: React.FC<{
 }> = ({ listing, seller, isMine, signedIn, onEdit }) => {
   const [busy, setBusy] = useState(false);
   const gone = listing.status !== 'available';
-  const goneLabel = listing.kind === 'rent' ? 'rented' : 'sold';
+  const goneLabel = listing.category === 'rent' ? 'rented' : 'sold';
 
   const mark = async (status: Listing['status']) => {
     setBusy(true);
@@ -79,7 +79,7 @@ const ListingCard: React.FC<{
                 <Pencil className="w-3.5 h-3.5" />
               </button>
               <Button size="sm" variant="outline" isLoading={busy}
-                onClick={() => mark(gone ? 'available' : (listing.kind === 'rent' ? 'rented' : 'sold'))}>
+                onClick={() => mark(gone ? 'available' : (listing.category === 'rent' ? 'rented' : 'sold'))}>
                 {gone ? 'Relist' : `Mark ${goneLabel}`}
               </Button>
               <button type="button" aria-label="Delete listing" disabled={busy}
@@ -111,12 +111,12 @@ const ListingCard: React.FC<{
 // Listings come in as props — Marketplace already holds a listener per board, so subscribing
 // here would open a second identical listener on every mount.
 export const ListingsTab: React.FC<{
-  kind: ListingKind;
+  category: ListingCategory;
   listings: Listing[];
   loading: boolean;
   sellers: Record<string, ContactData>;
   onEdit: (listing: Listing) => void;
-}> = ({ kind, listings, loading, sellers, onEdit }) => {
+}> = ({ category, listings, loading, sellers, onEdit }) => {
   const { user } = useAuth();
 
   if (loading) {
@@ -128,7 +128,7 @@ export const ListingsTab: React.FC<{
       <div className="rounded-3xl bg-tennis-surface/30 py-14 px-6 text-center">
         <Package className="w-7 h-7 text-fg/70 mx-auto mb-3" />
         <p className="text-sm font-bold text-fg">
-          {kind === 'rent' ? 'Nothing up for rent yet' : 'Nothing for sale yet'}
+          {category === 'rent' ? 'Nothing up for rent yet' : 'Nothing for sale yet'}
         </p>
         {!user && (
           <p className="text-sm text-fg/70 mt-1.5">
@@ -159,7 +159,7 @@ export const ListingsTab: React.FC<{
 // ─── Post / edit form ─────────────────────────────────────────────────────────────────────────
 
 const draftFromListing = (listing: Listing): ListingDraft => ({
-  kind: listing.kind,
+  category: listing.category,
   title: listing.title,
   description: listing.description,
   condition: listing.condition,
@@ -188,9 +188,9 @@ const fieldCls =
   'placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
 const labelCls = 'block text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-1.5';
 
-export const ListingForm: React.FC<{ kind: ListingKind; editingListing?: Listing; onClose: () => void }> = ({ kind, editingListing, onClose }) => {
+export const ListingForm: React.FC<{ category: ListingCategory; editingListing?: Listing; onClose: () => void }> = ({ category, editingListing, onClose }) => {
   const { user, profile } = useAuth();
-  const [draft, setDraft] = useState<ListingDraft>(() => (editingListing ? draftFromListing(editingListing) : emptyDraft(kind)));
+  const [draft, setDraft] = useState<ListingDraft>(() => (editingListing ? draftFromListing(editingListing) : emptyDraft(category)));
   const [keepPhotoPaths, setKeepPhotoPaths] = useState<string[]>(() => editingListing?.photo_paths ?? []);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(0);
@@ -221,7 +221,7 @@ export const ListingForm: React.FC<{ kind: ListingKind; editingListing?: Listing
   return (
     <Sheet
       onClose={onClose}
-      title={editingListing ? 'Edit listing' : (kind === 'rent' ? 'Rent out equipment' : 'Sell equipment')}
+      title={editingListing ? 'Edit listing' : (category === 'rent' ? 'Rent out equipment' : 'Sell equipment')}
       maxWidthClassName="max-w-md"
     >
       <form onSubmit={submit} className="p-5 pt-2 space-y-3.5">
@@ -282,7 +282,7 @@ export const ListingForm: React.FC<{ kind: ListingKind; editingListing?: Listing
           </div>
         </div>
 
-        {kind === 'rent' && (
+        {category === 'rent' && (
           <div>
             <label className={labelCls} htmlFor="l-dur">Rental length</label>
             <input id="l-dur" value={draft.duration} onChange={(e) => set('duration', e.target.value)}

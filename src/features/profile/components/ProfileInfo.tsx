@@ -18,8 +18,9 @@ import { LeagueEditor, SkillEditor } from './SkillLeagueEditor';
 import { getFavouritePlayerSuggestions, useFavouritePlayerOptions } from '../favouritePlayers';
 import { BadgePicker } from '../../tasks/BadgePicker';
 import { BADGE_PILL_CLASS } from '../../tasks/badges';
-import { Counters } from '../../tasks/useTasks';
-import { ContactMethod, TaskProgress } from '../../../types';
+import type { Counters, TaskProgress } from '../../tasks/useTasks';
+import { ContactMethod } from '../../../types';
+import { phoneAsWhatsapp } from '../services/profileService';
 
 type Actions = {
   updateName: (name: string) => Promise<boolean>;
@@ -27,8 +28,8 @@ type Actions = {
   updateWhatsappContact: (whatsappContact: string, sameAsPhone: boolean) => Promise<boolean>;
   updateBio: (bio: string) => Promise<boolean>;
   updateAvatar: (url: string) => Promise<boolean>;
-  updateSkills: (skill: number, pref: string) => Promise<boolean>;
-  updateLeagueAgeCategory: (league: "Men's" | "Women's" | '', ageCategory: 'Retired Pro' | 'Juniors' | '', visible: boolean) => Promise<boolean>;
+  updateSkills: (skill: number) => Promise<boolean>;
+  updateLeagueAgeCategory: (league: "Men's" | "Women's" | '', ageCategory: 'Retired Pro' | 'Juniors' | '') => Promise<boolean>;
   updateDisplayBadges: (badgeIds: string[]) => Promise<boolean>;
   updatePreferredCourts: (courts: string[], zone: string) => Promise<boolean>;
   updatePreferredZone: (zone: string) => Promise<boolean>;
@@ -186,7 +187,8 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
     setNameDraft(user.name);
     setPhoneDraft(contacts.phone);
     setWaDraft(contacts.whatsapp_contact ?? '');
-    setWaSameAsPhone(!!contacts.whatsapp_same_as_phone);
+    // Ticked when the saved WhatsApp number is the phone (that's all "same as phone" ever saves).
+    setWaSameAsPhone(!!contacts.phone && contacts.whatsapp_contact === phoneAsWhatsapp(contacts.phone));
     setWaValid(true);
     setBioDraft(user.bio ?? '');
     setFavDraft(preferences.favourite_players);
@@ -196,11 +198,12 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
   const save = async (fn: () => Promise<boolean>) => { if (await fn()) setEditing(null); };
 
   // Which channels the member wants to be reached on. Empty = no preference = all offered.
-  const methods = contacts.preferred_mode_of_contact ?? [];
+  // A non-array stored value is treated as no preference, so the spread below can't throw.
+  const methods: ContactMethod[] = Array.isArray(contacts.preferred_mode_of_contact) ? contacts.preferred_mode_of_contact : [];
   const toggleMethod = (m: ContactMethod, on: boolean) =>
     actions.updateContactMethods(on ? [...methods, m] : methods.filter((x) => x !== m));
   // A channel with nothing behind it can't be a contact method, so its switch is disabled.
-  const hasWhatsapp = !!(contacts.whatsapp_contact?.trim() || contacts.whatsapp_same_as_phone || contacts.phone?.trim());
+  const hasWhatsapp = !!(contacts.whatsapp_contact?.trim() || contacts.phone?.trim());
   const methodToggle = (m: ContactMethod, label: string, available: boolean) => (
     <ContactMethodToggle
       label={label}
@@ -326,7 +329,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
             </div>
           ) : (
             <p className="text-lg font-bold text-fg mt-0.5">
-              {contacts.whatsapp_same_as_phone ? (contacts.phone || '—') : (contacts.whatsapp_contact || '—')}
+              {contacts.whatsapp_contact || '—'}
             </p>
           )}
         </div>
@@ -351,7 +354,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
             <SkillEditor
               initial={stats.skill_level}
               saving={updateLoading}
-              onSave={(skill, band) => save(() => actions.updateSkills(skill, band))}
+              onSave={(skill) => save(() => actions.updateSkills(skill))}
             />
           ) : (
             <div className="mt-1 flex items-center gap-2">
@@ -366,9 +369,8 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
           {editing === 'league' ? (
             <LeagueEditor
               league={stats.league}
-              visible={!!user.profile_details_visible}
               saving={updateLoading}
-              onSave={(league, ageCategory, visible) => save(() => actions.updateLeagueAgeCategory(league, ageCategory, visible))}
+              onSave={(league, ageCategory) => save(() => actions.updateLeagueAgeCategory(league, ageCategory))}
             />
           ) : (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -378,9 +380,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
               {leagueAgeCategory(stats.league) && (
                 <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{leagueAgeCategory(stats.league)}</span>
               )}
-              {!leagueDivision(stats.league)
-                ? <span className="text-sm text-fg/70">Not set.</span>
-                : <span className="text-[11px] text-fg/70 ml-1">{user.profile_details_visible ? 'Visible to others' : 'Hidden from others'}</span>}
+              {!leagueDivision(stats.league) && <span className="text-sm text-fg/70">Not set.</span>}
             </div>
           )}
         </div>

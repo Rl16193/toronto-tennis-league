@@ -1,14 +1,15 @@
 /**
- * The tier catalogue + RS-points summing, shared by taskPoints.js (which awards tiers) and
- * rewards.js (which needs a player's earned RS total to compute their redeemable balance).
+ * The tier catalogue + RS points. RS points = the tiers a member's stats counters have reached +
+ * the initiation bonus + every task-ledger award they hold. Stored on stats.rsPoints and recomputed
+ * (never incremented) whenever a counter or an award changes, so it cannot drift.
  *
  * Lives in lib/ for the same reason constants.js does: index.js re-exports its modules wholesale
  * via `Object.assign(exports, require('./x'))` and the Firebase CLI treats every export it finds
  * there as a Cloud Function, so plain values must not be exported from a function module.
  *
  * MIRRORS src/features/tasks/taskCatalog.ts — keep the two in sync by hand (the client and the
- * functions are separate packages). `earnedRsPoints` below is the
- * exact server twin of taskPoints() in src/features/tasks/useTasks.ts.
+ * functions are separate packages). `taskPointsOf` is the server twin of taskPoints() in
+ * src/features/tasks/useTasks.ts.
  */
 
 // Flat bonus for finishing the Community Member Initiation checklist (taskCatalog.ts SETUP_POINTS).
@@ -45,7 +46,7 @@ const ALL_TIERS = [
   { id: 'visit5', title: 'Visit 5 courts', points: 15, counter: 'courtsVisited', need: 5 },
   { id: 'visit10', title: 'Visit 10 courts', points: 25, counter: 'courtsVisited', need: 10 },
   { id: 'visit20', title: 'Visit 20 courts', points: 40, counter: 'courtsVisited', need: 20 },
-  // Awarded by awardZoneCompleteIfDone in taskPoints.js on the check-in that completes a zone.
+  // zoneComplete is set by the visit that completes the member's zone (taskPoints.js).
   { id: 'visitZone', title: 'Visit every court in your zone', points: 30, counter: 'zoneComplete', need: 1 },
 
   { id: 'board1', title: 'Submit 1 waiting board report', points: 5, counter: 'boardPhotos', need: 1 },
@@ -58,39 +59,55 @@ const ALL_TIERS = [
   { id: 'queue50', title: 'Submit 50 queue updates', points: 35, counter: 'queueUpdates', need: 50 },
   { id: 'queue100', title: 'Submit 100 queue updates', points: 50, counter: 'queueUpdates', need: 100 },
 
-  { id: 'vol1', title: 'Volunteer at 1 event', points: 5, counter: 'volunteerEvents', need: 1 },
-  { id: 'vol5', title: 'Volunteer at 5 events', points: 15, counter: 'volunteerEvents', need: 5 },
-  { id: 'vol10', title: 'Volunteer at 10 events', points: 30, counter: 'volunteerEvents', need: 10 },
-  { id: 'vol20', title: 'Volunteer at 20 events', points: 50, counter: 'volunteerEvents', need: 20 },
+  { id: 'vol1', title: 'Volunteer at 1 event', points: 5, counter: 'volunteerApproved', need: 1 },
+  { id: 'vol5', title: 'Volunteer at 5 events', points: 15, counter: 'volunteerApproved', need: 5 },
+  { id: 'vol10', title: 'Volunteer at 10 events', points: 30, counter: 'volunteerApproved', need: 10 },
+  { id: 'vol20', title: 'Volunteer at 20 events', points: 50, counter: 'volunteerApproved', need: 20 },
 
-  { id: 'invite1', title: 'Invite 1 player who joins', points: 5, counter: 'invites', need: 1 },
-  { id: 'invite3', title: 'Invite 3 players', points: 10, counter: 'invites', need: 3 },
-  { id: 'invite10', title: 'Invite 10 players', points: 25, counter: 'invites', need: 10 },
+  { id: 'invite1', title: 'Invite 1 player who joins', points: 5, counter: 'inviteApproved', need: 1 },
+  { id: 'invite3', title: 'Invite 3 players', points: 10, counter: 'inviteApproved', need: 3 },
+  { id: 'invite10', title: 'Invite 10 players', points: 25, counter: 'inviteApproved', need: 10 },
 
-  { id: 'host1', title: 'Host 1 meetup', points: 10, counter: 'meetups', need: 1 },
-  { id: 'host5', title: 'Host 5 meetups', points: 30, counter: 'meetups', need: 5 },
-  { id: 'host10', title: 'Host 10 meetups', points: 50, counter: 'meetups', need: 10 },
+  { id: 'host1', title: 'Host 1 meetup', points: 10, counter: 'hostApproved', need: 1 },
+  { id: 'host5', title: 'Host 5 meetups', points: 30, counter: 'hostApproved', need: 5 },
+  { id: 'host10', title: 'Host 10 meetups', points: 50, counter: 'hostApproved', need: 10 },
 ];
 
-// The Initiation checklist — every task is unlocked, so completing every one of these awards
-// the flat SETUP_POINTS bonus (mirrors UNLOCKED_TASK_IDS in useTasks.ts).
-// 'ladderMatch' was removed from this list — it gated the Member badge behind the ladder,
-// which most new players never reach. The field is still written when someone plays a ladder
-// match (see taskPoints.js), it just no longer counts toward setupComplete.
-const INITIATION_TASK_IDS = [
-  'profileComplete', 'followSocial', 'tagPost', 'waitingBoard', 'courtVisit', 'queuePhoto',
-  'playMatch', 'courtSuggestion', 'whatsappGroup', 'profilePhoto', 'joinEvent',
+// The Initiation checklist: every item done awards the flat SETUP_POINTS bonus (mirrors useTasks.ts).
+// A counter item is done at 1; the rest are the member's own one-time booleans on stats.
+const INITIATION = [
+  { id: 'profileComplete' }, { id: 'followSocial' }, { id: 'tagPost' }, { id: 'whatsappGroup' }, { id: 'profilePhoto' },
+  { id: 'joinEvent', counter: 'eventsJoined' }, { id: 'playMatch', counter: 'matchesPlayed' },
+  { id: 'courtVisit', counter: 'courtsVisited' }, { id: 'waitingBoard', counter: 'boardPhotos' },
+  { id: 'queuePhoto', counter: 'queueUpdates' }, { id: 'courtSuggestion', counter: 'suggestions' },
 ];
+const INITIATION_TASK_IDS = INITIATION.map((i) => i.id);
 
+const num = (v) => (typeof v === 'number' ? v : 0);
+const initiationDone = (stats) => !!stats && INITIATION.every((i) => (i.counter ? num(stats[i.counter]) >= 1 : stats[i.id] === true));
 
-// Server twin of taskPoints() in src/features/tasks/useTasks.ts. `progress` is the raw
-// tasks/{uid} document data (or undefined/null if the doc doesn't exist yet).
-function earnedRsPoints(progress) {
-  if (!progress) return 0;
-  const setup = progress.setupComplete ? SETUP_POINTS : 0;
-  const tiers = ALL_TIERS.reduce((n, t) => n + (progress[t.id] ? t.points : 0), 0);
-  const bonus = typeof progress.bonusPoints === 'number' ? progress.bonusPoints : 0;
-  return setup + tiers + bonus;
+/** Task points a stats doc has reached: tiers by counter + the initiation bonus. */
+function taskPointsOf(stats) {
+  if (!stats) return 0;
+  const tiers = ALL_TIERS.reduce((sum, t) => sum + (num(stats[t.counter]) >= t.need ? t.points : 0), 0);
+  return tiers + (initiationDone(stats) ? SETUP_POINTS : 0);
 }
 
-module.exports = { ALL_TIERS, INITIATION_TASK_IDS, earnedRsPoints };
+/** Tier ids a stats doc has reached (task-completed alerts compare before and after). */
+const tiersReached = (stats) => ALL_TIERS.filter((t) => num(stats && stats[t.counter]) >= t.need).map((t) => t.id);
+
+/**
+ * Inside a transaction: the stats patch with rsPoints recomputed from the counters (after `patch`)
+ * + every task-ledger award naming the member. Does reads, so call it before the transaction writes.
+ */
+async function rsPointsPatch(tx, db, uid, patch = {}) {
+  const [statsSnap, awardsSnap] = await Promise.all([
+    tx.get(db.collection('stats').doc(uid)),
+    tx.get(db.collection('awards').where('awardees', 'array-contains', uid).where('sub_category', '==', 'task')),
+  ]);
+  const next = { ...(statsSnap.exists ? statsSnap.data() : {}), ...patch };
+  const awardPoints = awardsSnap.docs.reduce((sum, d) => sum + num(d.data().points_each), 0);
+  return { ...patch, rsPoints: taskPointsOf(next) + awardPoints };
+}
+
+module.exports = { ALL_TIERS, INITIATION_TASK_IDS, SETUP_POINTS, taskPointsOf, tiersReached, initiationDone, rsPointsPatch };

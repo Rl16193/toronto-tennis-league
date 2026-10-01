@@ -373,9 +373,10 @@ const bracketSlides = (input: DrawSlideInput, deadline?: string): DrawSlide[] =>
         body += `<rect x="${x}" y="${y}" width="${colW}" height="${BLOCK_H}" rx="10" fill="${C.card}" stroke="${C.cardStroke}" />`;
         body += `<line x1="${x}" y1="${y + BLOCK_H / 2}" x2="${x + colW}" y2="${y + BLOCK_H / 2}" stroke="${C.divider}" />`;
 
+        const res = m.result;
         const rows: [string, string, number[]][] = [
-          [m.player_1_name, m.player_1_uid, [m.set_1_player_1 ?? 0, m.set_2_player_1 ?? 0, m.set_3_player_1 ?? 0]],
-          [m.player_2_name, m.player_2_uid, [m.set_1_player_2 ?? 0, m.set_2_player_2 ?? 0, m.set_3_player_2 ?? 0]],
+          [m.player_1_name, m.player_1_uid, [res?.set_1_player_1 ?? 0, res?.set_2_player_1 ?? 0, res?.set_3_player_1 ?? 0]],
+          [m.player_2_name, m.player_2_uid, [res?.set_1_player_2 ?? 0, res?.set_2_player_2 ?? 0, res?.set_3_player_2 ?? 0]],
         ];
         rows.forEach(([name, uid, games], r) => {
           const ty = y + 19 + r * (BLOCK_H / 2);

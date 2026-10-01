@@ -41,8 +41,8 @@ function queueWaitTable(numCourts: number): { courtsPerBoard: 2 | 4; bands: Wait
 // "Submit a Photo" — the single unified report flow (merges the former "Report"/"Submit a Photo"
 // and "Suggest an Improvement" flows into one). Photo(s) + court + type + an optional note; no
 // organizer review — every report auto-approves immediately (automated image moderation still
-// runs and can remove an unsafe photo after the fact). Anonymous submitters are welcome;
-// logged-out reporters may optionally leave an email to get updates.
+// runs and can remove an unsafe photo after the fact). Signed-out visitors are welcome (the report
+// is filed as not_a_member / anonymous) and may leave an email, which joins the mailing list.
 // `initialType` opens the form on a given pill (a Tasks card deep link); omitted, it opens on
 // Improvements/Poor Conditions as it always has.
 export const PhotoSubmitModal: React.FC<{ onClose: () => void; initialType?: ReportType }> = ({ onClose, initialType }) => {
@@ -60,11 +60,6 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void; initialType?: Rep
   const [queueTime, setQueueTime] = useState(() => {
     const d = new Date();
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  });
-  // The day the queue was seen, YYYY-MM-DD, prefilled with today like the time above.
-  const [queueDate, setQueueDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
   const [waitingBoards, setWaitingBoards] = useState('');
   const [files, setFiles] = useState<File[]>([]);
@@ -100,10 +95,8 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void; initialType?: Rep
     return courts.filter((c) => c.toLowerCase().includes(q)).slice(0, 8);
   }, [courts, courtSearch]);
 
-  const selectedCourtNumCourts = useMemo(
-    () => courtList.find((c) => c.dropdown === court)?.numCourts ?? null,
-    [courtList, court],
-  );
+  const selectedCourt = useMemo(() => courtList.find((c) => c.dropdown === court) ?? null, [courtList, court]);
+  const selectedCourtNumCourts = selectedCourt?.numCourts ?? null;
 
   const waitTable = useMemo(
     () => (selectedCourtNumCourts != null ? queueWaitTable(selectedCourtNumCourts) : null),
@@ -129,7 +122,6 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void; initialType?: Rep
       setError('Please enter the time as HH:MM in 24-hour format, e.g. 18:30.');
       return;
     }
-    if (type === 'queue' && !/^d{4}-d{2}-d{2}$/.test(queueDate)) { setError('Please choose the date.'); return; }
     if (type === 'waiting_board' && !waitingBoards.trim()) { setError('Please enter the number of waiting boards.'); return; }
 
     setSubmitting(true);
@@ -140,10 +132,11 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void; initialType?: Rep
         userName: profile?.user.name || '',
         type,
         courtName: court,
+        zone: selectedCourt?.zone || '',
         files,
         note,
         ...(type === 'queue' && racquetsInQueue.trim() ? { racquetsInQueue: Number(racquetsInQueue) } : {}),
-        ...(type === 'queue' ? { queueTime, queueDate } : {}),
+        ...(type === 'queue' ? { queueTime } : {}),
         ...(type === 'waiting_board' && waitingBoards.trim() ? { waitingBoards: Number(waitingBoards) } : {}),
         onProgress: setProgress,
       });
@@ -325,17 +318,6 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void; initialType?: Rep
                       className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
                     />
                   </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Date <span className="text-clay">*</span></p>
-                  <input
-                    type="date"
-                    value={queueDate}
-                    onChange={(e) => setQueueDate(e.target.value)}
-                    aria-label="Date seen"
-                    className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-2.5 text-sm text-fg outline-none focus:border-clay focus:ring-2 focus:ring-clay/20"
-                  />
                 </div>
 
                 {waitTable && (

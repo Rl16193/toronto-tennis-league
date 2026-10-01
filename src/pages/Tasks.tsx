@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   CATEGORIES, COMMUNITY_GROUP_TASKS, COUNTER_NOUN, DAILY_GROUP_TASKS, SETUP_POINTS, TASKS,
   INITIATION_OPEN_UNTIL, UNLOCKED_TASK_IDS, initiationDoneCount,
-  type CategoryDef, type GroupTaskDef, type TaskId, setTaskDone, useTasks,
+  type CategoryDef, type GroupTaskDef, type TaskId, setTaskDone, useSweep, useTasks,
 } from '../features/tasks/useTasks';
 import { CheckInModal } from '../features/tasks/CheckInModal';
 import { PhotoSubmitModal } from '../features/tasks/PhotoSubmitModal';
@@ -19,18 +19,19 @@ import { ClaimModal } from '../features/tasks/ClaimModal';
 import type { ClaimType } from '../features/tasks/claimService';
 import { Toast } from '../components/Toast';
 import { useBadgeToast } from '../features/tasks/useBadgeToast';
+import { courtKey } from '../utils/courtKey';
 
 // Tasks tab — the Community Member Initiation checklist plus every task category.
 // Each section is a dropdown; tasks award themselves as the underlying counters grow.
 // (Completing every task in a category is a "milestone" on the Leaderboard.)
 export const Tasks: React.FC = () => {
   const { profile } = useAuth();
-  const { user, progress, progressLoaded, counters, points } = useTasks();
+  const { user, stats, progress, progressLoaded, counters, points } = useTasks();
   const [saving, setSaving] = useState<TaskId | null>(null);
   const [openSection, setOpenSection] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   // Called before the early returns below — hooks can't sit behind a conditional.
-  const { balance: redeemable } = useRedeemablePoints({ points, progressLoaded });
+  const { balance: redeemable } = useRedeemablePoints({ points, progressLoaded, stats });
   const { toast: badgeToast, dismissToast } = useBadgeToast(progress, counters, progressLoaded);
 
   useEffect(() => { document.title = 'Tasks · Racquets & Strings'; }, []);
@@ -44,10 +45,13 @@ export const Tasks: React.FC = () => {
     setSectionDefaultSet(true);
   }, [progressLoaded, progress, sectionDefaultSet]);
 
+  const citySweep = useSweep('city_sweep');
+  const myZone = profile?.preferences?.preferred_zone || '';
+  const zoneSweep = useSweep(myZone ? `zone_sweep_${courtKey(myZone)}` : null);
   const claimableRewards = Math.floor(Math.max(0, redeemable) / MIN_REWARD_COST);
-  // Tournament points live on the stats doc as leaguePoints26 — the same field the Leaderboard
+  // Tournament points live on the stats doc as leaguePoints — the same field the Leaderboard
   // ranks on (see features/leagues/useStandings.ts), so the two surfaces can't disagree.
-  const tournamentPoints = profile?.stats?.leaguePoints26 ?? 0;
+  const tournamentPoints = stats?.leaguePoints ?? profile?.stats?.leaguePoints ?? 0;
   const clearParams = () => setSearchParams({}, { replace: true });
 
   const checkinOpen = searchParams.get('checkin') === '1';
@@ -71,15 +75,14 @@ export const Tasks: React.FC = () => {
     );
   }
 
-  const rec = (progress || {}) as Record<string, unknown>;
-  const displayName = profile?.user.name || '';
+  const rec = progress || {};
   const doneUnlocked = UNLOCKED_TASK_IDS.filter((id) => rec[id]).length;
   const initiationComplete = !!progress?.setupComplete;
 
   const toggleTask = async (id: TaskId, done: boolean) => {
     setSaving(id);
     try {
-      await setTaskDone(user.uid, displayName, id, done);
+      await setTaskDone(user.uid, id, done);
     } finally {
       setSaving(null);
     }
@@ -163,8 +166,19 @@ export const Tasks: React.FC = () => {
     );
   };
 
+  // A sweep's progress this cycle: courts covered out of the courts it needs.
+  const SweepBar: React.FC<{ label?: string; covered: number; total: number }> = ({ label, covered, total }) => (
+    <div className="mt-2">
+      {label && <p className="text-xs font-bold text-fg mb-1">{label}</p>}
+      <div className="h-2 rounded-full bg-fg/10 overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={covered}>
+        <div className="h-full rounded-full bg-clay" style={{ width: `${Math.min(100, Math.round((covered / total) * 100))}%` }} />
+      </div>
+      <p className="text-xs text-fg/70 mt-1">{covered} of {total} courts</p>
+    </div>
+  );
+
   // Group / community bonuses — descriptive cards (name + wrapped trigger + points). Unlike the
-  // tiers, these unlock from collective activity and are paid server-side into bonusPoints.
+  // tiers, these unlock from collective activity and are paid server-side into RS points.
   const GroupSection: React.FC<{ id: string; title: string; tasks: GroupTaskDef[] }> = ({ id, title, tasks }) => (
     <Accordion
       id={id}
@@ -179,6 +193,8 @@ export const Tasks: React.FC = () => {
             <span className="text-xs font-bold text-clay shrink-0">{g.points}</span>
           </div>
           <p className="text-xs text-fg/70 mt-1 leading-relaxed">{g.trigger}</p>
+          {g.id === 'zoneSweep' && zoneSweep && <SweepBar label={`Your zone: ${myZone}`} {...zoneSweep} />}
+          {g.id === 'explorer' && citySweep && <SweepBar {...citySweep} />}
         </div>
       ))}
     </Accordion>

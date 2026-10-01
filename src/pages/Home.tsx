@@ -12,7 +12,6 @@ import { SiteFooterLine } from '../components/FooterElements';
 import { Toast } from '../components/Toast';
 import { subscribeVisitorToNewsletter, useMemberNewsletter } from '../lib/newsletter';
 import { VolunteerSignup, submitVolunteerSignup } from '../lib/volunteer';
-import { CourtImprovement, submitCourtImprovement } from '../lib/courtImprovements';
 import { isCurrentEvent, sortEventsByEndDate } from '../utils/eventDates';
 import { isTopspinMeetupEvent, isWeekendMatchdaysEvent } from '../utils/eventTypes';
 import { useCourtData } from './courtmap/useCourtData';
@@ -24,7 +23,6 @@ import {
   SupportBand,
   UpcomingEventsStrip,
   VolunteerSheet,
-  CourtNoteSheet,
 } from './home/HomeElements';
 
 // Animates a stat number up to its target whenever the target changes, carrying over the
@@ -86,7 +84,6 @@ export const Home: React.FC = () => {
   const [upcoming, setUpcoming] = useState<DisplayEvent[]>([]);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
   const [volunteerOpen, setVolunteerOpen] = useState(false);
-  const [courtNoteOpen, setCourtNoteOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => { document.title = 'Racquets & Strings'; }, []);
@@ -176,11 +173,6 @@ export const Home: React.FC = () => {
 
   const handleVisitorSubscribe = (email: string) => subscribeVisitorToNewsletter(email);
 
-  // The form always runs, member or not — only the uid and name ride along for a member.
-  // Visitors only: a member's Submit a Report opens PhotoSubmitModal, which pays points.
-  const handleCourtNote = (note: Omit<CourtImprovement, 'uid' | 'userName'>) =>
-    submitCourtImprovement({ ...note, uid: user?.uid, userName: profile?.user.name ?? '' });
-
   const handleVolunteer = (signup: Omit<VolunteerSignup, 'uid' | 'userName'>) =>
     submitVolunteerSignup({ ...signup, uid: user?.uid, userName: profile?.user.name ?? '' });
 
@@ -212,7 +204,7 @@ export const Home: React.FC = () => {
       {/* Portalled: Layout's animated <main> transforms on route change, and a transformed
           ancestor re-bases `position: fixed` — the same reason Sheet and Toast portal. */}
       {createPortal(
-        <FloatingCtaStack onSubscribe={showSubscribe ? onSubscribeClick : undefined} onCourtNote={user ? undefined : () => setCourtNoteOpen(true)} />,
+        <FloatingCtaStack onSubscribe={showSubscribe ? onSubscribeClick : undefined} onCourtNote={user ? undefined : onReport} />,
         document.body,
       )}
 
@@ -221,13 +213,6 @@ export const Home: React.FC = () => {
           onClose={() => setSubscribeOpen(false)}
           onSubscribe={handleVisitorSubscribe}
           defaultEmail={user?.email ?? ''}
-        />
-      )}
-
-      {courtNoteOpen && (
-        <CourtNoteSheet
-          onClose={() => setCourtNoteOpen(false)}
-          onSubmit={handleCourtNote}
         />
       )}
 

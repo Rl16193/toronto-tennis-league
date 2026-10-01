@@ -12,15 +12,16 @@
 // one before it whatever the gap. Consecutive runs therefore overlap and must never be summed.
 //
 // The metric definitions mirror analysis/build-engagement-xlsx.py. Both read the same
-// post-consolidation collections (`matches` split by `category`, `courts` by `type`, `tasks` by
-// `type`); if you change a definition in one, change it in the other or the scheduled numbers and
-// the engagement report will disagree.
+// v3 collections (`matches` split by `category`, results in `submissions`, `courts` by `category`);
+// if you change a definition in one, change it in the other or the scheduled numbers and the
+// engagement report will disagree.
 //
 // Requires deploy: `firebase deploy --only functions:aggregateAdminMetrics`
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
+const { Timestamp } = require('firebase-admin/firestore');
 const { TZ, REGION, SPREADSHEET_ID } = require('./lib/constants');
 // Metric definitions live in lib/ so they can be run against an export without credentials.
 const { computeMetrics, WINDOW_DAYS } = require('./lib/adminMetricsCompute');
@@ -33,12 +34,14 @@ const BQ_DATASET = 'rs_analytics';
 // ── data load ────────────────────────────────────────────────────────────────
 
 async function readAll() {
-  const names = ['users', 'stats', 'events', 'event_participants', 'matches', 'courts', 'tasks',
+  const names = ['users', 'stats', 'events', 'event_participants', 'matches', 'submissions', 'courts',
     'listings', 'connections', 'preferences'];
+  // Timestamps become ISO text so the metric definitions can compare and slice dates as strings.
+  const plain = (v) => (v && typeof v.toDate === 'function' ? v.toDate().toISOString() : v);
   const snaps = await Promise.all(names.map((n) => db.collection(n).get()));
   const out = {};
   names.forEach((n, i) => {
-    out[n] = snaps[i].docs.map((d) => ({ _id: d.id, ...d.data() }));
+    out[n] = snaps[i].docs.map((d) => ({ _id: d.id, ...Object.fromEntries(Object.entries(d.data()).map(([k, v]) => [k, plain(v)])) }));
   });
   return out;
 }
@@ -233,7 +236,7 @@ exports.aggregateAdminMetrics = onSchedule(
       by_zone: metrics.byZone,
       by_event: metrics.byEvent,
       window_days: WINDOW_DAYS,
-      generated_at: new Date().toISOString(),
+      updated_at: Timestamp.now(),
     });
     logger.info('[adminMetrics] wrote admin_stats/dashboard', metrics.headline);
 

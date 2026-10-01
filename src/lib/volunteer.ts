@@ -1,13 +1,12 @@
-import { addDoc, collection } from 'firebase/firestore';
+import { addDoc, collection, Timestamp } from 'firebase/firestore';
 import { db } from './firebase';
 
 /**
  * Volunteer sign-ups from the "Volunteer with Us" button.
  *
  * Unlike the newsletter, this ALWAYS shows the form, member or not: the activity and the note are
- * per-submission and an account cannot answer them for you. A member's row carries `uid` and
- * `user_name` on top of what a visitor's row carries, and `firestore.rules` enforces that the uid,
- * when present, is the caller's own.
+ * per-submission and an account cannot answer them for you. A member's row carries their `uid` and
+ * `user_name`; a visitor's carries 'not_a_member' / 'anonymous'. `firestore.rules` enforces both.
  *
  * Auto-id, never keyed on uid, because someone may volunteer more than once for different
  * activities and each note is its own message. Deduplicate by email when you work the list.
@@ -37,12 +36,9 @@ export const submitVolunteerSignup = async ({ email, activity, note, uid, userNa
   await addDoc(collection(db, 'volunteer_signups'), {
     email: email.trim().toLowerCase(),
     activity,
-    // Omitted rather than written empty: the rules whitelist allows these keys but a blank string
-    // is not data, and an absent field is cheaper to filter on.
-    ...(note?.trim() ? { note: note.trim() } : {}),
-    ...(uid ? { uid } : {}),
-    ...(uid && userName?.trim() ? { user_name: userName.trim() } : {}),
-    source: 'homepage',
-    created_at: new Date().toISOString(),
+    note: note?.trim() || '',
+    uid: uid || 'not_a_member',
+    user_name: uid ? (userName?.trim() || '') : 'anonymous',
+    created_at: Timestamp.now(),
   });
 };

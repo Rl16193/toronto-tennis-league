@@ -1,13 +1,21 @@
 import { TennisEvent } from '../types';
 import { isLadderEvent, isTournamentEvent } from './eventTypes';
 
-export type FirestoreDateLike = string | { toDate?: () => Date; seconds?: number; nanoseconds?: number } | undefined;
+export type FirestoreDateLike = string | { toDate?: () => Date; seconds?: number; nanoseconds?: number } | null | undefined;
 
-export const getEventStartDate = (event: TennisEvent): FirestoreDateLike =>
-  event.startDate || event.start_date || event.date;
+/** Any stored time (Timestamp, {seconds}, Date, ISO string) as a Date, or null. */
+export const toDate = (value: FirestoreDateLike | Date | number): Date | null => {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === 'number') return new Date(value);
+  return parseValidDate(value);
+};
 
-export const getEventEndDate = (event: TennisEvent): FirestoreDateLike =>
-  event.endDate || event.end_date || event.startDate || event.start_date || event.date;
+/** Any stored time as epoch millis (0 when absent) — for sorting and comparing. */
+export const toMillis = (value: FirestoreDateLike | Date | number): number => toDate(value)?.getTime() ?? 0;
+
+export const getEventStartDate = (event: TennisEvent): FirestoreDateLike => event.start_date;
+
+export const getEventEndDate = (event: TennisEvent): FirestoreDateLike => event.end_date || event.start_date;
 
 export const parseValidDate = (value?: FirestoreDateLike) => {
   if (!value) return null;

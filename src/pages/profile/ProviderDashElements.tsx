@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { ChevronDown, X } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { ContactOpponentButton, contactChannels } from '../../components/ContactOpponentButton';
-import { BOOKING_WORDS, type Booking, type BookingStage } from '../../features/services/useServices';
+import { BOOKING_WORDS, type BookingRow, type BookingStage, isGroupLesson } from '../../features/services/useServices';
+import { type FirestoreDateLike, toDate, toMillis } from '../../utils/eventDates';
 import { Empty, Group, Kicker, PlayerLink, RowError, focusRing, squareBtn } from './PlayerDashElements';
 import type { ProviderJob, useProviderDash } from './useProviderDash';
 
@@ -21,9 +22,9 @@ const money = (n: number | null | undefined) =>
   typeof n === 'number' ? `$${n % 1 === 0 ? n : n.toFixed(2)}` : '—';
 
 /** "today" or "Sep 12". */
-const dayLabel = (iso?: string) => {
-  const d = iso ? new Date(iso) : null;
-  if (!d || Number.isNaN(d.getTime())) return '';
+const dayLabel = (at?: FirestoreDateLike) => {
+  const d = toDate(at);
+  if (!d) return '';
   return d.toDateString() === new Date().toDateString()
     ? 'today'
     : d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
@@ -47,11 +48,11 @@ const StageBadge: React.FC<{ stage: BookingStage; extra?: string }> = ({ stage, 
 );
 
 /** "Premium Strings · $45 · 15 pts" */
-const serviceLine = (b: Booking) =>
+const serviceLine = (b: BookingRow) =>
   [b.offer, money(b.price), b.points ? `${b.points} pts` : ''].filter(Boolean).join(' · ');
 
 /** Who called it off, and where a redeemed booking's points stand. */
-const cancelNote = (b: Booking) => {
+const cancelNote = (b: BookingRow) => {
   // A group lesson booking keeps its lesson_group, so a provider cancel there is a cancelled class.
   const who = b.cancelled_by !== 'provider' ? 'Member cancelled' : b.lesson_group ? 'Class cancelled' : 'Declined';
   if (!b.points) return who;
@@ -116,7 +117,7 @@ const JobActions: React.FC<{ data: ProviderDashData; job: ProviderJob }> = ({ da
   if (job.stage === 'new') {
     return (
       <div className="flex shrink-0 items-center gap-1.5">
-        {!b.group_lesson && (
+        {!isGroupLesson(b) && (
           <Button variant="clay" size="sm" className={focusRing} isLoading={loading} disabled={busy} onClick={() => data.start(b.id)}>
             {words.start}
           </Button>
@@ -256,7 +257,7 @@ const MemberLine: React.FC<{ job: ProviderJob; wide: boolean; lead?: React.React
 );
 
 const LessonBlock: React.FC<{
-  wide: boolean; label: string; lesson: Lesson; since?: string; stage: BookingStage; errorKey: string;
+  wide: boolean; label: string; lesson: Lesson; since?: FirestoreDateLike; stage: BookingStage; errorKey: string;
   data: ProviderDashData; actions: React.ReactNode; children: React.ReactNode;
 }> = ({ wide, label, lesson, since, stage, errorKey, data, actions, children }) => {
   const [open, setOpen] = useState(false);
@@ -307,7 +308,7 @@ const WaitingBlock: React.FC<{ data: ProviderDashData; lesson: Lesson; wide: boo
   const [picked, setPicked] = useState<string[]>([]);
   const key = `${lesson.serviceId}:0`;
   const busy = !!data.busyId;
-  const latest = lesson.waiting.map((j) => j.booking.created_at).sort().pop();
+  const latest = [...lesson.waiting].sort((a, b) => toMillis(a.booking.created_at) - toMillis(b.booking.created_at)).pop()?.booking.created_at;
   const create = (
     <Button variant="clay" size="sm" className={focusRing} isLoading={data.busyId === key} disabled={busy || picked.length === 0}
       onClick={() => data.lessonGroup(lesson.serviceId, 'create', 0, picked).then(() => setPicked([]))}>
@@ -337,7 +338,7 @@ const GroupBlock: React.FC<{ data: ProviderDashData; lesson: Lesson; group: Less
   const busy = !!data.busyId;
   const run = (action: 'add' | 'remove' | 'done' | 'cancel', ids?: string[]) => data.lessonGroup(lesson.serviceId, action, group.n, ids);
   const pending = group.members.filter((j) => j.stage === 'in_progress');
-  const since = group.members.map((j) => j.booking.started_at || '').filter(Boolean).sort()[0];
+  const since = group.members.map((j) => j.booking.started_at).filter(Boolean).sort((a, b) => toMillis(a) - toMillis(b))[0];
   const actions = (
     <>
       {pending.length > 0 && !cancelling && (

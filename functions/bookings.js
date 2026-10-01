@@ -11,45 +11,44 @@ const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 // From the subpath, not admin.firestore: the Functions emulator proxies admin.firestore as a bound
 // function, which drops FieldValue.
-const { FieldValue } = require('firebase-admin/firestore');
+const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { REGION } = require('./lib/constants');
 const { notify, organizerUids } = require('./lib/notify');
 const { providerIdFor, providerMemberUids } = require('./lib/roles');
 const { requireAuth, requireDocId } = require('./lib/callable');
 const { recordServiceLead } = require('./lib/serviceLeads');
 const {
-  assertNoOpenBooking, assertCan, newBooking, releaseRedeem, cancelInTx, notifyNewBooking,
+  isGroup, assertNoOpenBooking, assertCan, newBooking, releaseRedeem, cancelInTx, labelsFor, notifyNewBooking,
 } = require('./lib/bookingState');
 const { linkPlayers } = require('./connections');
 
 const db = () => admin.firestore();
-const nowISO = () => new Date().toISOString();
 
 /**
- * Book an offer at its regular price. The member's contacts are shared with the provider before
+ * Book a service at its regular price. The member's contacts are shared with the provider before
  * the booking is written, so the provider's contact buttons work the moment it arrives.
  */
 exports.bookService = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
   const serviceId = requireDocId(request.data && request.data.serviceId, 'Missing service.');
-  const { offer, providerUids, userName } = await recordServiceLead(uid, serviceId, 'You can’t book your own service.');
+  const { service, providerUids, userName } = await recordServiceLead(uid, serviceId, 'You can’t book your own service.');
 
   const ref = db().collection('bookings').doc();
-  const lockRef = db().doc(`offers/${uid}`);
+  const lockRef = db().doc(`stats/${uid}`);
   const booking = await db().runTransaction(async (tx) => {
-    // Every booking and redeem by this member reads and writes offers/{uid}, so two taps at once
+    // Every booking and redeem by this member reads and writes stats/{uid}, so two taps at once
     // collide and the retry sees the first booking.
     await tx.get(lockRef);
-    await assertNoOpenBooking(tx, uid, offer.id);
-    const b = newBooking({ id: ref.id, offer, uid, userName, price: offer.total_price, points: 0, providerUids });
+    await assertNoOpenBooking(tx, uid, service.id);
+    const b = newBooking({ service, uid, userName, price: service.total_price, points: 0 });
     tx.create(ref, b);
-    tx.set(lockRef, { uid, updated_at: nowISO() }, { merge: true });
+    tx.set(lockRef, { updated_at: FieldValue.serverTimestamp() }, { merge: true });
     return b;
   });
 
-  logger.info(`Booking ${booking.id}: ${uid} booked ${offer.id}`);
+  logger.info(`Booking ${ref.id}: ${uid} booked ${service.id}`);
   await notifyNewBooking(providerUids, booking);
-  return { bookingId: booking.id };
+  return { bookingId: ref.id };
 });
 
 /**
@@ -72,43 +71,37 @@ async function step(request, name, actor, write) {
     if (actor === 'member' && b.uid !== uid) throw new HttpsError('permission-denied', 'That isn’t your booking.');
     assertCan(b, name);
     const extra = await write(tx, ref, b, uid);
-    return { booking: b, extra };
+    return { booking: { ...b, id: bookingId }, extra };
   });
   return { uid, ...result };
 }
 
 /** Organizers review the refund; points only come back when they approve. */
 async function notifyRefundReview(booking, what) {
-  const organizers = await organizerUids().catch(() => []);
+  const [organizers, { offer }] = await Promise.all([organizerUids().catch(() => []), labelsFor(booking)]);
   await notify(organizers, {
     type: 'reward_cancel_requested',
     title: 'Refund to review',
-    body: `${what} ${booking.offer} for ${booking.user_name || 'a member'}. ${booking.points} points to refund.`,
+    body: `${what} ${offer} for ${booking.user_name || 'a member'}. ${booking.points} points to refund.`,
     link: '/profile?dash=organizer',
   });
 }
 
 /** Provider: "Racquet received" or "Confirm lesson". A redeemed coupon counts as used from here. */
 exports.startBooking = onCall({ region: REGION }, async (request) => {
-  const { uid, booking } = await step(request, 'start', 'provider', async (tx, ref, b, actorUid) => {
-    const now = nowISO();
-    const couponRef = b.redemption_code ? db().doc(`redemptions/${b.redemption_code}`) : null;
-    const coupon = couponRef ? await tx.get(couponRef) : null;
-    if (coupon && coupon.exists && coupon.data().status === 'active') {
-      tx.update(couponRef, { status: 'used', used_at: now, used_by: actorUid });
-    }
+  const { uid, booking } = await step(request, 'start', 'provider', async (tx, ref) => {
+    const now = Timestamp.now();
     tx.update(ref, { status: 'in_progress', started_at: now, updated_at: now });
   });
 
   // A provider account linked after the booking was made still needs the member's contacts.
   await linkPlayers(booking.uid, uid, 'booking');
   const coaching = booking.category === 'coaching';
+  const { offer, provider } = await labelsFor(booking);
   await notify(booking.uid, {
     type: 'booking_started',
     title: coaching ? 'Lesson confirmed' : 'Racquet received',
-    body: coaching
-      ? `${booking.provider_name} confirmed your ${booking.offer} lesson.`
-      : `${booking.provider_name} has your racquet for ${booking.offer}.`,
+    body: coaching ? `${provider} confirmed your ${offer} lesson.` : `${provider} has your racquet for ${offer}.`,
     link: '/marketplace',
   });
   return { ok: true };
@@ -117,15 +110,15 @@ exports.startBooking = onCall({ region: REGION }, async (request) => {
 /** Provider turns down a New booking. */
 exports.declineBooking = onCall({ region: REGION }, async (request) => {
   const { booking, extra: refund } = await step(request, 'decline', 'provider',
-    (tx, ref, b) => cancelInTx(tx, ref, b, 'provider', `Declined by ${b.provider_name || 'the provider'}`));
-
+    (tx, ref, b) => cancelInTx(tx, ref, b, 'provider', 'Declined by the provider'));
+  const { offer, provider } = await labelsFor(booking);
   await notify(booking.uid, {
     type: 'booking_declined',
     title: 'Booking declined',
-    body: `${booking.provider_name} can’t take ${booking.offer}.${refund ? ' An organizer will review refunding your points.' : ''}`,
+    body: `${provider} can’t take ${offer}.${refund ? ' An organizer will review refunding your points.' : ''}`,
     link: '/marketplace',
   });
-  if (refund) await notifyRefundReview(booking, `${booking.provider_name} declined`);
+  if (refund) await notifyRefundReview(booking, `${provider} declined`);
   return { ok: true };
 });
 
@@ -133,11 +126,11 @@ exports.declineBooking = onCall({ region: REGION }, async (request) => {
 exports.cancelBooking = onCall({ region: REGION }, async (request) => {
   const { booking, extra: refund } = await step(request, 'cancel', 'member',
     (tx, ref, b) => cancelInTx(tx, ref, b, 'member', 'Cancelled by the member'));
-
+  const { offer } = await labelsFor(booking);
   await notify(await providerMemberUids(booking.provider_id).catch(() => []), {
     type: 'booking_cancelled',
     title: 'Booking cancelled',
-    body: `${booking.user_name || 'A member'} cancelled ${booking.offer}.`,
+    body: `${booking.user_name || 'A member'} cancelled ${offer}.`,
     link: '/profile?dash=provider',
     counterpart_uid: booking.uid,
     counterpart_name: booking.user_name,
@@ -154,16 +147,16 @@ const askTitle = (b) => (b.category === 'coaching'
 /** Provider: "Mark ready" / "Mark done" asks the member to confirm; neither completes the job. */
 exports.finishBooking = onCall({ region: REGION }, async (request) => {
   const { booking } = await step(request, 'finish', 'provider', (tx, ref) => {
-    const now = nowISO();
+    const now = Timestamp.now();
     tx.update(ref, { completion_requested_at: now, updated_at: now });
   });
-
+  const { offer, provider } = await labelsFor(booking);
   await notify(booking.uid, {
     type: 'booking_ready',
     title: askTitle(booking),
     body: booking.category === 'coaching'
-      ? `${booking.provider_name} marked your ${booking.offer} lesson done. Confirm it happened.`
-      : `${booking.provider_name} marked ${booking.offer} ready. Confirm once you have it.`,
+      ? `${provider} marked your ${offer} lesson done. Confirm it happened.`
+      : `${provider} marked ${offer} ready. Confirm once you have it.`,
     link: '/profile?dash=player',
   });
   return { ok: true };
@@ -172,26 +165,21 @@ exports.finishBooking = onCall({ region: REGION }, async (request) => {
 /** Member answers askTitle(). Not yet sends the job back to in progress. */
 exports.confirmBooking = onCall({ region: REGION }, async (request) => {
   const yes = !!(request.data && request.data.confirmed === true);
-  const { booking } = await step(request, 'confirm', 'member', async (tx, ref, b, actorUid) => {
-    const now = nowISO();
-    // A group lesson's coupon stays active until the member confirms, so a cancelled class can
-    // still send the points to review; Yes uses it and frees Redeem for the next member.
-    if (yes && b.group_lesson) {
-      const couponRef = b.redemption_code ? db().doc(`redemptions/${b.redemption_code}`) : null;
-      const coupon = couponRef ? await tx.get(couponRef) : null;
-      const offerRef = db().doc(`tasks/${b.service_id}`);
-      const offer = await tx.get(offerRef);
-      if (coupon && coupon.exists && coupon.data().status === 'active') {
-        tx.update(couponRef, { status: 'used', used_at: now, used_by: actorUid });
-      }
-      if (offer.exists) releaseRedeem(tx, offerRef, offer.data(), b.id);
+  const { booking } = await step(request, 'confirm', 'member', async (tx, ref, b) => {
+    const now = Timestamp.now();
+    // Yes on a group lesson frees Redeem for the next member (the coupon is used from here).
+    if (yes && isGroup(b)) {
+      const serviceRef = db().doc(`services/${b.service_id}`);
+      const service = await tx.get(serviceRef);
+      if (service.exists) releaseRedeem(tx, serviceRef, service.data(), ref.id);
     }
     tx.update(ref, yes
       ? { status: 'completed', completed_at: now, updated_at: now }
-      : { completion_requested_at: FieldValue.delete(), reminded_at: FieldValue.delete(), updated_at: now });
+      : { completion_requested_at: null, updated_at: now });
   });
 
   const providers = await providerMemberUids(booking.provider_id).catch(() => []);
+  const { offer, provider } = await labelsFor(booking);
   const member = booking.user_name || 'A member';
   const coaching = booking.category === 'coaching';
   const notYetTitle = coaching ? 'Lesson not confirmed' : 'Racquet not collected yet';
@@ -199,7 +187,7 @@ exports.confirmBooking = onCall({ region: REGION }, async (request) => {
   await notify(providers, {
     type: yes ? 'booking_completed' : 'booking_not_back',
     title: yes ? 'Job complete' : notYetTitle,
-    body: yes ? `${member} confirmed ${booking.offer} is done.` : `${member} says ${booking.offer} ${notYet}.`,
+    body: yes ? `${member} confirmed ${offer} is done.` : `${member} says ${offer} ${notYet}.`,
     link: '/profile?dash=provider',
     counterpart_uid: booking.uid,
     counterpart_name: booking.user_name,
@@ -209,7 +197,7 @@ exports.confirmBooking = onCall({ region: REGION }, async (request) => {
     await notify(organizers, {
       type: 'booking_not_back',
       title: notYetTitle,
-      body: `${member} says ${booking.offer} at ${booking.provider_name} ${notYet}.`,
+      body: `${member} says ${offer} at ${provider} ${notYet}.`,
       link: '/marketplace',
     });
   }
@@ -219,10 +207,10 @@ exports.confirmBooking = onCall({ region: REGION }, async (request) => {
 const GROUP_ACTIONS = ['create', 'add', 'remove', 'done', 'cancel'];
 
 /**
- * Coach: group lessons. Members book a group lesson offer and wait as New; the coach puts the ones
+ * Coach: group lessons. Members book a group lesson service and wait as New; the coach puts the ones
  * they choose into Group 1, 2, … (`lesson_group` on the booking, status in progress). create/add
  * seat New bookings, remove sends them back to New, done asks each member "Did your lesson
- * happen?", cancel cancels every open booking in the group (redeemed points go to review).
+ * happen?", cancel cancels every open booking in the group (points paid go to review).
  */
 exports.lessonGroup = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request);
@@ -232,13 +220,13 @@ exports.lessonGroup = onCall({ region: REGION }, async (request) => {
   const serviceId = requireDocId(d.serviceId, 'Missing service.');
   const ids = Array.isArray(d.bookingIds) ? d.bookingIds.filter((x) => typeof x === 'string' && x) : [];
   const providerId = await providerIdFor(uid);
-  const offerRef = db().doc(`tasks/${serviceId}`);
+  const serviceRef = db().doc(`services/${serviceId}`);
 
   const result = await db().runTransaction(async (tx) => {
-    const offerSnap = await tx.get(offerRef);
-    const offer = offerSnap.exists ? offerSnap.data() : null;
-    if (!offer || !offer.group_lesson) throw new HttpsError('failed-precondition', 'That isn’t a group lesson.');
-    if (!providerId || offer.provider_id !== providerId) throw new HttpsError('permission-denied', 'That lesson isn’t yours.');
+    const serviceSnap = await tx.get(serviceRef);
+    const service = serviceSnap.exists ? serviceSnap.data() : null;
+    if (!service || service.sub_category !== 'group') throw new HttpsError('failed-precondition', 'That isn’t a group lesson.');
+    if (!providerId || service.provider_id !== providerId) throw new HttpsError('permission-denied', 'That lesson isn’t yours.');
 
     const all = (await tx.get(db().collection('bookings').where('service_id', '==', serviceId))).docs;
     const inGroup = (s, n) => s.data().status === 'in_progress' && s.data().lesson_group === n;
@@ -261,50 +249,40 @@ exports.lessonGroup = onCall({ region: REGION }, async (request) => {
     }
     if (members.length === 0) throw new HttpsError('failed-precondition', 'Nobody to update. Refresh and try again.');
 
-    // Reads before writes: the coupons a cancelled class sends to review.
-    const coupons = action === 'cancel'
-      ? await Promise.all(members.map((s) => (s.data().redemption_code && s.data().points > 0
-        ? tx.get(db().doc(`redemptions/${s.data().redemption_code}`)) : null)))
-      : [];
-
-    const now = nowISO();
+    const now = Timestamp.now();
     const refunded = [];
-    members.forEach((s, i) => {
+    members.forEach((s) => {
+      const b = s.data();
       if (action === 'create' || action === 'add') {
         tx.update(s.ref, { status: 'in_progress', lesson_group: group, started_at: now, updated_at: now });
       } else if (action === 'remove') {
-        tx.update(s.ref, {
-          status: 'lead', lesson_group: FieldValue.delete(), started_at: FieldValue.delete(), updated_at: now,
-        });
+        tx.update(s.ref, { status: 'lead', lesson_group: 0, started_at: null, updated_at: now });
       } else if (action === 'done') {
         tx.update(s.ref, { completion_requested_at: now, updated_at: now });
       } else {
-        const coupon = coupons[i];
-        const refund = !!coupon && coupon.exists && coupon.data().status === 'active';
-        if (refund) {
-          tx.update(coupon.ref, { status: 'cancel_requested', cancel_requested_at: now, cancel_reason: 'Class cancelled by the coach' });
-          refunded.push(s.data());
-        }
+        const refund = b.payment === 'points' && b.points > 0;
+        if (refund) refunded.push({ ...b, id: s.id });
         tx.update(s.ref, {
-          status: 'cancelled', cancelled_at: now, cancelled_by: 'provider', ...(refund ? { refund: 'pending' } : {}), updated_at: now,
+          status: 'cancelled', cancelled_at: now, cancelled_by: 'provider', cancel_reason: 'Class cancelled by the coach',
+          refund: refund ? 'pending' : 'none', updated_at: now,
         });
-        releaseRedeem(tx, offerRef, offer, s.id);
+        releaseRedeem(tx, serviceRef, service, s.id);
       }
     });
-    return { group, members: members.map((s) => s.data()), refunded, provider: offer.provider_name || 'Your coach' };
+    return { group, members: members.map((s) => ({ ...s.data(), id: s.id })), refunded, provider: service.provider_name || 'Your coach', offer: service.offer || 'the lesson' };
   });
 
-  const { group, members, refunded, provider } = result;
+  const { group, members, refunded, provider, offer } = result;
   await Promise.all(members.map((b) => {
     const refund = refunded.some((r) => r.id === b.id);
     const message = {
       create: { type: 'booking_started', title: `You're in ${provider}'s group lesson`, body: `${provider} will contact you with the details.` },
       remove: { type: 'booking_started', title: 'Your group lesson changed', body: `${provider} moved you out of Group ${group}. You stay on the list for the next group.` },
-      done: { type: 'booking_ready', title: askTitle(b), body: `${provider} marked ${b.offer} done. Confirm it happened.` },
+      done: { type: 'booking_ready', title: askTitle(b), body: `${provider} marked ${offer} done. Confirm it happened.` },
       cancel: {
         type: 'booking_declined',
         title: 'Class cancelled',
-        body: `${provider} cancelled the ${b.offer} class.${refund ? ' An organizer will review refunding your points.' : ''}`,
+        body: `${provider} cancelled the ${offer} class.${refund ? ' An organizer will review refunding your points.' : ''}`,
       },
     }[action === 'add' ? 'create' : action];
     return notify(b.uid, { ...message, link: '/profile?dash=player' });

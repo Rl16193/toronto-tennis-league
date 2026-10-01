@@ -7,6 +7,7 @@
 const { logger } = require('firebase-functions');
 const { defineSecret } = require('firebase-functions/params');
 const admin = require('firebase-admin');
+const { FieldValue } = require('firebase-admin/firestore');
 const { Resend } = require('resend');
 const { htmlToText } = require('./htmlToText');
 const { LINK } = require('./emailTemplates');
@@ -16,29 +17,42 @@ const { emailDeliveryDecision } = require('./emailDelivery');
 const db = () => admin.firestore();
 const resendApiKey = defineSecret('RESEND_API_KEY');
 
-// Writes one notification per recipient. Skips blank/duplicate recipients so a trigger can
-// safely pass multiple people (e.g. both match players) in one call.
+// The area a notification belongs to, from the specific alert (`type` at the call sites).
+const categoryOf = (type) => /^ladder_|^challenge_/.test(type) ? 'challenge' : /^rally_/.test(type) ? 'rally'
+  : ['match_advanced', 'draw_published', 'group_assigned', 'reminder_pending_matches', 'match_bye', 'match_scheduled', 'partner_registered'].includes(type) ? 'match'
+    : /^partner_pool/.test(type) ? 'partner' : /^task_|^claim_|^initiation_/.test(type) ? 'task' : type === 'group_award_received' ? 'award'
+      : /^booking_/.test(type) ? 'booking' : /^reward_/.test(type) ? 'reward' : /^organizer_/.test(type) ? 'organizer' : 'account';
+
+// Writes one notification per recipient, every doc the same shape: category = area, sub_category =
+// the specific alert, read_at null until read. Skips blank/duplicate recipients.
 async function notify(recipients, payload) {
   const ids = [...new Set((Array.isArray(recipients) ? recipients : [recipients]).filter(Boolean))];
   if (ids.length === 0) return;
+  const { type, ...rest } = payload;
   const batch = db().batch();
-  const created_at = new Date().toISOString();
+  const created_at = FieldValue.serverTimestamp();
   ids.forEach((recipient_id) => {
     batch.set(db().collection('notifications').doc(), {
       uid: recipient_id,
-      read: false,
+      category: categoryOf(type || ''),
+      sub_category: type || '',
+      title: rest.title || '',
+      body: rest.body || '',
+      link: rest.link || '',
+      counterpart_uid: rest.counterpart_uid || '',
+      counterpart_name: rest.counterpart_name || '',
+      read_at: null,
       created_at,
-      ...payload,
     });
   });
   await batch.commit().catch((e) => logger.error('notify failed', e));
 }
 
-// Recipients for app-wide organizer work that belongs to no event (claims, coupons, bookings,
-// rally disputes): the super admin plus every `event_creator` account. Event work goes to that
+// Recipients for app-wide organizer work that belongs to no event (claims, bookings, rally
+// disputes): the super admin plus every member with the organizer role. Event work goes to that
 // event's organizers instead (eventOrganizerUids in roles.js).
 async function organizerUids() {
-  const snap = await db().collection('preferences').where('event_creator', '==', true).get();
+  const snap = await db().collection('providers').where('roles', 'array-contains', 'organizer').get();
   return [...new Set([SUPER_ADMIN_UID, ...snap.docs.map((d) => d.id)])];
 }
 
@@ -93,4 +107,4 @@ async function sendEmailOnce(uid, dedupeKey, subject, html) {
   await sendEmail(uid, subject, html);
 }
 
-module.exports = { notify, organizerUids, sendEmail, sendEmailOnce, resendApiKey };
+module.exports = { notify, organizerUids, sendEmail, sendEmailOnce, resendApiKey, categoryOf };

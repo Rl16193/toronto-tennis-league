@@ -1,12 +1,11 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
-import { doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { Timestamp, arrayUnion, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { ServiceCategory } from './types';
 
-// Every points-moving action and every booking step is a Cloud Function —
-// the client can't write `offers/*`, `redemptions/*` or `bookings/*` directly
-// (see firestore.rules). Each callable throws an HttpsError whose `message` is already player-readable.
+// Every points-moving action and every booking step is a Cloud Function — the client can't write
+// `bookings/*` or points on `stats` directly (see firestore.rules). Each callable throws an HttpsError whose `message` is already player-readable.
 
 const call = <T, R>(name: string) => {
   const fn = httpsCallable<T, R>(functions, name);
@@ -15,7 +14,6 @@ const call = <T, R>(name: string) => {
 
 // Redeeming also opens a booking with the offer's provider.
 export const redeemReward = call<{ rewardId: string }, { code: string; bookingId: string }>('redeemReward');
-export const markCouponUsed = call<{ code: string }, { ok: boolean }>('markCouponUsed');
 export const reviewRedemption =
   call<{ code: string; approve: boolean; note?: string }, { ok: boolean }>('reviewRedemption');
 
@@ -50,9 +48,12 @@ const slug = (s: string) =>
 
 export interface NewOfferInput {
   category: ServiceCategory;
-  /** An existing provider's id (from the catalog), or blank to create a new provider. */
-  providerId?: string;
+  /** The provider: a member's uid, picked in the Provider field. */
+  providerUid: string;
+  /** What members see: the business name, or the member's own name. */
   providerName: string;
+  /** The business name alone ('' = trades under their own name), stored on providers/{uid}. */
+  businessName: string;
   area: string;
   certified?: boolean;
   offer: string;
@@ -67,98 +68,72 @@ export interface NewOfferInput {
   capacity?: number;
   /** Coaching only, free text, e.g. "1 hr". */
   duration?: string;
-  /** Links the provider to a member account, same as scripts/set-stringer.mjs. */
-  linkUid?: string;
 }
 
+/** Every catalog field the form owns (redeem_booking_id and created_at are left to their writers). */
+const serviceFields = (input: NewOfferInput) => ({
+  category: input.category,
+  sub_category: input.category === 'coaching' ? (input.groupLesson ? 'group' : 'private') : input.category,
+  provider_id: input.providerUid,
+  provider_name: input.providerName,
+  area: input.area,
+  offer: input.offer,
+  brands: input.brands || '',
+  discount: input.discount,
+  total_price: input.totalPrice,
+  discounted_price: Math.max(0, input.totalPrice - input.discount),
+  points_cost: input.pointsCost,
+  certified: !!input.certified,
+  capacity: input.capacity || 0,
+  duration: input.duration || '',
+  updated_at: Timestamp.now(),
+});
+
 /**
- * Creates a Services offer (`tasks/{id}` with `type: 'offer'`), same doc shape as
- * scripts/seed-rewards.mjs. Optionally links the provider to a member account so they see their
- * own coupons in "Your shop". Both writes require the super-admin (firestore.rules isSuperAdmin()).
+ * "Flag the account": the provider's roles live on providers/{uid}, which only the super admin
+ * may write. Merged, so a coach who also strings keeps both roles.
  */
-export async function createOffer(input: NewOfferInput): Promise<string> {
-  const providerId = input.providerId || slug(input.providerName);
-  const offerId = `${providerId}-${slug(input.offer)}`.slice(0, 120);
-  const discountedPrice = Math.max(0, input.totalPrice - input.discount);
-
-  const batch = writeBatch(db);
-  batch.set(doc(db, 'tasks', offerId), {
-    type: 'offer',
-    category: input.category,
-    provider_id: providerId,
-    provider_name: input.providerName,
-    ...(input.linkUid ? { uid: input.linkUid } : {}),
+const flagProvider = async (batch: ReturnType<typeof writeBatch>, input: NewOfferInput) => {
+  const ref = doc(db, 'providers', input.providerUid);
+  const exists = (await getDoc(ref)).exists();
+  const now = Timestamp.now();
+  batch.set(ref, {
+    uid: input.providerUid,
+    name: input.businessName,
+    roles: arrayUnion(input.category === 'coaching' ? 'coach' : 'stringer'),
     area: input.area,
-    offer: input.offer,
-    ...(input.brands ? { brands: input.brands } : {}),
-    discount: input.discount,
-    total_price: input.totalPrice,
-    discounted_price: discountedPrice,
-    points_cost: input.pointsCost,
-    ...(input.certified ? { certified: true } : {}),
-    ...(input.groupLesson ? { group_lesson: true } : {}),
-    ...(input.capacity ? { capacity: input.capacity } : {}),
-    ...(input.duration ? { duration: input.duration } : {}),
-    active: true,
-    sort: Date.now(),
+    ...(exists ? {} : { created_at: now }),
+    updated_at: now,
   }, { merge: true });
+};
 
-  if (input.linkUid) {
-    const roleFields = input.category === 'coaching'
-      ? { coach: true, coach_id: providerId }
-      : { stringer: true, stringer_id: providerId };
-    batch.set(doc(db, 'preferences', input.linkUid), roleFields, { merge: true });
-  }
-
+/** Creates a Services offer (`services/{slug}`, the full catalog shape) and flags the provider. */
+export async function createOffer(input: NewOfferInput): Promise<string> {
+  const offerId = `${slug(input.providerName)}-${slug(input.offer)}`.slice(0, 120);
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'services', offerId), {
+    ...serviceFields(input),
+    redeem_booking_id: '',
+    active: true,
+    created_at: Timestamp.now(),
+  });
+  await flagProvider(batch, input);
   await batch.commit();
   return offerId;
 }
 
-/**
- * Edits an offer in place — same doc id, so issued coupons (redemptions.reward_id) keep pointing
- * at the right thing. `providerId` doesn't change here; that would move the offer under a
- * different provider row.
- */
-export async function updateOffer(
-  id: string, providerId: string, input: Omit<NewOfferInput, 'providerId'>,
-): Promise<void> {
-  const discountedPrice = Math.max(0, input.totalPrice - input.discount);
-
+/** Edits an offer in place — same doc id, so bookings (service_id) keep pointing at it. */
+export async function updateOffer(id: string, input: NewOfferInput): Promise<void> {
   const batch = writeBatch(db);
-  batch.update(doc(db, 'tasks', id), {
-    category: input.category,
-    provider_name: input.providerName,
-    ...(input.linkUid ? { uid: input.linkUid } : {}),
-    area: input.area,
-    offer: input.offer,
-    brands: input.brands || '',
-    discount: input.discount,
-    total_price: input.totalPrice,
-    discounted_price: discountedPrice,
-    points_cost: input.pointsCost,
-    certified: !!input.certified,
-    // Written unconditionally, unlike create: an edit that unticks Group lesson or clears the
-    // duration has to clear the stored value, not leave the old one behind.
-    group_lesson: !!input.groupLesson,
-    capacity: input.capacity || 0,
-    duration: input.duration || '',
-  });
-
-  if (input.linkUid) {
-    const roleFields = input.category === 'coaching'
-      ? { coach: true, coach_id: providerId }
-      : { stringer: true, stringer_id: providerId };
-    batch.set(doc(db, 'preferences', input.linkUid), roleFields, { merge: true });
-  }
-
+  batch.update(doc(db, 'services', id), serviceFields(input));
+  await flagProvider(batch, input);
   await batch.commit();
 }
 
 /**
- * Soft-delete: `tasks/{id}` denies hard deletes unconditionally (firestore.rules). Deactivated
- * offers drop out of the catalog (useServicesCatalog filters `active !== false`) but the doc — and
- * any redemptions.reward_id pointing at it — stay intact.
+ * Soft-delete: services are never hard-deleted (firestore.rules). A deactivated offer drops out of
+ * the catalog, but the doc — and every booking's service_id pointing at it — stays intact.
  */
 export async function deactivateOffer(id: string): Promise<void> {
-  await updateDoc(doc(db, 'tasks', id), { active: false });
+  await updateDoc(doc(db, 'services', id), { active: false, updated_at: Timestamp.now() });
 }

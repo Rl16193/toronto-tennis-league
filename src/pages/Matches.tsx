@@ -23,6 +23,8 @@ import { cancelChallenge, respondChallenge, LadderDivision } from '../features/l
 import { useRequestScoring } from '../features/matches/useRequestScoring';
 import { recordScore, resultFromForm } from '../features/matches/scoring';
 import { isReadyForMatches, useChallengeRules } from '../features/leagues/useChallengeRules';
+import { isOrganizerProfile } from '../utils/eventTypes';
+import { toMillis } from '../utils/eventDates';
 
 // Lazy: the tournament subsystem (useTournament.ts alone is ~2k lines, plus the draw engine and
 // ~20 components) was the bulk of this route's bundle, shipped even to people who only open
@@ -170,9 +172,8 @@ export const Matches: React.FC = () => {
     getDocs(collection(db, 'users')).then((snap) => {
       const joined: Record<string, number> = {};
       snap.docs.forEach((d) => {
-        const raw = d.data().created_at;
-        const ms = typeof raw === 'string' ? Date.parse(raw) : 0;
-        if (Number.isFinite(ms) && ms > 0) joined[d.id] = ms;
+        const ms = toMillis(d.data().created_at);
+        if (ms > 0) joined[d.id] = ms;
       });
       setJoinedAtByUid(joined);
     }).catch(() => { /* New falls back to activity ordering */ });
@@ -389,7 +390,7 @@ export const Matches: React.FC = () => {
 
   // Same score sheet for both tabs — a rally records against its rally doc, a challenge against
   // its challenge doc. Both pay the moment they are written; the Cloud Function on that
-  // transition is what moves leaguePoints26, since no client may write it.
+  // transition is what moves leaguePoints, since no client may write it.
   const openRallyScore = (opponent: { user_id: string; name: string }) => {
     // The score is reported against the rally doc itself, so it needs the real id.
     const rally = rallyWith[opponent.user_id];
@@ -417,7 +418,7 @@ export const Matches: React.FC = () => {
 
   // Organizer: recording a match two other members played. Settling disputes moved to the
   // Organizer Dash (/profile?dash=organizer), which is now the only place they are listed.
-  const isOrganizer = profile?.preferences?.event_creator === true;
+  const isOrganizer = isOrganizerProfile(profile);
 
   const recordCandidates = useMemo(() => {
     const q = recordSearch.trim().toLowerCase();

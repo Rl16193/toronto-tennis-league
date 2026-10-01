@@ -9,13 +9,13 @@ import { fadeUp } from '../lib/motion';
 import { useContacts } from '../features/contacts/useContacts';
 import { ServicesTab } from './services/ServicesElements';
 import { ListingForm, ListingsTab } from './marketplace/MarketplaceElements';
-import { Listing, ListingKind, useListings } from '../features/marketplace/listingService';
+import { Listing, ListingCategory, useListings } from '../features/marketplace/listingService';
 
 // Marketplace hub: Services (curated, admin-seeded) plus two member-posted boards.
 type Tab = 'services' | 'rent' | 'trade';
 
 // URL param values are kept as-is; `trade` is the sell board.
-const KIND_FOR: Record<'rent' | 'trade', ListingKind> = { rent: 'rent', trade: 'sell' };
+const CATEGORY_FOR: Record<'rent' | 'trade', ListingCategory> = { rent: 'rent', trade: 'sell' };
 
 export const Marketplace: React.FC = () => {
   const { user } = useAuth();
@@ -24,7 +24,7 @@ export const Marketplace: React.FC = () => {
   const [tab, setTab] = useState<Tab>(
     initial === 'rent' || initial === 'trade' ? initial : 'services',
   );
-  const [formKind, setFormKind] = useState<ListingKind | null>(null);
+  const [formCategory, setFormCategory] = useState<ListingCategory | null>(null);
   const [editingListing, setEditingListing] = useState<Listing | null>(null);
 
   useEffect(() => { document.title = 'Marketplace · Racquets & Strings'; }, []);
@@ -90,7 +90,7 @@ export const Marketplace: React.FC = () => {
       ) : (
         <motion.div key={tab} {...fadeUp}>
           <ListingsTab
-            kind={KIND_FOR[tab]}
+            category={CATEGORY_FOR[tab]}
             listings={board.listings}
             loading={board.loading}
             sellers={sellers}
@@ -104,7 +104,7 @@ export const Marketplace: React.FC = () => {
       {isBoard && user && (
         <Fab
           ariaLabel={tab === 'rent' ? 'Rent out equipment' : 'Sell equipment'}
-          onClick={() => setFormKind(KIND_FOR[tab])}
+          onClick={() => setFormCategory(CATEGORY_FOR[tab])}
         >
           <Plus className="w-6 h-6" />
         </Fab>
@@ -112,8 +112,8 @@ export const Marketplace: React.FC = () => {
 
       <AnimatePresence>
         {editingListing ? (
-          <ListingForm kind={editingListing.kind} editingListing={editingListing} onClose={() => setEditingListing(null)} />
-        ) : formKind && <ListingForm kind={formKind} onClose={() => setFormKind(null)} />}
+          <ListingForm category={editingListing.category} editingListing={editingListing} onClose={() => setEditingListing(null)} />
+        ) : formCategory && <ListingForm category={formCategory} onClose={() => setFormCategory(null)} />}
       </AnimatePresence>
     </div>
   );

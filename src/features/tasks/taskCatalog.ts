@@ -1,6 +1,8 @@
 // The full task catalogue: twelve categories, each a set of tasks (tiers).
 //
-// A task is completed once and never lost. Each pays its own points, EXCEPT the Community
+// MIRRORS functions/lib/points.js (tiers, counters, initiation) — keep the two in sync by hand.
+//
+// A task is done when its stats counter reaches its need. Each pays its own points, EXCEPT the Community
 // Member Initiation, which pays a flat SETUP_POINTS for finishing all of its tasks. Completing
 // every task in a category is a "milestone".
 //
@@ -9,30 +11,39 @@
 
 export const SETUP_POINTS = 25;
 
-// Counters are computed from real data (matches, challenges) or stored on the player's
-// tasks doc (things the app can't derive yet, like courts visited).
+// Every counter is a field on the member's stats doc, written by the server (functions/taskPoints.js,
+// commitPoints). A tier is reached when its counter is: nothing per tier is stored.
 export type CounterKey =
-  | 'matchesPlayed'      // completed matches with real set scores (walkovers excluded)
-  | 'challengesPlayed'   // confirmed ladder challenges, either side
-  | 'challengesWon'      // confirmed ladder challenges won
+  | 'matchesPlayed'      // played matches (walkovers excluded)
+  | 'challengesPlayed'   // played ladder challenges, either side
+  | 'challengesWon'      // played ladder challenges won
   | 'bestStreak'         // longest run of wins ever
-  | 'monthsActive'       // distinct months with a completed match
-  | 'suggestions'        // court improvement suggestions submitted
-  | 'courtsVisited'      // passport stamps
-  | 'zoneComplete'       // 1 once every court in your zone is stamped
-  | 'boardPhotos'        // waiting-board photos accepted
-  | 'queueUpdates'       // racquet queue photos submitted
-  | 'volunteerEvents'    // events volunteered at
-  | 'invites'            // players who joined via your invite
-  | 'meetups';           // meetups hosted
+  | 'monthsActive'       // distinct months with a played match
+  | 'suggestions'        // court condition reports filed
+  | 'courtsVisited'      // distinct courts visited
+  | 'zoneComplete'       // 1 once every court in your zone is visited
+  | 'boardPhotos'        // waiting-board reports filed
+  | 'queueUpdates'       // racquet queue reports filed
+  | 'eventsJoined'       // events registered for (the initiation's joinEvent)
+  | 'volunteerApproved'  // approved volunteer claims
+  | 'inviteApproved'     // approved ambassador claims
+  | 'hostApproved';      // approved meetup host claims
 
 export type Counters = Record<CounterKey, number>;
 
 export const EMPTY_COUNTERS: Counters = {
   matchesPlayed: 0, challengesPlayed: 0, challengesWon: 0, bestStreak: 0,
   monthsActive: 0, suggestions: 0, courtsVisited: 0, zoneComplete: 0, boardPhotos: 0,
-  queueUpdates: 0, volunteerEvents: 0, invites: 0, meetups: 0,
+  queueUpdates: 0, eventsJoined: 0, volunteerApproved: 0, inviteApproved: 0, hostApproved: 0,
 };
+
+type StatsLike = object | null | undefined;
+const field = (stats: StatsLike, k: string) => (stats as Record<string, unknown> | null | undefined)?.[k];
+
+/** The counters off a stats doc (0 when absent). */
+export const countersOf = (stats: StatsLike): Counters =>
+  Object.fromEntries((Object.keys(EMPTY_COUNTERS) as CounterKey[])
+    .map((k) => [k, typeof field(stats, k) === 'number' ? (field(stats, k) as number) : 0])) as Counters;
 
 // What a counter counts, for the "3 more matches" / "1 more event" line on a category card.
 export const COUNTER_NOUN: Record<CounterKey, { one: string; many: string }> = {
@@ -46,13 +57,14 @@ export const COUNTER_NOUN: Record<CounterKey, { one: string; many: string }> = {
   zoneComplete: { one: 'zone', many: 'zones' },
   boardPhotos: { one: 'board photo', many: 'board photos' },
   queueUpdates: { one: 'queue update', many: 'queue updates' },
-  volunteerEvents: { one: 'event', many: 'events' },
-  invites: { one: 'invite', many: 'invites' },
-  meetups: { one: 'meetup', many: 'meetups' },
+  eventsJoined: { one: 'event', many: 'events' },
+  volunteerApproved: { one: 'event', many: 'events' },
+  inviteApproved: { one: 'invite', many: 'invites' },
+  hostApproved: { one: 'meetup', many: 'meetups' },
 };
 
 export interface TierDef {
-  id: string;        // field name on the tasks/{uid} progress doc
+  id: string;
   title: string;
   points: number;
   counter: CounterKey;
@@ -161,10 +173,10 @@ export const CATEGORIES: CategoryDef[] = [
     title: 'Volunteering',
     to: '/tasks?claim=volunteer',
     tiers: [
-      { id: 'vol1', title: 'Volunteer at 1 event', points: 5, counter: 'volunteerEvents', need: 1 },
-      { id: 'vol5', title: 'Volunteer at 5 events', points: 15, counter: 'volunteerEvents', need: 5 },
-      { id: 'vol10', title: 'Volunteer at 10 events', points: 30, counter: 'volunteerEvents', need: 10 },
-      { id: 'vol20', title: 'Volunteer at 20 events', points: 50, counter: 'volunteerEvents', need: 20 },
+      { id: 'vol1', title: 'Volunteer at 1 event', points: 5, counter: 'volunteerApproved', need: 1 },
+      { id: 'vol5', title: 'Volunteer at 5 events', points: 15, counter: 'volunteerApproved', need: 5 },
+      { id: 'vol10', title: 'Volunteer at 10 events', points: 30, counter: 'volunteerApproved', need: 10 },
+      { id: 'vol20', title: 'Volunteer at 20 events', points: 50, counter: 'volunteerApproved', need: 20 },
     ],
   },
   {
@@ -172,9 +184,9 @@ export const CATEGORIES: CategoryDef[] = [
     title: 'Ambassador',
     to: '/tasks?claim=ambassador',
     tiers: [
-      { id: 'invite1', title: 'Invite One Player', points: 5, counter: 'invites', need: 1 },
-      { id: 'invite3', title: 'Invite 3 players', points: 10, counter: 'invites', need: 3 },
-      { id: 'invite10', title: 'Invite 10 players', points: 25, counter: 'invites', need: 10 },
+      { id: 'invite1', title: 'Invite One Player', points: 5, counter: 'inviteApproved', need: 1 },
+      { id: 'invite3', title: 'Invite 3 players', points: 10, counter: 'inviteApproved', need: 3 },
+      { id: 'invite10', title: 'Invite 10 players', points: 25, counter: 'inviteApproved', need: 10 },
     ],
   },
   {
@@ -182,16 +194,16 @@ export const CATEGORIES: CategoryDef[] = [
     title: 'Host',
     to: '/tasks?claim=host',
     tiers: [
-      { id: 'host1', title: 'Host 1 meetup', points: 10, counter: 'meetups', need: 1 },
-      { id: 'host5', title: 'Host 5 meetups', points: 30, counter: 'meetups', need: 5 },
-      { id: 'host10', title: 'Host 10 meetups', points: 50, counter: 'meetups', need: 10 },
+      { id: 'host1', title: 'Host 1 meetup', points: 10, counter: 'hostApproved', need: 1 },
+      { id: 'host5', title: 'Host 5 meetups', points: 30, counter: 'hostApproved', need: 5 },
+      { id: 'host10', title: 'Host 10 meetups', points: 50, counter: 'hostApproved', need: 10 },
     ],
   },
 ];
 
 // ─── Group / community bonuses ──────────────────────────────────────────────
 // These pay from COLLECTIVE activity, not one player's counter — awarded server-side by
-// functions/groupAwards.js and landed as bonusPoints. Shown here purely as descriptive cards
+// functions/groupAwards.js as `awards` rows, which count toward stats.rsPoints. Shown here purely as descriptive cards
 // (name + wrapped trigger + points); the numbers must match the constants in groupAwards.js.
 
 export interface GroupTaskDef {
@@ -230,16 +242,22 @@ export const COMMUNITY_GROUP_TASKS: GroupTaskDef[] = [
   {
     id: 'boardFreshness',
     name: 'Board Freshness',
-    trigger: 'Submit the first approved waiting-board report for a court. +5. Every court in a '
-      + 'zone has a waiting-board report, everyone who contributed in that zone gets +10.',
-    points: '+5 / +10',
+    trigger: 'Submit a waiting-board report for a court you haven’t reported a board for before.',
+    points: '+5',
   },
   {
     id: 'zoneSweep',
     name: 'Full Zone Sweep',
-    trigger: 'Every member with a check for a court in that a zone, unlocks the bonus. The sweep '
-      + 'then resets to zero and starts again.',
+    trigger: 'Every member with a check for a court in that a zone, unlocks the bonus. '
+      + 'Once completed we start over again.',
     points: '+10 each',
+  },
+  {
+    id: 'explorer',
+    name: 'Explorer',
+    trigger: 'When members’ check-ins and reports cover every court in Toronto, everyone who '
+      + 'contributed unlocks the bonus. Once completed we start over again.',
+    points: '+30 each',
   },
 ];
 
@@ -254,3 +272,29 @@ export const LADDER_TIER_IDS = CATEGORIES.find((c) => c.id === 'ladder')!.tiers.
 export const PLAYING_TIER_IDS = CATEGORIES
   .filter((c) => PLAYING_CATEGORY_IDS.includes(c.id))
   .flatMap((c) => c.tiers.map((t) => t.id));
+
+// ─── Progress from the stats doc ────────────────────────────────────────────
+
+// The Initiation checklist (mirrors INITIATION in functions/lib/points.js): a counter item is done
+// at 1; the rest are the member's own one-time booleans on stats. All done = SETUP_POINTS.
+export const INITIATION: { id: string; counter?: CounterKey }[] = [
+  { id: 'profileComplete' }, { id: 'followSocial' }, { id: 'tagPost' }, { id: 'whatsappGroup' }, { id: 'profilePhoto' },
+  { id: 'joinEvent', counter: 'eventsJoined' }, { id: 'playMatch', counter: 'matchesPlayed' },
+  { id: 'courtVisit', counter: 'courtsVisited' }, { id: 'waitingBoard', counter: 'boardPhotos' },
+  { id: 'queuePhoto', counter: 'queueUpdates' }, { id: 'courtSuggestion', counter: 'suggestions' },
+];
+
+/** The five initiation items the member ticks themselves (the only task fields a client writes). */
+export const SELF_REPORTED = ['profilePhoto', 'profileComplete', 'whatsappGroup', 'followSocial', 'tagPost'] as const;
+
+/** Done-ness of every task, keyed by tier id / initiation id, plus `setupComplete`. Derived, never stored. */
+export type TaskProgress = Record<string, boolean>;
+
+export const taskState = (stats: StatsLike): TaskProgress => {
+  const c = countersOf(stats);
+  const state: TaskProgress = {};
+  ALL_TIERS.forEach((t) => { state[t.id] = c[t.counter] >= t.need; });
+  INITIATION.forEach((i) => { state[i.id] = i.counter ? c[i.counter] >= 1 : field(stats, i.id) === true; });
+  state.setupComplete = INITIATION.every((i) => state[i.id]);
+  return state;
+};

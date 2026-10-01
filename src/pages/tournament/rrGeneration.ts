@@ -1,5 +1,6 @@
-import { DrawConfig, RRConfig, RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
-import { BYE, PLAYER_LOADING, fallbackTemplate } from './utils';
+import { Timestamp } from 'firebase/firestore';
+import { DrawConfig, RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
+import { BYE, PLAYER_LOADING, fallbackTemplate, matchUids } from './utils';
 import { skillBand } from '../../utils/skillLevels';
 
 // ── Zone-tier group formation ─────────────────────────────────────────────────
@@ -165,60 +166,71 @@ export function generateGroupPairings(n: number): [number, number][] {
 }
 
 /**
- * Build Firestore write objects for all matches in one group.
+ * A group's number in its match doc ids (`rr_g{N}_m{pos}`). Positions restart at 1 in every group,
+ * so this, not `position`, is what orders the groups and names a new group's docs.
+ */
+export const groupIndexOf = (m: Pick<TournamentMatch, 'match_id'>) =>
+  Number(/^rr_g(\d+)_/.exec(m.match_id || '')?.[1] ?? 0);
+
+/** The full v3 fields every tournament match doc carries; callers add the slot-specific ones. */
+const drawFields = (eventId: string, draw: DrawConfig, started: boolean) => {
+  const now = Timestamp.now();
+  return {
+    category: 'tournament' as const,
+    sub_category: (draw.tournamentChoice === 'Doubles' ? 'doubles' : 'singles') as 'singles' | 'doubles',
+    status: 'accepted' as const,
+    event_id: eventId,
+    winner_uid: '',
+    responded_at: null,
+    created_at: now,
+    updated_at: now,
+    division: draw.division,
+    skill_group: draw.skillGroup,
+    zone: draw.zone ?? '',
+    started,
+  };
+};
+
+/**
+ * Build Firestore write objects for all matches in one group. `groupLabel` is the group's
+ * identity (stored verbatim on every match), so it must be unique within the draw.
  */
 export function buildRRGroupMatchFields(params: {
   eventId: string;
   drawKey: string;
   draw: DrawConfig;
   groupIndex: number;
-  groupLabel?: string;
-  labelCustom?: boolean;
+  groupLabel: string;
   groupPlayers: TournamentPlayer[];
   pairings: [number, number][];
-  advancementCount: number;
   started: boolean;
 }, startPosition = 1): Array<{ docId: string; fields: Record<string, unknown> }> {
-  const { eventId, drawKey, draw, groupIndex, groupLabel, labelCustom, groupPlayers, pairings, advancementCount, started } = params;
+  const { eventId, drawKey, draw, groupIndex, groupLabel, groupPlayers, pairings, started } = params;
 
   return pairings.map(([i1, i2], idx) => {
     const p1 = groupPlayers[i1] ?? null;
     const p2 = groupPlayers[i2] ?? null;
-    const p1Uid = p1?.uid ?? '';
-    const p2Uid = p2?.uid ?? '';
     const pos = idx + startPosition;
     const docId = `${eventId}_${drawKey}_rr_g${groupIndex}_m${pos}`;
     return {
       docId,
       fields: {
-        category: (draw.tournamentChoice === 'Doubles' ? 'doubles' : 'singles') as 'singles' | 'doubles',
-        event_id: eventId,
-        tournament_choice: draw.tournamentChoice,
-        division: draw.division,
-        skill_group: draw.skillGroup,
-        ...(draw.zone ? { zone: draw.zone } : {}),
-        drawsize: groupPlayers.length,
+        ...drawFields(eventId, draw, started),
+        player_1_uid: p1?.uid ?? '',
+        player_1_name: p1?.name ?? PLAYER_LOADING,
+        player_2_uid: p2?.uid ?? '',
+        player_2_name: p2?.name ?? PLAYER_LOADING,
+        participant_uids: matchUids(p1, p2),
         match_id: `rr_g${groupIndex}_m${pos}`,
         round: 'RR',
         position: pos,
+        drawsize: groupPlayers.length,
+        format: 'rr',
         player_1_slot: i1 + 1,
         player_2_slot: i2 + 1,
-        player_1_name: p1?.name ?? PLAYER_LOADING,
-        player_1_uid: p1Uid,
-        player_2_name: p2?.name ?? PLAYER_LOADING,
-        player_2_uid: p2Uid,
         next_match_id: '',
         next_slot: '',
-        status: 'pending',
-        bracket: null,
-        started,
-        format: 'rr',
-        rr_group: groupIndex,
-        rr_round: idx + 1,
-        rr_advancement_count: advancementCount,
-        ...(groupLabel ? { rr_group_label: groupLabel } : {}),
-        ...(labelCustom ? { rr_label_custom: true } : {}),
-        created_at: new Date().toISOString(),
+        group_label: groupLabel,
       },
     };
   });
@@ -234,14 +246,12 @@ export function buildSafeGroupRewrite(params: {
   drawKey: string;
   draw: DrawConfig;
   groupIndex: number;
-  groupLabel?: string;
-  labelCustom?: boolean;
+  groupLabel: string;
   oldMatches: TournamentMatch[];
   newPlayers: TournamentPlayer[];
-  advancementCount: number;
   started: boolean;
 }): { toDelete: string[]; toWrite: Array<{ docId: string; fields: Record<string, unknown> }> } {
-  const { eventId, drawKey, draw, groupIndex, groupLabel, labelCustom, oldMatches, newPlayers, advancementCount, started } = params;
+  const { eventId, drawKey, draw, groupIndex, groupLabel, oldMatches, newPlayers, started } = params;
   const completedOld = oldMatches.filter((m) => m.status === 'complete');
   const pendingOld = oldMatches.filter((m) => m.status !== 'complete');
   const playedPairs = new Set(completedOld.map((m) => [m.player_1_uid, m.player_2_uid].sort().join('|')));
@@ -252,15 +262,16 @@ export function buildSafeGroupRewrite(params: {
   });
   const startPosition = 1 + Math.max(0, ...oldMatches.map((m) => m.position ?? 0));
   const toWrite = newPlayers.length > 0
-    ? buildRRGroupMatchFields({ eventId, drawKey, draw, groupIndex, groupLabel, labelCustom, groupPlayers: newPlayers, pairings, advancementCount, started }, startPosition)
+    ? buildRRGroupMatchFields({ eventId, drawKey, draw, groupIndex, groupLabel, groupPlayers: newPlayers, pairings, started }, startPosition)
     : [];
   return { toDelete: pendingOld.map((m) => m.id), toWrite };
 }
 
 /**
- * Standings for one group. The POINTS are what each match stored when it was paid
- * (`points_winner` / `points_loser`, written by functions/lib/scoring.js), so the table can never
- * show a different number from the one paid. This only adds wins, losses, games and the order.
+ * Standings for one group. The POINTS are what each result entry stored when it was paid
+ * (`points_winner` / `points_loser` on the applied submission, merged onto the match as `result`),
+ * so the table can never show a different number from the one paid. This only adds wins, losses,
+ * games and the order.
  *
  * Sort: points DESC → gamesWon DESC. No completion bonus: see the note at the foot of the function.
  */
@@ -278,31 +289,22 @@ export function computeGroupStandings(
 
   for (const m of groupMatches) {
     if (m.status !== 'complete') continue;
-    // An old no show has no winner: both players took the same points and neither a win, a loss,
-    // nor any games — a match nobody played must not move anyone's record.
-    if (m.no_show) {
-      [m.player_1_uid, m.player_2_uid].filter(Boolean).forEach((uid) => {
-        const s = stats.get(uid);
-        if (s) s.points += m.points_winner ?? 0;
-      });
-      continue;
-    }
 
     const winnerUid = m.winner_uid;
     if (!winnerUid) continue;
     const loserUid = winnerUid === m.player_1_uid ? m.player_2_uid : m.player_1_uid;
 
-    const p1Games = (m.set_1_player_1 ?? 0) + (m.set_2_player_1 ?? 0) + (m.set_3_player_1 ?? 0);
-    const p2Games = (m.set_1_player_2 ?? 0) + (m.set_2_player_2 ?? 0) + (m.set_3_player_2 ?? 0);
+    const r = m.result;
+    const p1Games = (r?.set_1_player_1 ?? 0) + (r?.set_2_player_1 ?? 0) + (r?.set_3_player_1 ?? 0);
+    const p2Games = (r?.set_1_player_2 ?? 0) + (r?.set_2_player_2 ?? 0) + (r?.set_3_player_2 ?? 0);
     const winnerGames = winnerUid === m.player_1_uid ? p1Games : p2Games;
     const loserGames  = winnerUid === m.player_1_uid ? p2Games : p1Games;
 
-    // Games are tracked for a walkover too: it normally has none, but a creator can enter a score
-    // alongside the flag.
+    // A walkover has no games, so it adds only the win, the loss and its points.
     const w = stats.get(winnerUid);
     const l = loserUid ? stats.get(loserUid) : undefined;
-    const winnerPts = m.points_winner ?? 0;
-    const loserPts = m.points_loser ?? 0;
+    const winnerPts = r?.points_winner ?? 0;
+    const loserPts = r?.points_loser ?? 0;
     if (w) { w.matchWins++; w.gamesWon += winnerGames; w.gamesLost += loserGames; w.points += winnerPts; }
     if (l) { l.matchLosses++; l.gamesWon += loserGames; l.gamesLost += winnerGames; l.points += loserPts; }
   }
@@ -414,43 +416,28 @@ export function buildRRKnockoutDocs(params: {
     p1 = advanceSeat.get(`${tm.match_id}_player_1`) ?? p1;
     p2 = advanceSeat.get(`${tm.match_id}_player_2`) ?? p2;
 
-    const p1Uid = p1?.uid ?? '';
-    const p2Uid = p2?.uid ?? '';
     return {
       docId: `${eventId}_${drawKey}_rr_ko_${tm.match_id}`,
       fields: {
-        category: (draw.tournamentChoice === 'Doubles' ? 'doubles' : 'singles') as 'singles' | 'doubles',
-        event_id: eventId,
-        tournament_choice: draw.tournamentChoice,
-        division: draw.division,
-        skill_group: draw.skillGroup,
-        ...(draw.zone ? { zone: draw.zone } : {}),
-        drawsize,
+        ...drawFields(eventId, draw, started),
+        player_1_uid: p1?.uid ?? '',
+        player_1_name: p1?.name ?? placeholder(tm.player_1),
+        player_2_uid: p2?.uid ?? '',
+        player_2_name: p2?.name ?? placeholder(tm.player_2),
+        participant_uids: matchUids(p1, p2),
         match_id: tm.match_id,
         round: tm.round,
         position: index + 1,
-        player_1_slot: tm.player_1,
-        player_2_slot: tm.player_2,
-        player_1_name: p1?.name ?? placeholder(tm.player_1),
-        player_1_uid: p1Uid,
-        player_2_name: p2?.name ?? placeholder(tm.player_2),
-        player_2_uid: p2Uid,
+        drawsize,
+        // Stays 'rr': it marks the draw as round robin, and keeps the server's late-joiner
+        // seating (format 'knockout' only) out of slots the organizer fills by hand.
+        format: 'rr' as const,
+        player_1_slot: typeof tm.player_1 === 'number' ? tm.player_1 : 0,
+        player_2_slot: typeof tm.player_2 === 'number' ? tm.player_2 : 0,
         next_match_id: tm.next_match_id ?? '',
         next_slot: tm.next_slot ?? '',
-        status: 'pending',
-        bracket: null,
-        started,
-        format: 'rr' as const,
-        created_at: new Date().toISOString(),
+        group_label: 'knockout',
       },
     };
   });
-}
-
-/** Derive the RRConfig from existing RR matches; null if they aren't RR format. */
-export function deriveRRConfig(rrMatches: TournamentMatch[]): RRConfig | null {
-  const groupStage = rrMatches.filter((m) => m.round === 'RR');
-  if (groupStage.length === 0) return null;
-  const adv = groupStage[0]?.rr_advancement_count ?? 1;
-  return { advancementCount: (adv as 1 | 2) };
 }
