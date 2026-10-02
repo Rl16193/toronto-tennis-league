@@ -61,7 +61,8 @@ export function useUnplacedParticipants({ events, enabled, refreshKey }: {
             tc: choiceOfMatch(m), division: m.division, band: m.skill_group as string,
             zone, done: false, seats: new Set<string>(),
           };
-          [m.player_1_uid, m.player_2_uid].forEach((id) => id && draw.seats.add(id));
+          // participant_uids carries doubles partners, who hold no slot of their own.
+          [m.player_1_uid, m.player_2_uid, ...(m.participant_uids ?? [])].forEach((id) => id && draw.seats.add(id));
           if (m.round === 'F' && m.status === 'complete' && m.winner_uid) draw.done = true;
           draws.set(key, draw);
           drawsByEvent.set(m.event_id, draws);
@@ -109,7 +110,8 @@ export function useUnplacedParticipants({ events, enabled, refreshKey }: {
           const live = [...(drawsByEvent.get(p.event_id)?.values() ?? [])].filter((dr) => !dr.done);
           const cov = live.filter((dr) => covering(dr, p));
           if (cov.length === 0) return false;
-          const seats = live.filter((dr) => dr.seats.has(p.uid));
+          // A doubles partner is placed when their captain is, even if participant_uids missed them.
+          const seats = live.filter((dr) => dr.seats.has(p.uid) || (!!p.partner_uid && dr.seats.has(p.partner_uid)));
           // Registered and never placed — any live draw they belong to is somewhere the organizer
           // could put them, whatever its zone.
           if (seats.length === 0) return true;

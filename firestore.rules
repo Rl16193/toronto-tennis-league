@@ -207,7 +207,9 @@ service cloud.firestore {
         (request.resource.data.uid == request.auth.uid || isEventManager(request.resource.data.event_id)) &&
         docId.matches(request.resource.data.event_id + '_' + request.resource.data.uid + '(_(mens|womens|mixed)doubles)?') &&
         request.resource.data.status == 'active' &&
-        request.resource.data.created_at is timestamp;
+        request.resource.data.created_at is timestamp &&
+        // Nobody joins a cancelled event, organizers included.
+        get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.get('status', 'active') != 'cancelled';
       allow update: if isAuthenticated() &&
         (
           isEventManager(resource.data.event_id) ||

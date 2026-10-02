@@ -364,14 +364,6 @@ exports.weeklyReminders = onSchedule(
       return sendEmailOnce(uid, `incomplete-matches:${uid}:${weekKey}`, `You have ${total} incomplete match${total === 1 ? '' : 'es'}`,
         (u) => buildIncompleteMatchesEmail(total, (u.name || '').trim().split(/\s+/)[0]));
     }));
-
-    // Weekly ladder allowance reset — anyone who used a challenge last week.
-    const weekAgo = Timestamp.fromMillis(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const challenges = await db().collection('matches').where('category', '==', 'challenge').where('created_at', '>=', weekAgo).get();
-    const challengers = [...new Set(challenges.docs.map((d) => d.data().player_1_uid).filter(Boolean))];
-    await notify(challengers, {
-      type: 'ladder_challenges_reset', title: 'Your ladder challenges have reset', body: 'You have 3 challenges available this week.', link: '/matches?mode=challenges',
-    });
   },
 );
 

@@ -185,6 +185,11 @@ describe('event_participants: one active row per member per event', () => {
     await assertFails(setDoc(doc(as('p1'), 'event_participants/e1_p1'), reg({ status: 'withdrawn' })));
     await assertFails(setDoc(doc(as('p1'), 'event_participants/e1_p1'), reg({ created_at: '2026-09-18T00:00:00.000Z' })));
   });
+  test('nobody joins a cancelled event, organizers included', async () => {
+    await seedEvent({ status: 'cancelled' });
+    await assertFails(setDoc(doc(as('p1'), 'event_participants/e1_p1'), reg()));
+    await assertFails(setDoc(doc(as(ORGANIZER), 'event_participants/e1_guest_1'), reg({ uid: 'guest_1', user_name: 'Gus' })));
+  });
   test('an event manager registers a guest', async () => {
     await seedEvent();
     await assertSucceeds(setDoc(doc(as(ORGANIZER), 'event_participants/e1_guest_1'), reg({ uid: 'guest_1', user_name: 'Gus' })));
