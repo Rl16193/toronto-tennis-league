@@ -78,7 +78,7 @@ export const useProfileActions = () => {
       updateLeagueAgeCategory: (league: "Men's" | "Women's" | '', ageCategory: 'Retired Pro' | 'Juniors' | '') =>
         withProfileUpdate(() => updateLeagueAndAgeCategory(user!.uid, league, ageCategory)),
       updateDisplayBadges: (badgeIds: string[]) => withProfileUpdate(() => updateDisplayBadges(user!.uid, badgeIds)),
-      updatePreferredCourts: (courts: string[], zone: string) => withProfileUpdate(() => updatePreferredCourts(user!.uid, courts, zone)),
+      updatePreferredCourts: (courts: string[], zone: string, custom: string[]) => withProfileUpdate(() => updatePreferredCourts(user!.uid, courts, zone, custom)),
       updatePreferredZone: (zone: string) => withProfileUpdate(() => updatePreferredZone(user!.uid, zone)),
       updateFavouritePlayers: (players: string[]) => withProfileUpdate(() => updateFavouritePlayers(user!.uid, players)),
       updateEmailNotifications: (enabled: boolean) => withProfileUpdate(() => updateEmailNotifications(user!.uid, enabled)),

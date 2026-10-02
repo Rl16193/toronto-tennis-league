@@ -78,7 +78,7 @@ exports.onZoneChanged = onDocumentUpdated(
         const eventDoc = await db().doc(`events/${row.event_id}`).get();
         if (!eventDoc.exists) continue;
         const ev = eventDoc.data();
-        if (!/_tournament$/.test(ev.category || '')) continue;
+        if (!/_tournament$/.test(ev.category || '') || ev.status === 'cancelled') continue;
         const merges = ev.zone_draw_config?.merges ?? {};
         const wanted = resolveMergedZone(zoneBucketId(after.preferred_zone), merges);
         const band = skillBand(Number(row.skill || 0));
@@ -108,7 +108,7 @@ exports.onZoneChanged = onDocumentUpdated(
         if (seated.length === 0 && !targetDrawExists) continue;
         const name = row.user_name || 'A player';
         await notify(eventOrganizerUids(ev), {
-          type: 'organizer_zone_change_request',
+          type: 'organizer_zone_change',
           title: `${name} changed their zone`,
           body: [
             unseated > 0 ? `${name} moved to ${after.preferred_zone} and was taken out of ${unseated} old-zone match${unseated === 1 ? '' : 'es'} with no opponent yet.` : `${name} moved to ${after.preferred_zone}.`,

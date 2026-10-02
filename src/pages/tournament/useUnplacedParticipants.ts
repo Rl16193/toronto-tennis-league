@@ -3,6 +3,7 @@ import { collection, documentId, getDocs, query, where } from 'firebase/firestor
 import { db } from '../../lib/firebase';
 import type { EventParticipant, TennisEvent } from '../../types';
 import { skillBand } from '../../utils/skillLevels';
+import { isGuest } from '../../utils/guest';
 import { choiceOf, choiceOfMatch, effectiveZone, resolveZoneConfig, zoneBucketFor } from './utils';
 import type { TournamentMatch, UnplacedEntry } from './types';
 
@@ -71,7 +72,7 @@ export function useUnplacedParticipants({ events, enabled, refreshKey }: {
         pSnaps.forEach((s) => s.forEach((d) => {
           const p = { id: d.id, ...d.data() } as EventParticipant;
           const key = `${p.event_id}|${p.uid}`;
-          if (!p.uid || p.status !== 'active' || !/_tournament$/.test(p.category) || seen.has(key)) return;
+          if (!p.uid || isGuest(p.uid) || p.status !== 'active' || !/_tournament$/.test(p.category) || seen.has(key)) return;
           seen.add(key);
           candidates.push(p);
         }));

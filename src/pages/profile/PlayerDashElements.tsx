@@ -14,6 +14,7 @@ import { LeagueEditor, SkillEditor } from '../../features/profile/components/Ski
 import type { useProfileActions } from '../../features/profile/hooks/useProfileActions';
 import type { UserProfile } from '../../types';
 import { leagueAgeCategory, leagueDivision } from '../../utils/skillLevels';
+import { isGuest } from '../../utils/guest';
 import type {
   BookingAskRow, DashEventRow, HeadToHeadRow, NeedsYouRow, PastMatchRow, TaskGroupRow, ToPlayRow,
   usePlayerDash,
@@ -134,7 +135,7 @@ const InlineLink: React.FC<{ to: string; children: React.ReactNode }> = ({ to, c
 );
 
 export const PlayerLink: React.FC<{ uid: string; name: string }> = ({ uid, name }) =>
-  uid ? (
+  uid && !isGuest(uid) ? (
     <Link to={`/players/${uid}`} className={`rounded hover:text-clay transition-colors ${focusRing}`}>{name}</Link>
   ) : (
     <>{name}</>
@@ -939,6 +940,7 @@ const PreferencesCard: React.FC<{ profile: UserProfile; actions: ProfileActions;
   const league = [leagueDivision(stats.league), leagueAgeCategory(stats.league)].filter(Boolean).join(' · ');
   const chips = [
     ...(preferences.preferred_courts ?? []),
+    ...(preferences.custom_courts ?? []),
     preferences.preferred_zone,
     ...(preferences.availability_tags ?? []),
   ].filter(Boolean);
@@ -959,7 +961,7 @@ const PreferencesCard: React.FC<{ profile: UserProfile; actions: ProfileActions;
 
       {editing ? (
         <div className="mt-1.5 divide-y divide-fg/10">
-          <PrefRow label="Courts" value={(preferences.preferred_courts ?? []).join(', ') || 'None set'} onEdit={() => setEditor('courts')} />
+          <PrefRow label="Courts" value={[...(preferences.preferred_courts ?? []), ...(preferences.custom_courts ?? [])].join(', ') || 'None set'} onEdit={() => setEditor('courts')} />
           <PrefRow label="Zone" value={preferences.preferred_zone || 'None set'} onEdit={() => setEditor('zone')} />
           <PrefRow label="Availability" value={(preferences.availability_tags ?? []).join(' · ') || 'None set'} onEdit={() => setEditor('availability')} />
           <PrefRow label="Skill level" value={stats.skill_level ? `NTRP ${stats.skill_level}` : 'Not set'} onEdit={() => setEditor('skill')} />
@@ -979,7 +981,7 @@ const PreferencesCard: React.FC<{ profile: UserProfile; actions: ProfileActions;
         {editor === 'courts' && (
           <Sheet key="courts" onClose={close} title="Your Courts" maxWidthClassName="max-w-md">
             <div className="p-6 pt-3">
-              <CourtsEditor preferences={preferences} saving={saving} onSave={(c, z) => save(() => actions.updatePreferredCourts(c, z))} />
+              <CourtsEditor preferences={preferences} saving={saving} onSave={(c, z, custom) => save(() => actions.updatePreferredCourts(c, z, custom))} />
             </div>
           </Sheet>
         )}

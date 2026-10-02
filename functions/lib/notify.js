@@ -11,7 +11,7 @@ const { FieldValue } = require('firebase-admin/firestore');
 const { Resend } = require('resend');
 const { htmlToText } = require('./htmlToText');
 const { LINK } = require('./emailTemplates');
-const { EMAIL_FROM, EMAIL_REPLY_TO, SUPER_ADMIN_UID } = require('./constants');
+const { EMAIL_FROM, EMAIL_REPLY_TO, SUPER_ADMIN_UID, isGuest } = require('./constants');
 const { emailDeliveryDecision } = require('./emailDelivery');
 
 const db = () => admin.firestore();
@@ -24,9 +24,9 @@ const categoryOf = (type) => /^ladder_|^challenge_/.test(type) ? 'challenge' : /
       : /^booking_/.test(type) ? 'booking' : /^reward_/.test(type) ? 'reward' : /^organizer_/.test(type) ? 'organizer' : 'account';
 
 // Writes one notification per recipient, every doc the same shape: category = area, sub_category =
-// the specific alert, read_at null until read. Skips blank/duplicate recipients.
+// the specific alert, read_at null until read. Skips blank/duplicate recipients and guests.
 async function notify(recipients, payload) {
-  const ids = [...new Set((Array.isArray(recipients) ? recipients : [recipients]).filter(Boolean))];
+  const ids = [...new Set((Array.isArray(recipients) ? recipients : [recipients]).filter((u) => u && !isGuest(u)))];
   if (ids.length === 0) return;
   const { type, ...rest } = payload;
   const batch = db().batch();
@@ -62,6 +62,7 @@ async function organizerUids() {
 // Resend error) is logged/skipped, never thrown, so a broken email never blocks the in-app
 // notification it accompanies.
 async function sendEmail(uid, subject, html) {
+  if (!uid || isGuest(uid)) return;
   try {
     // The address lives on `contacts` now (split out of the world-readable `users`); the name
     // still comes from `users` for the greeting. Admin SDK, so rules don't apply either way.

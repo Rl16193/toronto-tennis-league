@@ -16,7 +16,7 @@ const match = async (id) => (await db.doc(`matches/${id}`).get()).data();
 const alerts = async (uid, type) =>
   (await db.collection('notifications').where('uid', '==', uid).where('sub_category', '==', type).get()).size;
 const knockout = (extra = {}) => ({
-  category: 'tournament', sub_category: 'singles', event_id: 'e1', format: 'knockout', round: 'R16', position: 1,
+  category: 'tournament', sub_category: 'singles', event_id: 'e1', format: 'knockout', round: 'R16', match_id: 'm1',
   status: 'accepted', winner_uid: '', division: "Men's", skill_group: 'Challengers', zone: '',
   player_1_uid: 'x', player_1_name: 'Xan', player_2_uid: '', player_2_name: 'Player Loading', participant_uids: ['x'], ...extra,
 });
@@ -43,10 +43,10 @@ test('a late joiner is seated in an open spot of their draw', async () => {
   assert.deepEqual([...m.participant_uids].sort(), ['j', 'x']);
 });
 
-test('the earliest round and lowest position is filled first', async () => {
-  await db.doc('matches/qf').set(knockout({ round: 'QF', position: 1 }));
-  await db.doc('matches/k2').set(knockout({ position: 2 }));
-  await db.doc('matches/k1').set(knockout({ position: 1 }));
+test('the earliest round and lowest match number is filled first', async () => {
+  await db.doc('matches/qf').set(knockout({ round: 'QF', match_id: 'm1' }));
+  await db.doc('matches/k2').set(knockout({ match_id: 'm10' }));
+  await db.doc('matches/k1').set(knockout({ match_id: 'm2' }));
   assert.equal(await seatJoiner(joiner()), 'seated');
   assert.equal((await match('k1')).player_2_uid, 'j');
   assert.deepEqual([(await match('k2')).player_2_uid, (await match('qf')).player_2_uid], ['', '']);
@@ -76,6 +76,8 @@ test('only an active tournament registration is seated', async () => {
   await db.doc('matches/k1').set(knockout());
   assert.equal(await seatJoiner(joiner({ status: 'withdrawn' })), null);
   assert.equal(await seatJoiner(joiner({ category: 'social' })), null);
+  await db.doc('events/e1').set({ status: 'cancelled' }, { merge: true });
+  assert.equal(await seatJoiner(joiner()), null); // a cancelled event seats nobody
   assert.equal((await match('k1')).player_2_uid, '');
 });
 
@@ -175,6 +177,7 @@ test('a player with a partner, a withdrawn one or a singles player joins no pool
   const links = [];
   const link = async (a, b, reason) => { links.push([a, b, reason]); };
   await joinPartnerPool(doubles({ partner_uid: 'pp' }), link);
+  await joinPartnerPool(doubles({ partner_uid: 'guest_1', partner_name: 'Gus' }), link); // a guest partner is a partner
   await joinPartnerPool(doubles({ status: 'withdrawn' }), link);
   await joinPartnerPool(joiner(), link);
   assert.deepEqual(links, []);

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { ContactData } from '../../types';
+import { isGuest } from '../../utils/guest';
 
 /**
  * Resolves `contacts/{uid}` for a set of members, cached for the session.
@@ -15,7 +16,7 @@ const cache = new Map<string, ContactData>();
 export function useContacts(userIds: string[]): Record<string, ContactData> {
   const [contacts, setContacts] = useState<Record<string, ContactData>>({});
   // Stable dep: the array identity changes every render, the joined id list doesn't.
-  const key = [...new Set(userIds.filter(Boolean))].sort().join(',');
+  const key = [...new Set(userIds.filter((id) => id && !isGuest(id)))].sort().join(',');
 
   useEffect(() => {
     const ids = key ? key.split(',') : [];

@@ -1,6 +1,6 @@
 import { Timestamp } from 'firebase/firestore';
 import { DrawConfig, RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
-import { BYE, PLAYER_LOADING, fallbackTemplate, matchUids } from './utils';
+import { BYE, PLAYER_LOADING, fallbackTemplate, matchNumber, matchUids } from './utils';
 import { skillBand } from '../../utils/skillLevels';
 
 // ── Zone-tier group formation ─────────────────────────────────────────────────
@@ -167,7 +167,7 @@ export function generateGroupPairings(n: number): [number, number][] {
 
 /**
  * A group's number in its match doc ids (`rr_g{N}_m{pos}`). Positions restart at 1 in every group,
- * so this, not `position`, is what orders the groups and names a new group's docs.
+ * so this, not the match number, is what orders the groups and names a new group's docs.
  */
 export const groupIndexOf = (m: Pick<TournamentMatch, 'match_id'>) =>
   Number(/^rr_g(\d+)_/.exec(m.match_id || '')?.[1] ?? 0);
@@ -223,7 +223,6 @@ export function buildRRGroupMatchFields(params: {
         participant_uids: matchUids(p1, p2),
         match_id: `rr_g${groupIndex}_m${pos}`,
         round: 'RR',
-        position: pos,
         drawsize: groupPlayers.length,
         format: 'rr',
         player_1_slot: i1 + 1,
@@ -260,7 +259,7 @@ export function buildSafeGroupRewrite(params: {
     const a = newPlayers[i1]?.uid, b = newPlayers[i2]?.uid;
     return !(a && b && playedPairs.has([a, b].sort().join('|')));
   });
-  const startPosition = 1 + Math.max(0, ...oldMatches.map((m) => m.position ?? 0));
+  const startPosition = 1 + Math.max(0, ...oldMatches.map((m) => matchNumber(m.match_id)));
   const toWrite = newPlayers.length > 0
     ? buildRRGroupMatchFields({ eventId, drawKey, draw, groupIndex, groupLabel, groupPlayers: newPlayers, pairings, started }, startPosition)
     : [];
@@ -409,7 +408,7 @@ export function buildRRKnockoutDocs(params: {
     return `Winner of ${src.round}${pos}`;
   };
 
-  return template.map((tm, index) => {
+  return template.map((tm) => {
     let p1 = typeof tm.player_1 === 'number' ? (slotMap.get(tm.player_1) ?? null) : null;
     let p2 = typeof tm.player_2 === 'number' ? (slotMap.get(tm.player_2) ?? null) : null;
     // Apply baked bye advancement into this (next-round) match's slots.
@@ -427,7 +426,6 @@ export function buildRRKnockoutDocs(params: {
         participant_uids: matchUids(p1, p2),
         match_id: tm.match_id,
         round: tm.round,
-        position: index + 1,
         drawsize,
         // Stays 'rr': it marks the draw as round robin, and keeps the server's late-joiner
         // seating (format 'knockout' only) out of slots the organizer fills by hand.

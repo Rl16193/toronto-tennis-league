@@ -379,9 +379,9 @@ export const Matches: React.FC = () => {
   };
 
   // ── Actions ──
-  const sendRally = async (to: { id: string; name: string }) => {
+  const sendRally = async (to: { id: string; name: string; league: string; skill_level: number }) => {
     setBusy(to.id);
-    try { await createRally({ id: user.uid, name: myName }, to); } finally { setBusy(null); }
+    try { await createRally({ id: user.uid, name: myName, league: profile?.stats.league, skill_level: profile?.stats.skill_level }, to); } finally { setBusy(null); }
   };
   const sendChallenge = async (to: LeagueRow) => {
     setBusy(to.user_id);
@@ -611,7 +611,7 @@ export const Matches: React.FC = () => {
                         ) : isPending ? (
                           <span className="text-[11px] font-bold text-fg">Waiting to reply</span>
                         ) : mode === 'rallies' ? (
-                          <button type="button" className={pillButtonCls('sm', 'clay')} disabled={busy === p.user_id} onClick={() => sendRally({ id: p.user_id, name: p.name })}>
+                          <button type="button" className={pillButtonCls('sm', 'clay')} disabled={busy === p.user_id} onClick={() => sendRally({ id: p.user_id, name: p.name, league: p.league, skill_level: p.skill_level })}>
                             <RacquetIcon className="w-3.5 h-3.5" />Rally
                           </button>
                         ) : (
@@ -678,7 +678,7 @@ export const Matches: React.FC = () => {
                           <RacquetIcon className="w-3.5 h-3.5" />Score
                         </button>
                       ) : rallyPending ? null : (
-                        <button type="button" className={pillButtonCls('sm', 'clay')} disabled={busy === p.user_id} onClick={() => sendRally({ id: p.user_id, name: p.name })}>
+                        <button type="button" className={pillButtonCls('sm', 'clay')} disabled={busy === p.user_id} onClick={() => sendRally({ id: p.user_id, name: p.name, league: p.league, skill_level: p.skill_level })}>
                           <RacquetIcon className="w-3.5 h-3.5" />Rally
                         </button>
                       )

@@ -38,8 +38,9 @@ const courtsInZone = (zone) => ZONE_COURTS[zone] || [];
 // asked to add the court. aggregateCourtCounts releases held visits once the court is on the roster.
 const PENDING = 'site_stats/pending_court_visits';
 
-async function writeMatchVisits(db, { uids, courtKey: key, courtName, category, at }) {
-  const { torontoParts } = require('./constants');
+async function writeMatchVisits(db, { uids: all, courtKey: key, courtName, category, at }) {
+  const { torontoParts, isGuest } = require('./constants');
+  const uids = all.filter((u) => !isGuest(u)); // guests get points only, never visits
   const day = torontoParts(at).day;
   const zone = zoneOfCourt(key);
   const names = await Promise.all(uids.map((u) => db.doc(`users/${u}`).get().then((s) => (s.exists && s.data().name) || '').catch(() => '')));

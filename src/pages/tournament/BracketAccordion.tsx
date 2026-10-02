@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Accordion } from '../../components/Accordion';
 import { TournamentMatch, TournamentPlayer } from './types';
-import { formatDeadline } from './utils';
+import { byMatchNumber, formatDeadline } from './utils';
 import { getRoundLabels } from './bracketImage';
 import { getRoundState } from './BracketView';
 import { MatchCard } from './MatchCard';
@@ -36,7 +36,7 @@ export const BracketAccordion: React.FC<Props> = ({
 
   const rounds = useMemo(
     () => roundLabels.map((round) => {
-      const roundMatches = matches.filter((m) => m.round === round).sort((a, b) => a.position - b.position);
+      const roundMatches = matches.filter((m) => m.round === round).sort(byMatchNumber);
       return { round, matches: roundMatches, state: getRoundState(roundMatches) };
     }),
     [matches, roundLabels],

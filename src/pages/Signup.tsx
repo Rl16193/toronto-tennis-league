@@ -375,8 +375,11 @@ export const Signup: React.FC = () => {
       await updateDoc(doc(db, 'stats', u.uid), {
         name: formData.name, skill_level: formData.skillLevel, ...(leagueValue ? { league: leagueValue } : {}), updated_at: Timestamp.now(),
       });
+      // Roster courts → preferred_courts; a typed court not on the roster → custom_courts.
+      const roster = new Set(courtOptions.map((c) => c.toLowerCase()));
       await updateDoc(doc(db, 'preferences', u.uid), {
-        preferred_courts: formData.preferredCourts,
+        preferred_courts: formData.preferredCourts.filter((c) => roster.has(c.toLowerCase())),
+        custom_courts: formData.preferredCourts.filter((c) => !roster.has(c.toLowerCase())),
         // Favourite players moved to the Profile page — signup no longer asks. profileBootstrap
         // already defaults this to [], so it isn't written here at all.
         preferred_zone: formData.preferredZone,

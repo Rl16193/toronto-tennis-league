@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Timestamp, collection, doc, getDocs, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { isGuest } from '../../utils/guest';
 import { useAuth } from '../../context/AuthContext';
 import type { UserProfile, UserStats } from '../../types';
 import {
@@ -85,7 +86,7 @@ export const profileMissingFields = (p: UserProfile | null): string[] => {
   if (!p.contacts.phone?.trim()) missing.push('Phone');
   if (!p.contacts.whatsapp_contact?.trim()) missing.push('WhatsApp contact');
   if (!p.user.bio?.trim()) missing.push('Bio');
-  if (!p.preferences.preferred_courts?.length) missing.push('Preferred courts');
+  if (!p.preferences.preferred_courts?.length && !p.preferences.custom_courts?.length) missing.push('Preferred courts');
   if (!p.preferences.availability_tags?.length) missing.push('Availability');
   return missing;
 };
@@ -194,6 +195,7 @@ export function useCommunityStandings() {
     getDocs(collection(db, 'stats'))
       .then((snap) => {
         const data = snap.docs
+          .filter((d) => !isGuest(d.id))
           .map((d) => {
             const s = d.data() as UserStats;
             const state = taskState(s);

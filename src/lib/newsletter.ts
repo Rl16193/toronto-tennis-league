@@ -8,10 +8,11 @@ export type NewsletterSource = 'newsletter' | 'court report submission';
  * The one mailing list, in two deliberately different shapes. `firestore.rules` enforces the
  * split, so this file and that rule must change together:
  *
- * - A signed-in member owns exactly ONE row, keyed by their uid, carrying `uid` and `user_name`.
- *   Re-subscribing overwrites that row, so a member can never be listed twice.
- * - A signed-out visitor adds an auto-id row with uid 'not_a_member' and user_name 'anonymous'. The
- *   rules accept only those values on that path, so nobody can write a row claiming to be someone else.
+ * - A signed-in member owns exactly ONE row, keyed by their uid, carrying `uid`, `user_name` and
+ *   `member: true`. Re-subscribing overwrites that row, so a member can never be listed twice.
+ * - A signed-out visitor adds an auto-id row with uid 'not_a_member', user_name 'anonymous' and
+ *   `member: false`. The rules accept only those values on that path, so nobody can write a row
+ *   claiming to be someone else.
  *
  * `source` says where they signed up: the homepage button or the court report form.
  */
@@ -29,6 +30,7 @@ export const subscribeMemberToNewsletter = async (
     email: email.trim().toLowerCase(),
     uid,
     user_name: userName.trim(),
+    member: true,
     source,
     created_at: Timestamp.now(),
   });
@@ -66,6 +68,7 @@ export const subscribeVisitorToNewsletter = async (
     email: email.trim().toLowerCase(),
     uid: 'not_a_member',
     user_name: 'anonymous',
+    member: false,
     source,
     created_at: Timestamp.now(),
   });

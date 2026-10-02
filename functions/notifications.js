@@ -16,12 +16,12 @@ const admin = require('firebase-admin');
 const { notify, organizerUids, sendEmailOnce, resendApiKey } = require('./lib/notify');
 const { eventOrganizerUids } = require('./lib/roles');
 const { initiationDone } = require('./lib/points');
-const { RESULT_KINDS } = require('./lib/scoring');
+const { RESULT_KINDS, closeStaleRequests } = require('./lib/scoring');
 const {
   buildRallyEmail, buildRallyAcceptedEmail, buildChallengeEmail, buildChallengeAcceptedEmail, buildIncompleteMatchesEmail,
 } = require('./lib/emailTemplates');
 
-const { TZ, REGION, SITE } = require('./lib/constants');
+const { TZ, REGION, SITE, isGuest } = require('./lib/constants');
 const db = () => admin.firestore();
 const { Timestamp } = require('firebase-admin/firestore');
 
@@ -252,7 +252,7 @@ exports.onParticipantJoined = onDocumentCreated(
   { document: 'event_participants/{id}', region: REGION },
   async (event) => {
     const p = event.data?.data();
-    if (!p?.event_id || String(p.uid || '').startsWith('guest_')) return;
+    if (!p?.event_id || isGuest(p.uid)) return;
     const eventDoc = await db().doc(`events/${p.event_id}`).get();
     if (!eventDoc.exists) return;
     const e = eventDoc.data();
@@ -263,12 +263,22 @@ exports.onParticipantJoined = onDocumentCreated(
 
 // ─── Newsletter ─────────────────────────────────────────────────────────────
 
-// A member's own row (doc id = uid) confirms by notification; visitor rows (uid not_a_member) have nobody to tell.
+// A member's own row (doc id = uid) confirms by notification. A visitor row (member: false) whose
+// email is a member's contacts.email is marked member: true; it has nobody to tell.
 exports.onNewsletterSubscribed = onDocumentCreated(
   { document: 'mailing_list/{id}', region: REGION },
   async (event) => {
     const s = event.data?.data();
-    if (!s?.uid || s.uid !== event.params.id) return;
+    if (!s) return;
+    if (s.member === false) {
+      const email = String(s.email || '').trim();
+      const forms = [...new Set([email, email.toLowerCase()].filter(Boolean))];
+      if (forms.length && !(await db().collection('contacts').where('email', 'in', forms).limit(1).get()).empty) {
+        await event.data.ref.update({ member: true });
+      }
+      return;
+    }
+    if (!s.uid || s.uid !== event.params.id) return;
     await notify(s.uid, { type: 'newsletter_subscribed', title: 'You’ve been added to the list', body: 'Check your email for the latest issue.', link: '/' });
   },
 );
@@ -317,12 +327,17 @@ exports.onCustomCourtEntered = onDocumentWritten(
 exports.weeklyReminders = onSchedule(
   { schedule: '0 9 * * 2', timeZone: TZ, region: REGION, secrets: [resendApiKey] },
   async () => {
+    // Stale rallies and challenges are closed first, so they aren't counted below.
+    const closed = await closeStaleRequests(db());
+    logger.info(`weeklyReminders: closed ${closed.rallies} stale rallies (played), ${closed.challenges} stale challenges (declined)`);
+    const cancelled = new Set((await db().collection('events').where('status', '==', 'cancelled').get()).docs.map((d) => d.id));
+
     // Unplayed tournament fixtures (created accepted) with both players in.
     const matches = await db().collection('matches').where('category', '==', 'tournament').where('status', '==', 'accepted').get();
     const pendingByUser = new Map();
     matches.docs.forEach((d) => {
       const m = d.data();
-      if (!isRealMatch(d.id, m) || !m.player_1_uid || !m.player_2_uid) return;
+      if (!isRealMatch(d.id, m) || cancelled.has(m.event_id) || !m.player_1_uid || !m.player_2_uid) return;
       matchPlayers(m).forEach((uid) => pendingByUser.set(uid, (pendingByUser.get(uid) || 0) + 1));
     });
     await Promise.all([...pendingByUser.entries()].map(([uid, count]) => notify(uid, {
@@ -337,7 +352,7 @@ exports.weeklyReminders = onSchedule(
     const challengeCountByUser = new Map();
     acceptedChallenges.docs.forEach((d) => {
       const c = d.data();
-      if (!c.player_1_uid || !c.player_2_uid) return;
+      if (cancelled.has(c.event_id) || !c.player_1_uid || !c.player_2_uid) return;
       [c.player_1_uid, c.player_2_uid].forEach((uid) => challengeCountByUser.set(uid, (challengeCountByUser.get(uid) || 0) + 1));
     });
 

@@ -1,5 +1,5 @@
 import { TennisEvent } from '../types';
-import { isLadderEvent, isTournamentEvent } from './eventTypes';
+import { isCancelledEvent, isLadderEvent, isTournamentEvent } from './eventTypes';
 
 export type FirestoreDateLike = string | { toDate?: () => Date; seconds?: number; nanoseconds?: number } | null | undefined;
 
@@ -86,7 +86,7 @@ export const isCurrentEvent = (event: TennisEvent, now = Date.now()) => {
   // Server-stamped when the final is played (recordScore in functions/lib/scoring.js), and authoritative
   // when present. `matches` needs auth to read, so a signed-out visitor cannot work this out for
   // itself — which is the whole reason the answer is written onto the world-readable event doc.
-  if (event.completed_at) return false;
+  if (event.completed_at || isCancelledEvent(event)) return false;
 
   const endMs = parseEndInstant(getEventEndDate(event))?.getTime() ?? null;
 

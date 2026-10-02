@@ -4,6 +4,8 @@ import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { useContacts } from '../contacts/useContacts';
 import { toMillis } from '../../utils/eventDates';
+import { pairDivision, pairSkillGroup } from '../../utils/skillLevels';
+import type { RequestPlayer } from '../leagues/ladderService';
 
 // Rallies — rally-match requests, modelled on the ladder-challenge loop. The recipient accepts
 // or declines; either player then records the score through the scoreMatch Cloud Function
@@ -13,8 +15,9 @@ import { toMillis } from '../../utils/eventDates';
 // Recording a score is OPTIONAL by design: a rally is a way to earn extra points, and choosing not
 // to enter one is a normal outcome. An unplayed rally pays nothing and nobody is chased for it.
 
-// A played rally is `complete`; its result is its applied `submissions` entry (results.ts).
-export type RallyStatus = 'open' | 'accepted' | 'declined' | 'complete';
+// A scored rally is `complete`; its result is its applied `submissions` entry (results.ts).
+// `played` is an accepted rally auto-closed after 30 days with no score: no result, no history.
+export type RallyStatus = 'open' | 'accepted' | 'declined' | 'complete' | 'played';
 
 export interface Rally {
   id: string;
@@ -31,8 +34,8 @@ export interface Rally {
 }
 
 export async function createRally(
-  from: { id: string; name: string },
-  to: { id: string; name: string },
+  from: RequestPlayer,
+  to: RequestPlayer,
 ): Promise<void> {
   const now = Timestamp.now();
   // The full matches shape; a rally belongs to no event and tournament-only fields hold typed empties.
@@ -50,8 +53,8 @@ export async function createRally(
     responded_at: null,
     created_at: now,
     updated_at: now,
-    match_id: '', round: '', position: 0, drawsize: 0, division: '',
-    skill_group: '', zone: '', format: '',
+    match_id: '', round: '', drawsize: 0, division: pairDivision(from.league, to.league),
+    skill_group: pairSkillGroup(from.skill_level, to.skill_level), zone: '', format: '',
     player_1_slot: 0, player_2_slot: 0, next_match_id: '', next_slot: '', started: false,
     group_label: 'rally',
   });
@@ -92,9 +95,9 @@ export function useRallies() {
     return () => { un1(); un2(); };
   }, [user?.uid]);
 
-  // Rallies still in flight — used to disable duplicate Rally buttons. A finished one (declined
-  // or complete) frees the pairing so the two can arrange another rally.
-  const FINISHED: RallyStatus[] = ['declined', 'complete'];
+  // Rallies still in flight — used to disable duplicate Rally buttons. A finished one (declined,
+  // complete or played) frees the pairing so the two can arrange another rally.
+  const FINISHED: RallyStatus[] = ['declined', 'complete', 'played'];
   const activePartnerIds = useMemo(() => {
     const ids = new Set<string>();
     [...sent, ...received].forEach((r) => {

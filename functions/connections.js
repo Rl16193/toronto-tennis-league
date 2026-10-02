@@ -18,7 +18,7 @@ const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const { Timestamp } = require('firebase-admin/firestore');
 
-const { REGION } = require('./lib/constants');
+const { REGION, isGuest } = require('./lib/constants');
 const db = () => admin.firestore();
 
 /** Order-independent pair id. Must match pairId() in firestore.rules exactly. */
@@ -26,7 +26,7 @@ const pairId = (a, b) => (a < b ? `${a}__${b}` : `${b}__${a}`);
 
 /** Idempotent — `create` on an existing doc throws ALREADY_EXISTS, avoiding a read per match write. */
 async function linkPlayers(a, b, reason) {
-  if (!a || !b || a === b) return false;
+  if (!a || !b || a === b || isGuest(a) || isGuest(b)) return false;
   try {
     await db().collection('connections').doc(pairId(a, b)).create({
       uids: [a, b].sort(),

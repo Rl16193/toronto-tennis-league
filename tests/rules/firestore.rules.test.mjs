@@ -118,8 +118,9 @@ describe('providers and preferences: roles are the super admin\'s', () => {
   test('a member can edit their courts and zone', async () => {
     await seed('preferences/p1', { preferred_courts: [] });
     await assertSucceeds(updateDoc(doc(as('p1'), 'preferences/p1'), {
-      preferred_courts: ['Riverdale Park'], preferred_zone: 'Downtown - Midtown',
+      preferred_courts: ['Riverdale Park'], custom_courts: ['My Condo Court'], preferred_zone: 'Downtown - Midtown',
     }));
+    await assertFails(updateDoc(doc(as('p1'), 'preferences/p1'), { custom_courts: 'My Condo Court' }));
   });
   test('an organizer may change a member\'s zone and nothing else', async () => {
     await seedOrganizer();
@@ -130,12 +131,19 @@ describe('providers and preferences: roles are the super admin\'s', () => {
 });
 
 describe('events: organizers are per event (Racquets-And-Strings ADR-001)', () => {
+  const live = { status: 'active', cancelled_at: null };
   test('an organizer creates an event listing only themselves', async () => {
     await seedOrganizer();
-    await assertSucceeds(setDoc(doc(as(ORGANIZER), 'events/e2'), { title: 'Mine', organizer_ids: [ORGANIZER] }));
-    await assertFails(setDoc(doc(as(ORGANIZER), 'events/e3'), { title: 'X', organizer_ids: [ORGANIZER, 'org-3'] }));
-    await assertFails(setDoc(doc(as('p1'), 'events/e4'), { title: 'Y', organizer_ids: ['p1'] }));
-    await assertSucceeds(setDoc(doc(as(SUPER), 'events/e5'), { title: 'Z', organizer_ids: [ORGANIZER, 'org-3'] }));
+    await assertSucceeds(setDoc(doc(as(ORGANIZER), 'events/e2'), { title: 'Mine', organizer_ids: [ORGANIZER], ...live }));
+    await assertFails(setDoc(doc(as(ORGANIZER), 'events/e3'), { title: 'X', organizer_ids: [ORGANIZER, 'org-3'], ...live }));
+    await assertFails(setDoc(doc(as('p1'), 'events/e4'), { title: 'Y', organizer_ids: ['p1'], ...live }));
+    await assertSucceeds(setDoc(doc(as(SUPER), 'events/e5'), { title: 'Z', organizer_ids: [ORGANIZER, 'org-3'], ...live }));
+  });
+  test('a new event starts active, never cancelled', async () => {
+    await seedOrganizer();
+    await assertFails(setDoc(doc(as(ORGANIZER), 'events/e6'), { title: 'No status', organizer_ids: [ORGANIZER] }));
+    await assertFails(setDoc(doc(as(ORGANIZER), 'events/e7'), { title: 'C', organizer_ids: [ORGANIZER], status: 'cancelled', cancelled_at: null }));
+    await assertFails(setDoc(doc(as(ORGANIZER), 'events/e8'), { title: 'C', organizer_ids: [ORGANIZER], status: 'active', cancelled_at: serverTimestamp() }));
   });
   test('only the super admin changes who manages an event', async () => {
     await seedOrganizer();
@@ -165,6 +173,9 @@ describe('event_participants: one active row per member per event', () => {
     await seedEvent();
     await assertSucceeds(setDoc(doc(as('p1'), 'event_participants/e1_p1'), reg()));
     await assertSucceeds(setDoc(doc(as('p1'), 'event_participants/e1_p1_mensdoubles'), reg({ category: 'doubles_tournament' })));
+    // A partner not on the app is a guest_ uid.
+    await assertSucceeds(setDoc(doc(as('p1'), 'event_participants/e1_p1_mixeddoubles'),
+      reg({ category: 'doubles_tournament', partner_uid: 'guest_abc123def456', partner_name: 'Gus' })));
   });
   test('a wrong id, someone else, a withdrawn status or a non-timestamp is refused', async () => {
     await seedEvent();
@@ -346,10 +357,10 @@ describe('server-only collections', () => {
 
 describe('signed-out forms', () => {
   const member = (uid, extra = {}) => ({
-    email: `${uid}@x.com`, uid, user_name: 'Pat', source: 'newsletter', created_at: serverTimestamp(), ...extra,
+    email: `${uid}@x.com`, uid, user_name: 'Pat', member: true, source: 'newsletter', created_at: serverTimestamp(), ...extra,
   });
   const anon = (extra = {}) => ({
-    email: 'v@x.com', uid: 'not_a_member', user_name: 'anonymous', source: 'newsletter', created_at: serverTimestamp(), ...extra,
+    email: 'v@x.com', uid: 'not_a_member', user_name: 'anonymous', member: false, source: 'newsletter', created_at: serverTimestamp(), ...extra,
   });
 
   test('mailing list: a member owns one row keyed by their uid', async () => {
@@ -358,12 +369,14 @@ describe('signed-out forms', () => {
     await assertFails(setDoc(doc(as('p1'), 'mailing_list/p2'), member('p2')));
     await assertFails(setDoc(doc(as('p1'), 'mailing_list/p1x'), member('p1')));
     await assertFails(getDoc(doc(as('p2'), 'mailing_list/p1')));
+    await assertFails(setDoc(doc(as('p1'), 'mailing_list/p1'), member('p1', { member: false })));
   });
   test('mailing list: a visitor row is not_a_member / anonymous and cannot forge a member', async () => {
     await assertSucceeds(setDoc(doc(visitor(), 'mailing_list/v1'), anon({ source: 'court report submission' })));
     await assertFails(setDoc(doc(visitor(), 'mailing_list/p1'), member('p1')));
     await assertFails(setDoc(doc(visitor(), 'mailing_list/v2'), anon({ phone: '555' })));
     await assertFails(setDoc(doc(visitor(), 'mailing_list/v3'), anon({ email: '' })));
+    await assertFails(setDoc(doc(visitor(), 'mailing_list/v4'), anon({ member: true })));
     await assertFails(getDoc(doc(visitor(), 'mailing_list/v1')));
   });
   test('volunteer sign-ups: members as themselves, visitors anonymously; organizers read', async () => {

@@ -28,7 +28,6 @@ export interface Submission {
   replaces_id: string;
   points_winner: number;
   points_loser: number;
-  applied_deltas: Record<string, Record<string, number>>;
   applied_at: Timestamp | null;
   completed_at: Timestamp | null;
   resolved_by: string;

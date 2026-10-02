@@ -79,7 +79,7 @@ export const Profile: React.FC = () => {
 
   const incompleteFields = profile ? [
     !profile.user.name.trim() ? 'name' : null,
-    (profile.preferences.preferred_courts?.length ?? 0) === 0 ? 'preferred courts' : null,
+    (profile.preferences.preferred_courts?.length ?? 0) + (profile.preferences.custom_courts?.length ?? 0) === 0 ? 'preferred courts' : null,
     (profile.preferences.favourite_players?.length ?? 0) === 0 ? 'favourite players' : null,
   ].filter(Boolean) as string[] : [];
 

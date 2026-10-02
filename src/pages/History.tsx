@@ -8,6 +8,7 @@ import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useUserMatches } from '../features/matches/useUserMatches';
 import { toDate, toMillis } from '../utils/eventDates';
+import { isCancelledEvent } from '../utils/eventTypes';
 
 type PastEvent = { id: string; title: string; when: Date | null };
 
@@ -36,7 +37,7 @@ export const History: React.FC = () => {
           finalsSnap.docs.filter((d) => d.data().winner_uid).map((d) => d.data().event_id as string),
         );
         const rows = eventsSnap.docs
-          .filter((d) => completedIds.has(d.id))
+          .filter((d) => completedIds.has(d.id) && !isCancelledEvent(d.data()))
           .map((d) => ({
             id: d.id,
             title: (d.data().title as string) || 'Tournament',

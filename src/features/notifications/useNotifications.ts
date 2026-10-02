@@ -27,7 +27,7 @@ export type NotificationSubCategory =
   | 'reminder_pending_matches' | 'reminder_round_deadline'
   | 'reminder_event_tomorrow' | 'reminder_signup_closing'
   // organizer
-  | 'organizer_score_disputed' | 'organizer_event_roster' | 'organizer_review_pending'
+  | 'organizer_score_disputed' | 'organizer_event_roster' | 'organizer_review_pending' | 'organizer_zone_change'
   // service bookings (functions/bookings.js)
   | 'booking_created' | 'booking_started' | 'booking_declined' | 'booking_cancelled'
   | 'booking_ready' | 'booking_reminder' | 'booking_completed' | 'booking_not_back';

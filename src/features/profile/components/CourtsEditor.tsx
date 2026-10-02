@@ -10,15 +10,16 @@ import { UserPreferences } from '../../../types';
 import { loadCourtsCsv } from '../../tasks/courtList';
 
 /**
- * The preferred-courts editor, shared by the profile card and the Player Dash. Saving always
- * recomputes the zone, limited to the zones of the chosen courts.
+ * The preferred-courts editor, shared by the profile card and the Player Dash. A roster court goes
+ * to `preferred_courts`, a typed one not on the roster to `custom_courts`. Saving always recomputes
+ * the zone from the roster courts, limited to their zones.
  */
 export const CourtsEditor: React.FC<{
-  preferences: Pick<UserPreferences, 'preferred_courts' | 'preferred_zone'>;
+  preferences: Pick<UserPreferences, 'preferred_courts' | 'custom_courts' | 'preferred_zone'>;
   saving: boolean;
-  onSave: (courts: string[], zone: string) => void;
+  onSave: (courts: string[], zone: string, custom: string[]) => void;
   /** Set when another button saves (the join sheet's Join): reports the draft and hides Save. */
-  onDraftChange?: (courts: string[], zone: string) => void;
+  onDraftChange?: (courts: string[], zone: string, custom: string[]) => void;
 }> = ({ preferences, saving, onSave, onDraftChange }) => {
   // Court option list + coords (for the suggestions + zone recompute), loaded once.
   const [courtOptions, setCourtOptions] = useState<string[]>(defaultCourtOptions);
@@ -31,8 +32,18 @@ export const CourtsEditor: React.FC<{
     return () => { alive = false; };
   }, []);
 
-  const [courtsDraft, setCourtsDraft] = useState<string[]>(preferences.preferred_courts ?? []);
+  const [courtsDraft, setCourtsDraft] = useState<string[]>([...(preferences.preferred_courts ?? []), ...(preferences.custom_courts ?? [])]);
   const [courtInput, setCourtInput] = useState('');
+
+  // Split the draft into [roster, custom]: on the roster means in the court option list.
+  const split = (courts: string[]): [string[], string[]] => {
+    const roster = new Set(courtOptions.map((c) => c.toLowerCase()));
+    return [courts.filter((c) => roster.has(c.toLowerCase())), courts.filter((c) => !roster.has(c.toLowerCase()))];
+  };
+  const report = (fn: (courts: string[], zone: string, custom: string[]) => void) => {
+    const [roster, custom] = split(courtsDraft);
+    fn(roster, computeZone(roster), custom);
+  };
 
   const computeZone = (courts: string[]): string => {
     if (courts.length === 0) return '';
@@ -52,7 +63,7 @@ export const CourtsEditor: React.FC<{
   };
 
   // Re-reported once the court coordinates load, so the zone isn't computed from an empty map.
-  useEffect(() => { onDraftChange?.(courtsDraft, computeZone(courtsDraft)); }, [courtsDraft, courtCoords]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (onDraftChange) report(onDraftChange); }, [courtsDraft, courtCoords, courtOptions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const courtSuggestions = getCourtSuggestions(courtOptions, courtsDraft, courtInput);
   const addCourt = (court: string) => {
@@ -83,7 +94,7 @@ export const CourtsEditor: React.FC<{
           ))}
         </div>
       )}
-      {!onDraftChange && <Button size="sm" onClick={() => onSave(courtsDraft, computeZone(courtsDraft))} isLoading={saving}>Save</Button>}
+      {!onDraftChange && <Button size="sm" onClick={() => report(onSave)} isLoading={saving}>Save</Button>}
     </div>
   );
 };

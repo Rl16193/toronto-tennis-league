@@ -17,18 +17,19 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
   const [league, setLeague] = useState<"Men's" | "Women's" | ''>(leagueDivision(profile?.stats.league));
   const [ageCategory, setAgeCategory] = useState<'Retired Pro' | 'Juniors' | ''>(leagueAgeCategory(profile?.stats.league));
   // The shared courts editor reports its draft here; its own Save is hidden, Save & Continue saves.
-  const [courts, setCourts] = useState<{ list: string[]; zone: string }>({
+  const [courts, setCourts] = useState<{ list: string[]; zone: string; custom: string[] }>({
     list: profile?.preferences.preferred_courts || [], zone: profile?.preferences.preferred_zone || '',
+    custom: profile?.preferences.custom_courts || [],
   });
   const [error, setError] = useState('');
 
   const handleSave = async () => {
     if (!league) { setError('Please choose your league.'); return; }
-    if (courts.list.length === 0) { setError('Please add at least one preferred court.'); return; }
+    if (courts.list.length + courts.custom.length === 0) { setError('Please add at least one preferred court.'); return; }
     setError('');
     const ok1 = await actions.updateSkills(skillLevel);
     const ok2 = await actions.updateLeagueAgeCategory(league, ageCategory);
-    const ok3 = await actions.updatePreferredCourts(courts.list, courts.zone);
+    const ok3 = await actions.updatePreferredCourts(courts.list, courts.zone, courts.custom);
     if (ok1 && ok2 && ok3) onDone();
   };
 
@@ -116,7 +117,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
               preferences={profile.preferences}
               saving={updateLoading}
               onSave={() => {}}
-              onDraftChange={(list, zone) => setCourts({ list, zone })}
+              onDraftChange={(list, zone, custom) => setCourts({ list, zone, custom })}
             />
           )}
         </div>

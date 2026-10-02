@@ -1,11 +1,14 @@
 import { Timestamp, addDoc, collection, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { pairDivision, pairSkillGroup } from '../../utils/skillLevels';
 
 // League Ladder challenge loop: request, accept or decline, play. Every result, and its +3 / -3,
 // goes through the scoreMatch Cloud Function (features/matches/scoring.ts); this file only opens,
 // answers and cancels requests. Challenges live in `matches`, tagged category: 'challenge'.
 
 export type LadderDivision = 'mens' | 'womens';
+/** A player as a request needs them: `division` / `skill_group` come from both players' league and skill. */
+export type RequestPlayer = { id: string; name: string; league?: string; skill_level?: number };
 // `declined` is the one word for a turned-down challenge (CLAUDE.md, "One name per thing").
 // A played challenge is `complete`; its result is its applied `submissions` entry (results.ts).
 export type LadderChallengeStatus = 'open' | 'accepted' | 'declined' | 'complete';
@@ -13,7 +16,9 @@ export type LadderChallengeStatus = 'open' | 'accepted' | 'declined' | 'complete
 export interface LadderChallenge {
   id: string;
   event_id: string;
-  division: LadderDivision;
+  /** "Men's" | "Women's" | "Mixed" (pairDivision). */
+  division: string;
+  skill_group: string;
   player_1_uid: string;
   player_1_name: string;
   player_2_uid: string;
@@ -35,9 +40,8 @@ export const LADDER_ACTIVE_CHALLENGE_CAP = 3;
 
 export async function createChallenge(args: {
   eventId: string;
-  division: LadderDivision;
-  challenger: { id: string; name: string };
-  opponent: { id: string; name: string };
+  challenger: RequestPlayer;
+  opponent: RequestPlayer;
 }): Promise<void> {
   const now = Timestamp.now();
   // The full matches shape; tournament-only fields hold typed empties.
@@ -55,9 +59,9 @@ export async function createChallenge(args: {
     responded_at: null,
     created_at: now,
     updated_at: now,
-    match_id: '', round: '', position: 0, drawsize: 0,
-    division: args.division,
-    skill_group: '', zone: '', format: '',
+    match_id: '', round: '', drawsize: 0,
+    division: pairDivision(args.challenger.league, args.opponent.league),
+    skill_group: pairSkillGroup(args.challenger.skill_level, args.opponent.skill_level), zone: '', format: '',
     player_1_slot: 0, player_2_slot: 0, next_match_id: '', next_slot: '', started: false,
     group_label: 'challenge',
   });

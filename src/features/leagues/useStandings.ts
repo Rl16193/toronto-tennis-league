@@ -2,6 +2,7 @@ import { leagueDivision } from '../../utils/skillLevels';
 import { useEffect, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { isGuest } from '../../utils/guest';
 
 // Shared leaderboard model + loader, consumed by the Leagues page and the Home landing
 // league section so both read the same public `stats` data (no drift).
@@ -81,6 +82,7 @@ export function useStandings(): {
       let players = 0;
       let matchTotal = 0;
       snap.forEach((d) => {
+        if (isGuest(d.id)) return; // a guest partner's stats doc is not a member
         const s = d.data();
         const mp = s.matchesPlayed ?? 0;
         if (mp > 0) { players += 1; matchTotal += mp; }

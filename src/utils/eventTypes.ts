@@ -21,6 +21,9 @@ export const isProviderProfile = (profile: Pick<UserProfile, 'roles'> | null | u
 /** A weekly meetup (the card shows its next occurrence); a special is one-off. */
 export const isRecurringWeekly = (event: Pick<TennisEvent, 'sub_category'>) => event.sub_category === 'meetup';
 
+/** A cancelled event is hidden from every list and never current. */
+export const isCancelledEvent = (event: { status?: string } | null | undefined) => event?.status === 'cancelled';
+
 export const isTournamentEvent = (event: Pick<TennisEvent, 'category'>) => /_tournament$/.test(event.category || '');
 
 export const isDoublesEvent = (event: Pick<TennisEvent, 'category'>) => event.category === 'doubles_tournament';

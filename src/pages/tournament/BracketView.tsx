@@ -1,6 +1,6 @@
 ﻿import React, { useMemo } from 'react';
 import { TournamentMatch, TournamentPlayer } from './types';
-import { PLAYER_LOADING, formatDeadline, isPreviewMatch } from './utils';
+import { PLAYER_LOADING, byMatchNumber, formatDeadline, isPreviewMatch } from './utils';
 import { getRoundLabels } from './bracketImage';
 import { MatchCard } from './MatchCard';
 
@@ -50,7 +50,7 @@ export const BracketView: React.FC<Props> = ({
   const rounds = useMemo(
     () => roundLabels.map((round) => ({
       round,
-      matches: matches.filter((m) => m.round === round).sort((a, b) => a.position - b.position),
+      matches: matches.filter((m) => m.round === round).sort(byMatchNumber),
     })),
     [matches, roundLabels],
   );

@@ -4,7 +4,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
-import { SUPER_ADMIN_UID, isOrganizerProfile, isTournamentEvent } from '../../utils/eventTypes';
+import { SUPER_ADMIN_UID, isCancelledEvent, isOrganizerProfile, isTournamentEvent } from '../../utils/eventTypes';
+import { isGuest } from '../../utils/guest';
 import { type DisputeRow, disputeRow, resetScore, settleDispute } from '../../features/matches/scoring';
 import { type Submission, fetchResultsFor, isResultEntry, isWalkover, scoreLine } from '../../features/matches/results';
 import type { TaskClaim } from '../../features/tasks/claimService';
@@ -132,7 +133,7 @@ export function useOrganizerDash() {
     getDocs(q)
       .then((snap) => {
         if (!alive) return;
-        setEvents(snap.docs.map((d) => ({ ...d.data(), id: d.id } as TennisEvent)).filter(isTournamentEvent));
+        setEvents(snap.docs.map((d) => ({ ...d.data(), id: d.id } as TennisEvent)).filter((e) => isTournamentEvent(e) && !isCancelledEvent(e)));
       })
       .catch(() => { if (alive) setEvents([]); });
     return () => { alive = false; };
@@ -316,7 +317,7 @@ export function useOrganizerDash() {
     return {
       id: e.id,
       title: e.title ?? '',
-      registered: participants.filter((p) => p.event_id === e.id && p.status === 'active').length,
+      registered: participants.filter((p) => p.event_id === e.id && p.status === 'active' && !isGuest(p.uid)).length,
       played,
       outstanding: real.length - played,
       finished: mine.some((m) => m.round === 'F' && m.status === 'complete'),

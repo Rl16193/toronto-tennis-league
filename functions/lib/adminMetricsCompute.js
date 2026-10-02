@@ -5,6 +5,8 @@
  *
  * Definitions mirror analysis/build-engagement-xlsx.py — change one, change both.
  */
+const { isGuest } = require('./constants');
+
 const WINDOW_DAYS = 7;
 const RECENT_MATCH_LIMIT = 25;
 
@@ -20,10 +22,14 @@ const after = (v, cutoff) => !!v && str(v) >= cutoff;
 
 function computeMetrics(data) {
   const cutoff = isoDaysAgo(WINDOW_DAYS);
-  const { users, stats, events, event_participants, matches, submissions, courts, listings, connections,
+  const { users, stats: allStats, events, event_participants, matches: allMatches, submissions, courts, listings, connections,
     preferences } = data;
 
-  const parts = event_participants.filter((p) => str(p.status) === 'active');
+  // Guests (doubles partners not on the app) aren't members; a cancelled event's entries and unplayed matches don't count.
+  const stats = allStats.filter((s) => !isGuest(s._id));
+  const cancelled = new Set(events.filter((e) => str(e.status) === 'cancelled').map((e) => e._id));
+  const matches = allMatches.filter((m) => str(m.status) === 'complete' || !cancelled.has(str(m.event_id)));
+  const parts = event_participants.filter((p) => str(p.status) === 'active' && !cancelled.has(str(p.event_id)));
   // A played match is 'complete'; its result (sets, walkover, first-scored time) is the applied entry.
   const applied = new Map(submissions
     .filter((s) => str(s.status) === 'applied' && ['result', 'correction', 'walkover'].includes(str(s.sub_category)))

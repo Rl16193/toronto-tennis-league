@@ -13,6 +13,18 @@ export const SKILL_LEVEL_TIERS = [
 export const skillBand = (skill: number): 'Beginners' | 'Challengers' | 'Masters' =>
   skill < 3 ? 'Beginners' : skill < 4 ? 'Challengers' : 'Masters';
 
+/** A challenge/rally's `division`: the players' shared league, else 'Mixed'. */
+export const pairDivision = (a?: string, b?: string): string => {
+  const da = leagueDivision(a), db = leagueDivision(b);
+  return da && da === db ? da : 'Mixed';
+};
+
+/** A challenge/rally's `skill_group`: the lower of the two bands; one missing → the other; none → ''. */
+export const pairSkillGroup = (a?: number, b?: number): string => {
+  const levels = [a, b].filter((s): s is number => typeof s === 'number' && s > 0);
+  return levels.length ? skillBand(Math.min(...levels)) : '';
+};
+
 /** The same band as a singular label for a player card ("Beginner", "Challenger", "Masters"). */
 export const skillTier = (skill: number) =>
   ({ Beginners: 'Beginner', Challengers: 'Challenger', Masters: 'Masters' } as const)[skillBand(skill)];

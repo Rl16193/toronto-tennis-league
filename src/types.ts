@@ -159,6 +159,9 @@ export interface TennisEvent {
   zone_draw_config?: ZoneDrawConfig | Record<string, never>;
   /** Server-written when the event's final is played: the authoritative "this event is over". */
   completed_at?: Timestamp | null;
+  /** 'cancelled' hides the event everywhere (isCancelledEvent). */
+  status?: 'active' | 'cancelled';
+  cancelled_at?: Timestamp | null;
   created_at?: Timestamp | null;
 }
 

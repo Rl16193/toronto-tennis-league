@@ -9,6 +9,7 @@ import { sharesCourt } from '../../components/NearbyPill';
 import { NearbyPill } from '../../components/NearbyPill';
 import { AvailabilityPills } from '../../components/AvailabilityPills';
 import { skillBand } from '../../utils/skillLevels';
+import { isGuest } from '../../utils/guest';
 
 // ─── Bracket: your matches + potential next-round opponents ──────────────────────
 
@@ -98,7 +99,7 @@ export const OpponentCard: React.FC<{
             <div className="flex items-start justify-between gap-3 px-3.5 py-3">
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {opponent.userId ? (
+                  {opponent.userId && !isGuest(opponent.userId) ? (
                     <Link to={`/players/${opponent.userId}`} className="text-sm font-semibold text-fg truncate hover:text-clay transition-colors">
                       {opponent.name}
                     </Link>

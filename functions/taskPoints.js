@@ -12,7 +12,7 @@ const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('fir
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const { notify, organizerUids } = require('./lib/notify');
-const { torontoParts, REGION } = require('./lib/constants');
+const { torontoParts, isGuest, REGION } = require('./lib/constants');
 const { courtKey: toCourtKey, zoneOfCourt, courtsInZone, writeMatchVisits, holdMatchVisits } = require('./lib/memberLocation');
 const { isPlayedResult } = require('./lib/scoring');
 const { rsPointsPatch } = require('./lib/points');
@@ -23,7 +23,7 @@ const NOT_A_MEMBER = 'not_a_member';
 
 /** Writes a stats patch with rsPoints recomputed, in one transaction. `build(stats)` returns the patch. */
 async function updateCounters(uid, name, build) {
-  if (!uid || uid === NOT_A_MEMBER || String(uid).startsWith('guest_')) return;
+  if (!uid || uid === NOT_A_MEMBER || isGuest(uid)) return;
   const ref = db().collection('stats').doc(uid);
   await db().runTransaction(async (tx) => {
     const snap = await tx.get(ref);
@@ -115,7 +115,7 @@ exports.onMatchCompletedAwardPoints = onDocumentWritten(
     }
     if (after.court) {
       const onCourt = new Set([...(Array.isArray(m.participant_uids) ? m.participant_uids : []), ...players.map(([u]) => u)]);
-      await visitsFromResult([...onCourt].filter(Boolean), after.court, m.category, when)
+      await visitsFromResult([...onCourt].filter((u) => u && !isGuest(u)), after.court, m.category, when)
         .catch((e) => logger.error('visits from result failed', e));
     }
   },

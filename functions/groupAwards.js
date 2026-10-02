@@ -12,7 +12,7 @@
 const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 const { notify } = require('./lib/notify');
-const { torontoParts, toDate, REGION } = require('./lib/constants');
+const { torontoParts, toDate, isGuest, REGION } = require('./lib/constants');
 const { courtKey: slug, zoneOfCourt, courtsInZone, allCourts } = require('./lib/memberLocation');
 const { isPlayedResult } = require('./lib/scoring');
 const { rsPointsPatch } = require('./lib/points');
@@ -32,7 +32,7 @@ const HOURLY_POINTS = 10;
 const BOARD_NEW_POINTS = 5;       // a waiting-board photo for a court (once per member per court)
 const PIONEER_POINTS = 5;         // first-ever visit at a court
 const SWEEP_POINTS = 10;          // the community covers every court in a zone (this cycle)
-const EXPLORER_POINTS = 30;       // check-ins and reports cover every court in Toronto (this cycle)
+const EXPLORER_POINTS = 30;       // visits and reports cover every court in Toronto (this cycle)
 
 // Friendly label per award, used only for the notification copy below.
 const AWARD_LABELS = {
@@ -47,7 +47,7 @@ const AWARD_LABELS = {
 // ─── Payout primitive ───────────────────────────────────────────────────────────────────────
 // recipients: [{ uid, name }]. Returns the members newly paid.
 async function payGroupAward(awardId, { category, pointsEach, recipients, startedAt = null }) {
-  const clean = [...new Map(recipients.filter((r) => r && r.uid && r.uid !== NOT_A_MEMBER).map((r) => [r.uid, r])).values()];
+  const clean = [...new Map(recipients.filter((r) => r && r.uid && r.uid !== NOT_A_MEMBER && !isGuest(r.uid)).map((r) => [r.uid, r])).values()];
   if (clean.length === 0) return [];
   const ref = db().doc(`awards/${awardId}`);
   const fresh = await db().runTransaction(async (tx) => {
@@ -103,14 +103,19 @@ exports.onMatchCompletedMatchdayBonus = onDocumentWritten(
       .where('completed_at', '<=', Timestamp.fromMillis(pivot.getTime() + WINDOW_MS))
       .get();
     const matches = new Set();
-    const uids = new Set();
     snap.forEach((d) => {
       const s = d.data();
-      if (!isPlayedResult(s) || torontoParts(s.completed_at).day !== day) return;
-      matches.add(s.match_id);
-      Object.keys(s.applied_deltas || {}).forEach((u) => uids.add(u));
+      if (isPlayedResult(s) && torontoParts(s.completed_at).day === day) matches.add(s.match_id);
     });
     if (matches.size < MATCHDAY_MIN_MATCHES) return;
+    // Everyone on court: both sides and their member partners.
+    const matchSnaps = await db().getAll(...[...matches].map((id) => db().doc(`matches/${id}`)));
+    const uids = new Set();
+    matchSnaps.filter((m) => m.exists).forEach((m) => {
+      const x = m.data();
+      [x.player_1_uid, x.player_2_uid, ...(Array.isArray(x.participant_uids) ? x.participant_uids : [])]
+        .filter((u) => u && !isGuest(u)).forEach((u) => uids.add(u));
+    });
     await payGroupAward(`matchday_${day}`, {
       category: 'matchday', pointsEach: MATCHDAY_POINTS, recipients: [...uids].map((uid) => ({ uid, name: '' })),
     });
@@ -203,8 +208,8 @@ async function advanceSweep(ref, rosterKeys, a, fixed) {
 const payees = (result) => result.contributors.map((uid) => ({ uid, name: result.names[uid] || '' }));
 
 // Full Zone Sweep: visits (check-ins and match visits) and every kind of report cover a court; a
-// covered zone pays each member contributor 10. Explorer is the same for the whole city, but only
-// check-ins and reports count (a visit written from a score has lat/lng/dist 0) and it pays 30.
+// covered zone pays each member contributor 10. Explorer is the same for the whole city (courts on
+// the roster only) and pays 30.
 exports.onCourtActivityZoneSweep = onDocumentCreated(
   { document: 'courts/{id}', region: REGION },
   async (event) => {
@@ -219,8 +224,7 @@ exports.onCourtActivityZoneSweep = onDocumentCreated(
         });
       }
     }
-    const fromScore = a.category === 'visit' && !a.lat && !a.lng && !a.dist_m;
-    if (fromScore || !zoneOfCourt(a.court_key)) return;
+    if (!zoneOfCourt(a.court_key)) return;
     const city = allCourts();
     const result = await advanceSweep(db().doc('site_stats/city_sweep'), city, a, { total_courts: city.length });
     if (result.complete) {

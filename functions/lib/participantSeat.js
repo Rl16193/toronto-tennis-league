@@ -6,6 +6,7 @@ const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { notify } = require('./notify');
+const { isGuest } = require('./constants');
 
 const db = () => admin.firestore();
 
@@ -30,6 +31,8 @@ const registrationId = (eventId, uid, category, division) =>
 const OPEN_NAMES = ['Player Loading', 'BYE', ''];
 const slotIsOpen = (m, slot) => !m[`${slot}_uid`] && OPEN_NAMES.includes(m[`${slot}_name`] || '');
 const ROUND_ORDER = ['R32', 'R16', 'QF', 'SF', 'F'];
+/** A match's order in its round or group: the last number in its `match_id` (`m3`, `rr_g2_m4`). */
+const orderOf = (matchId) => Number((String(matchId || '').match(/(\d+)\D*$/) || [])[1] || 0);
 
 /**
  * Knockout late-joiner seating: finds an open first-round-first seat in the draw this registration
@@ -44,6 +47,7 @@ async function seatJoiner(p) {
     db().doc(`preferences/${p.uid}`).get(),
     db().collection('matches').where('event_id', '==', p.event_id).where('category', '==', 'tournament').get(),
   ]);
+  if (eventSnap.exists && eventSnap.data().status === 'cancelled') return null;
   const merges = (eventSnap.exists && eventSnap.data().zone_draw_config && eventSnap.data().zone_draw_config.merges) || {};
   const myZone = resolveMergedZone(zoneBucketId(prefsSnap.exists ? prefsSnap.data().preferred_zone : ''), merges);
   const band = skillBand(Number(p.skill || 0));
@@ -55,7 +59,7 @@ async function seatJoiner(p) {
     .filter((m) => m.skill_group === band || m.skill_group === 'All')
     .filter((m) => sub === 'doubles' || resolveMergedZone(effectiveZone(m.zone), merges) === myZone)
     .flatMap((m) => ['player_1', 'player_2'].filter((s) => slotIsOpen(m, s)).map((slot) => ({ m, slot })))
-    .sort((a, b) => ROUND_ORDER.indexOf(a.m.round) - ROUND_ORDER.indexOf(b.m.round) || (a.m.position || 0) - (b.m.position || 0));
+    .sort((a, b) => ROUND_ORDER.indexOf(a.m.round) - ROUND_ORDER.indexOf(b.m.round) || orderOf(a.m.match_id) - orderOf(b.m.match_id));
   for (const { m, slot } of candidates) {
     const outcome = await db().runTransaction(async (tx) => {
       const snap = await tx.get(m.ref);
@@ -63,7 +67,7 @@ async function seatJoiner(p) {
       const live = snap.data();
       if (live.status === 'complete' || !slotIsOpen(live, slot)) return 'spot taken';
       // participant_uids carries both sides and their doubles partners, as the draw editor keeps it.
-      const onCourt = [p.uid, p.partner_uid].filter((u) => u && !String(u).startsWith('guest_'));
+      const onCourt = [p.uid, p.partner_uid].filter((u) => u && !isGuest(u));
       tx.update(m.ref, { [`${slot}_uid`]: p.uid, [`${slot}_name`]: p.user_name || 'Player', participant_uids: FieldValue.arrayUnion(...onCourt), updated_at: Timestamp.now() });
       return 'seated';
     });
@@ -86,7 +90,7 @@ const registrationDoc = (fields) => ({
 async function registerMemberPartner(p) {
   if (p.category !== 'doubles_tournament' || p.status !== 'active') return;
   const partnerUid = p.partner_uid;
-  if (!partnerUid || partnerUid === p.uid || partnerUid.startsWith('guest_')) return;
+  if (!partnerUid || partnerUid === p.uid || isGuest(partnerUid)) return;
   const ref = db().doc(`event_participants/${registrationId(p.event_id, partnerUid, p.category, p.division)}`);
   const [existing, userSnap, statsSnap] = await Promise.all([ref.get(), db().doc(`users/${partnerUid}`).get(), db().doc(`stats/${partnerUid}`).get()]);
   if (existing.exists || !userSnap.exists) return;
@@ -115,7 +119,7 @@ async function joinPartnerPool(p, linkPlayers) {
   const snap = await db().collection('event_participants')
     .where('event_id', '==', p.event_id).where('category', '==', 'doubles_tournament').where('status', '==', 'active').get();
   const others = snap.docs.map((d) => d.data())
-    .filter((o) => o.uid && o.uid !== p.uid && !o.partner_uid && o.division === p.division && !o.uid.startsWith('guest_'))
+    .filter((o) => o.uid && o.uid !== p.uid && !o.partner_uid && o.division === p.division && !isGuest(o.uid))
     .map((o) => o.uid);
   await Promise.all(others.map((o) => linkPlayers(p.uid, o, 'partner_pool')));
   await notify(others, {
@@ -128,5 +132,5 @@ async function joinPartnerPool(p, linkPlayers) {
 
 module.exports = {
   seatJoiner, registerMemberPartner, joinPartnerPool, registrationDoc, registrationId,
-  zoneBucketId, effectiveZone, skillBand, resolveMergedZone,
+  zoneBucketId, effectiveZone, skillBand, resolveMergedZone, orderOf,
 };

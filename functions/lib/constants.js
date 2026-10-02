@@ -25,6 +25,9 @@ function torontoParts(when) {
   return { day: `${p.year}${p.month}${p.day}`, month: `${p.year}-${p.month}`, hour: parseInt(p.hour, 10) % 24 };
 }
 
+/** A doubles partner who isn't on the app (`guest_…` uid): paid league points, nothing else. */
+const isGuest = (uid) => String(uid || '').startsWith('guest_');
+
 // Deployment region for every trigger.
 const REGION = 'us-central1';
 const SUPER_ADMIN_UID = '7PvfzNtDmsOq5GLMieId7QRT7wH3';
@@ -49,4 +52,4 @@ const INSTAGRAM = 'https://www.instagram.com/racqnstringstoronto';
 const WHATSAPP = 'https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX';
 const FAQ = 'https://docs.google.com/document/d/17lyP5f62iuXRIiwDtrcn4EZo6vnx0jbr87kxdkEIzYY/edit?tab=t.0';
 
-module.exports = { TZ, toDate, torontoParts, REGION, SUPER_ADMIN_UID, SPREADSHEET_ID, EMAIL_FROM, EMAIL_REPLY_TO, SITE, INSTAGRAM, WHATSAPP, FAQ };
+module.exports = { TZ, toDate, isGuest, torontoParts, REGION, SUPER_ADMIN_UID, SPREADSHEET_ID, EMAIL_FROM, EMAIL_REPLY_TO, SITE, INSTAGRAM, WHATSAPP, FAQ };

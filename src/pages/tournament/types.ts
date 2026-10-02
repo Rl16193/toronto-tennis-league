@@ -75,7 +75,6 @@ export type TournamentMatch = {
   updated_at?: Timestamp | null;
   match_id: string;
   round: string;
-  position: number;
   drawsize: number;
   division: string;
   skill_group: SkillGroup;

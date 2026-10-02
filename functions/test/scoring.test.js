@@ -6,9 +6,10 @@ const admin = require('firebase-admin');
 if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('Run through the emulator: npm run test:functions');
 if (!admin.apps.length) admin.initializeApp({ projectId: 'demo-ttl' });
 const db = admin.firestore();
+const { Timestamp } = require('firebase-admin/firestore');
 const {
-  POINTS, RESULT_KINDS, awardIdForGroup, cancelDraw, groupBonus, isPlayedResult, pointsFor, recordScore,
-  recountEntries, resetScore, settleDispute,
+  POINTS, RESULT_KINDS, awardIdForGroup, cancelDraw, closeStaleRequests, groupBonus, isPlayedResult, pairDraw, pointsFor,
+  recordScore, recountEntries, resetScore, settleDispute,
 } = require('../lib/scoring');
 
 const ORG = 'org-1';
@@ -61,7 +62,9 @@ test('a group win counts at once: 3/1, the entry stores what it paid', async () 
   const e = await current('m1');
   assert.deepEqual([e.uid, e.sub_category, e.points_winner, e.points_loser], ['a', 'result', 3, 1]);
   assert.deepEqual([e.set_1_player_1, e.set_1_player_2, e.set_2_player_1, e.set_2_player_2], [6, 2, 6, 3]);
-  assert.deepEqual(e.applied_deltas.a, { leaguePoints: 3, matchesPlayed: 1, wins: 1, pointswon: 12, totalPointsPlayed: 17 });
+  assert.equal(e.applied_deltas, undefined); // points_winner/points_loser are the record
+  const a = await stats('a');
+  assert.deepEqual([a.leaguePoints, a.matchesPlayed, a.wins, a.pointswon, a.totalPointsPlayed], [3, 1, 1, 12, 17]);
   assert.ok(e.completed_at);
   const b = await stats('b');
   assert.deepEqual([b.leaguePoints, b.matchesPlayed, b.wins], [1, 1, undefined]);
@@ -76,8 +79,18 @@ test('a challenge pays +3 / -3, and the loser never goes below 0', async () => {
   assert.equal((await stats('a')).leaguePoints, 3);
   assert.equal((await stats('b')).leaguePoints, 0);
   const e = await current('c1');
-  assert.equal(e.applied_deltas.b.leaguePoints, -1);
   assert.deepEqual([e.points_winner, e.points_loser], [3, -1]);
+});
+
+test('undo reverses what the entry stored, not the table: a capped challenge loss comes back as 1', async () => {
+  await set('stats/b', { leaguePoints: 1 });
+  await set('matches/c1', accepted('challenge'));
+  await record('b', 'c1', A_WINS);
+  await resetScore(db, { uid: ORG, matchId: 'c1' });
+  const [a, b] = [await stats('a'), await stats('b')];
+  assert.deepEqual([a.leaguePoints, a.matchesPlayed, a.wins, b.leaguePoints, b.matchesPlayed], [0, 0, 0, 1, 0]);
+  const reset = (await entries('c1')).find((e) => e.sub_category === 'reset');
+  assert.deepEqual([reset.points_winner, reset.points_loser], [-3, 1]);
 });
 
 test('a rally pays +2 / +1 and no games tally', async () => {
@@ -104,6 +117,23 @@ test('an organizer records a played match for two others; players cannot', async
   assert.deepEqual(r.participant_uids, ['a', 'b']);
   assert.equal((await current(out.matchId)).uid, ORG);
   assert.equal((await stats('a')).leaguePoints, 2);
+  assert.equal(r.position, undefined);
+});
+
+test('a recorded challenge/rally takes its division and the lower skill band from both players', async () => {
+  const newMatch = { category: 'rally', player_1_uid: 'a', player_1_name: 'Ann', player_2_uid: 'b', player_2_name: 'Bob' };
+  await set('stats/a', { league: "Men's", skill_level: 4 });
+  await set('stats/b', { league: "Men's", skill_level: 3 });
+  let r = await match((await recordScore(db, { callerUid: ORG, newMatch, input: A_WINS })).matchId);
+  assert.deepEqual([r.division, r.skill_group], ["Men's", 'Challengers']);
+  await set('stats/b', { league: "Women's", skill_level: 2.5 });
+  r = await match((await recordScore(db, { callerUid: ORG, newMatch, input: A_WINS })).matchId);
+  assert.deepEqual([r.division, r.skill_group], ['Mixed', 'Beginners']);
+  await set('stats/b', {});
+  r = await match((await recordScore(db, { callerUid: ORG, newMatch, input: A_WINS })).matchId);
+  assert.deepEqual([r.division, r.skill_group], ['Mixed', 'Masters']);
+  assert.equal(pairDraw({ league: "Men's Retired Pro" }, { league: "Men's" }).division, "Men's");
+  assert.deepEqual(pairDraw(), { division: 'Mixed', skill_group: '' });
 });
 
 // ── Corrections and disputes ──
@@ -184,6 +214,19 @@ test('a knockout walkover pays the winner 0 and the loser the round points, and 
   assert.deepEqual([...sf.participant_uids].sort(), ['a', 'c']);
 });
 
+test('with no next_slot, the side comes from the number in match_id', async () => {
+  const qf = (id, extra) => knockout({ round: 'QF', match_id: id, next_match_id: 'S1', ...extra });
+  await set('matches/q10', qf('m10', { player_1_uid: 'c', player_1_name: 'Cy', player_2_uid: 'd', player_2_name: 'Di' }));
+  await set('matches/q9', qf('m9'));
+  await set('matches/sf', knockout({
+    round: 'SF', match_id: 'S1', player_1_uid: '', player_1_name: 'Player Loading', player_2_uid: '', player_2_name: 'Player Loading', participant_uids: [],
+  }));
+  await record('a', 'q9', A_WINS);
+  await record('c', 'q10', { winnerUid: 'c', scores: sets([6, 0], [6, 0]) });
+  const sf = await match('sf');
+  assert.deepEqual([sf.player_1_uid, sf.player_2_uid], ['a', 'c']); // m9 before m10, not '10' < '9'
+});
+
 test('a played final pays 20/10 and marks its event over', async () => {
   await set('matches/f', knockout({ round: 'F' }));
   await record('a', 'f', A_WINS);
@@ -209,8 +252,33 @@ test('doubles partners get the captain\'s credit, and a partner may record the s
   await set('event_participants/e1_b_mensdoubles', reg('b', 'b2'));
   await record('b2', 'd1', A_WINS);
   assert.equal((await stats('a2')).leaguePoints, 3);
-  assert.equal((await stats('b2')).leaguePoints, 1);
-  assert.deepEqual(Object.keys((await current('d1')).applied_deltas).sort(), ['a', 'a2', 'b', 'b2']);
+  const b2 = await stats('b2');
+  assert.deepEqual([b2.leaguePoints, b2.matchesPlayed, b2.pointswon], [1, 1, 7]);
+  await resetScore(db, { uid: ORG, matchId: 'd1' }); // partners are reversed too
+  for (const uid of ['a', 'a2', 'b', 'b2']) {
+    const s = await stats(uid);
+    assert.deepEqual([s.leaguePoints, s.matchesPlayed, s.wins ?? 0, s.pointswon, s.totalPointsPlayed], [0, 0, 0, 0, 0], uid);
+  }
+});
+
+test('a guest partner gets a stats doc only once paid, with the full shape, and is reversed like a member', async () => {
+  await set('matches/d1', group({ sub_category: 'doubles', skill_group: 'All', participant_uids: ['a', 'b', 'b2'] }));
+  const reg = (uid, partner, partner_name = '') => ({
+    uid, event_id: 'e1', category: 'doubles_tournament', sub_category: 'rr', division: "Men's", partner_uid: partner, partner_name, status: 'active',
+  });
+  await set('event_participants/e1_a_mensdoubles', reg('a', 'guest_g1', 'Gus'));
+  await set('event_participants/e1_b_mensdoubles', reg('b', 'b2'));
+  assert.equal((await db.doc('stats/guest_g1').get()).exists, false); // named, not paid
+  await record(ORG, 'd1', { winnerUid: 'a', walkover: true });
+  const g = await stats('guest_g1');
+  assert.deepEqual([g.uid, g.name, g.leaguePoints, g.matchesPlayed, g.rsPoints, g.rankTrend], ['guest_g1', 'Gus', 1, 0, 0, 'flat']);
+  assert.deepEqual(g.active_months, []);
+  await record(ORG, 'd1', { winnerUid: 'a', scores: sets([6, 1], [6, 1]) }); // organizer replaces the walkover
+  const g2 = await stats('guest_g1');
+  assert.deepEqual([g2.leaguePoints, g2.matchesPlayed, g2.wins, g2.name], [3, 1, 1, 'Gus']);
+  await resetScore(db, { uid: ORG, matchId: 'd1' });
+  const g3 = await stats('guest_g1');
+  assert.deepEqual([g3.leaguePoints, g3.matchesPlayed, g3.wins], [0, 0, 0]);
 });
 
 // ── Organizer actions ──
@@ -236,7 +304,7 @@ test('reset score undoes exactly what the result paid, records it, and pulls the
   assert.equal(all.find((e) => e.id === result.id).status, 'superseded');
   const reset = all.find((e) => e.sub_category === 'reset');
   assert.deepEqual([reset.status, reset.uid, reset.replaces_id], ['applied', ORG, result.id]);
-  assert.equal(reset.applied_deltas.b.leaguePoints, -3);
+  assert.deepEqual([reset.points_winner, reset.points_loser], [0, -3]);
   assert.equal(await current('qf'), undefined);
   assert.equal(await resetScore(db, { uid: ORG, matchId: 'qf' }), false); // nothing left to reset
 });
@@ -354,4 +422,22 @@ test("organizers are per event: another event's organizer cannot score here; a l
   await assert.rejects(record('org-3', 'r1', A_WINS), /Only the two players or an organizer/);
   await record('org-2', 'r1', A_WINS);
   assert.equal((await match('r1')).status, 'complete');
+});
+
+test('stale requests close: rallies after 30 days become played, open challenges after 40 are declined', async () => {
+  const daysAgo = (n) => Timestamp.fromMillis(Date.now() - n * 24 * 60 * 60 * 1000);
+  await set('matches/r_open', accepted('rally', { status: 'open', created_at: daysAgo(31) }));
+  await set('matches/r_acc', accepted('rally', { created_at: daysAgo(31) }));
+  await set('matches/r_new', accepted('rally', { status: 'open', created_at: daysAgo(29) }));
+  await set('matches/r_done', accepted('rally', { status: 'complete', created_at: daysAgo(60) }));
+  await set('matches/c_old', accepted('challenge', { status: 'open', created_at: daysAgo(41) }));
+  await set('matches/c_new', accepted('challenge', { status: 'open', created_at: daysAgo(39) }));
+  await set('matches/c_acc', accepted('challenge', { created_at: daysAgo(50) }));
+  assert.deepEqual(await closeStaleRequests(db), { rallies: 2, challenges: 1 });
+  const status = async (id) => (await match(id)).status;
+  assert.deepEqual(
+    await Promise.all(['r_open', 'r_acc', 'r_new', 'r_done', 'c_old', 'c_new', 'c_acc'].map(status)),
+    ['played', 'played', 'open', 'complete', 'declined', 'open', 'accepted'],
+  );
+  assert.deepEqual(await closeStaleRequests(db), { rallies: 0, challenges: 0 });
 });

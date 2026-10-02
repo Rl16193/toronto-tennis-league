@@ -5,15 +5,17 @@
  * - Every score entry is a `submissions` doc, kept forever. The match carries only its lifecycle
  *   `status` and `winner_uid`; the result (sets, walkover, points, ledger) lives on the applied entry.
  * - `commitPoints` is the only function in the codebase that writes league points to `stats`.
- * - Points already paid never move: the applied entry stores exactly what it paid
- *   (`applied_deltas`) and undoing negates exactly that. A reset is its own entry carrying the negation.
+ * - Points already paid never move: the applied entry stores what it paid (`points_winner` /
+ *   `points_loser`, with its sets), and `paymentOf` turns that into the per-player changes for both
+ *   paying and undoing, so the two can't drift. A reset is its own entry carrying the negation.
  * - The round-robin group bonus is an `awards` doc (sub_category league); it pays leaguePoints.
  *
  * Helpers only (no Cloud Function exports): see notify.js for why helpers live under lib/.
  */
 const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { isOrganizer } = require('./roles');
-const { toDate } = require('./constants');
+const { toDate, isGuest } = require('./constants');
+const { skillBand, orderOf } = require('./participantSeat');
 
 // ── The points table ───────────────────────────────────────────────────────────
 const POINTS = {
@@ -147,13 +149,21 @@ const creditedUids = (uid, partners) => {
   return p && p !== uid ? [uid, p] : [uid];
 };
 
-/** Stat changes a result makes, per uid. `loserBalance`: a challenge takes at most what the loser has. */
-function resultDeltas(match, result, { partners = new Map(), loserBalance = Infinity } = {}) {
+/** What a new result pays: the table, a challenge loss capped at what the loser has. */
+function pointsToPay(match, result, loserBalance = Infinity) {
+  const pts = pointsFor(match, result.walkover);
+  if (kindOf(match) === 'challenge') pts.loser = -Math.min(-pts.loser, Math.max(0, loserBalance));
+  return pts;
+}
+
+/**
+ * Stat changes a result makes, per uid, given the points it pays (`pts` = { winner, loser }). The
+ * one source for paying a result and, negated, for undoing a stored one (`paidBy`).
+ */
+function paymentOf(match, result, pts, partners = new Map()) {
   const deltas = new Map();
   const kind = kindOf(match);
   const tournament = kind === 'group' || kind === 'knockout';
-  const pts = pointsFor(match, result.walkover);
-  if (kind === 'challenge') pts.loser = -Math.min(-pts.loser, Math.max(0, loserBalance));
   const played = !result.walkover;
 
   const winnerIsP1 = result.winnerUid === match.player_1_uid;
@@ -171,23 +181,45 @@ function resultDeltas(match, result, { partners = new Map(), loserBalance = Infi
   return deltas;
 }
 
-const negate = (deltas) => new Map([...deltas].map(([u, d]) => [u, Object.fromEntries(Object.entries(d).map(([k, v]) => [k, -v]))]));
-const ledgerOf = (sub) => new Map(Object.entries((sub && sub.applied_deltas) || {}));
+/** What a stored result entry paid, from its own points and sets. Undoing negates exactly this. */
+const paidBy = (entry, match, partners) => (entry
+  ? paymentOf(match, resultOf(entry, match), { winner: entry.points_winner || 0, loser: entry.points_loser || 0 }, partners)
+  : new Map());
+
+// A guest's stats doc: the member shape (profileBootstrap.ts), every counter 0.
+const ZERO_STATS = ['leaguePoints', 'leaguePointsPrev', 'matchesPlayed', 'wins', 'pointswon', 'totalPointsPlayed',
+  'tournamentsPlayed', 'rankPosition', 'rankMove', 'eventsJoined', 'challengesPlayed', 'challengesWon', 'courtsVisited',
+  'zoneComplete', 'suggestions', 'boardPhotos', 'queueUpdates', 'currentStreak', 'bestStreak', 'monthsActive',
+  'volunteerClaimed', 'volunteerApproved', 'inviteClaimed', 'inviteApproved', 'hostClaimed', 'hostApproved', 'rsPoints', 'pointsSpent'];
+const guestStats = (uid, name) => ({
+  uid, name: name || '', skill_level: 0, league: '', ...Object.fromEntries(ZERO_STATS.map((k) => [k, 0])),
+  rankTrend: 'flat', rankUpdatedAt: null, profilePhoto: false, profileComplete: false, whatsappGroup: false,
+  followSocial: false, tagPost: false, active_months: [], latestVolunteerStatus: 'none', latestInviteStatus: 'none',
+  latestHostStatus: 'none', updated_at: FieldValue.serverTimestamp(),
+});
 
 /**
  * THE ONLY FUNCTION THAT WRITES LEAGUE POINTS TO `stats`. Undoes `undo`, applies `apply`, one net
- * increment per player, inside the caller's transaction. `loses` is never stored (losses derive as
- * matchesPlayed - wins), so it is dropped here.
+ * increment per player, inside the caller's transaction (call it before any other write: it reads
+ * guests' stats). A guest is given a stats doc the first time they are paid, named from `guestNames`.
+ * `loses` is never stored (losses derive as matchesPlayed - wins), so it is dropped here.
  */
-function commitPoints(tx, db, { undo = new Map(), apply = new Map() } = {}) {
+async function commitPoints(tx, db, { undo = new Map(), apply = new Map(), guestNames = new Map() } = {}) {
   const net = new Map();
   for (const [uid, d] of undo) addDelta(net, uid, Object.fromEntries(Object.entries(d).map(([k, v]) => [k, -v])));
   for (const [uid, d] of apply) addDelta(net, uid, d);
+  const guests = [...net.keys()].filter(isGuest);
+  const guestSnaps = new Map(await Promise.all(guests.map(async (u) => [u, await tx.get(db.collection('stats').doc(u))])));
   for (const [uid, delta] of net) {
     const values = {};
     Object.entries(delta).forEach(([k, v]) => { if (k !== 'loses' && typeof v === 'number' && v) values[k] = FieldValue.increment(v); });
     if (Object.keys(values).length === 0) continue;
-    tx.set(db.collection('stats').doc(uid), { ...values, updated_at: FieldValue.serverTimestamp() }, { merge: true });
+    const ref = db.collection('stats').doc(uid);
+    if (guestSnaps.has(uid) && !guestSnaps.get(uid).exists) {
+      if (apply.has(uid)) tx.set(ref, { ...guestStats(uid, guestNames.get(uid)), ...values });
+      continue;
+    }
+    tx.set(ref, { ...values, updated_at: FieldValue.serverTimestamp() }, { merge: true });
   }
 }
 
@@ -215,23 +247,33 @@ async function nextTarget(tx, db, match, matchId) {
   if (slot !== 'player_1' && slot !== 'player_2') {
     const siblings = inDraw
       .filter((d) => d.data().next_match_id === match.next_match_id)
-      .sort((a, b) => (a.data().position ?? 0) - (b.data().position ?? 0));
+      .sort((a, b) => orderOf(a.data().match_id) - orderOf(b.data().match_id));
     slot = siblings.findIndex((d) => d.id === matchId) <= 0 ? 'player_1' : 'player_2';
   }
   return { ref: next.ref, data: next.data(), slot };
 }
 
-/** uid → partner uid for a doubles match, from the active registrations in its division. */
-async function partnersFor(tx, db, match) {
-  const partners = new Map();
-  if (!isDoubles(match) || !match.event_id) return partners;
-  const snap = await tx.get(db.collection('event_participants').where('event_id', '==', match.event_id));
-  snap.docs.map((d) => d.data())
-    .filter((p) => p.category === 'doubles_tournament' && p.status === 'active' && p.uid && p.partner_uid &&
-      (!match.division || match.division === 'All' || p.division === match.division))
-    .forEach((p) => partners.set(p.uid, p.partner_uid));
-  return partners;
+/** An event's active doubles registrations that name a partner. */
+async function doublesRegs(tx, db, eventId) {
+  if (!eventId) return [];
+  const snap = await tx.get(db.collection('event_participants').where('event_id', '==', eventId));
+  return snap.docs.map((d) => d.data())
+    .filter((p) => p.category === 'doubles_tournament' && p.status === 'active' && p.uid && p.partner_uid);
 }
+
+/** A doubles match's teams from those registrations: uid → partner uid, and each guest partner's name. */
+function teamsOf(regs, match) {
+  const partners = new Map();
+  const guestNames = new Map();
+  if (!isDoubles(match)) return { partners, guestNames };
+  regs.filter((p) => !match.division || match.division === 'All' || p.division === match.division).forEach((p) => {
+    partners.set(p.uid, p.partner_uid);
+    if (isGuest(p.partner_uid)) guestNames.set(p.partner_uid, p.partner_name || '');
+  });
+  return { partners, guestNames };
+}
+
+const partnersFor = async (tx, db, match) => teamsOf(isDoubles(match) ? await doublesRegs(tx, db, match.event_id) : [], match);
 
 /** A match's participant_uids once `slot` holds `uid`: both sides plus their doubles partners (as the draw editor keeps it). */
 const onCourtAfter = (data, slot, uid, partners) => {
@@ -252,7 +294,7 @@ function entryDoc(match, matchId, fields) {
   return {
     category: match.category, sub_category: 'result', status: 'applied', match_id: matchId, event_id: match.event_id || '',
     uid: '', user_name: '', winner_uid: '', winner_name: '', ...scoreFieldPatch([[0, 0], [0, 0], [0, 0]]), court: '',
-    replaces_id: '', points_winner: 0, points_loser: 0, applied_deltas: {}, applied_at: null, completed_at: null,
+    replaces_id: '', points_winner: 0, points_loser: 0, applied_at: null, completed_at: null,
     resolved_by: '', resolved_at: null, created_at: now, updated_at: now,
     ...fields,
   };
@@ -272,10 +314,28 @@ function playedMatchFor(input) {
     player_2_uid: uids[1], player_2_name: String(n.player_2_name || ''),
     participant_uids: uids, event_id: n.category === 'challenge' ? n.event_id : '', winner_uid: '',
     responded_at: now, created_at: now, updated_at: now,
-    match_id: '', round: '', position: 0, drawsize: 0, division: n.category === 'challenge' ? String(n.division || '') : '',
+    match_id: '', round: '', drawsize: 0, division: '',
     skill_group: '', zone: '', format: '', player_1_slot: 0, player_2_slot: 0, next_match_id: '', next_slot: '', started: false,
     group_label: n.category,
   };
+}
+
+const BANDS = ['Beginners', 'Challengers', 'Masters'];
+/**
+ * A recorded challenge/rally's division and skill band, from both players' stats: the shared
+ * `league` (else 'Mixed'), and the lower of their bands. One side missing → the other's.
+ */
+// Same as leagueDivision / pairDivision in src/utils/skillLevels.ts — change together.
+const leagueDivision = (league) => {
+  const l = String(league || '').toLowerCase();
+  return l.includes('wom') || l.includes('female') ? "Women's" : l.includes('men') || l.includes('male') ? "Men's" : '';
+};
+
+function pairDraw(a = {}, b = {}) {
+  const [la, lb] = [leagueDivision(a.league), leagueDivision(b.league)];
+  const division = la && la === lb ? la : 'Mixed';
+  const bands = [a, b].filter((s) => Number(s.skill_level) > 0).map((s) => skillBand(Number(s.skill_level)));
+  return { division, skill_group: bands.sort((x, y) => BANDS.indexOf(x) - BANDS.indexOf(y))[0] || '' };
 }
 
 const nameOf = async (tx, db, uid) => {
@@ -306,6 +366,8 @@ async function recordScore(db, { callerUid, matchId, input, newMatch, applyEntry
     if (newMatch) {
       match = playedMatchFor(newMatch);
       matchRef = db.collection('matches').doc();
+      const [s1, s2] = await tx.getAll(db.collection('stats').doc(match.player_1_uid), db.collection('stats').doc(match.player_2_uid));
+      Object.assign(match, pairDraw(s1.data(), s2.data()));
     } else {
       matchRef = db.collection('matches').doc(matchId);
       const snap = await tx.get(matchRef);
@@ -322,7 +384,7 @@ async function recordScore(db, { callerUid, matchId, input, newMatch, applyEntry
     const eventSnap = match.event_id ? await tx.get(db.collection('events').doc(match.event_id)) : null;
     const event = eventSnap && eventSnap.exists ? eventSnap.data() : null;
     const organizer = await isOrganizer(callerUid, event);
-    const partners = tournament ? await partnersFor(tx, db, match) : new Map();
+    const { partners, guestNames } = await partnersFor(tx, db, match);
     const sides = [match.player_1_uid, match.player_2_uid];
     const isPlayer = sides.includes(callerUid) || sides.some((uid) => partners.get(uid) === callerUid);
     if (newMatch && !organizer) fail('Only an organizer can record a match for two other players.', 'permission-denied');
@@ -374,25 +436,21 @@ async function recordScore(db, { callerUid, matchId, input, newMatch, applyEntry
       fail('The next-round spot already holds another player. Fix the draw first.', 'failed-precondition');
     }
 
-    // Points: undo exactly what the current entry paid, pay the new result.
+    // Points: undo exactly what the current entry paid (its stored points), pay the new result.
+    const undo = paidBy(current && current.data, match, partners);
     let loserBalance = Infinity;
     if (match.category === 'challenge') {
       const loserUid = result.winnerUid === match.player_1_uid ? match.player_2_uid : match.player_1_uid;
       const s = await tx.get(db.collection('stats').doc(loserUid));
-      loserBalance = (s.exists ? s.data().leaguePoints ?? 0 : 0) - (ledgerOf(current && current.data).get(loserUid)?.leaguePoints ?? 0);
+      loserBalance = (s.exists ? s.data().leaguePoints ?? 0 : 0) - (undo.get(loserUid)?.leaguePoints ?? 0);
     }
-    const apply = resultDeltas(match, result, { partners, loserBalance });
-    commitPoints(tx, db, { undo: ledgerOf(current && current.data), apply });
-    const loserUid = result.winnerUid === match.player_1_uid ? match.player_2_uid : match.player_1_uid;
-    const paid = tournament ? pointsFor(match, result.walkover) : {
-      winner: apply.get(result.winnerUid)?.leaguePoints ?? 0, loser: apply.get(loserUid)?.leaguePoints ?? 0,
-    };
+    const paid = pointsToPay(match, result, loserBalance);
+    await commitPoints(tx, db, { undo, apply: paymentOf(match, result, paid, partners), guestNames });
     const appliedFields = {
       status: 'applied',
       sub_category: result.walkover ? 'walkover' : old ? 'correction' : 'result',
       replaces_id: current ? current.id : '',
-      points_winner: paid.winner, points_loser: paid.loser,
-      applied_deltas: Object.fromEntries(apply), applied_at: now,
+      points_winner: paid.winner, points_loser: paid.loser, applied_at: now,
       // Pinned to the first scoring of the match: corrections carry the original time.
       completed_at: current ? current.data.completed_at || now : now,
       updated_at: now,
@@ -473,15 +531,14 @@ async function resetScore(db, { uid, matchId }) {
     if (match.status !== 'complete') return false;
     const current = await currentEntry(tx, db, matchId);
     const target = tournament ? await nextTarget(tx, db, match, matchId) : null;
-    const partners = target ? await partnersFor(tx, db, match) : new Map();
+    const { partners } = await partnersFor(tx, db, match);
     const callerName = await nameOf(tx, db, uid);
-    const undo = ledgerOf(current && current.data);
-    commitPoints(tx, db, { undo });
+    await commitPoints(tx, db, { undo: paidBy(current && current.data, match, partners) });
     if (current) {
       tx.update(current.ref, { status: 'superseded', updated_at: now });
       tx.set(db.collection('submissions').doc(), entryDoc(match, matchId, {
         sub_category: 'reset', status: 'applied', uid, user_name: callerName, replaces_id: current.id,
-        applied_deltas: Object.fromEntries(negate(undo)), applied_at: now,
+        points_winner: 0 - (current.data.points_winner || 0), points_loser: 0 - (current.data.points_loser || 0), applied_at: now,
       }));
     }
     tx.update(matchRef, { status: 'accepted', winner_uid: '', updated_at: now });
@@ -513,10 +570,11 @@ async function cancelDraw(db, { uid, eventId, matchIds }) {
       groupAwards.set(id, db.collection('awards').doc(id));
     });
     const awardSnaps = groupAwards.size ? await tx.getAll(...groupAwards.values()) : [];
+    const regs = snaps.some((s) => isDoubles(s.data())) ? await doublesRegs(tx, db, eventId) : [];
     const undo = new Map();
-    entries.forEach((e) => e && ledgerOf(e.data).forEach((d, u) => addDelta(undo, u, d)));
+    entries.forEach((e, i) => e && paidBy(e.data, snaps[i].data(), teamsOf(regs, snaps[i].data()).partners).forEach((d, u) => addDelta(undo, u, d)));
     awardSnaps.filter((a) => a.exists).forEach((a) => (a.data().awardees || []).forEach((u) => addDelta(undo, u, { leaguePoints: POINTS.groupBonus })));
-    commitPoints(tx, db, { undo });
+    await commitPoints(tx, db, { undo });
     entries.forEach((e) => e && tx.update(e.ref, { status: 'superseded', updated_at: now }));
     awardSnaps.filter((a) => a.exists).forEach((a) => tx.delete(a.ref));
     snaps.forEach((s) => tx.delete(s.ref));
@@ -544,7 +602,7 @@ async function groupBonus(db, { uid, eventId, matchIds, award }) {
     const bonus = (uids) => new Map(uids.map((u) => [u, { leaguePoints: POINTS.groupBonus }]));
     if (award) {
       const players = [...new Set(snaps.flatMap((s) => [s.data().player_1_uid, s.data().player_2_uid]).filter(Boolean))];
-      commitPoints(tx, db, { apply: bonus(players) });
+      await commitPoints(tx, db, { apply: bonus(players) });
       const now = Timestamp.now();
       tx.set(ref, {
         category: 'rr_group_bonus', sub_category: 'league', key: `${eventId}_${drawKey}_${first.data().group_label}`,
@@ -553,7 +611,7 @@ async function groupBonus(db, { uid, eventId, matchIds, award }) {
       return players.length;
     }
     const paid = existing.data().awardees || [];
-    commitPoints(tx, db, { undo: bonus(paid) });
+    await commitPoints(tx, db, { undo: bonus(paid) });
     tx.delete(ref);
     return paid.length;
   });
@@ -565,7 +623,7 @@ async function groupBonus(db, { uid, eventId, matchIds, award }) {
  * double-count and no marker is needed. Returns the counts.
  */
 async function recountEntries(db, uid) {
-  if (!uid || String(uid).startsWith('guest_')) return null;
+  if (!uid || isGuest(uid)) return null;
   const regs = await db.collection('event_participants').where('uid', '==', uid).where('status', '==', 'active').get();
   const events = [...new Set(regs.docs.map((d) => d.data().event_id).filter(Boolean))];
   const tournaments = new Set(regs.docs.filter((d) => /_tournament$/.test(d.data().category || '')).map((d) => d.data().event_id));
@@ -577,11 +635,45 @@ async function recountEntries(db, uid) {
   return { eventsJoined: events.length, tournamentsPlayed: tournaments.size };
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+/**
+ * Closes stale requests (weeklyReminders): a rally open, or accepted with no result, 30+ days after
+ * it was made becomes `played` (no score, no points); a challenge still open after 40 days is
+ * `declined`. Batched writes. Returns the counts.
+ */
+async function closeStaleRequests(db, now = Date.now()) {
+  const old = (m, days) => { const t = toDate(m.created_at); return !!t && now - t.getTime() >= days * DAY_MS; };
+  const [rallies, challenges] = await Promise.all([
+    db.collection('matches').where('category', '==', 'rally').where('status', 'in', ['open', 'accepted']).get(),
+    db.collection('matches').where('category', '==', 'challenge').where('status', '==', 'open').get(),
+  ]);
+  const writes = [];
+  for (const d of rallies.docs.filter((x) => old(x.data(), 30))) {
+    if (d.data().status === 'accepted') {
+      const subs = await db.collection('submissions').where('match_id', '==', d.id).where('status', '==', 'applied').get();
+      if (subs.docs.some((s) => RESULT_KINDS.includes(s.data().sub_category))) continue;
+    }
+    writes.push([d.ref, 'played']);
+  }
+  challenges.docs.filter((d) => old(d.data(), 40)).forEach((d) => writes.push([d.ref, 'declined']));
+  for (let i = 0; i < writes.length; i += 400) {
+    const batch = db.batch();
+    const at = Timestamp.now();
+    writes.slice(i, i + 400).forEach(([ref, status]) => batch.update(ref, { status, updated_at: at }));
+    await batch.commit();
+  }
+  const count = (status) => writes.filter(([, s]) => s === status).length;
+  return { rallies: count('played'), challenges: count('declined') };
+}
+
 module.exports = {
   POINTS,
   RESULT_KINDS,
   ResultError,
   cancelDraw,
+  closeStaleRequests,
+  pairDraw,
+  paymentOf,
   recountEntries,
   groupBonus,
   isPlayedResult,

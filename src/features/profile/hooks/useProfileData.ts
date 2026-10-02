@@ -4,6 +4,7 @@ import { db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent, EventParticipant } from '../../../types';
 import { resolveStorageUrl } from '../../events/services/eventService';
+import { isCancelledEvent } from '../../../utils/eventTypes';
 
 /** An event the member is actively registered in (withdrawn and cancelled rows are left out). */
 export type JoinedEventCard = TennisEvent & {
@@ -66,7 +67,7 @@ export const useProfileData = () => {
 
         const eventMap = new Map<string, TennisEvent>();
         eventSnapshots.forEach((eventSnapshot) => {
-          eventSnapshot.docs.forEach((eventDoc) => {
+          eventSnapshot.docs.filter((d) => !isCancelledEvent(d.data())).forEach((eventDoc) => {
             eventMap.set(eventDoc.id, { id: eventDoc.id, ...eventDoc.data() } as TennisEvent);
           });
         });

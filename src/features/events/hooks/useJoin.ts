@@ -5,6 +5,7 @@ import { logEvent } from 'firebase/analytics';
 import { BYE, PLAYER_LOADING, resolveZoneConfig, zoneBucketFor } from '../../../pages/tournament/utils';
 import { isDoublesEvent, isTournamentEvent, isWeekendMatchdaysEvent } from '../../../utils/eventTypes';
 import { isSeniorsLeague, leagueDivision } from '../../../utils/skillLevels';
+import { guestUid } from '../../../utils/guest';
 import { DisplayEvent } from '../services/eventService';
 import { INITIAL_JOIN_FORM, JoinFormState, SlotResult } from '../types';
 
@@ -15,7 +16,7 @@ interface Params {
   profile: {
     user: { name: string };
     stats: { skill_level: number; league?: string };
-    preferences?: { preferred_zone?: string; preferred_courts?: string[] };
+    preferences?: { preferred_zone?: string; preferred_courts?: string[]; custom_courts?: string[] };
   } | null;
   hasJoinedEvent: (id: string) => boolean;
   hasJoinedAnyTournament: () => boolean;
@@ -183,7 +184,7 @@ export function useJoin({ user, profile, hasJoinedEvent, hasJoinedAnyTournament 
     const doubles = isDoublesEvent(selectedEvent);
     if (!joinForm.division) { setJoinError('Please select a division.'); return; }
     // Courts decide the zone, and a zone-enabled draw can't place a player without one.
-    if (resolveZoneConfig(selectedEvent.zone_draw_config as Parameters<typeof resolveZoneConfig>[0]).enabled && !profile?.preferences?.preferred_courts?.length) {
+    if (resolveZoneConfig(selectedEvent.zone_draw_config as Parameters<typeof resolveZoneConfig>[0]).enabled && !profile?.preferences?.preferred_courts?.length && !profile?.preferences?.custom_courts?.length) {
       if (!pendingCourts?.courts.length) { setJoinError('Choose at least one preferred court before joining this event.'); return; }
       setJoining(true);
       const saved = await pendingCourts.save();
@@ -206,7 +207,7 @@ export function useJoin({ user, profile, hasJoinedEvent, hasJoinedAnyTournament 
     if (slotStatus?.status === 'fallback' && !slotFallbackConfirmed) { setJoinError('Please confirm the draw assignment above.'); return; }
 
     // A partner not on the app gets a guest id, so partner_uid '' keeps meaning "looking for one".
-    const partnerUid = !partnerName ? '' : joinForm.partnerUid || `guest_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const partnerUid = !partnerName ? '' : joinForm.partnerUid || guestUid();
     const division = !doubles && joinForm.seniors ? `${joinForm.division} Retired Pro` : joinForm.division;
 
     setJoining(true);

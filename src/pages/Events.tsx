@@ -21,7 +21,7 @@ import { track } from '../lib/analytics';
 import { resolveZoneConfig } from './tournament/utils';
 import { toDate, toMillis } from '../utils/eventDates';
 import { isSeniorsLeague, leagueDivision } from '../utils/skillLevels';
-import { isEventManager, isOrganizerProfile, isTournamentCategoryEvent, isTournamentCategoryType, isTournamentEvent } from '../utils/eventTypes';
+import { isCancelledEvent, isEventManager, isOrganizerProfile, isTournamentCategoryEvent, isTournamentCategoryType, isTournamentEvent } from '../utils/eventTypes';
 
 type EventsTab = 'upcoming' | 'completed';
 type EventCategory = 'socials' | 'tournaments';
@@ -35,11 +35,11 @@ export const Events: React.FC = () => {
   const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed, handleSubmitJoin } = useJoin({ user, profile, hasJoinedEvent, hasJoinedAnyTournament });
   // Zone-enabled tournaments need courts to place a player; the join sheet asks for them inline.
   const { updateLoading: courtsSaving, actions: courtsActions } = useProfileActions();
-  const [pendingCourts, setPendingCourts] = useState<{ courts: string[]; zone: string }>({ courts: [], zone: '' });
+  const [pendingCourts, setPendingCourts] = useState<{ courts: string[]; zone: string; custom: string[] }>({ courts: [], zone: '', custom: [] });
   // Resolved, not raw: an event that never saved a zone config still has zones on by default.
   const needsCourts = !!selectedEvent && isTournamentEvent(selectedEvent)
     && resolveZoneConfig(selectedEvent.zone_draw_config).enabled
-    && !profile?.preferences.preferred_courts?.length;
+    && !profile?.preferences.preferred_courts?.length && !profile?.preferences.custom_courts?.length;
 
   const [category, setCategory] = useState<EventCategory>('tournaments');
   const [tab, setTab] = useState<EventsTab>('upcoming');
@@ -120,7 +120,7 @@ export const Events: React.FC = () => {
         );
         setCompletedEvents(
           eventsSnap.docs
-            .filter((d) => completedIds.has(d.id))
+            .filter((d) => completedIds.has(d.id) && !isCancelledEvent(d.data()))
             .map((d) => ({
               id: d.id,
               title: (d.data().title as string) || 'Tournament',
@@ -149,7 +149,7 @@ export const Events: React.FC = () => {
     && !!leagueDivision(profile?.stats.league)
     && !isSeniorsLeague(profile?.stats.league)
     && !isLateRegistration(event)
-    && (!resolveZoneConfig(event.zone_draw_config).enabled || !!profile?.preferences.preferred_courts?.length)
+    && (!resolveZoneConfig(event.zone_draw_config).enabled || !!profile?.preferences.preferred_courts?.length || !!profile?.preferences.custom_courts?.length)
   );
 
   useEffect(() => {
@@ -326,8 +326,8 @@ export const Events: React.FC = () => {
             setSlotFallbackConfirmed={setSlotFallbackConfirmed}
             joining={joining}
             onSubmitJoin={() => handleSubmitJoin(needsCourts ? {
-              courts: pendingCourts.courts,
-              save: () => courtsActions.updatePreferredCourts(pendingCourts.courts, pendingCourts.zone),
+              courts: [...pendingCourts.courts, ...pendingCourts.custom],
+              save: () => courtsActions.updatePreferredCourts(pendingCourts.courts, pendingCourts.zone, pendingCourts.custom),
             } : undefined)}
             onClose={() => setSelectedEvent(null)}
             courtsPicker={needsCourts && profile ? (
@@ -335,7 +335,7 @@ export const Events: React.FC = () => {
                 preferences={profile.preferences}
                 saving={courtsSaving}
                 onSave={() => {}}
-                onDraftChange={(courts, zone) => setPendingCourts({ courts, zone })}
+                onDraftChange={(courts, zone, custom) => setPendingCourts({ courts, zone, custom })}
               />
             ) : undefined}
           />

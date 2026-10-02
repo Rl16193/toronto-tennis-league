@@ -1,5 +1,5 @@
 import { TournamentMatch, TournamentPlayer } from './types';
-import { BYE, PLAYER_LOADING, formatDeadline, formatPlayerName } from './utils';
+import { BYE, PLAYER_LOADING, byMatchNumber, formatDeadline, formatPlayerName } from './utils';
 
 export const getRoundLabels = (drawSize: number): string[] => {
   if (drawSize <= 2) return ['F'];
@@ -341,7 +341,7 @@ const bracketSlides = (input: DrawSlideInput, deadline?: string): DrawSlide[] =>
   if (windowRounds.length === 0) return [];
 
   const byRound = windowRounds.map((round) =>
-    knockout.filter((m) => m.round === round).sort((a, b) => a.position - b.position));
+    knockout.filter((m) => m.round === round).sort(byMatchNumber));
 
   // A draw sheet only reads if the whole of a first-round pair is on the same sheet, so an
   // oversized first column is halved and every later column is halved with it. Keeping the first
@@ -430,7 +430,7 @@ const pendingSlides = (input: DrawSlideInput, deadline?: string): DrawSlide[] =>
   const contacts = input.contacts ?? {};
   const pending = input.matches
     .filter((m) => m.status !== 'complete' && isRealMatch(m))
-    .sort((a, b) => (roundRank(a.round ?? '') - roundRank(b.round ?? '')) || (a.position - b.position));
+    .sort((a, b) => (roundRank(a.round ?? '') - roundRank(b.round ?? '')) || byMatchNumber(a, b));
   if (pending.length === 0) return [];
 
   const PER_SLIDE = 8;

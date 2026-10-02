@@ -444,7 +444,7 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
         profile.stats.skill_level ? `Skill ${profile.stats.skill_level}` : '',
         // Optional: a member who has never picked a court has no `preferred_courts` at all, and
         // indexing it threw, taking the whole Profile page down with the error boundary.
-        profile.preferences.preferred_courts?.[0],
+        profile.preferences.preferred_courts?.[0] ?? profile.preferences.custom_courts?.[0],
         profile.preferences.preferred_zone,
       ].filter(Boolean).join(' · '),
     }

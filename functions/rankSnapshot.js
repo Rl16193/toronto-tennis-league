@@ -14,7 +14,7 @@ const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const { Timestamp } = require('firebase-admin/firestore');
 
-const { TZ, REGION } = require('./lib/constants');
+const { TZ, REGION, isGuest } = require('./lib/constants');
 const db = () => admin.firestore();
 
 // Mirror of inDivision() in src/features/leagues/useStandings.ts — keep in sync.
@@ -34,7 +34,7 @@ exports.weeklyRankSnapshot = onSchedule(
     const players = [];
     snap.forEach((d) => {
       const s = d.data();
-      if (!s.leaguePoints || s.leaguePoints <= 0) return;
+      if (isGuest(d.id) || !s.leaguePoints || s.leaguePoints <= 0) return; // guests are never ranked
       players.push({
         uid: d.id,
         league: s.league || '',
@@ -62,7 +62,7 @@ exports.weeklyRankSnapshot = onSchedule(
     }
 
     const active = new Set();
-    (await db().collection('event_participants').get()).forEach((d) => { const r = d.data(); if (r.uid && r.status === 'active' && !String(r.uid).startsWith('guest_')) active.add(r.uid); });
+    (await db().collection('event_participants').get()).forEach((d) => { const r = d.data(); if (r.uid && r.status === 'active' && !isGuest(r.uid)) active.add(r.uid); });
     const completed = await db().collection('matches').where('category', '==', 'tournament').where('status', '==', 'complete').count().get();
     // snake_case, matching every other site_stats doc — this one was the lone camelCase holdout.
     const siteStats = { active_players: active.size, matches_organized: completed.data().count + 70, updated_at: date };

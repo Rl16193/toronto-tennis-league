@@ -31,7 +31,7 @@ type Actions = {
   updateSkills: (skill: number) => Promise<boolean>;
   updateLeagueAgeCategory: (league: "Men's" | "Women's" | '', ageCategory: 'Retired Pro' | 'Juniors' | '') => Promise<boolean>;
   updateDisplayBadges: (badgeIds: string[]) => Promise<boolean>;
-  updatePreferredCourts: (courts: string[], zone: string) => Promise<boolean>;
+  updatePreferredCourts: (courts: string[], zone: string, custom: string[]) => Promise<boolean>;
   updatePreferredZone: (zone: string) => Promise<boolean>;
   updateFavouritePlayers: (players: string[]) => Promise<boolean>;
   updateEmailNotifications: (enabled: boolean) => Promise<boolean>;
@@ -411,12 +411,12 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
             <CourtsEditor
               preferences={preferences}
               saving={updateLoading}
-              onSave={(courts, zone) => save(() => actions.updatePreferredCourts(courts, zone))}
+              onSave={(courts, zone, custom) => save(() => actions.updatePreferredCourts(courts, zone, custom))}
             />
           ) : (
             <div className="mt-1 flex flex-wrap gap-1.5">
-              {(preferences.preferred_courts?.length ?? 0) > 0
-                ? (preferences.preferred_courts ?? []).map((c) => <span key={c} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{c}</span>)
+              {(preferences.preferred_courts?.length ?? 0) + (preferences.custom_courts?.length ?? 0) > 0
+                ? [...(preferences.preferred_courts ?? []), ...(preferences.custom_courts ?? [])].map((c) => <span key={c} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{c}</span>)
                 : <span className="text-sm text-fg/70">None set.</span>}
             </div>
           )}

@@ -6,6 +6,7 @@ import { parseValidDate, type FirestoreDateLike } from '../../utils/eventDates';
 import { EMAIL_REGEX } from '../../utils/emailRegex';
 import { DrawConfig, SkillGroup, SkillMergePair, SKILL_GROUP_ORDER, TemplateMatch, TournamentMatch, TournamentPlayer, UNASSIGNED_ZONE_ID, ZoneBucket, ZoneDrawConfig } from './types';
 import { ZONE_NAMES } from '../../utils/zones';
+import { isGuest } from '../../utils/guest';
 
 /** 'Singles' | 'Doubles' of a registration — the draw key's first segment. */
 export const choiceOf = (p: Pick<EventParticipant, 'category'>): 'Singles' | 'Doubles' =>
@@ -20,9 +21,6 @@ const DOUBLES_ID: Record<string, string> = { "men's": 'mensdoubles', "women's": 
 /** `{eventId}_{uid}`; doubles `{eventId}_{uid}_{mensdoubles|womensdoubles|mixeddoubles}`. */
 export const registrationId = (eventId: string, uid: string, category: string, division?: string) =>
   `${eventId}_${uid}${category === 'doubles_tournament' ? `_${DOUBLES_ID[(division || '').toLowerCase()] || 'doubles'}` : ''}`;
-
-/** A doubles partner who is not on the app. */
-export const guestUid = () => `guest_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
 // MIRRORS drawKeyOf / awardIdForGroup in functions/lib/scoring.js: change together, or the Group
 // Bonus switch reads a different award doc from the one the server writes.
@@ -66,6 +64,12 @@ export const SCORE_EDIT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** A match drawn client-side before the draw is generated (not a Firestore doc). */
 export const isPreviewMatch = (m: Pick<TournamentMatch, 'id'>) => m.id.startsWith('preview_');
+
+/** A match's order within its round or group: the trailing number of `match_id` (`m3`, `rr_g2_m4`). */
+export const matchNumber = (matchId?: string) => Number(/(\d+)$/.exec(matchId || '')?.[1] ?? 0);
+
+export const byMatchNumber = (a: Pick<TournamentMatch, 'match_id'>, b: Pick<TournamentMatch, 'match_id'>) =>
+  matchNumber(a.match_id) - matchNumber(b.match_id);
 
 export const PLAYER_LOADING = 'Player Loading';
 // The picker value for "add a Player Loading placeholder" (never a real uid).
@@ -353,14 +357,15 @@ export const getWinnerPlaceholder = (slot: number | string, matches: TemplateMat
 
 /**
  * Doubles: collapses mutual partner pairs (each row's partner_uid names the other) into one entry,
- * with `partner_name` set to the partner's registered name. A guest partner has no row of their
- * own, so that entry is kept as-is.
+ * with `partner_name` set to the partner's registered name. Guest rows go last, so the member of
+ * a member + guest pair is always the captain; an unpaired entry is kept as-is.
  */
 export const deduplicateDoublesTeams = (participants: EventParticipant[]): EventParticipant[] => {
   const processed = new Set<string>();
   const result: EventParticipant[] = [];
+  const ordered = [...participants].sort((a, b) => Number(isGuest(a.uid)) - Number(isGuest(b.uid)));
 
-  for (const p of participants) {
+  for (const p of ordered) {
     if (processed.has(p.id)) continue;
 
     const partner = p.partner_uid
@@ -482,7 +487,6 @@ export const deleteKey = <T extends Record<string, unknown>>(obj: T, key: string
 
 export const buildMatchFields = (
   tm: TemplateMatch,
-  index: number,
   slotMap: Map<number, TournamentPlayer>,
   cfg: {
     eventId: string;
@@ -515,7 +519,6 @@ export const buildMatchFields = (
     updated_at: now,
     match_id: tm.match_id,
     round: tm.round,
-    position: index + 1,
     drawsize: cfg.drawsize,
     division: cfg.division,
     skill_group: cfg.skillGroup,

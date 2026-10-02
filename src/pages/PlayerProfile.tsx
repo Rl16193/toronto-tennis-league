@@ -11,6 +11,7 @@ import { ContactData, MemberInfo, TennisEvent, UserData, UserPreferences, UserSt
 import type { TournamentMatch } from './tournament/types';
 import { BadgeRow } from '../features/tasks/BadgePicker';
 import { skillTier, leagueDivision, leagueAgeCategory } from '../utils/skillLevels';
+import { isCancelledEvent } from '../utils/eventTypes';
 import { contactChannels, pillButtonCls } from '../components/ContactOpponentButton';
 
 import { deriveResults } from '../features/matches/tournamentResults';
@@ -76,7 +77,7 @@ export const PlayerProfile: React.FC = () => {
         setOrganizer(null);
         if (eventId) {
           const eventDoc = await getDoc(doc(db, 'events', eventId));
-          if (eventDoc.exists()) {
+          if (eventDoc.exists() && !isCancelledEvent(eventDoc.data())) {
             // The creator is the first of the event's organizers.
             const creatorId = (eventDoc.data() as TennisEvent).organizer_ids?.[0];
             if (creatorId) {
@@ -128,7 +129,7 @@ export const PlayerProfile: React.FC = () => {
     whatsappContact: player.whatsapp_contact,
     preferred: player.preferred_mode_of_contact,
   });
-  const courts = preferences?.preferred_courts ?? [];
+  const courts = [...(preferences?.preferred_courts ?? []), ...(preferences?.custom_courts ?? [])];
   const favourites = preferences?.favourite_players ?? [];
 
   const s = stats;

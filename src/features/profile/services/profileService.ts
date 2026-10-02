@@ -112,8 +112,9 @@ export const updateDisplayBadges = async (userId: string, badgeIds: string[]) =>
   await updateDoc(doc(db, 'users', userId), { display_badges: badgeIds.slice(0, 3) });
 };
 
-export const updatePreferredCourts = async (userId: string, courts: string[], zone: string) => {
-  await updateDoc(doc(db, 'preferences', userId), { preferred_courts: courts, preferred_zone: zone });
+/** `courts` are roster courts; `custom` are typed courts not on the roster (CourtsEditor). */
+export const updatePreferredCourts = async (userId: string, courts: string[], zone: string, custom: string[]) => {
+  await updateDoc(doc(db, 'preferences', userId), { preferred_courts: courts, custom_courts: custom, preferred_zone: zone });
 };
 
 // Picked by hand on the profile card; the next court edit recomputes it. `onZoneChanged`

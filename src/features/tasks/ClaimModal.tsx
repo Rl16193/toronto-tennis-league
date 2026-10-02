@@ -8,6 +8,7 @@ import { Input } from '../../components/Input';
 import { SelectField } from '../../components/SelectField';
 import { MemberSearchInput } from '../members/MemberSearchInput';
 import { useAuth } from '../../context/AuthContext';
+import { isCancelledEvent } from '../../utils/eventTypes';
 import { createAmbassadorClaim, createHostClaim, createVolunteerClaim, type ClaimType } from './claimService';
 
 const TITLES: Record<ClaimType, string> = {
@@ -36,7 +37,7 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
   useEffect(() => {
     if (type === 'volunteer') {
       getDocs(collection(db, 'events')).then((snap) =>
-        setEvents(snap.docs.map((d) => ({ id: d.id, title: (d.data().title as string) || 'Untitled event' }))
+        setEvents(snap.docs.filter((d) => !isCancelledEvent(d.data())).map((d) => ({ id: d.id, title: (d.data().title as string) || 'Untitled event' }))
           .sort((a, b) => a.title.localeCompare(b.title))));
     }
     // The member roster is loaded by MemberSearchInput (shared, cached) — not here.

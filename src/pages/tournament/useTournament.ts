@@ -13,11 +13,12 @@ import {
   generateGroupPairings, groupIndexOf, selectGroupWinners, sharedBand, sharedZone,
 } from './rrGeneration';
 import {
-  BYE, PLAYER_LOADING, PLAYER_LOADING_SENTINEL, buildMatchFields, buildPlayerList, buildZoneAwareDrawConfigs, choiceOf, choiceOfMatch, deleteKey, fallbackTemplate, filterParticipantsForDraw, resolveZoneConfig, formatPlayerName, getDrawKey, getDrawSize, groupBonusAwardId, guestUid, isTournamentStarted, normalizeTemplateMatches, registrationId, zoneBucketFor, effectiveZone,
+  BYE, PLAYER_LOADING, PLAYER_LOADING_SENTINEL, buildMatchFields, byMatchNumber, buildPlayerList, buildZoneAwareDrawConfigs, choiceOf, choiceOfMatch, deleteKey, fallbackTemplate, filterParticipantsForDraw, resolveZoneConfig, formatPlayerName, getDrawKey, getDrawSize, groupBonusAwardId, isTournamentStarted, normalizeTemplateMatches, registrationId, zoneBucketFor, effectiveZone,
 } from './utils';
 import { skillBand } from '../../utils/skillLevels';
 import { CONSOLIDATED_DOUBLES_DRAW, VISIBLE_DRAWS, buildMergedSkillDraw } from './utils';
-import { isDoublesEvent, isEventManager, isTournamentEvent } from '../../utils/eventTypes';
+import { isCancelledEvent, isDoublesEvent, isEventManager, isTournamentEvent } from '../../utils/eventTypes';
+import { guestUid, isGuest } from '../../utils/guest';
 import { toMillis } from '../../utils/eventDates';
 import { useEventResults } from '../../features/matches/results';
 import {
@@ -204,7 +205,7 @@ export const useTournament = (eventIdOverride?: string) => {
           .map((d) => ({ id: d.id, ...d.data() } as TennisEvent))
           // League Ladder events have no draw — ladder matches are a match type surfaced in
           // Matches/Challenges instead, so they don't belong on the Tournament page at all.
-          .filter((e) => isTournamentEvent(e))
+          .filter((e) => isTournamentEvent(e) && !isCancelledEvent(e))
           .sort((a, b) => toMillis(b.start_date) - toMillis(a.start_date));
         setAllTournamentEvents(tournamentEvents);
       } finally {
@@ -341,7 +342,8 @@ export const useTournament = (eventIdOverride?: string) => {
   useEffect(() => {
     if (!user) return;
     const allIds = [...new Set(participants.map((p) => p.uid).filter(Boolean))];
-    const missingUsers = allIds.filter((id) => !userMap[id]);
+    // A guest has no users/contacts doc; one in a batch would deny the whole contacts query.
+    const missingUsers = allIds.filter((id) => !userMap[id] && !isGuest(id));
     const missingStats = allIds.filter((id) => !statsMap[id]);
     if (missingUsers.length === 0 && missingStats.length === 0) return;
 
@@ -551,7 +553,7 @@ export const useTournament = (eventIdOverride?: string) => {
         // zones existed bind to the Downtown-Midtown draw instead of a category of their own.
         effectiveZone(m.zone) === effectiveZone(currentDraw.zone),
       )
-      .sort((a, b) => a.position - b.position);
+      .sort(byMatchNumber);
   }, [currentDraw, matches]);
 
   // Full sorted player list for the current draw — shared by displayMatches and editPlayers.
@@ -607,9 +609,9 @@ export const useTournament = (eventIdOverride?: string) => {
       allMatches: templateMatches,
       started,
     };
-    return templateMatches.map<TournamentMatch>((tm, index) => ({
+    return templateMatches.map<TournamentMatch>((tm) => ({
       id: `preview_${currentDraw.label}_${tm.match_id}`,
-      ...buildMatchFields(tm, index, slotMap, cfg),
+      ...buildMatchFields(tm, slotMap, cfg),
     }));
   }, [currentDraw, currentDrawAllPlayers, currentMatches, event?.id, previewDrawSize, previewSlotOverrides, started]);
 
@@ -972,10 +974,10 @@ export const useTournament = (eventIdOverride?: string) => {
       allMatches: templateMatches,
       started,
     };
-    templateMatches.forEach((tm, index) => {
+    templateMatches.forEach((tm) => {
       batch.set(
         doc(db, 'matches', `${event.id}_${drawKey}_${tm.match_id}`),
-        buildMatchFields(tm, index, slotMap, cfg),
+        buildMatchFields(tm, slotMap, cfg),
         { merge: true },
       );
     });

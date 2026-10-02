@@ -4,7 +4,7 @@ import { fetchEvents } from '../events/services/eventService';
 import { isLadderEvent } from '../../utils/eventTypes';
 import { TennisEvent } from '../../types';
 import { DivTab, inDivision } from './useStandings';
-import { LADDER_COOLDOWN_DAYS, LadderDivision, createChallenge } from './ladderService';
+import { LADDER_COOLDOWN_DAYS, createChallenge } from './ladderService';
 import { useLadder } from './useLadder';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -22,8 +22,9 @@ import { toMillis } from '../../utils/eventDates';
  * courts, the same pair `isReadyForMatches` has always used on the Matches page.
  */
 export const isReadyForMatches = (
-  profile: { stats: { league: string }; preferences: { preferred_courts: string[] } } | null | undefined,
-) => !!profile && profile.stats.league !== '' && (profile.preferences.preferred_courts?.length ?? 0) > 0;
+  profile: { stats: { league: string }; preferences: { preferred_courts: string[]; custom_courts?: string[] } } | null | undefined,
+) => !!profile && profile.stats.league !== ''
+  && (profile.preferences.preferred_courts?.length ?? 0) + (profile.preferences.custom_courts?.length ?? 0) > 0;
 
 export type ChallengeBlockReason =
   | null                 // go ahead
@@ -99,13 +100,12 @@ export function useChallengeRules() {
     return null;
   };
 
-  const challenge = async (opponent: { user_id: string; name: string }) => {
+  const challenge = async (opponent: { user_id: string; name: string; league?: string; skill_level?: number }) => {
     if (!user || !ladder || !myDivision) return;
     await createChallenge({
       eventId: ladder.id,
-      division: myDivision as LadderDivision,
-      challenger: { id: user.uid, name: profile?.user.name || '' },
-      opponent: { id: opponent.user_id, name: opponent.name },
+      challenger: { id: user.uid, name: profile?.user.name || '', league: profile?.stats.league, skill_level: profile?.stats.skill_level },
+      opponent: { id: opponent.user_id, name: opponent.name, league: opponent.league, skill_level: opponent.skill_level },
     });
   };
 

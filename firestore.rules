@@ -118,11 +118,15 @@ service cloud.firestore {
     // Preferences — playing preferences only (roles moved to providers).
     // ===============================================================
     match /preferences/{userId} {
+      // custom_courts: typed courts not on the roster, a list when present.
+      function customCourtsOk() {
+        return !('custom_courts' in request.resource.data) || request.resource.data.custom_courts is list;
+      }
       allow read: if true;
-      allow create: if isOwner(userId) &&
+      allow create: if isOwner(userId) && customCourtsOk() &&
         request.resource.data.keys().hasOnly(['uid', 'preferred_courts', 'custom_courts', 'preferred_zone',
           'favourite_players', 'availability_tags', 'email_notifications']);
-      allow update: if (isOwner(userId) &&
+      allow update: if (isOwner(userId) && customCourtsOk() &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['preferred_courts', 'custom_courts',
             'preferred_zone', 'favourite_players', 'availability_tags', 'email_notifications'])) ||
         // An organizer's Change Zone overwrites the member's zone (the member's next court edit recomputes it).
@@ -143,7 +147,9 @@ service cloud.firestore {
     // ===============================================================
     match /events/{eventId} {
       allow read: if true;
+      // A new event starts active; cancelling (status 'cancelled' + cancelled_at) is an update.
       allow create: if isOrganizerRole() &&
+        request.resource.data.status == 'active' && request.resource.data.cancelled_at == null &&
         (isSuperAdmin() || request.resource.data.organizer_ids == [request.auth.uid]);
       allow update: if isEventManager(eventId) &&
         (isSuperAdmin() || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['organizer_ids']));
@@ -327,20 +333,21 @@ service cloud.firestore {
       allow read, update, delete: if isOrganizerRole();
     }
 
-    // The one mailing list. A member owns ONE row keyed by their uid; a visitor's auto-id row carries
-    // uid 'not_a_member' / user_name 'anonymous' (a real uid can never equal it, so it can't be forged).
+    // The one mailing list. A member owns ONE row keyed by their uid (member: true); a visitor's
+    // auto-id row carries uid 'not_a_member' / user_name 'anonymous' / member: false (a real uid can
+    // never equal it, so it can't be forged).
     match /mailing_list/{subscriberId} {
       function validSubscriber() {
-        return request.resource.data.keys().hasOnly(['email', 'uid', 'user_name', 'source', 'created_at']) &&
+        return request.resource.data.keys().hasOnly(['email', 'uid', 'user_name', 'member', 'source', 'created_at']) &&
           request.resource.data.email is string &&
           request.resource.data.email.size() > 0 &&
           request.resource.data.email.size() < 320 &&
           request.resource.data.source is string;
       }
       allow create, update: if isAuthenticated() && subscriberId == request.auth.uid &&
-        request.resource.data.uid == request.auth.uid && validSubscriber();
+        request.resource.data.uid == request.auth.uid && request.resource.data.member == true && validSubscriber();
       allow create: if request.resource.data.uid == 'not_a_member' && request.resource.data.user_name == 'anonymous' &&
-        validSubscriber();
+        request.resource.data.member == false && validSubscriber();
       allow get: if isAuthenticated() && subscriberId == request.auth.uid;
       allow read, update, delete: if isOrganizerRole();
     }

@@ -2,6 +2,7 @@ import { Timestamp, addDoc, collection, doc, getDocs, updateDoc } from 'firebase
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../../../lib/firebase';
 import { TennisEvent } from '../../../types';
+import { isCancelledEvent } from '../../../utils/eventTypes';
 import { sortEventsByStartDate, toDate } from '../../../utils/eventDates';
 
 export type DisplayEvent = TennisEvent & {
@@ -72,7 +73,7 @@ const datesOf = (f: EventFormState) => ({
 
 export const fetchEvents = async () => {
   const snapshot = await getDocs(collection(db, 'events'));
-  const eventsData = snapshot.docs.map((eventDoc) => {
+  const eventsData = snapshot.docs.filter((d) => !isCancelledEvent(d.data())).map((eventDoc) => {
     const event = { id: eventDoc.id, ...eventDoc.data() } as TennisEvent;
     const rawImage = event.image || '';
 
@@ -136,6 +137,8 @@ export const createEvent = async (userId: string, organizerName: string, eventFo
     round_deadlines: {},
     zone_draw_config: {},
     completed_at: null,
+    status: 'active',
+    cancelled_at: null,
     created_at: Timestamp.now(),
   };
 

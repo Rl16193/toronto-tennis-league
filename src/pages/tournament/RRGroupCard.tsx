@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { SelectField } from '../../components/SelectField';
 import { RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
-import { PLAYER_LOADING, PLAYER_LOADING_SENTINEL, formatPlayerName, formatSetScores } from './utils';
+import { PLAYER_LOADING, PLAYER_LOADING_SENTINEL, byMatchNumber, formatPlayerName, formatSetScores } from './utils';
 import { ContactOpponentButton, pillButtonCls } from '../../components/ContactOpponentButton';
 import { pgWinPct } from '../../features/leagues/useStandings';
 import type { ContactData } from '../../types';
@@ -289,7 +289,7 @@ export const RRGroupCard: React.FC<Props> = ({
 
           {matchesOpen && (
             <div>
-              {matches.slice().sort((a, b) => a.position - b.position).map((m) => {
+              {matches.slice().sort(byMatchNumber).map((m) => {
                 const isDone = m.status === 'complete';
                 const scoreStr = formatSetScores(m.result ?? {});
                 return (

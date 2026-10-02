@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { isGuest } from '../../utils/guest';
 
 /** `memberId: null` means the name was typed by hand for someone who isn't on the app. */
 export type MemberPick = { name: string; memberId: string | null };
@@ -136,6 +137,7 @@ const loadRoster = (): Promise<Member[]> => {
   inFlight = getDocs(collection(db, 'users'))
     .then((snap) => {
       cache = snap.docs
+        .filter((d) => !isGuest(d.id))
         .map((d) => ({ id: d.id, name: (d.data().name as string) || 'Player' }))
         .sort((a, b) => a.name.localeCompare(b.name));
       return cache;

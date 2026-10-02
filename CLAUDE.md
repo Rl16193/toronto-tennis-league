@@ -79,7 +79,7 @@ The core is `useTournament.ts` (~2000 lines), a single hook consumed only by `To
 - Preview draw (client-side, in `displayMatches`) vs. generated draw (Firestore docs)
 - Draw size auto-calculation: `getDrawSize(count)` in `utils.ts` — Singles and Doubles both scale 8/16/32 with participant count
 - Score submission (`handleSubmitScore`), Reset Score, Cancel Matches and the Group Bonus all call the one `scoreMatch` function. Every points rule and the only points writer are in `functions/lib/scoring.js` — see "Scoring is one module". A match doc carries only `status` and `winner_uid`; its sets, walkover, points and who entered it are its applied `submissions` entry, read only through `src/features/matches/results.ts`.
-- Winner advancement is server-side, inside the scoring transaction (`nextTarget` in `functions/lib/scoring.js`): the next match is found among the event's matches in the **same draw** (`sameDraw`: `sub_category`, `division`, `skill_group`, `zone`) by `next_match_id`, and the side by `next_slot`, else by sibling `position`.
+- Winner advancement is server-side, inside the scoring transaction (`nextTarget` in `functions/lib/scoring.js`): the next match is found among the event's matches in the **same draw** (`sameDraw`: `sub_category`, `division`, `skill_group`, `zone`) by `next_match_id`, and the side by `next_slot`, else by sibling order (the number in `match_id`; matches carry no `position`).
 - Participant draw visibility (`userDraw`): a participant sees the draw they are **actually placed in** — `userDraw` looks for the participant's `uid` in a generated match and returns that match's draw. **Do not** route `userDraw` by skill: a creator can move a player across skill groups (e.g. Challengers → Masters) without changing their `event_participants` skill, and skill-derived routing would hide the draw they're really in. There is deliberately **no** pre-generation fallback — before any draw is generated there is no placement, so `userDraw` is `undefined` and `visibleDraws` shows the participant every draw. That is intended (nothing to hide pre-generation), so don't "fix" the undefined by guessing a draw from `skill_level`.
 
 Draw document IDs follow the pattern: `{eventId}_{drawKey}_{matchId}` where `drawKey = getDrawKey(tournamentChoice, division, skillGroup, zone)` (no zone segment for the default zone; `tournamentChoice` comes from the match's `sub_category` via `choiceOfMatch`). Don't change the pattern: the RR group bonus award id is rebuilt from it (`drawKeyOf` in `lib/scoring.js`, `groupBonusAwardId` in `utils.ts`). Every match is `category: 'tournament' | 'challenge' | 'rally'` with `sub_category: 'singles' | 'doubles'`; a fixture is created `accepted` and becomes `complete` when scored. (The Lucky-Loser `reserves` variant was removed; matches have no `bracket` field.)
@@ -169,7 +169,7 @@ League Ladder standings and challenges no longer live on the Tournament page —
 of the double-farming risk (one physical match reported twice, once per surface). Once it has a
 result, score or walkover, the pair fall back to the ordinary 3-day rematch cooldown, counted from
 that match. Blocking played opponents too was leaving players with nothing to do: a tournament that
-ends without its Final ever being recorded never marks itself complete, so the block never lifted. The **Rallies** tab is `src/features/rallies/` (`rallyService.ts`), the same request/accept loop for a casual match (+2/+1, no organizer step). Both live in `matches` (`category: challenge | rally`, `sub_category: 'singles'`): `open` → `accepted` or `declined` (the recipient) → `complete` once scored; the result is a `submissions` entry like any other. There is no "propose a played tournament match as a challenge" conversion. **Never say "friendly"** (Racquets-And-Strings' rule): it is a rally, in code and on screen. `?mode=friendlies` and `/friendlies` still open the Rallies tab for old links. `src/pages/Leagues.tsx` is now pure standings/leaderboard (tournament + community boards) — it no longer renders any challenge UI, or a personal Progress panel (that moved to the Player Dash).
+ends without its Final ever being recorded never marks itself complete, so the block never lifted. The **Rallies** tab is `src/features/rallies/` (`rallyService.ts`), the same request/accept loop for a casual match (+2/+1, no organizer step). Both live in `matches` (`category: challenge | rally`, `sub_category: 'singles'`): `open` → `accepted` or `declined` (the recipient) → `complete` once scored; the result is a `submissions` entry like any other. A request carries `division` (both players' league normalised to Men's/Women's when they agree, else `Mixed`) and `skill_group` (the lower band), written by the client services and the server's `newMatch` alike (`pairDivision`/`pairSkillGroup` in `src/utils/skillLevels.ts` ↔ `pairDraw` in `lib/scoring.js` — change together). **Stale requests close themselves:** a rally open, or accepted and unscored, for 30 days becomes `played` (no score, no points, left out of match history), and a challenge open for 40 days becomes `declined`, counted from `created_at` — `closeStaleRequests` (`lib/scoring.js`), run at the start of the Tuesday `weeklyReminders`. There is no "propose a played tournament match as a challenge" conversion. **Never say "friendly"** (Racquets-And-Strings' rule): it is a rally, in code and on screen. `?mode=friendlies` and `/friendlies` still open the Rallies tab for old links. `src/pages/Leagues.tsx` is now pure standings/leaderboard (tournament + community boards) — it no longer renders any challenge UI, or a personal Progress panel (that moved to the Player Dash).
 
 ### Player Dash (`/profile`)
 A member's own tennis in one place. A "Player Dash" switch on Profile, above Record Activity and Submit a Report, swaps
@@ -361,7 +361,7 @@ action (`result` | `correction` | `walkover` | `reset`) and `status` its standin
 current result), `superseded` (replaced or reset), `disputed` (names a different winner, awaiting
 an organizer), `rejected` (ruled against). A match's result is its one `applied` entry that is not
 a `reset`; it carries `winner_uid`/`winner_name`, the absolute `set_N_player_1/2`, `court`,
-`points_winner`/`points_loser`, `applied_deltas` and `completed_at`. The match keeps only `status`
+`points_winner`/`points_loser` and `completed_at`. The match keeps only `status`
 and `winner_uid`. The history of a match is its chain of entries (`replaces_id`); there is no
 separate audit collection. A `correction` replaces the applied entry, which turns `superseded`; a
 `reset` supersedes it and records the negated points on its own entry.
@@ -387,8 +387,10 @@ the scoring call doesn't send them.
   organizer-only, tournament-only, and pays points only: group winner 1, knockout winner 0, loser
   the round's losing points, with no match played. **Challenges** +3 / −3 (the loss never takes a
   player's `leaguePoints` below 0); **rallies** +2 / +1. There is no no-show.
-- **Points already paid never move.** Every applied entry stores exactly what it paid
-  (`applied_deltas`, uid → changes, partners included), and undoing negates exactly that. The
+- **Points already paid never move.** Every applied entry stores what it paid (`points_winner` /
+  `points_loser`, the challenge loss as actually applied after the floor), and undoing reverses
+  exactly that: `paidBy` rebuilds the payment from those points and the sets (matches, wins,
+  games), with doubles partners from the registrations, through the same `paymentOf` that pays. The
   Group Bonus is an `awards` doc whose `awardees` are exactly who it paid; turning it off, or
   cancelling the draw, takes it back only from them.
 - **Display:** `computeGroupStandings` shows the points each result entry stored (`points_winner` /
@@ -467,8 +469,8 @@ table now reads the points each result entry stored, and the rules live only in 
   first contribution.
 - **Explorer is a city-wide sweep, not a badge** (the old Explorer badge could never be earned and
   was removed). When check-ins and reports together cover every court on the roster (173 today),
-  every member who contributed this cycle gets +30 and the sweep resets. Score visits do **not**
-  count toward it (a visit with `lat`/`lng`/`dist_m` all 0), unlike the zone sweep. Progress lives
+  every member who contributed this cycle gets +30 and the sweep resets. Score visits count too
+  (a score at a court is a check-in for every player on court). Progress lives
   in `site_stats/city_sweep` (`covered_keys` of `total_courts`). The Tasks tab draws it as a bar on the
   Explorer card, and the member's own zone (`zone_sweep_{slug}`, from `preferences.preferred_zone`)
   as a bar on the Full Zone Sweep card (`useSweep`). Every zone has a sweep doc from conversion, so
@@ -514,9 +516,9 @@ snapshots live in `_archive_database_consolidation/{source}/docs/{id}` (Admin SD
 |---|---|---|
 | `users`, `stats`, `preferences`, `contacts` | Signup / profile / `profileBootstrap.ts`; `stats` counters by the server (see "Stats data flow") | doc id **is** the uid. `contacts` is the PII split out of `users`; `preferences` is playing preferences only |
 | `providers` | Super admin only (the offer form's `flagProvider`) | id = the member's uid; `roles` ⊆ `stringer` \| `coach` \| `organizer`, `name` = business name. Public read |
-| `events` | Organizer via event form (`eventService.ts`); `scoreMatch` stamps `completed_at` | `category` / `sub_category` — see "Event kinds and recurring meetups" |
-| `event_participants` | Player self-join (`useJoin.ts`) or organizer (`handleAddPlayer`); `onParticipantSeat` | id `{eventId}_{uid}`, doubles `{eventId}_{uid}_{mensdoubles\|womensdoubles\|mixeddoubles}` (the rules check it). `status`: `active` \| `withdrawn` \| `cancelled`, with `withdrawn_reason/_at/_by`; re-adding sets the same row back to `active`. A partner not on the app is a `guest_…` uid |
-| `matches` | `useTournament.ts` (draws), `ladderService.ts` and `rallyService.ts` (requests); `status`/`winner_uid`/advancement only by `scoreMatch` | `category`: `tournament` \| `challenge` \| `rally`; `sub_category`: `singles` \| `doubles`; `status`: `open` \| `accepted` \| `complete` \| `declined` \| `cancelled` |
+| `events` | Organizer via event form (`eventService.ts`); `scoreMatch` stamps `completed_at` | `category` / `sub_category` — see "Event kinds and recurring meetups". `status`: `active` \| `cancelled` (+ `cancelled_at`); a cancelled event is hidden everywhere and left out of every list and current-event check, its registrations kept |
+| `event_participants` | Player self-join (`useJoin.ts`) or organizer (`handleAddPlayer`); `onParticipantSeat` | id `{eventId}_{uid}`, doubles `{eventId}_{uid}_{mensdoubles\|womensdoubles\|mixeddoubles}` (the rules check it). `status`: `active` \| `withdrawn` \| `cancelled`, with `withdrawn_reason/_at/_by`; re-adding sets the same row back to `active`. A partner not on the app is a `guest_…` uid (`isGuest` in `src/utils/guest.ts` and `functions/lib/constants.js`): it gets a `stats/guest_…` doc only when it plays a match or receives walkover points, its points are parked there, and guests are left out of leaderboards, the rank snapshot, member counts, visits, tasks, alerts and connections. Linking a guest to a member who joins is done by hand on request |
+| `matches` | `useTournament.ts` (draws), `ladderService.ts` and `rallyService.ts` (requests); `status`/`winner_uid`/advancement only by `scoreMatch` | `category`: `tournament` \| `challenge` \| `rally`; `sub_category`: `singles` \| `doubles`; `status`: `open` \| `accepted` \| `complete` \| `declined` \| `cancelled` \| `played` (a stale rally) |
 | `submissions` | `scoreMatch` only (server) | Every scoring action and the points it paid — see "Scoring is one module". Readable by any signed-in member |
 | `awards` | `functions/groupAwards.js`; `scoreMatch` (`bonus`) | Every bonus, deterministic ids. Server-only, public read |
 | `league_seasons` | Season rollover (server-only) | `{uid}_{season}`: one finished season's league points. Public read |
@@ -538,7 +540,7 @@ snapshots live in `_archive_database_consolidation/{source}/docs/{id}` (Admin SD
 
 `mailing_list` is the one mailing list. The homepage Subscribe button writes `source: 'newsletter'`
 and the court report form writes `source: 'court report submission'` when a signed-out reporter
-leaves an email. Every row carries `email`, `uid`, `user_name`, `source`, `created_at` and nothing
+leaves an email. Every row carries `email`, `uid`, `user_name`, `source`, `member`, `created_at` and nothing
 else (`hasOnly()`). A row looks different
 depending on who made it. The split is enforced by `firestore.rules`, not by the client, so `src/lib/newsletter.ts`
 and that rule change together:
@@ -547,6 +549,8 @@ and that rule change together:
   `uid`, `email`, `user_name`, `source`, `created_at`. Because the id is the uid, tapping
   Subscribe again overwrites that row instead of listing them twice, and the rule requires
   `subscriberId == request.auth.uid`, so nobody can write a row in another member's name.
+- **`member`** is `true` on a member row. A visitor row is written `false`, and `onNewsletterSubscribed`
+  sets it `true` when the email matches a member's `contacts.email`.
 - **A signed-out visitor** gets an auto-id row with the same fields, but `uid: 'not_a_member'` and
   `user_name: 'anonymous'`, and the rule accepts **only** those values on this path. A real uid can
   never equal the sentinel, which is the whole reason a stranger can't forge a member row.
@@ -789,10 +793,8 @@ became a bug. The surviving pairs are listed here; **don't add another.**
   routes them in when that draw is generated. There is deliberately **no** auto-seating in any
   case. This is why `unplacedParticipants` tests seating **per draw**, not per event: a
   zone-changer is seated in their old draw and unseated in the new one, and only the second fact
-  matters. Needs `firebase deploy --only functions:onZoneChanged`. **Its alert still carries the
-  old `sub_category: 'organizer_zone_change_request'`**, which `DATA_DICTIONARY_v3.csv` lists as
-  retired (the request feature it named is gone). Rename it when the notifications are reworked,
-  and change `useNotifications` with it.
+  matters. Needs `firebase deploy --only functions:onZoneChanged`. Its alert is
+  `sub_category: 'organizer_zone_change'` (it was `organizer_zone_change_request`).
 - **A result is the applied `submissions` entry: `winner_uid` + absolute `set_N_player_1/2`,** for
   tournament matches, challenges and rallies alike. `match.winner_uid` is the one copy kept on the
   match, for advancement and "who won". Nothing else about a result lives on the match —
@@ -867,7 +869,7 @@ Each of these was a real bug. The code carries a one-to-four line warning; the r
 - **A result is paid inside the same server transaction that reads the match.** Two submissions
   fired close together (a mobile double-tap) used to each read a pre-confirm world and both apply
   ±3 — winner +6, loser −6, and those phantom points are spendable on Services. `recordScore`
-  reads the match and its applied entry, undoes that entry's `applied_deltas`, and pays the new
+  reads the match and its applied entry, reverses that entry's stored points, and pays the new
   result in one transaction.
 
 **Effects and writes**
