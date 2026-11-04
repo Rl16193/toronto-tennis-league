@@ -54,7 +54,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
             onChange={(e) => setSkillLevel(SELECTABLE_SKILL_LEVELS[Number(e.target.value)])}
             className="w-full h-3 rounded-full"
           />
-          <div className="flex justify-between text-[10px] text-fg/70">
+          <div className="flex justify-between text-xs text-fg/70">
             {SKILL_LEVEL_TIERS.map((t) => <span key={t.label}>{t.range} · {t.label}</span>)}
           </div>
         </div>
@@ -67,7 +67,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
                 key={l}
                 type="button"
                 onClick={() => setLeague(l)}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-colors ${
+                className={`flex-1 py-2.5 rounded-2xl text-sm font-bold border transition-colors ${
                   league === l ? 'bg-clay border-clay text-white' : 'bg-white text-ink border-fg/10 hover:bg-white/90'
                 }`}
               >
@@ -106,7 +106,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
             </button>
           </div>
           {!league && (
-            <p className="text-[11px] text-fg/70">Choose a league above to unlock Retired Pro / Juniors.</p>
+            <p className="text-xs text-fg/70">Choose a league above to unlock Retired Pro / Juniors.</p>
           )}
         </div>
 

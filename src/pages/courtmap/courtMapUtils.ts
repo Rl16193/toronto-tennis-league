@@ -46,6 +46,10 @@ export type CourtWithCount = CsvCourt & {
   activity30: number;
   activityBreakdown7: ActivityBreakdown;
   activityBreakdown30: ActivityBreakdown;
+  /** The 3 newest court-condition notes, newest first (site_stats/court_counts.reports). */
+  reports: string[];
+  /** Every court-condition report with a note (site_stats/court_counts.report_counts). */
+  reportCount: number;
   hasPrograms: boolean;
   pickleballEntries: PickleballEntry[];
 };
@@ -390,6 +394,7 @@ export function parseCourts(csvText: string): CsvCourt[] {
   const iWinterPlay = idx('WinterPlay');
   const iWebsite = idx('ClubWebsite');
   const iBooking = idx('BookingUrl');
+  const iCity = idx('City');
 
   const courts: CsvCourt[] = [];
   for (const line of lines) {
@@ -401,15 +406,19 @@ export function parseCourts(csvText: string): CsvCourt[] {
       const [lng, lat] = geom.coordinates[0];
       const dropdown = cells[iDropdown]?.trim() || cells[iName]?.trim() || '';
       if (!dropdown || !lat || !lng) continue;
+      const courtType = cells[iType]?.trim() || '';
+      const city = (iCity >= 0 ? cells[iCity]?.trim() : '') || 'Toronto';
       courts.push({
         name: cells[iName]?.trim() || dropdown,
         dropdown,
         lat, lng,
         address: cells[iAddress]?.trim() || '',
-        courtType: cells[iType]?.trim() || '',
+        courtType,
         numCourts: parseInt(cells[iCourts]) || 0,
         lights: cells[iLights]?.trim().toLowerCase() === 'yes',
-        winterPlay: iWinterPlay >= 0 && cells[iWinterPlay]?.trim().toLowerCase() === 'yes',
+        // Winter play counts on Toronto clubs and on GTA courts; a Toronto public court never shows it.
+        winterPlay: iWinterPlay >= 0 && cells[iWinterPlay]?.trim().toLowerCase() === 'yes'
+          && (city !== 'Toronto' || courtType.toLowerCase() === 'club'),
         website: iWebsite >= 0 ? (cells[iWebsite]?.trim() || '') : '',
         clubInfo: iClubInfo >= 0 ? (cells[iClubInfo]?.trim() || '') : '',
         zone: getZone(lat, lng),
@@ -550,6 +559,12 @@ const soloMarkerSvg = (s: number, color: string, opacity: number, label?: string
     </svg>`;
 };
 
+// Winter tennis: a pale ice dot with a dark-cyan ring, the same 12px as the other plain dots.
+export const ICE = '#67e8f9';
+const winterMarkerSvg = (): string => `<svg width="12" height="12" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="6" cy="6" r="5.25" fill="${ICE}" stroke="#0e7490" stroke-width="1.5"/>
+    </svg>`;
+
 /**
  * Marker size bands, scaled off the busiest court so they stay meaningful as the league grows.
  *
@@ -584,8 +599,11 @@ export function courtMarkerHtml(court: CourtWithCount, busiestCount = 0, metric?
   const fs = label.length >= 3 ? 8 : label.length === 2 ? 10 : 11;
 
   if (hasPlayers && court.hasPrograms) return splitMarkerSvg(s, '#15803d', '#eab308', label, fs);
+  if (hasPlayers && court.winterPlay) return splitMarkerSvg(s, '#15803d', ICE, label, fs);
   if (hasPlayers && hasPublicHours(court)) return splitMarkerSvg(s, '#15803d', '#3b82f6', label, fs);
   if (hasPlayers) return soloMarkerSvg(s, '#15803d', 0.95, label, fs);
+  if (court.winterPlay && hasPublicHours(court)) return splitMarkerSvg(s, '#3b82f6', ICE, '', fs);
+  if (court.winterPlay) return winterMarkerSvg();
   if (court.hasPrograms) return soloMarkerSvg(s, '#eab308', 0.82);
   if (hasPublicHours(court)) return soloMarkerSvg(s, '#3b82f6', 0.82);
   if (court.courtType.toLowerCase() === 'club') return soloMarkerSvg(s, '#f97316', 0.75);

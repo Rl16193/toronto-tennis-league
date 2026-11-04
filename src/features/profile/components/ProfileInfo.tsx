@@ -18,6 +18,7 @@ import { LeagueEditor, SkillEditor } from './SkillLeagueEditor';
 import { getFavouritePlayerSuggestions, useFavouritePlayerOptions } from '../favouritePlayers';
 import { BadgePicker } from '../../tasks/BadgePicker';
 import { BADGE_PILL_CLASS } from '../../tasks/badges';
+import { providerTags } from '../../../utils/eventTypes';
 import type { Counters, TaskProgress } from '../../tasks/useTasks';
 import { ContactMethod } from '../../../types';
 import { phoneAsWhatsapp } from '../services/profileService';
@@ -103,11 +104,11 @@ export const ZonePickerSheet: React.FC<{
               disabled={isCurrent || saving}
               onClick={() => onPick(z)}
               className={`w-full flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors ${
-                isCurrent ? 'bg-clay/15 border border-clay/50' : 'bg-fg/5 hover:bg-fg/[0.08] border border-transparent'
+                isCurrent ? 'bg-clay/15 border border-clay/50' : 'bg-fg/5 hover:bg-fg/10 border border-transparent'
               } ${saving ? 'opacity-50' : ''}`}
             >
               <span className="text-sm font-bold text-fg truncate">{z}</span>
-              {isCurrent && <span className="text-[11px] font-bold text-clay shrink-0">Current</span>}
+              {isCurrent && <span className="text-xs font-bold text-clay shrink-0">Current</span>}
             </button>
           );
         })}
@@ -125,7 +126,7 @@ const ContactMethodToggle: React.FC<{
   onChange: (on: boolean) => void;
 }> = ({ label, on, disabled, onChange }) => (
   <label className={`flex items-center gap-2 select-none ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
-    <span className="text-[10px] font-bold uppercase tracking-widest text-fg/70 whitespace-nowrap">
+    <span className="text-xs font-bold uppercase tracking-widest text-fg/70 whitespace-nowrap">
       Contact Method: {label}
     </span>
     <span className="relative inline-flex items-center shrink-0">
@@ -237,7 +238,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
   const initial = (user.name || contacts.email || '?').trim().charAt(0).toUpperCase();
 
   return (
-    <div className="rounded-[2.5rem] bg-tennis-surface/30 shadow-xl p-5 sm:p-7">
+    <div className="rounded-2xl bg-fg/5 p-5 sm:p-7">
       <h2 className="text-xl font-bold text-fg mb-5">Profile Card</h2>
 
       {/* Avatar + name/phone/bio, vertical */}
@@ -375,10 +376,10 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
           ) : (
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {leagueDivision(stats.league) && (
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{leagueDivision(stats.league)} League</span>
+                <span className="px-2.5 py-1 rounded-2xl text-xs font-bold bg-fg/5 text-fg/70">{leagueDivision(stats.league)} League</span>
               )}
               {leagueAgeCategory(stats.league) && (
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{leagueAgeCategory(stats.league)}</span>
+                <span className="px-2.5 py-1 rounded-2xl text-xs font-bold bg-fg/5 text-fg/70">{leagueAgeCategory(stats.league)}</span>
               )}
               {!leagueDivision(stats.league) && <span className="text-sm text-fg/70">Not set.</span>}
             </div>
@@ -394,6 +395,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
               reads as one set of labels. */}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <span className={BADGE_PILL_CLASS}>{skillTier(stats.skill_level)}</span>
+            {providerTags(profile.roles).map((t) => <span key={t} className={BADGE_PILL_CLASS}>{t}</span>)}
             <BadgePicker
               selected={user.display_badges ?? []}
               onSave={actions.updateDisplayBadges}
@@ -416,7 +418,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
           ) : (
             <div className="mt-1 flex flex-wrap gap-1.5">
               {(preferences.preferred_courts?.length ?? 0) + (preferences.custom_courts?.length ?? 0) > 0
-                ? [...(preferences.preferred_courts ?? []), ...(preferences.custom_courts ?? [])].map((c) => <span key={c} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{c}</span>)
+                ? [...(preferences.preferred_courts ?? []), ...(preferences.custom_courts ?? [])].map((c) => <span key={c} className="px-2.5 py-1 rounded-2xl text-xs font-bold bg-fg/5 text-fg/70">{c}</span>)
                 : <span className="text-sm text-fg/70">None set.</span>}
             </div>
           )}
@@ -440,7 +442,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
           </div>
           <div className="mt-1 flex flex-wrap gap-1.5">
             {preferences.preferred_zone
-              ? <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{preferences.preferred_zone}</span>
+              ? <span className="px-2.5 py-1 rounded-2xl text-xs font-bold bg-fg/5 text-fg/70">{preferences.preferred_zone}</span>
               : <span className="text-sm text-fg/70">None set.</span>}
           </div>
         </div>
@@ -460,10 +462,10 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
                       key={p}
                       type="button"
                       onClick={() => setFavDraft(favDraft.filter((x) => x !== p))}
-                      className="px-2.5 py-1 rounded-lg text-xs font-bold bg-clay text-fg flex items-center gap-1.5"
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold leading-none bg-clay text-white"
                       aria-label={`Remove ${p}`}
                     >
-                      {p} <span className="opacity-70">✕</span>
+                      {p} <X className="size-3.5 opacity-70" aria-hidden="true" />
                     </button>
                   ))}
                 </div>
@@ -500,7 +502,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
                       key={p}
                       type="button"
                       onClick={() => addFavourite(p)}
-                      className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
+                      className="w-full rounded-2xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
                     >
                       {p}
                     </button>
@@ -524,7 +526,7 @@ export const ProfileInfo: React.FC<Props> = ({ actions, updateLoading, message, 
           ) : (
             <div className="mt-1 flex flex-wrap gap-1.5">
               {(preferences.favourite_players?.length ?? 0) > 0
-                ? (preferences.favourite_players ?? []).map((p) => <span key={p} className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{p}</span>)
+                ? (preferences.favourite_players ?? []).map((p) => <span key={p} className="px-2.5 py-1 rounded-2xl text-xs font-bold bg-fg/5 text-fg/70">{p}</span>)
                 : <span className="text-sm text-fg/70">None set.</span>}
             </div>
           )}

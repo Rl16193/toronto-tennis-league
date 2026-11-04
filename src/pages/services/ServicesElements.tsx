@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import {
   BadgeCheck, MapPin, Pencil, Plus, Search, Sparkles, Trash2, X,
 } from 'lucide-react';
-import { collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/Button';
@@ -14,10 +14,11 @@ import { Sheet } from '../../components/Sheet';
 import { Tree, TreeGroup } from '../../components/Tree';
 import { ContactOpponentButton } from '../../components/ContactOpponentButton';
 import { useContacts } from '../../features/contacts/useContacts';
+import { loadRoster } from '../../features/members/MemberSearchInput';
 import { fadeUp } from '../../lib/motion';
 import {
   BookingRow, CATEGORY_IMAGE, CATEGORY_LABEL, GROUP_LESSON_CAPACITY, MIN_REWARD_COST, OPEN_BOOKING_STATUSES, Provider,
-  Reward, ServiceCategory, areaCoords, bookingStage, isGroupLesson, useMyBookings, useProviderAvatars,
+  Reward, ServiceCategory, areaCoords, bookingStage, isGroupLesson, money, useMyBookings, useProviderAvatars,
   useProviderRole, useRedeemablePoints, useServicesCatalog,
 } from '../../features/services/useServices';
 import { useTasks } from '../../features/tasks/useTasks';
@@ -28,32 +29,41 @@ import {
 } from '../../features/services/servicesApi';
 import { createOffer, deactivateOffer, updateOffer } from '../../features/services/servicesApi';
 import { SUPER_ADMIN_UID } from '../../utils/eventTypes';
+import type { ProviderDoc, ProviderRole } from '../../types';
 
 // Services tab and offer form. Firestore reads live in features/services/.
 
-// ─── Add / edit an offer (super-admin only) ──────────────────────────────────────────────────────
+// ─── Add / edit an offer (super admin, or a provider for their own) ──────────────────────────────────────────────────────
 
 // Compact field chrome, matching Add an Event: one size for every field in the sheet.
 const fieldCls =
-  'w-full rounded-xl bg-tennis-dark/70 border border-fg/10 px-3.5 py-2.5 text-sm text-fg ' +
+  'w-full rounded-2xl bg-tennis-dark/70 border border-fg/10 px-3.5 py-2.5 text-sm text-fg ' +
   'placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
-const labelCls = 'block text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-1.5';
+const labelCls = 'block text-xs font-bold uppercase tracking-widest text-fg/70 mb-1.5';
 
 type LinkCandidate = { uid: string; name: string };
+
+/** The signed-in provider adding their own offer: locked to them, Type limited to their roles. */
+export type OfferSelf = { uid: string; name: string; roles: ProviderRole[] };
 
 export const AddServiceForm: React.FC<{
   byCategory: Map<ServiceCategory, Provider[]>;
   editingReward?: Reward;
   onClose: () => void;
   onCreated: () => void;
-}> = ({ byCategory, editingReward, onClose, onCreated }) => {
+  self?: OfferSelf;
+}> = ({ byCategory, editingReward, onClose, onCreated, self }) => {
   const isEditing = !!editingReward;
-  const [category, setCategory] = useState<ServiceCategory>(editingReward?.category ?? 'stringing');
+  // A provider offers only what their role covers (firestore.rules checks the same).
+  const allowedCategories: ServiceCategory[] = self
+    ? [...(self.roles.includes('stringer') ? ['stringing' as const] : []), ...(self.roles.includes('coach') ? ['coaching' as const] : [])]
+    : ['stringing', 'coaching', 'others'];
+  const [category, setCategory] = useState<ServiceCategory>(editingReward?.category ?? allowedCategories[0] ?? 'stringing');
   // Every provider is a member. Searching a name here IS choosing the provider: saving flags their
   // account (a coach/stringer role on providers/{uid}). There is no unlinked-provider path, so there
   // is no separate "link an account" step either.
-  const [providerUid, setProviderUid] = useState(editingReward?.provider_id ?? '');
-  const [memberName, setMemberName] = useState('');
+  const [providerUid, setProviderUid] = useState(self?.uid ?? editingReward?.provider_id ?? '');
+  const [memberName, setMemberName] = useState(self?.name ?? '');
   // The business name, when it differs from the member's own — "TIVORYX" for Karan Tiwari.
   // Blank means they trade under their own name.
   const [alias, setAlias] = useState(editingReward?.provider_name ?? '');
@@ -80,15 +90,25 @@ export const AddServiceForm: React.FC<{
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // A provider's business name and area come from their providers doc.
+  useEffect(() => {
+    if (!self) return;
+    getDoc(doc(db, 'providers', self.uid)).then((snap) => {
+      const p = snap.data() as ProviderDoc | undefined;
+      if (!p) return;
+      if (!isEditing) setAlias((cur) => cur || p.name || '');
+      setArea((cur) => cur || p.area || '');
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [self?.uid]);
+
   const providersInCategory = useMemo(() => byCategory.get(category) ?? [], [byCategory, category]);
 
   useEffect(() => {
     // Loaded once, lazily, only after two characters are typed — `users` is world-readable, and
     // this keeps opening the form free of a full-collection read.
     if (search.trim().length < 2 || candidates.length > 0) return;
-    getDocs(collection(db, 'users')).then((snap) => {
-      setCandidates(snap.docs.map((d) => ({ uid: d.id, name: (d.data().name as string) || '' })));
-    }).catch(() => {});
+    loadRoster().then((roster) => setCandidates(roster.map((m) => ({ uid: m.id, name: m.name })))).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
@@ -106,11 +126,9 @@ export const AddServiceForm: React.FC<{
   };
 
   const priceNum = Number(totalPrice);
+  // Discount and points are optional: blank is 0, a plain regular-price service.
   const discountNum = Number(discount) || 0;
-  const pointsNum = Number(pointsCost);
-  const discountedPrice = Number.isFinite(priceNum) ? Math.max(0, priceNum - discountNum) : null;
-  // No discount and no points is a plain regular-price service — it carries a pill and Book alone.
-  const regularPriceOnly = discountNum === 0 && pointsNum === 0;
+  const pointsNum = Number(pointsCost) || 0;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,6 +139,7 @@ export const AddServiceForm: React.FC<{
     if (!providerUid) { setError('Search for the provider by name and pick their account.'); return; }
     if (!name) { setError('Enter the provider\'s name or business name.'); return; }
     if (!offer.trim()) { setError('Enter an offer title.'); return; }
+    if (!totalPrice.trim()) { setError('Enter a price.'); return; }
     if (!Number.isFinite(priceNum) || priceNum < 0) { setError('Enter a valid price.'); return; }
     if (!Number.isFinite(discountNum) || discountNum < 0 || discountNum > priceNum) { setError('Discount must be between 0 and the price.'); return; }
     // 0 is allowed: an offer with no discount and no points is a plain regular-price service.
@@ -141,7 +160,7 @@ export const AddServiceForm: React.FC<{
       providerName: name,
       businessName: alias.trim(),
       area: area.trim(),
-      certified: category === 'coaching' && certified,
+      certified: category !== 'others' && certified,
       offer: offer.trim(),
       brands: category === 'stringing' ? brands.join(', ') : '',
       totalPrice: priceNum,
@@ -153,8 +172,8 @@ export const AddServiceForm: React.FC<{
     };
     setSaving(true);
     try {
-      if (isEditing) await updateOffer(editingReward!.id, input);
-      else await createOffer(input);
+      if (isEditing) await updateOffer(editingReward!.id, input, !!self);
+      else await createOffer(input, !!self);
       onCreated();
       onClose();
     } catch {
@@ -167,19 +186,15 @@ export const AddServiceForm: React.FC<{
   return (
     <Sheet onClose={onClose} title={isEditing ? 'Edit service' : 'Add a service'} maxWidthClassName="max-w-md">
       <form onSubmit={submit} className="p-5 pt-2 space-y-3">
-        {error && (
-          <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-2.5">{error}</div>
-        )}
-
         <div>
           <label className={labelCls}>Type</label>
           <div className="flex gap-2">
-            {(['stringing', 'coaching', 'others'] as ServiceCategory[]).map((c) => (
+            {allowedCategories.map((c) => (
               <button
                 key={c}
                 type="button"
                 onClick={() => setCategory(c)}
-                className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-colors ${
+                className={`flex-1 py-2 rounded-2xl text-xs font-bold border transition-colors ${
                   category === c ? 'bg-clay border-clay text-white' : 'bg-tennis-dark/70 text-fg/70 border-fg/10 hover:border-fg/30'
                 }`}
               >
@@ -195,18 +210,20 @@ export const AddServiceForm: React.FC<{
               it as a coach/stringer on save, so there is no separate link step and no way to add
               a provider nobody can book. */}
           {providerUid ? (
-            <div className="flex items-center justify-between rounded-xl bg-fg/5 px-3.5 py-2.5">
+            <div className="flex items-center justify-between rounded-2xl bg-fg/5 px-3.5 py-2.5">
               <span className="text-sm text-fg font-semibold">{pickedLabel || 'Linked account'}</span>
-              <button type="button" aria-label="Choose a different provider"
-                onClick={() => { setProviderUid(''); setMemberName(''); setSearch(''); }}
-                className="text-fg/70 hover:text-fg"><X className="w-4 h-4" /></button>
+              {!self && (
+                <button type="button" aria-label="Choose a different provider"
+                  onClick={() => { setProviderUid(''); setMemberName(''); setSearch(''); }}
+                  className="text-fg/70 hover:text-fg"><X className="w-4 h-4" /></button>
+              )}
             </div>
           ) : (
             <div className="relative">
               <input className={fieldCls} placeholder="Search members by name…" value={search}
                 onChange={(e) => setSearch(e.target.value)} />
               {memberMatches.length > 0 && (
-                <div className="mt-1.5 rounded-xl border border-fg/10 bg-tennis-dark/95 overflow-hidden">
+                <div className="mt-1.5 rounded-2xl border border-fg/10 bg-tennis-dark/95 overflow-hidden">
                   {memberMatches.map((c) => (
                     <button key={c.uid} type="button"
                       onClick={() => {
@@ -240,7 +257,7 @@ export const AddServiceForm: React.FC<{
             onChange={(e) => setArea(e.target.value)} />
         </div>
 
-        {category === 'coaching' && (
+        {category !== 'others' && (
           <label className="flex items-center gap-2 text-sm text-fg/70 cursor-pointer">
             <input type="checkbox" checked={certified} onChange={(e) => setCertified(e.target.checked)} className="accent-clay" />
             Certified
@@ -287,14 +304,14 @@ export const AddServiceForm: React.FC<{
         {/* Stringing only — a coach has no brands to list. */}
         {category === 'stringing' && (
         <div>
-          <label className={labelCls}>Brands</label>
+          <label className={labelCls}>Brands/Services</label>
           {brands.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-2">
               {brands.map((b) => (
-                <span key={b} className="inline-flex items-center gap-1.5 rounded-full bg-fg/[0.06] pl-2.5 pr-1.5 py-1 text-[11px] text-fg/70">
+                <span key={b} className="inline-flex items-center gap-1.5 rounded-full bg-fg/5 pl-2.5 pr-1.5 py-1 text-xs text-fg/70">
                   {b}
                   <button type="button" onClick={() => setBrands(brands.filter((x) => x !== b))} className="text-fg/70 hover:text-fg">
-                    <X className="w-3 h-3" />
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 </span>
               ))}
@@ -325,14 +342,10 @@ export const AddServiceForm: React.FC<{
               onChange={(e) => setPointsCost(e.target.value)} placeholder="0" className={fieldCls} />
           </div>
         </div>
-        {discountedPrice !== null && (
-          <p className="text-[11px] text-fg/70">
-            {regularPriceOnly
-              ? priceNum === 0
-                ? 'Shown to members as Free — Book only, nothing to redeem.'
-                : `Shown to members at $${priceNum} as a regular price — Book only, nothing to redeem.`
-              : `Shown to members as $${discountedPrice} with ${pointsCost || '—'} points, off a $${priceNum} regular price.`}
-          </p>
+
+        {/* Beside the buttons, not the top: the sheet scrolls, and a banner up there went unseen. */}
+        {error && (
+          <div role="alert" className="rounded-2xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-2.5">{error}</div>
         )}
 
         <div className="flex gap-3 pt-1">
@@ -347,10 +360,7 @@ export const AddServiceForm: React.FC<{
 // ─── The Services tab ────────────────────────────────────────────────────────────────────────────
 
 // Every pill on an offer card wears this: clay on a clay wash, one size.
-const pillCls = 'text-[11px] font-bold text-clay bg-clay/10 rounded-full px-2.5 py-0.5';
-
-const money = (n: number | null | undefined) =>
-  typeof n === 'number' ? `$${n % 1 === 0 ? n : n.toFixed(2)}` : '—';
+const pillCls = 'text-xs font-bold text-clay bg-clay/10 rounded-full px-2.5 py-0.5';
 
 // ─── One offer ──────────────────────────────────────────────────────────────────────────────
 
@@ -375,6 +385,8 @@ const OfferCard: React.FC<{
   const redeemTaken = isGroupLesson(reward) && !!reward.redeem_booking_id;
   // Nothing to redeem: no discount and no points. The card says so and offers Book alone.
   const regularPriceOnly = reward.discount === 0 && reward.points_cost === 0;
+  // Free: the headline price itself reads "Free", so it carries no price pill.
+  const free = regularPriceOnly && reward.total_price === 0;
   const pills = [
     ...(reward.brands ? reward.brands.split(',').map((b) => b.trim()).filter(Boolean) : []),
     ...(reward.capacity ? [reward.capacity === 1 ? 'Private' : `Up to ${reward.capacity}`] : []),
@@ -382,7 +394,7 @@ const OfferCard: React.FC<{
   ];
 
   return (
-    <div className="rounded-2xl bg-fg/[0.03] p-4">
+    <div className="rounded-2xl bg-fg/5 p-4">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-bold text-fg leading-snug">{reward.offer}</p>
         <div className="flex items-center gap-2 shrink-0">
@@ -396,17 +408,15 @@ const OfferCard: React.FC<{
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
-          <span className="text-xl font-black text-fg leading-none">{money(reward.total_price)}</span>
+          <span className="text-xl font-black text-fg leading-none">{free ? 'Free' : money(reward.total_price)}</span>
         </div>
       </div>
 
       {/* Brands for stringing; capacity and duration for coaching — same pill row either way, and
           the price pill leads it. Every pill is clay: they are the card's accents, not captions. */}
-      {(regularPriceOnly || pills.length > 0) && (
+      {((regularPriceOnly && !free) || pills.length > 0) && (
         <div className="flex flex-wrap gap-1.5 mt-2.5">
-          {regularPriceOnly && (
-            <span className={pillCls}>{reward.total_price === 0 ? 'Free' : 'Regular price'}</span>
-          )}
+          {regularPriceOnly && !free && <span className={pillCls}>Regular price</span>}
           {pills.map((b) => <span key={b} className={pillCls}>{b}</span>)}
         </div>
       )}
@@ -470,7 +480,7 @@ const ProviderAvatar: React.FC<{ name: string; src?: string }> = ({ name, src })
       className="w-6 h-6 rounded-full object-cover shrink-0 bg-fg/10"
     />
   ) : (
-    <span className="w-6 h-6 rounded-full shrink-0 bg-fg/10 text-fg/70 text-[11px] font-black flex items-center justify-center">
+    <span className="w-6 h-6 rounded-full shrink-0 bg-fg/10 text-fg/70 text-xs font-black flex items-center justify-center">
       {name.trim().charAt(0).toUpperCase() || '?'}
     </span>
   )
@@ -621,7 +631,7 @@ const NearestSearch: React.FC<{
 };
 
 export const ServicesTab: React.FC = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { rewards, byCategory, loading: catalogLoading, reload: reloadCatalog } = useServicesCatalog();
   const [showAddService, setShowAddService] = useState(false);
   const [editingReward, setEditingReward] = useState<Reward | null>(null);
@@ -631,6 +641,11 @@ export const ServicesTab: React.FC = () => {
   const { balance, loading: balanceLoading } = useRedeemablePoints(useTasks());
   const { bookings } = useMyBookings();
   const { providerId } = useProviderRole();
+  // A provider adds and edits their own offers; the super admin edits any.
+  const offerSelf: OfferSelf | undefined = !isSuperAdmin && providerId && profile
+    ? { uid: providerId, name: profile.user.name || '', roles: profile.roles }
+    : undefined;
+  const mayEdit = (r: Reward) => isSuperAdmin || (!!offerSelf && r.provider_id === offerSelf.uid);
   // Category is now a picture card rather than an accordion row, and exactly ONE can be chosen —
   // tapping the open one closes it and the panel below empties, which is the state the page opens
   // in. Providers below it can still be open several at a time, unlike the Tree elsewhere in the
@@ -722,7 +737,7 @@ export const ServicesTab: React.FC = () => {
       <motion.div {...fadeUp} className="flex items-end justify-between gap-3 mb-4">
         <div>
           <p className="text-3xl font-black text-clay leading-none">{balanceLoading ? '—' : balance}</p>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70 mt-1.5">
+          <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mt-1.5">
             Redeemable points
           </p>
         </div>
@@ -736,7 +751,7 @@ export const ServicesTab: React.FC = () => {
       </div>
 
       {!user && (
-        <p className="text-[11px] text-fg/70 mb-5 -mt-3">
+        <p className="text-xs text-fg/70 mb-5 -mt-3">
           <Link to="/login" className="text-clay font-bold hover:underline">Join or Log in</Link>{' '}
           to redeem points or avail the services.
         </p>
@@ -770,9 +785,9 @@ export const ServicesTab: React.FC = () => {
       )}
 
       {catalogLoading ? (
-        <div className="h-40 bg-tennis-surface/30 rounded-3xl animate-pulse" />
+        <div className="h-40 bg-fg/5 rounded-2xl animate-pulse" />
       ) : byCategory.size === 0 ? (
-        <div className="rounded-3xl bg-tennis-surface/30 py-12 text-center">
+        <div className="rounded-2xl bg-fg/5 py-12 text-center">
           <Sparkles className="w-7 h-7 text-fg/70 mx-auto mb-3" />
           <p className="text-sm text-fg/70">No services available yet. Check back soon.</p>
         </div>
@@ -845,7 +860,7 @@ export const ServicesTab: React.FC = () => {
                           </span>
                           {/* Area always shows beside the distance: the figure is measured from
                               the neighbourhood centre, not the provider's door. */}
-                          <span className="block text-[11px] font-medium text-fg/70 mt-0.5">
+                          <span className="block text-xs font-medium text-fg/70 mt-0.5">
                             {p.area}
                             {distKm !== null && ` · ${kmLabel(distKm)}`}
                           </span>
@@ -881,19 +896,19 @@ export const ServicesTab: React.FC = () => {
                         busy={busyId === `book:${r.id}` ? 'book' : busyId === `redeem:${r.id}` ? 'redeem' : null}
                         onBook={() => run(`book:${r.id}`, () => bookService({ serviceId: r.id }))}
                         onRedeem={() => run(`redeem:${r.id}`, () => redeemReward({ rewardId: r.id }))}
-                        onEdit={isSuperAdmin ? () => setEditingReward(r) : undefined}
-                        onDelete={isSuperAdmin && deletingId !== r.id ? () => removeOffer(r) : undefined}
+                        onEdit={mayEdit(r) ? () => setEditingReward(r) : undefined}
+                        onDelete={mayEdit(r) && deletingId !== r.id ? () => removeOffer(r) : undefined}
                       />
                     ))}
                     {p.offers.length > 1 && (
                       <button
                         type="button"
                         onClick={() => toggleSet(setAllOffersFor)(`${cat}:${p.id}`)}
-                        className="w-full min-h-11 rounded-2xl bg-fg/[0.03] text-xs font-bold text-clay hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+                        className="w-full min-h-11 rounded-2xl bg-fg/5 text-xs font-bold text-clay hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
                       >
                         {allOffersFor.has(`${cat}:${p.id}`)
                           ? 'Show less'
-                          : `Show ${p.offers.length - 1} more offer${p.offers.length === 2 ? '' : 's'}`}
+                          : 'Show other options'}
                       </button>
                     )}
                   </TreeGroup>
@@ -904,7 +919,7 @@ export const ServicesTab: React.FC = () => {
         </>
       )}
 
-      {isSuperAdmin && (
+      {(isSuperAdmin || offerSelf) && (
         <Fab ariaLabel="Add a service" onClick={() => setShowAddService(true)}>
           <Plus className="w-6 h-6" />
         </Fab>
@@ -916,6 +931,7 @@ export const ServicesTab: React.FC = () => {
           editingReward={editingReward ?? undefined}
           onClose={() => { setShowAddService(false); setEditingReward(null); }}
           onCreated={reloadCatalog}
+          self={offerSelf}
         />
       )}
     </div>

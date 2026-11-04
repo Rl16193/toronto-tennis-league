@@ -13,6 +13,8 @@ export const emptyContacts = (): ContactData => ({
   contactable: false,
   secondary_email: '',
   updated_at: null,
+  // When they last agreed to the Terms and Privacy Policy; null = never (ConsentSheet asks).
+  consent_at: null,
 });
 
 // The full stats shape with every server-written counter at zero (firestore.rules requires it).

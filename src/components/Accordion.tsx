@@ -18,12 +18,12 @@ export const Accordion: React.FC<{
   children: React.ReactNode;
 }> = ({ id, title, right, open, onToggle, locked, highlight, titleClassName = 'font-bold text-sm', bodyClassName = 'mt-2', children }) => (
   <div
-    className={`rounded-3xl border p-5 ${
+    className={`rounded-2xl border p-5 ${
       locked
         ? 'bg-tennis-surface/15 border-fg/5'
         : highlight
-          ? 'bg-tennis-surface/30 border-clay/40'
-          : 'bg-tennis-surface/30 border-fg/5'
+          ? 'bg-fg/5 border-clay/40'
+          : 'bg-fg/5 border-fg/5'
     }`}
   >
     <button

@@ -1,38 +1,35 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
-import { ChevronRight, Plus, Trophy } from 'lucide-react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { Plus } from 'lucide-react';
 
-import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Fab } from '../components/Fab';
 import { SegmentedControl } from '../components/SegmentedControl';
-import { createEvent, updateEvent, uploadEventImage, formFromEvent, DisplayEvent, EventFormState, INITIAL_EVENT_FORM, validateEventForm } from '../features/events/services/eventService';
+import { CompletedEvent, createEvent, fetchCompletedEvents, updateEvent, uploadEventImage, formFromEvent, DisplayEvent, EventFormState, INITIAL_EVENT_FORM, validateEventForm } from '../features/events/services/eventService';
 import { useEvents } from '../features/events/hooks/useEvents';
 import { useJoin } from '../features/events/hooks/useJoin';
 import { CourtsEditor } from '../features/profile/components/CourtsEditor';
 import { useProfileActions } from '../features/profile/hooks/useProfileActions';
 import { EventCarousel } from '../features/events/EventCarousel';
 import {
-  CreatorEventModal, EventCard, JoinEventSheet, isLateRegistration,
+  CompletedEventRow, CreatorEventModal, EventCard, JoinEventSheet, isLateRegistration, nextOccurrence,
 } from '../features/events/EventsElements';
+import { getEventEndDate, parseValidDate } from '../utils/eventDates';
 import { track } from '../lib/analytics';
-import { resolveZoneConfig } from './tournament/utils';
-import { toDate, toMillis } from '../utils/eventDates';
+import { resolveZoneConfig } from './tournament/drawGenerator';
 import { isSeniorsLeague, leagueDivision } from '../utils/skillLevels';
-import { isCancelledEvent, isEventManager, isOrganizerProfile, isTournamentCategoryEvent, isTournamentCategoryType, isTournamentEvent } from '../utils/eventTypes';
+import { isEventManager, isLadderEvent, isOrganizerProfile, isRecurringWeekly, isTournamentCategoryEvent, isTournamentCategoryType, isTournamentEvent } from '../utils/eventTypes';
 
 type EventsTab = 'upcoming' | 'completed';
 type EventCategory = 'socials' | 'tournaments';
-type CompletedEvent = { id: string; title: string; category: string; when: Date | null };
 
 export const Events: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
   const isEventCreator = isOrganizerProfile(profile);
 
   const { setEvents, loading, visibleEvents, hasJoinedEvent, hasJoinedAnyTournament, isFullyJoinedEvent } = useEvents();
-  const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed, handleSubmitJoin } = useJoin({ user, profile, hasJoinedEvent, hasJoinedAnyTournament });
+  const { selectedEvent, setSelectedEvent, joinForm, setJoinForm, joinError, joining, handleSubmitJoin } = useJoin({ user, profile, hasJoinedEvent, hasJoinedAnyTournament });
   // Zone-enabled tournaments need courts to place a player; the join sheet asks for them inline.
   const { updateLoading: courtsSaving, actions: courtsActions } = useProfileActions();
   const [pendingCourts, setPendingCourts] = useState<{ courts: string[]; zone: string; custom: string[] }>({ courts: [], zone: '', custom: [] });
@@ -61,7 +58,37 @@ export const Events: React.FC = () => {
   const [linkMissing, setLinkMissing] = useState(false);
   const handledLinkRef = useRef<string | null>(null);
 
-  useEffect(() => { document.title = 'Events · Racquets & Strings'; }, []);
+  useEffect(() => { document.title = 'Tennis Events & Tournaments in Toronto · Racquets & Strings'; }, []);
+
+  // Event structured data for search: current public events, located by city (events name no court).
+  // A weekly meetup is its next occurrence; the ladder runs all season and private events are left out.
+  useEffect(() => {
+    const SITE = 'https://www.racquetsandstrings.ca';
+    const day = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const org = { '@type': 'Organization', name: 'Racquets & Strings', url: SITE };
+    const schema = visibleEvents.filter((e) => !e.private && !isLadderEvent(e)).flatMap((e) => {
+      const start = nextOccurrence(e);
+      const end = isRecurringWeekly(e) ? start : parseValidDate(getEventEndDate(e));
+      if (!start || !end) return [];
+      return [{
+        '@context': 'https://schema.org', '@type': 'Event',
+        name: e.title, startDate: day(start), endDate: day(end),
+        eventStatus: 'https://schema.org/EventScheduled',
+        eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+        location: { '@type': 'Place', name: 'Toronto',
+          address: { '@type': 'PostalAddress', addressLocality: 'Toronto', addressRegion: 'ON', addressCountry: 'CA' } },
+        ...(e.image?.startsWith('https://') ? { image: e.image } : {}),
+        url: `${SITE}/events?event=${e.id}`,
+        organizer: org,
+      }];
+    });
+    if (!schema.length) return;
+    const tag = document.createElement('script');
+    tag.type = 'application/ld+json';
+    tag.text = JSON.stringify(schema).replace(/</g, '\\u003c');
+    document.head.appendChild(tag);
+    return () => tag.remove();
+  }, [visibleEvents]);
 
   useEffect(() => {
     if (!linkedEventId || loading || handledLinkRef.current === linkedEventId) return;
@@ -105,31 +132,13 @@ export const Events: React.FC = () => {
     return () => clearTimeout(t);
   }, [eventFormMessage]);
 
-  // Completed events, loaded on first visit to the Completed tab (final has a winner —
-  // same classification the Tournament/History pages use).
+  // Completed events, loaded on first visit to the Completed tab: `completed_at` is stamped by
+  // scoring once every draw has played its final (or named its winner).
   useEffect(() => {
     if (tab !== 'completed' || completedEvents.length > 0) return;
     setCompletedLoading(true);
-    Promise.all([
-      getDocs(collection(db, 'events')),
-      getDocs(query(collection(db, 'matches'), where('round', '==', 'F'), where('status', '==', 'complete'))),
-    ])
-      .then(([eventsSnap, finalsSnap]) => {
-        const completedIds = new Set(
-          finalsSnap.docs.filter((d) => d.data().winner_uid).map((d) => d.data().event_id as string),
-        );
-        setCompletedEvents(
-          eventsSnap.docs
-            .filter((d) => completedIds.has(d.id) && !isCancelledEvent(d.data()))
-            .map((d) => ({
-              id: d.id,
-              title: (d.data().title as string) || 'Tournament',
-              category: (d.data().category as string) || '',
-              when: toDate(d.data().start_date),
-            }))
-            .sort((a, b) => toMillis(b.when) - toMillis(a.when)),
-        );
-      })
+    fetchCompletedEvents()
+      .then(setCompletedEvents)
       .catch(() => {})
       .finally(() => setCompletedLoading(false));
   }, [tab, completedEvents.length]);
@@ -153,15 +162,14 @@ export const Events: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!quickJoinId || quickRunning.current || !selectedEvent || selectedEvent.id !== quickJoinId || loadingMatches) return;
-    // A tournament waits for useJoin to seed the division and load the draw.
+    if (!quickJoinId || quickRunning.current || !selectedEvent || selectedEvent.id !== quickJoinId) return;
+    // A tournament waits for useJoin to seed the division.
     if (isTournamentEvent(selectedEvent) && !joinForm.division) return;
-    if (slotStatus && slotStatus.status !== 'available') { setQuickJoinId(null); return; }
     quickRunning.current = true;
     // The confirmation is the "You're in" notification onParticipantJoined sends, not a toast.
     handleSubmitJoin()
       .finally(() => { quickRunning.current = false; setQuickJoinId(null); });
-  }, [quickJoinId, selectedEvent, loadingMatches, joinForm.division, slotStatus, handleSubmitJoin]);
+  }, [quickJoinId, selectedEvent, joinForm.division, handleSubmitJoin]);
 
   const handleJoin = (event: DisplayEvent) => {
     setSelectedEvent(event);
@@ -238,39 +246,20 @@ export const Events: React.FC = () => {
       {tab === 'completed' ? (
         completedLoading ? (
           <div className="space-y-2 max-w-xl">
-            {[1, 2].map((i) => <div key={i} className="h-14 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
+            {[1, 2].map((i) => <div key={i} className="h-14 bg-fg/5 rounded-2xl animate-pulse" />)}
           </div>
         ) : categoryCompletedEvents.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-fg/70 text-sm">No completed events yet.</p>
           </div>
         ) : (
-          <div className="rounded-3xl bg-tennis-surface/30 overflow-hidden divide-y divide-white/5 max-w-xl">
-            {categoryCompletedEvents.map((e) => (
-              <Link
-                key={e.id}
-                to={`/matches?mode=tournament&event=${e.id}`}
-                className="flex items-center gap-3 px-4 py-3.5 hover:bg-fg/[0.04] transition-colors"
-              >
-                <span className="w-8 h-8 shrink-0 rounded-xl bg-clay/15 border border-clay/25 flex items-center justify-center">
-                  <Trophy className="w-4 h-4 text-clay" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-fg truncate">{e.title}</p>
-                  {e.when && (
-                    <p className="text-[11px] text-fg/70">
-                      {e.when.toLocaleDateString('en-CA', { month: 'short', year: 'numeric' })}
-                    </p>
-                  )}
-                </div>
-                <ChevronRight className="w-4 h-4 text-fg/70 shrink-0" />
-              </Link>
-            ))}
+          <div className="rounded-2xl bg-fg/5 overflow-hidden divide-y divide-white/5 max-w-xl">
+            {categoryCompletedEvents.map((e) => <CompletedEventRow key={e.id} e={e} />)}
           </div>
         )
       ) : loading ? (
         <div className="space-y-4">
-          {[1, 2, 3].map((i) => <div key={i} className="h-48 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
+          {[1, 2, 3].map((i) => <div key={i} className="h-48 bg-fg/5 rounded-2xl animate-pulse" />)}
         </div>
       ) : categoryEvents.length > 0 ? (
         // One card per screen with arrows on a phone; the plain stacked list everywhere else.
@@ -290,7 +279,7 @@ export const Events: React.FC = () => {
         </EventCarousel>
       ) : (
         <div className="text-center py-16">
-          <h3 className="text-xl font-bold text-fg">No upcoming events</h3>
+          <h3 className="text-lg font-bold text-fg">No upcoming events</h3>
           <p className="text-fg/70 mt-1">Events will appear here when available.</p>
         </div>
       )}
@@ -320,10 +309,6 @@ export const Events: React.FC = () => {
             joinForm={joinForm}
             setJoinForm={setJoinForm}
             joinError={joinError}
-            slotStatus={slotStatus}
-            loadingMatches={loadingMatches}
-            slotFallbackConfirmed={slotFallbackConfirmed}
-            setSlotFallbackConfirmed={setSlotFallbackConfirmed}
             joining={joining}
             onSubmitJoin={() => handleSubmitJoin(needsCourts ? {
               courts: [...pendingCourts.courts, ...pendingCourts.custom],

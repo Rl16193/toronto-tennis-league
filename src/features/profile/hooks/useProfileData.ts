@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, onSnapshot, documentId } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
+import { chunk, db } from '../../../lib/firebase';
 import { useAuth } from '../../../context/AuthContext';
 import { TennisEvent, EventParticipant } from '../../../types';
 import { resolveStorageUrl } from '../../events/services/eventService';
@@ -12,14 +12,6 @@ export type JoinedEventCard = TennisEvent & {
 };
 
 const FIRESTORE_IN_QUERY_LIMIT = 10;
-
-const chunkValues = <T,>(values: T[], chunkSize: number) => {
-  const chunks: T[][] = [];
-  for (let index = 0; index < values.length; index += chunkSize) {
-    chunks.push(values.slice(index, index + chunkSize));
-  }
-  return chunks;
-};
 
 export const useProfileData = () => {
   const { user } = useAuth();
@@ -58,7 +50,7 @@ export const useProfileData = () => {
 
       try {
         const eventIds = [...new Set(participantData.map((participant) => participant.event_id).filter(Boolean))];
-        const eventIdChunks = chunkValues(eventIds, FIRESTORE_IN_QUERY_LIMIT);
+        const eventIdChunks = chunk(eventIds, FIRESTORE_IN_QUERY_LIMIT);
         const eventSnapshots = await Promise.all(
           eventIdChunks.map((eventIdsChunk) =>
             getDocs(query(collection(db, 'events'), where(documentId(), 'in', eventIdsChunk)))

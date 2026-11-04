@@ -92,7 +92,7 @@ export const MemberSearchInput: React.FC<Props> = ({
               key={m.id}
               type="button"
               onClick={() => onChange({ name: m.name, memberId: m.id })}
-              className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
+              className="w-full rounded-2xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
             >
               {m.name}
             </button>
@@ -101,7 +101,7 @@ export const MemberSearchInput: React.FC<Props> = ({
             <button
               type="button"
               onClick={() => onChange({ name: typed, memberId: null })}
-              className="w-full rounded-xl px-3 py-2 text-left text-sm text-fg hover:bg-clay/20 transition-colors"
+              className="w-full rounded-2xl px-3 py-2 text-left text-sm text-fg hover:bg-clay/20 transition-colors"
             >
               Use “<span className="font-semibold text-fg">{typed}</span>” — not on the app
             </button>
@@ -109,7 +109,7 @@ export const MemberSearchInput: React.FC<Props> = ({
         </div>
       )}
 
-      {hint && <p className="text-[11px] text-fg">{hint}</p>}
+      {hint && <p className="text-xs text-fg">{hint}</p>}
     </div>
   );
 };
@@ -131,7 +131,7 @@ export type Member = { id: string; name: string };
 let cache: Member[] | null = null;
 let inFlight: Promise<Member[]> | null = null;
 
-const loadRoster = (): Promise<Member[]> => {
+export const loadRoster = (): Promise<Member[]> => {
   if (cache) return Promise.resolve(cache);
   if (inFlight) return inFlight;
   inFlight = getDocs(collection(db, 'users'))

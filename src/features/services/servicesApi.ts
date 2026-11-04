@@ -25,6 +25,10 @@ export const declineBooking = call<BookingStep, { ok: boolean }>('declineBooking
 export const cancelBooking = call<BookingStep, { ok: boolean }>('cancelBooking');
 export const finishBooking = call<BookingStep, { ok: boolean }>('finishBooking');
 export const confirmBooking = call<BookingStep & { confirmed: boolean }, { ok: boolean }>('confirmBooking');
+/** Organizer: a booking that already happened, written straight to completed. No points move. */
+export const recordBooking = call<{
+  memberUid: string; serviceId: string; payment: 'price' | 'points'; completedAt: number;
+}, { bookingId: string }>('recordBooking');
 
 // Coach only: seat New group lesson bookings in a group, and run that group's lesson.
 export const lessonGroup = call<{
@@ -40,9 +44,9 @@ export const serviceErrorMessage = (err: unknown): string => {
   return msg && !msg.startsWith('INTERNAL') ? msg : 'Something went wrong. Try again.';
 };
 
-// ─── Catalog admin (super admin) ───────────────────────────────────────────────────────────────
+// ─── Catalog admin (super admin, or a provider for their own offers) ───────────────────────────────────────────────────────────────
 
-// Mirror of slug() in scripts/seed-rewards.mjs — keep in sync.
+// A service's bare id from its title (services ids are never prefixed).
 const slug = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
@@ -107,26 +111,36 @@ const flagProvider = async (batch: ReturnType<typeof writeBatch>, input: NewOffe
   }, { merge: true });
 };
 
+/**
+ * A provider saving their own offer can't write roles: only their business name and area change
+ * (firestore.rules). The super admin flags the account instead.
+ */
+const saveProvider = async (batch: ReturnType<typeof writeBatch>, input: NewOfferInput, asProvider: boolean) => {
+  if (!asProvider) return flagProvider(batch, input);
+  batch.update(doc(db, 'providers', input.providerUid), { name: input.businessName, area: input.area });
+};
+
 /** Creates a Services offer (`services/{slug}`, the full catalog shape) and flags the provider. */
-export async function createOffer(input: NewOfferInput): Promise<string> {
+export async function createOffer(input: NewOfferInput, asProvider = false): Promise<string> {
   const offerId = `${slug(input.providerName)}-${slug(input.offer)}`.slice(0, 120);
   const batch = writeBatch(db);
   batch.set(doc(db, 'services', offerId), {
     ...serviceFields(input),
     redeem_booking_id: '',
+    booking_count: 0,
     active: true,
     created_at: Timestamp.now(),
   });
-  await flagProvider(batch, input);
+  await saveProvider(batch, input, asProvider);
   await batch.commit();
   return offerId;
 }
 
 /** Edits an offer in place — same doc id, so bookings (service_id) keep pointing at it. */
-export async function updateOffer(id: string, input: NewOfferInput): Promise<void> {
+export async function updateOffer(id: string, input: NewOfferInput, asProvider = false): Promise<void> {
   const batch = writeBatch(db);
   batch.update(doc(db, 'services', id), serviceFields(input));
-  await flagProvider(batch, input);
+  await saveProvider(batch, input, asProvider);
   await batch.commit();
 }
 

@@ -20,6 +20,8 @@ import { SCORE_EDIT_WINDOW_MS, formatPlayerName } from '../tournament/utils';
 import type { TournamentMatch } from '../tournament/types';
 import { type FirestoreDateLike, getEventEndDate, isCurrentEvent, parseEndInstant, toMillis } from '../../utils/eventDates';
 import { isLadderEvent, isTournamentEvent } from '../../utils/eventTypes';
+import { withdrawFromEvent } from '../../features/events/services/eventService';
+import type { RemovalReason } from '../../features/events/registrations';
 import { leagueDivision, skillBand } from '../../utils/skillLevels';
 
 // Data for the Player Dash on /profile. Profile mounts this whether the dash is switched on or not,
@@ -78,6 +80,7 @@ export type PastMatchRow = {
   id: string;
   kind: DashKind;
   won: boolean;
+  drawn: boolean;
   scoreLine: string;
   when: string;
   context: string;
@@ -116,6 +119,8 @@ export type DashEventRow = {
   champion: boolean;
   played?: { done: number; total: number };
   href: string;
+  /** A live tournament: the member may withdraw from it here. */
+  withdrawable: boolean;
 };
 
 const kindOf = (category: string): DashKind =>
@@ -306,13 +311,13 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
     const pastRow = (m: UserMatch): PastMatchRow => {
       const kind = kindOf(m.category);
       // One rule for every kind; the server decides whether the correction replaces the score.
-      const editable = !m.walkover && !!m.winnerUid &&
+      const editable = !m.walkover && (!!m.winnerUid || m.drawn) &&
         m.completedAt > 0 && now - m.completedAt <= SCORE_EDIT_WINDOW_MS;
       const context = kind === 'tournament'
         ? [eventTitle.get(m.eventId) || 'Tournament', stageOf(m.round, m.tournamentMatch?.group_label)].filter(Boolean).join(' · ')
         : kind === 'challenge' ? 'Ladder challenge' : 'Rally';
       return {
-        id: m.id, kind, won: m.won, scoreLine: m.walkover ? 'W/O' : m.scoreLine,
+        id: m.id, kind, won: m.won, drawn: m.drawn, scoreLine: m.walkover ? 'W/O' : m.scoreLine,
         when: shortDate(m.completedAt), context, editable, match: m,
       };
     };
@@ -326,14 +331,14 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
         opponent: { uid: m.opponentId, name: formatPlayerName(m.opponentName) },
         wins: 0, losses: 0, lastScore: '', matches: [],
       };
-      if (m.won) row.wins += 1; else row.losses += 1;
+      if (m.won) row.wins += 1; else if (!m.drawn) row.losses += 1;
       row.matches.push(pastRow(m));
       groups.set(key, row);
     });
 
     return {
       recent: matches.slice(0, 5).map(pastRow),
-      form: matches.slice(0, 8).map((m) => m.won),
+      form: matches.filter((m) => !m.drawn).slice(0, 8).map((m) => m.won),
       headToHead: [...groups.values()].map((g) => ({ ...g, lastScore: g.matches[0]?.scoreLine ?? '' })),
     };
   }, [matches, uid, eventTitle]);
@@ -346,7 +351,8 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
     const { streak, pgWon } = playerRecord(matches, profile?.stats);
     let bestStreak = 0;
     let run = 0;
-    [...played].reverse().forEach((m) => { run = m.won ? run + 1 : 0; bestStreak = Math.max(bestStreak, run); });
+    // A draw is neither a win nor a loss: it doesn't add to the run or end it.
+    [...played].reverse().forEach((m) => { if (m.drawn) return; run = m.won ? run + 1 : 0; bestStreak = Math.max(bestStreak, run); });
     const activeMonths = new Set(matches.filter((m) => m.completedAt).map((m) => {
       const d = new Date(m.completedAt);
       return `${d.getFullYear()}-${d.getMonth()}`;
@@ -354,7 +360,7 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
     return {
       streak,
       wins,
-      losses: played.length - wins,
+      losses: played.filter((m) => !m.won && !m.drawn).length,
       matches: played.length,
       pgWon,
       rsPoints,
@@ -411,7 +417,9 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
         const mine = fixtures.filter((m) => m.event_id === e.id);
         const done = mine.filter((m) => m.status === 'complete').length;
         const end = parseEndInstant(getEventEndDate(e));
-        const result = !live && mine.length ? deriveResults(mine, uid ?? '').bestResult : '—';
+        // A one-group round robin has no final: its winner is named on the event (`champions`).
+        const named = !!uid && Object.values(e.champions ?? {}).some((c) => c.uids.includes(uid));
+        const result = named ? 'Champion' : !live && mine.length ? deriveResults(mine, uid ?? '').bestResult : '—';
         const detail = ladderEvent
           ? 'All Season'
           : live
@@ -426,6 +434,7 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
           detail,
           champion: result === 'Champion',
           played: tournament && live && mine.length ? { done, total: mine.length } : undefined,
+          withdrawable: tournament && live,
           href: ladderEvent
             ? '/matches?mode=challenges'
             : tournament ? `/matches?mode=tournament&event=${e.id}` : `/events?event=${e.id}`,
@@ -458,6 +467,7 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
 
   return {
     identity,
+    withdraw: (eventId: string, reason: RemovalReason) => withdrawFromEvent(eventId, uid ?? '', reason),
     count: needsYou.length + bookingAsks.length + toPlay.length,
     needsYouCount: needsYou.length + bookingAsks.length,
     needsYou,

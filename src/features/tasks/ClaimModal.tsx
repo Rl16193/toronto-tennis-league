@@ -88,7 +88,7 @@ export const ClaimModal: React.FC<{ type: ClaimType; onClose: () => void }> = ({
         ) : (
           <>
             {error && (
-              <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-3">{error}</div>
+              <div className="rounded-2xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-3">{error}</div>
             )}
 
             {type === 'volunteer' && (

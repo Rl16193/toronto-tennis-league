@@ -59,6 +59,7 @@ export const Signup: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { user, profile, loading: authLoading, refreshProfile } = useAuth();
   const [phase, setPhase] = useState<AuthPhase>('email');
+  const [agreed, setAgreed] = useState(false);
   // Preferences is one screen now; these are the expandable cards on it, all open on arrival.
   const [openCards, setOpenCards] = useState<Set<string>>(
     () => new Set(['about', 'skill', 'courts', 'league']),
@@ -369,6 +370,7 @@ export const Signup: React.FC = () => {
         // consent to be contacted; members refine the channel later.
         contactable: !!formData.phone,
         updated_at: Timestamp.now(),
+        consent_at: Timestamp.now(),
       });
       const ageCategory = formData.retiredPro ? ' Retired Pro' : formData.juniors ? ' Juniors' : '';
       const leagueValue = formData.league ? `${formData.league}${ageCategory}` : '';
@@ -499,7 +501,7 @@ export const Signup: React.FC = () => {
       <div className="absolute top-0 right-0 w-96 h-96 bg-clay/5 blur-[120px] -z-10 rounded-full" />
       <div className="absolute bottom-0 left-0 w-96 h-96 bg-tennis-surface/20 blur-[100px] -z-10 rounded-full" />
 
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-xl mx-auto">
         {/* Progress Bar — signup phases only */}
         {isSignupPhase && (
           <div className="mb-12">
@@ -600,7 +602,7 @@ export const Signup: React.FC = () => {
                 </div>
                 <Button onClick={handleEmailContinue} className="w-full group" isLoading={loading}>
                   Continue
-                  <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </div>
 
@@ -621,7 +623,7 @@ export const Signup: React.FC = () => {
                   onClick={handleGoogleSignIn}
                   isLoading={loading}
                 >
-                  <Chrome className="mr-2 w-5 h-5" />
+                  <Chrome className="w-5 h-5" />
                   Google Account
                 </Button>
                 {APPLE_SIGN_IN_ENABLED && (
@@ -632,7 +634,7 @@ export const Signup: React.FC = () => {
                     onClick={handleAppleSignIn}
                     isLoading={loading}
                   >
-                    <Apple className="mr-2 w-5 h-5" />
+                    <Apple className="w-5 h-5" />
                     Apple Account
                   </Button>
                   )}
@@ -649,7 +651,7 @@ export const Signup: React.FC = () => {
                     <CheckCircle2 className="w-10 h-10 text-badge-win" />
                   </div>
                   <div className="space-y-2">
-                    <h3 className="text-xl font-bold text-fg">Reset Link Sent</h3>
+                    <h3 className="text-lg font-bold text-fg">Reset Link Sent</h3>
                     <p className="text-fg/70">If the email is linked with an account, you will receive a reset link.</p>
                     <p className="text-fg/70 text-sm">Check your spam folder too.</p>
                   </div>
@@ -705,7 +707,7 @@ export const Signup: React.FC = () => {
 
                   <Button onClick={showForgot ? handleResetPassword : handleLogin} className="w-full group" isLoading={loading}>
                     {showForgot ? 'Send Reset Link' : 'Sign In'}
-                    {!loading && <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />}
+                    {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
                   </Button>
 
                   {showForgot && (
@@ -737,7 +739,7 @@ export const Signup: React.FC = () => {
                         onClick={handleGoogleSignIn}
                         isLoading={loading}
                       >
-                        <Chrome className="mr-2 w-5 h-5" />
+                        <Chrome className="w-5 h-5" />
                         Google Account
                       </Button>
                       {APPLE_SIGN_IN_ENABLED && (
@@ -748,7 +750,7 @@ export const Signup: React.FC = () => {
                           onClick={handleAppleSignIn}
                           isLoading={loading}
                         >
-                          <Apple className="mr-2 w-5 h-5" />
+                          <Apple className="w-5 h-5" />
                           Apple Account
                         </Button>
                         )}
@@ -828,7 +830,7 @@ export const Signup: React.FC = () => {
 
           {/* PHASE: VERIFY EMAIL */}
           {phase === 'done' && (
-            <div className="relative max-w-md mx-auto text-center rounded-3xl border border-green-500/25 bg-green-500/5 p-8">
+            <div className="relative max-w-md mx-auto text-center rounded-2xl border border-green-500/25 bg-green-500/5 p-8">
               {/* Cross — closes the message and opens the app (Matches page). */}
               <button
                 type="button"
@@ -924,7 +926,7 @@ export const Signup: React.FC = () => {
                           key={level}
                           type="button"
                           onClick={() => { setFormData({ ...formData, skillLevel: level }); setSkillChosen(true); }}
-                          className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
+                          className={`py-2.5 rounded-2xl text-sm font-bold border-2 transition-all ${
                             active ? 'bg-clay/10 text-clay border-clay' : 'bg-fg/5 text-fg border-transparent hover:bg-fg/10'
                           }`}
                         >
@@ -956,9 +958,10 @@ export const Signup: React.FC = () => {
                           key={court}
                           type="button"
                           onClick={() => setFormData({ ...formData, preferredCourts: formData.preferredCourts.filter((c) => c !== court) })}
-                          className="px-3 py-1 rounded-xl text-xs font-bold bg-clay text-white flex items-center gap-1.5"
+                          aria-label={`Remove ${court}`}
+                          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold leading-none bg-clay text-white"
                         >
-                          {court} <span className="opacity-70">✕</span>
+                          {court} <X className="size-3.5 opacity-70" aria-hidden="true" />
                         </button>
                       ))}
                     </div>
@@ -987,7 +990,7 @@ export const Signup: React.FC = () => {
                             key={court}
                             type="button"
                             onClick={() => selectCourt(court)}
-                            className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-fg transition-colors hover:bg-clay/20 hover:text-fg"
+                            className="w-full rounded-2xl px-3 py-2 text-left text-sm font-semibold text-fg transition-colors hover:bg-clay/20 hover:text-fg"
                           >
                             {court}
                           </button>
@@ -1008,7 +1011,7 @@ export const Signup: React.FC = () => {
                             key={zone}
                             type="button"
                             onClick={() => setFormData({ ...formData, preferredZone: zone, pendingZoneChoice: null })}
-                            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+                            className={`flex-1 py-2 px-3 rounded-2xl text-xs font-bold transition-all ${
                               formData.preferredZone === zone
                                 ? 'bg-clay text-white'
                                 : 'bg-fg/5 text-fg hover:bg-fg/10'
@@ -1023,7 +1026,7 @@ export const Signup: React.FC = () => {
                     <div className="mt-3 flex items-center gap-2">
                       <MapPin className="w-3.5 h-3.5 text-clay shrink-0" />
                       <span className="text-xs text-fg/70">Zone auto-assigned:</span>
-                      <span className="px-2.5 py-1 rounded-lg bg-clay/20 text-clay text-xs font-bold">
+                      <span className="px-2.5 py-1 rounded-2xl bg-clay/20 text-clay text-xs font-bold">
                         {formData.preferredZone}
                       </span>
                     </div>
@@ -1088,15 +1091,25 @@ export const Signup: React.FC = () => {
                     </div>
                   </div>
                   {!formData.league && (
-                    <p className="text-[11px] text-fg/70">Choose a league above to unlock Retired Pro / Juniors.</p>
+                    <p className="text-xs text-fg/70">Choose a league above to unlock Retired Pro / Juniors.</p>
                   )}
                 </div>
               </Accordion>
 
-              <p className="text-xs text-fg/70 text-center px-2 pt-2">
-                By joining you agree to our{' '}
-                <Link to="/terms" className="text-clay hover:underline">terms of service</Link>.
-              </p>
+              {/* Required: Complete Profile stays disabled until ticked; the tick is stored as contacts.consent_at. */}
+              <label className="flex items-center justify-center gap-2.5 text-sm text-fg cursor-pointer px-2 pt-2 min-h-11">
+                <input
+                  type="checkbox"
+                  checked={agreed}
+                  onChange={(e) => setAgreed(e.target.checked)}
+                  className="accent-clay w-4 h-4 shrink-0"
+                />
+                <span>
+                  I agree to the{' '}
+                  <Link to="/terms" className="text-clay hover:underline">Terms of Service</Link> and{' '}
+                  <Link to="/privacy" className="text-clay hover:underline">Privacy Policy</Link>
+                </span>
+              </label>
             </div>
           )}
 
@@ -1105,16 +1118,16 @@ export const Signup: React.FC = () => {
             <div className="flex justify-center items-center gap-3 mt-4 pt-8 border-t border-fg/5">
               <Button onClick={handleAccountContinue} className="group" isLoading={loading}>
                 Continue
-                <ChevronRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </div>
           )}
           {/* One screen now, so no Back/Next shuttle — just the single finishing action. */}
           {phase === 'preferences' && (
             <div className="flex justify-center items-center mt-4 pt-8 border-t border-fg/5">
-              <Button onClick={handleCompleteProfile} isLoading={loading} disabled={!isNameValid()}>
+              <Button onClick={handleCompleteProfile} isLoading={loading} disabled={!isNameValid() || !agreed}>
                 Complete Profile
-                <CheckCircle2 className="ml-2 w-5 h-5" />
+                <CheckCircle2 className="w-5 h-5" />
               </Button>
             </div>
           )}

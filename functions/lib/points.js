@@ -81,7 +81,6 @@ const INITIATION = [
   { id: 'courtVisit', counter: 'courtsVisited' }, { id: 'waitingBoard', counter: 'boardPhotos' },
   { id: 'queuePhoto', counter: 'queueUpdates' }, { id: 'courtSuggestion', counter: 'suggestions' },
 ];
-const INITIATION_TASK_IDS = INITIATION.map((i) => i.id);
 
 const num = (v) => (typeof v === 'number' ? v : 0);
 const initiationDone = (stats) => !!stats && INITIATION.every((i) => (i.counter ? num(stats[i.counter]) >= 1 : stats[i.id] === true));
@@ -92,9 +91,6 @@ function taskPointsOf(stats) {
   const tiers = ALL_TIERS.reduce((sum, t) => sum + (num(stats[t.counter]) >= t.need ? t.points : 0), 0);
   return tiers + (initiationDone(stats) ? SETUP_POINTS : 0);
 }
-
-/** Tier ids a stats doc has reached (task-completed alerts compare before and after). */
-const tiersReached = (stats) => ALL_TIERS.filter((t) => num(stats && stats[t.counter]) >= t.need).map((t) => t.id);
 
 /**
  * Inside a transaction: the stats patch with rsPoints recomputed from the counters (after `patch`)
@@ -110,4 +106,4 @@ async function rsPointsPatch(tx, db, uid, patch = {}) {
   return { ...patch, rsPoints: taskPointsOf(next) + awardPoints };
 }
 
-module.exports = { ALL_TIERS, INITIATION_TASK_IDS, SETUP_POINTS, taskPointsOf, tiersReached, initiationDone, rsPointsPatch };
+module.exports = { num, initiationDone, rsPointsPatch };

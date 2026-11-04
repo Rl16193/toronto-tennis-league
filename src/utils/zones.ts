@@ -1,3 +1,5 @@
+import { GTA_ZONE_NAMES, GTA_ZONE_POLYGONS, type GtaZoneName } from './gtaZones';
+
 export const ZONE_NAMES = [
   'York West',
   'Etobicoke',
@@ -10,7 +12,37 @@ export const ZONE_NAMES = [
 
 export type ZoneName = typeof ZONE_NAMES[number];
 
+// A Toronto zone, or a GTA municipality (outside the city a court's zone is its municipality).
+// The pickers and tournament draws still offer only the 7 Toronto zones.
+export type Zone = ZoneName | GtaZoneName;
+
 type Pt = [number, number]; // [lng, lat]
+
+const inRing = (lng: number, lat: number, ring: Pt[]): boolean => {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+};
+
+// Bounding boxes first: almost every point is rejected without walking a ring.
+const GTA_BOXES = GTA_ZONE_NAMES.map((name) => {
+  const outer = GTA_ZONE_POLYGONS[name][0];
+  const lngs = outer.map((p) => p[0]), lats = outer.map((p) => p[1]);
+  return { name, box: [Math.min(...lngs), Math.min(...lats), Math.max(...lngs), Math.max(...lats)] };
+});
+
+/** The GTA municipality a point is in, or null (Toronto, or outside the GTA). */
+export function gtaZoneOf(lat: number, lng: number): GtaZoneName | null {
+  for (const { name, box } of GTA_BOXES) {
+    if (lng < box[0] || lat < box[1] || lng > box[2] || lat > box[3]) continue;
+    const [outer, ...holes] = GTA_ZONE_POLYGONS[name];
+    if (inRing(lng, lat, outer) && !holes.some((h) => inRing(lng, lat, h))) return name;
+  }
+  return null;
+}
 
 // Real street/highway/river centerlines from the City of Toronto Centreline dataset (4 decimals),
 // one polyline per boundary road. Hwy 407 isn't in that dataset (provincial route), so Steeles Ave
@@ -95,7 +127,12 @@ function rectangleFallback(lat: number, lng: number): ZoneName {
   }
 }
 
-// Zone boundaries follow real streets/highways/rivers (City of Toronto Centreline dataset):
+// A point inside a GTA municipality's boundary takes that municipality; everything else is Toronto.
+export function getZone(lat: number, lng: number): Zone {
+  return gtaZoneOf(lat, lng) ?? torontoZone(lat, lng);
+}
+
+// Toronto zone boundaries follow real streets/highways/rivers (City of Toronto Centreline dataset):
 //  - Etobicoke: south of Hwy 401, north of St Clair Ave W -> Dundas St W, west of Dufferin St, east of the west city edge
 //  - Etobicoke - Lakeshore: south of St Clair Ave W -> Dundas St W, west of Dufferin St, north of the lake
 //  - York West: west of Bathurst St, between Steeles Ave (real northern edge) and Hwy 401, east of the west city edge
@@ -103,7 +140,7 @@ function rectangleFallback(lat: number, lng: number): ZoneName {
 //  - North York: between Bathurst St and the DVP/Hwy 404, between Eglinton Ave and Steeles Ave
 //  - North Scarborough: south of Steeles Ave, north of the east-edge road chain, east of the DVP/Hwy 404
 //  - East York and South Scarborough: south of the east-edge road chain, north of the lake, east of the DVP/Hwy 404
-export function getZone(lat: number, lng: number): ZoneName {
+function torontoZone(lat: number, lng: number): ZoneName {
   const northOf401 = sideByLng(ROADS.hwy401, lng, lat) > 0;
   const eastOfDvp404 = sideByLat(DVP_404, lng, lat) < 0;
   const westOfDufferin = sideByLat(ROADS.dufferin, lng, lat) > 0;
@@ -211,7 +248,7 @@ const PROBE_DEG = 0.011; // ~1.2km at these latitudes
 export function getZoneWithBorderCheck(
   lat: number,
   lng: number,
-): { primary: ZoneName; adjacent: ZoneName | null } {
+): { primary: Zone; adjacent: Zone | null } {
   const primary = getZone(lat, lng);
   const probes: [number, number][] = [
     [lat + PROBE_DEG, lng], [lat - PROBE_DEG, lng], [lat, lng + PROBE_DEG], [lat, lng - PROBE_DEG],

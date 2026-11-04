@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, ChevronDown, Loader2 } from 'lucide-react';
+import { Check, ChevronDown, Loader2, Snowflake } from 'lucide-react';
 import { tapScale } from '../../lib/motion';
 import { Sheet } from '../../components/Sheet';
 import { Button } from '../../components/Button';
@@ -31,7 +31,7 @@ const SEL_BG = 'var(--color-tennis-deep)';
 // picks one option; MultiFilterSelect ticks several and closes with Done.
 const FilterTrigger: React.FC<{ label: string; text: string; onOpen: () => void; disabled?: boolean }> = ({ label, text, onOpen, disabled }) => (
   <div className={`flex flex-col gap-0.5 ${disabled ? 'opacity-35 pointer-events-none' : ''}`}>
-    <span className="text-fg/70 text-[10px] uppercase tracking-wide">{label}</span>
+    <span className="text-fg/70 text-xs uppercase tracking-wide">{label}</span>
     <button
       type="button"
       onClick={onOpen}
@@ -209,6 +209,11 @@ export const CourtPopup: React.FC<{
           PUBLIC HOURS
         </span>
       )}
+      {court.winterPlay && (
+        <span style={{ background: '#cffafe', color: '#155e75', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+          <Snowflake size={10} aria-hidden="true" />WINTER
+        </span>
+      )}
       {court.bookingUrl && (
         <span style={{ background: '#7c2d12', color: '#fdba74', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
           BOOKABLE
@@ -261,7 +266,8 @@ export const CourtPopup: React.FC<{
         </button>
       )}
     </div>
-    {onSuggest && (
+    {/* Clubs without public hours (orange dots) get no Report button; Website above stays. */}
+    {onSuggest && !(court.courtType.toLowerCase() === 'club' && !hasPublicHours(court)) && (
       <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
         <button
           onClick={onSuggest}
@@ -286,6 +292,8 @@ interface CourtResultsProps {
   onViewPrograms: (court: CourtWithCount) => void;
   /** 7D / 30D Activity on: each row shows that window's breakdown as pills. '' = off. */
   activityWindow: '' | 'd7' | 'd30';
+  /** Reports on: each row shows its newest court-condition note, with More for the other two. */
+  showReports: boolean;
 }
 
 // Memoized — CourtMap re-renders on every search keystroke.
@@ -298,7 +306,9 @@ const ACTIVITY_PILLS: { kind: keyof ActivityBreakdown; label: string }[] = [
   { kind: 'condition', label: 'Court conditions' },
 ];
 
-export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ courts, loading, userCoords, onSelectCourt, onViewPrograms, activityWindow }) => {
+export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ courts, loading, userCoords, onSelectCourt, onViewPrograms, activityWindow, showReports }) => {
+  // The court whose Reports are expanded to all three; one at a time.
+  const [openReports, setOpenReports] = useState<string | null>(null);
   if (loading) {
     return (
       <div className="flex items-center justify-center h-32">
@@ -318,7 +328,7 @@ export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ court
             // inside it, and nesting those in a button is invalid and swallows their clicks.
             <div
               key={`${c.dropdown}-${c.lat}`}
-              className="flex items-start justify-between gap-2 px-4 py-3 hover:bg-white/[0.04] transition-colors"
+              className="flex items-start justify-between gap-2 px-4 py-3 hover:bg-fg/5 transition-colors"
             >
               <motion.button
                 onClick={() => onSelectCourt(c)}
@@ -333,8 +343,11 @@ export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ court
                   {c.numCourts > 0 && <Badge bg="#2d2d3a" color="#d1d5db">{c.numCourts} CT</Badge>}
                   {c.lights && <Badge bg="#422006" color="#fbbf24">LIGHTS</Badge>}
                   {hasPublicHours(c) && <Badge bg="#1e3a5f" color="#93c5fd">PUBLIC HOURS</Badge>}
+                  {c.winterPlay && <Badge bg="#164e63" color="#a5f3fc">WINTER</Badge>}
                   {c.bookingUrl && <Badge bg="#7c2d12" color="#fdba74">BOOKABLE</Badge>}
-                  {c.count > 0 && <Badge bg="#14532d" color="#86efac">{c.count} player{c.count !== 1 ? 's' : ''}</Badge>}
+                  {showReports
+                    ? c.reportCount > 0 && <Badge bg="#14532d" color="#86efac">{c.reportCount} report{c.reportCount !== 1 ? 's' : ''}</Badge>
+                    : c.count > 0 && <Badge bg="#14532d" color="#86efac">{c.count} player{c.count !== 1 ? 's' : ''}</Badge>}
                   <PickleballBadges entries={c.pickleballEntries} />
                 </div>
                 {c.clubInfo && <p className="text-fg text-xs mt-1 leading-snug">{c.clubInfo}</p>}
@@ -346,6 +359,25 @@ export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ court
                     })}
                   </div>
                 )}
+                {showReports && c.reports.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                    {(openReports === c.dropdown ? c.reports : c.reports.slice(0, 1)).map((note, i) => (
+                      <Badge key={i} bg="#3b1f12" color="#fdba74">{note}</Badge>
+                    ))}
+                    {c.reports.length > 1 && (
+                      // A span, not a button: the whole row is already a button.
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(ev) => { ev.stopPropagation(); setOpenReports((cur) => (cur === c.dropdown ? null : c.dropdown)); }}
+                        onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.stopPropagation(); setOpenReports((cur) => (cur === c.dropdown ? null : c.dropdown)); } }}
+                        className="text-xs font-bold text-clay cursor-pointer focus-visible:outline-2 focus-visible:outline-clay"
+                      >
+                        {openReports === c.dropdown ? 'Less' : `More (${c.reports.length - 1})`}
+                      </span>
+                    )}
+                  </div>
+                )}
               </motion.button>
               {/* Distance, then the same actions the map bubble offers, stacked beneath it. */}
               <div className="shrink-0 flex flex-col items-end gap-1">
@@ -353,7 +385,7 @@ export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ court
                 {c.bookingUrl && (
                   <a
                     href={c.bookingUrl} target="_blank" rel="noreferrer"
-                    className="rounded-lg bg-clay px-2 py-0.5 text-[10px] font-bold text-white hover:bg-clay-dark transition-colors"
+                    className="rounded-2xl bg-clay px-2 py-0.5 text-xs font-bold text-white hover:bg-clay-dark transition-colors"
                   >
                     Book Online
                   </a>
@@ -362,7 +394,7 @@ export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ court
                   <button
                     type="button"
                     onClick={() => onViewPrograms(c)}
-                    className="rounded-lg bg-fg/10 px-2 py-0.5 text-[10px] font-bold text-fg hover:bg-fg/20 transition-colors"
+                    className="rounded-2xl bg-fg/10 px-2 py-0.5 text-xs font-bold text-fg hover:bg-fg/20 transition-colors"
                   >
                     Programs
                   </button>
@@ -412,7 +444,7 @@ export const ProgramResultsList: React.FC<ProgramResultsProps> = React.memo(({
           No back control by design: Reset in the filter sheet is what returns you to the courts. */}
       <div className="px-4 py-2 border-b border-fg/5">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <span className="text-fg/70 text-[11px] shrink-0">
+          <span className="text-fg/70 text-xs shrink-0">
             Showing {programs.length} of {totalPrograms} programs
           </span>
           <div className="flex items-center gap-1">
@@ -421,7 +453,7 @@ export const ProgramResultsList: React.FC<ProgramResultsProps> = React.memo(({
                 key={s.value || 'all'}
                 type="button"
                 onClick={() => onStatusChange(s.value)}
-                className={`rounded-lg px-2 py-0.5 text-[10px] font-bold transition-colors ${
+                className={`rounded-2xl px-2 py-0.5 text-xs font-bold transition-colors ${
                   statusFilter === s.value ? 'bg-clay text-white' : 'bg-fg/10 text-fg hover:bg-fg/20'}`}
               >
                 {s.label}
@@ -462,7 +494,7 @@ export const ProgramResultsList: React.FC<ProgramResultsProps> = React.memo(({
                   {p.activityUrl && (
                     <a href={p.activityUrl} target="_blank" rel="noopener noreferrer"
                        onClick={(e) => e.stopPropagation()}
-                       className="shrink-0 inline-flex items-center rounded-lg bg-clay px-2.5 py-1
+                       className="shrink-0 inline-flex items-center rounded-2xl bg-clay px-2.5 py-1
                                   text-xs font-bold text-white hover:bg-clay-dark transition-colors">
                       View Activity
                     </a>

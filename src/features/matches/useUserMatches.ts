@@ -19,6 +19,8 @@ export type UserMatch = {
   opponentName: string;
   eventId: string;
   won: boolean;
+  /** A rally with level sets: neither a win nor a loss, 1 point each. */
+  drawn: boolean;
   completedAt: number; // ms since epoch, the result's first scoring
   myGames: number;
   oppGames: number;
@@ -126,7 +128,9 @@ export function useUserMatches(uid?: string): {
           }
 
           const result = results.get(d.id);
-          if (!raw.winner_uid || !result) return;
+          // A rally with no winner is a draw; every other result needs one.
+          const drawn = category === 'rally' && !raw.winner_uid;
+          if ((!raw.winner_uid && !drawn) || !result) return;
           // Sets are stored absolutely (player_1 first), so flip them to the viewer's side.
           const sets: [number, number][] = [
             [result.set_1_player_1 ?? 0, result.set_1_player_2 ?? 0],
@@ -142,7 +146,8 @@ export function useUserMatches(uid?: string): {
             opponentId,
             opponentName: opponentName || 'Opponent',
             eventId: raw.event_id || '',
-            won: raw.winner_uid === uid,
+            won: !drawn && raw.winner_uid === uid,
+            drawn,
             completedAt: toMillis(result.completed_at),
             myGames: pairs.reduce((s, [a]) => s + a, 0),
             oppGames: pairs.reduce((s, [, b]) => s + b, 0),
@@ -177,18 +182,20 @@ export function useUserMatches(uid?: string): {
  * public profile both show these, so they come from here and can't disagree.
  */
 export const playerRecord = (
-  all: Pick<UserMatch, 'won' | 'myGames' | 'oppGames' | 'walkover'>[],
+  all: Pick<UserMatch, 'won' | 'drawn' | 'myGames' | 'oppGames' | 'walkover'>[],
   stats?: { pointswon?: number; totalPointsPlayed?: number } | null,
 ) => {
   // A walkover is nobody's win or loss — no match was played. Filtered HERE rather than at the
   // call sites so a new caller can't reintroduce it. `stats` already agrees: scoring.js pays a
   // walkover no matchesPlayed/wins (resultDeltas, `played = !walkover`).
   const matches = all.filter((m) => !m.walkover);
+  // A rally draw is played but neither a win nor a loss, so it doesn't break the run.
+  const decided = matches.filter((m) => !m.drawn);
   let streak: string | null = null;
-  if (matches.length) {
-    const first = matches[0].won;
+  if (decided.length) {
+    const first = decided[0].won;
     let n = 0;
-    for (const m of matches) { if (m.won !== first) break; n += 1; }
+    for (const m of decided) { if (m.won !== first) break; n += 1; }
     streak = `${n}${first ? 'W' : 'L'}`;
   }
   // The stored points pair, with a games fallback for members whose points were never populated.

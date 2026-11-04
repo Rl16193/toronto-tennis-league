@@ -2,10 +2,12 @@
  * Courts and zones for the Cloud Functions: the one court slug and the zone roster. Same module
  * name and `courtKey` as Racquets-And-Strings. Helpers only (see notify.js for why).
  *
- * courts.json is the courtKey → zone roster, generated from
- * public/Tennis Courts Facilities - 4326.csv. Regenerate it if the CSV changes.
+ * courts.json is the courtKey → { zone, city } roster, generated from
+ * public/Tennis Courts Facilities - 4326.csv. Regenerate it if the CSV changes (CLAUDE.md, "GTA courts").
+ * A GTA court's zone is its municipality; city is 'Toronto' or that municipality.
  */
-const courts = require('../courts.json');
+const roster = require('../courts.json');
+const courts = Object.fromEntries(Object.entries(roster).map(([key, c]) => [key, c.zone]));
 
 // Same normalization as src/utils/courtKey.ts — keep in sync.
 const courtKey = (value) =>
@@ -25,8 +27,10 @@ const ZONE_COURTS = (() => {
   return m;
 })();
 
-/** Every court key on the roster (the whole city). */
-const allCourts = () => Object.keys(courts);
+/** Every Toronto court key: the Explorer (city sweep) roster. */
+const TORONTO_COURTS = Object.keys(roster).filter((key) => roster[key].city === 'Toronto');
+const torontoCourts = () => TORONTO_COURTS;
+const isTorontoCourt = (key) => roster[key]?.city === 'Toronto';
 
 /** Every court key in a zone ([] for an unknown zone). */
 const courtsInZone = (zone) => ZONE_COURTS[zone] || [];
@@ -85,4 +89,4 @@ async function releaseHeldVisits(db) {
   return released;
 }
 
-module.exports = { courtKey, zoneOfCourt, courtsInZone, allCourts, writeMatchVisits, holdMatchVisits, releaseHeldVisits };
+module.exports = { courtKey, zoneOfCourt, courtsInZone, torontoCourts, isTorontoCourt, writeMatchVisits, holdMatchVisits, releaseHeldVisits };

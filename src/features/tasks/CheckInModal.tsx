@@ -98,7 +98,7 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                     <div key={c.court} className="flex items-center gap-3 px-4 py-2.5">
                       <span className="text-fg/70 font-black text-sm w-4 shrink-0">{i + 1}</span>
                       <p className="text-fg font-semibold text-sm truncate flex-1 min-w-0">{c.court}</p>
-                      <span className="text-[11px] text-fg/70 shrink-0">{c.count} check-ins</span>
+                      <span className="text-xs text-fg/70 shrink-0">{c.count} check-ins</span>
                     </div>
                   ))}
                 </div>
@@ -106,7 +106,7 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
             </div>
 
             <Button onClick={locate} className="w-full">
-              <Navigation className="w-4 h-4 mr-2" />Courts nearby
+              <Navigation className="w-4 h-4" />Courts nearby
             </Button>
           </div>
         )}
@@ -142,7 +142,7 @@ export const CheckInModal: React.FC<{ onClose: () => void }> = ({ onClose }) => 
                     {here ? (
                       <Button size="sm" onClick={() => doCheckIn(c)} isLoading={busy}>Select</Button>
                     ) : (
-                      <span className="text-[11px] text-fg/70 shrink-0">Get closer</span>
+                      <span className="text-xs text-fg/70 shrink-0">Get closer</span>
                     )}
                   </div>
                 );

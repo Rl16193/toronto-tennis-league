@@ -19,15 +19,6 @@ function requireTrimmedString(value, message, options = {}) {
   return trimmed;
 }
 
-function optionalTrimmedString(value, options = {}) {
-  if (typeof value !== 'string') return '';
-  const trimmed = value.trim();
-  if (typeof options.maxLength === 'number' && trimmed.length > options.maxLength) {
-    throw new HttpsError('invalid-argument', 'Text is too long.');
-  }
-  return trimmed;
-}
-
 /** A Firestore document id taken from the caller: present, and no path separator. */
 function requireDocId(value, message) {
   const id = requireTrimmedString(value, message);
@@ -39,4 +30,4 @@ function normalizeCouponCode(value) {
   return requireTrimmedString(value, 'Missing coupon code.').toUpperCase();
 }
 
-module.exports = { normalizeCouponCode, optionalTrimmedString, requireAuth, requireDocId, requireTrimmedString };
+module.exports = { normalizeCouponCode, requireAuth, requireDocId, requireTrimmedString };

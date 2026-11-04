@@ -33,6 +33,16 @@
       "port": 3020
     },
     {
+      "name": "dev-emulators-demo",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "$env:VITE_USE_EMULATORS='true'; $env:VITE_FIREBASE_PROJECT_ID='demo-ttl'; npx vite --port 3030 --strictPort"
+      ],
+      "port": 3030
+    },
+    {
       "name": "dev-attach",
       "url": "http://localhost:3000",
       "port": 3000

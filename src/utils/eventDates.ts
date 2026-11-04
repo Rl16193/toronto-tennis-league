@@ -83,7 +83,7 @@ export const parseEndInstant = (value?: FirestoreDateLike) => {
 const STALE_TOURNAMENT_GRACE_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const isCurrentEvent = (event: TennisEvent, now = Date.now()) => {
-  // Server-stamped when the final is played (recordScore in functions/lib/scoring.js), and authoritative
+  // Server-stamped when the event's LAST final is played (recordScore in functions/lib/scoring.js), and authoritative
   // when present. `matches` needs auth to read, so a signed-out visitor cannot work this out for
   // itself — which is the whole reason the answer is written onto the world-readable event doc.
   if (event.completed_at || isCancelledEvent(event)) return false;

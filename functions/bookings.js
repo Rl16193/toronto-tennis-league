@@ -4,7 +4,8 @@
  * every step is one of these callables. The lifecycle itself is lib/bookingState.js.
  *
  * Deploy: firebase deploy --only functions:bookService,functions:startBooking,functions:declineBooking,
- *   functions:cancelBooking,functions:finishBooking,functions:confirmBooking,functions:lessonGroup
+ *   functions:cancelBooking,functions:finishBooking,functions:confirmBooking,functions:lessonGroup,
+ *   functions:recordBooking
  */
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { logger } = require('firebase-functions');
@@ -12,9 +13,9 @@ const admin = require('firebase-admin');
 // From the subpath, not admin.firestore: the Functions emulator proxies admin.firestore as a bound
 // function, which drops FieldValue.
 const { FieldValue, Timestamp } = require('firebase-admin/firestore');
-const { REGION } = require('./lib/constants');
+const { REGION, DAY_MS } = require('./lib/constants');
 const { notify, organizerUids } = require('./lib/notify');
-const { providerIdFor, providerMemberUids } = require('./lib/roles');
+const { isOrganizer, providerIdFor, providerMemberUids } = require('./lib/roles');
 const { requireAuth, requireDocId } = require('./lib/callable');
 const { recordServiceLead } = require('./lib/serviceLeads');
 const {
@@ -42,6 +43,8 @@ exports.bookService = onCall({ region: REGION }, async (request) => {
     await assertNoOpenBooking(tx, uid, service.id);
     const b = newBooking({ service, uid, userName, price: service.total_price, points: 0 });
     tx.create(ref, b);
+    // Every booking ever made, never taken back on cancel; orders a stringer's offers on Services.
+    tx.update(db().doc(`services/${service.id}`), { booking_count: FieldValue.increment(1) });
     tx.set(lockRef, { updated_at: FieldValue.serverTimestamp() }, { merge: true });
     return b;
   });
@@ -289,4 +292,59 @@ exports.lessonGroup = onCall({ region: REGION }, async (request) => {
   }));
   await Promise.all(refunded.map((b) => notifyRefundReview(b, `${provider} cancelled the class`)));
   return { ok: true, group };
+});
+
+/**
+ * Organizer: record a booking that already happened, straight to `completed` on the date it
+ * happened. A record, not a job: nobody is notified, and no points move even when it is marked as
+ * redeemed (they were settled outside the site). It still links member and provider, as a real
+ * booking does, and counts toward the offer's `booking_count`.
+ */
+exports.recordBooking = onCall({ region: REGION }, async (request) => {
+  const uid = requireAuth(request);
+  if (!(await isOrganizer(uid))) throw new HttpsError('permission-denied', 'Organizers only.');
+  const d = request.data || {};
+  const serviceId = requireDocId(d.serviceId, 'Pick a service.');
+  const memberUid = requireDocId(d.memberUid, 'Pick a member.');
+  const payment = d.payment === 'points' ? 'points' : 'price';
+  const when = Number(d.completedAt);
+  if (!Number.isFinite(when)) throw new HttpsError('invalid-argument', 'Pick the date it happened.');
+  // A day of slack: the client sends local noon, which is still ahead of "now" on the morning of.
+  if (when > Date.now() + DAY_MS) throw new HttpsError('invalid-argument', 'That date is in the future.');
+
+  const [serviceSnap, memberSnap] = await Promise.all([
+    db().doc(`services/${serviceId}`).get(),
+    db().doc(`users/${memberUid}`).get(),
+  ]);
+  if (!serviceSnap.exists) throw new HttpsError('not-found', 'That service no longer exists.');
+  if (!memberSnap.exists) throw new HttpsError('not-found', 'That member isn’t on the app.');
+  const service = { id: serviceSnap.id, ...serviceSnap.data() };
+  if (service.provider_id === memberUid) throw new HttpsError('invalid-argument', 'A provider can’t book their own service.');
+  if (payment === 'points' && !(service.points_cost > 0)) {
+    throw new HttpsError('failed-precondition', 'That offer has no points price, so it can’t be marked as redeemed.');
+  }
+
+  const at = Timestamp.fromMillis(when);
+  const ref = db().collection('bookings').doc();
+  const booking = {
+    ...newBooking({
+      service,
+      uid: memberUid,
+      userName: memberSnap.get('name') || '',
+      price: payment === 'points' && typeof service.discounted_price === 'number' ? service.discounted_price : service.total_price,
+      points: payment === 'points' ? service.points_cost : 0,
+    }),
+    status: 'completed',
+    created_at: at,
+    started_at: at,
+    completed_at: at,
+  };
+  const batch = db().batch();
+  batch.create(ref, booking);
+  batch.update(serviceSnap.ref, { booking_count: FieldValue.increment(1) });
+  await batch.commit();
+  await linkPlayers(memberUid, service.provider_id, 'booking');
+
+  logger.info(`Booking ${ref.id}: ${uid} recorded ${memberUid} on ${service.id}, completed ${at.toDate().toISOString()}`);
+  return { bookingId: ref.id };
 });

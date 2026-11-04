@@ -2,7 +2,7 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '../../lib/firebase';
 import type { ScoreForm } from '../../pages/tournament/types';
 import { type Submission, scoreLine } from './results';
-import { toTitleCase } from '../leagues/useStandings';
+import { toTitleCase } from '../../pages/tournament/utils';
 
 // Every score, for every match type, goes through the one `scoreMatch` Cloud Function
 // (functions/scoring.js → lib/scoring.js). It checks the score, records it and pays the points;
@@ -46,6 +46,13 @@ export const cancelDraw = (eventId: string, matchIds: string[]) => call<number>(
 /** Organizer: one round-robin group's bonus on or off. Returns how many players it moved. */
 export const setGroupBonus = (eventId: string, matchIds: string[], award: boolean) =>
   call<number>('bonus', { eventId, matchIds, award });
+/** Organizer: name a one-group round robin's leader as its winner (a title, no points); null takes it back. */
+export const setGroupChampion = (eventId: string, matchIds: string[], winnerUid: string | null) =>
+  call<boolean>('champion', { eventId, matchIds, winnerUid });
+
+/** Organizer: queues the WhatsApp (SMS fallback) reminder to both players for the next 8:00am (`remindMatch`). Returns how many players. */
+export const remindMatch = async (matchId: string) =>
+  (await httpsCallable<{ matchId: string }, { sent: number }>(functions, 'remindMatch')({ matchId })).data.sent;
 
 /** The modal's sets, entered from `submitterIsP1`'s side, as absolute pairs. All zeros is a walkover. */
 export const resultFromForm = (form: ScoreForm, submitterIsP1: boolean): ScorePayload => {

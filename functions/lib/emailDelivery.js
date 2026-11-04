@@ -12,4 +12,4 @@ function emailDeliveryDecision({ projectId, emulator = false }) {
   return { deliver: true, reason: 'production' };
 }
 
-module.exports = { PRODUCTION_PROJECT, emailDeliveryDecision };
+module.exports = { emailDeliveryDecision };

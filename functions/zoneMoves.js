@@ -18,7 +18,7 @@ const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { notify } = require('./lib/notify');
 const { REGION } = require('./lib/constants');
 const { eventOrganizerUids } = require('./lib/roles');
-const { zoneBucketId, effectiveZone, skillBand, resolveMergedZone } = require('./lib/participantSeat');
+const { effectiveZone, skillBand, resolveMergedZone, playerZone } = require('./lib/participantSeat');
 
 const db = () => admin.firestore();
 
@@ -65,7 +65,9 @@ exports.onZoneChanged = onDocumentUpdated(
     const before = event.data?.before.data() || {};
     const after = event.data?.after.data() || {};
     const uid = event.params.uid;
-    if (!after.preferred_zone || before.preferred_zone === after.preferred_zone) return;
+    // An empty zone is a move too: courts with no Toronto zone put the member in Unassigned.
+    if ((before.preferred_zone || '') === (after.preferred_zone || '')) return;
+    const zoneName = after.preferred_zone || 'Unassigned';
 
     const partSnap = await db().collection('event_participants').where('uid', '==', uid).get();
     const rows = partSnap.docs
@@ -80,7 +82,7 @@ exports.onZoneChanged = onDocumentUpdated(
         const ev = eventDoc.data();
         if (!/_tournament$/.test(ev.category || '') || ev.status === 'cancelled') continue;
         const merges = ev.zone_draw_config?.merges ?? {};
-        const wanted = resolveMergedZone(zoneBucketId(after.preferred_zone), merges);
+        const wanted = playerZone(after.preferred_zone, merges);
         const band = skillBand(Number(row.skill || 0));
 
         const matchSnap = await db().collection('matches').where('event_id', '==', row.event_id).get();
@@ -111,7 +113,7 @@ exports.onZoneChanged = onDocumentUpdated(
           type: 'organizer_zone_change',
           title: `${name} changed their zone`,
           body: [
-            unseated > 0 ? `${name} moved to ${after.preferred_zone} and was taken out of ${unseated} old-zone match${unseated === 1 ? '' : 'es'} with no opponent yet.` : `${name} moved to ${after.preferred_zone}.`,
+            unseated > 0 ? `${name} moved to ${zoneName} and was taken out of ${unseated} old-zone match${unseated === 1 ? '' : 'es'} with no opponent yet.` : `${name} moved to ${zoneName}.`,
             seated.length > unseated
               ? 'They stay in the matches they already have an opponent for.'
               : '',
@@ -121,7 +123,7 @@ exports.onZoneChanged = onDocumentUpdated(
           ].filter(Boolean).join(' '),
           link: `/tournament?event=${row.event_id}`,
         });
-        logger.info(`Zone move: ${uid} → ${after.preferred_zone} in ${row.event_id}; organizer notified`);
+        logger.info(`Zone move: ${uid} → ${zoneName} in ${row.event_id}; organizer notified`);
       } catch (err) {
         // One event's failure must not stop the others.
         logger.error(`Zone move notice failed for ${uid} in ${row.event_id}:`, err);

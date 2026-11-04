@@ -6,7 +6,7 @@ import { TennisEvent } from '../../types';
 import { DivTab, inDivision } from './useStandings';
 import { LADDER_COOLDOWN_DAYS, createChallenge } from './ladderService';
 import { useLadder } from './useLadder';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { fetchResultsFor } from '../matches/results';
 import { toMillis } from '../../utils/eventDates';
@@ -179,17 +179,13 @@ export function useCrossEventConflicts(uid: string | undefined, ladderEventId: s
       );
       if (perEvent.size === 0) { if (alive) setOpponents({ unplayed: new Set(), recentlyPlayed }); return; }
 
-      // An event is completed once its Final ('F') is played with a winner. Same query shape the
-      // Tournament page already uses (event_id `in` …), so no new index; Final check is client-side.
+      // An event is completed once scoring stamps `completed_at`: every draw has played its final.
       const eids = [...perEvent.keys()];
       const completed = new Set<string>();
       for (let i = 0; i < eids.length; i += 10) {
         const chunk = eids.slice(i, i + 10);
-        const finalSnap = await getDocs(query(collection(db, 'matches'), where('event_id', 'in', chunk), where('round', '==', 'F'), where('status', '==', 'complete')));
-        finalSnap.docs.forEach((d) => {
-          const m = d.data();
-          if (m.winner_uid) completed.add(m.event_id as string);
-        });
+        const evSnap = await getDocs(query(collection(db, 'events'), where(documentId(), 'in', chunk)));
+        evSnap.docs.forEach((d) => { if (d.data().completed_at) completed.add(d.id); });
       }
 
       // Unplayed fixtures in events that are NOT yet completed = active conflicts.

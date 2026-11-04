@@ -22,7 +22,7 @@ import { ContactData } from '../../types';
 const ListingPhoto: React.FC<{ path?: string; alt: string }> = ({ path, alt }) => {
   const url = useImageUrl(path);
   return (
-    <div className="w-20 h-20 shrink-0 rounded-xl bg-fg/[0.06] overflow-hidden flex items-center justify-center">
+    <div className="w-20 h-20 shrink-0 rounded-2xl bg-fg/5 overflow-hidden flex items-center justify-center">
       {url
         ? <img src={url} alt={alt} className="w-full h-full object-cover" />
         : <Package className="w-6 h-6 text-fg/70" />}
@@ -47,7 +47,7 @@ const ListingCard: React.FC<{
   };
 
   return (
-    <div className={`rounded-2xl bg-tennis-surface/30 p-4 ${gone ? 'opacity-55' : ''}`}>
+    <div className={`rounded-2xl bg-fg/5 p-4 ${gone ? 'opacity-55' : ''}`}>
       <div className="flex gap-3">
         <ListingPhoto path={listing.photo_paths?.[0]} alt={listing.title} />
         <div className="min-w-0 flex-1">
@@ -57,7 +57,7 @@ const ListingCard: React.FC<{
               {formatListingPrice(listing)}
             </span>
           </div>
-          <p className="text-[11px] text-fg/70 mt-0.5">
+          <p className="text-xs text-fg/70 mt-0.5">
             {listing.condition} · {listing.user_name || 'Member'}
             {gone && <span className="ml-1.5 text-clay font-bold">{STATUS_LABEL[listing.status]}</span>}
           </p>
@@ -66,8 +66,8 @@ const ListingCard: React.FC<{
       </div>
 
       <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-fg/5">
-        <span className="inline-flex items-center gap-1 min-w-0 text-[11px] text-fg/70">
-          <MapPin className="w-3 h-3 shrink-0" />
+        <span className="inline-flex items-center gap-1 min-w-0 text-xs text-fg/70">
+          <MapPin className="w-3.5 h-3.5 shrink-0" />
           <span className="truncate">{listing.pickup}</span>
         </span>
 
@@ -75,7 +75,7 @@ const ListingCard: React.FC<{
           {isMine ? (
             <>
               <button type="button" aria-label="Edit listing" onClick={onEdit}
-                className="p-2 rounded-lg bg-fg/5 text-fg/70 hover:text-fg transition-colors">
+                className="p-2 rounded-2xl bg-fg/5 text-fg/70 hover:text-fg transition-colors">
                 <Pencil className="w-3.5 h-3.5" />
               </button>
               <Button size="sm" variant="outline" isLoading={busy}
@@ -84,7 +84,7 @@ const ListingCard: React.FC<{
               </Button>
               <button type="button" aria-label="Delete listing" disabled={busy}
                 onClick={() => { if (confirm('Delete this listing?')) { setBusy(true); deleteListing(listing.id).finally(() => setBusy(false)); } }}
-                className="p-2 rounded-lg bg-red-500/10 text-badge-loss hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                className="p-2 rounded-2xl bg-red-500/10 text-badge-loss hover:bg-red-500/20 transition-colors disabled:opacity-50">
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </>
@@ -120,12 +120,12 @@ export const ListingsTab: React.FC<{
   const { user } = useAuth();
 
   if (loading) {
-    return <div className="h-32 bg-tennis-surface/30 rounded-3xl animate-pulse" />;
+    return <div className="h-32 bg-fg/5 rounded-2xl animate-pulse" />;
   }
 
   if (listings.length === 0) {
     return (
-      <div className="rounded-3xl bg-tennis-surface/30 py-14 px-6 text-center">
+      <div className="rounded-2xl bg-fg/5 py-14 px-6 text-center">
         <Package className="w-7 h-7 text-fg/70 mx-auto mb-3" />
         <p className="text-sm font-bold text-fg">
           {category === 'rent' ? 'Nothing up for rent yet' : 'Nothing for sale yet'}
@@ -172,11 +172,11 @@ const draftFromListing = (listing: Listing): ListingDraft => ({
 const ExistingPhoto: React.FC<{ path: string; onRemove: () => void }> = ({ path, onRemove }) => {
   const url = useImageUrl(path);
   return (
-    <span className="relative inline-block w-16 h-16 rounded-lg overflow-hidden bg-fg/[0.06]">
+    <span className="relative inline-block w-16 h-16 rounded-2xl overflow-hidden bg-fg/5">
       {url && <img src={url} alt="" className="w-full h-full object-cover" />}
       <button type="button" aria-label="Remove photo" onClick={onRemove}
         className="absolute top-0.5 right-0.5 p-0.5 rounded-full bg-tennis-dark/80 text-fg hover:text-fg">
-        <X className="w-3 h-3" />
+        <X className="w-3.5 h-3.5" />
       </button>
     </span>
   );
@@ -184,9 +184,9 @@ const ExistingPhoto: React.FC<{ path: string; onRemove: () => void }> = ({ path,
 
 // Shared field chrome, sized to keep the form within one or two phone screens.
 const fieldCls =
-  'w-full rounded-xl bg-tennis-dark/70 px-3.5 py-2.5 text-sm text-fg ' +
+  'w-full rounded-2xl bg-tennis-dark/70 px-3.5 py-2.5 text-sm text-fg ' +
   'placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
-const labelCls = 'block text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-1.5';
+const labelCls = 'block text-xs font-bold uppercase tracking-widest text-fg/70 mb-1.5';
 
 export const ListingForm: React.FC<{ category: ListingCategory; editingListing?: Listing; onClose: () => void }> = ({ category, editingListing, onClose }) => {
   const { user, profile } = useAuth();
@@ -226,7 +226,7 @@ export const ListingForm: React.FC<{ category: ListingCategory; editingListing?:
     >
       <form onSubmit={submit} className="p-5 pt-2 space-y-3.5">
         {error && (
-          <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-2.5">{error}</div>
+          <div className="rounded-2xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-2.5">{error}</div>
         )}
 
         <div>
@@ -250,18 +250,18 @@ export const ListingForm: React.FC<{ category: ListingCategory; editingListing?:
                 onRemove={() => setKeepPhotoPaths((paths) => paths.filter((p) => p !== path))} />
             ))}
             {draft.files.map((f, i) => (
-              <span key={`${f.name}-${i}`} className="inline-flex items-center gap-1.5 rounded-lg bg-fg/[0.06] pl-2.5 pr-1.5 py-1.5 text-[11px] text-fg/70 max-w-[9rem]">
+              <span key={`${f.name}-${i}`} className="inline-flex items-center gap-1.5 rounded-2xl bg-fg/5 pl-2.5 pr-1.5 py-1.5 text-xs text-fg/70 max-w-[9rem]">
                 <span className="truncate">{f.name}</span>
                 <button type="button" aria-label={`Remove ${f.name}`}
                   onClick={() => set('files', draft.files.filter((_, j) => j !== i))}
                   className="shrink-0 text-fg/70 hover:text-fg">
-                  <X className="w-3 h-3" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               </span>
             ))}
             {draft.files.length < maxNewPhotos && (
               <button type="button" onClick={() => fileRef.current?.click()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-fg/20 px-3 py-1.5 text-[11px] font-bold text-fg/70 hover:border-clay/40 hover:text-fg transition-colors">
+                className="inline-flex items-center gap-1.5 rounded-2xl border border-dashed border-fg/20 px-3 py-1.5 text-xs font-bold text-fg/70 hover:border-clay/40 hover:text-fg transition-colors">
                 <ImagePlus className="w-3.5 h-3.5" />Add photo
               </button>
             )}
@@ -287,7 +287,7 @@ export const ListingForm: React.FC<{ category: ListingCategory; editingListing?:
             <label className={labelCls} htmlFor="l-dur">Rental length</label>
             <input id="l-dur" value={draft.duration} onChange={(e) => set('duration', e.target.value)}
               className={fieldCls} placeholder="2 weeks" />
-            <p className="text-[11px] text-fg/70 mt-1">
+            <p className="text-xs text-fg/70 mt-1">
               Shown as “{draft.price ? `$${draft.price}` : '$40'} for {draft.duration.trim() || '2 weeks'}”.
             </p>
           </div>

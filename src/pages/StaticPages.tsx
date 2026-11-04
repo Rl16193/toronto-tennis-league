@@ -6,14 +6,14 @@ import {
   UserPlus, CalendarPlus, MessageCircle, Handshake, ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { CONTACT_EMAIL, InstagramLink, WHATSAPP_URL } from '../components/FooterElements';
+import { CONTACT_EMAIL, InstagramLink, PRIVACY_EFFECTIVE, WHATSAPP_URL } from '../components/FooterElements';
 
 
 const PageWrapper: React.FC<{ title?: string; icon?: any; boxed?: boolean; children: React.ReactNode }> = ({ title, icon: Icon, boxed = true, children }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pb-32">
+    <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 pb-32">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -30,16 +30,16 @@ const PageWrapper: React.FC<{ title?: string; icon?: any; boxed?: boolean; child
         {title && (
           <div className="text-center space-y-6">
             {Icon && (
-              <div className="w-20 h-20 clay-gradient rounded-3xl mx-auto flex items-center justify-center shadow-2xl">
+              <div className="w-20 h-20 clay-gradient rounded-2xl mx-auto flex items-center justify-center shadow-2xl">
                 <Icon className="w-10 h-10 text-white" />
               </div>
             )}
-            <h1 className="text-5xl md:text-6xl font-display font-black text-fg tracking-tight">{title}</h1>
+            <h1 className="text-3xl font-display font-black text-fg tracking-tight">{title}</h1>
             <div className="h-1.5 w-24 clay-gradient mx-auto rounded-full" />
           </div>
         )}
         {boxed ? (
-          <div className="bg-tennis-surface/30 p-10 md:p-16 rounded-[3rem] shadow-2xl prose prose-invert prose-clay max-w-none">
+          <div className="bg-fg/5 p-6 sm:p-8 rounded-2xl prose prose-invert prose-clay max-w-none">
             {children}
           </div>
         ) : (
@@ -109,7 +109,7 @@ export const About: React.FC = () => {
                 key={t.id}
                 type="button"
                 onClick={() => setActiveTab(t.id)}
-                className={`w-full text-left px-4 py-3 rounded-xl font-bold text-sm transition-colors ${
+                className={`w-full text-left px-4 py-3 rounded-2xl font-bold text-sm transition-colors ${
                   t.id === activeTab ? 'bg-clay text-white' : 'bg-fg/5 text-fg hover:bg-fg/10'
                 }`}
               >
@@ -124,10 +124,10 @@ export const About: React.FC = () => {
                 <span className="text-lg font-black font-display tracking-tight">
                   <span className="text-fg">RACQUETS</span><span className="text-clay"> &amp; </span><span className="text-fg">STRINGS</span>
                 </span>
-                <p className="text-clay font-bold text-[10px] tracking-widest uppercase mt-1">L&apos;&OElig;UF FOR THE GAME</p>
+                <p className="text-clay font-bold text-xs tracking-widest uppercase mt-1">L&apos;&OElig;UF FOR THE GAME</p>
               </div>
             ) : (
-              <img src={tab.image!} alt={tab.label} className="w-full h-40 object-cover rounded-xl mb-4" />
+              <img src={tab.image!} alt={tab.label} className="w-full h-40 object-cover rounded-2xl mb-4" />
             )}
             <p className="text-fg text-sm leading-relaxed text-justify">{tab.body}</p>
           </div>
@@ -140,7 +140,7 @@ export const About: React.FC = () => {
               const inner = (
                 <>
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-xl bg-clay/15 border border-clay/30 flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 rounded-2xl bg-clay/15 border border-clay/30 flex items-center justify-center shrink-0">
                       <step.icon className="w-5 h-5 text-clay" />
                     </div>
                     <span className="text-fg/70 font-black text-lg">{i + 1}</span>
@@ -245,43 +245,103 @@ export const Terms: React.FC = () => (
   </PageWrapper>
 );
 
+// The policy text. Change PRIVACY_EFFECTIVE (FooterElements.tsx) with any material change: members re-agree.
+const PRIVACY_SECTIONS: { title: string; body: (string | string[])[] }[] = [
+  {
+    title: 'Who Is Responsible',
+    body: [
+      `Racquets & Strings is responsible for the personal information it holds. Questions, requests and complaints go to our privacy contact at ${CONTACT_EMAIL}.`,
+    ],
+  },
+  {
+    title: 'What We Collect and Why',
+    body: [
+      'We collect only what we need to run the league and the community:',
+      [
+        'Account and profile: name, sign-in email, photo, bio, skill level, league, preferred courts and zone, and availability. These are used to place you in draws, ladders and match suggestions.',
+        'Contact details: email, phone and WhatsApp, so the players you are scheduled to play can reach you.',
+        'Play: match results, scores, league points, and the events you join.',
+        'Court activity: check-ins (including the location you checked in from, used to confirm you are at the court), court-condition, waiting-board and queue reports, and any photos you attach.',
+        'Marketplace and services: your listings, and bookings with stringers and coaches.',
+        'Newsletter and volunteering: the email (and note) you give us. A court report made while signed out may include an email, which joins the newsletter list.',
+      ],
+    ],
+  },
+  {
+    title: 'Consent',
+    body: [
+      'You agree to this policy when you create an account, and we record when you did. If we change it in a way that matters, we ask you again.',
+      'You can withdraw consent at any time by deleting your account (see "Your Rights"), or by turning off email notifications or unsubscribing from the newsletter, which we only send to people who signed up for it.',
+    ],
+  },
+  {
+    title: 'What Is Public and Who Sees What',
+    body: [
+      [
+        'Public: your name, photo, bio, badges, results, league points and rankings, and the text of court-condition reports (without your name).',
+        'Members you play, partner with or book: your contact details, and only theirs. This includes doubles partners and players looking for a partner in the same event.',
+        'Marketplace: while you have a listing, signed-in members can see your contact details.',
+        'Organizers: what they need to run events and review results.',
+      ],
+      'We do not sell your personal information.',
+    ],
+  },
+  {
+    title: 'Service Providers and Where Data Is Stored',
+    body: [
+      'We use Google Firebase (sign-in, database, file storage, hosting and analytics), Resend (email), and Google Sheets (an internal copy for organizers, refreshed weekly). Your information is stored and processed in the United States, where it may be accessible to authorities under US law.',
+    ],
+  },
+  {
+    title: 'How Long We Keep It',
+    body: [
+      [
+        'Your account, profile and contact details: until you delete your account.',
+        'Match results and league points: kept for league history. When you delete your account they stay under "Former member", with your name removed.',
+        'Notifications: removed 24 hours after you read them, and after 30 days at the latest.',
+        'Newsletter and volunteer sign-ups: until you unsubscribe or ask us to remove them.',
+        'We keep no backups, so deleted information cannot be restored.',
+      ],
+    ],
+  },
+  {
+    title: 'Your Rights',
+    body: [
+      `You can see and correct most of your information on your Profile. To get a copy of everything we hold about you, write to ${CONTACT_EMAIL}. We reply within 30 days.`,
+      'You can delete your account yourself from Profile → Delete account. Your profile, contact details, preferences, photos, listings and sign-in are deleted, and your name is removed from everything that stays (results, points, bookings, claims). Unplayed tournament matches become walkovers for your opponents.',
+    ],
+  },
+  {
+    title: 'Safeguards',
+    body: [
+      'Access is controlled by database security rules: contact details are readable only by the people listed above, and results and points are written only by our servers. No method of storage or transmission is completely secure, so we cannot promise absolute security.',
+    ],
+  },
+  {
+    title: 'Complaints',
+    body: [
+      `Tell us first at ${CONTACT_EMAIL}. If you are not satisfied with our answer, you can complain to the Office of the Privacy Commissioner of Canada (priv.gc.ca).`,
+    ],
+  },
+];
+
 export const Privacy: React.FC = () => (
   <PageWrapper title="Privacy Policy" icon={Shield}>
     <div className="space-y-10">
-      <section className="space-y-4">
-        <h2 className="text-2xl font-bold text-fg">1. Information We Collect</h2>
-        <p className="text-fg leading-relaxed">
-          We collect information you provide directly to us when you create an account, complete your profile, join an event, contact us, or otherwise use the Platform. This may include your name, email address, phone number, tennis preferences, skill level, scheduling details, event participation details, and any information you choose to submit in messages or profile fields.
-        </p>
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-2xl font-bold text-fg">2. How We Use Your Information</h2>
-        <p className="text-fg leading-relaxed">
-          We use your information to operate and improve the Platform, create and manage accounts, facilitate matches and events, connect you with other players, respond to inquiries, communicate updates, and support the safety, reliability, and fair operation of the community.
-        </p>
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-2xl font-bold text-fg">3. Data Sharing</h2>
-        <p className="text-fg leading-relaxed">
-          We do not sell your personal information. We may share relevant profile or contact information with other participants when you join a match, meetup, tournament, or event and that information is reasonably needed for coordination. We may also use third-party service providers, such as authentication, database, storage, analytics, or hosting tools, to help operate the Platform.
-        </p>
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-2xl font-bold text-fg">4. Storage and Security</h2>
-        <p className="text-fg leading-relaxed">
-          Your information may be stored and processed using third-party services, including cloud-based databases, file storage, and authentication providers. We take reasonable steps to protect your information, but no method of transmission, storage, or security is completely secure, and we cannot guarantee absolute security.
-        </p>
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-2xl font-bold text-fg">5. Your Responsibilities</h2>
-        <p className="text-fg leading-relaxed">
-          You are responsible for maintaining the confidentiality of your account credentials and for being thoughtful about what personal information you choose to share with other users through the Platform or during event coordination.
-        </p>
-      </section>
+      <p className="text-sm text-fg/70">
+        Effective {PRIVACY_EFFECTIVE.toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })}. Written to follow
+        Canada's Personal Information Protection and Electronic Documents Act (PIPEDA).
+      </p>
+      {PRIVACY_SECTIONS.map((s, i) => (
+        <section key={s.title} className="space-y-4">
+          <h2 className="text-2xl font-bold text-fg">{i + 1}. {s.title}</h2>
+          {s.body.map((p, j) => (
+            Array.isArray(p)
+              ? <ul key={j} className="list-disc pl-5 space-y-1.5 text-fg leading-relaxed">{p.map((li) => <li key={li}>{li}</li>)}</ul>
+              : <p key={j} className="text-fg leading-relaxed">{p}</p>
+          ))}
+        </section>
+      ))}
     </div>
   </PageWrapper>
 );
@@ -299,13 +359,13 @@ export const Contact: React.FC = () => (
         </p>
       </section>
       <section className="grid grid-cols-1 gap-4">
-        <div className="rounded-[2rem] bg-fg/5 p-6">
+        <div className="rounded-2xl bg-fg/5 p-6">
           <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-2">Email</p>
           <a href={`mailto:${CONTACT_EMAIL}`} className="text-clay font-bold hover:underline break-all">
             {CONTACT_EMAIL}
           </a>
         </div>
-        <div className="rounded-[2rem] bg-fg/5 p-6">
+        <div className="rounded-2xl bg-fg/5 p-6">
           <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-2">Instagram</p>
           <InstagramLink className="text-clay font-bold" />
         </div>

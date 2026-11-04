@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, Trophy } from 'lucide-react';
+import { Button, buttonCls } from '../../components/Button';
+import { numCls, statTileCls, tableHeadCls } from '../../components/Input';
 import { SelectField } from '../../components/SelectField';
 import { RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
-import { PLAYER_LOADING, PLAYER_LOADING_SENTINEL, byMatchNumber, formatPlayerName, formatSetScores } from './utils';
-import { ContactOpponentButton, pillButtonCls } from '../../components/ContactOpponentButton';
+import { PLAYER_LOADING, PLAYER_LOADING_SENTINEL, byMatchNumber, formatPlayerName, formatSetScores, withSeed } from './utils';
+import { PlayerName, RemindButton, SeedContext } from './MatchCard';
+import { ContactOpponentButton } from '../../components/ContactOpponentButton';
 import { pgWinPct } from '../../features/leagues/useStandings';
-import type { ContactData } from '../../types';
+import type { ContactData, GroupChampion } from '../../types';
 import { isWalkover } from '../../features/matches/results';
+import { cn } from '../../lib/cn';
+import { WithdrawReasons } from '../../features/events/EventsElements';
+import type { RemovalReason } from '../../features/events/registrations';
 
 type Props = {
   groupIndex: number;
@@ -41,6 +47,12 @@ type Props = {
   onSetGroupBonus?: (award: boolean) => Promise<void>;
   /** Whether this group's bonus award exists (the switch's state). */
   bonusAwarded?: boolean;
+  /** One-group draws only: the named winner, or null while none is named. Undefined elsewhere. */
+  champion?: GroupChampion | null;
+  /** Organizer: name the leader as winner, or take it back with null. */
+  onSetChampion?: (winnerUid: string | null) => Promise<void>;
+  /** The viewer withdraws themselves from the event (trash on their own row). */
+  onWithdrawSelf?: (reason: RemovalReason) => Promise<void>;
 };
 
 
@@ -49,11 +61,25 @@ export const RRGroupCard: React.FC<Props> = ({
   isCreator, currentUserId, editMode, allGroupPlayers,
   onSubmitScore, submittableMatchIds, onSaveGroupEdit, onRenameGroup,
   statsByUid, contactsByUid, onRemovePlayer, onMovePlayerZone, zoneBuckets = [],
-  onSetGroupBonus, bonusAwarded = false,
+  onSetGroupBonus, bonusAwarded = false, champion, onSetChampion, onWithdrawSelf,
 }) => {
+  const [withdrawAsk, setWithdrawAsk] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
   // Which standings row is expanded to show the full stat line (wireframe 1c: Pts is the one
   // primary number; MP/MW/GW/GL are a tap away — same disclosure the Leaderboard uses).
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  // Naming the winner: the leader by the table's own order (points, then games won). Teams level
+  // on both are the organizer's pick, so the server accepts any of them.
+  const ranked = standings.filter((r) => r.userId && r.name !== PLAYER_LOADING);
+  const leaders = ranked.filter((r) => r.points === ranked[0]?.points && r.gamesWon === ranked[0]?.gamesWon);
+  const unplayed = matches.filter((m) => m.status !== 'complete').length;
+  const [pick, setPick] = useState('');
+  const [naming, setNaming] = useState(false);
+  const nameWinner = async (uid: string | null) => {
+    if (!onSetChampion) return;
+    setNaming(true);
+    try { await onSetChampion(uid); } finally { setNaming(false); }
+  };
   // Creator-only pairings list at the foot of the card.
   const [matchesOpen, setMatchesOpen] = useState(false);
   // Local edit state: copy of players in this group for reassignment
@@ -62,6 +88,7 @@ export const RRGroupCard: React.FC<Props> = ({
   const [labelDraft, setLabelDraft] = useState(groupLabel);
   // Group bonus in flight — the switch is frozen until the batch lands.
   const [awarding, setAwarding] = useState(false);
+  const seeds = React.useContext(SeedContext);
 
   // Sync local state when the roster actually changes (e.g. after a save completes) — NOT on
   // every new `players` array reference. `players` is derived from the live matches feed, so an
@@ -81,15 +108,15 @@ export const RRGroupCard: React.FC<Props> = ({
 
 
   return (
-    <div className="rounded-2xl bg-tennis-surface/30 overflow-hidden">
+    <div className="rounded-2xl bg-fg/5 overflow-hidden">
       {/* Group header. Same switch as the profile card's Email Notifications. Shown to everyone so
           players can see whether their group has been paid; only the organizer can move it, and
           it's hidden in preview (no match docs yet) — nothing to pay or stamp. */}
-      <div className="px-4 py-3 border-b border-fg/10 bg-fg/[0.03] flex items-center justify-between gap-3">
+      <div className="px-4 py-3 border-b border-fg/10 bg-fg/5 flex items-center justify-between gap-3">
         <h3 className="text-sm font-bold text-fg min-w-0 truncate">{groupLabel}</h3>
         {!!onSetGroupBonus && matches.length > 0 && (
           <div className="shrink-0 flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-fg/70">
+            <span className="text-xs font-bold uppercase tracking-widest text-fg/70">
               {bonusAwarded ? 'Bonus Awarded' : 'Group Bonus'}
             </span>
             <label className={`relative inline-flex items-center shrink-0 ${isCreator && !awarding ? 'cursor-pointer' : 'cursor-default opacity-50'}`}>
@@ -111,6 +138,61 @@ export const RRGroupCard: React.FC<Props> = ({
         )}
       </div>
 
+      {/* A one-group round robin has no final, so its winner is named: the table's leader, once
+          every match is in. Everyone sees the winner; only the organizer gets the button. */}
+      {champion !== undefined && (champion || (isCreator && onSetChampion)) && (
+        <div className="px-4 py-3 border-b border-fg/10">
+          {champion ? (
+            <div className="flex items-center justify-between gap-3">
+              <p className="min-w-0 flex items-center gap-2 text-sm font-bold text-fg">
+                <Trophy className="w-4 h-4 shrink-0 text-clay" />
+                <span className="truncate">Winner: {formatPlayerName(champion.name)}</span>
+              </p>
+              {isCreator && onSetChampion && (
+                <button
+                  type="button"
+                  disabled={naming}
+                  onClick={() => { if (window.confirm('Take back the winner? The event reopens.')) void nameWinner(null); }}
+                  className="shrink-0 text-xs font-bold text-clay hover:underline disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+                >
+                  Take back
+                </button>
+              )}
+            </div>
+          ) : unplayed > 0 ? (
+            <p className="text-xs text-fg/70">
+              The leader can be named winner once all {matches.length} matches are recorded ({unplayed} to go).
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {leaders.length > 1 && (
+                <SelectField
+                  label="Tied for first"
+                  value={pick}
+                  placeholder="Choose the winner"
+                  options={leaders.map((r) => ({ value: r.userId, label: formatPlayerName(r.name), hint: `${r.points} pts · ${r.gamesWon} games` }))}
+                  onChange={setPick}
+                />
+              )}
+              <Button
+                size="sm"
+                variant="clay"
+                className="w-full"
+                isLoading={naming}
+                disabled={naming || leaders.length === 0 || (leaders.length > 1 && !pick)}
+                onClick={() => {
+                  const uid = leaders.length > 1 ? pick : leaders[0].userId;
+                  const who = ranked.find((r) => r.userId === uid)?.name ?? '';
+                  if (window.confirm(`Name ${formatPlayerName(who)} as the winner? It's a title, no points.`)) void nameWinner(uid);
+                }}
+              >
+                Select Group Leader as Winner
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Standings — ranked rows, Pts as the one primary number; tap a row for the full line */}
       <div>
         {standings.length > 0 ? (
@@ -129,14 +211,14 @@ export const RRGroupCard: React.FC<Props> = ({
                     type="button"
                     onClick={() => setExpandedRow((cur) => (cur === row.userId ? null : row.userId))}
                     aria-expanded={expanded}
-                    className="flex-1 min-w-0 min-h-[44px] flex items-center gap-2.5 pl-4 pr-2 py-2.5 text-left hover:bg-fg/[0.03] transition-colors"
+                    className="flex-1 min-w-0 min-h-[44px] flex items-center gap-2.5 pl-4 pr-2 py-2.5 text-left hover:bg-fg/5 transition-colors"
                   >
                     <span className="text-fg/70 text-xs font-bold w-4 shrink-0">{row.rank}</span>
                     <span className="text-fg font-semibold text-sm truncate flex-1 min-w-0">
-                      {formatPlayerName(row.name)}
+                      <PlayerName uid={row.userId} name={row.name} />
                     </span>
                     {isAdvancing && (
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold border border-clay/50 text-clay uppercase tracking-wider shrink-0">
+                      <span className="px-1.5 py-0.5 rounded text-xs font-bold border border-clay/50 text-clay uppercase tracking-wider shrink-0">
                         ADV
                       </span>
                     )}
@@ -164,12 +246,37 @@ export const RRGroupCard: React.FC<Props> = ({
                           onRemovePlayer(row.userId);
                         }
                       }}
-                      className="shrink-0 mr-2 p-1.5 rounded-lg text-fg/70 opacity-70 hover:opacity-100 hover:text-badge-loss hover:bg-red-500/10 transition-colors"
+                      className="shrink-0 mr-2 p-1.5 rounded-2xl text-fg/70 opacity-70 hover:opacity-100 hover:text-badge-loss hover:bg-red-500/10 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {!editMode && onWithdrawSelf && row.userId === currentUserId && !withdrawAsk && (
+                    <button
+                      type="button"
+                      aria-label="Withdraw from the event"
+                      title="Withdraw from the event"
+                      onClick={() => setWithdrawAsk(true)}
+                      className="shrink-0 mr-2 p-1.5 rounded-2xl text-fg/70 opacity-70 hover:opacity-100 hover:text-badge-loss hover:bg-red-500/10 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   )}
                   </div>
+                  {withdrawAsk && onWithdrawSelf && row.userId === currentUserId && (
+                    <div className="px-4 pb-3">
+                      <WithdrawReasons
+                        prompt="Withdraw from this event? Why?"
+                        note="Your opponents get a walkover in matches still to play. You can join again from Events."
+                        busy={withdrawing}
+                        onPick={async (reason) => {
+                          setWithdrawing(true);
+                          try { await onWithdrawSelf(reason); } finally { setWithdrawing(false); setWithdrawAsk(false); }
+                        }}
+                        onCancel={() => setWithdrawAsk(false)}
+                      />
+                    </div>
+                  )}
                   {expanded && (() => {
                     // Career numbers, not this group's — every other player row in the app shows
                     // lifetime stats, and MP used to count only matches inside this one group.
@@ -212,7 +319,7 @@ export const RRGroupCard: React.FC<Props> = ({
                     // Played → the score, with a W/L pill only when it's YOUR match, since only
                     // then does a win or loss have an owner the viewer can read it as.
                     const actionTile = showOverview ? (
-                      <span className="text-[11px] font-bold leading-tight">
+                      <span className="text-xs font-bold leading-tight">
                         {theirPlayed} played
                         <br />
                         <span className="text-fg/70">{theirPending} pending</span>
@@ -221,7 +328,7 @@ export const RRGroupCard: React.FC<Props> = ({
                       : played ? (
                         <span className="inline-flex items-center gap-1.5">
                           {!!mine && (
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-black ${wonIt ? 'bg-green-500/15 text-badge-win' : 'bg-red-500/15 text-badge-loss'}`}>
+                            <span className={`px-1.5 py-0.5 rounded text-xs font-black ${wonIt ? 'bg-green-500/15 text-badge-win' : 'bg-red-500/15 text-badge-loss'}`}>
                               {wonIt ? 'W' : 'L'}
                             </span>
                           )}
@@ -230,9 +337,9 @@ export const RRGroupCard: React.FC<Props> = ({
                           </span>
                         </span>
                       ) : isCreator ? (
-                        <button type="button" onClick={() => onSubmitScore?.(relevant)} className={pillButtonCls('sm', 'clay')}>Score</button>
+                        <button type="button" onClick={() => onSubmitScore?.(relevant)} className={cn(buttonCls('clay', 'sm'), 'px-2')}>Score</button>
                       ) : submittableMatchIds?.has(relevant.id) ? (
-                        <button type="button" onClick={() => onSubmitScore?.(relevant)} className={pillButtonCls('sm', 'clay')}>Score</button>
+                        <button type="button" onClick={() => onSubmitScore?.(relevant)} className={cn(buttonCls('clay', 'sm'), 'px-2')}>Score</button>
                       ) : <span className="text-fg/70">—</span>;
 
                     return (
@@ -245,9 +352,9 @@ export const RRGroupCard: React.FC<Props> = ({
                         ].map((s) => (
                           // min-w-0 so a 4-column track can actually shrink on a phone (~58px at
                           // 320px) instead of its contents forcing the row wider.
-                          <div key={s.label} className="min-w-0 rounded-xl bg-fg/[0.04] py-2 flex flex-col items-center justify-center">
-                            <div className="text-sm font-black text-fg tabular-nums flex-1 flex items-center justify-center">{s.value}</div>
-                            <p className="text-[9px] font-bold uppercase tracking-widest text-fg/70 mt-0.5">{s.label}</p>
+                          <div key={s.label} className={statTileCls}>
+                            <div className={`${numCls} text-sm flex-1 flex items-center justify-center`}>{s.value}</div>
+                            <p className={`${tableHeadCls} mt-0.5`}>{s.label}</p>
                           </div>
                         ))}
                       </div>
@@ -256,13 +363,13 @@ export const RRGroupCard: React.FC<Props> = ({
                 </div>
               );
             })}
-            <p className="px-4 py-1.5 text-center text-[10px] text-fg/70">tap a player to contact them or handle your match</p>
+            <p className="px-4 py-1.5 text-center text-xs text-fg/70">tap a player to contact them or handle your match</p>
           </>
         ) : (
           players.map((p) => (
             <div key={p.uid} className="border-b border-fg/[0.04] last:border-0 flex items-center gap-2.5 pl-4 pr-4 py-2.5">
               <span className="text-fg/70 text-xs w-4 shrink-0">—</span>
-              <span className="text-fg/70 text-sm truncate">{formatPlayerName(p.name)}</span>
+              <span className="text-fg/70 text-sm truncate">{withSeed(formatPlayerName(p.name), seeds[p.uid])}</span>
             </div>
           ))
         )}
@@ -277,9 +384,9 @@ export const RRGroupCard: React.FC<Props> = ({
             type="button"
             onClick={() => setMatchesOpen((v) => !v)}
             aria-expanded={matchesOpen}
-            className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-fg/[0.03] transition-colors"
+            className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-fg/5 transition-colors"
           >
-            <span className="text-[10px] font-bold uppercase tracking-widest text-fg/70">
+            <span className="text-xs font-bold uppercase tracking-widest text-fg/70">
               Matches ({matches.length})
             </span>
             {matchesOpen
@@ -295,24 +402,25 @@ export const RRGroupCard: React.FC<Props> = ({
                 return (
                   <div key={m.id} className="flex items-center gap-3 px-4 py-2.5 border-t border-fg/[0.04]">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-fg truncate">
+                      <p className="text-sm text-fg break-words">
                         <span className={isDone && m.winner_uid === m.player_1_uid ? 'font-bold text-fg' : ''}>
-                          {formatPlayerName(m.player_1_name)}
+                          <PlayerName uid={m.player_1_uid} name={m.player_1_name} />
                         </span>
                         <span className="text-fg/70 mx-1.5">vs</span>
                         <span className={isDone && m.winner_uid === m.player_2_uid ? 'font-bold text-fg' : ''}>
-                          {formatPlayerName(m.player_2_name)}
+                          <PlayerName uid={m.player_2_uid} name={m.player_2_name} />
                         </span>
                       </p>
                       {isDone && scoreStr && <p className="text-xs text-fg/70 mt-0.5">{scoreStr}</p>}
-                      {isWalkover(m.result) && <p className="text-[10px] text-badge/70 mt-0.5">Walkover</p>}
+                      {isWalkover(m.result) && <p className="text-xs text-badge/70 mt-0.5">Walkover</p>}
                     </div>
                     <div className="shrink-0 flex items-center gap-2">
                       {isDone && (
-                        <span className="text-[10px] font-bold text-badge-win uppercase tracking-wider">Done</span>
+                        <span className="text-xs font-bold text-badge-win uppercase tracking-wider">Done</span>
                       )}
+                      <RemindButton match={m} />
                       {!!onSubmitScore && (
-                        <button type="button" onClick={() => onSubmitScore(m)} className={pillButtonCls('sm', 'clay')}>
+                        <button type="button" onClick={() => onSubmitScore(m)} className={buttonCls('clay', 'sm')}>
                           Score
                         </button>
                       )}
@@ -330,7 +438,7 @@ export const RRGroupCard: React.FC<Props> = ({
         <div className="border-t border-fg/10 px-4 py-4 space-y-3">
           {onRenameGroup && (
             <div className="space-y-1.5">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70">Group Name</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-fg/70">Group Name</p>
               <div className="flex items-center gap-2">
                 <input
                   value={labelDraft}
@@ -340,14 +448,14 @@ export const RRGroupCard: React.FC<Props> = ({
                 <button
                   onClick={() => onRenameGroup(labelDraft)}
                   disabled={!labelDraft.trim() || labelDraft.trim() === groupLabel}
-                  className="px-3 py-1 rounded-lg bg-clay/20 text-clay text-xs font-bold hover:bg-clay/30 transition-colors disabled:opacity-40"
+                  className="px-3 py-1 rounded-2xl bg-clay/20 text-clay text-xs font-bold hover:bg-clay/30 transition-colors disabled:opacity-50"
                 >
                   Rename
                 </button>
               </div>
             </div>
           )}
-          <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70">Reassign Players</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-fg/70">Reassign Players</p>
           {localPlayers.map((p, idx) => {
             return (
               <div key={p.uid} className="flex items-center gap-2">
@@ -399,7 +507,7 @@ export const RRGroupCard: React.FC<Props> = ({
           })()}
           <button
             onClick={() => onSaveGroupEdit(groupIndex, localPlayers)}
-            className="w-full mt-2 py-1.5 rounded-lg bg-clay text-white text-xs font-bold hover:bg-clay/80 transition-colors"
+            className="w-full mt-2 py-1.5 rounded-2xl bg-clay text-white text-xs font-bold hover:bg-clay/80 transition-colors"
           >
             Save Group
           </button>

@@ -21,13 +21,13 @@ export const Tree: React.FC<{
   className?: string;
   children: React.ReactNode;
 }> = ({ title, footnote, className = '', children }) => (
-  <div className={`rounded-3xl bg-tennis-surface/30 overflow-hidden ${className}`}>
+  <div className={`rounded-2xl bg-fg/5 overflow-hidden ${className}`}>
     {title && (
       <h2 className="px-5 pt-5 pb-3.5 text-base font-black text-fg">{title}</h2>
     )}
     <div className={`divide-y divide-fg/5 ${title ? 'border-t border-fg/5' : ''}`}>{children}</div>
     {footnote && (
-      <p className="px-5 py-3 border-t border-fg/5 text-[11px] text-fg/70 text-center">{footnote}</p>
+      <p className="px-5 py-3 border-t border-fg/5 text-xs text-fg/70 text-center">{footnote}</p>
     )}
   </div>
 );
@@ -104,7 +104,7 @@ export const TreeRow: React.FC<{
   // The two add up to the same text position as before, so nothing shifts.
   // The width is stated explicitly rather than left to a block-level flex box stretching on its
   // own, so the row is guaranteed to run all the way to the right edge of the group.
-  const shared = `flex items-center gap-2.5 py-2 pr-3.5 text-left rounded-xl transition-colors ${
+  const shared = `flex items-center gap-2.5 py-2 pr-3.5 text-left rounded-2xl transition-colors ${
     level === 1 ? 'ml-10 w-[calc(100%-2.5rem)] pl-4' : 'ml-5 w-[calc(100%-1.25rem)] pl-5'}`;
   const pct = fill ? Math.min(100, Math.round((fill.count / Math.max(1, fill.size)) * 100)) : 0;
   const body = (
@@ -120,7 +120,7 @@ export const TreeRow: React.FC<{
               style={{ width: `${pct}%` }}
             />
           </span>
-          <span className={`shrink-0 text-[10px] tabular-nums ${active ? 'text-clay/70' : 'text-fg/70'}`}>{fill.count}/{fill.size}</span>
+          <span className={`shrink-0 text-xs tabular-nums ${active ? 'text-clay/70' : 'text-fg/70'}`}>{fill.count}/{fill.size}</span>
         </span>
       ) : right ? (
         <span className={`shrink-0 flex items-center gap-1.5 text-xs tabular-nums ${active ? 'text-clay/70' : 'text-fg/70'}`}>
@@ -139,7 +139,7 @@ export const TreeRow: React.FC<{
       onClick={onClick}
       disabled={disabled}
       className={`${shared} ${activeClass} ${
-        disabled ? 'opacity-40 cursor-not-allowed' : active ? '' : 'hover:bg-fg/[0.03]'
+        disabled ? 'opacity-40 cursor-not-allowed' : active ? '' : 'hover:bg-fg/5'
       }`}
     >
       {body}

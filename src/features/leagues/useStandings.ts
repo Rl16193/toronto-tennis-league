@@ -34,25 +34,6 @@ export const byLeagueRank = (a: LeagueRow, b: LeagueRow) =>
 
 export type DivTab = 'mens' | 'womens' | 'doubles';
 
-export const toTitleCase = (s: string) =>
-  s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-
-/**
- * "Juan Diego Albarracin" → "Juan D", "Erick Mata" → "Erick M". First word, then the initial of the
- * next one; anything after that is dropped, so a three-part name is no longer than a two-part one.
- *
- * Used for names in lists, tables and match rows, where a doubles label is two of these joined and
- * was truncating. A profile shows the full name — see `formatPlayerName`'s `full` option.
- *
- * A single-word name ("Kai") is returned as-is: there is no initial to add, and "Kai" is already
- * as short as it gets.
- */
-export const abbreviatePlayerName = (s: string) => {
-  const parts = toTitleCase(s.trim()).split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return parts[0] ?? '';
-  return `${parts[0]} ${parts[1].charAt(0).toUpperCase()}`;
-};
-
 export const inDivision = (league: string, tab: DivTab): boolean => {
   if (tab === 'mens') return leagueDivision(league) === "Men's";
   if (tab === 'womens') return leagueDivision(league) === "Women's";

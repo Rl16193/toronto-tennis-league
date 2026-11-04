@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, onSnapshot, query, where, type Timestamp } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { chunk, db } from '../../lib/firebase';
 
 /**
  * Match results. A match carries only its lifecycle (`status`, `winner_uid`); the result — sets,
@@ -62,9 +62,7 @@ export function useEventResults(eventId: string | undefined | null): Map<string,
 /** One-off: match id → result for these matches (chunked `in` queries). */
 export async function fetchResultsFor(matchIds: string[]): Promise<Map<string, Submission>> {
   const ids = [...new Set(matchIds.filter(Boolean))];
-  const chunks: string[][] = [];
-  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30));
-  const snaps = await Promise.all(chunks.map((c) => getDocs(
+  const snaps = await Promise.all(chunk(ids, 30).map((c) => getDocs(
     query(collection(db, 'submissions'), where('match_id', 'in', c), where('status', '==', 'applied')),
   ).catch(() => null)));
   return toMap(snaps.flatMap((s) => (s ? s.docs.map(asSubmission) : [])));

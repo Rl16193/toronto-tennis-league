@@ -1,51 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ChevronRight, Trophy } from 'lucide-react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
 import { motion } from 'motion/react';
 import { fadeUp, staggerDelay } from '../lib/motion';
-import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useUserMatches } from '../features/matches/useUserMatches';
-import { toDate, toMillis } from '../utils/eventDates';
-import { isCancelledEvent } from '../utils/eventTypes';
+import { fetchCompletedEvents, type CompletedEvent } from '../features/events/services/eventService';
+import { CompletedEventRow } from '../features/events/EventsElements';
 
-type PastEvent = { id: string; title: string; when: Date | null };
 
 // History tab — two sections: My Matches (personal results, newest first) and Past Tournaments
 // (the completed-events archive; opening one deep-links into the Tournament page read-only).
 export const History: React.FC = () => {
   const { user } = useAuth();
   const { matches, loading } = useUserMatches(user?.uid);
-  const [pastEvents, setPastEvents] = useState<PastEvent[]>([]);
+  const [pastEvents, setPastEvents] = useState<CompletedEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
 
   useEffect(() => { document.title = 'History · Racquets & Strings'; }, []);
 
-  // A tournament is "past" once its final has a winner — same rule the Tournament
-  // page uses to classify events.
+  // A tournament is "past" once scoring stamps `completed_at`: every draw has played its final.
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    Promise.all([
-      getDocs(collection(db, 'events')),
-      getDocs(query(collection(db, 'matches'), where('round', '==', 'F'), where('status', '==', 'complete'))),
-    ])
-      .then(([eventsSnap, finalsSnap]) => {
-        if (cancelled) return;
-        const completedIds = new Set(
-          finalsSnap.docs.filter((d) => d.data().winner_uid).map((d) => d.data().event_id as string),
-        );
-        const rows = eventsSnap.docs
-          .filter((d) => completedIds.has(d.id) && !isCancelledEvent(d.data()))
-          .map((d) => ({
-            id: d.id,
-            title: (d.data().title as string) || 'Tournament',
-            when: toDate(d.data().start_date),
-          }))
-          .sort((a, b) => toMillis(b.when) - toMillis(a.when));
-        setPastEvents(rows);
-      })
+    fetchCompletedEvents()
+      .then((rows) => { if (!cancelled) setPastEvents(rows); })
       .catch(() => {})
       .finally(() => { if (!cancelled) setEventsLoading(false); });
     return () => { cancelled = true; };
@@ -59,31 +36,31 @@ export const History: React.FC = () => {
           nav already shows which tab you're on. */}
       <h1 className="sr-only">History</h1>
 
-      <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-3">My Matches</p>
+      <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-3">My Matches</p>
 
       {loading ? (
         <div className="space-y-2">
-          {[1, 2, 3].map((i) => <div key={i} className="h-16 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
+          {[1, 2, 3].map((i) => <div key={i} className="h-16 bg-fg/5 rounded-2xl animate-pulse" />)}
         </div>
       ) : matches.length === 0 ? (
-        <div className="rounded-3xl bg-tennis-surface/30 py-12 text-center">
+        <div className="rounded-2xl bg-fg/5 py-12 text-center">
           <p className="text-sm text-fg/70">No matches yet. Join an event and your results will land here.</p>
         </div>
       ) : (
-        <div className="rounded-3xl bg-tennis-surface/30 overflow-hidden divide-y divide-fg/5">
+        <div className="rounded-2xl bg-fg/5 overflow-hidden divide-y divide-fg/5">
           {matches.map((m, i) => (
             <motion.div key={m.id} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }} className="flex items-center gap-3 px-4 py-3.5">
               <span
-                className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center text-xs font-black ${
-                  m.won ? 'bg-green-500/15 text-badge-win' : 'bg-red-500/15 text-badge-loss'
+                className={`w-8 h-8 shrink-0 rounded-2xl flex items-center justify-center text-xs font-black ${
+                  m.drawn ? 'bg-fg/10 text-fg' : m.won ? 'bg-green-500/15 text-badge-win' : 'bg-red-500/15 text-badge-loss'
                 }`}
               >
-                {m.won ? 'W' : 'L'}
+                {m.drawn ? 'D' : m.won ? 'W' : 'L'}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-fg truncate">vs {m.opponentName}</p>
                 {m.completedAt > 0 && (
-                  <p className="text-[11px] text-fg/70">
+                  <p className="text-xs text-fg/70">
                     {new Date(m.completedAt).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </p>
                 )}
@@ -94,37 +71,21 @@ export const History: React.FC = () => {
         </div>
       )}
 
-      <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-3 mt-8">Past Tournaments</p>
+      <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-3 mt-8">Past Tournaments</p>
 
       {eventsLoading ? (
         <div className="space-y-2">
-          {[1, 2].map((i) => <div key={i} className="h-14 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
+          {[1, 2].map((i) => <div key={i} className="h-14 bg-fg/5 rounded-2xl animate-pulse" />)}
         </div>
       ) : pastEvents.length === 0 ? (
-        <div className="rounded-3xl bg-tennis-surface/30 py-10 text-center">
+        <div className="rounded-2xl bg-fg/5 py-10 text-center">
           <p className="text-sm text-fg/70">No completed tournaments yet.</p>
         </div>
       ) : (
-        <div className="rounded-3xl bg-tennis-surface/30 overflow-hidden divide-y divide-fg/5">
+        <div className="rounded-2xl bg-fg/5 overflow-hidden divide-y divide-fg/5">
           {pastEvents.map((e, i) => (
             <motion.div key={e.id} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}>
-            <Link
-              to={`/matches?mode=tournament&event=${e.id}`}
-              className="flex items-center gap-3 px-4 py-3.5 hover:bg-fg/[0.04] transition-colors"
-            >
-              <span className="w-8 h-8 shrink-0 rounded-xl bg-clay/15 border border-clay/25 flex items-center justify-center">
-                <Trophy className="w-4 h-4 text-clay" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-fg truncate">{e.title}</p>
-                {e.when && (
-                  <p className="text-[11px] text-fg/70">
-                    {e.when.toLocaleDateString('en-CA', { month: 'short', year: 'numeric' })}
-                  </p>
-                )}
-              </div>
-              <ChevronRight className="w-4 h-4 text-fg/70 shrink-0" />
-            </Link>
+            <CompletedEventRow e={e} />
             </motion.div>
           ))}
         </div>

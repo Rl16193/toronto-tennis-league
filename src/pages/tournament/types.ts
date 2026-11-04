@@ -18,8 +18,8 @@ export const DOUBLES_DIVISIONS = ["Men's", "Women's", 'Mixed Doubles'] as const;
 // `zone_draw_config` field shape (src/types.ts).
 export type ZoneBucket = { id: string; label: string; zones: string[] };
 /**
- * Zones are ALWAYS on — `enabled` is legacy and ignored by `resolveZoneConfig`, which is the only
- * thing that should read this. A tournament can't turn zones off. A zone is either running on its
+ * `enabled` (default on) is the organizer's zone-draws toggle; off means one draw per skill, zones
+ * ignored. Read it through `resolveZoneConfig`. A zone is either running on its
  * own, or MERGED into another zone: its players play in the target's draws and it produces none of
  * its own. Merging is per-source and reversible, so the target can unmerge one source at a time.
  */
@@ -35,7 +35,10 @@ export type ZoneDrawConfig = {
 // includeUnassigned is true, regardless of what the creator picked for real zones.
 export const UNASSIGNED_ZONE_ID = 'unassigned';
 // A fixture is created 'accepted' (unplayed); scoreMatch makes it 'complete'.
-export type MatchStatus = 'accepted' | 'complete';
+// A fixture is created `accepted` and becomes `complete` when scored. `cancelled` is the third:
+// a match taken out of the draw by hand, keeping its document and any result it already paid.
+// `currentMatches` filters those out, so nothing below this type ever sees one.
+export type MatchStatus = 'accepted' | 'complete' | 'cancelled';
 
 export type TemplateMatch = {
   match_id: string;

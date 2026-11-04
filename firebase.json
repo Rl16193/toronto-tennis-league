@@ -40,11 +40,14 @@
         ]
       }
     ],
+    "cleanUrls": true,
+    "trailingSlash": false,
+    "redirects": [
+      { "source": "/rules", "destination": "/", "type": 301 },
+      { "source": "/how-it-works", "destination": "/about", "type": 301 }
+    ],
     "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
+      { "regex": "^/(login|signup|tournament|leagues|tasks|profile|history|matches|friendlies|challenges|notifications|players/[^/]+)$", "destination": "/app.html" }
     ]
   },
   "emulators": {

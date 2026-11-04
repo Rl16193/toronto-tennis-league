@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
 import { Button } from '../../../components/Button';
 import { Input } from '../../../components/Input';
 import {
@@ -78,7 +79,7 @@ export const CourtsEditor: React.FC<{
         <div className="flex flex-wrap gap-1.5">
           {courtsDraft.map((c) => (
             <button key={c} type="button" onClick={() => setCourtsDraft(courtsDraft.filter((x) => x !== c))}
-              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-clay text-fg flex items-center gap-1.5">{c} <span className="opacity-70">✕</span></button>
+              aria-label={`Remove ${c}`} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold leading-none bg-clay text-white">{c} <X className="size-3.5 opacity-70" aria-hidden="true" /></button>
           ))}
         </div>
       )}
@@ -88,9 +89,9 @@ export const CourtsEditor: React.FC<{
         <Button size="sm" variant="clay" className="px-3 shrink-0" onClick={() => addCourt(courtInput)} disabled={!courtInput.trim()}>Add</Button>
       </div>
       {courtSuggestions.length > 0 && (
-        <div className="max-h-40 overflow-y-auto rounded-xl bg-tennis-dark/95 p-1">
+        <div className="max-h-40 overflow-y-auto rounded-2xl bg-tennis-dark/95 p-1">
           {courtSuggestions.map((c) => (
-            <button key={c} type="button" onClick={() => addCourt(c)} className="w-full text-left px-3 py-2 text-sm text-fg rounded-lg hover:bg-clay/20">{c}</button>
+            <button key={c} type="button" onClick={() => addCourt(c)} className="w-full text-left px-3 py-2 text-sm text-fg rounded-2xl hover:bg-clay/20">{c}</button>
           ))}
         </div>
       )}

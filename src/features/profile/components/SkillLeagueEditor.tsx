@@ -25,7 +25,7 @@ export const SkillEditor: React.FC<{
               key={level}
               type="button"
               onClick={() => setSkillDraft(level)}
-              className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
+              className={`py-2.5 rounded-2xl text-sm font-bold border-2 transition-all ${
                 active ? 'bg-clay/10 text-clay border-clay' : 'bg-fg/5 text-fg border-transparent hover:bg-fg/10'
               }`}
             >

@@ -23,7 +23,7 @@ export const Stepper: React.FC<{
   };
 
   return (
-    <div className={`flex items-center justify-between rounded-xl border border-fg/10 bg-fg/5 px-1.5 py-1 ${className}`}>
+    <div className={`flex items-center justify-between rounded-2xl border border-fg/10 bg-fg/5 px-1.5 py-1 ${className}`}>
       <motion.button
         type="button"
         onClick={() => onChange(Math.max(min, value - 1))}
@@ -31,7 +31,7 @@ export const Stepper: React.FC<{
         aria-label={`Decrease ${label}`}
         whileTap={value <= min ? undefined : tapScale.whileTap}
         transition={tapScale.transition}
-        className="w-10 h-10 flex items-center justify-center rounded-lg text-fg/70 hover:text-fg hover:bg-fg/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+        className="w-10 h-10 flex items-center justify-center rounded-2xl text-fg/70 hover:text-fg hover:bg-fg/10 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
       >
         <Minus className="w-4 h-4" />
       </motion.button>
@@ -52,7 +52,7 @@ export const Stepper: React.FC<{
         aria-label={`Increase ${label}`}
         whileTap={value >= max ? undefined : tapScale.whileTap}
         transition={tapScale.transition}
-        className="w-10 h-10 flex items-center justify-center rounded-lg text-fg/70 hover:text-fg hover:bg-fg/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+        className="w-10 h-10 flex items-center justify-center rounded-2xl text-fg/70 hover:text-fg hover:bg-fg/10 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
       >
         <Plus className="w-4 h-4" />
       </motion.button>

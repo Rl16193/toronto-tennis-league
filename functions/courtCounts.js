@@ -106,6 +106,24 @@ async function computeActivity() {
   return out;
 }
 
+// The 3 newest court-condition notes per court_key, any age, and how many there are in all (the
+// marker number while Reports is on), for the map's Reports view. Public on
+// purpose (owner ruling 2026-10-06): copied in full, without names.
+async function computeReports() {
+  const snap = await db.collection('courts').where('category', '==', 'report').where('sub_category', '==', 'condition').get();
+  const rows = snap.docs.map((d) => d.data())
+    .filter((c) => c.court_key && c.created_at && String(c.note || '').trim())
+    .sort((x, y) => y.created_at.toMillis() - x.created_at.toMillis());
+  const out = {};
+  const counts = {};
+  rows.forEach((c) => {
+    counts[c.court_key] = (counts[c.court_key] ?? 0) + 1;
+    const list = out[c.court_key] || (out[c.court_key] = []);
+    if (list.length < 3) list.push(String(c.note).trim());
+  });
+  return { notes: out, counts };
+}
+
 // Explicit region + timeZone, like every other scheduled function here. The bare-cron form
 // defaulted the schedule to UTC, so "every 6 hours" drifted against Toronto local time.
 exports.aggregateCourtCounts = onSchedule({ schedule: '0 */6 * * *', timeZone: TZ, region: REGION }, async () => {
@@ -113,10 +131,12 @@ exports.aggregateCourtCounts = onSchedule({ schedule: '0 */6 * * *', timeZone: T
     // Visits held for courts that weren't on the roster: written once the court has been added.
     const released = await releaseHeldVisits(db);
     if (released) logger.info(`[aggregateCourtCounts] released ${released} held match visit(s)`);
-    const [counts, activity] = await Promise.all([computeCourtCounts(), computeActivity()]);
+    const [counts, activity, { notes: reports, counts: report_counts }] = await Promise.all([computeCourtCounts(), computeActivity(), computeReports()]);
     await db.doc('site_stats/court_counts').set({
       counts,
       activity,
+      reports,
+      report_counts,
       updated_at: Timestamp.now(),
     });
     logger.info(`[aggregateCourtCounts] wrote ${Object.keys(counts).length} court keys, `

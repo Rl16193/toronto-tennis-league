@@ -11,7 +11,9 @@
       "PowerShell(npm run lint)",
       "Bash(node --check functions/zoneMoves.js)",
       "Bash(node --check functions/index.js)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "mcp__785921a6-32fa-439e-a497-370c72179b1d__list-brand-kits",
+      "mcp__785921a6-32fa-439e-a497-370c72179b1d__search-folders"
     ]
   },
   "deniedMcpServers": [

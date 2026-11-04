@@ -14,12 +14,12 @@
  */
 const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { isOrganizer } = require('./roles');
-const { toDate, isGuest } = require('./constants');
+const { toDate, isGuest, DAY_MS } = require('./constants');
 const { skillBand, orderOf } = require('./participantSeat');
 
 // ── The points table ───────────────────────────────────────────────────────────
 const POINTS = {
-  rally: { win: 2, loss: 1 },
+  rally: { win: 2, loss: 1, draw: 1 }, // a rally draw (sets level) pays 1 to each player
   challenge: { win: 3, loss: -3 }, // the loss never takes a player below 0
   group: { win: 3, loss: 1, walkoverWin: 1 },
   knockout: { win: 0, finalWin: 20, walkoverWin: 0, lossByRound: { R32: 1, R16: 2, QF: 3, SF: 5, F: 10 } },
@@ -27,7 +27,7 @@ const POINTS = {
 };
 
 const MAX_GAME_SCORE = 99;
-const EDIT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // a player may fix their own entry this long
+const EDIT_WINDOW_MS = 7 * DAY_MS; // a player may fix their own entry this long
 const SCORE_FIELDS = [
   ['set_1_player_1', 'set_1_player_2'],
   ['set_2_player_1', 'set_2_player_2'],
@@ -54,14 +54,17 @@ const kindOf = (m) => (isTournament(m) ? (isGroupMatch(m) ? 'group' : 'knockout'
  * an applied challenge/rally entry. Task progress and the Matchday bonus both use it.
  */
 const isPlayedResult = (sub) => {
-  if (!sub || sub.status !== 'applied' || !RESULT_KINDS.includes(sub.sub_category) || !sub.winner_uid) return false;
+  if (!sub || sub.status !== 'applied' || !RESULT_KINDS.includes(sub.sub_category)) return false;
   if (sub.sub_category === 'walkover') return false;
+  if (sub.category === 'rally') return true; // a draw has no winner_uid, but is still played
+  if (!sub.winner_uid) return false;
   if (sub.category !== 'tournament') return true;
   return SCORE_FIELDS.some(([a, b]) => (sub[a] ?? 0) + (sub[b] ?? 0) > 0);
 };
 
 /** League points a result pays, from the table. */
-function pointsFor(match, walkover) {
+function pointsFor(match, walkover, draw = false) {
+  if (draw) return { winner: POINTS.rally.draw, loser: POINTS.rally.draw };
   const kind = kindOf(match);
   const row = POINTS[kind];
   if (kind === 'knockout') {
@@ -89,15 +92,26 @@ function normalizeScores(value) {
   });
 }
 
-// The only score check: the client and the rules no longer repeat it.
-function validateSetScores(scores) {
+// The only score check: the client and the rules no longer repeat it. A tied set is a draw only in a
+// rally, so it is refused everywhere else.
+function validateSetScores(scores, allowTie) {
   const played = scores.filter(([a, b]) => a !== 0 || b !== 0);
   if (played.length === 0) fail('Enter the games for each set played.');
   for (const [a, b] of played) {
-    if (a === b) fail('A set cannot be tied.');
+    if (a === b) {
+      if (!allowTie) fail('A set cannot be tied.');
+      continue;
+    }
     if (Math.max(a, b) > 21 && Math.abs(a - b) !== 2) fail(`${a}-${b} isn't a valid set. Above 21 the margin has to be exactly 2.`);
   }
 }
+
+// Sets won by [player 1, player 2]. Level sets are a rally draw.
+const setsWonOf = (scores) => {
+  const sets = [0, 0];
+  scores.forEach(([a, b]) => { if (a > b) sets[0] += 1; if (b > a) sets[1] += 1; });
+  return sets;
+};
 
 const marginOf = (scores, winnerUid, match) => {
   const w = winnerUid === match.player_1_uid ? 0 : 1;
@@ -107,29 +121,38 @@ const marginOf = (scores, winnerUid, match) => {
 /** A submitted result, validated. Throws ResultError with a player-readable message. */
 function normalizeResult(input, match) {
   if (!input || typeof input !== 'object') fail('Missing result.');
+  const rally = match.category === 'rally';
   const walkover = input.walkover === true;
   const scores = normalizeScores(input.scores);
+  const court = typeof input.court === 'string' ? input.court.trim() : '';
+  if (court.length > 200) fail('Court name is too long.');
+  if (walkover && rally) fail('Walkovers are only for tournament matches. A rally needs a score: enter the games.');
   if (walkover && !scores.every(([a, b]) => a === 0 && b === 0)) fail('A walkover has no games.');
-  if (!walkover) validateSetScores(scores);
+  if (!walkover) validateSetScores(scores, rally);
+
+  // A rally whose sets are level is a draw: no winner, whoever was picked.
+  if (rally && !walkover) {
+    const sets = setsWonOf(scores);
+    if (sets[0] === sets[1]) return { winnerUid: '', scores, walkover, draw: true, court, margin: 0 };
+  }
   const winnerUid = typeof input.winnerUid === 'string' ? input.winnerUid.trim() : '';
   if (!winnerUid || ![match.player_1_uid, match.player_2_uid].includes(winnerUid)) {
     fail('Please choose who won the match.');
   }
   if (!walkover) {
     const w = winnerUid === match.player_1_uid ? 0 : 1;
-    const sets = [0, 0];
-    scores.forEach(([a, b]) => { if (a > b) sets[0] += 1; if (b > a) sets[1] += 1; });
+    const sets = setsWonOf(scores);
     if (sets[w] <= sets[1 - w]) fail('The winner must have won more sets.');
   }
-  const court = typeof input.court === 'string' ? input.court.trim() : '';
-  if (court.length > 200) fail('Court name is too long.');
-  return { winnerUid, scores, walkover, court, margin: marginOf(scores, winnerUid, match) };
+  return { winnerUid, scores, walkover, draw: false, court, margin: marginOf(scores, winnerUid, match) };
 }
 
-/** The result an entry records. */
+/** The result an entry records. A rally entry with no winner is a draw. */
 function resultOf(sub, match) {
   const scores = SCORE_FIELDS.map(([a, b]) => [sub[a] ?? 0, sub[b] ?? 0]);
-  return { winnerUid: sub.winner_uid || '', scores, walkover: sub.sub_category === 'walkover', court: sub.court || '', margin: marginOf(scores, sub.winner_uid, match) };
+  const walkover = sub.sub_category === 'walkover';
+  const draw = match.category === 'rally' && !walkover && !sub.winner_uid;
+  return { winnerUid: sub.winner_uid || '', scores, walkover, draw, court: sub.court || '', margin: draw ? 0 : marginOf(scores, sub.winner_uid, match) };
 }
 
 const scoreFieldPatch = (scores) =>
@@ -151,7 +174,7 @@ const creditedUids = (uid, partners) => {
 
 /** What a new result pays: the table, a challenge loss capped at what the loser has. */
 function pointsToPay(match, result, loserBalance = Infinity) {
-  const pts = pointsFor(match, result.walkover);
+  const pts = pointsFor(match, result.walkover, result.draw);
   if (kindOf(match) === 'challenge') pts.loser = -Math.min(-pts.loser, Math.max(0, loserBalance));
   return pts;
 }
@@ -165,6 +188,11 @@ function paymentOf(match, result, pts, partners = new Map()) {
   const kind = kindOf(match);
   const tournament = kind === 'group' || kind === 'knockout';
   const played = !result.walkover;
+  // A draw pays both players the same and moves no wins or losses, so it never breaks a streak.
+  if (result.draw) {
+    [match.player_1_uid, match.player_2_uid].forEach((uid) => addDelta(deltas, uid, { leaguePoints: pts.winner, matchesPlayed: 1 }));
+    return deltas;
+  }
 
   const winnerIsP1 = result.winnerUid === match.player_1_uid;
   const loserUid = winnerIsP1 ? match.player_2_uid : match.player_1_uid;
@@ -389,6 +417,9 @@ async function recordScore(db, { callerUid, matchId, input, newMatch, applyEntry
     const isPlayer = sides.includes(callerUid) || sides.some((uid) => partners.get(uid) === callerUid);
     if (newMatch && !organizer) fail('Only an organizer can record a match for two other players.', 'permission-denied');
     if (!organizer && !isPlayer) fail('Only the two players or an organizer can record this score.', 'permission-denied');
+    if (tournament && event && event.champions && event.champions[drawKeyOf(matchRef.id, match)]) {
+      fail('This group’s winner has been declared. Take it back before changing a result.', 'failed-precondition');
+    }
     if (!tournament && !newMatch && !['accepted', 'complete'].includes(match.status)) {
       fail('That match is not ready for a score yet.', 'failed-precondition');
     }
@@ -397,15 +428,18 @@ async function recordScore(db, { callerUid, matchId, input, newMatch, applyEntry
     const pending = applyEntryId ? await tx.get(db.collection('submissions').doc(applyEntryId)) : null;
     const result = pending ? resultOf(pending.data(), match) : normalizeResult(input, match);
     if (result.walkover && !tournament) fail('Walkovers are only for tournament matches.');
-    if (result.walkover && !organizer) fail('Only the organizer can record a walkover.', 'permission-denied');
 
     const callerName = await nameOf(tx, db, callerUid);
-    const winnerName = result.winnerUid === match.player_1_uid ? match.player_1_name : match.player_2_name;
+    const winnerName = result.draw ? '' : result.winnerUid === match.player_1_uid ? match.player_1_name : match.player_2_name;
     const entryFields = {
       uid: callerUid, user_name: callerName, winner_uid: result.winnerUid, winner_name: winnerName,
       ...scoreFieldPatch(result.scores), court: result.court, sub_category: result.walkover ? 'walkover' : 'result',
     };
     const old = current ? resultOf(current.data, match) : null;
+    // A player may concede (withdrawing): a walkover for their opponent in an unplayed match.
+    const callerSide = sides.find((uid) => uid === callerUid || partners.get(uid) === callerUid);
+    const concedes = !old && !!callerSide && result.winnerUid !== callerSide;
+    if (result.walkover && !organizer && !concedes) fail('Only the organizer can record a walkover.', 'permission-denied');
     const keep = (status) => { tx.set(db.collection('submissions').doc(), entryDoc(match, matchRef.id, { ...entryFields, status })); };
 
     if (old && !pending && old.winnerUid === result.winnerUid && old.walkover === result.walkover &&
@@ -415,15 +449,25 @@ async function recordScore(db, { callerUid, matchId, input, newMatch, applyEntry
     }
     if (old && !organizer) {
       if (old.walkover) fail('Only the organizer can change this result.', 'permission-denied');
-      if (result.winnerUid !== old.winnerUid) {
-        keep('disputed');
-        return { inDispute: true, matchId: matchRef.id };
-      }
       const enteredAt = toDate(current.data.created_at);
       const ownFix = callerUid === current.data.uid && enteredAt && Date.now() - enteredAt.getTime() <= EDIT_WINDOW_MS;
-      if (!ownFix && result.margin >= old.margin) {
-        keep('superseded');
-        return { recordedOnly: true, matchId: matchRef.id };
+      // A rally draw and a win don't dispute: a draw takes over a win, and a draw stands against a
+      // win unless its own entrant changes it within the edit window.
+      const drawSwitch = match.category === 'rally' && result.draw !== old.draw;
+      if (drawSwitch) {
+        if (old.draw && !ownFix) {
+          keep('superseded');
+          return { recordedOnly: true, matchId: matchRef.id };
+        }
+      } else {
+        if (result.winnerUid !== old.winnerUid) {
+          keep('disputed');
+          return { inDispute: true, matchId: matchRef.id };
+        }
+        if (!ownFix && result.margin >= old.margin) {
+          keep('superseded');
+          return { recordedOnly: true, matchId: matchRef.id };
+        }
       }
     }
 
@@ -434,6 +478,28 @@ async function recordScore(db, { callerUid, matchId, input, newMatch, applyEntry
     }
     if (!old && target && occupant && occupant !== result.winnerUid) {
       fail('The next-round spot already holds another player. Fix the draw first.', 'failed-precondition');
+    }
+
+    // The event is over only when EVERY draw in it has played its final. Stamping at the first final
+    // retired a multi-draw event with three finals still to play (Zephyr Open, Oct 2026). A draw with
+    // no final yet (RR groups before the knockout) keeps it open; isCurrentEvent's 30-day long stop
+    // covers a draw that is abandoned. Read here because a transaction reads before it writes.
+    let eventDone = false;
+    if (tournament && !old && match.round === 'F' && eventSnap && eventSnap.exists) {
+      const draws = new Map();
+      (await tx.get(db.collection('matches').where('event_id', '==', match.event_id))).docs.forEach((d) => {
+        const m = d.data();
+        if (!isTournament(m) || m.status === 'cancelled') return;
+        const key = drawKeyOf(d.id, m) || [m.sub_category, m.division, m.skill_group, m.zone || ''].join('|');
+        const row = draws.get(key) || { hasFinal: false, open: false };
+        if (m.round === 'F') {
+          row.hasFinal = true;
+          if (d.id !== matchRef.id && m.status !== 'complete') row.open = true;
+        }
+        draws.set(key, row);
+      });
+      const champions = (event && event.champions) || {};
+      eventDone = draws.size > 0 && [...draws].every(([key, r]) => champions[key] || (r.hasFinal && !r.open));
     }
 
     // Points: undo exactly what the current entry paid (its stored points), pay the new result.
@@ -471,11 +537,8 @@ async function recordScore(db, { callerUid, matchId, input, newMatch, applyEntry
         participant_uids: onCourtAfter(target.data, target.slot, result.winnerUid, partners), updated_at: now,
       });
     }
-    // A played final means the event is over, as far as the public homepage is concerned. Each
-    // new final pushes the stamp forward, so an event with several draws stays listed until the last.
-    if (tournament && !old && match.round === 'F' && eventSnap && eventSnap.exists) {
-      tx.set(eventSnap.ref, { completed_at: now }, { merge: true });
-    }
+    // The last final played: the event is over, as far as the public homepage is concerned.
+    if (eventDone) tx.set(eventSnap.ref, { completed_at: now }, { merge: true });
     return { applied: true, advanced: !!target, matchId: matchRef.id };
   });
 }
@@ -528,6 +591,9 @@ async function resetScore(db, { uid, matchId }) {
     const eventSnap = match.event_id ? await tx.get(db.doc(`events/${match.event_id}`)) : null;
     const event = eventSnap && eventSnap.exists ? eventSnap.data() : null;
     if (!(await isOrganizer(uid, event))) fail('Only the organizer can reset a score.', 'permission-denied');
+    if (tournament && event && event.champions && event.champions[drawKeyOf(matchId, match)]) {
+      fail('This group’s winner has been declared. Take it back before resetting a result.', 'failed-precondition');
+    }
     if (match.status !== 'complete') return false;
     const current = await currentEntry(tx, db, matchId);
     const target = tournament ? await nextTarget(tx, db, match, matchId) : null;
@@ -542,6 +608,10 @@ async function resetScore(db, { uid, matchId }) {
       }));
     }
     tx.update(matchRef, { status: 'accepted', winner_uid: '', updated_at: now });
+    // Taking a final back reopens the event: it is no longer true that every final is played.
+    if (tournament && match.round === 'F' && event && event.completed_at) {
+      tx.set(eventSnap.ref, { completed_at: null }, { merge: true });
+    }
     // Pull the winner back out of the next round, unless that match has already been played.
     if (target && target.data.status !== 'complete' && target.data[`${target.slot}_uid`] === match.winner_uid) {
       tx.update(target.ref, {
@@ -618,6 +688,75 @@ async function groupBonus(db, { uid, eventId, matchIds, award }) {
 }
 
 /**
+ * Organizer: name the leader of a round robin that is ONE group with no knockout as that draw's
+ * winner, or take it back (winnerUid null). A title, not points: nothing is paid. Stored on the
+ * event as `champions[drawKey]` (public read, so profiles can show Champion), and it finishes the
+ * draw for event completion, as a played final does. Leader = the group table's order: points,
+ * then games won. An exact tie at the top is the organizer's pick, so any team level with the
+ * leader is accepted.
+ */
+async function groupChampion(db, { uid, eventId, matchIds, winnerUid }) {
+  await requireOrganizer(db, uid, eventId);
+  return db.runTransaction(async (tx) => {
+    const now = Timestamp.now();
+    const eventRef = db.collection('events').doc(eventId);
+    const eventSnap = await tx.get(eventRef);
+    if (!eventSnap.exists) fail('Event not found.', 'not-found');
+    const event = eventSnap.data();
+    const snaps = (await tx.getAll(...matchIds.map((id) => db.collection('matches').doc(id)))).filter((s) => s.exists);
+    const labels = new Set(snaps.map((s) => s.data().group_label));
+    if (snaps.length === 0 || labels.size !== 1 || !snaps.every((s) => s.data().event_id === eventId && isGroupMatch(s.data()))) {
+      fail('Give the matches of exactly one group.');
+    }
+    const drawKey = drawKeyOf(snaps[0].id, snaps[0].data());
+    const ours = new Set(snaps.map((s) => s.id));
+    const all = (await tx.get(db.collection('matches').where('event_id', '==', eventId))).docs
+      .filter((d) => isTournament(d.data()) && d.data().status !== 'cancelled');
+    if (all.some((d) => drawKeyOf(d.id, d.data()) === drawKey && !ours.has(d.id))) {
+      fail('Only a round robin with a single group and no knockout can name its leader as winner.');
+    }
+
+    const champions = { ...(event.champions || {}) };
+    if (!winnerUid) {
+      if (!champions[drawKey]) return false;
+      delete champions[drawKey];
+      tx.update(eventRef, { champions, completed_at: null, updated_at: now });
+      return true;
+    }
+    if (snaps.some((s) => s.data().status !== 'complete')) fail('Every match in the group has to be recorded first.');
+
+    const entries = (await tx.get(db.collection('submissions').where('event_id', '==', eventId).where('status', '==', 'applied'))).docs
+      .map((d) => d.data()).filter((e) => ours.has(e.match_id) && e.sub_category !== 'reset');
+    const table = new Map();
+    const row = (u) => { if (!table.has(u)) table.set(u, { points: 0, games: 0 }); return table.get(u); };
+    for (const e of entries) {
+      const m = snaps.find((s) => s.id === e.match_id).data();
+      const p1 = row(m.player_1_uid), p2 = row(m.player_2_uid);
+      for (const [a, b] of SCORE_FIELDS) { p1.games += e[a] || 0; p2.games += e[b] || 0; }
+      const loser = e.winner_uid === m.player_1_uid ? m.player_2_uid : m.player_1_uid;
+      row(e.winner_uid).points += e.points_winner || 0;
+      row(loser).points += e.points_loser || 0;
+    }
+    const pick = table.get(winnerUid);
+    const best = [...table.values()].reduce((a, r) => (r.points > a.points || (r.points === a.points && r.games > a.games) ? r : a), { points: -Infinity, games: -Infinity });
+    if (!pick || pick.points !== best.points || pick.games !== best.games) fail('That team isn’t top of the group.');
+
+    const { partners } = await partnersFor(tx, db, snaps[0].data());
+    const side = snaps.map((s) => s.data()).find((m) => m.player_1_uid === winnerUid || m.player_2_uid === winnerUid);
+    const name = side.player_1_uid === winnerUid ? side.player_1_name : side.player_2_name;
+    const uids = [winnerUid, partners.get(winnerUid)].filter((u, i, a) => u && a.indexOf(u) === i);
+    champions[drawKey] = { uids, name: name || '', awarded_at: now, awarded_by: uid };
+
+    // Finished when every draw in the event has a played final or a named winner.
+    const keys = new Set(all.map((d) => drawKeyOf(d.id, d.data())));
+    const done = [...keys].every((k) => champions[k]
+      || all.some((d) => drawKeyOf(d.id, d.data()) === k && d.data().round === 'F' && d.data().status === 'complete'));
+    tx.update(eventRef, { champions, updated_at: now, ...(done ? { completed_at: now } : {}) });
+    return true;
+  });
+}
+
+/**
  * Recounts a member's registrations: `eventsJoined` = distinct events with an active registration,
  * `tournamentsPlayed` = those that are tournaments. Set, never incremented, so a re-join can't
  * double-count and no marker is needed. Returns the counts.
@@ -635,7 +774,6 @@ async function recountEntries(db, uid) {
   return { eventsJoined: events.length, tournamentsPlayed: tournaments.size };
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 /**
  * Closes stale requests (weeklyReminders): a rally open, or accepted with no result, 30+ days after
  * it was made becomes `played` (no score, no points); a challenge still open after 40 days is
@@ -673,14 +811,13 @@ module.exports = {
   cancelDraw,
   closeStaleRequests,
   pairDraw,
-  paymentOf,
   recountEntries,
   groupBonus,
+  groupChampion,
   isPlayedResult,
   pointsFor,
   recordScore,
   resetScore,
   settleDispute,
   awardIdForGroup,
-  drawKeyOf,
 };

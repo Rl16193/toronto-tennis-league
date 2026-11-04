@@ -56,7 +56,7 @@ export const BracketView: React.FC<Props> = ({
   );
 
   return (
-    <section className="overflow-x-auto rounded-[2rem] bg-tennis-surface/20 text-fg p-4 md:p-6">
+    <section className="overflow-x-auto rounded-2xl bg-fg/5 text-fg p-4 md:p-6">
       {editMode && (
         <p className="text-center text-xs text-badge font-semibold mb-4">
           Edit mode — use dropdowns to reassign players
@@ -69,7 +69,7 @@ export const BracketView: React.FC<Props> = ({
         {rounds.map((round, roundIndex) => (
           <div
             key={round.round}
-            className={`grid rounded-xl border p-3 ${getRoundTone(round.round)}`}
+            className={`grid rounded-2xl border p-3 ${getRoundTone(round.round)}`}
             style={{ gridTemplateRows: `auto repeat(${drawSize}, minmax(24px, 1fr))`, rowGap: '0.35rem' }}
           >
             <div className="sticky top-0 z-10 bg-inherit pb-2">
@@ -86,11 +86,11 @@ export const BracketView: React.FC<Props> = ({
                   type="date"
                   value={roundDeadlines[round.round] ?? ''}
                   onChange={(e) => onUpdateDeadline(round.round, e.target.value)}
-                  className="mt-0.5 w-full text-center text-[10px] text-fg/70 bg-transparent border-none outline-none cursor-pointer hover:text-fg focus:text-fg [color-scheme:dark]"
+                  className="mt-0.5 w-full text-center text-xs text-fg/70 bg-transparent border-none outline-none cursor-pointer hover:text-fg focus:text-fg [color-scheme:dark]"
                   title={`Set deadline for ${round.round}`}
                 />
               ) : roundDeadlines[round.round] ? (
-                <p className="text-center text-[10px] text-fg/70 mt-0.5">
+                <p className="text-center text-xs text-fg/70 mt-0.5">
                   Till {formatDeadline(roundDeadlines[round.round])}
                 </p>
               ) : null}

@@ -30,8 +30,8 @@ export const ReviewQueue: React.FC<{ claims: TaskClaim[]; coupons: BookingRow[] 
     try { await fn(); } catch (err) { setError(serviceErrorMessage(err)); } finally { setBusy(null); }
   };
 
-  const yes = 'p-2 rounded-lg bg-badge-win/15 text-badge-win hover:bg-badge-win/25 disabled:opacity-50 shrink-0';
-  const no = 'p-2 rounded-lg bg-badge-loss/15 text-badge-loss hover:bg-badge-loss/25 disabled:opacity-50 shrink-0';
+  const yes = 'p-2 rounded-2xl bg-badge-win/15 text-badge-win hover:bg-badge-win/25 disabled:opacity-50 shrink-0';
+  const no = 'p-2 rounded-2xl bg-badge-loss/15 text-badge-loss hover:bg-badge-loss/25 disabled:opacity-50 shrink-0';
 
   return (
     <>

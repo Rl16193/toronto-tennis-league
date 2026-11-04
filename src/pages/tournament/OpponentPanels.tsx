@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, ChevronUp } from 'lucide-react';
 import { TournamentMatch } from './types';
+import { isWalkover } from '../../features/matches/results';
 import type { ContactMethod } from '../../types';
 import { ScheduleControls, type ScheduleApi } from './TournamentElements';
-import { ContactOpponentButton, pillButtonCls } from '../../components/ContactOpponentButton';
+import { ContactOpponentButton } from '../../components/ContactOpponentButton';
+import { buttonCls } from '../../components/Button';
 import { sharesCourt } from '../../components/NearbyPill';
 import { NearbyPill } from '../../components/NearbyPill';
 import { AvailabilityPills } from '../../components/AvailabilityPills';
@@ -45,7 +46,6 @@ const scheduleBadge = (m: TournamentMatch, viewerUid?: string): { text: string; 
 
 export const OpponentCard: React.FC<{
   opponent: OpponentRow;
-  defaultOpen?: boolean;
   currentMatch?: TournamentMatch | null;
   schedule?: ScheduleApi;
   // A creator who's also playing uses the same Enter/Edit Score flow they have in the Match List
@@ -60,8 +60,7 @@ export const OpponentCard: React.FC<{
   myCourts?: Set<string>;
   courtsMap?: Record<string, string[]>;
   availabilityMap?: Record<string, string[]>;
-}> = ({ opponent, defaultOpen = false, currentMatch, schedule, isCreator, viewerUid, myCourts, courtsMap, availabilityMap }) => {
-  const [open, setOpen] = useState(defaultOpen);
+}> = ({ opponent, currentMatch, schedule, isCreator, viewerUid, myCourts, courtsMap, availabilityMap }) => {
   const canSchedule = !!currentMatch && !!schedule && !currentMatch.id.startsWith('preview_');
   const isComplete = currentMatch?.status === 'complete';
   const badge = canSchedule ? scheduleBadge(currentMatch!, viewerUid) : null;
@@ -69,24 +68,14 @@ export const OpponentCard: React.FC<{
     isCreator || (!isComplete && !!schedule!.submittableMatchIds?.has(currentMatch!.id))
   );
   const submitLabel = isCreator ? 'Score' : 'Submit Score';
+  // Grey once played, lime for a walkover, the plain card fill while it's still to play.
+  const tone = isComplete && isWalkover(currentMatch?.result) ? 'bg-lime/25' : isComplete ? 'bg-fg/10' : 'bg-fg/5';
 
   return (
-    <div className="mb-6">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between mb-3 group"
-      >
-        <span className="text-xs uppercase tracking-widest text-fg/70 font-bold">Your Match</span>
-        {open
-          ? <ChevronUp className="w-4 h-4 text-fg/70 group-hover:text-fg/70 transition-colors" />
-          : <ChevronDown className="w-4 h-4 text-fg/70 group-hover:text-fg/70 transition-colors" />}
-      </button>
-
-      {open && (
+    <div className={`mb-6 rounded-2xl px-2 py-2 ${tone}`}>
         <div className="space-y-3">
           {opponent.round && (
-            <p className="text-[10px] uppercase tracking-widest text-clay font-bold">{opponent.round}</p>
+            <p className="px-3.5 pt-1 text-xs uppercase tracking-widest text-clay font-bold">{opponent.round}</p>
           )}
 
           {/* Two-column row: left is name/skill, tier, availability (3 lines); right is
@@ -109,7 +98,7 @@ export const OpponentCard: React.FC<{
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {opponent.skill != null && opponent.skill > 0 && (
-                    <span className="text-[11px] text-fg/70">Skill {opponent.skill} · {skillBand(opponent.skill)}</span>
+                    <span className="text-xs text-fg/70">Skill {opponent.skill} · {skillBand(opponent.skill)}</span>
                   )}
                   <NearbyPill show={!!myCourts && sharesCourt(courtsMap?.[opponent.userId], myCourts)} />
                 </div>
@@ -128,10 +117,10 @@ export const OpponentCard: React.FC<{
                 />
                 <div className="flex items-center gap-1.5 flex-wrap justify-end">
                   {badge && (
-                    <span className={`max-w-[9rem] truncate px-2 py-0.5 rounded-lg text-[9px] font-bold border ${badge.cls}`}>{badge.text}</span>
+                    <span className={`max-w-[9rem] truncate px-2 py-0.5 rounded-2xl text-xs font-bold border ${badge.cls}`}>{badge.text}</span>
                   )}
                   {showSubmitInline && (
-                    <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => schedule!.onSubmitScore!(currentMatch!)}>{submitLabel}</button>
+                    <button type="button" className={buttonCls('clay', 'sm')} onClick={() => schedule!.onSubmitScore!(currentMatch!)}>{submitLabel}</button>
                   )}
                 </div>
               </div>
@@ -141,7 +130,6 @@ export const OpponentCard: React.FC<{
           {/* The matchday rule, until the match is complete. Submit Score lives inline above. */}
           {canSchedule && !isComplete && <ScheduleControls match={currentMatch!} api={schedule!} hideBadge hideSubmitButton />}
         </div>
-      )}
     </div>
   );
 };

@@ -15,6 +15,9 @@ export type ScoreTarget = {
   /** Present when correcting a recorded score: the winner stays, only the games change. */
   edit?: { winnerUid: string; sets: [number, number][] };
   title?: string;
+  /** An organizer recording for both players, from player 1's side; may enter a walkover or reset. */
+  organizer?: { player1: { uid: string; name: string }; onReset?: () => Promise<void> };
+  court?: string;
 };
 
 export type ScoreModalProps = ComponentProps<typeof ScoreModal>;
@@ -29,15 +32,16 @@ export const blankScoreForm = (matchDocId: string): ScoreForm => ({
 const SUBMIT_NOTE: Record<ScoreKind, string> = {
   tournament: 'It counts as soon as you submit. If your opponent records a different winner, an organizer approves or rejects theirs.',
   challenge: 'It counts as soon as you submit. If your opponent records a different winner, an organizer approves or rejects theirs.',
-  rally: 'It counts as soon as you submit. The winner gets 2 points and the loser 1.',
+  rally: 'It counts as soon as you submit. The winner gets 2 points and the loser 1. Level sets are a draw: 1 point each.',
 };
 const EDIT_NOTE = "Correct the games. The winner stays as recorded, so the points don't change. Only the player who entered the score can widen it; a closer score always replaces it.";
 
 /**
  * One score sheet for rallies, challenges and tournament matches, submitted or corrected. Shared by
- * the Matches page and the Player Dash. Every kind goes through the same scoreMatch call.
+ * the Matches page, the Player Dash and the Tournament page. Every kind goes through the same
+ * scoreMatch call. `onSaved` gets the server's notice (a dispute, a kept score) or null.
  */
-export function useRequestScoring(me: { uid: string; name: string } | null, onSaved?: () => void) {
+export function useRequestScoring(me: { uid: string; name: string } | null, onSaved?: (notice: string | null) => void) {
   const [target, setTarget] = useState<ScoreTarget | null>(null);
   const [form, setForm] = useState<ScoreForm | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +49,7 @@ export function useRequestScoring(me: { uid: string; name: string } | null, onSa
   const close = () => { setTarget(null); setForm(null); setError(null); };
 
   const open = (t: ScoreTarget) => {
-    const next = blankScoreForm(t.docId);
+    const next = { ...blankScoreForm(t.docId), court: t.court ?? '' };
     if (t.edit) {
       const recorded = t.edit.sets;
       next.winnerUserId = t.edit.winnerUid;
@@ -67,13 +71,13 @@ export function useRequestScoring(me: { uid: string; name: string } | null, onSa
     try {
       const res = await recordScore({ matchId: target.docId }, resultFromForm(form, target.viewerIsP1));
       const notice = resultNotice(res);
-      if (notice) { setError(notice); onSaved?.(); return; }
+      if (notice) { setError(notice); onSaved?.(notice); return; }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not record your score. Please try again.');
       return;
     }
     close();
-    onSaved?.();
+    onSaved?.(null);
   };
 
   const defaultTitle = (kind: ScoreKind) =>
@@ -82,7 +86,7 @@ export function useRequestScoring(me: { uid: string; name: string } | null, onSa
   const modalProps: ScoreModalProps | null = me && target && form ? {
     matchInfo: {
       title: target.title ?? defaultTitle(target.kind),
-      player1: { uid: me.uid, name: me.name },
+      player1: target.organizer?.player1 ?? { uid: me.uid, name: me.name },
       player2: target.opponent,
     },
     scoreForm: form,
@@ -90,8 +94,11 @@ export function useRequestScoring(me: { uid: string; name: string } | null, onSa
     onClose: close,
     onSubmit: submit,
     error,
-    note: target.edit ? EDIT_NOTE : SUBMIT_NOTE[target.kind],
+    note: target.organizer ? undefined : target.edit ? EDIT_NOTE : SUBMIT_NOTE[target.kind],
+    isCreatorSubmit: !!target.organizer,
+    onReset: target.organizer?.onReset,
     lockedWinnerUid: target.edit?.winnerUid,
+    drawAllowed: target.kind === 'rally',
   } : null;
 
   return { open, close, target, modalProps };

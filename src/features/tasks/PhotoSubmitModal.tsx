@@ -161,7 +161,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void; initialType?: Rep
             <h3 className="text-lg font-bold text-fg">Completed.</h3>
 
             {!user && !subscribed && (
-              <div className="text-left rounded-2xl bg-fg/[0.03] p-4 space-y-3">
+              <div className="text-left rounded-2xl bg-fg/5 p-4 space-y-3">
                 <p className="text-sm font-semibold text-fg">Want to stay in the loop?</p>
                 <p className="text-xs text-fg/70">Leave your email to hear about upcoming events. Totally optional.</p>
                 <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -183,7 +183,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void; initialType?: Rep
         ) : (
           <>
             {error && (
-              <div className="rounded-xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-3">{error}</div>
+              <div className="rounded-2xl bg-red-500/10 border border-red-500/20 text-badge-loss text-sm px-4 py-3">{error}</div>
             )}
 
             <div className="flex flex-wrap gap-2">
@@ -192,7 +192,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void; initialType?: Rep
                   key={o.id}
                   type="button"
                   onClick={() => setType(o.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
+                  className={`px-3 py-1.5 rounded-2xl text-xs font-bold border transition-colors ${
                     type === o.id ? 'bg-clay text-white border-clay' : 'bg-white text-ink border-fg hover:bg-white/90'
                   }`}
                 >
@@ -219,7 +219,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void; initialType?: Rep
                       key={c}
                       type="button"
                       onMouseDown={() => { setCourt(c); setCourtSearch(''); setShowDropdown(false); }}
-                      className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
+                      className="w-full rounded-2xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
                     >
                       {c}
                     </button>
@@ -231,7 +231,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void; initialType?: Rep
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Photos</p>
-                <span className="text-[10px] text-fg/70">Up to {MAX_PHOTOS}</span>
+                <span className="text-xs text-fg/70">Up to {MAX_PHOTOS}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {/* Take Photo — opens the camera directly on mobile. */}
@@ -321,9 +321,9 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void; initialType?: Rep
                 </div>
 
                 {waitTable && (
-                  <div className="rounded-2xl bg-fg/[0.03] p-3 space-y-2">
+                  <div className="rounded-2xl bg-fg/5 p-3 space-y-2">
                     <p className="text-xs font-bold text-fg/70 uppercase tracking-widest">Approximate Wait Time</p>
-                    <p className="text-[11px] text-fg/70">Courts per waiting board: {waitTable.courtsPerBoard}</p>
+                    <p className="text-xs text-fg/70">Courts per waiting board: {waitTable.courtsPerBoard}</p>
                     <div className="space-y-1">
                       {waitTable.bands.map((b) => (
                         <div key={b.range} className="flex items-center justify-between text-xs">

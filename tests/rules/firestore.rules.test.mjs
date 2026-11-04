@@ -128,6 +128,43 @@ describe('providers and preferences: roles are the super admin\'s', () => {
     await assertSucceeds(updateDoc(doc(as(ORGANIZER), 'preferences/p1'), { preferred_zone: 'North York' }));
     await assertFails(updateDoc(doc(as(ORGANIZER), 'preferences/p1'), { preferred_courts: ['Ramsden Park'] }));
   });
+  test('a provider edits their own business name and area, never roles', async () => {
+    await seed('providers/coach1', { uid: 'coach1', name: '', roles: ['coach'], area: '' });
+    await assertSucceeds(updateDoc(doc(as('coach1'), 'providers/coach1'), { name: 'Ace Coaching', area: 'Leslieville' }));
+    await assertFails(updateDoc(doc(as('coach1'), 'providers/coach1'), { roles: ['coach', 'organizer'] }));
+    await assertFails(updateDoc(doc(as('p1'), 'providers/coach1'), { name: 'Hijacked' }));
+  });
+});
+
+describe('services: a provider maintains their own offers', () => {
+  const offer = (extra = {}) => ({
+    category: 'coaching', sub_category: 'private', provider_id: 'coach1', provider_name: 'Ace', area: 'Leslieville',
+    offer: 'Private lesson', brands: '', discount: 0, total_price: 60, discounted_price: 60, points_cost: 0,
+    certified: false, capacity: 1, duration: '1 hr', redeem_booking_id: '', active: true, ...extra,
+  });
+  beforeEach(async () => {
+    await seed('providers/coach1', { roles: ['coach'] });
+    await seed('providers/str1', { roles: ['stringer'] });
+  });
+  test('a coach adds and edits a coaching offer of their own', async () => {
+    await assertSucceeds(setDoc(doc(as('coach1'), 'services/c1'), offer()));
+    await assertSucceeds(updateDoc(doc(as('coach1'), 'services/c1'), { total_price: 70, active: false }));
+  });
+  test('a coach cannot offer stringing, nor a member offer anything', async () => {
+    await assertFails(setDoc(doc(as('coach1'), 'services/c2'), offer({ category: 'stringing', sub_category: 'stringing' })));
+    await assertFails(setDoc(doc(as('p1'), 'services/c3'), offer({ provider_id: 'p1' })));
+  });
+  test('no offer in another provider\'s name, and no edit of theirs', async () => {
+    await assertFails(setDoc(doc(as('str1'), 'services/c4'), offer({ category: 'stringing', provider_id: 'coach1' })));
+    await seed('services/c5', offer());
+    await assertFails(updateDoc(doc(as('str1'), 'services/c5'), { total_price: 1 }));
+    await assertFails(updateDoc(doc(as('coach1'), 'services/c5'), { provider_id: 'str1' }));
+  });
+  test('redeem_booking_id stays the booking callables\'', async () => {
+    await assertFails(setDoc(doc(as('coach1'), 'services/c6'), offer({ redeem_booking_id: 'b1' })));
+    await seed('services/c7', offer());
+    await assertFails(updateDoc(doc(as('coach1'), 'services/c7'), { redeem_booking_id: 'b1' }));
+  });
 });
 
 describe('events: organizers are per event (Racquets-And-Strings ADR-001)', () => {

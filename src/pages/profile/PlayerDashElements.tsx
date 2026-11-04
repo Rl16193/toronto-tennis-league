@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { numCls, tableHeadCls } from '../../components/Input';
 import { Link } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
-import { ArrowDown, ArrowUp, Calendar, ChevronDown, HistoryIcon, Pencil, Sparkles, Trophy, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Calendar, ChevronDown, HistoryIcon, Pencil, Sparkles, Trash2, Trophy, X } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
 import { ContactOpponentButton, contactChannels } from '../../components/ContactOpponentButton';
@@ -15,6 +16,8 @@ import type { useProfileActions } from '../../features/profile/hooks/useProfileA
 import type { UserProfile } from '../../types';
 import { leagueAgeCategory, leagueDivision } from '../../utils/skillLevels';
 import { isGuest } from '../../utils/guest';
+import { WithdrawReasons } from '../../features/events/EventsElements';
+import type { RemovalReason } from '../../features/events/registrations';
 import type {
   BookingAskRow, DashEventRow, HeadToHeadRow, NeedsYouRow, PastMatchRow, TaskGroupRow, ToPlayRow,
   usePlayerDash,
@@ -84,7 +87,7 @@ export const PlayerDashSwitch: React.FC<{
 }> = ({ on, count, onChange, label = 'Player Dash', hint = 'Your season in one place.' }) => (
   // `h-full` so side-by-side switches share a height, and the hint truncates rather than wrapping:
   // a hint that wrapped on one card and not the other made the row change height as you toggled.
-  <div className="h-full rounded-3xl bg-fg/5 px-5 py-3 flex items-center justify-between gap-3">
+  <div className="h-full rounded-2xl bg-fg/5 px-5 py-3 flex items-center justify-between gap-3">
     <div className="min-w-0">
       <p className="text-xs font-bold uppercase tracking-widest text-fg/70 flex items-center gap-2">
         {label}
@@ -150,7 +153,7 @@ const Chevron: React.FC<{ open: boolean; label: string; onClick: () => void }> =
     onClick={onClick}
     aria-expanded={open}
     aria-label={label}
-    className={`shrink-0 p-1 -mr-1 rounded-lg text-fg/70 hover:text-fg transition-colors ${focusRing}`}
+    className={`shrink-0 p-1 -mr-1 rounded-2xl text-fg/70 hover:text-fg transition-colors ${focusRing}`}
   >
     <ChevronDown className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
   </button>
@@ -294,7 +297,7 @@ const BookingCancel: React.FC<{ data: PlayerDashData; r: BookingAskRow }> = ({ d
 
 const ScoreButton: React.FC<{ onClick: () => void; icon?: boolean; className?: string }> = ({ onClick, icon, className = ROW_BTN_W }) => (
   <Button variant="clay" size="sm" className={`shrink-0 ${focusRing} ${className}`} onClick={onClick}>
-    {icon && <RacquetIcon className="w-4 h-4 mr-1.5" />}Score
+    {icon && <RacquetIcon className="w-4 h-4" />}Score
   </Button>
 );
 
@@ -333,7 +336,7 @@ const Scoreboard: React.FC<{ data: PlayerDashData }> = ({ data }) => {
   const value = 'text-3xl font-black leading-none tracking-tight';
   const label = 'mt-1.5 text-xs font-bold uppercase tracking-widest text-fg/70';
   return (
-    <section className="flex items-stretch rounded-3xl bg-tennis-deep px-7 py-6">
+    <section className="flex items-stretch rounded-2xl bg-tennis-deep px-7 py-6">
       <div className="flex min-w-0 flex-1 flex-col justify-center">
         <p className="text-xs font-black uppercase tracking-widest text-clay">Player Dash</p>
         <p className="mt-1.5 truncate text-3xl font-black leading-none tracking-tight text-fg">{data.identity?.name}</p>
@@ -373,7 +376,7 @@ const Scoreboard: React.FC<{ data: PlayerDashData }> = ({ data }) => {
 
 // ── Needs you ─────────────────────────────────────────────────────────────────
 const NeedsYouList: React.FC<{ data: PlayerDashData }> = ({ data }) => (
-  <section className="rounded-3xl bg-fg/5 pt-4 pb-1">
+  <section className="rounded-2xl bg-fg/5 pt-4 pb-1">
     <div className="flex items-center gap-2 px-4 pb-2.5">
       <Kicker accent>Needs you</Kicker>
       {data.needsYouCount > 0 && <CountBadge n={data.needsYouCount} />}
@@ -431,7 +434,7 @@ const NeedsYouList: React.FC<{ data: PlayerDashData }> = ({ data }) => (
 );
 
 const NeedsYouCards: React.FC<{ data: PlayerDashData }> = ({ data }) => (
-  <section className="rounded-3xl bg-fg/5 p-[18px]">
+  <section className="rounded-2xl bg-fg/5 p-[18px]">
     <div className="mb-3.5 flex items-center gap-2">
       <Kicker accent>Needs you</Kicker>
       {data.needsYouCount > 0 && <CountBadge n={data.needsYouCount} />}
@@ -500,7 +503,7 @@ const nothingToPlay = (
 const ToPlayList: React.FC<{ data: PlayerDashData }> = ({ data }) => {
   const [open, setOpen] = useState<string | null>(null);
   return (
-    <section className="rounded-3xl bg-fg/5 pt-4 pb-1">
+    <section className="rounded-2xl bg-fg/5 pt-4 pb-1">
       <div className="flex items-center gap-2 px-4 pb-2.5">
         <Kicker>Matches to play</Kicker>
         {data.toPlay.length > 0 && <CountBadge n={data.toPlay.length} strong={false} />}
@@ -547,7 +550,7 @@ const ToPlayList: React.FC<{ data: PlayerDashData }> = ({ data }) => {
 const ToPlayCards: React.FC<{ data: PlayerDashData }> = ({ data }) => {
   const [open, setOpen] = useState<string | null>(null);
   return (
-    <section className="rounded-3xl bg-fg/5 p-[18px]">
+    <section className="rounded-2xl bg-fg/5 p-[18px]">
       <div className="mb-3.5 flex items-center gap-2">
         <Kicker>Matches to play</Kicker>
         {data.toPlay.length > 0 && <CountBadge n={data.toPlay.length} strong={false} />}
@@ -587,8 +590,8 @@ const ToPlayCards: React.FC<{ data: PlayerDashData }> = ({ data }) => {
 const Tile: React.FC<{ label: string; to?: string; children: React.ReactNode }> = ({ label, to, children }) => {
   const body = (
     <>
-      <span className="flex h-7 items-center justify-center gap-1 text-lg font-black text-fg">{children}</span>
-      <span className="mt-0.5 block text-xs font-bold uppercase tracking-wider text-fg/70">{label}</span>
+      <span className={`flex h-7 items-center justify-center gap-1 text-lg ${numCls}`}>{children}</span>
+      <span className={`mt-0.5 block ${tableHeadCls}`}>{label}</span>
     </>
   );
   return to ? (
@@ -601,7 +604,7 @@ const Tile: React.FC<{ label: string; to?: string; children: React.ReactNode }> 
 const SeasonCard: React.FC<{ data: PlayerDashData }> = ({ data }) => {
   const s = data.season;
   return (
-    <section className="rounded-3xl bg-fg/5 p-5">
+    <section className="rounded-2xl bg-fg/5 p-5">
       <div className="mb-3"><Kicker>Season</Kicker></div>
       <div className="grid grid-cols-3 gap-2 text-center">
         <Tile label="Streak">{s.streak ?? '—'}</Tile>
@@ -623,7 +626,7 @@ const SeasonCard: React.FC<{ data: PlayerDashData }> = ({ data }) => {
         <div className="mt-3 divide-y divide-fg/10">
           {data.recent.map((m) => (
             <div key={m.id} className="flex items-center gap-3 px-3.5 py-2.5">
-              <span className={`w-5 shrink-0 text-xs font-black ${m.won ? 'text-badge-win' : 'text-badge-loss'}`}>{m.won ? 'W' : 'L'}</span>
+              <span className={`w-5 shrink-0 text-xs font-black ${m.drawn ? 'text-fg' : m.won ? 'text-badge-win' : 'text-badge-loss'}`}>{m.drawn ? 'D' : m.won ? 'W' : 'L'}</span>
               <p className="min-w-0 flex-1 truncate text-sm font-semibold text-fg"><PlayerLink uid={m.match.opponentId} name={m.match.opponentName} /></p>
               <span className="shrink-0 text-xs font-bold text-fg tabular-nums">{m.scoreLine}</span>
             </div>
@@ -638,13 +641,13 @@ const FormCard: React.FC<{ data: PlayerDashData }> = ({ data }) => {
   if (data.form.length === 0) return null;
   const s = data.season;
   return (
-    <section className="rounded-3xl bg-fg/5 p-[18px]">
+    <section className="rounded-2xl bg-fg/5 p-[18px]">
       <div className="mb-3.5"><Kicker>Form</Kicker></div>
       <div className="flex gap-1.5">
         {data.form.map((won, i) => (
           <span
             key={i}
-            className={`flex h-9 flex-1 items-center justify-center rounded-lg text-sm font-black ${won ? 'bg-badge-win/20 text-badge-win' : 'bg-badge-loss/20 text-badge-loss'}`}
+            className={`flex h-9 flex-1 items-center justify-center rounded-2xl text-sm font-black ${won ? 'bg-badge-win/20 text-badge-win' : 'bg-badge-loss/20 text-badge-loss'}`}
           >
             {won ? 'W' : 'L'}
           </span>
@@ -661,7 +664,7 @@ const FormCard: React.FC<{ data: PlayerDashData }> = ({ data }) => {
 const noTasks = <Empty>Nothing in progress. See what earns points on <InlineLink to="/tasks">Tasks</InlineLink>.</Empty>;
 
 const TaskTiles: React.FC<{ groups: TaskGroupRow[] }> = ({ groups }) => (
-  <section className="rounded-3xl bg-fg/5 p-5">
+  <section className="rounded-2xl bg-fg/5 p-5">
     <div className="mb-3.5 flex items-center justify-between gap-2">
       <Kicker>Task groups in progress</Kicker>
       {groups.length > 0 && (
@@ -692,7 +695,7 @@ const TaskTiles: React.FC<{ groups: TaskGroupRow[] }> = ({ groups }) => (
 );
 
 const TaskRows: React.FC<{ groups: TaskGroupRow[] }> = ({ groups }) => (
-  <section className="rounded-3xl bg-fg/5 p-[18px]">
+  <section className="rounded-2xl bg-fg/5 p-[18px]">
     <div className="mb-3.5 flex items-center justify-between gap-2">
       <Kicker>Task groups</Kicker>
       {groups.length > 0 && (
@@ -731,7 +734,7 @@ const MatchList: React.FC<{ matches: PastMatchRow[]; opponent: string; onEdit: (
           {m.when && <p className="text-xs text-fg/70">{m.when}</p>}
         </div>
         <span className="flex shrink-0 items-center gap-1.5">
-          <span className={`text-xs font-bold tabular-nums ${m.won ? 'text-badge-win' : 'text-badge-loss'}`}>{m.scoreLine}</span>
+          <span className={`text-xs font-bold tabular-nums ${m.drawn ? 'text-fg' : m.won ? 'text-badge-win' : 'text-badge-loss'}`}>{m.scoreLine}</span>
           {m.editable && (
             <button
               type="button"
@@ -766,7 +769,7 @@ const wlTone = (h: HeadToHeadRow) => (h.wins >= h.losses ? 'text-badge-win' : 't
 const HeadToHeadList: React.FC<{ rows: HeadToHeadRow[]; onEdit: (m: PastMatchRow) => void }> = ({ rows, onEdit }) => {
   const st = useHeadToHeadState(4, rows.length);
   return (
-    <section className="rounded-3xl bg-fg/5 pt-4 pb-1">
+    <section className="rounded-2xl bg-fg/5 pt-4 pb-1">
       <div className="flex items-center justify-between gap-2 px-4 pb-2.5">
         <Kicker>Head to head</Kicker>
         {rows.length > 0 && <span className="text-xs font-semibold text-fg/70">{rows.length} opponent{rows.length === 1 ? '' : 's'}</span>}
@@ -798,7 +801,7 @@ const HeadToHeadList: React.FC<{ rows: HeadToHeadRow[]; onEdit: (m: PastMatchRow
 const HeadToHeadTable: React.FC<{ rows: HeadToHeadRow[]; onEdit: (m: PastMatchRow) => void }> = ({ rows, onEdit }) => {
   const st = useHeadToHeadState(8, rows.length);
   return (
-    <section className="rounded-3xl bg-fg/5 p-[18px]">
+    <section className="rounded-2xl bg-fg/5 p-[18px]">
       <div className="mb-3.5"><Kicker>Head to head</Kicker></div>
       {rows.length === 0 ? <Empty>No matches played yet.</Empty> : (
         <>
@@ -843,12 +846,51 @@ const LivePill: React.FC<{ solid?: boolean }> = ({ solid }) => (
   <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-black uppercase tracking-wide ${solid ? 'bg-clay text-white' : 'bg-clay/15 text-clay'}`}>Live</span>
 );
 
-const EventsList: React.FC<{ events: DashEventRow[] }> = ({ events }) => (
-  <section className="rounded-3xl bg-fg/5 pt-4 pb-1">
+type OnWithdraw = (eventId: string, reason: RemovalReason) => Promise<number>;
+
+// The event row with a trash beside it while the member can still withdraw (a live tournament).
+const EventWithdraw: React.FC<{ e: DashEventRow; onWithdraw: OnWithdraw; className?: string; panelClass?: string; children: React.ReactNode }> = ({ e, onWithdraw, className = '', panelClass = '', children }) => {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(false);
+  const pick = async (reason: RemovalReason) => {
+    setBusy(true); setError(false);
+    try { await onWithdraw(e.id, reason); } catch { setError(true); setBusy(false); }
+  };
+  return (
+    <div className={className}>
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">{children}</div>
+        {e.withdrawable && !asking && (
+          <Button variant="ghost" size="sm" className={squareBtn} onClick={() => setAsking(true)}
+            title="Withdraw from the event" aria-label={`Withdraw from ${e.title}`}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+      <div className={asking || error ? panelClass : ''}>
+      {asking && (
+        <WithdrawReasons
+          prompt={<>Withdraw from <span className="font-bold">{e.title}</span>? Why?</>}
+          note="Your opponents get a walkover in matches still to play. You can join again from Events."
+          busy={busy}
+          onPick={pick}
+          onCancel={() => setAsking(false)}
+        />
+      )}
+      <RowError show={error} text="Could not withdraw you. Try again." />
+      </div>
+    </div>
+  );
+};
+
+const EventsList: React.FC<{ events: DashEventRow[]; onWithdraw: OnWithdraw }> = ({ events, onWithdraw }) => (
+  <section className="rounded-2xl bg-fg/5 pt-4 pb-1">
     <div className="px-4 pb-2.5"><Kicker>Your events</Kicker></div>
     {events.length === 0 && <div className="border-t border-fg/10 px-4 py-3">{noEvents}</div>}
     {events.map((e) => (
-      <Link key={e.id} to={e.href} className={`flex items-center gap-3 border-t border-fg/10 px-4 py-3 transition-colors hover:bg-fg/5 ${focusRing}`}>
+      <EventWithdraw key={e.id} e={e} onWithdraw={onWithdraw} className="border-t border-fg/10 pr-4" panelClass="px-4 pb-3">
+      <Link to={e.href} className={`flex items-center gap-3 px-4 py-3 transition-colors hover:bg-fg/5 ${focusRing}`}>
         {e.champion
           ? <Trophy className="h-[18px] w-[18px] shrink-0 text-badge" />
           : <Calendar className={`h-[18px] w-[18px] shrink-0 ${e.live ? 'text-clay' : 'text-fg/70'}`} />}
@@ -860,6 +902,7 @@ const EventsList: React.FC<{ events: DashEventRow[] }> = ({ events }) => (
         </span>
         {e.live && <LivePill />}
       </Link>
+      </EventWithdraw>
     ))}
   </section>
 );
@@ -883,14 +926,14 @@ const PlayedBar: React.FC<{ done: number; total: number }> = ({ done, total }) =
   </>
 );
 
-const EventCards: React.FC<{ events: DashEventRow[] }> = ({ events }) => (
-  <section className="rounded-3xl bg-fg/5 p-[18px]">
+const EventCards: React.FC<{ events: DashEventRow[]; onWithdraw: OnWithdraw }> = ({ events, onWithdraw }) => (
+  <section className="rounded-2xl bg-fg/5 p-[18px]">
     <div className="mb-3.5"><Kicker>Events</Kicker></div>
     {events.length === 0 ? noEvents : (
       <div className="flex flex-col gap-2.5">
         {events.map((e) => (
+          <EventWithdraw key={e.id} e={e} onWithdraw={onWithdraw}>
           <Link
-            key={e.id}
             to={e.href}
             className={`block rounded-2xl p-3 transition-colors ${focusRing} ${e.live ? 'bg-clay/10 hover:bg-clay/15' : e.champion ? 'bg-badge/10 hover:bg-badge/15' : 'bg-fg/5 hover:bg-fg/10'}`}
           >
@@ -902,6 +945,7 @@ const EventCards: React.FC<{ events: DashEventRow[] }> = ({ events }) => (
             {e.detail && <span className={`mt-1 block truncate text-xs ${e.champion ? 'font-bold text-badge' : 'text-fg/70'}`}>{e.detail}</span>}
             {e.played && <PlayedBar done={e.played.done} total={e.played.total} />}
           </Link>
+          </EventWithdraw>
         ))}
       </div>
     )}
@@ -946,7 +990,7 @@ const PreferencesCard: React.FC<{ profile: UserProfile; actions: ProfileActions;
   ].filter(Boolean);
 
   return (
-    <section className="rounded-3xl bg-fg/5 p-[18px]">
+    <section className="rounded-2xl bg-fg/5 p-[18px]">
       <div className="flex items-center justify-between gap-2">
         <Kicker>Playing preferences</Kicker>
         <button
@@ -1045,7 +1089,7 @@ export const PlayerDash: React.FC<{
           </div>
           <div className="flex flex-col gap-4">
             <TaskRows groups={data.taskGroups} />
-            <EventCards events={data.events} />
+            <EventCards events={data.events} onWithdraw={data.withdraw} />
             {prefs}
           </div>
         </div>
@@ -1062,7 +1106,7 @@ export const PlayerDash: React.FC<{
       <FormCard data={data} />
       <TaskTiles groups={data.taskGroups} />
       <HeadToHeadList rows={data.headToHead} onEdit={data.edit} />
-      <EventsList events={data.events} />
+      <EventsList events={data.events} onWithdraw={data.withdraw} />
       {prefs}
     </div>
   );

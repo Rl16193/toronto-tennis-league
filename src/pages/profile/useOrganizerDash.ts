@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Timestamp, collection, doc, documentId, getDoc, getDocs, limit, onSnapshot, orderBy, query, startAfter, where, writeBatch, type QueryDocumentSnapshot,
 } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { chunk, db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { SUPER_ADMIN_UID, isCancelledEvent, isOrganizerProfile, isTournamentEvent } from '../../utils/eventTypes';
 import { isGuest } from '../../utils/guest';
@@ -10,10 +10,13 @@ import { type DisputeRow, disputeRow, resetScore, settleDispute } from '../../fe
 import { type Submission, fetchResultsFor, isResultEntry, isWalkover, scoreLine } from '../../features/matches/results';
 import type { TaskClaim } from '../../features/tasks/claimService';
 import { taskState, tasksCompletedCount } from '../../features/tasks/useTasks';
-import { usePendingRefunds } from '../../features/services/useServices';
+import { type Reward, usePendingRefunds } from '../../features/services/useServices';
+import { recordBooking as recordBookingCall, serviceErrorMessage } from '../../features/services/servicesApi';
+import { loadRoster } from '../../features/members/MemberSearchInput';
 import { useUnplacedParticipants } from '../tournament/useUnplacedParticipants';
+import { type RemovalReason, withdrawal } from '../../features/events/registrations';
 import type { TournamentMatch, UnplacedEntry } from '../tournament/types';
-import { PLAYER_LOADING, formatPlayerName } from '../tournament/utils';
+import { formatPlayerName } from '../tournament/utils';
 import { timeAgo } from '../../features/notifications/useNotifications';
 import { type FirestoreDateLike, toMillis } from '../../utils/eventDates';
 import type { EventParticipant, TennisEvent, UserStats } from '../../types';
@@ -33,13 +36,6 @@ const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 /** The newest played results listed, of any age; read in pages because most entries are filtered out. */
 const RECENT_LIMIT = 50;
 const RECENT_PAGE = 100;
-
-/** The pills, and the withdrawn_reason each one stores. */
-export const REMOVAL_REASONS = ['Wrong zone', 'Unavailable', 'Other'] as const;
-export type RemovalReason = typeof REMOVAL_REASONS[number];
-const REASON_CODE: Record<RemovalReason, 'wrong_zone' | 'unavailable' | 'other'> = {
-  'Wrong zone': 'wrong_zone', Unavailable: 'unavailable', Other: 'other',
-};
 
 export type RecordedRow = {
   id: string;
@@ -87,9 +83,6 @@ const agoText = (at?: FirestoreDateLike) => {
   const age = timeAgo(at);
   return age === 'now' ? 'just now' : age ? `${age} ago` : '';
 };
-
-const chunk = <T,>(xs: T[], n: number) =>
-  Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
 
 /** Match docs by id, 30 per `in` query (a missing one is simply absent). */
 const fetchMatches = async (ids: string[]): Promise<Map<string, MatchDoc>> => {
@@ -204,7 +197,7 @@ export function useOrganizerDash() {
             id: m.id,
             kind,
             players: `${formatPlayerName(m.player_1_name)} vs ${formatPlayerName(m.player_2_name)}`,
-            result: [`${formatPlayerName(e.winner_name || '')} won`, scoreLine(e)].filter(Boolean).join(' · '),
+            result: [e.winner_uid ? `${formatPlayerName(e.winner_name || '')} won` : 'Draw', scoreLine(e)].filter(Boolean).join(' · '),
             when: agoText(e.completed_at),
             context: kind === 'rally' ? 'Rally'
               : kind === 'challenge' ? 'Ladder challenge'
@@ -320,7 +313,7 @@ export function useOrganizerDash() {
       registered: participants.filter((p) => p.event_id === e.id && p.status === 'active' && !isGuest(p.uid)).length,
       played,
       outstanding: real.length - played,
-      finished: mine.some((m) => m.round === 'F' && m.status === 'complete'),
+      finished: !!e.completed_at,
       href: `/tournament?event=${e.id}`,
     };
   }), [events, eventMatches, participants]);
@@ -331,30 +324,30 @@ export function useOrganizerDash() {
     try { await fn(); } catch { setRowError({ id, text: failText }); } finally { setBusyId(null); }
   };
 
-  /**
-   * Withdraws an unplaced registrant from that event, with the organizer's reason — the same
-   * status the Tournament page writes, so the row survives and they can be added back. Their name
-   * also comes out of any unplayed match in that event, in the same batch. Played matches keep
-   * their record.
-   */
+  // Record a booking: members and active services, read once and only when the form opens.
+  const [bookingOptions, setBookingOptions] = useState<{ members: { uid: string; name: string }[]; services: Reward[] } | null>(null);
+  const loadBookingOptions = useCallback(async () => {
+    if (!isOrganizer || bookingOptions) return;
+    const [roster, services] = await Promise.all([loadRoster(), getDocs(collection(db, 'services'))]);
+    setBookingOptions({
+      members: roster.map((m) => ({ uid: m.id, name: m.name })),
+      services: services.docs
+        .map((d) => ({ id: d.id, ...d.data() } as Reward))
+        .filter((r) => r.active !== false),
+    });
+  }, [isOrganizer, bookingOptions]);
+  /** Resolves to an error to show, or null when it was recorded. */
+  const recordBooking = async (input: Parameters<typeof recordBookingCall>[0]): Promise<string | null> => {
+    try { await recordBookingCall(input); return null; } catch (err) { return serviceErrorMessage(err); }
+  };
+
+  // Withdraws an unplaced registrant, with the organizer's reason. They hold no seat, so the draw is untouched.
   const removeUnplaced = (row: UnplacedEntry, reason: RemovalReason) =>
     run(row.participantId, async () => {
       const batch = writeBatch(db);
-      const now = Timestamp.now();
       participants
         .filter((p) => p.uid === row.uid && p.event_id === row.eventId && p.status === 'active')
-        .forEach((p) => batch.update(doc(db, 'event_participants', p.id), {
-          status: 'withdrawn',
-          withdrawn_reason: REASON_CODE[reason],
-          withdrawn_at: now,
-          withdrawn_by: uid ?? '',
-        }));
-      eventMatches
-        .filter((m) => m.event_id === row.eventId && m.status !== 'complete')
-        .forEach((m) => {
-          if (m.player_1_uid === row.uid) batch.update(doc(db, 'matches', m.id), { player_1_uid: '', player_1_name: PLAYER_LOADING, updated_at: now });
-          if (m.player_2_uid === row.uid) batch.update(doc(db, 'matches', m.id), { player_2_uid: '', player_2_name: PLAYER_LOADING, updated_at: now });
-        });
+        .forEach((p) => batch.update(doc(db, 'event_participants', p.id), withdrawal(uid ?? '', reason)));
       await batch.commit();
       reload();
     }, 'Could not remove that player. Try again.');
@@ -390,5 +383,8 @@ export function useOrganizerDash() {
       reload();
     }, 'Could not undo that score. It may already have been undone.'),
     removeUnplaced,
+    bookingOptions,
+    loadBookingOptions,
+    recordBooking,
   };
 }

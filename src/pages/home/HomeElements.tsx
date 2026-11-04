@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { Calendar, Camera, Heart, HeartHandshake, Mail, MapPin } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Calendar, Camera, ChevronDown, Heart, HeartHandshake, Mail, MapPin } from 'lucide-react';
 
-import { Button } from '../../components/Button';
+import { Button, buttonCls } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
-import { Input, field, fieldLabelCls } from '../../components/Input';
+import { Input, fieldLabelCls } from '../../components/Input';
 import { SelectField } from '../../components/SelectField';
 import { DONATE_URL } from '../../components/FooterElements';
 import { VOLUNTEER_ACTIVITIES, VolunteerSignup } from '../../lib/volunteer';
@@ -133,23 +133,6 @@ const HeroBackdrop: React.FC = () => {
   );
 };
 
-/**
- * Control geometry, shared by every CTA on this page.
- *
- * The fill strings mirror Button's `lime` and `clay` variants on purpose: Donate and Volunteer are
- * links, and an <a> cannot be a <button> without nesting two interactive elements. Keep them in
- * step with src/components/Button.tsx.
- */
-const CTA_BASE =
-  'inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-6 text-base font-semibold ' +
-  'transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 ' +
-  'focus-visible:outline-clay';
-const CTA_LIME = 'bg-lime hover:bg-lime-press text-ink shadow-lg shadow-lime/20';
-const CTA_CLAY = 'bg-clay hover:bg-clay-dark text-white shadow-lg shadow-clay/20';
-/** For <Button>, which already brings its own fill — this adds only the geometry and focus ring. */
-export const ctlCls =
-  'h-11 rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay';
-
 const sectionHeadingCls = 'text-2xl font-black text-fg tracking-tight';
 
 // ── Hero ─────────────────────────────────────────────────────────────────────
@@ -174,15 +157,15 @@ export const HomeHero: React.FC<{
       <div className="mt-5 max-w-md mx-auto">
         {signedIn ? (
           <div className="grid grid-cols-2 gap-2.5">
-            <Button variant="white" className={`${ctlCls} w-full`} onClick={onCheckIn}>
-              <MapPin className="w-4 h-4 mr-2 shrink-0" />Record Activity
+            <Button variant="white" className="w-full" onClick={onCheckIn}>
+              <MapPin className="w-4 h-4 shrink-0" />Record Activity
             </Button>
-            <Button variant="clay" className={`${ctlCls} w-full`} onClick={onReport}>
-              <Camera className="w-4 h-4 mr-2 shrink-0" />Submit a Report
+            <Button variant="clay" className="w-full" onClick={onReport}>
+              <Camera className="w-4 h-4 shrink-0" />Submit a Report
             </Button>
           </div>
         ) : (
-          <Link to="/login" className={`${CTA_BASE} ${CTA_CLAY} w-full`}>
+          <Link to="/login" className={`${buttonCls('clay')} w-full`}>
             Join or Log In
           </Link>
         )}
@@ -237,7 +220,7 @@ const eventDateChip = (event: TennisEvent) => {
   return date.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
 };
 
-const typeChipCls = 'px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-widest';
+const typeChipCls = 'px-2 py-0.5 rounded-2xl text-xs font-bold uppercase tracking-widest';
 
 /**
  * The same card as the Events page, minus the two things a 240px column in a sideways scroll has
@@ -249,7 +232,7 @@ const UpcomingEventCard: React.FC<{ event: TennisEvent }> = ({ event }) => {
   return (
     <Link
       to="/events"
-      className="shrink-0 w-60 rounded-3xl bg-fg/5 overflow-hidden flex flex-col transition-colors
+      className="shrink-0 w-60 rounded-2xl bg-fg/5 overflow-hidden flex flex-col transition-colors
                  hover:bg-fg/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
     >
       {/* The banner runs to the card's top edge with the type chip sitting ON it. Putting the chip
@@ -291,12 +274,12 @@ const UpcomingEventCard: React.FC<{ event: TennisEvent }> = ({ event }) => {
         {/* One row, never wrapping: the location truncates instead, so the date is always beside it. */}
         <div className="mt-auto flex items-center gap-1.5 min-w-0">
           <span className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-full bg-fg/5 text-xs text-fg/70">
-            <Calendar className="w-3 h-3 text-clay shrink-0" />
+            <Calendar className="w-3.5 h-3.5 text-clay shrink-0" />
             {eventDateChip(event)}
           </span>
           {event.location && (
             <span className="min-w-0 flex items-center gap-1 px-2 py-1 rounded-full bg-fg/5 text-xs text-fg/70">
-              <MapPin className="w-3 h-3 text-clay shrink-0" />
+              <MapPin className="w-3.5 h-3.5 text-clay shrink-0" />
               <span className="truncate">{event.location}</span>
             </span>
           )}
@@ -373,7 +356,7 @@ export const SupportBand: React.FC<{ onVolunteer: () => void }> = ({ onVolunteer
   <motion.section
     {...fadeUp}
     transition={{ ...fadeUp.transition, delay: 0.3 }}
-    className="relative mt-8 overflow-hidden rounded-3xl bg-fg/5 p-6 sm:p-8"
+    className="relative mt-8 overflow-hidden rounded-2xl bg-fg/5 p-6 sm:p-8"
     aria-labelledby="support-heading"
   >
     <SupportRings />
@@ -386,9 +369,7 @@ export const SupportBand: React.FC<{ onVolunteer: () => void }> = ({ onVolunteer
         Join our movement to make tennis more accessible.
       </h2>
       <p className="mt-3 text-sm text-fg/70">
-        Donations cover new tennis balls for tournaments, group coaching classes for socials, prizes
-        and more. Volunteering involves organizing matchdays or regular meetups on different courts,
-        distributing tennis balls, marketing, website design, testing, research and more.
+        Contributions cover new tennis balls, prizes for tournaments, group coaching classes for and more. Volunteering involves organizing matchdays or regular meetups on different courts and more.
       </p>
 
       {/* Side by side wherever they fit, stacked and full width on a phone, where two pills need
@@ -401,25 +382,25 @@ export const SupportBand: React.FC<{ onVolunteer: () => void }> = ({ onVolunteer
             href={DONATE_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className={`${CTA_BASE} ${CTA_LIME} w-full sm:w-auto`}
+            className={`${buttonCls('lime')} w-full sm:w-auto`}
           >
-            <Heart className="w-4 h-4 shrink-0" />Donate
+            <Heart className="w-4 h-4 shrink-0" />Contribute
           </a>
         ) : (
           <button
             type="button"
             disabled
             aria-disabled="true"
-            title="Donations open soon"
-            className={`${CTA_BASE} ${CTA_LIME} w-full sm:w-auto opacity-50 cursor-not-allowed pointer-events-none select-none`}
+            title="Contributions open soon"
+            className={`${buttonCls('lime')} w-full sm:w-auto opacity-50 cursor-not-allowed pointer-events-none select-none`}
           >
-            <Heart className="w-4 h-4 shrink-0" />Donate
+            <Heart className="w-4 h-4 shrink-0" />Contribute
           </button>
         )}
         <button
           type="button"
           onClick={onVolunteer}
-          className={`${CTA_BASE} ${CTA_LIME} w-full sm:w-auto`}
+          className={`${buttonCls('lime')} w-full sm:w-auto`}
         >
           <HeartHandshake className="w-4 h-4 shrink-0" />Volunteer with Us
         </button>
@@ -428,9 +409,78 @@ export const SupportBand: React.FC<{ onVolunteer: () => void }> = ({ onVolunteer
   </motion.section>
 );
 
+// ── FAQ ──────────────────────────────────────────────────────────────────────
+// The player-facing rules. This list is their source of truth; the old Google Doc is out of date.
+const FAQ: { q: string; a: string }[] = [
+  { q: "What's the match format?", a: 'Warm up for 5–10 minutes. Players choose between one set, 2 sets plus a 10-point match tiebreak, best of 3 tiebreaks, or a pro set. If court time runs short, play a quick 7-point tiebreak.' },
+  { q: 'Who serves first?', a: 'Toss a coin, or spin a racquet and call the logo. The winner chooses to serve, receive or pick an end.' },
+  { q: 'How is the draw made?', a: "Knockouts: your first-round opponent is chosen by skill level, then zone, then preferred courts. If you've collected enough points to be in the top 8 of an event's entrants, you get a seed. A seed doesn't guarantee an easier opponent. Round robins: players are grouped by skill level, zone and preferred courts." },
+  { q: 'How will I know when my next opponent is ready?', a: "We send you a WhatsApp message (or a text) with your opponent's name and number: straight away if they're decided between 8am and 4pm, otherwise at 8am the next morning. Add your WhatsApp or text number to your profile if you'd like these timely updates." },
+  { q: 'When should I contact my opponent?', a: "Within 48 hours of the draw being published. If they haven't replied in 5 days, tell the organizer." },
+  { q: 'Who brings the balls?', a: 'First round: both players bring a new can. The winner keeps the unopened can for their next match, and the loser keeps the opened one.' },
+  { q: 'What if my opponent is late?', a: "Wait 30 minutes from the agreed time. Tap Check In when you get to the court, which records that you were there. If they still haven't shown, tell the organizer. Cancelling with less than 3 hours' notice counts as a no-show." },
+  { q: "What if we can't play before the deadline?", a: "Ask the organizer for a one-week extension at least 4 days before the deadline. If a match still isn't played, the organizer may schedule it on a weekend matchday. A player who can't make it is replaced by a Lucky Loser." },
+  { q: "What's a Lucky Loser?", a: 'We get no-shows. Play your match before the deadline, even if you lose, and the organizer may bring you back into the draw to fill an empty spot.' },
+  { q: "What's a wildcard?", a: 'A player chosen to fill an empty slot and keep the draw moving. If an opponent is unavailable in a later round (QF, SF), the organizer can bring in a replacement.' },
+  { q: 'How do line calls work?', a: 'You call the lines on your side. Call right away and loudly enough for your opponent to hear. If a ball is too close to call, replay the point if you both agree; otherwise it counts as good and the point goes to the player who hit it.' },
+  { q: 'What if it rains?', a: "Don't play on wet public courts. Rearrange the match before the deadline, or ask the organizer for an extension." },
+  { q: "Someone's waiting for our court.", a: "Public courts rotate every 30 minutes when there's a queue. Ask for 5 more minutes to finish a game, then rejoin the queue. Locations with 4 or more courts make it easier to finish a match." },
+  { q: "What if we run out of time and can't finish?", a: "The score when your time runs out or the court changes over is the result. If it's level (e.g. 3–3) with 5–10 minutes left and people waiting, play a tiebreak to 7. Please try not to spread a match over several days." },
+  { q: 'How do I report a score?', a: 'Either player taps Enter Score, picks the winner and the court, and enters the sets. It counts straight away.' },
+  { q: 'How are points awarded?', a: 'Round robin: 3 for a win, 1 for a loss. Knockout: R32 1, R16 2, QF 3, SF 5, final 10, champion 20. Challenges: +3 / −3. Rallies: +2 / +1. Half your points carry into next season.' },
+];
+
+// One answer open at a time. Not the shared Accordion: it has no focus ring and a bordered card.
+export const FaqSection: React.FC = () => {
+  const [open, setOpen] = useState<number | null>(null);
+  return (
+    <motion.section
+      {...fadeUp}
+      transition={{ ...fadeUp.transition, delay: 0.4 }}
+      className="mt-8"
+      aria-labelledby="faq-heading"
+    >
+      <h2 id="faq-heading" className={`${sectionHeadingCls} text-center mb-3`}>FAQ</h2>
+      <div className="space-y-2">
+        {FAQ.map((item, i) => {
+          const isOpen = open === i;
+          return (
+            <div key={item.q} className="rounded-2xl bg-fg/5">
+              <button
+                type="button"
+                onClick={() => setOpen(isOpen ? null : i)}
+                aria-expanded={isOpen}
+                aria-controls={`faq-${i}`}
+                className="w-full min-h-11 flex items-center justify-between gap-3 px-4 py-3 text-left rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+              >
+                <span className="text-sm font-bold text-fg">{item.q}</span>
+                <ChevronDown className={`w-4 h-4 shrink-0 text-fg/70 transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+              </button>
+              <AnimatePresence initial={false}>
+                {isOpen && (
+                  <motion.div
+                    id={`faq-${i}`}
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    className="overflow-hidden"
+                  >
+                    <p className="px-4 pb-4 text-sm text-fg/70">{item.a}</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+      </div>
+    </motion.section>
+  );
+};
+
 // ── Floating CTAs ────────────────────────────────────────────────────────────
-// Sits ABOVE the bottom tab bar, which shows on the homepage like every other route. `bottom-20`
-// clears the bar's ~63px, and the safe-area inset is added on top so it lifts clear of the home
+// Sits ABOVE the bottom tab bar, which shows on the homepage like every other route below `lg`.
+// `bottom-20` clears the bar's ~63px (`lg:bottom-8` once the bar is gone), and the safe-area inset is added on top so it lifts clear of the home
 // indicator on a notched phone rather than sitting under it. z-40 keeps it under the bar (z-50)
 // and under sheets (z-100).
 //
@@ -448,7 +498,7 @@ export const FloatingCtaStack: React.FC<{
   onCourtNote?: () => void;
 }> = ({ onSubscribe, onCourtNote }) => (
   <div
-    className="fixed right-4 bottom-20 z-40 flex flex-col items-end gap-3"
+    className="fixed right-4 bottom-20 lg:bottom-8 z-40 flex flex-col items-end gap-3"
     style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
   >
     {/* Report a court sits above Subscribe. It needs no account on purpose — a passer-by who
@@ -458,7 +508,7 @@ export const FloatingCtaStack: React.FC<{
       <button
         type="button"
         onClick={onCourtNote}
-        className={`${CTA_BASE} ${CTA_CLAY} ${FLOAT_W} shadow-xl`}
+        className={`${buttonCls('clay')} ${FLOAT_W} shadow-xl`}
       >
         <MapPin className="w-4 h-4 shrink-0" />
         <span>Submit a Report</span>
@@ -468,7 +518,7 @@ export const FloatingCtaStack: React.FC<{
       <button
         type="button"
         onClick={onSubscribe}
-        className={`${CTA_BASE} ${CTA_LIME} ${FLOAT_W} shadow-xl`}
+        className={`${buttonCls('lime')} ${FLOAT_W} shadow-xl`}
       >
         <Mail className="w-4 h-4 shrink-0" />
         <span className="sm:hidden">Subscribe</span>
@@ -511,7 +561,7 @@ export const SubscribeSheet: React.FC<{
         {status === 'done' ? (
           <>
             <AlertMessage tone="success">You&apos;re on the list. See you on court.</AlertMessage>
-            <Button variant="clay" className={`${ctlCls} w-full`} onClick={onClose}>Done</Button>
+            <Button variant="clay" className="w-full" onClick={onClose}>Done</Button>
           </>
         ) : (
           <form onSubmit={submit} className="space-y-4">
@@ -531,7 +581,7 @@ export const SubscribeSheet: React.FC<{
             <Button
               type="submit"
               variant="lime"
-              className={`${ctlCls} w-full`}
+              className="w-full"
               isLoading={status === 'saving'}
             >
               Subscribe
@@ -580,7 +630,7 @@ export const VolunteerSheet: React.FC<{
         {status === 'done' ? (
           <>
             <AlertMessage tone="success">Thank you. We&apos;ll be in touch about helping out.</AlertMessage>
-            <Button variant="clay" className={`${ctlCls} w-full`} onClick={onClose}>Done</Button>
+            <Button variant="clay" className="w-full" onClick={onClose}>Done</Button>
           </>
         ) : (
           <form onSubmit={submit} className="space-y-4">
@@ -623,7 +673,7 @@ export const VolunteerSheet: React.FC<{
             <Button
               type="submit"
               variant="lime"
-              className={`${ctlCls} w-full`}
+              className="w-full"
               isLoading={status === 'saving'}
             >
               Sign me up

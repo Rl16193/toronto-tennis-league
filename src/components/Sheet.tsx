@@ -103,7 +103,7 @@ export const Sheet: React.FC<Props> = ({ onClose, title, ariaLabel, maxWidthClas
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute top-3.5 right-4 sm:top-5 sm:right-5 z-30 w-9 h-9 bg-tennis-dark/50 hover:bg-tennis-dark rounded-full flex items-center justify-center text-fg transition-colors"
+          className="absolute top-3.5 right-4 sm:top-5 sm:right-5 z-30 w-9 h-9 bg-tennis-dark/50 hover:bg-tennis-dark rounded-full flex items-center justify-center text-fg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
         >
           <X className="w-5 h-5" />
         </button>

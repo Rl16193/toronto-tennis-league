@@ -11,14 +11,20 @@
  */
 const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
+const { onTaskDispatched } = require('firebase-functions/v2/tasks');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 const { notify, organizerUids, sendEmailOnce, resendApiKey } = require('./lib/notify');
-const { eventOrganizerUids } = require('./lib/roles');
+const { eventOrganizerUids, isOrganizer } = require('./lib/roles');
+const { requireAuth, requireDocId } = require('./lib/callable');
+const {
+  twilioSecrets, authToken, sendMatchMessage, queueMatchMessage, smsFallback, signedByTwilio, memberByNumber, stageOf,
+} = require('./lib/twilio');
 const { initiationDone } = require('./lib/points');
 const { RESULT_KINDS, closeStaleRequests } = require('./lib/scoring');
 const {
-  buildRallyEmail, buildRallyAcceptedEmail, buildChallengeEmail, buildChallengeAcceptedEmail, buildIncompleteMatchesEmail,
+  buildRallyEmail, buildRallyAcceptedEmail, buildChallengeEmail, buildChallengeAcceptedEmail,
 } = require('./lib/emailTemplates');
 
 const { TZ, REGION, SITE, isGuest } = require('./lib/constants');
@@ -72,7 +78,7 @@ exports.onMatchCreated = onDocumentCreated(
   },
 );
 
-// Advancement into an empty slot: the next-round pairing is known.
+// Advancement into an empty slot: the next-round pairing is known. In-app now; WhatsApp/SMS at 8:00am.
 exports.onMatchUpdated = onDocumentUpdated(
   { document: 'matches/{matchId}', region: REGION },
   async (event) => {
@@ -87,9 +93,99 @@ exports.onMatchUpdated = onDocumentUpdated(
         body: opponentName(after, uid) ? `You play ${opponentName(after, uid)}` : '',
         link: matchLink(after),
       })));
+      await Promise.all(matchPlayers(after).map((uid) =>
+        queueMatchMessage('nextOpponent', uid, event.params.matchId, after).catch((e) => logger.error('queue failed', e))));
     }
   },
 );
+
+// Organizer's paper plane on an unplayed match: the WhatsApp/SMS reminder to both players, at 8:00am.
+exports.remindMatch = onCall({ region: REGION }, async (request) => {
+  const uid = requireAuth(request);
+  const matchId = requireDocId(request.data && request.data.matchId, 'Missing match.');
+  const mSnap = await db().doc(`matches/${matchId}`).get();
+  if (!mSnap.exists) throw new HttpsError('not-found', 'Match not found.');
+  const m = mSnap.data();
+  const eSnap = await db().doc(`events/${m.event_id}`).get();
+  const ev = eSnap.exists ? eSnap.data() : null;
+  if (!ev || !(await isOrganizer(uid, ev))) throw new HttpsError('permission-denied', 'Only this event’s organizers can send reminders.');
+  if (m.category !== 'tournament' || m.status !== 'accepted' || !m.player_1_uid || !m.player_2_uid) {
+    throw new HttpsError('failed-precondition', 'Only an unplayed match with two players can be reminded.');
+  }
+  const queued = await Promise.all(matchPlayers(m).map((p) => queueMatchMessage('reminder', p, matchId, m)));
+  return { sent: queued.filter(Boolean).length };
+});
+
+// 8:00am: sends one queued message, unless the match has been played or the pairing changed since.
+exports.sendQueuedMessage = onTaskDispatched(
+  { region: REGION, secrets: twilioSecrets, retryConfig: { maxAttempts: 3, minBackoffSeconds: 60 }, rateLimits: { maxConcurrentDispatches: 5 } },
+  async (req) => {
+    const { kind, uid, matchId, opponent } = req.data || {};
+    const mSnap = await db().doc(`matches/${matchId}`).get();
+    if (!mSnap.exists) return;
+    const m = mSnap.data();
+    const pair = [m.player_1_uid, m.player_2_uid];
+    if (m.category !== 'tournament' || m.status !== 'accepted' || !pair.includes(uid) || !pair.includes(opponent)) return;
+    const eSnap = await db().doc(`events/${m.event_id}`).get();
+    if (!eSnap.exists || eSnap.data().status === 'cancelled') return;
+    await sendMatchMessage(kind, uid, matchId, m, eSnap.data());
+  },
+);
+
+const REPLIES = { U: 'is unavailable to play', H: 'is having difficulty fixing a time and court' };
+
+// Twilio webhook (number + WhatsApp sender): delivery status callbacks and member replies.
+// Replies go to the organizers of the member's unplayed tournament matches; nothing is sent back.
+exports.twilioWebhook = onRequest({ region: REGION, secrets: [...twilioSecrets, authToken] }, async (req, res) => {
+  if (req.method !== 'POST' || !signedByTwilio(req)) { res.status(403).send('Forbidden'); return; }
+  const b = req.body || {};
+  try {
+    if (req.query.fallback) {
+      if (req.query.fallback === 'sms' && ['failed', 'undelivered'].includes(b.MessageStatus)) {
+        logger.warn('whatsapp alert failed, sending sms', { errorCode: b.ErrorCode, kind: req.query.kind });
+        await smsFallback(req.query);
+      }
+    } else if (b.From && (!b.MessageStatus || b.MessageStatus === 'received')) {
+      // Inbound only: a status callback without our ?fallback (e.g. a sender-level URL) is ignored.
+      const text = String(b.Body || '').trim() || (Number(b.NumMedia) > 0 ? '(sent an attachment)' : '(empty message)');
+      const what = REPLIES[text.toUpperCase()] || `replied: "${text.slice(0, 300)}"`;
+      const from = String(b.From).replace(/^whatsapp:/, '');
+      const uid = await memberByNumber(from);
+      const name = uid ? ((await db().doc(`users/${uid}`).get()).data()?.name || 'A member') : '';
+      const matches = uid
+        ? (await db().collection('matches').where('participant_uids', 'array-contains', uid).get()).docs.map((d) => d.data())
+          .filter((m) => m.category === 'tournament' && m.status === 'accepted' && m.player_1_uid && m.player_2_uid)
+        : [];
+      if (!matches.length) {
+        await notify(await organizerUids(), {
+          type: 'organizer_player_reply',
+          title: uid ? `${name} replied to a match message` : 'Reply from an unknown number',
+          body: `${uid ? name : from} ${what}`,
+          link: uid ? `/players/${uid}` : '/profile?dash=organizer',
+          counterpart_uid: uid || '', counterpart_name: name,
+        });
+      } else {
+        const byEvent = new Map();
+        matches.forEach((m) => byEvent.set(m.event_id, [...(byEvent.get(m.event_id) || []), m]));
+        await Promise.all([...byEvent].map(async ([eventId, ms]) => {
+          const eSnap = await db().doc(`events/${eventId}`).get();
+          const managers = eSnap.exists ? eventOrganizerUids(eSnap.data()) : [];
+          const list = ms.map((m) => `${stageOf(m)}: ${m.player_1_name} vs ${m.player_2_name}`).join('; ');
+          await notify(managers.length ? managers : await organizerUids(), {
+            type: 'organizer_player_reply',
+            title: `${name} ${what}`.slice(0, 120),
+            body: `${eSnap.exists ? eSnap.data().title : 'Tournament'}: ${list}`,
+            link: `/tournament?event=${eventId}`,
+            counterpart_uid: uid, counterpart_name: name,
+          });
+        }));
+      }
+    }
+  } catch (e) {
+    logger.error('twilioWebhook failed', e);
+  }
+  res.type('text/xml').send('<Response></Response>');
+});
 
 // ─── League Ladder ──────────────────────────────────────────────────────────
 
@@ -325,7 +421,7 @@ exports.onCustomCourtEntered = onDocumentWritten(
 
 // Tuesday 9am: your outstanding matches + ladder challenges reset.
 exports.weeklyReminders = onSchedule(
-  { schedule: '0 9 * * 2', timeZone: TZ, region: REGION, secrets: [resendApiKey] },
+  { schedule: '0 9 * * 2', timeZone: TZ, region: REGION },
   async () => {
     // Stale rallies and challenges are closed first, so they aren't counted below.
     const closed = await closeStaleRequests(db());
@@ -346,24 +442,7 @@ exports.weeklyReminders = onSchedule(
       body: 'Arrange a time with your opponent this week.',
       link: '/tournament',
     })));
-
-    // Accepted challenges still to be played. Rallies are deliberately not counted.
-    const acceptedChallenges = await db().collection('matches').where('category', '==', 'challenge').where('status', '==', 'accepted').get();
-    const challengeCountByUser = new Map();
-    acceptedChallenges.docs.forEach((d) => {
-      const c = d.data();
-      if (cancelled.has(c.event_id) || !c.player_1_uid || !c.player_2_uid) return;
-      [c.player_1_uid, c.player_2_uid].forEach((uid) => challengeCountByUser.set(uid, (challengeCountByUser.get(uid) || 0) + 1));
-    });
-
-    const weekKey = new Date().toISOString().slice(0, 10);
-    const allUids = new Set([...pendingByUser.keys(), ...challengeCountByUser.keys()]);
-    await Promise.all([...allUids].map((uid) => {
-      const total = (pendingByUser.get(uid) || 0) + (challengeCountByUser.get(uid) || 0);
-      if (total === 0) return Promise.resolve();
-      return sendEmailOnce(uid, `incomplete-matches:${uid}:${weekKey}`, `You have ${total} incomplete match${total === 1 ? '' : 'es'}`,
-        (u) => buildIncompleteMatchesEmail(total, (u.name || '').trim().split(/\s+/)[0]));
-    }));
+    // No weekly "incomplete matches" email: removed at the owner's request (2026-10-23).
   },
 );
 

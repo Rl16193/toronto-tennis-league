@@ -108,4 +108,4 @@ async function sendEmailOnce(uid, dedupeKey, subject, html) {
   await sendEmail(uid, subject, html);
 }
 
-module.exports = { notify, organizerUids, sendEmail, sendEmailOnce, resendApiKey, categoryOf };
+module.exports = { notify, organizerUids, sendEmail, sendEmailOnce, resendApiKey };

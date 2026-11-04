@@ -77,6 +77,8 @@ export function useCourtData(): {
         activity30: 0,
         activityBreakdown7: EMPTY_ACTIVITY,
         activityBreakdown30: EMPTY_ACTIVITY,
+        reports: [],
+        reportCount: 0,
         hasPrograms: false,
         pickleballEntries: pbByDropdown.get(c.dropdown) ?? [],
       })));
@@ -102,6 +104,16 @@ export function useCourtData(): {
           // by court_key, so it only needs slugifying our own dropdown to line up; the `byName`
           // half is free-text court names off match docs and goes through matchCourtName, the
           // same one-place-only resolution the preference counts use.
+          // Latest court-condition notes, keyed by court_key like activity.byKey.
+          const reports = data?.reports as Record<string, string[]> | undefined;
+          const reportCounts = (data?.report_counts ?? {}) as Record<string, number>;
+          if (reports && !cancelled) {
+            setCourts((prev) => prev.map((c) => {
+              const notes = reports[courtKey(c.dropdown)] ?? [];
+              return { ...c, reports: notes, reportCount: reportCounts[courtKey(c.dropdown)] ?? notes.length };
+            }));
+          }
+
           const activity = data?.activity as ActivityAggregate | undefined;
           if (activity) {
             const resolve = (win?: ActivityWindow) => {

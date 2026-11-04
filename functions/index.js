@@ -6,13 +6,14 @@ const { onObjectFinalized } = require('firebase-functions/v2/storage');
 const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
+const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const vision = require('@google-cloud/vision');
 const path = require('path');
-// The welcome email shares its shell with the rally/challenge/digest templates, and goes out
+// The welcome email shares its shell with the rally/challenge templates, and goes out
 // through the same sender as every other email (lib/notify.js), like Racquets-And-Strings.
 const { buildWelcomeEmail } = require('./lib/emailTemplates');
 const { notify, sendEmail, resendApiKey } = require('./lib/notify');
-const { SPREADSHEET_ID } = require('./lib/constants');
+const { SPREADSHEET_ID, REGION, TZ } = require('./lib/constants');
 
 admin.initializeApp();
 
@@ -55,10 +56,10 @@ Object.assign(exports, require('./adminMetrics'));
 // type. All points go through lib/scoring.js's single writer; a played final marks its event over.
 Object.assign(exports, require('./scoring'));
 
-// Registration: late-joiner seating (knockout), member-partner registration, doubles partner pool.
+// Registration: entry recount, member-partner registration, doubles partner pool.
 Object.assign(exports, require('./participantWorkflow'));
 
-// Zone changes — tells the organizers of every live tournament the player is in (never unseats).
+// Zone changes — gives up opponent-less old-zone seats and alerts the organizers of live tournaments.
 Object.assign(exports, require('./zoneMoves'));
 
 
@@ -157,7 +158,7 @@ exports.moderateUploadedImage = onObjectFinalized(
 // Sent once, when the member's public profile is first created (the welcomeEmailSent/isVerified flags
 // retired with v3). sendEmail reads the address from contacts/{uid} and honours the email opt-out.
 exports.sendWelcomeEmail = onDocumentCreated(
-  { document: 'users/{uid}', region: 'us-central1', secrets: [resendApiKey] },
+  { document: 'users/{uid}', region: REGION, secrets: [resendApiKey] },
   async (event) => {
     const after = event.data.data() || {};
     const firstName = (after.name || '').split(' ')[0] || 'there';
@@ -168,98 +169,86 @@ exports.sendWelcomeEmail = onDocumentCreated(
 
 // ─── Google Sheets Weekly Sync (Saturdays, midnight America/Toronto) ──────
 
-// Export-only mirror of the real collections. Field names are the actual Firestore fields (the
-// header row upper-cases them). Adjust the `fields` lists to add/remove columns.
-const COLLECTION_MAP = [
-  // `email`/`phone` moved to the `contacts` collection; this tab now exports the public profile
-  // only. Re-adding contact columns would mean joining contacts/{uid} here and re-exporting PII
-  // to a spreadsheet whose sharing lives outside this repo — a deliberate omission.
-  { collection: 'users', sheetTab: 'Players', fields: ['name', 'avatar'] },
-  {
-    collection: 'matches', sheetTab: 'Matches',
-    fields: [
-      'player_1_name', 'player_2_name', 'winner_uid', 'status', 'round',
-    ],
-    where: ['category', '==', 'tournament'],
-  },
-  {
-    collection: 'matches', sheetTab: 'Challenges',
-    fields: ['player_1_name', 'player_2_name', 'winner_uid', 'status', 'division'],
-    where: ['category', '==', 'challenge'],
-  },
-];
+// Export-only mirror: one tab per collection, every field, rewritten each run (edits in these tabs
+// are wiped; work in other tabs). `contacts` and the archives are not exported. The mailing list and
+// volunteer sign-ups go out with their emails, so the sheet's sharing must stay organizer-only.
+const SHEET_COLLECTIONS = [
+  'users', 'stats', 'preferences', 'providers', 'events', 'event_participants', 'matches', 'submissions',
+  'awards', 'league_seasons', 'courts', 'services', 'bookings', 'listings', 'task_claims', 'notifications',
+  'connections', 'public_contacts', 'mailing_list', 'volunteer_signups', 'site_stats', 'admin_stats',
+].map((name) => ({ tab: name, read: (db) => db.collection(name).get() }))
+  .concat([
+    { tab: 'rr_drafts', read: (db) => db.collectionGroup('rr_drafts').get() },
+    { tab: 'ranking_history', read: (db) => db.collectionGroup('entries').get(), under: 'ranking_history' },
+  ]);
+const SHEET_LEAD = ['uid', 'name', 'user_name', 'title', 'category', 'sub_category', 'status'];
+const CELL_MAX = 49000; // Sheets caps a cell at 50,000 characters
+
+// A Firestore value as one readable cell: dates in Toronto time, lists joined, maps as JSON.
+const sheetCell = (v) => {
+  const plain = (x) => (x && typeof x.toDate === 'function' ? x.toDate().toLocaleString('sv-SE', { timeZone: TZ }).slice(0, 16)
+    : Array.isArray(x) ? x.map(plain) : x && typeof x === 'object' ? Object.fromEntries(Object.entries(x).map(([k, y]) => [k, plain(y)])) : x);
+  const p = plain(v);
+  const out = p === null || p === undefined ? '' : Array.isArray(p) && p.every((x) => typeof x !== 'object' || x === null) ? p.join(', ')
+    : typeof p === 'object' ? JSON.stringify(p) : p;
+  return typeof out === 'string' && out.length > CELL_MAX ? `${out.slice(0, CELL_MAX)}… (truncated)` : out;
+};
 
 exports.syncFirestoreAndSheets = onSchedule(
-  { schedule: '0 0 * * 6', timeZone: 'America/Toronto', region: 'us-central1' },
-  async (event) => {
-  const { google } = require('googleapis');
-
-  const auth = new google.auth.GoogleAuth({
-    keyFile: path.join(__dirname, 'service-account-key-gs.json'),
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-  const sheets = google.sheets({ version: 'v4', auth });
-
-  // Ensure every configured tab exists first. A missing tab makes values.update fail with
-  // "Unable to parse range: <Tab>!A1" — the HTTP 500 the Cloud Scheduler job was hitting — and
-  // because it throws on the first collection, nothing else syncs either. Creating any absent
-  // tabs up front makes the sync self-healing if a tab is renamed or deleted.
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
-  const existingTabs = new Set((meta.data.sheets || []).map((s) => s.properties.title));
-  const missingTabs = [...new Set(COLLECTION_MAP.map((c) => c.sheetTab))].filter((t) => !existingTabs.has(t));
-  if (missingTabs.length > 0) {
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
-      resource: { requests: missingTabs.map((title) => ({ addSheet: { properties: { title } } })) },
+  { schedule: '0 0 * * 6', timeZone: TZ, region: REGION, timeoutSeconds: 540, memory: '512MiB' },
+  async () => {
+    const { google } = require('googleapis');
+    const auth = new google.auth.GoogleAuth({
+      keyFile: path.join(__dirname, 'service-account-key-gs.json'),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
-    logger.info(`Created missing sheet tab(s): ${missingTabs.join(', ')}.`);
-  }
+    const sheets = google.sheets({ version: 'v4', auth });
+    const db = admin.firestore();
 
-  const { FieldValue, Timestamp, where: fWhere } = require('firebase-admin/firestore');
-
-  for (const config of COLLECTION_MAP) {
-    const { collection, sheetTab, fields, where: wh } = config;
-    // Isolate each collection so one bad tab/collection can't fail the whole scheduled job.
-    try {
-
-    // 1. FIRESTORE -> GOOGLE SHEETS
-    let collRef = admin.firestore().collection(collection);
-    if (wh) {
-      collRef = collRef.where(...wh);
-    }
-    const snapshot = await collRef.get();
-    const rows = [['Document ID', ...fields.map((f) => f.toUpperCase())]];
-
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      const rowData = [doc.id];
-
-      fields.forEach((field) => {
-        let value = data[field] || '';
-        // Render image-URL fields (avatar/photo/image) as an inline image in the sheet.
-        if (/(image|avatar|photo)/i.test(field) && value) {
-          value = `=IMAGE("${value}")`;
-        }
-        rowData.push(value);
+    // Missing tabs are created up front: writing to an absent tab fails the whole call.
+    const tabs = async () => new Map(((await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID })).data.sheets || [])
+      .map((s) => [s.properties.title, s.properties]));
+    let existing = await tabs();
+    const missing = SHEET_COLLECTIONS.map((c) => c.tab).filter((t) => !existing.has(t));
+    if (missing.length) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        resource: { requests: missing.map((title) => ({ addSheet: { properties: { title } } })) },
       });
-
-      rows.push(rowData);
-    });
-
-    // Export-only: clear the tab first so rows for deleted docs don't linger, then write fresh.
-    await sheets.spreadsheets.values.clear({ spreadsheetId: SPREADSHEET_ID, range: `${sheetTab}!A:Z` });
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetTab}!A1`,
-      valueInputOption: 'USER_ENTERED',
-      resource: { values: rows },
-    });
-
-    logger.info(`Exported ${snapshot.size} doc(s) from "${collection}" to sheet tab "${sheetTab}".`);
-
-    } catch (err) {
-      // Log and move on — a single collection's failure shouldn't 500 the whole job.
-      logger.error(`Sync failed for collection "${collection}" / tab "${sheetTab}":`, err);
+      existing = await tabs();
     }
-  }
-});
+
+    for (const { tab, read, under } of SHEET_COLLECTIONS) {
+      // One failing collection must not stop the rest.
+      try {
+        const docs = (await read(db)).docs.filter((d) => !under || d.ref.path.startsWith(`${under}/`));
+        const keys = new Set();
+        docs.forEach((d) => Object.keys(d.data()).forEach((k) => keys.add(k)));
+        const cols = [...SHEET_LEAD.filter((k) => keys.has(k)), ...[...keys].filter((k) => !SHEET_LEAD.includes(k)).sort()];
+        const rows = [['id', ...cols], ...docs.map((d) => [d.ref.path.split('/').length > 2 ? d.ref.path : d.id, ...cols.map((k) => sheetCell(d.data()[k]))])];
+
+        // Size the grid to fit (values.update won't grow it), clear, then write as plain values (RAW):
+        // member-entered text starting with '=' must never run as a formula.
+        const props = existing.get(tab);
+        const grid = props.gridProperties || {};
+        const rowCount = Math.max(rows.length, 2), columnCount = Math.max(rows[0].length, 1);
+        if (grid.rowCount < rowCount || grid.columnCount < columnCount) {
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: SPREADSHEET_ID,
+            resource: { requests: [{ updateSheetProperties: {
+              properties: { sheetId: props.sheetId, gridProperties: { rowCount: Math.max(grid.rowCount || 0, rowCount), columnCount: Math.max(grid.columnCount || 0, columnCount), frozenRowCount: 1 } },
+              fields: 'gridProperties(rowCount,columnCount,frozenRowCount)',
+            } }] },
+          });
+        }
+        await sheets.spreadsheets.values.clear({ spreadsheetId: SPREADSHEET_ID, range: `'${tab}'` });
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID, range: `'${tab}'!A1`, valueInputOption: 'RAW', resource: { values: rows },
+        });
+        logger.info(`Exported ${docs.length} doc(s) to sheet tab "${tab}".`);
+      } catch (err) {
+        logger.error(`Sheet sync failed for "${tab}":`, err);
+      }
+    }
+  },
+);

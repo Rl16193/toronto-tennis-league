@@ -5,6 +5,7 @@ import { byMatchNumber, formatDeadline } from './utils';
 import { getRoundLabels } from './bracketImage';
 import { getRoundState } from './BracketView';
 import { MatchCard } from './MatchCard';
+import { Check } from 'lucide-react';
 
 // Mobile bracket (wireframe 1b): instead of panning a 900px grid sideways, each round is a
 // vertical accordion section — one open at a time — with round chips (R16 ✓ / QF / SF / F) that
@@ -53,7 +54,7 @@ export const BracketAccordion: React.FC<Props> = ({
   useEffect(() => { setOpenRound(defaultOpen); }, [defaultOpen]);
 
   return (
-    <section className="rounded-[2rem] bg-tennis-surface/20 p-4">
+    <section className="rounded-2xl bg-fg/5 p-4">
       {editMode && (
         <p className="text-center text-xs text-badge font-semibold mb-3">
           Edit mode — use dropdowns to reassign players
@@ -67,13 +68,13 @@ export const BracketAccordion: React.FC<Props> = ({
             key={r.round}
             type="button"
             onClick={() => setOpenRound(r.round)}
-            className={`shrink-0 whitespace-nowrap px-3.5 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+            className={`shrink-0 inline-flex items-center gap-1 whitespace-nowrap px-3.5 py-1.5 rounded-full text-xs font-bold border transition-colors ${
               openRound === r.round
                 ? 'bg-clay border-clay text-white'
                 : 'bg-fg/5 border-fg/10 text-fg/70 hover:border-fg/30'
             }`}
           >
-            {r.round}{r.state === 'finished' ? ' ✓' : ''}
+            {r.round}{r.state === 'finished' && <Check className="size-3.5" aria-label="finished" />}
           </button>
         ))}
       </div>
@@ -94,11 +95,11 @@ export const BracketAccordion: React.FC<Props> = ({
                   value={roundDeadlines[r.round] ?? ''}
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => onUpdateDeadline(r.round, e.target.value)}
-                  className="text-[10px] text-fg/70 bg-transparent border-none outline-none cursor-pointer hover:text-fg [color-scheme:dark]"
+                  className="text-xs text-fg/70 bg-transparent border-none outline-none cursor-pointer hover:text-fg [color-scheme:dark]"
                   title={`Set deadline for ${r.round}`}
                 />
               ) : roundDeadlines[r.round] ? (
-                <span className="text-[10px] text-fg/70">Till {formatDeadline(roundDeadlines[r.round])}</span>
+                <span className="text-xs text-fg/70">Till {formatDeadline(roundDeadlines[r.round])}</span>
               ) : undefined
             }
           >

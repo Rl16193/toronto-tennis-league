@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "node scripts/build-programs-csv.mjs && vite build",
+    "build": "node scripts/build-programs-csv.mjs && vite build && node scripts/build-seo-pages.mjs",
     "build:programs": "node scripts/build-programs-csv.mjs",
     "preview": "vite preview",
     "hosting:deploy": "npm run build && npx firebase-tools deploy --only hosting",

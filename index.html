@@ -26,7 +26,6 @@
 
     <!-- SEO -->
     <meta name="description" content="Racquets &amp; Strings — Toronto's tennis community. Join events, play competitive matches, track results and connect with other players." />
-    <meta name="keywords" content="tennis Toronto, Toronto tennis community, Toronto tennis club, Toronto tennis league, Toronto tennis meetup, recreational tennis Toronto, tennis players Toronto, NTRP Toronto, doubles tennis Toronto, singles tennis Toronto, tennis tournament Toronto, Racquets and Strings, find tennis courts Toronto, tennis courts near me, tennis courts near you Toronto, public tennis courts Toronto, outdoor tennis courts Toronto, tennis court map Toronto, find tennis programs Toronto, tennis programs near me, tennis programs near you, tennis lessons Toronto, Toronto tennis programs, City of Toronto tennis, tennis court locations Toronto, where to play tennis Toronto" />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://www.racquetsandstrings.ca/" />
 
@@ -88,8 +87,10 @@
     <script>
       (function () {
         try {
+          // ThemeContext stores the theme and when it stops applying (the next sunrise/sunset).
           var t = localStorage.getItem('rs-theme');
-          if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+          var until = Number(localStorage.getItem('rs-theme-until'));
+          if (t === 'light' && until > Date.now()) document.documentElement.setAttribute('data-theme', 'light');
         } catch (e) { /* default (dark) applies */ }
       })();
     </script>

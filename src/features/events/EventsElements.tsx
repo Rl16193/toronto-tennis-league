@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Calendar, CheckCircle2, ImageUp, MapPin, Pencil, Star } from 'lucide-react';
+import { Calendar, Check, CheckCircle2, ChevronRight, ImageUp, MapPin, Pencil, Star, Trophy } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
 import { SelectField } from '../../components/SelectField';
@@ -15,10 +15,32 @@ import {
   getEventEndDate, getEventStartDate, parseEndInstant, parseValidDate,
 } from '../../utils/eventDates';
 import { DOUBLES_DIVISIONS } from '../../pages/tournament/types';
-import { JoinFormState, SlotResult } from './types';
+import { JoinFormState } from './types';
+import { REMOVAL_REASONS, type RemovalReason } from './registrations';
 import {
-  DisplayEvent, EVENT_SKILL_OPTIONS, EVENT_TYPE_OPTIONS, EventFormState,
+  CompletedEvent, DisplayEvent, EVENT_SKILL_OPTIONS, EVENT_TYPE_OPTIONS, EventFormState,
 } from './services/eventService';
+
+/** One completed event, opening its draw read-only (Events → Completed, and History). */
+export const CompletedEventRow: React.FC<{ e: Pick<CompletedEvent, 'id' | 'title' | 'when'> }> = ({ e }) => (
+  <Link
+    to={`/matches?mode=tournament&event=${e.id}`}
+    className="flex items-center gap-3 px-4 py-3.5 hover:bg-fg/5 transition-colors"
+  >
+    <span className="w-8 h-8 shrink-0 rounded-2xl bg-clay/15 border border-clay/25 flex items-center justify-center">
+      <Trophy className="w-4 h-4 text-clay" />
+    </span>
+    <div className="min-w-0 flex-1">
+      <p className="text-sm font-semibold text-fg truncate">{e.title}</p>
+      {e.when && (
+        <p className="text-xs text-fg/70">
+          {e.when.toLocaleDateString('en-CA', { month: 'short', year: 'numeric' })}
+        </p>
+      )}
+    </div>
+    <ChevronRight className="w-4 h-4 text-fg/70 shrink-0" />
+  </Link>
+);
 
 // Events page presentation: event card, creator form, join sheet, schedule formatters.
 // Data access lives in ./services/eventService.ts and ./hooks/; shared form types in ./types.ts.
@@ -156,7 +178,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
       transition={{ delay: index * 0.05 }}
       // The Events page scrolls a deep-linked card into view by this id (/events?event=ID).
       id={`event-${event.id}`}
-      className="bg-tennis-surface/30 rounded-2xl p-5 flex flex-col gap-3 transition-colors scroll-mt-24"
+      className="bg-fg/5 rounded-2xl p-5 flex flex-col gap-3 transition-colors scroll-mt-24"
     >
       {/* Poster banner — a 16:9 crop from the centre of the artwork, which is where the event name
           is printed. The type and price ride ON it, and the organiser's edit control takes the
@@ -170,14 +192,14 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
             alt=""
             loading="lazy"
             decoding="async"
-            className="w-full aspect-video object-cover object-center rounded-xl"
+            className="w-full aspect-video object-cover object-center rounded-2xl"
           />
           {/* Both get an opaque backing: a poster is busy, and an unfilled chip disappears into it. */}
-          <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-lg bg-tennis-dark/85 backdrop-blur-sm text-[10px] font-bold text-clay uppercase tracking-widest">
+          <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-2xl bg-tennis-dark/85 backdrop-blur-sm text-xs font-bold text-clay uppercase tracking-widest">
             {eventTypeLabel(event)}
           </span>
           <span className="absolute top-2 right-2 rounded-full bg-clay px-3 py-1 text-xs font-bold text-white">
-            Free
+            {event.private ? 'Invitation Only' : 'Free'}
           </span>
           {onEdit && (
             <button
@@ -194,11 +216,11 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
         </div>
       ) : (
         <div className="flex items-center justify-between gap-2">
-          <span className="px-2.5 py-0.5 bg-clay/10 border border-clay/20 rounded-lg text-[10px] font-bold text-clay uppercase tracking-widest">
+          <span className="px-2.5 py-0.5 bg-clay/10 border border-clay/20 rounded-2xl text-xs font-bold text-clay uppercase tracking-widest">
             {eventTypeLabel(event)}
           </span>
           <div className="flex items-center gap-2 shrink-0">
-            <span className="rounded-full bg-lime px-3 py-1 text-xs font-bold text-ink">Free</span>
+            <span className="rounded-full bg-lime px-3 py-1 text-xs font-bold text-ink">{event.private ? 'Invitation Only' : 'Free'}</span>
             {onEdit && (
               <button
                 type="button"
@@ -227,14 +249,15 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
           )}
         </div>
         <div className="shrink-0">
-          {isLadder ? (
+          {/* A private event has no action: its Invitation Only pill replaces Free above. */}
+          {event.private ? null : isLadder ? (
             <Button
               variant="primary"
               size="sm"
               onClick={() => navigate(isLoggedIn ? '/matches?mode=challenges' : '/login')}
               disabled={authLoading}
             >
-              {isLoggedIn && <RacquetIcon className="w-3.5 h-3.5 mr-1" />}
+              {isLoggedIn && <RacquetIcon className="w-3.5 h-3.5" />}
               {isLoggedIn ? 'Challenge Now' : 'Log In to Challenge'}
             </Button>
           ) : (
@@ -268,19 +291,19 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
       <div className="flex flex-wrap gap-1.5">
         {dateLabel && (
           <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-fg/5 text-xs text-fg/70">
-            <Calendar className="w-3 h-3 text-clay shrink-0" />
+            <Calendar className="w-3.5 h-3.5 text-clay shrink-0" />
             {dateLabel}
           </span>
         )}
         {event.location && (
           <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-fg/5 text-xs text-fg/70">
-            <MapPin className="w-3 h-3 text-clay shrink-0" />
+            <MapPin className="w-3.5 h-3.5 text-clay shrink-0" />
             {event.location}
           </span>
         )}
         {event.skill_level && (
           <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-fg/5 text-xs text-fg/70">
-            <Star className="w-3 h-3 text-clay shrink-0" />
+            <Star className="w-3.5 h-3.5 text-clay shrink-0" />
             {event.skill_level}
           </span>
         )}
@@ -310,9 +333,9 @@ type CreatorEventModalProps = {
 // Compact field chrome: smaller labels, tighter inputs, and short fields paired two-across so
 // the whole form fits in roughly one phone screen instead of eleven stacked full-width rows.
 const fieldCls =
-  'w-full rounded-xl bg-tennis-dark/70 px-3.5 py-2.5 text-sm text-fg ' +
+  'w-full rounded-2xl bg-tennis-dark/70 px-3.5 py-2.5 text-sm text-fg ' +
   'placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
-const labelCls = 'block text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-1.5';
+const labelCls = 'block text-xs font-bold uppercase tracking-widest text-fg/70 mb-1.5';
 const req = <span className="text-clay">*</span>;
 
 const Toggle: React.FC<{
@@ -329,7 +352,7 @@ const Toggle: React.FC<{
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
-          className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-colors ${
+          className={`flex-1 py-2 rounded-2xl text-xs font-bold border transition-colors ${
             value === o.value
               ? 'bg-clay text-white border-clay'
               : 'bg-tennis-dark/70 text-fg/70 border-fg/10 hover:border-fg/30'
@@ -385,7 +408,7 @@ export const CreatorEventModal: React.FC<CreatorEventModalProps> = ({
     <Sheet maxWidthClassName="max-w-md" onClose={onClose} title={isEditing ? 'Edit Event' : 'Add an Event'}>
       <form onSubmit={onSubmit} className="p-5 pt-2 space-y-3.5">
         {eventFormMessage && (
-          <div className={`rounded-xl border px-4 py-2.5 text-sm font-semibold ${
+          <div className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold ${
             eventFormMessage.type === 'success'
               ? 'border-green-500/20 bg-green-500/10 text-badge-win'
               : 'border-red-500/20 bg-red-500/10 text-badge-loss'
@@ -404,26 +427,26 @@ export const CreatorEventModal: React.FC<CreatorEventModalProps> = ({
         <div>
           <span className={labelCls}>Image</span>
           {hasImage ? (
-            <div className="rounded-xl bg-tennis-dark/70 overflow-hidden">
+            <div className="rounded-2xl bg-tennis-dark/70 overflow-hidden">
               {previewUrl
                 ? <img src={previewUrl} alt="" className="w-full aspect-[16/9] object-cover" />
                 : <p className="px-3.5 py-3 text-sm text-fg/70">Current image</p>}
               <div className="flex gap-2 p-2">
-                <label className="flex-1 cursor-pointer rounded-lg bg-fg/5 py-2 text-center text-xs font-bold text-fg hover:bg-fg/10 transition-colors">
+                <label className="flex-1 cursor-pointer rounded-2xl bg-fg/5 py-2 text-center text-xs font-bold text-fg hover:bg-fg/10 transition-colors">
                   Replace
                   <input type="file" accept="image/*" onChange={pickImage} className="hidden" />
                 </label>
                 <button
                   type="button"
                   onClick={removeImage}
-                  className="flex-1 rounded-lg bg-fg/5 py-2 text-xs font-bold text-badge-loss hover:bg-fg/10 transition-colors"
+                  className="flex-1 rounded-2xl bg-fg/5 py-2 text-xs font-bold text-badge-loss hover:bg-fg/10 transition-colors"
                 >
                   Remove
                 </button>
               </div>
             </div>
           ) : (
-            <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-fg/20 cursor-pointer hover:border-fg/40 transition-colors">
+            <label className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-dashed border-fg/20 cursor-pointer hover:border-fg/40 transition-colors">
               <ImageUp className="w-5 h-5 text-fg/70 shrink-0" />
               <span className="text-sm text-fg/70">Add an image</span>
               <input type="file" accept="image/*" onChange={pickImage} className="hidden" />
@@ -453,6 +476,17 @@ export const CreatorEventModal: React.FC<CreatorEventModalProps> = ({
             Recurring
           </label>
         )}
+
+        {/* Every type. Invitation only: no Join button; organizers add players themselves. */}
+        <label className="flex items-center gap-2.5 text-sm text-fg cursor-pointer">
+          <input
+            type="checkbox"
+            checked={eventForm.isPrivate}
+            onChange={(e) => set({ isPrivate: e.target.checked })}
+            className="accent-clay w-4 h-4 shrink-0"
+          />
+          Private Event
+        </label>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -533,10 +567,6 @@ type JoinEventSheetProps = {
   joinForm: JoinFormState;
   setJoinForm: (form: JoinFormState) => void;
   joinError: string;
-  slotStatus: SlotResult | null;
-  loadingMatches?: boolean;
-  slotFallbackConfirmed: boolean;
-  setSlotFallbackConfirmed: (v: boolean) => void;
   joining: boolean;
   onSubmitJoin: () => void;
   onClose: () => void;
@@ -545,7 +575,7 @@ type JoinEventSheetProps = {
 };
 
 const chip = (active: boolean) =>
-  `px-3 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+  `px-3 py-2 rounded-2xl text-sm font-semibold border transition-colors ${
     active ? 'bg-clay text-white border-clay' : 'bg-white text-ink border-fg hover:bg-white/90'
   }`;
 
@@ -554,7 +584,6 @@ const chip = (active: boolean) =>
 // reflows, and the flow matches every other sheet in the app.
 export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
   event, isLate, seniorsEligible, joinForm, setJoinForm, joinError,
-  slotStatus, loadingMatches, slotFallbackConfirmed, setSlotFallbackConfirmed,
   joining, onSubmitJoin, onClose, courtsPicker,
 }) => {
   const { user, profile } = useAuth();
@@ -599,7 +628,7 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
               <button
                 type="button"
                 onClick={() => setJoinForm({ ...joinForm, seniors: !joinForm.seniors })}
-                className={`w-full flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors ${
+                className={`w-full flex items-center justify-between rounded-2xl border px-4 py-3 text-left transition-colors ${
                   joinForm.seniors ? 'border-clay/50 bg-clay/10' : 'border-fg/10 bg-fg/5 hover:border-fg/30'
                 }`}
                 aria-pressed={joinForm.seniors}
@@ -609,9 +638,9 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
                   <span className="block text-xs text-fg/70 mt-0.5">Play in the age-based Retired Pro group instead of skill routing.</span>
                 </span>
                 <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 ${
-                  joinForm.seniors ? 'bg-clay border-clay text-white text-xs' : 'border-fg/20'
+                  joinForm.seniors ? 'bg-clay border-clay text-white' : 'border-fg/20'
                 }`}>
-                  {joinForm.seniors ? '✓' : ''}
+                  {joinForm.seniors && <Check className="size-3.5" aria-hidden="true" />}
                 </span>
               </button>
             )}
@@ -645,37 +674,17 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
                     value={joinForm.combinedSkill}
                     onChange={(e) => setJoinForm({ ...joinForm, combinedSkill: e.target.value })}
                     placeholder="e.g. 3.5"
-                    className="border border-fg/25 w-full rounded-xl bg-tennis-dark/70 px-3 py-2.5 text-sm text-fg outline-none focus:border-clay"
+                    className="border border-fg/25 w-full rounded-2xl bg-tennis-dark/70 px-3 py-2.5 text-sm text-fg outline-none focus:border-clay"
                   />
                 </div>
               </>
             )}
 
             {isLate && (
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-badge">
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-badge">
                 <p className="font-semibold">Late registration. Limited spots remaining.</p>
-                <p className="mt-0.5 text-badge/70">If your draw has an open spot you'll be placed in it; otherwise the organizer will place you.</p>
+                <p className="mt-0.5 text-badge/70">The organizer will place you in a draw.</p>
               </div>
-            )}
-
-            {slotStatus?.status === 'fallback' && (
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-badge">
-                <p className="font-semibold mb-1">
-                  {slotStatus.intendedGroup} draw is full — you'll be placed in the {slotStatus.actualGroup} draw.
-                </p>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={slotFallbackConfirmed}
-                    onChange={(e) => setSlotFallbackConfirmed(e.target.checked)}
-                    className="accent-clay"
-                  />
-                  I understand and wish to continue
-                </label>
-              </div>
-            )}
-            {slotStatus?.status === 'full' && (
-              <p className="text-xs text-badge-loss font-semibold">This draw is currently full.</p>
             )}
           </>
         ) : (
@@ -696,13 +705,42 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
 
         <Button
           onClick={onSubmitJoin}
-          isLoading={joining || loadingMatches}
-          disabled={joining || loadingMatches || slotStatus?.status === 'full' || (slotStatus?.status === 'fallback' && !slotFallbackConfirmed)}
+          isLoading={joining}
+          disabled={joining}
           className="w-full"
         >
-          {loadingMatches ? 'Loading draw…' : 'Join Event'}
+          Join Event
         </Button>
       </div>
     </Sheet>
+  );
+};
+
+// ── Withdraw: the reason pills, shared by the organizer's removal and a member's own ──────────
+export const WithdrawReasons: React.FC<{
+  prompt: React.ReactNode;
+  note: string;
+  busy: boolean;
+  onPick: (reason: RemovalReason) => void;
+  onCancel: () => void;
+}> = ({ prompt, note, busy, onPick, onCancel }) => {
+  const [picked, setPicked] = useState<RemovalReason | null>(null);
+  return (
+    <div className="mt-2.5 rounded-2xl bg-fg/5 p-2.5">
+      <p className="text-xs text-fg">{prompt}</p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {REMOVAL_REASONS.map((reason) => (
+          <Button
+            key={reason} variant="outline" size="sm"
+            isLoading={busy && picked === reason} disabled={busy}
+            onClick={() => { setPicked(reason); onPick(reason); }}
+          >
+            {reason}
+          </Button>
+        ))}
+        <Button variant="ghost" size="sm" disabled={busy} onClick={onCancel}>Cancel</Button>
+      </div>
+      <p className="mt-1.5 text-xs text-fg/70">{note}</p>
+    </div>
   );
 };

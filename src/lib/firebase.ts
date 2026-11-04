@@ -33,6 +33,9 @@ export const auth = getAuth(app);
 export const setAuthPersistence = (stayLoggedIn: boolean) =>
   setPersistence(auth, stayLoggedIn ? browserLocalPersistence : browserSessionPersistence);
 export const db = getFirestore(app);
+/** `xs` in runs of `n`, for `in` queries (Firestore caps the list). */
+export const chunk = <T,>(xs: T[], n: number): T[][] =>
+  Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
 export const storage = getStorage(app);
 // Region must match REGION in functions/lib/constants.js — the callables are deployed there.
 export const functions = getFunctions(app, 'us-central1');

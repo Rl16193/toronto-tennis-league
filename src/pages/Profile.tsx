@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Camera, ChevronDown, ChevronUp, MapPin } from 'lucide-react';
+import { Camera, MapPin } from 'lucide-react';
 import { ContactLink, InstagramLink } from '../components/FooterElements';
-import { INITIATION_OPEN_UNTIL, TASKS, initiationDoneCount, useTasks } from '../features/tasks/useTasks';
+import { useTasks } from '../features/tasks/useTasks';
 import { useAuth } from '../context/AuthContext';
 import { useProfileData } from '../features/profile/hooks/useProfileData';
 import { useProfileActions } from '../features/profile/hooks/useProfileActions';
 import { ProfileInfo } from '../features/profile/components/ProfileInfo';
+import { DeleteAccountSheet } from '../features/profile/components/DeleteAccountSheet';
 import { CheckInModal } from '../features/tasks/CheckInModal';
 import { PhotoSubmitModal } from '../features/tasks/PhotoSubmitModal';
 import { Button } from '../components/Button';
@@ -33,6 +34,7 @@ export const Profile: React.FC = () => {
   // Floating Subscribe, as on Home: shown until the member is on the list, never over a dash.
   const newsletter = useMemberNewsletter(user?.uid, user?.email, profile?.user.name ?? '');
   const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [subscribeError, setSubscribeError] = useState<string | null>(null);
   const onSubscribeClick = async () => {
     if (!user?.email) { setSubscribeOpen(true); return; }
@@ -56,20 +58,23 @@ export const Profile: React.FC = () => {
     else if (dashParam === 'provider' && providerDash.providerId) setOpenDash('provider');
     else if (dashParam === 'organizer' && organizerDash.isOrganizer) setOpenDash('organizer');
   }, [dashParam, providerDash.providerId, organizerDash.isOrganizer]);
-  // Open until INITIATION_OPEN_UNTIL tasks are done, collapsed after. Decided once, when the
-  // progress read lands, so a tap to collapse isn't undone by a later update.
-  const [showTasks, setShowTasks] = useState(false);
-  const [tasksDefaultSet, setTasksDefaultSet] = useState(false);
+  // With no `?dash=`, open the dash with the most action items (a tie goes to the Player Dash).
+  // The counts load from several live reads, so this re-picks for the first few seconds, then
+  // stops — and stops at once on any switch tap — so acting inside a dash never swaps it away.
+  const [autoDash, setAutoDash] = useState(true);
+  useEffect(() => { const t = setTimeout(() => setAutoDash(false), 5000); return () => clearTimeout(t); }, []);
   useEffect(() => {
-    if (!progressLoaded || tasksDefaultSet) return;
-    setShowTasks(initiationDoneCount(progress) < INITIATION_OPEN_UNTIL);
-    setTasksDefaultSet(true);
-  }, [progressLoaded, progress, tasksDefaultSet]);
-
+    if (!autoDash || dashParam) return;
+    const counts = [
+      { dash: 'player' as const, n: dash.count },
+      { dash: 'provider' as const, n: providerDash.providerId ? providerDash.count : 0 },
+      { dash: 'organizer' as const, n: organizerDash.isOrganizer ? organizerDash.count : 0 },
+    ];
+    const best = counts.reduce((a, b) => (b.n > a.n ? b : a));
+    if (best.n > 0) setOpenDash(best.dash);
+  }, [autoDash, dashParam, dash.count, providerDash.providerId, providerDash.count, organizerDash.isOrganizer, organizerDash.count]);
+  const chooseDash = (d: typeof openDash) => { setAutoDash(false); setOpenDash(d); };
   const { toast: badgeToast, dismissToast } = useBadgeToast(progress, counters, progressLoaded);
-
-  // Derived from the stats doc (taskState), so the section disappears the moment the last task lands.
-  const initiationDone = !!progress?.setupComplete;
 
   useEffect(() => { document.title = 'My Profile · Racquets & Strings'; }, []);
 
@@ -109,7 +114,7 @@ export const Profile: React.FC = () => {
   return (
     // Widens from `xl` only while the dash is on, so its three columns fit. The profile card keeps
     // the narrow column it always had.
-    <div className={`max-w-2xl ${dashOn ? 'xl:max-w-6xl' : ''} mx-auto px-4 sm:px-6 pb-20 pt-8 space-y-4`}>
+    <div className={`${dashOn ? 'max-w-2xl xl:max-w-6xl' : 'max-w-xl'} mx-auto px-4 sm:px-6 pb-20 pt-8 space-y-4`}>
       {incompleteFields.length > 0 && (
         <div className="px-1">
           <p className="text-sm text-clay font-bold mb-1">Profile incomplete</p>
@@ -121,11 +126,11 @@ export const Profile: React.FC = () => {
           Provider Dash only shows for members linked to a stringing or coaching provider. */}
       {/* Two per row from `sm`: with all three switches that reads as 2 + 1. Stacked on a phone,
           where two of these side by side would leave no room for the hint. */}
-      <div className="max-w-2xl mx-auto grid gap-2 sm:grid-cols-2">
+      <div className="max-w-xl mx-auto grid gap-2 sm:grid-cols-2">
         <PlayerDashSwitch
           on={openDash === 'player'}
           count={dash.count}
-          onChange={(on) => setOpenDash(on ? 'player' : null)}
+          onChange={(on) => chooseDash(on ? 'player' : null)}
         />
         {providerDash.providerId && (
           <PlayerDashSwitch
@@ -133,7 +138,7 @@ export const Profile: React.FC = () => {
             hint="Your bookings in one place."
             on={openDash === 'provider'}
             count={providerDash.count}
-            onChange={(on) => setOpenDash(on ? 'provider' : null)}
+            onChange={(on) => chooseDash(on ? 'provider' : null)}
           />
         )}
         {organizerDash.isOrganizer && (
@@ -142,7 +147,7 @@ export const Profile: React.FC = () => {
             hint="Your events in one place."
             on={openDash === 'organizer'}
             count={organizerDash.count}
-            onChange={(on) => setOpenDash(on ? 'organizer' : null)}
+            onChange={(on) => chooseDash(on ? 'organizer' : null)}
           />
         )}
       </div>
@@ -155,10 +160,10 @@ export const Profile: React.FC = () => {
               on a narrow phone and the button grows taller than the one beside it. The row wraps
               instead, which is what flex-wrap above is for. */}
           <Button variant="white" size="sm" className="whitespace-nowrap" onClick={() => setQuickAction('checkin')}>
-            <MapPin className="w-4 h-4 mr-1.5" />Record Activity
+            <MapPin className="w-4 h-4" />Record Activity
           </Button>
           <Button variant="clay" size="sm" className="whitespace-nowrap" onClick={() => setQuickAction('photo')}>
-            <Camera className="w-4 h-4 mr-1.5" />Submit a Report
+            <Camera className="w-4 h-4" />Submit a Report
           </Button>
         </div>
       )}
@@ -170,42 +175,7 @@ export const Profile: React.FC = () => {
       ) : openDash === 'organizer' ? (
         <OrganizerDash data={organizerDash} wide={wide} />
       ) : (
-        <>
-          {/* Community Member Initiation checklist — hidden once finished, and its box with it.
-              Gated on the read having completed, NOT on the document existing: a brand-new
-              account may have no stats doc yet, and `!!progress`
-              therefore hid the checklist from exactly the people who still need it. A missing
-              doc simply means nothing is ticked yet. */}
-          {progressLoaded && !initiationDone && (
-            <div className="bg-tennis-surface/30 rounded-3xl p-5">
-              <button
-                type="button"
-                onClick={() => setShowTasks((v) => !v)}
-                className="w-full flex items-center justify-between mb-2 group"
-              >
-                <span className="text-[11px] font-bold uppercase tracking-widest text-fg/70">Tasks</span>
-                {showTasks
-                  ? <ChevronUp className="w-3.5 h-3.5 text-fg/70 group-hover:text-fg/70 transition-colors" />
-                  : <ChevronDown className="w-3.5 h-3.5 text-fg/70 group-hover:text-fg/70 transition-colors" />}
-              </button>
-              {showTasks && (
-                <div className="divide-y divide-white/5 rounded-2xl overflow-hidden px-3.5">
-                  {TASKS.map((t) => {
-                    const done = !!progress?.[t.id];
-                    return (
-                      <div key={t.id} className="flex items-center gap-2.5 py-2.5">
-                        <span className={`w-4 h-4 shrink-0 rounded-full border ${done ? 'bg-clay border-clay' : 'border-fg/20'}`} />
-                        <span className={`text-sm flex-1 min-w-0 truncate ${done ? 'text-fg/70 line-through' : 'text-fg'}`}>{t.title}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          <ProfileInfo actions={actions} updateLoading={updateLoading} message={message} progress={progress} counters={counters} />
-        </>
+        <ProfileInfo actions={actions} updateLoading={updateLoading} message={message} progress={progress} counters={counters} />
       )}
 
       {quickAction === 'checkin' && <CheckInModal onClose={() => setQuickAction(null)} />}
@@ -230,8 +200,10 @@ export const Profile: React.FC = () => {
           <Link to="/privacy" className="hover:text-clay transition-colors">Privacy Policy</Link>
           <ContactLink />
           <InstagramLink />
+          <button type="button" onClick={() => setDeleteOpen(true)} className="hover:text-clay transition-colors">Delete account</button>
         </div>
       </div>
+      {deleteOpen && <DeleteAccountSheet onClose={() => setDeleteOpen(false)} />}
     </div>
   );
 };

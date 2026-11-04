@@ -1,9 +1,13 @@
-import { Timestamp, addDoc, collection, doc, getDocs, updateDoc } from 'firebase/firestore';
+import { Timestamp, addDoc, collection, doc, getDocs, query, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../../../lib/firebase';
 import { TennisEvent } from '../../../types';
 import { isCancelledEvent } from '../../../utils/eventTypes';
-import { sortEventsByStartDate, toDate } from '../../../utils/eventDates';
+import { sortEventsByStartDate, toDate, toMillis } from '../../../utils/eventDates';
+import { recordScore } from '../../matches/scoring';
+import { planRemovePlayer } from '../../../pages/tournament/drawGenerator';
+import type { TournamentMatch } from '../../../pages/tournament/types';
+import { type RemovalReason, withdrawal } from '../registrations';
 
 export type DisplayEvent = TennisEvent & {
   imagePath?: string;
@@ -24,6 +28,8 @@ export type EventFormState = {
   tournamentChoice: 'Singles' | 'Doubles';
   /** Meetup only: on = a weekly meetup (sub_category 'meetup'), off = a one-off special. */
   recurring: boolean;
+  /** Private Event, any type: invitation only (`private` on the event). */
+  isPrivate: boolean;
   /** The image already stored on the event (a URL or a legacy gs:// path), or '' for none. A newly
    *  picked file is held by the page until Save and uploaded then, never kept here. */
   image: string;
@@ -41,6 +47,7 @@ export const INITIAL_EVENT_FORM: EventFormState = {
   skillLevel: 'All',
   tournamentFormat: 'knockout',
   recurring: false,
+  isPrivate: false,
   tournamentChoice: 'Singles',
   image: '',
 };
@@ -98,6 +105,20 @@ export const resolveStorageUrl = async (imagePath: string) => {
 export const MAX_EVENT_IMAGE_BYTES = 5 * 1024 * 1024;
 
 /** Uploads an event image into the creator's own folder (see storage.rules) and returns its URL. */
+export type CompletedEvent = { id: string; title: string; category: string; when: Date | null };
+
+/** Every event scoring has stamped `completed_at` (all its draws decided), newest start first. */
+export const fetchCompletedEvents = async (): Promise<CompletedEvent[]> =>
+  (await getDocs(collection(db, 'events'))).docs
+    .filter((d) => d.data().completed_at && !isCancelledEvent(d.data()))
+    .map((d) => ({
+      id: d.id,
+      title: (d.data().title as string) || 'Tournament',
+      category: (d.data().category as string) || '',
+      when: toDate(d.data().start_date),
+    }))
+    .sort((a, b) => toMillis(b.when) - toMillis(a.when));
+
 export const uploadEventImage = async (userId: string, file: File) => {
   if (!file.type.startsWith('image/')) throw new Error('Please choose an image file.');
   if (file.size > MAX_EVENT_IMAGE_BYTES) throw new Error('The image must be under 5 MB.');
@@ -136,9 +157,12 @@ export const createEvent = async (userId: string, organizerName: string, eventFo
     time: eventForm.time.trim(),
     round_deadlines: {},
     zone_draw_config: {},
+    seeds: {},
+    skill_merges: {},
     completed_at: null,
     status: 'active',
     cancelled_at: null,
+    private: eventForm.isPrivate,
     created_at: Timestamp.now(),
   };
 
@@ -157,6 +181,7 @@ export const updateEvent = async (eventId: string, eventForm: EventFormState) =>
     ...datesOf(eventForm),
     time: eventForm.time.trim(),
     skill_level: eventForm.skillLevel,
+    private: eventForm.isPrivate,
   };
   await updateDoc(doc(db, 'events', eventId), patch);
   return patch;
@@ -185,8 +210,31 @@ export const formFromEvent = (event: DisplayEvent): EventFormState => ({
   skillLevel: event.skill_level || 'All',
   tournamentFormat: event.sub_category === 'rr' ? 'rr' : 'knockout',
   recurring: event.sub_category === 'meetup',
+  isPrivate: !!event.private,
   tournamentChoice: event.category === 'doubles_tournament' ? 'Doubles' : 'Singles',
   // fetchEvents moves a gs:// path out of `image` into `imagePath`; hand back whichever is stored,
   // so saving an edit without touching the image writes the same value back.
   image: event.imagePath || event.image || '',
 });
+
+/**
+ * A member withdraws themselves: each unplayed match with a real opponent is conceded as a
+ * walkover (recorded first; the server refuses a result once a side is blank), then every
+ * registration they hold in the event is withdrawn. Slots with no opponent are left for the
+ * organizer, who is alerted (onParticipantSeat). Resolves to the number of walkovers.
+ */
+export const withdrawFromEvent = async (eventId: string, uid: string, reason: RemovalReason) => {
+  const [regs, matches] = await Promise.all([
+    getDocs(query(collection(db, 'event_participants'), where('event_id', '==', eventId), where('uid', '==', uid))),
+    getDocs(query(collection(db, 'matches'), where('event_id', '==', eventId))),
+  ]);
+  const { walkovers } = planRemovePlayer(uid, matches.docs.map((d) => ({ id: d.id, ...d.data() }) as TournamentMatch));
+  for (const w of walkovers) {
+    await recordScore({ matchId: w.matchId }, { winnerUid: w.winnerUid, scores: [[0, 0], [0, 0], [0, 0]], walkover: true, court: '' });
+  }
+  const batch = writeBatch(db);
+  regs.docs.filter((d) => d.data().status === 'active')
+    .forEach((d) => batch.update(d.ref, withdrawal(uid, reason)));
+  await batch.commit();
+  return walkovers.length;
+};

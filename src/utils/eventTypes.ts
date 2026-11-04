@@ -18,6 +18,10 @@ export const isOrganizerProfile = (profile: Pick<UserProfile, 'id' | 'roles'> | 
 export const isProviderProfile = (profile: Pick<UserProfile, 'roles'> | null | undefined) =>
   !!profile && (profile.roles.includes('stringer') || profile.roles.includes('coach'));
 
+/** The provider tags a profile shows among its badges. */
+export const providerTags = (roles: readonly string[] = []) =>
+  [roles.includes('stringer') && 'Stringer', roles.includes('coach') && 'Coach'].filter(Boolean) as string[];
+
 /** A weekly meetup (the card shows its next occurrence); a special is one-off. */
 export const isRecurringWeekly = (event: Pick<TennisEvent, 'sub_category'>) => event.sub_category === 'meetup';
 

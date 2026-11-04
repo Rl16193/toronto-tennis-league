@@ -1,3 +1,4 @@
+import type { GroupChampion } from '../../types';
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '../../components/Button';
@@ -6,8 +7,9 @@ import { formatPlayerName } from './utils';
 import { RRGroupCard } from './RRGroupCard';
 import { useStandings } from '../../features/leagues/useStandings';
 import { useContacts } from '../../features/contacts/useContacts';
-import { BracketView } from './BracketView';
+import { BracketAccordion } from './BracketAccordion';
 import { BracketErrorBoundary } from './TournamentElements';
+import type { RemovalReason } from '../../features/events/registrations';
 
 type Props = {
   groups: TournamentPlayer[][];
@@ -30,7 +32,11 @@ type Props = {
   onRenameGroup?: (gi: number, label: string) => void;
   /** Organizer pays/takes back one group's bonus. Passed even to players — the card shows it disabled. */
   onSetGroupBonus?: (gi: number, award: boolean) => Promise<void>;
+  /** A one-group draw's named winner (null: none yet). Undefined when the draw has more groups or a knockout. */
+  champion?: GroupChampion | null;
+  onSetChampion?: (winnerUid: string | null) => Promise<void>;
   onRemovePlayer?: (uid: string) => void;
+  onWithdrawSelf?: (reason: RemovalReason) => Promise<void>;
   /** Organizer moves a player into another zone’s draw (see handleMoveZoneByUid). */
   onMovePlayerZone?: (uid: string, bucketId: string) => void;
   zoneBuckets?: { id: string; label: string }[];
@@ -56,7 +62,7 @@ const KnockoutSizeBar: React.FC<{
         key={size}
         disabled={generating}
         onClick={() => onSelect(size)}
-        className={`px-4 py-1.5 rounded-xl text-sm font-bold transition-colors ${
+        className={`px-4 py-1.5 rounded-2xl text-sm font-bold transition-colors ${
           currentSize === size ? 'bg-clay text-white' : 'bg-tennis-surface/60 text-fg hover:text-fg'
         } ${generating ? 'opacity-60 cursor-not-allowed' : ''}`}
       >
@@ -94,7 +100,7 @@ const AddGroupForm: React.FC<{
     return (
       <div className="mt-4 flex justify-center">
         <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-          <Plus className="w-4 h-4 mr-1.5" />
+          <Plus className="w-4 h-4" />
           Add Group
         </Button>
       </div>
@@ -102,8 +108,8 @@ const AddGroupForm: React.FC<{
   }
 
   return (
-    <div className="mt-4 rounded-2xl bg-tennis-surface/30 p-4 space-y-3">
-      <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70">New Group</p>
+    <div className="mt-4 rounded-2xl bg-fg/5 p-4 space-y-3">
+      <p className="text-xs font-bold uppercase tracking-widest text-fg/70">New Group</p>
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -140,7 +146,7 @@ export const RoundRobinView: React.FC<Props> = ({
   groups, groupLabels, groupBonus, standingsByGroup, groupMatches, knockoutMatches,
   isCreator, currentUserId, editMode, editPlayers,
   onEditPlayer, onSubmitScore, submittableMatchIds, onSaveGroupEdit,
-  onRenameGroup, onSetGroupBonus, onRemovePlayer, onMovePlayerZone, zoneBuckets, onCreateGroup, unplacedPlayers,
+  onRenameGroup, onSetGroupBonus, champion, onSetChampion, onRemovePlayer, onWithdrawSelf, onMovePlayerZone, zoneBuckets, onCreateGroup, unplacedPlayers,
   generatingKnockout, onGenerateKnockout, rrView,
   roundDeadlines, onUpdateDeadline,
 }) => {
@@ -184,7 +190,7 @@ export const RoundRobinView: React.FC<Props> = ({
         )}
         {knockoutMatches.length > 0 ? (
           <BracketErrorBoundary onDownload={() => {}}>
-            <BracketView
+            <BracketAccordion
               matches={knockoutMatches}
               editMode={editMode}
               editPlayers={editMode ? editPlayers : []}
@@ -198,7 +204,7 @@ export const RoundRobinView: React.FC<Props> = ({
             />
           </BracketErrorBoundary>
         ) : (
-          <div className="rounded-2xl bg-tennis-surface/20 p-8 text-center">
+          <div className="rounded-2xl bg-fg/5 p-8 text-center">
             <p className="text-sm text-fg/70">
               {isCreator ? 'Pick a round size above to build the knockout bracket.' : 'The knockout bracket has not been set up yet.'}
             </p>
@@ -233,7 +239,10 @@ export const RoundRobinView: React.FC<Props> = ({
               onRenameGroup={onRenameGroup ? (label) => onRenameGroup(gi, label) : undefined}
               onSetGroupBonus={onSetGroupBonus ? (award) => onSetGroupBonus(gi, award) : undefined}
               bonusAwarded={!!groupBonus?.[gi]}
+              champion={champion}
+              onSetChampion={onSetChampion}
               onRemovePlayer={onRemovePlayer}
+              onWithdrawSelf={onWithdrawSelf}
               onMovePlayerZone={onMovePlayerZone}
               zoneBuckets={zoneBuckets}
               contactsByUid={contactsByUid}

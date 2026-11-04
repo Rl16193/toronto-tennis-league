@@ -36,7 +36,7 @@ service cloud.firestore {
 
     // The full contacts shape — all owner data, no points, so every field is safely self-writable.
     function ownerContactFields() {
-      return ['email', 'phone', 'preferred_mode_of_contact', 'whatsapp_contact', 'contactable', 'updated_at', 'secondary_email'];
+      return ['email', 'phone', 'preferred_mode_of_contact', 'whatsapp_contact', 'contactable', 'updated_at', 'secondary_email', 'consent_at'];
     }
 
     // Order-independent id for a pair of players. MUST match pairId() in functions/connections.js
@@ -140,6 +140,9 @@ service cloud.firestore {
     match /providers/{uid} {
       allow read: if true;
       allow write: if isSuperAdmin();
+      // A provider may change their own business name and area (the offer form); roles stay the super admin's.
+      allow update: if isAuthenticated() && request.auth.uid == uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'area']);
     }
 
     // ===============================================================
@@ -168,6 +171,15 @@ service cloud.firestore {
     match /site_stats/{docId} {
       allow read: if true;
       allow write: if false;
+    }
+
+    // Served Up photo focus points, one doc per issue. Public read; the super admin only writes.
+    match /newsletter/{issueId} {
+      allow read: if true;
+      allow write: if isSuperAdmin()
+        && request.resource.data.keys().hasOnly(['issue', 'focus', 'updated_at'])
+        && request.resource.data.issue is int
+        && request.resource.data.focus is map;
     }
 
     match /admin_stats/{docId} {
@@ -209,17 +221,38 @@ service cloud.firestore {
         request.resource.data.status == 'active' &&
         request.resource.data.created_at is timestamp &&
         // Nobody joins a cancelled event, organizers included.
-        get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.get('status', 'active') != 'cancelled';
+        get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.get('status', 'active') != 'cancelled' &&
+        // A private event is invitation only: only its managers add players.
+        (isEventManager(request.resource.data.event_id) ||
+          get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.get('private', false) != true);
       allow update: if isAuthenticated() &&
         (
           isEventManager(resource.data.event_id) ||
           (
             resource.data.uid == request.auth.uid &&
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['user_name', 'skill', 'partner_uid', 'partner_name'])
+          ) ||
+          // The member withdraws themselves, with a reason.
+          (
+            resource.data.uid == request.auth.uid &&
+            resource.data.status == 'active' && request.resource.data.status == 'withdrawn' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'withdrawn_reason', 'withdrawn_at', 'withdrawn_by']) &&
+            request.resource.data.withdrawn_reason in ['wrong_zone', 'unavailable', 'other'] &&
+            request.resource.data.withdrawn_at is timestamp &&
+            request.resource.data.withdrawn_by == request.auth.uid
+          ) ||
+          // The member rejoins on the same row, under the same conditions as a new join.
+          (
+            resource.data.uid == request.auth.uid &&
+            resource.data.status == 'withdrawn' && request.resource.data.status == 'active' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'withdrawn_reason', 'withdrawn_at', 'withdrawn_by', 'division', 'skill', 'partner_uid', 'partner_name', 'user_name']) &&
+            request.resource.data.withdrawn_reason == '' && request.resource.data.withdrawn_at == null && request.resource.data.withdrawn_by == '' &&
+            get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.get('status', 'active') != 'cancelled' &&
+            get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.get('private', false) != true
           )
         );
-      allow delete: if isAuthenticated() &&
-        (resource.data.uid == request.auth.uid || isEventManager(resource.data.event_id));
+      // Registrations are withdrawn, never deleted, by members.
+      allow delete: if isAuthenticated() && isEventManager(resource.data.event_id);
     }
 
     // ===============================================================
@@ -303,11 +336,26 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Services — the catalog. Organizers maintain it.
+    // Services — the catalog. Organizers maintain it; a provider maintains their own offers.
     // ===============================================================
+    // Coaching needs the coach role, stringing the stringer role; no other category for a provider.
+    function providerMayOffer(data) {
+      return data.provider_id == request.auth.uid &&
+        ((data.category == 'coaching' && hasRole(request.auth.uid, 'coach')) ||
+         (data.category == 'stringing' && hasRole(request.auth.uid, 'stringer')));
+    }
+
     match /services/{id} {
       allow read: if true;
-      allow create, update: if isOrganizerRole();
+      allow create: if isOrganizerRole() || (isAuthenticated() &&
+        providerMayOffer(request.resource.data) &&
+        request.resource.data.redeem_booking_id == '' && request.resource.data.booking_count == 0 &&
+        request.resource.data.active == true);
+      // redeem_booking_id and booking_count belong to the booking callables (a group lesson's one
+      // redeemed seat; how often the offer was booked, which orders a stringer's offers).
+      allow update: if isOrganizerRole() || (isAuthenticated() &&
+        resource.data.provider_id == request.auth.uid && providerMayOffer(request.resource.data) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['redeem_booking_id', 'booking_count', 'created_at']));
       allow delete: if false;
     }
 

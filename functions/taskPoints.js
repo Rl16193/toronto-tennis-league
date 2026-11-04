@@ -41,15 +41,18 @@ const bump = (uid, name, field, by = 1) =>
  * A played result for one member: challenge counters, streaks and active months. Tournament
  * matches, challenges and rallies all count toward streaks and months.
  */
-function recordPlayResult(uid, name, { isChallenge, won, when }) {
+function recordPlayResult(uid, name, { isChallenge, won, draw, when }) {
   return updateCounters(uid, name, (s) => {
     const patch = {};
     if (isChallenge) {
       patch.challengesPlayed = (s.challengesPlayed || 0) + 1;
       if (won) patch.challengesWon = (s.challengesWon || 0) + 1;
     }
-    patch.currentStreak = won ? (s.currentStreak || 0) + 1 : 0;
-    patch.bestStreak = Math.max(s.bestStreak || 0, patch.currentStreak);
+    // A draw is played but neither a win nor a loss: the streak stays where it is.
+    if (!draw) {
+      patch.currentStreak = won ? (s.currentStreak || 0) + 1 : 0;
+      patch.bestStreak = Math.max(s.bestStreak || 0, patch.currentStreak);
+    }
     const months = new Set(Array.isArray(s.active_months) ? s.active_months : []);
     months.add(torontoParts(when).month);
     patch.active_months = [...months];
@@ -111,7 +114,7 @@ exports.onMatchCompletedAwardPoints = onDocumentWritten(
     const when = after.completed_at || after.created_at;
     const players = [[m.player_1_uid, m.player_1_name], [m.player_2_uid, m.player_2_name]].filter(([u]) => u);
     for (const [uid, name] of players) {
-      await recordPlayResult(uid, name || '', { isChallenge: m.category === 'challenge', won: after.winner_uid === uid, when });
+      await recordPlayResult(uid, name || '', { isChallenge: m.category === 'challenge', won: after.winner_uid === uid, draw: !after.winner_uid && m.category === 'rally', when });
     }
     if (after.court) {
       const onCourt = new Set([...(Array.isArray(m.participant_uids) ? m.participant_uids : []), ...players.map(([u]) => u)]);

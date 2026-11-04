@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Timestamp, collection, doc, getDocs, onSnapshot, updateDoc } from 'firebase/firestore';
+import { Timestamp, collection, doc, getDocs, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { toMillis } from '../../utils/eventDates';
 import { isGuest } from '../../utils/guest';
 import { useAuth } from '../../context/AuthContext';
 import type { UserProfile, UserStats } from '../../types';
@@ -119,6 +120,32 @@ export function useSweep(docId: string | null) {
   return sweep;
 }
 
+/**
+ * Per group bonus (`awards.category`): when it was last paid (`updated_at` moves with each new
+ * awardee), how many distinct members it has ever paid, and how many payouts in all (a member paid
+ * on five Matchdays is five). One read of the task awards.
+ */
+export function useGroupAwardStats() {
+  const [byAward, setByAward] = useState<Record<string, { last: Date | null; players: number; payouts: number }>>({});
+  useEffect(() => {
+    getDocs(query(collection(db, 'awards'), where('sub_category', '==', 'task')))
+      .then((snap) => {
+        const acc: Record<string, { last: number; uids: Set<string>; payouts: number }> = {};
+        snap.forEach((d) => {
+          const a = d.data();
+          const e = (acc[a.category] ??= { last: 0, uids: new Set(), payouts: 0 });
+          e.last = Math.max(e.last, toMillis(a.updated_at));
+          (a.awardees || []).forEach((u: string) => e.uids.add(u));
+          e.payouts += (a.awardees || []).length;
+        });
+        setByAward(Object.fromEntries(Object.entries(acc)
+          .map(([k, e]) => [k, { last: e.last ? new Date(e.last) : null, players: e.uids.size, payouts: e.payouts }])));
+      })
+      .catch(() => { /* unreadable — cards show no tally */ });
+  }, []);
+  return byAward;
+}
+
 // ─── Hook ───────────────────────────────────────────────────────────────────
 
 export function useTasks() {
@@ -207,7 +234,7 @@ export function useCommunityStandings() {
               milestones: milestoneCount(state),
             };
           })
-          .filter((r) => r.points > 0 || r.tasksCompleted > 0)
+          .filter((r) => r.points > 0)
           .sort((a, b) =>
             b.points - a.points ||
             b.tasksCompleted - a.tasksCompleted ||

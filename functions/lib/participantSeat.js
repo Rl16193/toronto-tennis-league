@@ -1,10 +1,10 @@
 /**
- * Registration helpers for participantWorkflow.js (late-joiner seating, member-partner rows, the
+ * Registration helpers for participantWorkflow.js (member-partner rows, the
  * doubles partner pool) and zoneMoves.js. Helpers only, so they can be tested against the emulator.
  */
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
-const { FieldValue, Timestamp } = require('firebase-admin/firestore');
+const { Timestamp } = require('firebase-admin/firestore');
 const { notify } = require('./notify');
 const { isGuest } = require('./constants');
 
@@ -23,58 +23,18 @@ const resolveMergedZone = (bucketId, merges = {}) => {
   for (let i = 0; i < 10 && merges[id] && merges[id] !== id; i += 1) id = merges[id];
   return id;
 };
+// A member with no Toronto zone plays in the Unassigned draw, which can be merged like any zone
+// (zoneBucketFor in utils.ts).
+const UNASSIGNED_ZONE_ID = 'unassigned';
+const playerZone = (preferredZone, merges) =>
+  resolveMergedZone(preferredZone ? zoneBucketId(preferredZone) : UNASSIGNED_ZONE_ID, merges);
 // A doubles registration's id carries its division: {eventId}_{uid}_{mensdoubles|womensdoubles|mixeddoubles}.
 const DBL = { "men's": 'mensdoubles', "women's": 'womensdoubles', 'mixed doubles': 'mixeddoubles' };
 const registrationId = (eventId, uid, category, division) =>
   `${eventId}_${uid}${category === 'doubles_tournament' ? `_${DBL[String(division || '').toLowerCase()] || 'doubles'}` : ''}`;
 
-const OPEN_NAMES = ['Player Loading', 'BYE', ''];
-const slotIsOpen = (m, slot) => !m[`${slot}_uid`] && OPEN_NAMES.includes(m[`${slot}_name`] || '');
-const ROUND_ORDER = ['R32', 'R16', 'QF', 'SF', 'F'];
 /** A match's order in its round or group: the last number in its `match_id` (`m3`, `rr_g2_m4`). */
 const orderOf = (matchId) => Number((String(matchId || '').match(/(\d+)\D*$/) || [])[1] || 0);
-
-/**
- * Knockout late-joiner seating: finds an open first-round-first seat in the draw this registration
- * belongs to (format, division, skill band, zone) and seats the player inside a transaction, so two
- * joiners can never take the same seat. Round-robin placement stays manual (CLAUDE.md).
- */
-async function seatJoiner(p) {
-  if (!/_tournament$/.test(p.category || '') || p.status !== 'active' || p.sub_category !== 'knockout') return null;
-  const sub = p.category === 'doubles_tournament' ? 'doubles' : 'singles';
-  const [eventSnap, prefsSnap, matchSnap] = await Promise.all([
-    db().doc(`events/${p.event_id}`).get(),
-    db().doc(`preferences/${p.uid}`).get(),
-    db().collection('matches').where('event_id', '==', p.event_id).where('category', '==', 'tournament').get(),
-  ]);
-  if (eventSnap.exists && eventSnap.data().status === 'cancelled') return null;
-  const merges = (eventSnap.exists && eventSnap.data().zone_draw_config && eventSnap.data().zone_draw_config.merges) || {};
-  const myZone = resolveMergedZone(zoneBucketId(prefsSnap.exists ? prefsSnap.data().preferred_zone : ''), merges);
-  const band = skillBand(Number(p.skill || 0));
-  const all = matchSnap.docs.map((d) => ({ ref: d.ref, id: d.id, ...d.data() }));
-  if (all.some((m) => m.player_1_uid === p.uid || m.player_2_uid === p.uid)) return 'already seated';
-  const candidates = all
-    .filter((m) => m.format === 'knockout' && m.sub_category === sub && m.status !== 'complete')
-    .filter((m) => m.division === p.division || m.division === 'All')
-    .filter((m) => m.skill_group === band || m.skill_group === 'All')
-    .filter((m) => sub === 'doubles' || resolveMergedZone(effectiveZone(m.zone), merges) === myZone)
-    .flatMap((m) => ['player_1', 'player_2'].filter((s) => slotIsOpen(m, s)).map((slot) => ({ m, slot })))
-    .sort((a, b) => ROUND_ORDER.indexOf(a.m.round) - ROUND_ORDER.indexOf(b.m.round) || orderOf(a.m.match_id) - orderOf(b.m.match_id));
-  for (const { m, slot } of candidates) {
-    const outcome = await db().runTransaction(async (tx) => {
-      const snap = await tx.get(m.ref);
-      if (!snap.exists) return 'match gone';
-      const live = snap.data();
-      if (live.status === 'complete' || !slotIsOpen(live, slot)) return 'spot taken';
-      // participant_uids carries both sides and their doubles partners, as the draw editor keeps it.
-      const onCourt = [p.uid, p.partner_uid].filter((u) => u && !isGuest(u));
-      tx.update(m.ref, { [`${slot}_uid`]: p.uid, [`${slot}_name`]: p.user_name || 'Player', participant_uids: FieldValue.arrayUnion(...onCourt), updated_at: Timestamp.now() });
-      return 'seated';
-    });
-    if (outcome === 'seated') return 'seated';
-  }
-  return candidates.length ? 'every open spot was taken' : 'no open spot';
-}
 
 /** A full event_participants doc. */
 const registrationDoc = (fields) => ({
@@ -131,6 +91,6 @@ async function joinPartnerPool(p, linkPlayers) {
 }
 
 module.exports = {
-  seatJoiner, registerMemberPartner, joinPartnerPool, registrationDoc, registrationId,
-  zoneBucketId, effectiveZone, skillBand, resolveMergedZone, orderOf,
+  registerMemberPartner, joinPartnerPool, registrationId,
+  effectiveZone, skillBand, resolveMergedZone, playerZone, orderOf,
 };

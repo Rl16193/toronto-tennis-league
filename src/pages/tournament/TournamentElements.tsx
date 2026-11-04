@@ -1,23 +1,25 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ChevronDown, ChevronUp, Download, Image as ImageIcon, Pencil, Play, Settings2, UserPlus, Users, X, XCircle } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, Pencil, Play, Settings2, Trash2, UserPlus, Users, X, XCircle } from 'lucide-react';
 import { EventCarousel } from '../../features/events/EventCarousel';
 import { DrawSlide, downloadSlide } from './bracketImage';
-import { Button } from '../../components/Button';
+import { Button, buttonCls } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { SelectField } from '../../components/SelectField';
 import { Tree, TreeGroup, TreeRow } from '../../components/Tree';
 import { EventParticipant, UserStats } from '../../types';
 import { ZONE_NAMES, ZoneName } from '../../utils/zones';
-import { ContactOpponentButton, pillButtonCls } from '../../components/ContactOpponentButton';
+import { ContactOpponentButton } from '../../components/ContactOpponentButton';
 import type { ContactData } from '../../types';
 import {
-  DOUBLES_DIVISIONS, DrawConfig, DrawTab, OpenDrawSlot, SkillGroup,
-  SkillMergePair, TournamentFormat, TournamentMatch, UnplacedEntry, ZoneDrawConfig,
+  DOUBLES_DIVISIONS, DrawConfig, DrawTab, OpenDrawSlot,
+  SkillMergePair, TournamentFormat, TournamentMatch, UNASSIGNED_ZONE_ID, UnplacedEntry, ZoneDrawConfig,
 } from './types';
-import {
-  PLAYER_LOADING, PLAYER_LOADING_SENTINEL, formatPlayerName, zoneBucketFor,
-} from './utils';
+import { PLAYER_LOADING, PLAYER_LOADING_SENTINEL, formatPlayerName } from './utils';
+import { drawKey, zoneBucketFor } from './drawGenerator';
+import { WithdrawReasons } from '../../features/events/EventsElements';
+import type { RemovalReason } from '../../features/events/registrations';
 import { skillBand } from '../../utils/skillLevels';
 import { MemberSearchInput, type MemberPick } from '../../features/members/MemberSearchInput';
 
@@ -39,12 +41,12 @@ export class BracketErrorBoundary extends React.Component<BoundaryProps, Boundar
   render() {
     if (this.state.hasError) {
       return (
-        <div className="rounded-[2rem] bg-red-500/10 border border-red-500/20 p-10 text-center space-y-4">
+        <div className="rounded-2xl bg-red-500/10 border border-red-500/20 p-10 text-center space-y-4">
           <AlertCircle className="w-10 h-10 text-badge-loss mx-auto" />
           <p className="text-fg font-bold text-lg">Failed to load the bracket.</p>
           <p className="text-fg text-sm">Download the draw to view it offline.</p>
           <Button variant="outline" onClick={this.props.onDownload}>
-            <Download className="w-4 h-4 mr-2" />
+            <Download className="w-4 h-4" />
             Download Draw
           </Button>
         </div>
@@ -63,8 +65,8 @@ export const ChangeZoneButton: React.FC<{
   onChange: () => void;
 }> = ({ onChange }) => {
   return (
-    <button type="button" className={pillButtonCls('sm', 'outline')} onClick={onChange}>
-      Change Your Zone
+    <button type="button" className={buttonCls('clay', 'sm')} onClick={onChange}>
+      Change
     </button>
   );
 };
@@ -118,17 +120,17 @@ export const ChangeZoneModal: React.FC<{
                 onClick={() => setPicked(z)}
                 className={`w-full flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors ${
                   isPicked ? 'bg-clay/15 border border-clay/50'
-                    : isCurrent ? 'bg-fg/[0.03] opacity-50 cursor-not-allowed'
-                    : 'bg-fg/5 hover:bg-fg/[0.08] border border-transparent'
+                    : isCurrent ? 'bg-fg/5 opacity-50 cursor-not-allowed'
+                    : 'bg-fg/5 hover:bg-fg/10 border border-transparent'
                 }`}
               >
                 <span className="min-w-0">
                   <span className="block text-sm font-bold text-fg truncate">{z}</span>
-                  <span className="block text-[11px] text-fg/70">
+                  <span className="block text-xs text-fg/70">
                     {ZONE_COURT_COUNTS[z].courts} courts · {ZONE_COURT_COUNTS[z].sites} locations
                   </span>
                 </span>
-                {isCurrent && <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-fg/70">Current</span>}
+                {isCurrent && <span className="shrink-0 text-xs font-bold uppercase tracking-wide text-fg/70">Current</span>}
               </button>
             );
           })}
@@ -194,8 +196,8 @@ const UnplacedPlayerRow: React.FC<{
     <div className="flex flex-wrap items-center gap-2 py-2 border-b border-fg/5 last:border-0">
       <span className="flex-1 min-w-[140px]">
         <span className="block text-sm text-fg">{formatPlayerName(player.name)}</span>
-        {!!player.eventTitle && <span className="block text-[11px] font-semibold text-fg truncate">{player.eventTitle}</span>}
-        {!!meta && <span className="block text-[11px] text-fg/70">{meta}</span>}
+        {!!player.eventTitle && <span className="block text-xs font-semibold text-fg truncate">{player.eventTitle}</span>}
+        {!!meta && <span className="block text-xs text-fg/70">{meta}</span>}
       </span>
       <SelectField
         value={pick}
@@ -233,7 +235,7 @@ export const UnplacedPlayersPanel: React.FC<{
 }> = ({ players, slots, onSeat }) => (
   <QueueDropdown title="Unplaced players" count={players.length}>
     {slots.length === 0 && (
-      <p className="py-2 text-[11px] text-fg/70">
+      <p className="py-2 text-xs text-fg/70">
         No free slots in this draw. Switch draw, or make room, to place these players.
       </p>
     )}
@@ -283,7 +285,7 @@ export const ScheduleControls: React.FC<{
     <div className={className ?? 'mt-3 rounded-2xl bg-tennis-dark/40 p-3 space-y-2.5'}>
       {!hideBadge && badge && (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${badge.cls}`}>{badge.text}</span>
+          <span className={`px-2.5 py-1 rounded-2xl text-xs font-bold border ${badge.cls}`}>{badge.text}</span>
         </div>
       )}
 
@@ -293,7 +295,7 @@ export const ScheduleControls: React.FC<{
         </div>
       )}
       {!hideRule && !isComplete && (
-        <p className="text-[11px] text-fg/70 leading-snug">
+        <p className="text-xs text-fg/70 leading-snug">
           Matchdays. Schedule prepared by organizer based on your availability.
         </p>
       )}
@@ -325,7 +327,7 @@ export const RRConfigModal: React.FC<{
 
         {/* Conversion warning */}
         {isConversion && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 space-y-2">
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 space-y-2">
             <p className="text-sm font-semibold text-badge-loss">
               This will delete all existing bracket matches and rebuild as Round Robin.
             </p>
@@ -351,7 +353,7 @@ export const RRConfigModal: React.FC<{
 
         {/* How groups + knockout are formed (sizes are automatic — see the preview on the page) */}
         {playerCount >= 3 ? (
-          <div className="rounded-xl bg-fg/5 p-3 space-y-1.5 text-sm">
+          <div className="rounded-2xl bg-fg/5 p-3 space-y-1.5 text-sm">
             <p className="text-fg/70 text-xs font-bold uppercase tracking-widest mb-1">How it works</p>
             <p className="text-fg/70">
               Groups are formed automatically by <span className="text-fg">skill band</span> and{' '}
@@ -409,6 +411,11 @@ export const ZoneDrawConfigPanel: React.FC<{
 
   const merges = config.merges ?? {};
   const activeBuckets = config.buckets.filter((b) => !merges[b.id]);
+  // Unassigned (players with no Toronto zone) isn't a bucket, but it runs its own draw, so it is
+  // listed to be merged into a real zone. It is never offered as a target.
+  const listedZones = merges[UNASSIGNED_ZONE_ID]
+    ? activeBuckets
+    : [...activeBuckets, { id: UNASSIGNED_ZONE_ID, label: 'Unassigned', zones: [] }];
 
   // Counted against the zone they'd actually play in, so a merged zone's players show under the target.
   const counts = useMemo(() => {
@@ -463,7 +470,8 @@ export const ZoneDrawConfigPanel: React.FC<{
 
   const sourcesMergedInto = (targetId: string) =>
     Object.entries(merges).filter(([, t]) => t === targetId).map(([s]) => s);
-  const labelOf = (id: string) => config.buckets.find((b) => b.id === id)?.label ?? id;
+  const labelOf = (id: string) =>
+    (id === UNASSIGNED_ZONE_ID ? 'Unassigned' : config.buckets.find((b) => b.id === id)?.label ?? id);
   const courtsIn = (id: string) => ZONE_COURT_COUNTS[labelOf(id) as ZoneName]?.courts;
 
   return (
@@ -476,7 +484,7 @@ export const ZoneDrawConfigPanel: React.FC<{
           onClick={() => onSetEnabled(!config.enabled)}
           aria-pressed={config.enabled}
           className={`w-full flex items-center justify-between rounded-2xl px-4 py-3.5 text-left transition-colors ${
-            config.enabled ? 'bg-clay/10 border border-clay/50' : 'bg-fg/5 border border-transparent hover:bg-fg/[0.09]'
+            config.enabled ? 'bg-clay/10 border border-clay/50' : 'bg-fg/5 border border-transparent hover:bg-fg/10'
           }`}
         >
           <span className="min-w-0">
@@ -485,7 +493,7 @@ export const ZoneDrawConfigPanel: React.FC<{
               {config.enabled ? 'Each zone runs its own draws' : 'One draw per skill, zones ignored'}
             </span>
           </span>
-          <span className={`text-[10px] font-black uppercase tracking-wide shrink-0 ${config.enabled ? 'text-clay' : 'text-fg/70'}`}>
+          <span className={`text-xs font-black uppercase tracking-wide shrink-0 ${config.enabled ? 'text-clay' : 'text-fg/70'}`}>
             {config.enabled ? 'On' : 'Off'}
           </span>
         </button>
@@ -497,7 +505,7 @@ export const ZoneDrawConfigPanel: React.FC<{
         </p>
 
         <div className="space-y-2">
-          {activeBuckets.map((b) => {
+          {listedZones.map((b) => {
             const swallowed = sourcesMergedInto(b.id);
             const locked = zonesWithMatches?.has(b.id);
             const courts = courtsIn(b.id);
@@ -506,14 +514,14 @@ export const ZoneDrawConfigPanel: React.FC<{
                 <div className="flex items-center justify-between gap-2">
                   <span className="min-w-0">
                     <span className="block text-sm font-bold text-fg truncate">{b.label}</span>
-                    <span className="block text-[11px] text-fg/70">
+                    <span className="block text-xs text-fg/70">
                       {counts.get(b.id) ?? 0} players{courts ? ` · ${courts} courts` : ''}
                     </span>
                   </span>
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={locked || activeBuckets.length < 2}
+                    disabled={locked || !activeBuckets.some((t) => t.id !== b.id)}
                     title={locked ? 'This zone already has matches' : undefined}
                     onClick={() => setMergeSource(b.id)}
                   >
@@ -529,7 +537,7 @@ export const ZoneDrawConfigPanel: React.FC<{
                         key={s}
                         type="button"
                         onClick={() => onUnmerge(s)}
-                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-clay/10 text-clay hover:bg-clay/20 transition-colors"
+                        className="px-2.5 py-1 rounded-2xl text-xs font-bold bg-clay/10 text-clay hover:bg-clay/20 transition-colors"
                       >
                         Unmerge {labelOf(s)}
                       </button>
@@ -553,10 +561,10 @@ export const ZoneDrawConfigPanel: React.FC<{
                   key={b.id}
                   type="button"
                   onClick={() => { onMerge(mergeSource, b.id); setMergeSource(null); }}
-                  className="w-full flex items-center justify-between gap-2 rounded-xl bg-fg/5 hover:bg-fg/[0.09] px-3 py-2 text-left transition-colors"
+                  className="w-full flex items-center justify-between gap-2 rounded-2xl bg-fg/5 hover:bg-fg/10 px-3 py-2 text-left transition-colors"
                 >
                   <span className="text-sm font-semibold text-fg truncate">{b.label}</span>
-                  <span className="shrink-0 text-[11px] text-fg/70">
+                  <span className="shrink-0 text-xs text-fg/70">
                     {counts.get(b.id) ?? 0} players
                   </span>
                 </button>
@@ -617,28 +625,16 @@ export const ZoneDrawConfigPanel: React.FC<{
 
 // ─── Draw selector ────────────────────────────────────────────────────────────────────────────
 
-const TAB_LABEL: Record<DrawTab, string> = {
-  mens: "Men's",
-  womens: "Women's",
-  doubles: 'Doubles',
-};
 const TAB_ORDER: DrawTab[] = ['mens', 'womens', 'doubles'];
 
-// Division tree. Each draw shows how full it is ("14/16") so a creator can see which divisions
-// need players without tapping through. Zone variants stay their own rows.
+// The draw picker: one name at a time between previous / next arrows that loop, its signed-up
+// count under it and its zones as pills above (see CLAUDE.md, "A player sees one draw at a time").
 export const DrawTabs: React.FC<{
-  activeTab: DrawTab;
-  activeSkill: SkillGroup;
-  activeDoubles: string;
-  currentDraw: DrawConfig | undefined;
-  visibleDraws: DrawConfig[];
+  selected: DrawConfig | undefined;
+  draws: DrawConfig[];
   /** Per-draw signed-up count and capacity, keyed by draw label. */
   drawCounts?: Record<string, { count: number; size: number }>;
-  onTabChange: (tab: DrawTab) => void;
-  onSkillChange: (skill: SkillGroup) => void;
-  onDoublesChange: (division: string) => void;
-  // Zone bucket id — only relevant once an event has zone draws enabled (see ZoneDrawConfigPanel).
-  onZoneChange: (zone: string | undefined) => void;
+  onSelect: (draw: DrawConfig) => void;
   // Round Robin sub-view (Groups / Knockout). Omitted for non-RR draws.
   rrView?: 'groups' | 'knockout';
   onRRViewChange?: (v: 'groups' | 'knockout') => void;
@@ -646,122 +642,135 @@ export const DrawTabs: React.FC<{
   drawSizeControl?: React.ReactNode;
   /** Opens the picture slideshow. Omitted when the draw has nothing generated to show. */
   onViewCompleteDraw?: () => void;
+  /** A player's view: the wheel steps only through their own zones (`playerZones`). */
+  playerMode?: boolean;
+  /** Zone bucket ids a player may step through: their own zone and any zone they hold a match in. */
+  playerZones?: Set<string>;
+  /** The current draw holds one of the viewer's matches ("My Draw"). */
+  isMyDraw?: boolean;
 }> = ({
-  currentDraw, visibleDraws, drawCounts,
-  onTabChange, onSkillChange, onDoublesChange, onZoneChange, rrView, onRRViewChange,
-  drawSizeControl, onViewCompleteDraw,
+  selected: currentDraw, draws: visibleDraws, drawCounts, onSelect: select, rrView, onRRViewChange,
+  drawSizeControl, onViewCompleteDraw, playerMode, playerZones, isMyDraw,
 }) => {
-  const drawKey = (d: DrawConfig) => `${d.tab}|${d.division}|${d.skillGroup}|${d.zone ?? ''}`;
   const currentKey = currentDraw ? drawKey(currentDraw) : null;
+  const reduceMotion = useReducedMotion();
+  // +1 turns the wheel forward, -1 back; the name swings out the way it was pushed.
+  const [direction, setDirection] = useState(1);
 
-  // Open the group holding the current draw by default, so the selection is always visible.
-  const [openTab, setOpenTab] = useState<DrawTab | null>(currentDraw?.tab ?? null);
-  const [openZone, setOpenZone] = useState<string | null>(
-    currentDraw?.zone ? `${currentDraw.tab}-${currentDraw.zone}` : null,
-  );
-
-  // Preserves the order draws arrive in; un-zoned draws collapse into a single leading bucket.
-  const groupByZone = (list: DrawConfig[]) => {
-    const out: { zone: string; label: string; draws: DrawConfig[] }[] = [];
-    for (const d of list) {
-      const zone = d.zone ?? '';
-      const existing = out.find((g) => g.zone === zone);
-      if (existing) existing.draws.push(d);
-      else out.push({ zone, label: zoneLabel(d), draws: [d] });
-    }
-    return out;
-  };
-
-  // Strip gender and zone from the label — the parent groups already say them.
-  const rowLabel = (d: DrawConfig) => {
-    if (d.tab === 'doubles') {
-      return d.division !== 'Mixed Doubles' && d.division !== 'All' ? `${d.division} Doubles` : d.label;
-    }
-    const prefix = `${d.division} `;
-    const withoutDivision = d.label.startsWith(prefix) ? d.label.slice(prefix.length) : d.label;
-    return withoutDivision.split(' — ')[0];
-  };
-
-  // Read off the draw label's " — <zone>" suffix, so the tree needs no zone config passed down.
+  // Read off the draw label's " — <zone>" suffix, so the header needs no zone config passed down.
   const zoneLabel = (d: DrawConfig) => (d.zone ? d.label.split(' — ').slice(1).join(' — ') || d.zone : '');
 
-  const select = (d: DrawConfig) => {
-    onTabChange(d.tab);
-    // The division on every tab: it tells a Retired Pro draw from a merged one (both skill 'All').
-    onDoublesChange(d.division);
-    if (d.tab !== 'doubles') onSkillChange(d.skillGroup);
-    onZoneChange(d.zone);
+  // Players step through their own zone only; doubles draws carry no zone and always stay.
+  const shown = visibleDraws.filter((d) =>
+    !playerMode || !playerZones || !d.zone || playerZones.has(d.zone));
+  // A level is one draw across its zones: Men's Masters in every zone is one stop on the wheel.
+  const levelKey = (d: DrawConfig) => `${d.tab}|${d.division}|${d.skillGroup}`;
+  const levels: { key: string; name: string; draws: DrawConfig[] }[] = [];
+  [...shown]
+    .sort((a, b) => TAB_ORDER.indexOf(a.tab) - TAB_ORDER.indexOf(b.tab))
+    .forEach((d) => {
+      const lvl = levels.find((l) => l.key === levelKey(d));
+      if (lvl) lvl.draws.push(d);
+      else levels.push({ key: levelKey(d), name: d.label.split(' — ')[0], draws: [d] });
+    });
+  const level = currentDraw ? levels.find((l) => l.key === levelKey(currentDraw)) : undefined;
+  const name = level?.name ?? currentDraw?.label.split(' — ')[0] ?? '';
+  const zoneDraws = level ? level.draws.filter((d) => d.zone) : [];
+  const countOf = (list: DrawConfig[]) => list.reduce((n, d) => n + (drawCounts?.[d.label]?.count ?? 0), 0);
+
+  // Previous / next loop round; the new level keeps the chosen zone when it has it.
+  const step = (dir: 1 | -1) => {
+    if (levels.length < 2) return;
+    const i = level ? levels.indexOf(level) : 0;
+    const next = levels[(i + dir + levels.length) % levels.length];
+    setDirection(dir);
+    select(next.draws.find((d) => d.zone === currentDraw?.zone) ?? next.draws[0]);
   };
 
-  const tabs = TAB_ORDER
-    .map((tab) => ({ tab, draws: visibleDraws.filter((d) => d.tab === tab) }))
-    .filter((g) => g.draws.length > 0);
+  // The name swings along an arc pivoting below it, like a wheel turning; a plain fade when the
+  // viewer asks for reduced motion.
+  const wheel = {
+    enter: (dir: number) => (reduceMotion ? { opacity: 0 } : { opacity: 0, rotate: 25 * dir, x: `${60 * dir}%`, y: 12 }),
+    center: { opacity: 1, rotate: 0, x: '0%', y: 0 },
+    exit: (dir: number) => (reduceMotion ? { opacity: 0 } : { opacity: 0, rotate: -25 * dir, x: `${-60 * dir}%`, y: 12 }),
+  };
+  const arrowCls = `shrink-0 w-11 h-11 rounded-2xl bg-fg/5 hover:bg-fg/10 text-fg flex items-center justify-center
+                    transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay`;
 
   return (
     <>
-      {tabs.length > 0 && (
-        <Tree className="mb-4">
-          {tabs.map(({ tab, draws }) => {
-            const signedUp = draws.reduce((n, d) => n + (drawCounts?.[d.label]?.count ?? 0), 0);
-            return (
-              <TreeGroup
-                key={tab}
-                id={tab}
-                label={TAB_LABEL[tab]}
-                right={drawCounts ? `${signedUp} signed up` : undefined}
-                open={openTab === tab}
-                onToggle={(id) => setOpenTab((cur) => (cur === id ? null : (id as DrawTab)))}
-              >
-                {/* Gender → Zone → Skill. Un-zoned draws (doubles, pre-zone leftovers) stay direct rows. */}
-                {groupByZone(draws).map(({ zone, label, draws: zoneDraws }) => {
-                  const rows = zoneDraws.map((d) => {
-                    const key = drawKey(d);
-                    const c = drawCounts?.[d.label];
-                    const isActive = currentKey === key;
-                    return (
-                      <React.Fragment key={key}>
-                        <TreeRow
-                          label={rowLabel(d)}
-                          fill={c}
-                          active={isActive}
-                          onClick={() => select(d)}
-                          level={zone ? 1 : 0}
-                        />
-                        {/* Lives in the row it changes, not floating below the whole selector. */}
-                        {isActive && drawSizeControl && (
-                          <div className={`${zone ? 'pl-14' : 'pl-10'} pr-5 pb-2`}>{drawSizeControl}</div>
-                        )}
-                      </React.Fragment>
-                    );
-                  });
-                  if (!zone) return <React.Fragment key={`${tab}-nozone`}>{rows}</React.Fragment>;
-                  const zoneSignedUp = zoneDraws.reduce((n, d) => n + (drawCounts?.[d.label]?.count ?? 0), 0);
-                  return (
-                    <TreeGroup
-                      key={`${tab}-${zone}`}
-                      id={`${tab}-${zone}`}
-                      label={label}
-                      level={1}
-                      right={drawCounts ? `${zoneSignedUp}` : undefined}
-                      open={openZone === `${tab}-${zone}`}
-                      onToggle={(id) => setOpenZone((cur) => (cur === id ? null : id))}
-                    >
-                      {rows}
-                    </TreeGroup>
-                  );
-                })}
-              </TreeGroup>
-            );
-          })}
-        </Tree>
+      {currentDraw && (
+        <div className="mb-4">
+          {/* Zones as pills above the name, only when this level runs in more than one. Never for a
+              player, whose wheel is already limited to their own zones. */}
+          {!playerMode && zoneDraws.length > 1 && (
+            <div className="mb-3 flex flex-wrap justify-center gap-2">
+              {zoneDraws.map((d) => {
+                const on = drawKey(d) === currentKey;
+                return (
+                  <button
+                    key={drawKey(d)}
+                    type="button"
+                    onClick={() => select(d)}
+                    aria-pressed={on}
+                    className={`min-h-11 rounded-2xl px-3 text-xs font-bold transition-colors focus-visible:outline-2
+                                focus-visible:outline-offset-2 focus-visible:outline-clay ${on ? 'bg-clay text-white' : 'bg-fg/5 text-fg hover:bg-fg/10'}`}
+                  >
+                    {zoneLabel(d)}{drawCounts ? ` ${countOf([d])}` : ''}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex items-center justify-center gap-3">
+            {levels.length > 1 && (
+              <button type="button" onClick={() => step(-1)} aria-label="Previous draw" className={arrowCls}>
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            )}
+            <div className="relative min-w-0 flex-1 max-w-xs h-16 overflow-hidden">
+              <AnimatePresence initial={false} custom={direction} mode="popLayout">
+                <motion.div
+                  key={level?.key ?? currentKey ?? ''}
+                  custom={direction}
+                  variants={wheel}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={reduceMotion ? { duration: 0.2 } : { type: 'spring', stiffness: 260, damping: 18 }}
+                  style={{ transformOrigin: '50% 180%' }}
+                  className="absolute inset-0 flex flex-col items-center justify-center text-center"
+                >
+                  <span className="flex items-baseline gap-2 max-w-full">
+                    <h2 className="text-lg font-bold text-fg truncate">{name}</h2>
+                    {isMyDraw && <span className="shrink-0 text-xs font-bold text-clay">My Draw</span>}
+                  </span>
+                  {drawCounts && (
+                    <span className="text-xs text-fg/70">{countOf(level?.draws ?? [currentDraw])} signed up</span>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+            {levels.length > 1 && (
+              <button type="button" onClick={() => step(1)} aria-label="Next draw" className={arrowCls}>
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+
+          {drawSizeControl && <div className="mt-3 flex justify-center">{drawSizeControl}</div>}
+        </div>
       )}
 
       {/* Everyone's way into the pictures, players included. The organizer's Manage Draw sheet no
           longer carries a download of its own. */}
       {onViewCompleteDraw && (
-        <Button variant="outline" className="w-full mb-4" onClick={onViewCompleteDraw}>
-          <ImageIcon className="w-4 h-4 mr-1.5" />View Complete Draw
-        </Button>
+        <div className="mb-4 flex justify-center">
+          <Button variant="clay" size="sm" className="whitespace-nowrap" onClick={onViewCompleteDraw}>
+            View Draw
+          </Button>
+        </div>
       )}
 
       {rrView && onRRViewChange && (
@@ -769,7 +778,7 @@ export const DrawTabs: React.FC<{
           options={[{ value: 'groups', label: 'Groups' }, { value: 'knockout', label: 'Knockout' }]}
           value={rrView}
           onChange={onRRViewChange}
-          className="mb-5 max-w-xs"
+          className="mb-5 max-w-xs mx-auto"
         />
       )}
     </>
@@ -805,7 +814,7 @@ export const DrawSlideshow: React.FC<{
                 className="w-full rounded-2xl border border-fg/10"
               />
               <Button variant="outline" className="w-full" onClick={() => downloadSlide(s)}>
-                <Download className="w-4 h-4 mr-1.5" />Download {s.label}
+                <Download className="w-4 h-4" />Download {s.label}
               </Button>
             </div>
           ))}
@@ -879,7 +888,7 @@ export const TournamentHeader: React.FC<{
             : 'border-fg/10 bg-fg/5 hover:border-fg/30'
       }`}
     >
-      <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+      <span className={`w-9 h-9 rounded-2xl flex items-center justify-center shrink-0 ${
         danger ? 'bg-red-500/15 text-badge-loss' : active ? 'bg-clay/20 text-clay' : 'bg-fg/5 text-fg/70'
       }`}>
         {icon}
@@ -888,20 +897,20 @@ export const TournamentHeader: React.FC<{
         <span className={`block text-sm font-bold ${danger ? 'text-badge-loss' : 'text-fg'}`}>{label}</span>
         {hint && <span className="block text-xs text-fg/70 mt-0.5">{hint}</span>}
       </span>
-      {active && <span className="text-[10px] font-black uppercase tracking-wide text-clay shrink-0">On</span>}
+      {active && <span className="text-xs font-black uppercase tracking-wide text-clay shrink-0">On</span>}
     </button>
   );
 
   return (
     <div className="mb-8">
       <Button variant="white" onClick={() => setOpen(true)} className="w-full sm:w-auto">
-        <Settings2 className="w-4 h-4 mr-2" />Manage Draw
+        <Settings2 className="w-4 h-4" />Manage Draw
       </Button>
 
       {open && (
         <Sheet onClose={() => setOpen(false)} title="Manage Draw" maxWidthClassName="max-w-md">
           <div className="p-6 pt-3 space-y-2.5">
-            {/* Download Draw used to sit here. It moved to View Complete Draw under the selector,
+            {/* Download Draw used to sit here. It moved to View Draw under the selector,
                 where players can reach it too. */}
             {hasMatches ? (
               <Row
@@ -939,7 +948,7 @@ export const TournamentHeader: React.FC<{
             )}
             {canMerge && (
               <>
-                <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 pt-2">Merge Draws</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-fg/70 pt-2">Merge Draws</p>
                 {mergeSections.map((section) => {
                   const isExpanded = expandedMerge === section.key;
                   return (
@@ -998,7 +1007,7 @@ export const PartnerPoolPanel: React.FC<{
   contacts: Record<string, ContactData>;
   viewerUid: string;
 }> = ({ members, contacts, viewerUid }) => (
-  <section className="mb-6 rounded-3xl bg-fg/5 p-4" aria-label="Partner pool">
+  <section className="mb-6 rounded-2xl bg-fg/5 p-4" aria-label="Partner pool">
     <div className="min-w-0">
       <h2 className="text-sm font-bold text-fg">Partner pool</h2>
       <p className="mt-0.5 text-xs text-fg/70">Players looking for a doubles partner. Contact one to team up.</p>
@@ -1045,16 +1054,16 @@ export const PartnerPoolPanel: React.FC<{
  *
  * REGENERATE when `public/Tennis Courts Facilities - 4326.csv` or the zone boundaries in
  * `zones.ts` change — sum the CSV's `Courts` column per `getZone(lat, lng)`.
- * Last generated: 580 courts across 174 sites.
+ * Last generated: 628 courts across 182 sites.
  */
 const ZONE_COURT_COUNTS: Record<ZoneName, { courts: number; sites: number }> = {
-  'York West': { courts: 72, sites: 28 },
-  'Etobicoke': { courts: 87, sites: 28 },
+  'York West': { courts: 90, sites: 30 },
+  'Etobicoke': { courts: 93, sites: 29 },
   'Etobicoke - Lakeshore': { courts: 72, sites: 24 },
   'North York': { courts: 118, sites: 34 },
-  'Downtown - Midtown': { courts: 77, sites: 17 },
-  'North Scarborough': { courts: 84, sites: 24 },
-  'East York and South Scarborough': { courts: 70, sites: 19 },
+  'Downtown - Midtown': { courts: 88, sites: 19 },
+  'North Scarborough': { courts: 89, sites: 26 },
+  'East York and South Scarborough': { courts: 78, sites: 20 },
 };
 
 // ─── Add teammate panel ────────────────────────────────────────────────────────────────────────
@@ -1105,12 +1114,12 @@ export const AddTeammatePanel: React.FC<AddTeammatePanelProps> = ({ currentUserI
   };
 
   return (
-    <div className="mb-6 rounded-3xl bg-tennis-surface/30 p-5 space-y-4">
+    <div className="mb-6 rounded-2xl bg-fg/5 p-5 space-y-4">
       <div className="flex items-center gap-2">
         <Users className="w-4 h-4 text-clay shrink-0" />
         <div>
           <p className="text-sm font-bold text-fg">Add your teammate</p>
-          <p className="text-[11px] text-fg">
+          <p className="text-xs text-fg">
             You’re registered for doubles but we don’t have your partner yet.
           </p>
         </div>
@@ -1140,12 +1149,12 @@ export const AddTeammatePanel: React.FC<AddTeammatePanelProps> = ({ currentUserI
             value={skill}
             onChange={(e) => setSkill(e.target.value)}
             placeholder="e.g. 3.5"
-            className="border border-fg/25 w-full rounded-xl bg-tennis-dark/70 px-3 py-2.5 text-sm text-fg outline-none focus:border-clay"
+            className="border border-fg/25 w-full rounded-2xl bg-tennis-dark/70 px-3 py-2.5 text-sm text-fg outline-none focus:border-clay"
           />
         </div>
       )}
 
-      {error && <p className="text-[11px] text-badge-loss">{error}</p>}
+      {error && <p className="text-xs text-badge-loss">{error}</p>}
 
       <Button variant="clay" isLoading={saving} onClick={submit} className="w-full">
         Save teammate
@@ -1171,31 +1180,12 @@ export const AddPlayerPanel: React.FC<AddPlayerPanelProps> = ({
   const [selectedUserId, setSelectedUserId] = useState('');
   const [partnerName, setPartnerName] = useState('');
   const [divisionOverride, setDivisionOverride] = useState("Men's");
-  const [search, setSearch] = useState('');
-  const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
 
   if (!currentDraw) return null;
 
   const isDoubles = currentDraw.tournamentChoice === 'Doubles';
   const needsDivisionPicker = currentDraw.division === 'All';
-
-  const filtered = availableUsers.filter(
-    (u) =>
-      (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
-      (u.email || '').toLowerCase().includes(search.toLowerCase()),
-  );
-  const isPlayerLoading = selectedUserId === PLAYER_LOADING_SENTINEL;
-  const selectedUser = availableUsers.find((u) => u.id === selectedUserId);
 
   const handleAdd = async () => {
     if (!selectedUserId) return;
@@ -1208,7 +1198,6 @@ export const AddPlayerPanel: React.FC<AddPlayerPanelProps> = ({
       );
       setSelectedUserId('');
       setPartnerName('');
-      setSearch('');
     } finally {
       setAdding(false);
     }
@@ -1222,50 +1211,18 @@ export const AddPlayerPanel: React.FC<AddPlayerPanelProps> = ({
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
-          <div className="relative flex-1 min-w-[200px]" ref={dropdownRef}>
-            <button
-              type="button"
-              onClick={() => setOpen((v) => !v)}
-              className="w-full text-left px-3 py-2 rounded-xl bg-tennis-surface/60 text-sm text-fg hover:border-clay/50 transition-colors"
-            >
-              {isPlayerLoading ? <span className="text-fg/70 italic">{PLAYER_LOADING}</span> : selectedUser ? selectedUser.name : <span className="text-fg">Select player…</span>}
-            </button>
-            {open && (
-              <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-[#1a1a2e] rounded-xl shadow-xl overflow-hidden">
-                <div className="p-2 border-b border-fg/10">
-                  <input
-                    autoFocus
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search…"
-                    className="border border-fg/25 w-full bg-transparent text-sm text-fg placeholder-fg/70 outline-none"
-                  />
-                </div>
-                <ul className="max-h-52 overflow-y-auto">
-                  <li
-                    onClick={() => { setSelectedUserId(PLAYER_LOADING_SENTINEL); setOpen(false); setSearch(''); }}
-                    className="px-3 py-2 text-sm text-fg/70 italic hover:bg-clay/20 cursor-pointer border-b border-fg/10"
-                  >
-                    {PLAYER_LOADING}
-                  </li>
-                  {filtered.length === 0 ? (
-                    <li className="px-3 py-2 text-sm text-fg">No users found</li>
-                  ) : (
-                    filtered.map((u) => (
-                      <li
-                        key={u.id}
-                        onClick={() => { setSelectedUserId(u.id); setOpen(false); setSearch(''); }}
-                        className="px-3 py-2 text-sm text-fg hover:bg-clay/20 cursor-pointer"
-                      >
-                        <span className="font-semibold">{u.name}</span>
-                        <span className="text-fg ml-2 text-xs">{u.email}</span>
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </div>
-            )}
-          </div>
+          <SelectField
+            title="Add Player"
+            value={selectedUserId}
+            placeholder="Select player…"
+            searchable
+            options={[
+              { value: PLAYER_LOADING_SENTINEL, label: PLAYER_LOADING },
+              ...availableUsers.map((u) => ({ value: u.id, label: u.name || '', hint: u.email || undefined })),
+            ]}
+            onChange={setSelectedUserId}
+            className="flex-1 min-w-[200px]"
+          />
 
           {needsDivisionPicker && (
             <SelectField
@@ -1282,15 +1239,48 @@ export const AddPlayerPanel: React.FC<AddPlayerPanelProps> = ({
               value={partnerName}
               onChange={(e) => setPartnerName(e.target.value)}
               placeholder="Partner name…"
-              className="border border-fg/25 flex-1 min-w-[160px] px-3 py-2 rounded-xl bg-tennis-surface/60 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay/50 transition-colors"
+              className="border border-fg/25 flex-1 min-w-[160px] px-3 py-2 rounded-2xl bg-tennis-surface/60 text-sm text-fg placeholder-fg/70 outline-none focus:border-clay/50 transition-colors"
             />
           )}
 
           <Button onClick={handleAdd} disabled={!selectedUserId} isLoading={adding} size="md">
-            <UserPlus className="w-4 h-4 mr-2" />
+            <UserPlus className="w-4 h-4" />
             Add
           </Button>
         </div>
+    </div>
+  );
+};
+
+// ── Withdraw yourself (under Your Match) ──────────────────────────────────────
+export const WithdrawSelf: React.FC<{ onWithdraw: (reason: RemovalReason) => Promise<void> }> = ({ onWithdraw }) => {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (!asking) {
+    return (
+      <div className="-mt-4 mb-6 flex justify-end px-2">
+        <button
+          type="button"
+          onClick={() => setAsking(true)}
+          className="inline-flex items-center gap-1.5 rounded-2xl px-2 py-1.5 text-xs text-fg/70 hover:text-badge-loss focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+        >
+          <Trash2 className="h-3.5 w-3.5" /> Withdraw
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="-mt-4 mb-6">
+      <WithdrawReasons
+        prompt="Withdraw from this event? Why?"
+        note="Your opponents get a walkover in matches still to play. You can join again from Events."
+        busy={busy}
+        onPick={async (reason) => {
+          setBusy(true);
+          try { await onWithdraw(reason); } finally { setBusy(false); setAsking(false); }
+        }}
+        onCancel={() => setAsking(false)}
+      />
     </div>
   );
 };

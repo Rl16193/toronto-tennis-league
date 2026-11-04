@@ -211,6 +211,7 @@ export interface GroupTaskDef {
   name: string;
   trigger: string;   // full sentence — rendered wrapped, not truncated
   points: string;    // e.g. "+10 each" — a label, since group bonuses aren't a single tier value
+  award: string;     // the `awards.category` groupAwards.js writes for it
 }
 
 // Reset every day (the calendar day is part of the award, so yesterday's bonus never blocks today's).
@@ -221,6 +222,7 @@ export const DAILY_GROUP_TASKS: GroupTaskDef[] = [
     trigger: 'When more than 3 matches are played across the league on the same day, every member '
       + 'who played a match that day unlocks the bonus. Walkovers don’t count.',
     points: '+10 each',
+    award: 'matchday',
   },
   {
     id: 'hourlyCoverage',
@@ -228,6 +230,7 @@ export const DAILY_GROUP_TASKS: GroupTaskDef[] = [
     trigger: 'When a court has at least one live racquet-queue report for every hour from 8 AM to '
       + '10 PM on the same day, everyone who posted a queue report there that day unlocks the bonus.',
     points: '+10 each',
+    award: 'hourly_coverage',
   },
 ];
 
@@ -238,12 +241,14 @@ export const COMMUNITY_GROUP_TASKS: GroupTaskDef[] = [
     name: 'Court Pioneer',
     trigger: 'Be the first member ever to check in at a court that has no prior check-ins.',
     points: '+5',
+    award: 'pioneer',
   },
   {
     id: 'boardFreshness',
     name: 'Board Freshness',
     trigger: 'Submit a waiting-board report for a court you haven’t reported a board for before.',
     points: '+5',
+    award: 'board_new',
   },
   {
     id: 'zoneSweep',
@@ -251,20 +256,19 @@ export const COMMUNITY_GROUP_TASKS: GroupTaskDef[] = [
     trigger: 'Every member with a check for a court in that a zone, unlocks the bonus. '
       + 'Once completed we start over again.',
     points: '+10 each',
+    award: 'zone_sweep',
   },
   {
     id: 'explorer',
     name: 'Explorer',
-    trigger: 'When members’ check-ins and reports cover every court in Toronto, everyone who '
-      + 'contributed unlocks the bonus. Once completed we start over again.',
+    trigger: 'When members’ check-ins, score submissions and reports cover every court in Toronto, '
+      + 'everyone who contributed unlocks the bonus. Once completed we start over again.',
     points: '+30 each',
+    award: 'explorer',
   },
 ];
 
 export const ALL_TIERS: TierDef[] = CATEGORIES.flatMap((c) => c.tiers);
-export const TIER_POINTS: Record<string, number> = Object.fromEntries(ALL_TIERS.map((t) => [t.id, t.points]));
-
-export const categoryTotal = (c: CategoryDef): number => c.tiers.reduce((n, t) => n + t.points, 0);
 
 // Badge grouping: "playing tasks" spans the three match-based categories.
 export const PLAYING_CATEGORY_IDS = ['tournament', 'ladder', 'streaks'];
@@ -283,9 +287,6 @@ export const INITIATION: { id: string; counter?: CounterKey }[] = [
   { id: 'courtVisit', counter: 'courtsVisited' }, { id: 'waitingBoard', counter: 'boardPhotos' },
   { id: 'queuePhoto', counter: 'queueUpdates' }, { id: 'courtSuggestion', counter: 'suggestions' },
 ];
-
-/** The five initiation items the member ticks themselves (the only task fields a client writes). */
-export const SELF_REPORTED = ['profilePhoto', 'profileComplete', 'whatsappGroup', 'followSocial', 'tagPost'] as const;
 
 /** Done-ness of every task, keyed by tier id / initiation id, plus `setupComplete`. Derived, never stored. */
 export type TaskProgress = Record<string, boolean>;

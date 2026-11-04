@@ -1,14 +1,18 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { RotateCcw } from 'lucide-react';
 import { Button } from '../../components/Button';
+import { Sheet } from '../../components/Sheet';
+import { SelectField } from '../../components/SelectField';
+import { field, fieldLabelCls } from '../../components/Input';
 import { ReviewQueue } from '../../features/tasks/ReviewQueue';
 import { CountBadge, Empty, Group, PlayerLink, RowError, focusRing, squareBtn } from './PlayerDashElements';
 import {
-  REMOVAL_REASONS, type CourtReportRow, type RecordedRow, type RemovalReason, type SignupRow, type EventStatRow,
+  type CourtReportRow, type RecordedRow, type SignupRow, type EventStatRow,
   type useOrganizerDash,
 } from './useOrganizerDash';
 import type { UnplacedEntry } from '../tournament/types';
+import { WithdrawReasons } from '../../features/events/EventsElements';
 import type { DisputeRow } from '../../features/matches/scoring';
 import { type FirestoreDateLike, toDate } from '../../utils/eventDates';
 
@@ -95,26 +99,13 @@ const UnplacedCard: React.FC<{ data: OrganizerDashData; row: UnplacedEntry }> = 
       </div>
 
       {asking && (
-        <div className="mt-2.5 rounded-2xl bg-fg/5 p-2.5">
-          <p className="text-xs text-fg">
-            Take <span className="font-bold">{row.name}</span> off {row.eventTitle || 'this event'}? Why?
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {REMOVAL_REASONS.map((reason: RemovalReason) => (
-              <Button
-                key={reason} variant="outline" size="sm" className={focusRing}
-                isLoading={data.busyId === row.participantId} disabled={busy}
-                onClick={() => data.removeUnplaced(row, reason)}
-              >
-                {reason}
-              </Button>
-            ))}
-            <Button variant="ghost" size="sm" className={focusRing} disabled={busy} onClick={() => setAsking(false)}>
-              Cancel
-            </Button>
-          </div>
-          <p className="mt-1.5 text-xs text-fg/70">They come off the event and would have to be added back.</p>
-        </div>
+        <WithdrawReasons
+          prompt={<>Take <span className="font-bold">{row.name}</span> off {row.eventTitle || 'this event'}? Why?</>}
+          note="They come off the event and would have to be added back."
+          busy={data.busyId === row.participantId}
+          onPick={(reason) => data.removeUnplaced(row, reason)}
+          onCancel={() => setAsking(false)}
+        />
       )}
       <RowError show={data.rowError?.id === row.participantId} text={data.rowError?.text} />
     </div>
@@ -248,11 +239,120 @@ const Recorded: React.FC<{ data: OrganizerDashData }> = ({ data }) => {
         <button
           type="button"
           onClick={() => setAll((v) => !v)}
-          className="w-full min-h-11 rounded-2xl bg-fg/[0.03] text-xs font-bold text-clay hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+          className="w-full min-h-11 rounded-2xl bg-fg/5 text-xs font-bold text-clay hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
         >
           {all ? 'Show less' : `Show ${extra} more`}
         </button>
       )}
+    </Group>
+  );
+};
+
+// ── Record a booking ──────────────────────────────────────────────────────────
+// A booking that already happened, entered by hand: it goes straight to completed on the chosen
+// date. Recorded only — marking it Redeemed takes no points (recordBooking in functions/bookings.js).
+const isoDay = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+const PAY_BTN = 'flex-1 min-h-11 rounded-2xl text-xs font-bold border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay';
+
+const RecordBookingSheet: React.FC<{ data: OrganizerDashData; onClose: () => void; onRecorded: (text: string) => void }> = ({ data, onClose, onRecorded }) => {
+  const { bookingOptions: opts, loadBookingOptions } = data;
+  const [memberUid, setMemberUid] = useState('');
+  const [providerId, setProviderId] = useState('');
+  const [serviceId, setServiceId] = useState('');
+  const [payment, setPayment] = useState<'price' | 'points'>('price');
+  const [day, setDay] = useState(() => isoDay(new Date()));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => { void loadBookingOptions(); }, [loadBookingOptions]);
+
+  const services = opts?.services ?? [];
+  const providers = [...new Map(services.map((r) => [r.provider_id, r.provider_name])).entries()]
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const offers = services.filter((r) => r.provider_id === providerId);
+  const service = offers.find((r) => r.id === serviceId);
+  const redeemable = !!service && service.points_cost > 0;
+  const member = opts?.members.find((m) => m.uid === memberUid);
+
+  const save = async () => {
+    if (!memberUid || !serviceId || !day) { setError('Pick a member, a service and the date.'); return; }
+    const [y, m, d] = day.split('-').map(Number);
+    setSaving(true); setError('');
+    // Local noon, so the stored instant lands on the chosen day in any timezone nearby.
+    const err = await data.recordBooking({
+      memberUid, serviceId, payment: redeemable ? payment : 'price', completedAt: new Date(y, m - 1, d, 12).getTime(),
+    });
+    setSaving(false);
+    if (err) { setError(err); return; }
+    onRecorded(`Recorded ${service?.offer ?? 'the booking'} for ${member?.name ?? 'the member'}.`);
+    onClose();
+  };
+
+  return (
+    <Sheet onClose={onClose} title="Record a completed booking" maxWidthClassName="max-w-md">
+      <div className="p-5 pt-2 space-y-3">
+        {!opts ? <div className="h-40 animate-pulse rounded-2xl bg-fg/5" /> : (
+          <>
+            <SelectField label="Member" value={memberUid} placeholder="Choose a member" searchable
+              options={opts.members.map((m) => ({ value: m.uid, label: m.name }))} onChange={setMemberUid} />
+            <SelectField label="Provider" value={providerId} placeholder="Choose a provider"
+              options={providers} onChange={(v) => { setProviderId(v); setServiceId(''); setPayment('price'); }} />
+            <SelectField label="Service" value={serviceId} placeholder={providerId ? 'Choose a service' : 'Choose a provider first'}
+              disabled={!providerId}
+              options={offers.map((r) => ({ value: r.id, label: r.offer, hint: `${r.total_price}${r.points_cost > 0 ? ` · ${r.points_cost} points` : ''}` }))}
+              onChange={(v) => { setServiceId(v); setPayment('price'); }} />
+
+            <div>
+              <p className={fieldLabelCls}>Paid by</p>
+              <div className="mt-1.5 flex gap-2">
+                {(['price', 'points'] as const).map((p) => (
+                  <button key={p} type="button" disabled={p === 'points' && !redeemable} onClick={() => setPayment(p)}
+                    className={`${PAY_BTN} disabled:opacity-50 ${payment === p ? 'bg-clay border-clay text-white' : 'border-fg/10 text-fg/70 hover:border-fg/30'}`}>
+                    {p === 'price' ? 'Regular price' : 'Redeemed points'}
+                  </button>
+                ))}
+              </div>
+              {payment === 'points' && redeemable && (
+                <p className="mt-1.5 text-xs text-fg/70">Recorded only: no points are taken from their balance.</p>
+              )}
+            </div>
+
+            <div>
+              <label className={fieldLabelCls} htmlFor="rb-day">Date it happened</label>
+              <input id="rb-day" type="date" value={day} max={isoDay(new Date())}
+                onChange={(e) => setDay(e.target.value)} className={`${field} mt-1.5`} />
+            </div>
+
+            {error && <p role="alert" className="text-xs text-badge-loss">{error}</p>}
+
+            <div className="flex gap-3 pt-1">
+              <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
+              <Button type="button" variant="clay" className="flex-1" isLoading={saving} onClick={save}>Record</Button>
+            </div>
+          </>
+        )}
+      </div>
+    </Sheet>
+  );
+};
+
+const Bookings: React.FC<{ data: OrganizerDashData }> = ({ data }) => {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  return (
+    <Group title="Bookings" count={0}>
+      {note && <p role="status" className="px-1 text-xs text-badge-win">{note}</p>}
+      <button
+        type="button"
+        onClick={() => { setNote(''); setOpen(true); }}
+        className="w-full min-h-11 rounded-2xl bg-fg/5 text-xs font-bold text-clay hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+      >
+        Record a completed booking
+      </button>
+      {open && <RecordBookingSheet data={data} onClose={() => setOpen(false)} onRecorded={setNote} />}
     </Group>
   );
 };
@@ -277,6 +377,7 @@ const PhoneDash: React.FC<{ data: OrganizerDashData }> = ({ data }) => (
   <div className="flex flex-col gap-4">
     <Queues data={data} />
     <Recorded data={data} />
+    <Bookings data={data} />
     <Awareness data={data} />
   </div>
 );
@@ -293,12 +394,13 @@ const DeskDash: React.FC<{ data: OrganizerDashData }> = ({ data }) => (
     <div className="flex flex-col gap-4">
       <Queues data={data} />
       <Recorded data={data} />
+      <Bookings data={data} />
     </div>
     <div className="flex flex-col gap-4"><Awareness data={data} /></div>
   </div>
 );
 
 export const OrganizerDash: React.FC<{ data: OrganizerDashData; wide: boolean }> = ({ data, wide }) => {
-  if (data.loading) return <div className="h-40 animate-pulse rounded-3xl bg-fg/5" />;
+  if (data.loading) return <div className="h-40 animate-pulse rounded-2xl bg-fg/5" />;
   return wide ? <DeskDash data={data} /> : <PhoneDash data={data} />;
 };

@@ -36,6 +36,8 @@ export const SelectField: React.FC<{
   error?: string;
   disabled?: boolean;
   className?: string;
+  /** Adds a search box above the options, matching label and hint (long lists, e.g. members). */
+  searchable?: boolean;
 }> = ({
   label,
   value,
@@ -47,14 +49,19 @@ export const SelectField: React.FC<{
   error,
   disabled,
   className,
+  searchable,
 }) => {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const items = normalise(options);
   const chosen = items.find((o) => o.value === value);
+  const q = query.trim().toLowerCase();
+  const shown = q ? items.filter((o) => `${o.label} ${o.hint ?? ''}`.toLowerCase().includes(q)) : items;
 
+  const close = () => { setOpen(false); setQuery(''); };
   const pick = (next: string) => {
     onChange(next);
-    setOpen(false);
+    close();
   };
 
   return (
@@ -88,9 +95,20 @@ export const SelectField: React.FC<{
 
       <AnimatePresence>
         {open && (
-          <Sheet onClose={() => setOpen(false)} title={title ?? label ?? 'Choose'} maxWidthClassName="max-w-md">
+          <Sheet onClose={close} title={title ?? label ?? 'Choose'} maxWidthClassName="max-w-md">
             <div className="p-3 pt-1 space-y-1">
-              {items.map((option) => {
+              {searchable && (
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search…"
+                  aria-label="Search options"
+                  className={cn(field, 'mb-2')}
+                />
+              )}
+              {shown.length === 0 && <p className="px-3 py-3 text-sm text-fg/70">No matches</p>}
+              {shown.map((option) => {
                 const active = option.value === value;
                 return (
                   <button

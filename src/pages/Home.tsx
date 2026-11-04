@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -18,6 +18,7 @@ import { useCourtData } from './courtmap/useCourtData';
 import {
   FloatingCtaStack,
   HomeHero,
+  FaqSection,
   StatsStrip,
   SubscribeSheet,
   SupportBand,
@@ -74,7 +75,7 @@ const UPCOMING_EVENT_COUNT = 6;
  * src/pages/StaticPages.tsx.
  */
 export const Home: React.FC = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { courts } = useCourtData();
 
@@ -86,7 +87,7 @@ export const Home: React.FC = () => {
   const [volunteerOpen, setVolunteerOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  useEffect(() => { document.title = 'Racquets & Strings'; }, []);
+  useEffect(() => { document.title = 'Racquets & Strings · Toronto Tennis Leagues & Community'; }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -171,6 +172,19 @@ export const Home: React.FC = () => {
   // Visitors always see Subscribe; a member only until their row exists (hidden while checking).
   const showSubscribe = !user || newsletter.subscribed === false;
 
+  // `/?subscribe` (the newsletter's Subscribe link) acts as one tap on Subscribe, once auth and the
+  // member's row check have settled, so a member isn't shown the visitor sheet.
+  const [searchParams] = useSearchParams();
+  const subscribeLink = searchParams.has('subscribe');
+  const subscribeLinkHandled = useRef(false);
+  useEffect(() => {
+    if (!subscribeLink || subscribeLinkHandled.current || authLoading) return;
+    if (user && newsletter.subscribed === null) return;
+    subscribeLinkHandled.current = true;
+    if (showSubscribe) onSubscribeClick();
+    else setToast("You're already subscribed.");
+  });
+
   const handleVisitorSubscribe = (email: string) => subscribeVisitorToNewsletter(email);
 
   const handleVolunteer = (signup: Omit<VolunteerSignup, 'uid' | 'userName'>) =>
@@ -198,6 +212,7 @@ export const Home: React.FC = () => {
 
       <UpcomingEventsStrip events={upcoming} />
       <SupportBand onVolunteer={() => setVolunteerOpen(true)} />
+      <FaqSection />
 
       <SiteFooterLine className="mt-8" />
 

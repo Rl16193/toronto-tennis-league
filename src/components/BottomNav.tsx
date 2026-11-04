@@ -12,15 +12,17 @@ import { RacquetIcon } from './RacquetIcon';
 // A signed-out visitor sees ONLY the tabs they can actually use — Events, Courts, Marketplace.
 // The members-only tabs are hidden rather than shown and bounced to /login, so the bar never
 // offers a door that opens onto a sign-in wall.
-const TABS = [
+// Below `lg` this is the bottom bar; from `lg` Navbar renders the same list as header links.
+export const TABS: readonly { name: string; short?: string; path: string; icon: React.ComponentType<{ className?: string }>; requiresAuth: boolean }[] = [
   { name: 'Events', path: '/events', icon: Calendar, requiresAuth: false },
   { name: 'Courts', path: '/courts', icon: MapPin, requiresAuth: false },
   { name: 'Matches', path: '/matches', icon: RacquetIcon, requiresAuth: true },
   { name: 'Tasks', path: '/tasks', icon: ListChecks, requiresAuth: true },
   // Rewards is live here; Rent and Buy/Sell are placeholder tabs inside the page itself.
   // Browsable logged out — a signed-out visitor sees a 0 balance and can't redeem.
-  { name: 'Marketplace', path: '/marketplace', icon: Store, requiresAuth: false },
-] as const;
+  // `short` is the bottom-bar label: "Marketplace" doesn't fit a fifth of a phone at 12px.
+  { name: 'Marketplace', short: 'Market', path: '/marketplace', icon: Store, requiresAuth: false },
+];
 
 export const BottomNav: React.FC = () => {
   const { user } = useAuth();
@@ -32,7 +34,7 @@ export const BottomNav: React.FC = () => {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-fg/8 bg-nav/95 backdrop-blur-xl"
+      className="lg:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-fg/8 bg-nav/95 backdrop-blur-xl"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="Primary"
     >
@@ -64,7 +66,7 @@ export const BottomNav: React.FC = () => {
                 )}
                 <tab.icon className="relative z-10 w-5 h-5" />
               </span>
-              {active && <span className="text-[10px] font-black leading-none">{tab.name}</span>}
+              <span className={`text-xs leading-none ${active ? 'font-black' : 'font-bold'}`}>{tab.short ?? tab.name}</span>
             </Link>
           );
         })}

@@ -1,4 +1,5 @@
 import React from 'react';
+import { numCls, statTileCls, tableHeadCls } from './Input';
 import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ChevronDown, Minus } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -8,14 +9,14 @@ import { AnimatePresence, motion } from 'motion/react';
 export const RankMove: React.FC<{ t?: 'up' | 'down' | 'flat'; move?: number }> = ({ t, move }) =>
   t === 'up' ? (
     <span className="inline-flex items-center gap-0.5 text-badge-win" aria-label={`rising${move ? ` ${move}` : ''}`}>
-      <ArrowUp className="w-3 h-3" />{!!move && <span className="text-[10px] font-bold">{move}</span>}
+      <ArrowUp className="w-3.5 h-3.5" />{!!move && <span className="text-xs font-bold">{move}</span>}
     </span>
   ) : t === 'down' ? (
     <span className="inline-flex items-center gap-0.5 text-badge-loss" aria-label={`falling${move ? ` ${move}` : ''}`}>
-      <ArrowDown className="w-3 h-3" />{!!move && <span className="text-[10px] font-bold">{move}</span>}
+      <ArrowDown className="w-3.5 h-3.5" />{!!move && <span className="text-xs font-bold">{move}</span>}
     </span>
   ) : (
-    <Minus className="w-3 h-3 text-fg/70 inline" aria-label="no change" />
+    <Minus className="w-3.5 h-3.5 text-fg/70 inline" aria-label="no change" />
   );
 
 // Where a row came from, as a single letter on the name line: T tournament, C challenge,
@@ -23,7 +24,7 @@ export const RankMove: React.FC<{ t?: 'up' | 'down' | 'flat'; move?: number }> =
 // which is white in dark theme and dark green in light, from the --color-fg token.
 export const SourceLetter: React.FC<{ source: 'tournament' | 'challenge' | 'rally' }> = ({ source }) => (
   <span
-    className={`text-[11px] font-black ${source === 'rally' ? 'text-fg' : 'text-clay'}`}
+    className={`text-xs font-black ${source === 'rally' ? 'text-fg' : 'text-clay'}`}
     aria-label={source === 'tournament' ? 'Tournament' : source === 'challenge' ? 'Challenge' : 'Rally'}
   >
     {source === 'tournament' ? 'T' : source === 'challenge' ? 'C' : 'R'}
@@ -105,9 +106,9 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
             {nameHref
               ? <Link to={nameHref} className="hover:text-clay transition-colors">{name}</Link>
               : name}
-            {isYou ? <span className="ml-1 text-clay text-[10px]">(you)</span> : null}
+            {isYou ? <span className="ml-1 text-clay text-xs">(you)</span> : null}
           </p>
-          {subtitle ? <p className="text-fg/70 text-[11px]">{subtitle}</p> : null}
+          {subtitle ? <p className="text-fg/70 text-xs">{subtitle}</p> : null}
           {pills ? <div className="flex items-center gap-1.5 flex-wrap mt-1">{pills}</div> : null}
         </div>
 
@@ -160,14 +161,14 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
                   {stats.map((s, i) => (
                     <div
                       key={i}
-                      className={`rounded-xl bg-fg/[0.03] px-2 py-2 text-center flex flex-col ${
+                      className={`${statTileCls} px-2 ${
                         stats.length % 2 === 1 && i === stats.length - 1 ? 'col-span-2' : ''
                       }`}
                     >
-                      <div className="text-fg font-bold text-sm flex-1 flex items-center justify-center">{s.value}</div>
+                      <div className={`${numCls} text-sm flex-1 flex items-center justify-center`}>{s.value}</div>
                       {/* An empty label renders no header — used by cells whose content already
                           speaks for itself (the tags cell), so they don't get a redundant title. */}
-                      {!!s.label && <p className="text-fg/70 text-[9px] uppercase tracking-wide mt-0.5">{s.label}</p>}
+                      {!!s.label && <p className={`${tableHeadCls} mt-0.5`}>{s.label}</p>}
                     </div>
                   ))}
                 </div>

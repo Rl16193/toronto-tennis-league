@@ -1,6 +1,7 @@
 import { Timestamp, doc, setDoc, updateDoc, getDocs, query, where, collection, writeBatch } from 'firebase/firestore';
-import { EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail, type User } from 'firebase/auth';
-import { db } from '../../../lib/firebase';
+import { EmailAuthProvider, reauthenticateWithCredential, reauthenticateWithPopup, signOut, verifyBeforeUpdateEmail, type User } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
+import { appleProvider, auth, db, functions, googleProvider } from '../../../lib/firebase';
 import type { ContactMethod } from '../../../types';
 
 // Sync the display name onto stats and every event_participants doc (user_name is owner-writable).
@@ -140,5 +141,21 @@ export const changeEmail = async (user: User, newEmail: string, password: string
   const credential = EmailAuthProvider.credential(user.email || '', password);
   await reauthenticateWithCredential(user, credential);
   await verifyBeforeUpdateEmail(user, newEmail.trim());
+};
+
+/** True when the account signs in with a password (the sheet then asks for it). */
+export const usesPassword = (user: User) => user.providerData.some((p) => p.providerId === 'password');
+
+// The server refuses unless the sign-in is under 5 minutes old, so this signs in again first.
+export const deleteAccount = async (user: User, password: string) => {
+  if (usesPassword(user)) {
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email || '', password));
+  } else {
+    const apple = user.providerData.some((p) => p.providerId === 'apple.com');
+    await reauthenticateWithPopup(user, apple ? appleProvider : googleProvider);
+  }
+  await user.getIdToken(true);
+  await httpsCallable(functions, 'deleteAccount')({});
+  await signOut(auth).catch(() => {});
 };
 

@@ -40,13 +40,15 @@ type Props = {
   note?: string;
   /** Correcting a recorded score: the winner shows but can't change, only the games can. */
   lockedWinnerUid?: string;
+  /** Rallies only: level sets are a draw, so the winner isn't asked for. */
+  drawAllowed?: boolean;
 };
 
 // Mobile-first score entry (wireframe 1d): winner picked with two large tap-cards instead of a
 // native dropdown, games entered with +/− steppers instead of the number keyboard. Set values
 // stay strings in ScoreForm ('' means untouched → 0 downstream), so submit semantics — including
 // the all-0-0 walkover convention — are unchanged.
-export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, onClose, onSubmit, isCreatorSubmit, extraCheckbox, onReset, error, note, lockedWinnerUid }) => {
+export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, onClose, onSubmit, isCreatorSubmit, extraCheckbox, onReset, error, note, lockedWinnerUid, drawAllowed }) => {
   const winnerLocked = !!lockedWinnerUid;
   const [submitting, setSubmitting] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -83,6 +85,18 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
 
   const winnerOptions = [matchInfo.player1, matchInfo.player2];
 
+  // A rally whose sets are level is a draw (1 point each). The server decides the same way.
+  const setWins = scoreForm.sets.reduce<[number, number]>((won, s) => {
+    const mine = Number(s.mine || 0);
+    const opp = Number(s.opponent || 0);
+    if (mine > opp) return [won[0] + 1, won[1]];
+    if (opp > mine) return [won[0], won[1] + 1];
+    return won;
+  }, [0, 0]);
+  const rallyDraw = !!drawAllowed && !winnerLocked
+    && scoreForm.sets.some((s) => Number(s.mine || 0) > 0 || Number(s.opponent || 0) > 0)
+    && setWins[0] === setWins[1];
+
   const mineLabel = isCreatorSubmit ? matchInfo.player1.name : 'My score';
   const oppLabel = isCreatorSubmit ? matchInfo.player2.name : 'Opponent';
 
@@ -103,11 +117,11 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
 
         {/* Winner — two large tap-cards. A no-show has no winner, so they switch off. */}
         <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mb-2">
-          Winner{winnerLocked ? ' · stays as recorded' : ''}
+          Winner{winnerLocked ? ' · stays as recorded' : rallyDraw ? ' · none, the sets are level' : ''}
         </p>
         {/* A correction keeps the recorded winner, so the cards show it but take no input. */}
         <div
-          className={`flex gap-2.5 mb-6 ${winnerLocked ? 'pointer-events-none' : ''}`}
+          className={`flex gap-2.5 mb-6 ${winnerLocked || rallyDraw ? 'pointer-events-none opacity-50' : ''}`}
           role="radiogroup"
           aria-label="Winner"
           aria-readonly={winnerLocked || undefined}
@@ -158,7 +172,7 @@ export const ScoreModal: React.FC<Props> = ({ matchInfo, scoreForm, onChange, on
                   key={c}
                   type="button"
                   onMouseDown={() => { onChange({ ...scoreForm, court: c }); setCourtSearch(''); setShowCourtDropdown(false); }}
-                  className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
+                  className="w-full rounded-2xl px-3 py-2 text-left text-sm font-semibold text-fg hover:bg-clay/20 transition-colors"
                 >
                   {c}
                 </button>

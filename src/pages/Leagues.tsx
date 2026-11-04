@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 
 import { AnimatePresence, motion } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
-import { abbreviatePlayerName, byLeagueRank, pgWinPct, useStandings } from '../features/leagues/useStandings';
+import { abbreviatePlayerName } from './tournament/utils';
+import { byLeagueRank, pgWinPct, useStandings } from '../features/leagues/useStandings';
 import { TOTAL_MILESTONES, TOTAL_TASKS, useCommunityStandings } from '../features/tasks/useTasks';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { Button } from '../components/Button';
@@ -83,10 +84,10 @@ export const Leagues: React.FC = () => {
       {board === 'tournament' && (<>
       {loading ? (
         <div className="space-y-2">
-          {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-12 bg-tennis-surface/30 rounded-xl animate-pulse" />)}
+          {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-12 bg-fg/5 rounded-2xl animate-pulse" />)}
         </div>
       ) : (
-        <div className="rounded-3xl bg-tennis-surface/30 overflow-hidden divide-y divide-fg/5">
+        <div className="rounded-2xl bg-fg/5 overflow-hidden divide-y divide-fg/5">
           {shownRows.length === 0 ? (
             <p className="text-sm text-fg/70 py-6 text-center">Standings appear once matches are played.</p>
           ) : shownRows.map((row, i) => {
@@ -119,7 +120,7 @@ export const Leagues: React.FC = () => {
                     <Button
                       size="sm"
                       variant="clay"
-                      className="w-full justify-center !px-2 !py-1 !text-[11px] !rounded-lg whitespace-nowrap"
+                      className="w-full px-2"
                       disabled={(!!blocked && blocked !== 'active-limit') || challengeBusy === row.user_id}
                       isLoading={challengeBusy === row.user_id}
                       title={blocked && blocked !== 'active-limit' ? CHALLENGE_BLOCK_LABEL[blocked] : undefined}
@@ -147,7 +148,7 @@ export const Leagues: React.FC = () => {
                       transition={{ duration: 0.2, ease: 'easeInOut' }}
                       className="overflow-hidden"
                     >
-                      <p className="pl-9 pr-3 pb-2 pt-1 text-[11px] text-clay">{challengeMessage.text}</p>
+                      <p className="pl-9 pr-3 pb-2 pt-1 text-xs text-clay">{challengeMessage.text}</p>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -169,7 +170,7 @@ export const Leagues: React.FC = () => {
       {board === 'community' && (
         communityLoading ? (
           <div className="space-y-2">
-            {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-12 bg-tennis-surface/30 rounded-xl animate-pulse" />)}
+            {[1, 2, 3, 4, 5].map((i) => <div key={i} className="h-12 bg-fg/5 rounded-2xl animate-pulse" />)}
           </div>
         ) : communityVisible.length === 0 ? (
           <div className="text-center py-16">
@@ -188,7 +189,7 @@ export const Leagues: React.FC = () => {
                   key={row.uid}
                   {...fadeUp}
                   transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}
-                  className={`rounded-2xl border ${isUser ? 'bg-clay/10 border-clay/20' : 'bg-tennis-surface/30 border-fg/5'}`}
+                  className={`rounded-2xl border ${isUser ? 'bg-clay/10 border-clay/20' : 'bg-fg/5 border-fg/5'}`}
                 >
                   <PlayerCard
                     id={row.uid}

@@ -4,10 +4,11 @@ import { ArrowLeft, Moon, Sun, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { HeaderMenu } from './HeaderMenu';
+import { TABS } from './BottomNav';
 
 // Slim top bar: brand (→ Home) + the header hamburger (About Us / How It Works always;
-// Notifications / Profile / Logout when signed in — see HeaderMenu). Primary navigation lives
-// in the bottom tab bar (BottomNav), app-style.
+// Notifications / Profile / Logout when signed in — see HeaderMenu). Primary navigation is the
+// bottom tab bar below `lg` and these text links from `lg`, both from BottomNav's TABS.
 
 export const Navbar: React.FC = () => {
   const { user, profile } = useAuth();
@@ -62,12 +63,32 @@ export const Navbar: React.FC = () => {
             </Link>
           ) : (
             <Link to="/" className="flex items-center shrink-0" aria-label="Home">
-              <span className="text-lg md:text-xl font-bold font-['Montserrat'] tracking-tight">
+              <span className="text-base min-[360px]:text-lg md:text-xl font-bold font-['Montserrat'] tracking-tight">
                 <span className="text-fg">RACQUETS</span>
                 <span className="text-clay"> &</span>
                 <span className="text-fg"> STRINGS</span>
               </span>
             </Link>
+          )}
+
+          {!isAuthPage && (
+            <div className="hidden lg:flex items-center gap-6">
+              {TABS.filter((tab) => !!user || !tab.requiresAuth).map((tab) => {
+                const active = location.pathname === tab.path;
+                return (
+                  <Link
+                    key={tab.path}
+                    to={tab.path}
+                    aria-current={active ? 'page' : undefined}
+                    className={`py-1 text-sm font-bold border-b-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay ${
+                      active ? 'text-fg border-clay' : 'text-fg/70 border-transparent hover:text-fg'
+                    }`}
+                  >
+                    {tab.name}
+                  </Link>
+                );
+              })}
+            </div>
           )}
 
           {/* Theme toggle + hamburger (About Us / How It Works / Notifications / Profile / Logout) */}
@@ -76,7 +97,7 @@ export const Navbar: React.FC = () => {
               <button
                 type="button"
                 onClick={toggleTheme}
-                className="p-2 rounded-xl text-fg hover:text-clay hover:bg-clay/5 transition-colors"
+                className="p-2 rounded-2xl text-fg hover:text-clay hover:bg-clay/5 transition-colors"
                 aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
               >
                 {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -84,7 +105,7 @@ export const Navbar: React.FC = () => {
               {user && (
                 <Link
                   to="/profile"
-                  className="p-2 rounded-xl text-fg hover:text-clay hover:bg-clay/5 transition-colors"
+                  className="p-2 rounded-2xl text-fg hover:text-clay hover:bg-clay/5 transition-colors"
                   aria-label="Profile"
                 >
                   {profile?.user.avatar && !avatarFailed ? (

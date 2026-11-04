@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import { tableHeadCls } from '../../components/Input';
 import { ChevronDown, X } from 'lucide-react';
 import { Button } from '../../components/Button';
 import { ContactOpponentButton, contactChannels } from '../../components/ContactOpponentButton';
-import { BOOKING_WORDS, type BookingRow, type BookingStage, isGroupLesson } from '../../features/services/useServices';
+import { BOOKING_WORDS, type BookingRow, type BookingStage, isGroupLesson, money } from '../../features/services/useServices';
 import { type FirestoreDateLike, toDate, toMillis } from '../../utils/eventDates';
 import { Empty, Group, Kicker, PlayerLink, RowError, focusRing, squareBtn } from './PlayerDashElements';
 import type { ProviderJob, useProviderDash } from './useProviderDash';
@@ -17,9 +18,6 @@ import type { ProviderJob, useProviderDash } from './useProviderDash';
 
 export type ProviderDashData = ReturnType<typeof useProviderDash>;
 type Identity = NonNullable<ProviderDashData['identity']>;
-
-const money = (n: number | null | undefined) =>
-  typeof n === 'number' ? `$${n % 1 === 0 ? n : n.toFixed(2)}` : '—';
 
 /** "today" or "Sep 12". */
 const dayLabel = (at?: FirestoreDateLike) => {
@@ -42,7 +40,7 @@ const STAGE: Record<BookingStage, { label: string; cls: string }> = {
 };
 
 const StageBadge: React.FC<{ stage: BookingStage; extra?: string }> = ({ stage, extra }) => (
-  <span className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-lg px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${STAGE[stage].cls}`}>
+  <span className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-2xl px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${STAGE[stage].cls}`}>
     {STAGE[stage].label}{extra ? ` · ${extra}` : ''}
   </span>
 );
@@ -139,7 +137,7 @@ const JobActions: React.FC<{ data: ProviderDashData; job: ProviderJob }> = ({ da
 };
 
 const ActiveChip: React.FC<{ active: boolean }> = ({ active }) => (
-  <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${active ? 'bg-badge-win/15 text-badge-win' : 'bg-fg/10 text-fg/70'}`}>
+  <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-2xl px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${active ? 'bg-badge-win/15 text-badge-win' : 'bg-fg/10 text-fg/70'}`}>
     <span className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-badge-win' : 'bg-fg/70'}`} />
     {active ? 'Active' : 'No offers'}
   </span>
@@ -162,9 +160,9 @@ const TONE = {
 
 const Tile: React.FC<{ label: string; value: number; tone?: keyof typeof TONE; wide?: boolean }> = ({ label, value, tone = 'plain', wide }) => (
   <div className={`rounded-2xl ${wide ? 'px-4 py-3.5' : 'px-2 py-2.5 text-center'} ${TONE[tone]}`}>
-    {wide && <p className="text-xs font-bold uppercase tracking-widest text-fg/70">{label}</p>}
+    {wide && <p className={tableHeadCls}>{label}</p>}
     <p className={`font-black leading-none tracking-tight ${wide ? 'mt-1.5 text-3xl' : 'text-2xl'}`}>{value}</p>
-    {!wide && <p className="mt-1 text-xs font-bold uppercase tracking-wide text-fg/70">{label}</p>}
+    {!wide && <p className={`mt-1 ${tableHeadCls}`}>{label}</p>}
   </div>
 );
 
@@ -172,7 +170,7 @@ const Earnings: React.FC<{ data: ProviderDashData; wide?: boolean }> = ({ data, 
   const s = data.stats;
   const settled = data.identity?.category === 'coaching' ? 'at the lesson' : 'at drop-off';
   return (
-    <section className="rounded-3xl bg-fg/5 p-4">
+    <section className="rounded-2xl bg-fg/5 p-4">
       <div className={wide ? 'flex flex-col gap-3' : 'flex items-start justify-between gap-3'}>
         <div>
           <Kicker>Earned · {s.completed} completed</Kicker>
@@ -263,7 +261,7 @@ const LessonBlock: React.FC<{
   const [open, setOpen] = useState(false);
   const toggle = (
     <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
-      className={`flex min-w-0 items-center gap-1.5 rounded-lg text-left text-sm font-bold text-fg ${focusRing}`}>
+      className={`flex min-w-0 items-center gap-1.5 rounded-2xl text-left text-sm font-bold text-fg ${focusRing}`}>
       <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
       {/* Wraps rather than truncates: the table's Player column is narrow. */}
       <span className="min-w-0 break-words">{label}</span>
@@ -497,7 +495,7 @@ const ServiceRail: React.FC<{ data: ProviderDashData }> = ({ data }) => {
   const total = Math.max(1, data.stats.total);
   const fills = ['bg-clay', 'bg-clay/60', 'bg-badge'];
   return (
-    <section className="rounded-3xl bg-fg/5 p-4">
+    <section className="rounded-2xl bg-fg/5 p-4">
       <Kicker>Bookings by service</Kicker>
       {data.services.length === 0 ? (
         <div className="mt-3"><Empty>No offers listed.</Empty></div>
@@ -552,8 +550,8 @@ const DeskDash: React.FC<{ data: ProviderDashData }> = ({ data }) => {
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)_280px] items-start gap-5">
-        <section className="overflow-hidden rounded-3xl bg-fg/5">
-          <div className={`${TABLE_COLS} py-3 text-xs font-bold uppercase tracking-widest text-fg/70`}>
+        <section className="overflow-hidden rounded-2xl bg-fg/5">
+          <div className={`${TABLE_COLS} py-3 ${tableHeadCls}`}>
             <span>Player</span><span>Service</span><span>Booked</span><span>Price</span><span>Status</span><span />
           </div>
           {s.total === 0 && (
@@ -583,6 +581,6 @@ const DeskDash: React.FC<{ data: ProviderDashData }> = ({ data }) => {
 };
 
 export const ProviderDash: React.FC<{ data: ProviderDashData; wide: boolean }> = ({ data, wide }) => {
-  if (data.loading) return <div className="h-40 animate-pulse rounded-3xl bg-fg/5" />;
+  if (data.loading) return <div className="h-40 animate-pulse rounded-2xl bg-fg/5" />;
   return wide ? <DeskDash data={data} /> : <PhoneDash data={data} />;
 };

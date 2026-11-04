@@ -44,7 +44,7 @@ export const Notifications: React.FC = () => {
         <button
           type="button"
           onClick={() => navigate(-1)}
-          className="p-2 -ml-2 rounded-xl text-fg/70 hover:text-fg hover:bg-fg/5 transition-colors"
+          className="p-2 -ml-2 rounded-2xl text-fg/70 hover:text-fg hover:bg-fg/5 transition-colors"
           aria-label="Back"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -73,15 +73,15 @@ export const Notifications: React.FC = () => {
 
       {loading ? (
         <div className="space-y-2">
-          {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}
+          {[1, 2, 3, 4].map((i) => <div key={i} className="h-16 bg-fg/5 rounded-2xl animate-pulse" />)}
         </div>
       ) : items.length === 0 && claimableRewards === 0 ? (
-        <div className="rounded-3xl bg-tennis-surface/30 py-16 text-center">
+        <div className="rounded-2xl bg-fg/5 py-16 text-center">
           <Bell className="w-8 h-8 text-fg/70 mx-auto mb-3" />
           <p className="text-sm text-fg/70">Nothing yet. Match updates and task news land here.</p>
         </div>
       ) : (
-        <div className="rounded-3xl bg-tennis-surface/30 overflow-hidden divide-y divide-fg/5">
+        <div className="rounded-2xl bg-fg/5 overflow-hidden divide-y divide-fg/5">
           {items.map((n, i) => {
             const contact = n.counterpart_uid ? contactMap[n.counterpart_uid] : undefined;
             return (
@@ -98,14 +98,14 @@ export const Notifications: React.FC = () => {
                   type="button"
                   onClick={() => openItem(n)}
                   whileTap={tapScale.whileTap}
-                  className="w-full text-left px-4 py-3.5 hover:bg-white/[0.04] transition-colors"
+                  className="w-full text-left px-4 py-3.5 hover:bg-fg/5 transition-colors"
                 >
                   <div className="flex items-start gap-2">
                     {!n.read_at && <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-clay shrink-0" />}
                     <div className={`min-w-0 flex-1 ${n.read_at ? 'pl-3.5' : ''}`}>
                       <p className="text-sm font-semibold text-fg leading-snug">{n.title}</p>
                       {n.body && <p className="text-xs text-fg/70 mt-0.5 leading-snug">{n.body}</p>}
-                      <p className="text-[10px] text-fg/70 mt-1">{timeAgo(n.created_at)}</p>
+                      <p className="text-xs text-fg/70 mt-1">{timeAgo(n.created_at)}</p>
                     </div>
                   </div>
                 </motion.button>

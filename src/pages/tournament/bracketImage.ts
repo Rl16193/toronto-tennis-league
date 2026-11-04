@@ -1,5 +1,5 @@
 import { TournamentMatch, TournamentPlayer } from './types';
-import { BYE, PLAYER_LOADING, byMatchNumber, formatDeadline, formatPlayerName } from './utils';
+import { BYE, PLAYER_LOADING, byMatchNumber, formatDeadline, formatPlayerName, withSeed } from './utils';
 
 export const getRoundLabels = (drawSize: number): string[] => {
   if (drawSize <= 2) return ['F'];
@@ -214,7 +214,7 @@ const contactOf = (uid: string, contacts: ContactMap): string => {
  */
 const PENDING_CARD_H = 108;
 
-const pendingCard = (m: TournamentMatch, col: number, contacts: ContactMap, tag: string) =>
+const pendingCard = (m: TournamentMatch, col: number, contacts: ContactMap, tag: string, seeds: SeedMap) =>
   (y: number): string => {
     const x = PAD + col * (COL_W + 24);
     let out = `<rect x="${x}" y="${y}" width="${COL_W}" height="${PENDING_CARD_H - 16}" rx="14" fill="${C.card}" stroke="${C.cardStroke}" />`;
@@ -226,7 +226,8 @@ const pendingCard = (m: TournamentMatch, col: number, contacts: ContactMap, tag:
     slots.forEach(([name, uid], i) => {
       const ry = y + 34 + i * 30;
       const contact = contactOf(uid, contacts);
-      out += `<text x="${x + 20}" y="${ry + 22}" font-size="18" font-weight="700" fill="${C.text}">${escapeSvg(shortName(name, 16))}</text>`;
+      const seed = seeds[uid];
+      out += `<text x="${x + 20}" y="${ry + 22}" font-size="18" font-weight="700" fill="${C.text}">${escapeSvg(withSeed(shortName(name, seed ? 12 : 16), seed))}</text>`;
       if (contact) out += `<text x="${x + COL_W - 20}" y="${ry + 22}" text-anchor="end" font-size="14" fill="${C.textMuted}">${escapeSvg(truncate(contact, 18))}</text>`;
     });
     return out;
@@ -235,10 +236,11 @@ const pendingCard = (m: TournamentMatch, col: number, contacts: ContactMap, tag:
 // Cards are laid two across, so they are paired into full-width rows before pagination.
 const pendingRows = (
   matches: TournamentMatch[], contacts: ContactMap, tagOf: (m: TournamentMatch) => string,
+  seedsOf: (m: TournamentMatch) => SeedMap,
 ): Block[] => {
   const rows: Block[] = [];
   for (let i = 0; i < matches.length; i += 2) {
-    const pair = matches.slice(i, i + 2).map((m, c) => pendingCard(m, c, contacts, tagOf(m)));
+    const pair = matches.slice(i, i + 2).map((m, c) => pendingCard(m, c, contacts, tagOf(m), seedsOf(m)));
     rows.push({ height: PENDING_CARD_H, render: (y) => pair.map((p) => p(y)).join('') });
   }
   return rows;
@@ -247,6 +249,8 @@ const pendingRows = (
 // ── Slides ───────────────────────────────────────────────────────────────────
 
 export type ContactMap = Record<string, { phone?: string; email?: string }>;
+/** uid → seed. */
+export type SeedMap = Record<string, number>;
 
 export type DrawSlide = {
   id: string;
@@ -264,6 +268,9 @@ export type DrawSlideInput = {
   zone?: string;
   roundDeadlines?: Record<string, string>;
   contacts?: ContactMap;
+  /** RR group seeds (per group) and the bracket's seeds; a seeded name reads "(1) Name". */
+  groupSeeds?: SeedMap;
+  bracketSeeds?: SeedMap;
   /** Data URI from loadBrandMark(); the frame falls back to a plain ring without it. */
   brandMark?: string;
 };
@@ -289,7 +296,8 @@ const groupSlides = (input: DrawSlideInput, deadline?: string): DrawSlide[] => {
     out += `<line x1="${x}" y1="${y + 46}" x2="${x + COL_W}" y2="${y + 46}" stroke="${C.divider}" />`;
     g.players.forEach((p, pi) => {
       const ry = y + 46 + pi * 34;
-      const name = truncate(formatPlayerName(p.name), 18);
+      const seed = input.groupSeeds?.[p.uid];
+      const name = withSeed(truncate(formatPlayerName(p.name), seed ? 14 : 18), seed);
       const contact = truncate(contactOf(p.uid, contacts), 16);
       out += `<text x="${x + 20}" y="${ry + 26}" font-size="18" font-weight="600" fill="${C.text}">${escapeSvg(name)}</text>`;
       if (contact) out += `<text x="${x + COL_W - 20}" y="${ry + 26}" text-anchor="end" font-size="14" fill="${C.textMuted}">${escapeSvg(contact)}</text>`;
@@ -381,7 +389,8 @@ const bracketSlides = (input: DrawSlideInput, deadline?: string): DrawSlide[] =>
         rows.forEach(([name, uid, games], r) => {
           const ty = y + 19 + r * (BLOCK_H / 2);
           const won = !!m.winner_uid && m.winner_uid === uid;
-          const label = isRealSlot(name, uid) ? shortName(name, 15) : 'TBD';
+          const seed = input.bracketSeeds?.[uid];
+          const label = isRealSlot(name, uid) ? withSeed(shortName(name, seed ? 11 : 15), seed) : 'TBD';
           body += `<text x="${x + 12}" y="${ty}" font-size="15" font-weight="700" fill="${won ? C.clay : C.text}">${escapeSvg(label)}</text>`;
           if (m.status === 'complete') {
             const score = games.filter((g) => g > 0).join(' ');
@@ -451,7 +460,7 @@ const pendingSlides = (input: DrawSlideInput, deadline?: string): DrawSlide[] =>
       body: renderPage(pendingRows(chunk, contacts, (m) => {
         const round = m.round === 'RR' ? 'GROUP' : (m.round ?? '');
         return round ? `${round} · ${m.match_id ?? ''}`.trim() : (m.match_id ?? '');
-      })),
+      }, (m) => (m.round === 'RR' ? input.groupSeeds : input.bracketSeeds) ?? {})),
     }),
   }));
 };

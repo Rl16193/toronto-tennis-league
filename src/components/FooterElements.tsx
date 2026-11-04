@@ -4,8 +4,7 @@ import { Instagram, Mail, MessageCircle } from 'lucide-react';
 
 // Every site-wide link and contact detail, plus the components that render them.
 // Mirrored in index.html and functions/lib/constants.js — change all three together.
-export const SITE_URL = 'https://www.racquetsandstrings.ca';
-/** Bare host, for display in the footer line. Keep in step with SITE_URL. */
+/** Bare host, for display in the footer line. */
 export const SITE_HOST = 'racquetsandstrings.ca';
 export const CONTACT_EMAIL = 'events@racquetsandstrings.ca';
 export const INSTAGRAM_URL = 'https://www.instagram.com/racqnstringstoronto';
@@ -14,6 +13,9 @@ export const WHATSAPP_URL = 'https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX';
  *  homepage's floating stack (FloatingCtaStack, pages/home/HomeElements.tsx). Nothing reads this
  *  yet. Drop the payment link in here (Stripe/PayPal/etc.) when that button lands. */
 export const DONATE_URL = '';
+/** The current Terms/Privacy Policy took effect on this date (local midnight). A member whose
+ *  contacts.consent_at is earlier, or null, is asked to agree again (ConsentSheet). */
+export const PRIVACY_EFFECTIVE = new Date(2026, 9, 20);
 
 const linkCls = (className: string) =>
   `inline-flex items-center gap-1.5 hover:text-clay transition-colors ${className}`;

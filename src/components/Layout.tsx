@@ -43,8 +43,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.22 }}
           // Full-height courts page reserves the top+bottom bars itself; every other page gets
-          // top padding for the fixed top bar and bottom padding for the fixed bottom tab bar.
-          className={`flex-grow${isCourts ? '' : isHome ? ' pb-16' : ' pt-16 pb-16'}`}
+          // top padding for the fixed top bar and bottom padding for the fixed bottom tab bar (below lg).
+          className={`flex-grow${isCourts ? '' : isHome ? ' pb-16 lg:pb-0' : ' pt-16 pb-16 lg:pb-0'}`}
         >
           <Suspense fallback={<RouteFallback />}>
             {children}

@@ -13,7 +13,7 @@ const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/
 const admin = require('firebase-admin');
 const { notify } = require('./lib/notify');
 const { torontoParts, toDate, isGuest, REGION } = require('./lib/constants');
-const { courtKey: slug, zoneOfCourt, courtsInZone, allCourts } = require('./lib/memberLocation');
+const { courtKey: slug, zoneOfCourt, courtsInZone, torontoCourts, isTorontoCourt } = require('./lib/memberLocation');
 const { isPlayedResult } = require('./lib/scoring');
 const { rsPointsPatch } = require('./lib/points');
 const db = () => admin.firestore();
@@ -208,8 +208,8 @@ async function advanceSweep(ref, rosterKeys, a, fixed) {
 const payees = (result) => result.contributors.map((uid) => ({ uid, name: result.names[uid] || '' }));
 
 // Full Zone Sweep: visits (check-ins and match visits) and every kind of report cover a court; a
-// covered zone pays each member contributor 10. Explorer is the same for the whole city (courts on
-// the roster only) and pays 30.
+// covered zone pays each member contributor 10 (a GTA municipality is a zone). Explorer is the same
+// for Toronto's courts only and pays 30.
 exports.onCourtActivityZoneSweep = onDocumentCreated(
   { document: 'courts/{id}', region: REGION },
   async (event) => {
@@ -224,8 +224,8 @@ exports.onCourtActivityZoneSweep = onDocumentCreated(
         });
       }
     }
-    if (!zoneOfCourt(a.court_key)) return;
-    const city = allCourts();
+    if (!isTorontoCourt(a.court_key)) return; // Explorer is Toronto only; each GTA municipality has its zone sweep
+    const city = torontoCourts();
     const result = await advanceSweep(db().doc('site_stats/city_sweep'), city, a, { total_courts: city.length });
     if (result.complete) {
       await payGroupAward(`explorer_${result.sweepIndex}`, {

@@ -16,12 +16,6 @@ export type JoinedRegistration = {
   category: EventCategory;
 };
 
-export type SlotResult = {
-  status: 'available' | 'fallback' | 'full';
-  skillOverride: number;
-  intendedGroup?: string;
-  actualGroup?: string;
-};
 
 export const INITIAL_JOIN_FORM: JoinFormState = {
   division: '',

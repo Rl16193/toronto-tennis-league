@@ -81,6 +81,11 @@ exports.onMatchConnection = onDocumentWritten(
     const a = after.player_1_uid;
     const b = after.player_2_uid;
     if (!a || !b) return;
+    // Same pair, same standing: they were linked on the write that paired them. Skipping later
+    // writes (scores, renames) stops deleteAccount's anonymising from re-linking a deleted member.
+    const before = event.data?.before?.data();
+    if (before && before.player_1_uid === a && before.player_2_uid === b &&
+      (after.category === 'tournament' || before.status === after.status)) return;
 
     if (after.category === 'rally' || after.category === 'challenge') {
       // Only an ACCEPTED request earns contact access. An open request must not — otherwise

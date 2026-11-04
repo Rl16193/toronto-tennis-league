@@ -22,6 +22,8 @@ export interface ContactData {
   /** CONSENT signal: whether the app offers a Contact button, not who may read this doc. */
   contactable?: boolean;
   updated_at?: Timestamp | null;
+  /** Last agreement to the Terms and Privacy Policy; null = never. See PRIVACY_EFFECTIVE. */
+  consent_at?: Timestamp | null;
 }
 
 // Collection: users — publicly readable. Contact details live in `contacts`, never here.
@@ -138,6 +140,9 @@ export interface ZoneDrawConfig {
   merges?: Record<string, string>;
 }
 
+/** A one-group round robin's named winner: the leader, by the group table (a title, no points). */
+export type GroupChampion = { uids: string[]; name: string; awarded_at: Timestamp; awarded_by: string };
+
 export interface TennisEvent {
   id: string;
   category: EventCategory;
@@ -157,11 +162,19 @@ export interface TennisEvent {
   time?: string;
   round_deadlines?: Record<string, string>; // round → 'YYYY-MM-DD'
   zone_draw_config?: ZoneDrawConfig | Record<string, never>;
+  /** drawKey (RR knockout: `${drawKey}__knockout`) → uid → seed, frozen when the draw is generated. */
+  seeds?: Record<string, Record<string, number>>;
+  /** Merged draw's drawKey → the bands it holds ('Beginners+Challengers', …), saved at Generate. */
+  skill_merges?: Record<string, 'Beginners+Challengers' | 'Challengers+Masters' | 'Beginners+Challengers+Masters'>;
   /** Server-written when the event's final is played: the authoritative "this event is over". */
   completed_at?: Timestamp | null;
+  /** Draw key → that draw's named winner, for a round robin of one group with no knockout. Server-written. */
+  champions?: Record<string, GroupChampion>;
   /** 'cancelled' hides the event everywhere (isCancelledEvent). */
   status?: 'active' | 'cancelled';
   cancelled_at?: Timestamp | null;
+  /** Invitation only: no Join button, and the rules refuse a member registering themselves. */
+  private?: boolean;
   created_at?: Timestamp | null;
 }
 

@@ -5,6 +5,7 @@
  *   reset   one played match (tournament, challenge or rally) back to unplayed (organizer)
  *   cancel  a draw's matches (organizer)
  *   bonus   a round-robin group's bonus on or off (organizer)
+ *   champion  name a one-group round robin's leader as its winner, or take it back (organizer)
  * Everything happens in lib/scoring.js; this only checks the caller and turns refusals into
  * player-readable messages. Alerts and task progress react to the recorded match elsewhere.
  *
@@ -33,6 +34,9 @@ const ACTIONS = {
   reset: (db, uid, d) => scoring.resetScore(db, { uid, matchId: str(d.matchId, 'match') }),
   cancel: (db, uid, d) => scoring.cancelDraw(db, { uid, eventId: str(d.eventId, 'event'), matchIds: ids(d.matchIds) }),
   bonus: (db, uid, d) => scoring.groupBonus(db, { uid, eventId: str(d.eventId, 'event'), matchIds: ids(d.matchIds), award: d.award === true }),
+  champion: (db, uid, d) => scoring.groupChampion(db, {
+    uid, eventId: str(d.eventId, 'event'), matchIds: ids(d.matchIds), winnerUid: d.winnerUid ? str(d.winnerUid, 'winner') : null,
+  }),
 };
 
 exports.scoreMatch = onCall({ region: REGION }, async (request) => {

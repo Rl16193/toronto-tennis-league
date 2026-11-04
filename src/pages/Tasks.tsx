@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   CATEGORIES, COMMUNITY_GROUP_TASKS, COUNTER_NOUN, DAILY_GROUP_TASKS, SETUP_POINTS, TASKS,
   INITIATION_OPEN_UNTIL, UNLOCKED_TASK_IDS, initiationDoneCount,
-  type CategoryDef, type GroupTaskDef, type TaskId, setTaskDone, useSweep, useTasks,
+  type CategoryDef, type GroupTaskDef, type TaskId, setTaskDone, useGroupAwardStats, useSweep, useTasks,
 } from '../features/tasks/useTasks';
 import { CheckInModal } from '../features/tasks/CheckInModal';
 import { PhotoSubmitModal } from '../features/tasks/PhotoSubmitModal';
@@ -45,6 +45,7 @@ export const Tasks: React.FC = () => {
     setSectionDefaultSet(true);
   }, [progressLoaded, progress, sectionDefaultSet]);
 
+  const awardStats = useGroupAwardStats();
   const citySweep = useSweep('city_sweep');
   const myZone = profile?.preferences?.preferred_zone || '';
   const zoneSweep = useSweep(myZone ? `zone_sweep_${courtKey(myZone)}` : null);
@@ -69,8 +70,8 @@ export const Tasks: React.FC = () => {
     return (
       <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-4 md:pt-6">
         <h1 className="sr-only">Tasks</h1>
-        <div className="h-24 bg-tennis-surface/30 rounded-3xl animate-pulse mb-6" />
-        <div className="h-64 bg-tennis-surface/30 rounded-3xl animate-pulse" />
+        <div className="h-24 bg-fg/5 rounded-2xl animate-pulse mb-6" />
+        <div className="h-64 bg-fg/5 rounded-2xl animate-pulse" />
       </div>
     );
   }
@@ -134,14 +135,14 @@ export const Tasks: React.FC = () => {
               strokeDasharray={`${(CIRC * pct) / 100} ${CIRC}`} className="text-clay"
             />
           </svg>
-          <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black text-fg tabular-nums">
+          <span className="absolute inset-0 flex items-center justify-center text-xs font-black text-fg tabular-nums">
             {pct}%
           </span>
         </span>
 
         <span className="min-w-0 flex-1">
           {/* The category keeps its own name: Tournament, Traveller, League Ladder, Streaks. */}
-          <span className="block text-[10px] font-bold uppercase tracking-widest text-fg/70 truncate">{c.title}</span>
+          <span className="block text-xs font-bold uppercase tracking-widest text-fg/70 truncate">{c.title}</span>
           {/* Always present, blank until a reward is earned, so every card has the same shape. Only
               this line is bold; the next reward never is. */}
           <span className="flex items-center gap-2 min-h-5">
@@ -179,12 +180,13 @@ export const Tasks: React.FC = () => {
 
   // Group / community bonuses — descriptive cards (name + wrapped trigger + points). Unlike the
   // tiers, these unlock from collective activity and are paid server-side into RS points.
-  const GroupSection: React.FC<{ id: string; title: string; tasks: GroupTaskDef[] }> = ({ id, title, tasks }) => (
+  // `tally`: daily bonuses count every payout, community ones count distinct members.
+  const GroupSection: React.FC<{ id: string; title: string; tasks: GroupTaskDef[]; tally: 'payouts' | 'players' }> = ({ id, title, tasks, tally }) => (
     <Accordion
       id={id}
       title={title}
       {...sectionProps(id)}
-      right={<span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-clay/70 border border-clay/25">Bonus</span>}
+      right={<span className="px-1.5 py-0.5 rounded text-xs font-bold uppercase tracking-wide text-clay border border-clay/25">Bonus</span>}
     >
       {tasks.map((g) => (
         <div key={g.id} className="py-3">
@@ -193,6 +195,15 @@ export const Tasks: React.FC = () => {
             <span className="text-xs font-bold text-clay shrink-0">{g.points}</span>
           </div>
           <p className="text-xs text-fg/70 mt-1 leading-relaxed">{g.trigger}</p>
+          <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs font-bold">
+            <span className="text-clay">
+              Last awarded: {awardStats[g.award]?.last?.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) ?? 'Never'}
+            </span>
+            {/* Lime pill, ink label: lime text would be unreadable on the light theme. */}
+            <span className="px-2 py-0.5 rounded-2xl bg-lime text-ink">
+              {awardStats[g.award]?.[tally] ?? 0} {awardStats[g.award]?.[tally] === 1 ? 'player' : 'players'} awarded
+            </span>
+          </div>
           {g.id === 'zoneSweep' && zoneSweep && <SweepBar label={`Your zone: ${myZone}`} {...zoneSweep} />}
           {g.id === 'explorer' && citySweep && <SweepBar {...citySweep} />}
         </div>
@@ -209,39 +220,42 @@ export const Tasks: React.FC = () => {
           one number toward a moving threshold; these state where you actually stand. Buttons are
           unconditional now, since the "Rewards Available" count already conveys whether there's
           anything to redeem. */}
-      <motion.div {...fadeUp} className="rounded-3xl bg-tennis-surface/30 p-5 mb-6">
+      <motion.div {...fadeUp} className="rounded-2xl bg-fg/5 p-5 mb-6">
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="text-center">
             <p className="text-2xl font-black text-clay leading-none">
               {points}
             </p>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mt-1">RS Points</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mt-1">RS Points</p>
           </div>
-          <div className="text-center">
+          <Link to="/leagues" className="block text-center rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay">
             <p className="text-2xl font-black text-fg leading-none">{tournamentPoints}</p>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mt-1">League Points</p>
-          </div>
-          <div className="text-center">
+            <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mt-1">League Points</p>
+          </Link>
+          <Link to="/marketplace" className="block text-center rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay">
             <p className="text-2xl font-black text-fg leading-none">{claimableRewards}</p>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mt-1">Rewards</p>
-          </div>
+            <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mt-1">Rewards</p>
+          </Link>
         </div>
         <div className="flex items-center justify-center gap-2 flex-wrap">
           <Link to="/tasks?checkin=1">
-            <Button variant="white" size="sm"><MapPin className="w-4 h-4 mr-1.5" />Record Activity</Button>
+            <Button variant="white" size="sm"><MapPin className="w-4 h-4" />Record Activity</Button>
           </Link>
           <Link to="/marketplace">
-            <Button variant="lime" size="sm"><Gift className="w-4 h-4 mr-1.5" />Redeem</Button>
+            <Button variant="lime" size="sm"><Gift className="w-4 h-4" />Redeem</Button>
           </Link>
           <Link to="/tasks?photo=1">
-            <Button variant="clay" size="sm"><Camera className="w-4 h-4 mr-1.5" />Submit a Report</Button>
+            <Button variant="clay" size="sm"><Camera className="w-4 h-4" />Submit a Report</Button>
           </Link>
         </div>
       </motion.div>
 
       <div className="space-y-3">
-        <GroupSection id="dailyGroup" title="Daily Group Tasks" tasks={DAILY_GROUP_TASKS} />
-        <GroupSection id="communityGroup" title="Community Tasks" tasks={COMMUNITY_GROUP_TASKS} />
+        {CATEGORIES.map((c, i) => (
+          <motion.div key={c.id} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}>
+            <CategoryCard c={c} />
+          </motion.div>
+        ))}
 
         {/* Community Member Initiation — flat award for the whole checklist */}
         <Accordion
@@ -249,7 +263,7 @@ export const Tasks: React.FC = () => {
           title="Community Member Initiation"
           {...sectionProps('initiation')}
           right={initiationComplete ? (
-            <span className="px-2 py-0.5 rounded-lg text-[11px] font-black bg-clay/15 text-clay border border-clay/25">
+            <span className="px-2 py-0.5 rounded-2xl text-xs font-black bg-clay/15 text-clay border border-clay/25">
               +{SETUP_POINTS} pts
             </span>
           ) : (
@@ -273,7 +287,7 @@ export const Tasks: React.FC = () => {
                   {t.title}
                 </span>
                 {t.locked ? (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide text-fg/70 shrink-0">
+                  <span className="px-1.5 py-0.5 rounded text-xs font-bold uppercase tracking-wide text-fg/70 shrink-0">
                     Soon
                   </span>
                 ) : t.link ? (
@@ -291,11 +305,8 @@ export const Tasks: React.FC = () => {
           })}
         </Accordion>
 
-        {CATEGORIES.map((c, i) => (
-          <motion.div key={c.id} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }}>
-            <CategoryCard c={c} />
-          </motion.div>
-        ))}
+        <GroupSection id="dailyGroup" title="Daily Group Tasks" tasks={DAILY_GROUP_TASKS} tally="payouts" />
+        <GroupSection id="communityGroup" title="Community Tasks" tasks={COMMUNITY_GROUP_TASKS} tally="players" />
       </div>
 
       {/* Socials, WhatsApp and contact links. */}

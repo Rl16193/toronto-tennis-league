@@ -1,23 +1,25 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { skillBand } from '../utils/skillLevels';
 import { useSearchParams } from 'react-router-dom';
 import { collection, getDocs } from 'firebase/firestore';
-import { Check, Dices, Plus, X } from 'lucide-react';
+import { Check, Dices, Handshake, Plus, Swords, X, type LucideIcon } from 'lucide-react';
 import { motion } from 'motion/react';
 import { fadeUp, staggerDelay, tapScale } from '../lib/motion';
 import { lazyWithRetry } from '../lib/lazyWithRetry';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
-import { Button } from '../components/Button';
+import { Button, buttonCls } from '../components/Button';
 import { Fab } from '../components/Fab';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { useUserMatches } from '../features/matches/useUserMatches';
 import { RacquetIcon } from '../components/RacquetIcon';
-import { ContactOpponentButton, pillButtonCls } from '../components/ContactOpponentButton';
+import { ContactOpponentButton } from '../components/ContactOpponentButton';
 import { PlayerCard, RankMove } from '../components/PlayerCard';
 import { ScoreModal } from '../features/matches/ScoreModal';
 import { ScoreForm } from './tournament/types';
-import { LeagueRow, abbreviatePlayerName, byLeagueRank, inDivision, pgWinPct, useStandings } from '../features/leagues/useStandings';
+import { abbreviatePlayerName } from './tournament/utils';
+import { LeagueRow, byLeagueRank, inDivision, pgWinPct, useStandings } from '../features/leagues/useStandings';
 import { cancelRally, createRally, respondRally, useRallies } from '../features/rallies/rallyService';
 import { cancelChallenge, respondChallenge, LadderDivision } from '../features/leagues/ladderService';
 import { useRequestScoring } from '../features/matches/useRequestScoring';
@@ -25,99 +27,34 @@ import { recordScore, resultFromForm } from '../features/matches/scoring';
 import { isReadyForMatches, useChallengeRules } from '../features/leagues/useChallengeRules';
 import { isOrganizerProfile } from '../utils/eventTypes';
 import { toMillis } from '../utils/eventDates';
+import { resolveStorageUrl, type DisplayEvent } from '../features/events/services/eventService';
+import {
+  type Mode, type RandState, POOL_SIZE, RAND_SLOTS_PER_WEEK, TAG_LABEL, byActivity as activityOrder, loadOpened, loadRandState,
+  mixPool, refreshPool, rerollSlot, resetSlot as resetSlotState, saveOpened, saveRandState, weekKey,
+} from '../features/matches/opponentPool';
 
 // Lazy: the tournament subsystem (useTournament.ts alone is ~2k lines, plus the draw engine and
-// ~20 components) was the bulk of this route's bundle, shipped even to people who only open
-// Rallies or Challenges.
+// ~20 components) is the bulk of this route's bundle. It loads on every tab now, because it draws
+// the tournament cards in the shared card row; until it arrives the row shows only these cards.
 const Tournament = lazyWithRetry(() => import('./Tournament').then((m) => ({ default: m.Tournament })), 'Tournament');
 import { CompleteProfileModal } from '../features/profile/components/CompleteProfileModal';
 import { AvailabilityModal } from '../features/profile/components/AvailabilityModal';
 import { sharesCourt } from '../components/NearbyPill';
-import { NearbyPill } from '../components/NearbyPill';
 import { AvailabilityPills } from '../components/AvailabilityPills';
 
-type Mode = 'tournament' | 'rallies' | 'challenges';
+const RALLIES_IMAGE = '/matches/Rallies.webp';
+// Members away from Toronto: left out of the Challenges and Rallies lists. See CLAUDE.md.
+const AWAY_UIDS = new Set(['HN9QV7zrmic5xbaSAf02h9Qqwsl2']); // Wan Eizzul
+const MODE_CARDS:{ value: 'challenges' | 'rallies'; label: string; Icon: LucideIcon }[] = [
+  { value: 'challenges', label: 'Challenges', Icon: Swords },
+  { value: 'rallies', label: 'Rallies', Icon: Handshake },
+];
 
 // `isReadyForMatches` now lives in features/leagues/useChallengeRules so the Leaderboard's
 // Challenge button gates on exactly the same rule (see the import above).
 
-// ── Per-slot randomizer (both tabs): 12 category slots, each with its own dice. A weekly budget of
-// 2 slots may go "randomized"; re-rolls are then free, originals kept. Same boundary the pool
-// refresh rolls over on — both reset Thursday 8:00am local, not on a calendar week.
-const RAND_SLOTS_PER_WEEK = 2;
-const CYCLE_ANCHOR = new Date(2024, 0, 4, 8, 0, 0, 0).getTime(); // a Thursday, 8:00am local
-const CYCLE_MS = 7 * 24 * 60 * 60 * 1000;
-const weekKey = () => `cycle-${Math.floor((Date.now() - CYCLE_ANCHOR) / CYCLE_MS)}`;
-const randStoreKey = (uid: string, mode: Mode) => `matches_rand_${mode}_${uid}_${weekKey()}`;
-type RandState = { slots: number[]; overrides: Record<number, string> };
-const loadRandState = (uid: string, mode: Mode): RandState => {
-  try { const raw = localStorage.getItem(randStoreKey(uid, mode)); if (raw) return JSON.parse(raw) as RandState; }
-  catch { /* ignore */ }
-  return { slots: [], overrides: {} };
-};
-const saveRandState = (uid: string, mode: Mode, s: RandState) => {
-  try { localStorage.setItem(randStoreKey(uid, mode), JSON.stringify(s)); } catch { /* ignore */ }
-};
-
-// ── Weekly pool refresh: anyone shown last cycle who never got a Challenge/Rally from the viewer
-// is dropped this cycle, so the same untouched names don't sit there forever. Not permanent — one
-// quiet cycle makes them eligible again. `skipUids` is decided once per cycle (from the PRIOR
-// cycle's shown list) and persisted, so it stays stable across reloads within the cycle.
-// How many players each filter shows.
-const POOL_SIZE = 10;
-
-const seenStoreKey = (uid: string, mode: Mode) => `matches_seen_${mode}_${uid}`;
-type SeenRecord = { cycle: string; shownUids: string[]; skipUids: string[] };
-const loadSeen = (uid: string, mode: Mode): SeenRecord | null => {
-  try { const raw = localStorage.getItem(seenStoreKey(uid, mode)); if (raw) return JSON.parse(raw) as SeenRecord; }
-  catch { /* ignore */ }
-  return null;
-};
-const saveSeen = (uid: string, mode: Mode, rec: SeenRecord) => {
-  try { localStorage.setItem(seenStoreKey(uid, mode), JSON.stringify(rec)); } catch { /* ignore */ }
-};
-const refreshPool = (uid: string, mode: Mode, extended: LeagueRow[], requestedIds: Set<string>): LeagueRow[] => {
-  const cycle = weekKey();
-  const stored = loadSeen(uid, mode);
-  const skipUids = stored && stored.cycle === cycle
-    ? new Set(stored.skipUids)
-    : new Set((stored?.shownUids ?? []).filter((id) => !requestedIds.has(id)));
-  const filtered = skipUids.size > 0 ? extended.filter((r) => !skipUids.has(r.user_id)) : extended;
-  const top = filtered.slice(0, POOL_SIZE);
-  if (!stored || stored.cycle !== cycle) {
-    saveSeen(uid, mode, { cycle, shownUids: top.map((r) => r.user_id), skipUids: [...skipUids] });
-  }
-  return top;
-};
-
-// Deterministic pseudo-random in [0,1) from a string seed — used to give the Rallies pool a
-// stable-for-the-week tiebreak among equally-active players (so the 12 shown can rotate weekly
-// without jittering on every reload).
-const seededRand = (seed: string): number => {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
-  return (h >>> 0) / 4294967296;
-};
-
-// One "Matches" hub: Rallies (non-competitive) and Challenges (competitive) tabs.
-//
-// Four explicit filters, not an automatic tier waterfall — "why is this person on my list?" needs
-// an answer the player can see. The BASE POOL differs per tab: Challenges is locked to the
-// viewer's league (points only mean something within a division); Rallies is cross-league.
-type PlayerFilter = 'nearby' | 'new' | 'played' | 'rematch';
-const PLAYER_FILTERS: { value: PlayerFilter; label: string }[] = [
-  { value: 'new', label: 'New' },
-  { value: 'played', label: 'Most matches' },
-  { value: 'nearby', label: 'Nearby' },
-  { value: 'rematch', label: 'Re-Match' },
-];
-
-// Each person is claimed by exactly ONE of the first three filters, so browsing all three shows up
-// to 30 different names instead of the same faces. Re-Match is exempt — it's a fact about them,
-// not a bucket.
-// Allocation order is by how constrained each pool is, NOT display order: Nearby has the smallest
-// candidate set, so it picks first or ends up empty; Most matches picks last and can always fill.
-const ALLOCATION_ORDER: Exclude<PlayerFilter, 'rematch'>[] = ['nearby', 'new', 'played'];
+// One "Matches" hub: Rallies (non-competitive) and Challenges (competitive) tabs. The opponent
+// pool (weekly cycle, pills, refresh, randomizer) is features/matches/opponentPool.ts.
 
 // RallyRow was removed with the separate open-requests list — a rally's state now lives in
 // the player's own row (see the stats cell below).
@@ -140,13 +77,68 @@ export const Matches: React.FC = () => {
   const [courtsByUid, setCourtsByUid] = useState<Record<string, string[]>>({});
   const [joinedAtByUid, setJoinedAtByUid] = useState<Record<string, number>>({});
   const [zoneByUid, setZoneByUid] = useState<Record<string, string>>({});
-  const [playerFilter, setPlayerFilter] = useState<PlayerFilter>('nearby');
   const [expandedUid, setExpandedUid] = useState<string | null>(null);
 
   // The active ladder, the viewer's division and every "may I challenge them?" rule come from
   // useChallengeRules, the same hook the Leaderboard uses.
   const { ladder, myDivision, blockReason, challenge, ladderState } = useChallengeRules();
   const { challenges, myChallenges, incoming, contactMap, stateWith, acceptedPartnerIds: acceptedChallengePartnerIds } = ladderState;
+
+  // "New Players Available" on a tab card: this week's refresh not opened yet, or a request
+  // received since that tab was last opened. Opening the tab clears it.
+  const [, setOpenedTick] = useState(0);
+  const openRequestIds = useMemo(() => ({
+    rallies: received.filter((r) => r.status === 'open').map((r) => r.id),
+    challenges: incoming.map((c) => c.id),
+  }), [received, incoming]);
+  useEffect(() => {
+    if (!user || mode === 'tournament') return;
+    saveOpened(user.uid, mode, { cycle: weekKey(), requestIds: openRequestIds[mode] });
+    setOpenedTick((t) => t + 1);
+  }, [user, mode, openRequestIds]);
+  const hasNew = (m: 'rallies' | 'challenges') => {
+    if (!user) return false;
+    const opened = loadOpened(user.uid, m);
+    if (!opened || opened.cycle !== weekKey()) return true;
+    return openRequestIds[m].some((id) => !opened.requestIds.includes(id));
+  };
+  // The Challenges card wears the league ladder's own picture. fetchEvents moves a gs:// path out
+  // of `image` into `imagePath`, so read both and resolve the path.
+  const [ladderImage, setLadderImage] = useState('');
+  const ladderImageSrc = ladder?.image || (ladder as DisplayEvent | null)?.imagePath || '';
+  useEffect(() => {
+    if (!ladderImageSrc) { setLadderImage(''); return; }
+    resolveStorageUrl(ladderImageSrc).then(setLadderImage).catch(() => setLadderImage(''));
+  }, [ladderImageSrc]);
+
+  // Same square card as the tournament cards beside them.
+  const modeCards = MODE_CARDS.map(({ value, label, Icon }) => {
+    const active = mode === value;
+    const fresh = !active && hasNew(value);
+    const image = value === 'challenges' ? ladderImage : RALLIES_IMAGE;
+    return (
+      <button
+        key={value}
+        type="button"
+        onClick={() => setMode(value)}
+        aria-pressed={active}
+        className={`relative w-full aspect-square rounded-2xl overflow-hidden text-left bg-fg/5
+                    transition-all focus-visible:outline-2 focus-visible:outline-offset-2
+                    focus-visible:outline-clay ${active ? 'ring-2 ring-clay' : 'opacity-90 hover:opacity-100'}`}
+      >
+        {image ? (
+          // object-top crops the Rallies picture's own title off; the card's label names it.
+          <img src={image} alt="" loading="lazy" decoding="async" className={`absolute inset-0 w-full h-full object-cover ${value === 'rallies' ? 'object-top' : 'object-center'}`} />
+        ) : (
+          <Icon className={`absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 ${active ? 'text-clay' : 'text-fg/70'}`} />
+        )}
+        <span className={`absolute inset-x-0 bottom-0 p-2.5 ${image ? 'bg-gradient-to-t from-tennis-dark via-tennis-dark/75 to-transparent' : ''}`}>
+          <span className="block text-sm font-bold text-clay truncate">{label}</span>
+          {fresh && <span className="block text-xs font-semibold text-fg/70 leading-tight">New Players Available</span>}
+        </span>
+      </button>
+    );
+  });
   // Completed matches, for the Re-Match filter's "who have I already played" list.
   const { matches } = useUserMatches(user?.uid);
 
@@ -210,14 +202,14 @@ export const Matches: React.FC = () => {
 
   // Rallies base pool: everyone, every league — casual play doesn't care about division.
   const allLeaguesPool = useMemo(
-    () => rows.filter((r) => r.user_id && r.user_id !== user?.uid && r.name),
+    () => rows.filter((r) => r.user_id && r.user_id !== user?.uid && r.name && !AWAY_UIDS.has(r.user_id)),
     [rows, user?.uid],
   );
 
   const myCourts = useMemo(() => new Set(profile?.preferences.preferred_courts ?? []), [profile?.preferences.preferred_courts]);
   const week = weekKey();
 
-  // Most recent completed match against each opponent — drives the Re-Match filter.
+  // Most recent completed match against each opponent — drives the Re-Match pill.
   const lastPlayedByUid = useMemo(() => {
     const m = new Map<string, number>();
     matches.forEach((mt) => {
@@ -229,52 +221,21 @@ export const Matches: React.FC = () => {
   // These comparators feed the pool useMemos below. They're useCallbacks so those memos can list
   // them honestly instead of suppressing exhaustive-deps — the old hand-written dep arrays
   // omitted rankIndexByUid entirely, so a rank refresh didn't re-sort the Challenges pool.
-  const byActivity = useCallback((a: LeagueRow, b: LeagueRow) =>
-    (b.matchesPlayed - a.matchesPlayed) || (seededRand(week + a.user_id) - seededRand(week + b.user_id)),
-  [week]);
-  // Shares a preferred court, OR is in the same preferred zone. Court overlap alone is a narrow
-  // signal — most members pick two or three courts — and Nearby needs a big enough candidate set
-  // to fill its own slice once names are being handed out exclusively.
-  const myZone = profile?.preferences.preferred_zone || '';
+  const byActivity = useMemo(() => activityOrder(week), [week]);
+  // Nearby: shares one of your preferred courts.
   const isNearby = useCallback(
-    (r: LeagueRow) => sharesCourt(courtsByUid[r.user_id], myCourts)
-      || (!!myZone && zoneByUid[r.user_id] === myZone),
-    [courtsByUid, myCourts, zoneByUid, myZone],
+    (r: LeagueRow) => sharesCourt(courtsByUid[r.user_id], myCourts),
+    [courtsByUid, myCourts],
   );
 
-  const sortFor = useCallback((f: Exclude<PlayerFilter, 'rematch'>) => {
-    if (f === 'played') return (a: LeagueRow, b: LeagueRow) => b.matchesPlayed - a.matchesPlayed || a.name.localeCompare(b.name);
-    if (f === 'new') return (a: LeagueRow, b: LeagueRow) => (joinedAtByUid[b.user_id] ?? 0) - (joinedAtByUid[a.user_id] ?? 0) || byActivity(a, b);
-    return byActivity; // nearby — most active among the people you can actually reach
-  }, [joinedAtByUid, byActivity]);
+  // The tab's whole candidate list, mixed, with each person's pills (mixPool).
+  const mixFor = useCallback(
+    (pool: LeagueRow[]) => mixPool(pool, { isNearby, lastPlayedByUid, joinedAtByUid, byActivity }),
+    [isNearby, lastPlayedByUid, joinedAtByUid, byActivity],
+  );
 
-  /**
-   * Hands each person to exactly one of the three exclusive filters, then returns the slice for the
-   * showing tab. Walks ALLOCATION_ORDER so the most constrained pool claims first.
-   * Re-Match is outside this — seeing a familiar name again is its point, so it draws from all.
-   */
-  const applyFilter = useCallback((pool: LeagueRow[]): LeagueRow[] => {
-    if (playerFilter === 'rematch') {
-      return pool
-        .filter((r) => lastPlayedByUid.has(r.user_id))
-        .sort((a, b) => (lastPlayedByUid.get(b.user_id) ?? 0) - (lastPlayedByUid.get(a.user_id) ?? 0));
-    }
-
-    // Each filter claims a BLOCK, not just the 10 it shows. The spares feed the weekly refresh and
-    // the dice. Because blocks don't overlap, the visible 10s can't either — even after a re-roll.
-    const BLOCK = POOL_SIZE * 3;
-    const claimed = new Set<string>();
-    let mine: LeagueRow[] = [];
-    for (const f of ALLOCATION_ORDER) {
-      const available = pool.filter((r) => !claimed.has(r.user_id) && (f !== 'nearby' || isNearby(r)));
-      const take = available.sort(sortFor(f)).slice(0, BLOCK);
-      take.forEach((r) => claimed.add(r.user_id));
-      if (f === playerFilter) { mine = take; break; }
-    }
-    return mine;
-  }, [playerFilter, isNearby, sortFor, lastPlayedByUid]);
-
-  const ralliesExtended = useMemo(() => applyFilter(allLeaguesPool), [applyFilter, allLeaguesPool]);
+  const ralliesMix = useMemo(() => mixFor(allLeaguesPool), [mixFor, allLeaguesPool]);
+  const ralliesExtended = ralliesMix.list;
   // "Requested" = a rally you've ever sent them, any status — that's what exempts them from the
   // weekly refresh below.
   const ralliesRequestedIds = useMemo(() => new Set(sent.map((r) => r.player_2_uid)), [sent]);
@@ -283,11 +244,13 @@ export const Matches: React.FC = () => {
     [user, ralliesExtended, ralliesRequestedIds, week],
   );
 
-  // Challenges uses the same filter, just over the viewer's own league.
-  const challengesExtended = useMemo(
-    () => (user ? applyFilter(divisionRanked.filter((r) => r.user_id !== user.uid)) : []),
-    [divisionRanked, user, applyFilter],
+  // Challenges uses the same mix, just over the viewer's own league.
+  const challengesMix = useMemo(
+    // Away members filtered here, not in divisionRanked: that list is also the "#12" rank lookup.
+    () => mixFor(user ? divisionRanked.filter((r) => r.user_id !== user.uid && !AWAY_UIDS.has(r.user_id)) : []),
+    [divisionRanked, user, mixFor],
   );
+  const challengesExtended = challengesMix.list;
   // "Requested" = a challenge you've ever sent them, any status.
   const challengesRequestedIds = useMemo(
     () => new Set(challenges.filter((c) => c.player_1_uid === user?.uid).map((c) => c.player_2_uid)),
@@ -299,6 +262,7 @@ export const Matches: React.FC = () => {
   );
 
   const people = mode === 'challenges' ? challengesPool : ralliesPool;
+  const tagsByUid = mode === 'challenges' ? challengesMix.tags : ralliesMix.tags;
   // Re-roll source: each tab keeps drawing from its own full tiered candidate list (not just the
   // initial top 12), so a re-roll still respects that tab's pool and tiering.
   const rerollSource = mode === 'challenges' ? challengesExtended : ralliesExtended;
@@ -358,25 +322,10 @@ export const Matches: React.FC = () => {
 
   if (!user) return null; // private route
 
-  const randomizeSlot = (i: number) => {
-    const already = rand.slots.includes(i);
-    if (!already && budgetLeft <= 0) return;
-    const shownIds = new Set(slots.map((s) => s.row.user_id));
-    const pool = rerollSource.filter((r) => !shownIds.has(r.user_id) && !activePartnerIds.has(r.user_id));
-    if (pool.length === 0) return;
-    const pick = pool[Math.floor(Math.random() * pool.length)];
-    const next: RandState = {
-      slots: already ? rand.slots : [...rand.slots, i],
-      overrides: { ...rand.overrides, [i]: pick.user_id },
-    };
-    setRand(next); saveRandState(user.uid, mode, next);
-  };
-  const resetSlot = (i: number) => {
-    const rest = { ...rand.overrides };
-    delete rest[i];
-    const next: RandState = { slots: rand.slots.filter((s) => s !== i), overrides: rest };
-    setRand(next); saveRandState(user.uid, mode, next);
-  };
+  const setSlots = (next: RandState | null) => { if (next) { setRand(next); saveRandState(user.uid, mode, next); } };
+  const randomizeSlot = (i: number) =>
+    setSlots(rerollSlot(rand, i, rerollSource, new Set(slots.map((s) => s.row.user_id)), activePartnerIds));
+  const resetSlot = (i: number) => setSlots(resetSlotState(rand, i));
 
   // ── Actions ──
   const sendRally = async (to: { id: string; name: string; league: string; skill_level: number }) => {
@@ -459,34 +408,13 @@ export const Matches: React.FC = () => {
     <div className="max-w-xl mx-auto px-4 pb-20 pt-4">
       <h1 className="sr-only">Matches</h1>
 
-      <SegmentedControl<Mode>
-        options={[
-          { value: 'tournament', label: 'Tournament' },
-          { value: 'challenges', label: 'Challenges' },
-          { value: 'rallies', label: 'Rallies' },
-        ]}
-        value={mode}
-        onChange={setMode}
-        className="mb-3"
-      />
+      {/* One card row: your tournaments (drawn by Tournament, which owns that list), then these. */}
+      <React.Suspense fallback={<div className="grid grid-cols-3 gap-3 mb-4">{modeCards}</div>}>
+        <Tournament showDraw={mode === 'tournament'} extraCards={modeCards} onPickEvent={() => setMode('tournament')} />
+      </React.Suspense>
 
-      {/* Who to show. Sits directly under the mode control so the two read as one filter stack;
-          the Tournament tab has no player list, so it doesn't apply there. */}
-      {mode !== 'tournament' && (
-        <SegmentedControl<PlayerFilter>
-          options={PLAYER_FILTERS}
-          value={playerFilter}
-          onChange={setPlayerFilter}
-          className="mb-5"
-        />
-      )}
-
-      {mode === 'tournament' ? (
-        <React.Suspense fallback={<div className="h-64 bg-tennis-surface/30 rounded-3xl animate-pulse" />}>
-          <Tournament />
-        </React.Suspense>
-      ) : !isReadyForMatches(profile) ? (
-        <div className="rounded-3xl bg-tennis-surface/30 py-12 px-6 text-center">
+      {mode === 'tournament' ? null : !isReadyForMatches(profile) ? (
+        <div className="rounded-2xl bg-fg/5 py-12 px-6 text-center">
           <p className="text-sm text-fg/70 mb-4">
             Set your preferred courts, skill level, and league so we can match you with players.
           </p>
@@ -505,26 +433,18 @@ export const Matches: React.FC = () => {
         </div>
       )}
 
-      <p className="text-[11px] font-bold uppercase tracking-widest text-fg/70 mb-2">
-        {budgetLeft} of {RAND_SLOTS_PER_WEEK} randomizes left this week
-      </p>
       {mode === 'rallies' && (
-        <p className="text-[11px] text-fg/70 mb-2">Submit the score to record a rally match, both players get points.</p>
+        <p className="text-xs text-fg/70 mb-2">Submit the score to record a rally match, both players get points.</p>
       )}
 
       {peopleLoading ? (
-        <div className="space-y-2">{[1, 2, 3, 4].map((i) => <div key={i} className="h-14 bg-tennis-surface/30 rounded-2xl animate-pulse" />)}</div>
+        <div className="space-y-2">{[1, 2, 3, 4].map((i) => <div key={i} className="h-14 bg-fg/5 rounded-2xl animate-pulse" />)}</div>
       ) : slots.length === 0 ? (
-        <div className="rounded-3xl bg-tennis-surface/30 py-12 text-center">
-          {/* Nearby and Re-Match genuinely can be empty — say why rather than "no players". */}
-          <p className="text-sm text-fg">
-            {playerFilter === 'rematch' ? 'You haven’t played anyone yet.'
-              : playerFilter === 'nearby' ? 'Nobody shares your preferred courts yet.'
-              : 'No players found.'}
-          </p>
+        <div className="rounded-2xl bg-fg/5 py-12 text-center">
+          <p className="text-sm text-fg">No players found.</p>
         </div>
       ) : (
-        <div className="rounded-3xl bg-tennis-surface/30 overflow-hidden divide-y divide-white/5">
+        <div className="rounded-2xl bg-fg/5 overflow-hidden divide-y divide-white/5">
           {/* `i` is the SCREEN position — only for the React key and the stagger delay. Every
               piece of slot logic below uses `slot`, the pool index. */}
           {slots.map(({ row: p, slot }, i) => {
@@ -558,6 +478,18 @@ export const Matches: React.FC = () => {
               if (mode === 'rallies') respondRally(incomingReq.id, accept);
               else respondChallenge(incomingReq.id, accept);
             };
+            // Contact sits beside Score once the request is accepted.
+            const contacts = (mode === 'rallies' ? rallyContactMap : contactMap)[p.user_id];
+            const contactButton = showContact ? (
+              <ContactOpponentButton
+                name={p.name}
+                phone={contacts?.phone}
+                email={contacts?.email}
+                whatsappContact={contacts?.whatsapp_contact}
+                preferred={contacts?.preferred_mode_of_contact}
+                size="sm"
+              />
+            ) : null;
             const cancelRequest = () => {
               if (mode === 'rallies') {
                 const r = sent.find((x) => x.player_2_uid === p.user_id);
@@ -581,51 +513,36 @@ export const Matches: React.FC = () => {
                 name={abbreviatePlayerName(p.name)}
                 nameHref={isConnected ? `/players/${p.user_id}` : undefined}
                 subtitle={p.skill_level > 0 ? `Skill ${p.skill_level} · ${skillBand(p.skill_level)}` : undefined}
+                // Why they're on the list.
+                pills={(tagsByUid.get(p.user_id) ?? []).length > 0 ? (tagsByUid.get(p.user_id) ?? []).map((t) => (
+                  <span key={t} className="shrink-0 rounded-full bg-fg/5 text-fg text-xs font-bold px-2 py-0.5">{TAG_LABEL[t]}</span>
+                )) : undefined}
                 open={expandedUid === p.user_id}
                 onToggle={() => setExpandedUid((cur) => (cur === p.user_id ? null : p.user_id))}
-                // Exactly four cells: the lifecycle/contact control, tags, P/G Won %, Rank Move.
+                // Exactly four cells: zone (+ request status), availability, P/G Won %, Rank Move.
                 // P/G Played and Matches Won were volume figures that belong on the leaderboard.
                 stats={[
                   {
-                    // One cell for the whole request lifecycle, so the same spot always answers
-                    // "what's happening with this person":
-                    //   nothing sent → Rally / Challenge  ·  sent → Waiting to reply (+ Cancel)
-                    //   accepted → Contact (+ Cancel)     ·  they asked us → Accept / Decline
-                    label: '',
+                    // The player's zone. Rally / Challenge and Contact live on the row itself; this
+                    // cell only adds why a request is waiting, and Cancel.
+                    label: 'Zone',
                     value: (
                       <div className="flex flex-col items-center gap-1">
-                        {showContact ? (
-                          <ContactOpponentButton
-                            name={p.name}
-                            phone={(mode === 'rallies' ? rallyContactMap : contactMap)[p.user_id]?.phone}
-                            email={(mode === 'rallies' ? rallyContactMap : contactMap)[p.user_id]?.email}
-                            whatsappContact={(mode === 'rallies' ? rallyContactMap : contactMap)[p.user_id]?.whatsapp_contact}
-                            preferred={(mode === 'rallies' ? rallyContactMap : contactMap)[p.user_id]?.preferred_mode_of_contact}
-                            size="sm"
-                          />
-                        ) : incomingReq ? (
-                          // Accept/Decline moved to the row itself; this cell just states why.
-                          <span className="text-[11px] font-bold text-fg">
+                        <span className="text-xs font-bold text-fg">{zoneByUid[p.user_id] || 'Unassigned'}</span>
+                        {incomingReq ? (
+                          <span className="text-xs text-fg/70">
                             {mode === 'rallies' ? 'Wants to rally' : 'Challenged you'}
                           </span>
                         ) : isPending ? (
-                          <span className="text-[11px] font-bold text-fg">Waiting to reply</span>
-                        ) : mode === 'rallies' ? (
-                          <button type="button" className={pillButtonCls('sm', 'clay')} disabled={busy === p.user_id} onClick={() => sendRally({ id: p.user_id, name: p.name, league: p.league, skill_level: p.skill_level })}>
-                            <RacquetIcon className="w-3.5 h-3.5" />Rally
-                          </button>
-                        ) : (
-                          <button type="button" className={`${pillButtonCls('sm', 'clay')} disabled:opacity-40`} disabled={challengeBlocked || busy === p.user_id} onClick={() => sendChallenge(p)}>
-                            <RacquetIcon className="w-3.5 h-3.5" />Challenge
-                          </button>
-                        )}
+                          <span className="text-xs text-fg/70">Waiting to reply</span>
+                        ) : null}
                         {/* Cancel stays available once accepted too, not just while pending — but
                             never for an incoming request, where Decline is the right verb. */}
                         {!incomingReq && (showContact || isPending) && (
                           <button
                             type="button"
                             onClick={cancelRequest}
-                            className="text-[10px] font-bold text-fg hover:text-badge-loss transition-colors"
+                            className="text-xs font-bold text-fg hover:text-badge-loss transition-colors"
                           >
                             Cancel
                           </button>
@@ -637,7 +554,6 @@ export const Matches: React.FC = () => {
                     label: '',
                     value: (
                       <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                        <NearbyPill show={isNearby(p)} />
                         <AvailabilityPills tags={availabilityByUid[p.user_id]} />
                       </div>
                     ),
@@ -653,10 +569,10 @@ export const Matches: React.FC = () => {
                     {/* No dice on a pinned row (slot < 0): it's there because you have a live
                         match with them, so rerolling it away is exactly what pinning prevents. */}
                     {slot >= 0 && !(mode === 'rallies' && rallyScorable) && (
-                      <motion.button type="button" onClick={() => randomizeSlot(slot)} disabled={!canRandomize} whileTap={canRandomize ? tapScale.whileTap : undefined} transition={tapScale.transition} title={canRandomize ? 'Randomize this slot' : 'No randomizes left this week'} className="p-2 rounded-xl bg-fg/5 text-fg/70 hover:text-fg transition-colors disabled:opacity-30 disabled:cursor-not-allowed shrink-0" aria-label="Randomize slot"><Dices className="w-4 h-4" /></motion.button>
+                      <motion.button type="button" onClick={() => randomizeSlot(slot)} disabled={!canRandomize} whileTap={canRandomize ? tapScale.whileTap : undefined} transition={tapScale.transition} title={canRandomize ? 'Randomize this slot' : 'No randomizes left this week'} className="p-2 rounded-2xl bg-fg/5 text-fg/70 hover:text-fg transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0" aria-label="Randomize slot"><Dices className="w-4 h-4" /></motion.button>
                     )}
                     {isRandomized && !(mode === 'rallies' && rallyScorable) && (
-                      <motion.button type="button" onClick={() => resetSlot(slot)} whileTap={tapScale.whileTap} transition={tapScale.transition} title="Restore original player" className="p-2 rounded-xl bg-fg/5 text-fg/70 hover:text-fg transition-colors shrink-0" aria-label="Reset slot"><X className="w-4 h-4" /></motion.button>
+                      <motion.button type="button" onClick={() => resetSlot(slot)} whileTap={tapScale.whileTap} transition={tapScale.transition} title="Restore original player" className="p-2 rounded-2xl bg-fg/5 text-fg/70 hover:text-fg transition-colors shrink-0" aria-label="Reset slot"><X className="w-4 h-4" /></motion.button>
                     )}
                     {/* Row actions are pills, not <Button>, so they match Profile's rows and the
                         Contact/Schedule pills they sit beside. Score is the same orange pill
@@ -666,29 +582,35 @@ export const Matches: React.FC = () => {
                         a decision was the one thing you had to tap to find. */}
                     {incomingReq ? (
                       <div className="flex items-center gap-1.5">
-                        <button type="button" onClick={() => respondToIncoming(true)} title="Accept" className="p-1.5 rounded-lg bg-green-500/15 text-badge-win hover:bg-green-500/25 transition-colors" aria-label="Accept"><Check className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={() => respondToIncoming(false)} title="Decline" className="p-1.5 rounded-lg bg-red-500/15 text-badge-loss hover:bg-red-500/25 transition-colors" aria-label="Decline"><X className="w-3.5 h-3.5" /></button>
+                        <button type="button" onClick={() => respondToIncoming(true)} title="Accept" className="p-1.5 rounded-2xl bg-green-500/15 text-badge-win hover:bg-green-500/25 transition-colors" aria-label="Accept"><Check className="w-3.5 h-3.5" /></button>
+                        <button type="button" onClick={() => respondToIncoming(false)} title="Decline" className="p-1.5 rounded-2xl bg-red-500/15 text-badge-loss hover:bg-red-500/25 transition-colors" aria-label="Decline"><X className="w-3.5 h-3.5" /></button>
                       </div>
                     ) : mode === 'rallies' ? (
                       rallyScorable ? (
                         // Recording the score IS the result now — it pays on write, with no
                         // second-party confirm. The opponent may record it too; the narrower
                         // score wins and a different winner raises a dispute.
-                        <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => openRallyScore(p)}>
-                          <RacquetIcon className="w-3.5 h-3.5" />Score
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          {contactButton}
+                          <button type="button" className={buttonCls('clay', 'sm')} onClick={() => openRallyScore(p)}>
+                            <RacquetIcon className="w-3.5 h-3.5" />Score
+                          </button>
+                        </div>
                       ) : rallyPending ? null : (
-                        <button type="button" className={pillButtonCls('sm', 'clay')} disabled={busy === p.user_id} onClick={() => sendRally({ id: p.user_id, name: p.name, league: p.league, skill_level: p.skill_level })}>
+                        <button type="button" className={buttonCls('clay', 'sm')} disabled={busy === p.user_id} onClick={() => sendRally({ id: p.user_id, name: p.name, league: p.league, skill_level: p.skill_level })}>
                           <RacquetIcon className="w-3.5 h-3.5" />Rally
                         </button>
                       )
                     ) : (
                       challengeAccepted ? (
-                        <button type="button" className={pillButtonCls('sm', 'clay')} onClick={() => openChallengeScore(p)}>
-                          <RacquetIcon className="w-3.5 h-3.5" />Score
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          {contactButton}
+                          <button type="button" className={buttonCls('clay', 'sm')} onClick={() => openChallengeScore(p)}>
+                            <RacquetIcon className="w-3.5 h-3.5" />Score
+                          </button>
+                        </div>
                       ) : challengeState === 'pending' ? null : (
-                        <button type="button" className={`${pillButtonCls('sm', 'clay')} disabled:opacity-40`} disabled={challengeBlocked || busy === p.user_id} onClick={() => sendChallenge(p)}>
+                        <button type="button" className={buttonCls('clay', 'sm')} disabled={challengeBlocked || busy === p.user_id} onClick={() => sendChallenge(p)}>
                           <RacquetIcon className="w-3.5 h-3.5" />Challenge
                         </button>
                       )
@@ -707,7 +629,12 @@ export const Matches: React.FC = () => {
       </>
       )}
 
-      <div className="flex justify-center mt-5">
+      {mode !== 'tournament' && isReadyForMatches(profile) && (
+        <p className="mt-5 text-center text-xs font-bold uppercase tracking-widest text-fg/70">
+          {budgetLeft} of {RAND_SLOTS_PER_WEEK} randomizes left this week
+        </p>
+      )}
+      <div className="flex justify-center mt-3">
         <Button
           size="sm"
           variant="white"
@@ -740,9 +667,10 @@ export const Matches: React.FC = () => {
         </Fab>
       )}
 
-      {recordStep === 'players' && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Record a played match">
-          <div className="w-full max-w-sm rounded-3xl bg-tennis-surface p-5 max-h-[85vh] overflow-y-auto">
+      {/* Portalled above the bottom nav: Layout's animated <main> traps z-index, so z-50 here sat under it. */}
+      {recordStep === 'players' && createPortal(
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Record a played match">
+          <div className="w-full max-w-sm rounded-2xl bg-tennis-surface p-5 max-h-[85vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-fg mb-1">Record a played match</h2>
             <p className="text-xs text-fg/70 mb-4">
               It counts straight away. Neither player is asked to confirm it.
@@ -764,7 +692,7 @@ export const Matches: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setRecordPair(recordPair.filter((_, j) => j !== i))}
-                        className="text-[10px] font-bold text-fg hover:text-badge-loss transition-colors"
+                        className="text-xs font-bold text-fg hover:text-badge-loss transition-colors"
                       >Change</button>
                     </>
                   ) : (
@@ -823,7 +751,8 @@ export const Matches: React.FC = () => {
               <Button variant="outline" className="flex-1" onClick={closeRecord}>Cancel</Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {recordStep === 'score' && recordForm && recordPair.length === 2 && (

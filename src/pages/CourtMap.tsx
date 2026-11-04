@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
-import MapGL, { Marker, Popup, NavigationControl, Source, Layer } from 'react-map-gl/maplibre';
-import type { MapRef } from 'react-map-gl/maplibre';
+import MapGL, { Marker, Popup, NavigationControl, GeolocateControl, Source, Layer } from 'react-map-gl/maplibre';
+import type { GeolocateResultEvent, MapRef } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Search, Loader2, X, Layers } from 'lucide-react';
 import { ZONE_NAMES, ZONE_COLORS, getZone, haversineKm, zoneOverlayGeoJSON } from '../utils/zones';
+import { GTA_ZONE_NAMES } from '../utils/gtaZones';
 
 import type { CourtWithCount, PickleballOnlyCourt, NearestCourt, NearestProgram, SuggestionItem } from './courtmap/courtMapUtils';
 import {
@@ -93,7 +94,7 @@ const COURT_TYPE_OPTIONS = [
   { value: 'OpenHours',  label: 'Clubs with Public Hours' },
 ];
 const LIGHTS_OPTIONS = [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }];
-const ZONE_OPTIONS = ZONE_NAMES.map((z) => ({ value: z, label: z }));
+const TORONTO_ZONE_OPTIONS = ZONE_NAMES.map((z) => ({ value: z, label: z }));
 // Total-court-count bands (on CsvCourt.numCourts). Non-overlapping: under 4, exactly 4, 5–8, over 8.
 const COURT_COUNT_OPTIONS = [
   { value: 'lt4',  label: 'Under 4'      },
@@ -105,7 +106,7 @@ const COURT_COUNT_OPTIONS = [
 // Age/Days are read off each row's pills — none of them are filter-panel controls any more.
 
 export const CourtMap: React.FC = () => {
-  useEffect(() => { document.title = 'Court Locator · Racquets & Strings'; }, []);
+  useEffect(() => { document.title = 'Toronto Tennis Court Finder · Racquets & Strings'; }, []);
 
   const { user } = useAuth();
   const { courts, programs, pickleballOnly, loading, loadingProgress, setPrograms } = useCourtData();
@@ -130,16 +131,23 @@ export const CourtMap: React.FC = () => {
   // Zone overlay — off by default so it doesn't clutter the map for people just finding a court.
   const [showZones, setShowZones] = useState(false);
   const zoneGeoJSON = useMemo(() => zoneOverlayGeoJSON(), []);
+  // Toronto zones, then only the GTA municipalities that have a court on the map.
+  const zoneOptions = useMemo(() => {
+    const withCourts = new Set(courts.map((c) => c.zone));
+    return [...TORONTO_ZONE_OPTIONS, ...GTA_ZONE_NAMES.filter((z) => withCourts.has(z)).map((z) => ({ value: z, label: z }))];
+  }, [courts]);
   // Drives the marker size bands. Taken from every court, not just the filtered set, so a marker
   // doesn't change size just because the user narrowed the filters.
   const busiestCount = useMemo(() => courts.reduce((n, c) => Math.max(n, c.count), 0), [courts]);
-  // Members Only (the default) shows courts members prefer; All Courts reveals the rest (empty
-  // courts, programs-only, pickleball). Activity is its own button and its own idea: while it is
-  // on, only courts that saw a check-in, report or recorded result in the chosen window are
-  // shown, ranked by how many. Pickleball-only sites belong to All Courts alone, since activity
-  // is a narrowing view rather than a widening one.
-  const [showAllCourts, setShowAllCourts] = useState(false);
+  // All Courts (the default) shows every court, including the empty, programs-only and pickleball
+  // ones; Members Only narrows to the courts members prefer. Activity is its own button and its
+  // own idea: while it is on, only courts that saw a check-in, report or recorded result in the
+  // chosen window are shown, ranked by how many. Pickleball-only sites belong to All Courts alone,
+  // since activity is a narrowing view rather than a widening one.
+  const [showAllCourts, setShowAllCourts] = useState(true);
   const [activityWindow, setActivityWindow] = useState<ActivityWindow>('');
+  // Reports: only courts with court-condition notes, each row showing them as pills.
+  const [reportsOn, setReportsOn] = useState(false);
   const activityOf = (c: CourtWithCount) => (activityWindow === 'd7' ? c.activity7 : c.activity30);
 
 
@@ -195,7 +203,8 @@ export const CourtMap: React.FC = () => {
     }
     // Activity takes the map over while it is on: only courts busy in that window.
     if (activityWindow) list = list.filter((c) => activityOf(c) > 0);
-    else if (!showAllCourts) list = list.filter((c) => c.count > 0);
+    if (reportsOn) list = list.filter((c) => c.reports.length > 0);
+    if (!activityWindow && !reportsOn && !showAllCourts) list = list.filter((c) => c.count > 0);
 
     return list
       .map((c) => ({ ...c, distKm: userCoords ? haversineKm(userCoords.lat, userCoords.lng, c.lat, c.lng) : 0 }))
@@ -207,7 +216,7 @@ export const CourtMap: React.FC = () => {
         if (b.count !== a.count) return b.count - a.count;
         return a.dropdown.localeCompare(b.dropdown);
       });
-  }, [courts, zoneFilters, courtTypeFilter, courtLightsFilter, courtCountFilters, userCoords, showAllCourts, activityWindow]);
+  }, [courts, zoneFilters, courtTypeFilter, courtLightsFilter, courtCountFilters, userCoords, showAllCourts, activityWindow, reportsOn]);
 
   const displayedPickleballOnly = useMemo((): PickleballOnlyCourt[] => {
     // Pickleball-only sites belong to All and Pickleball alone — every other Type is a tennis-court
@@ -430,6 +439,18 @@ export const CourtMap: React.FC = () => {
     }
   }, [courts]);
 
+  // Near me: the browser's location stands in for a typed address, so the list sorts by distance
+  // and the map fits you plus the five nearest courts, exactly as a search does.
+  const handleNearMe = useCallback((e: GeolocateResultEvent) => {
+    const coords = { lat: e.coords.latitude, lng: e.coords.longitude };
+    setSearchError('');
+    setUserCoords(coords);
+    const nearest5 = courts
+      .map((c) => ({ lat: c.lat, lng: c.lng, dist: haversineKm(coords.lat, coords.lng, c.lat, c.lng) }))
+      .sort((a, b) => a.dist - b.dist).slice(0, 5);
+    setFitBoundsData([[coords.lat, coords.lng], ...nearest5.map((c) => [c.lat, c.lng] as [number, number])]);
+  }, [courts]);
+
   const applySuggestion = useCallback((s: SuggestionItem) => {
     setSuggestions([]);
     if (s.kind === 'court') {
@@ -458,6 +479,7 @@ export const CourtMap: React.FC = () => {
       userCoords={userCoords}
       onSelectCourt={handleSelectCourt}
       activityWindow={activityWindow}
+      showReports={reportsOn}
       onViewPrograms={(c) => {
         setProgLocationFilter(c.dropdown || c.name);
         setMobileResultsOpen(true);
@@ -494,7 +516,7 @@ export const CourtMap: React.FC = () => {
         <MultiFilterSelect
           label="Zone" allLabel="All zones" selected={zoneFilters}
           onChange={(s) => { setZoneFilters(s); trackMap('filter', { filter_name: 'zone', filter_value: s.size ? [...s].join('|') : '(all)' }); }}
-          options={ZONE_OPTIONS}
+          options={zoneOptions}
         />
         <MultiFilterSelect
           label="Total Courts" allLabel="Any size" selected={courtCountFilters}
@@ -507,7 +529,7 @@ export const CourtMap: React.FC = () => {
 
   // ── JSX ──────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-dvh pt-16 pb-16 bg-tennis-dark overflow-hidden">
+    <div className="flex flex-col h-dvh pt-16 pb-16 lg:pb-0 bg-tennis-dark overflow-hidden">
 
       {/* MAP — full screen (mobile-only layout; wireframe 1j) */}
       <div className="flex-1 relative">
@@ -522,18 +544,18 @@ export const CourtMap: React.FC = () => {
           <button
             type="button"
             onClick={() => { setShowZones((v) => !v); trackMap('filter', { filter_name: 'show_zones', filter_value: String(!showZones) }); }}
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold shadow-lg transition-colors ${
+            className={`inline-flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-bold shadow-lg transition-colors ${
               showZones ? 'bg-clay text-white' : 'bg-white text-ink hover:bg-white/90'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />Show Zones
           </button>
           {showZones && (
-            <div className="rounded-xl bg-white shadow-lg p-2 space-y-1 max-w-[180px]">
+            <div className="rounded-2xl bg-white shadow-lg p-2 space-y-1 max-w-[180px]">
               {ZONE_NAMES.map((z) => (
                 <div key={z} className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: ZONE_COLORS[z] }} />
-                  <span className="text-[10px] font-semibold text-ink leading-tight">{z}</span>
+                  <span className="text-xs font-semibold text-ink leading-tight">{z}</span>
                 </div>
               ))}
             </div>
@@ -552,6 +574,15 @@ export const CourtMap: React.FC = () => {
               top width (top-3 left-3 right-3) and was sitting on top of the zoom controls there,
               making them unclickable. */}
           <NavigationControl position="bottom-right" />
+          {/* Near me. One fix, no tracking; the page's own "you are here" marker draws the point,
+              so the control's blue dot is off rather than showing two. */}
+          <GeolocateControl
+            position="bottom-right"
+            trackUserLocation={false}
+            showUserLocation={false}
+            onGeolocate={handleNearMe}
+            onError={() => setSearchError('Couldn’t get your location. Allow location access, or search an address.')}
+          />
 
           {showZones && (
             <Source id="zones" type="geojson" data={zoneGeoJSON}>
@@ -573,7 +604,7 @@ export const CourtMap: React.FC = () => {
               key={i}
               court={court}
               busiestCount={busiestCount}
-              metric={activityWindow ? activityOf(court) : undefined}
+              metric={reportsOn ? court.reportCount : activityWindow ? activityOf(court) : undefined}
               onSelect={handleSelectCourt}
             />
           ))}
@@ -691,9 +722,10 @@ export const CourtMap: React.FC = () => {
                 ))}
               </div>
             )}
-            {searchError && <p className="text-badge-loss text-xs mt-1.5 bg-tennis-dark/80 rounded-lg px-2 py-1">{searchError}</p>}
+            {searchError && <p className="text-badge-loss text-xs mt-1.5 bg-tennis-dark/80 rounded-2xl px-2 py-1">{searchError}</p>}
           </div>
-          <div className="flex items-start gap-2 sm:contents">
+          <div className="flex items-start gap-2 -my-2 py-2 overflow-x-auto no-scrollbar sm:contents">
+
           <button
             type="button"
             onClick={() => setShowAllCourts((v) => !v)}
@@ -718,6 +750,17 @@ export const CourtMap: React.FC = () => {
           </button>
           <button
             type="button"
+            onClick={() => setReportsOn((v) => !v)}
+            className={`h-10 shrink-0 px-3.5 rounded-2xl backdrop-blur border shadow-xl text-xs font-bold transition-colors ${
+              reportsOn
+                ? 'bg-clay/15 border-clay/40 text-clay'
+                : 'bg-tennis-dark/95 border-fg/10 text-fg hover:border-clay/50'
+            }`}
+          >
+            Reports
+          </button>
+          <button
+            type="button"
             onClick={() => setShowFiltersSheet(true)}
             className="h-10 shrink-0 px-3.5 rounded-2xl bg-tennis-dark/95 backdrop-blur shadow-xl text-xs font-bold text-fg hover:border-clay/50 transition-colors"
           >
@@ -726,19 +769,24 @@ export const CourtMap: React.FC = () => {
           </div>
         </div>
 
-        {/* Join CTA — floats just above the pull-up handle for logged-out visitors; goes away
-            once the results list is opened so it never blocks the list itself. */}
+        {/* The Join CTA and the pull-up panel share ONE bottom-anchored column, so the button is
+            always above the panel whatever height it renders at. Pinned separately at `bottom-14`
+            it sat on top of the "N courts" handle, and any fixed offset breaks again as soon as
+            the legend row wraps. The column ignores pointer events so the map still drags either
+            side of the button. */}
+        <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col items-center pointer-events-none">
+        {/* Logged-out visitors only, and it goes away once the list is open so it never blocks it. */}
         {!user && !mobileResultsOpen && (
           <Link
             to="/signup"
-            className="absolute bottom-14 left-1/2 -translate-x-1/2 z-20 px-4 py-2 rounded-full bg-clay text-white text-xs font-bold shadow-lg shadow-clay/30 hover:bg-clay-dark transition-colors"
+            className="pointer-events-auto mb-2.5 px-4 py-2 rounded-full bg-clay text-white text-xs font-bold shadow-lg shadow-clay/30 hover:bg-clay-dark transition-colors"
           >
             Join
           </Link>
         )}
 
         {/* Pull-up results panel (Maps/Uber model) ── */}
-        <div className="absolute bottom-0 left-0 right-0 z-10 bg-tennis-dark rounded-t-3xl border-t border-fg/10 shadow-[0_-8px_24px_rgba(0,0,0,0.4)]">
+        <div className="pointer-events-auto w-full bg-tennis-dark rounded-t-3xl border-t border-fg/10 shadow-[0_-8px_24px_rgba(0,0,0,0.4)]">
           <button
             type="button"
             onClick={() => setMobileResultsOpen((v) => !v)}
@@ -752,24 +800,25 @@ export const CourtMap: React.FC = () => {
             </span>
           </button>
           {mobileResultsOpen && (
-            <>
-              <div className="max-h-[45vh] overflow-y-auto border-t border-fg/5">{resultsBody}</div>
+            <div className="max-h-[45vh] overflow-y-auto border-t border-fg/5">{resultsBody}</div>
+          )}
+          {/* Legend + Report: always visible, open or closed. */}
               <div className="border-t border-fg/10 px-4 py-2.5 flex items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-fg/70 pointer-events-none">
+                <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-fg/70 pointer-events-none">
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#15803d] inline-block shrink-0" />Active</span>
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#eab308] inline-block shrink-0" />Programs</span>
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#3b82f6] inline-block shrink-0" />Public hours</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#67e8f9] inline-block shrink-0" />Winter</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowSuggestModal(true)}
-                  className="shrink-0 px-3 py-1.5 rounded-xl border border-clay/40 text-clay text-[11px] font-semibold hover:bg-clay/10 transition-colors"
+                  className="shrink-0 px-3 py-1.5 rounded-2xl border border-clay/40 text-clay text-xs font-semibold hover:bg-clay/10 transition-colors"
                 >
                   Report
                 </button>
               </div>
-            </>
-          )}
+        </div>
         </div>
       </div>
 

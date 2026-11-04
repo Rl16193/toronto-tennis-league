@@ -97,6 +97,8 @@ export interface Reward {
   certified: boolean;
   /** Group lesson only: the one open redeemed booking. Redeem is blocked for others while set. */
   redeem_booking_id: string;
+  /** Bookings ever made (Book or Redeem), kept by the booking callables; orders stringing offers. */
+  booking_count?: number;
   /** Coaching only. 1 for a private lesson, more for a group: a guide, never a limit. Shown as a pill. */
   capacity: number;
   /** Coaching only, free text, e.g. "1 hr" or "30 min". Shown as a pill. */
@@ -108,6 +110,10 @@ export interface Reward {
 
 /** A group lesson: members book it, the coach groups them on the Provider Dash (lessonGroup). */
 export const isGroupLesson = (x: { sub_category?: string }) => x.sub_category === 'group';
+
+/** A price as "$40" or "$37.50"; '—' when there is none. */
+export const money = (n: number | null | undefined) =>
+  typeof n === 'number' ? `${n % 1 === 0 ? n : n.toFixed(2)}` : '—';
 
 // ─── Bookings ───────────────────────────────────────────────────────────────────────────────
 

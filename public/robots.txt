@@ -1,7 +1,5 @@
 User-agent: *
 Allow: /
-Disallow: /login
-Disallow: /signup
 Disallow: /tournament
 Disallow: /leagues
 Disallow: /profile

@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { analyticsPromise } from './lib/firebase';
 import { Layout } from './components/Layout';
+import { ConsentSheet } from './components/ConsentSheet';
 import { lazyWithRetry } from './lib/lazyWithRetry';
 
 // Route-level code splitting: each page loads as its own chunk on demand,
@@ -20,6 +21,7 @@ const Tasks = lazyWithRetry(() => import('./pages/Tasks').then((m) => ({ default
 const CourtMap = lazyWithRetry(() => import('./pages/CourtMap').then((m) => ({ default: m.CourtMap })), 'CourtMap');
 const History = lazyWithRetry(() => import('./pages/History').then((m) => ({ default: m.History })), 'History');
 const Matches = lazyWithRetry(() => import('./pages/Matches').then((m) => ({ default: m.Matches })), 'Matches');
+const Newsletter = lazyWithRetry(() => import('./pages/Newsletter').then((m) => ({ default: m.Newsletter })), 'Newsletter');
 const Notifications = lazyWithRetry(() => import('./pages/Notifications').then((m) => ({ default: m.Notifications })), 'Notifications');
 const Marketplace = lazyWithRetry(() => import('./pages/Marketplace').then((m) => ({ default: m.Marketplace })), 'Marketplace');
 const About = lazyWithRetry(() => import('./pages/StaticPages').then((m) => ({ default: m.About })), 'About');
@@ -90,6 +92,7 @@ export default function App() {
           {/* Suspense now lives inside Layout, outside the route-keyed <main> — see the comment
               there. Keeping it here meant it remounted on every navigation. */}
           <Layout>
+              <ConsentSheet />
               <Routes>
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<Signup />} />
@@ -110,6 +113,9 @@ export default function App() {
                 <Route path="/players/:userId" element={<PrivateRoute><PlayerProfile /></PrivateRoute>} />
                 <Route path="/courts" element={<CourtMap />} />
                 <Route path="/about" element={<About />} />
+                <Route path="/newsletter" element={<Newsletter />} />
+                <Route path="/newsletter/:issue" element={<Newsletter />} />
+                <Route path="/newsletter/:issue/:slug" element={<Newsletter />} />
                 <Route path="/how-it-works" element={<HowItWorks />} />
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/privacy" element={<Privacy />} />

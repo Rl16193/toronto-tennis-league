@@ -6,20 +6,14 @@ const admin = require('firebase-admin');
 if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('Run through the emulator: npm run test:functions');
 if (!admin.apps.length) admin.initializeApp({ projectId: 'demo-ttl' });
 const db = admin.firestore();
-const { seatJoiner, registerMemberPartner, joinPartnerPool, registrationId } = require('../lib/participantSeat');
+const { registerMemberPartner, joinPartnerPool, registrationId } = require('../lib/participantSeat');
 
 const clear = () => fetch(
   `http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/demo-ttl/databases/(default)/documents`,
   { method: 'DELETE' },
 );
-const match = async (id) => (await db.doc(`matches/${id}`).get()).data();
 const alerts = async (uid, type) =>
   (await db.collection('notifications').where('uid', '==', uid).where('sub_category', '==', type).get()).size;
-const knockout = (extra = {}) => ({
-  category: 'tournament', sub_category: 'singles', event_id: 'e1', format: 'knockout', round: 'R16', match_id: 'm1',
-  status: 'accepted', winner_uid: '', division: "Men's", skill_group: 'Challengers', zone: '',
-  player_1_uid: 'x', player_1_name: 'Xan', player_2_uid: '', player_2_name: 'Player Loading', participant_uids: ['x'], ...extra,
-});
 const joiner = (extra = {}) => ({
   uid: 'j', user_name: 'Jo', event_id: 'e1', event_name: 'Test Open', category: 'singles_tournament', sub_category: 'knockout',
   division: "Men's", skill: 3.5, partner_uid: '', partner_name: '', status: 'active', ...extra,
@@ -32,81 +26,6 @@ beforeEach(async () => {
   await db.doc('preferences/j').set({ preferred_zone: 'Downtown - Midtown' });
 });
 after(() => admin.app().delete());
-
-// ── Knockout late-joiner seating ──
-
-test('a late joiner is seated in an open spot of their draw', async () => {
-  await db.doc('matches/k1').set(knockout());
-  assert.equal(await seatJoiner(joiner()), 'seated');
-  const m = await match('k1');
-  assert.deepEqual([m.player_2_uid, m.player_2_name], ['j', 'Jo']);
-  assert.deepEqual([...m.participant_uids].sort(), ['j', 'x']);
-});
-
-test('the earliest round and lowest match number is filled first', async () => {
-  await db.doc('matches/qf').set(knockout({ round: 'QF', match_id: 'm1' }));
-  await db.doc('matches/k2').set(knockout({ match_id: 'm10' }));
-  await db.doc('matches/k1').set(knockout({ match_id: 'm2' }));
-  assert.equal(await seatJoiner(joiner()), 'seated');
-  assert.equal((await match('k1')).player_2_uid, 'j');
-  assert.deepEqual([(await match('k2')).player_2_uid, (await match('qf')).player_2_uid], ['', '']);
-});
-
-test('a spot someone else holds is left alone', async () => {
-  await db.doc('matches/k1').set(knockout({ player_2_uid: 'other', player_2_name: 'Oli', participant_uids: ['x', 'other'] }));
-  assert.equal(await seatJoiner(joiner()), 'no open spot');
-  assert.equal((await match('k1')).player_2_uid, 'other');
-});
-
-test('a player already in the draw is not seated twice', async () => {
-  await db.doc('matches/k1').set(knockout());
-  await db.doc('matches/k0').set(knockout({ player_2_uid: 'j', player_2_name: 'Jo', participant_uids: ['x', 'j'] }));
-  assert.equal(await seatJoiner(joiner()), 'already seated');
-  assert.equal((await match('k1')).player_2_uid, '');
-});
-
-test('round-robin is never seated automatically', async () => {
-  await db.doc('matches/k1').set(knockout({ format: 'rr', round: 'RR' }));
-  assert.equal(await seatJoiner(joiner({ sub_category: 'rr' })), null);
-  assert.equal(await seatJoiner(joiner()), 'no open spot');
-  assert.equal((await match('k1')).player_2_uid, '');
-});
-
-test('only an active tournament registration is seated', async () => {
-  await db.doc('matches/k1').set(knockout());
-  assert.equal(await seatJoiner(joiner({ status: 'withdrawn' })), null);
-  assert.equal(await seatJoiner(joiner({ category: 'social' })), null);
-  await db.doc('events/e1').set({ status: 'cancelled' }, { merge: true });
-  assert.equal(await seatJoiner(joiner()), null); // a cancelled event seats nobody
-  assert.equal((await match('k1')).player_2_uid, '');
-});
-
-test('a spot in another division, skill band or zone is refused', async () => {
-  await db.doc('matches/k1').set(knockout({ division: "Women's" }));
-  assert.equal(await seatJoiner(joiner()), 'no open spot');
-  await db.doc('matches/k1').set(knockout({ skill_group: 'Masters' }));
-  assert.equal(await seatJoiner(joiner()), 'no open spot');
-  await db.doc('matches/k1').set(knockout({ zone: 'scarborough' }));
-  assert.equal(await seatJoiner(joiner()), 'no open spot');
-  await db.doc('matches/k1').set(knockout({ division: 'All', skill_group: 'All' })); // a merged draw takes anyone
-  assert.equal(await seatJoiner(joiner()), 'seated');
-});
-
-test('a zone merged into another plays in that zone\'s draw', async () => {
-  await db.doc('events/e1').set({ zone_draw_config: { merges: { scarborough: 'downtown_midtown' } } }, { merge: true });
-  await db.doc('preferences/j').set({ preferred_zone: 'Scarborough' });
-  await db.doc('matches/k1').set(knockout()); // no zone: the default zone
-  assert.equal(await seatJoiner(joiner()), 'seated');
-});
-
-test('doubles ignores zone and puts the member partner on court, never a guest', async () => {
-  await db.doc('matches/d1').set(knockout({ sub_category: 'doubles', zone: 'scarborough' }));
-  assert.equal(await seatJoiner(doubles({ partner_uid: 'pp', partner_name: 'Pia' })), 'seated');
-  assert.deepEqual([...(await match('d1')).participant_uids].sort(), ['j', 'pp', 'x']);
-  await db.doc('matches/d2').set(knockout({ sub_category: 'doubles', player_1_uid: 'y', participant_uids: ['y'] }));
-  assert.equal(await seatJoiner(doubles({ uid: 'k', user_name: 'Kai', partner_uid: 'guest_1' })), 'seated');
-  assert.deepEqual([...(await match('d2')).participant_uids].sort(), ['k', 'y']);
-});
 
 // ── Doubles partners ──
 

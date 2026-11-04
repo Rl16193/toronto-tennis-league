@@ -30,7 +30,7 @@ export const AvailabilityModal: React.FC<{ onClose: () => void; onDone?: () => v
               key={t.id}
               type="button"
               onClick={() => toggle(t.id)}
-              className={`px-3.5 py-2 rounded-xl text-sm font-bold border transition-colors ${
+              className={`px-3.5 py-2 rounded-2xl text-sm font-bold border transition-colors ${
                 selected.includes(t.id) ? 'bg-clay border-clay text-white' : 'bg-white text-ink border-fg/10 hover:bg-white/90'
               }`}
             >

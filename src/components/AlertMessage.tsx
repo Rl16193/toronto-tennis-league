@@ -21,8 +21,8 @@ export const AlertMessage: React.FC<Props> = ({ tone, children, className = '' }
   const Icon = tone === 'success' ? CheckCircle2 : AlertCircle;
 
   return (
-    <div className={`rounded-2xl border p-4 flex items-start gap-3 ${toneClasses[tone]} ${className}`}>
-      <Icon className="w-5 h-5 mt-0.5 shrink-0" />
+    <div role={tone === 'error' ? 'alert' : 'status'} className={`rounded-2xl border p-4 flex items-start gap-3 ${toneClasses[tone]} ${className}`}>
+      <Icon className="w-5 h-5 mt-0.5 shrink-0" aria-hidden="true" />
       <div className="font-semibold">{children}</div>
     </div>
   );

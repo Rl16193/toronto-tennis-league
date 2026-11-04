@@ -5,14 +5,14 @@ import { ArrowLeft, Award, Mail, MapPin, Phone, Star, Users } from 'lucide-react
 import { motion } from 'motion/react';
 import { fadeUp, staggerDelay } from '../lib/motion';
 import { db } from '../lib/firebase';
-import { Button } from '../components/Button';
+import { Button, buttonCls } from '../components/Button';
 import { RacquetIcon } from '../components/RacquetIcon';
-import { ContactData, MemberInfo, TennisEvent, UserData, UserPreferences, UserStats } from '../types';
+import { ContactData, MemberInfo, ProviderDoc, ProviderRole, TennisEvent, UserData, UserPreferences, UserStats } from '../types';
 import type { TournamentMatch } from './tournament/types';
 import { BadgeRow } from '../features/tasks/BadgePicker';
 import { skillTier, leagueDivision, leagueAgeCategory } from '../utils/skillLevels';
-import { isCancelledEvent } from '../utils/eventTypes';
-import { contactChannels, pillButtonCls } from '../components/ContactOpponentButton';
+import { isCancelledEvent, providerTags } from '../utils/eventTypes';
+import { contactChannels } from '../components/ContactOpponentButton';
 
 import { deriveResults } from '../features/matches/tournamentResults';
 import { playerRecord, useUserMatches } from '../features/matches/useUserMatches';
@@ -22,7 +22,7 @@ const SectionLabel: React.FC<{ icon?: React.ReactNode; label: string }> = ({ ico
 );
 
 const Pill: React.FC<{ label: string }> = ({ label }) => (
-  <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-fg/5 text-fg/70">{label}</span>
+  <span className="px-2.5 py-1 rounded-2xl text-xs font-bold bg-fg/5 text-fg/70">{label}</span>
 );
 
 // Read-only view of another player's profile — mirrors the user's own profile page
@@ -37,6 +37,7 @@ export const PlayerProfile: React.FC = () => {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [organizer, setOrganizer] = useState<MemberInfo | null>(null);
+  const [roles, setRoles] = useState<ProviderRole[]>([]);
   const [loading, setLoading] = useState(true);
   // The same played matches, streak and P/G Won as the Player Dash (useUserMatches, playerRecord).
   const { matches: played, upcoming } = useUserMatches(userId);
@@ -57,12 +58,14 @@ export const PlayerProfile: React.FC = () => {
       try {
         // Contact details are a separate, sign-in-gated doc. A signed-out visitor still sees the
         // public card (name, badges, stats) — the contacts read just fails and resolves to null.
-        const [userDoc, statsDoc, prefsDoc, contactsDoc] = await Promise.all([
+        const [userDoc, statsDoc, prefsDoc, contactsDoc, providerDoc] = await Promise.all([
           getDoc(doc(db, 'users', userId)),
           getDoc(doc(db, 'stats', userId)),
           getDoc(doc(db, 'preferences', userId)),
           getDoc(doc(db, 'contacts', userId)).catch(() => null),
+          getDoc(doc(db, 'providers', userId)).catch(() => null),
         ]);
+        setRoles(providerDoc?.exists() ? ((providerDoc.data() as ProviderDoc).roles ?? []) : []);
 
         const playerData = userDoc.exists()
           ? { ...(userDoc.data() as UserData), ...(contactsDoc?.exists() ? (contactsDoc.data() as ContactData) : {}) }
@@ -112,7 +115,7 @@ export const PlayerProfile: React.FC = () => {
 
   if (!player) {
     return (
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
+      <div className="max-w-xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
         <h1 className="text-3xl font-black text-fg mb-3">Player Not Found</h1>
         <p className="text-fg mb-6">This player profile is not available.</p>
         <Button variant="outline" onClick={() => navigate('/matches?mode=tournament')}>Back to Tournament</Button>
@@ -148,13 +151,13 @@ export const PlayerProfile: React.FC = () => {
   ];
 
   return (
-    <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-20 pt-8 space-y-4">
+    <div className="max-w-xl mx-auto px-4 sm:px-6 pb-20 pt-8 space-y-4">
       <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="px-2">
-        <ArrowLeft className="w-4 h-4 mr-1.5" />Back
+        <ArrowLeft className="w-4 h-4" />Back
       </Button>
 
       {/* Profile Card — read-only mirror of ProfileInfo */}
-      <div className="rounded-[2.5rem] bg-tennis-surface/30 shadow-xl p-5 sm:p-7">
+      <div className="rounded-2xl bg-fg/5 p-5 sm:p-7">
         <h2 className="text-xl font-bold text-fg mb-5">Profile Card</h2>
 
         <div className="flex flex-col items-center gap-4 pb-5 border-b border-fg/5">
@@ -188,7 +191,7 @@ export const PlayerProfile: React.FC = () => {
                     href={c.href}
                     target={c.key === 'whatsapp' ? '_blank' : undefined}
                     rel="noopener noreferrer"
-                    className={pillButtonCls('md', 'clay')}
+                    className={buttonCls('clay', 'sm')}
                   >
                     <c.icon className="w-3.5 h-3.5" />{c.label}
                   </a>
@@ -222,10 +225,13 @@ export const PlayerProfile: React.FC = () => {
             <SectionLabel icon={<Award className="w-3.5 h-3.5 text-clay" />} label="Badges" />
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               {stats && (
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/15 text-badge border border-amber-500/25">
+                <span className="px-2.5 py-1 rounded-2xl text-xs font-bold bg-amber-500/15 text-badge border border-amber-500/25">
                   {skillTier(stats.skill_level)}
                 </span>
               )}
+              {providerTags(roles).map((t) => (
+                <span key={t} className="px-2.5 py-1 rounded-2xl text-xs font-bold bg-amber-500/15 text-badge border border-amber-500/25">{t}</span>
+              ))}
               <BadgeRow ids={player.display_badges} />
             </div>
           </div>
@@ -258,23 +264,23 @@ export const PlayerProfile: React.FC = () => {
       </div>
 
       {/* Match Stats — read-only mirror of ProfileStats */}
-      <div className="bg-tennis-surface/30 rounded-[2.5rem] shadow-xl p-6">
+      <div className="bg-fg/5 rounded-2xl p-6">
         <h2 className="text-lg font-bold text-fg flex items-center mb-4">
           <Star className="w-5 h-5 mr-2 text-clay" />Match Stats
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {statTiles.map((t, i) => (
-            <motion.div key={t.label} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }} className="min-w-0 rounded-2xl bg-white/[0.03] px-3 py-4 text-center flex flex-col justify-center">
+            <motion.div key={t.label} {...fadeUp} transition={{ ...fadeUp.transition, delay: staggerDelay(i) }} className="min-w-0 rounded-2xl bg-fg/5 px-3 py-4 text-center flex flex-col justify-center">
               {/* Long values (a round name) drop a size so they stay inside the tile. */}
               <p className={`${t.value.length > 6 ? 'text-lg' : 'text-2xl'} font-black leading-tight break-words ${t.accent}`}>{t.value}</p>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-fg/70 mt-1">{t.label}</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-fg/70 mt-1">{t.label}</p>
             </motion.div>
           ))}
         </div>
       </div>
 
       {organizer && (
-        <div className="rounded-[2.5rem] bg-tennis-surface/30 shadow-xl p-6">
+        <div className="rounded-2xl bg-fg/5 p-6">
           <h2 className="text-base font-black text-fg mb-3">Contact organizer if you require any assistance</h2>
           <div className="flex flex-wrap gap-6">
             {organizer.email && (

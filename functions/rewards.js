@@ -20,10 +20,10 @@ const { notify } = require('./lib/notify');
 const { isOrganizer } = require('./lib/roles');
 const { normalizeCouponCode, requireAuth, requireDocId } = require('./lib/callable');
 const { recordServiceLead } = require('./lib/serviceLeads');
+const { num } = require('./lib/points');
 const { OPEN_BOOKING_STATUSES, isGroup, assertNoOpenBooking, newBooking, labelsFor, notifyNewBooking } = require('./lib/bookingState');
 
 const db = () => admin.firestore();
-const num = (v) => (typeof v === 'number' ? v : 0);
 
 // Ambiguous glyphs (0/O, 1/I) left out so a code read aloud or off a phone screen can't be mistyped.
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -84,7 +84,11 @@ exports.redeemReward = onCall({ region: REGION }, async (request) => {
           price: typeof service.discounted_price === 'number' ? service.discounted_price : service.total_price,
         });
         tx.create(bookingRef, booking);
-        if (isGroup(service)) tx.update(serviceRef, { redeem_booking_id: bookingRef.id, updated_at: Timestamp.now() });
+        // One update: the count (as bookService keeps it) plus a group lesson's redeemed seat.
+        tx.update(serviceRef, {
+          booking_count: FieldValue.increment(1),
+          ...(isGroup(service) ? { redeem_booking_id: bookingRef.id, updated_at: Timestamp.now() } : {}),
+        });
         tx.set(db().doc(`stats/${uid}`), { pointsSpent: spent + cost, updated_at: FieldValue.serverTimestamp() }, { merge: true });
         return booking;
       });

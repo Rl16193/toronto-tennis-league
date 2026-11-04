@@ -1,4 +1,4 @@
-﻿import React from 'react';
+﻿import React, { useId } from 'react';
 import { cn } from '../lib/cn';
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -17,32 +17,44 @@ export const field =
 /** The label above a field. Same reason as above — one copy, shared by Input and SelectField. */
 export const fieldLabelCls = 'block text-sm font-medium text-fg';
 
+/** Table and stat-tile recipes: the leaderboard, group cards and dashes all read from these. */
+export const tableHeadCls = 'text-xs font-bold uppercase tracking-widest text-fg/70';
+export const statTileCls = 'min-w-0 rounded-2xl bg-fg/5 py-2 flex flex-col items-center justify-center text-center';
+export const numCls = 'font-black tabular-nums text-fg';
+
 export const Input: React.FC<InputProps> = ({
   label,
   error,
   className,
   required,
+  id,
   ...props
 }) => {
+  const autoId = useId();
+  const inputId = id ?? autoId;
+  const errorId = `${inputId}-error`;
   return (
     <div className="w-full space-y-1.5">
       {label && (
-        <label className={fieldLabelCls}>
+        <label htmlFor={inputId} className={fieldLabelCls}>
           {label}
           {required && <span className="text-clay ml-0.5">*</span>}
         </label>
       )}
       <input
+        id={inputId}
         required={required}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
         className={cn(
           field,
-          error && 'border-red-500 focus:border-red-500 focus:ring-red-500/20',
+          error && 'border-badge-loss focus:border-badge-loss focus:ring-badge-loss/20',
           className
         )}
         {...props}
       />
       {error && (
-        <p className="text-xs text-badge-loss mt-1 ml-1">{error}</p>
+        <p id={errorId} className="text-xs text-badge-loss mt-1 ml-1">{error}</p>
       )}
     </div>
   );

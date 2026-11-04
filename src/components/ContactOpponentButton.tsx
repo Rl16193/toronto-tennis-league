@@ -1,6 +1,8 @@
 import React from 'react';
 import { Mail, MessageSquare } from 'lucide-react';
 import type { ContactMethod } from '../types';
+import { cn } from '../lib/cn';
+import { buttonCls } from './Button';
 
 // WhatsApp's own mark. lucide ships no brand logos, and a generic speech bubble made the WhatsApp
 // action indistinguishable from SMS once the buttons lost their text labels.
@@ -22,16 +24,6 @@ const toE164Phone = (phone?: string): string | null => {
 
 export type Channel = { key: string; label: string; href: string; icon: React.ComponentType<{ className?: string }> };
 
-// Shared pill shape for small buttons that sit inline together in a row (Contact, Schedule on
-// Matchdays, Submit Score, …) — same size/shape/text everywhere they're placed side by side.
-export const pillButtonCls = (size: 'sm' | 'md', variant: 'outline' | 'white' | 'clay') => {
-  const base = `inline-flex items-center gap-1.5 rounded-lg font-bold transition-colors whitespace-nowrap ${
-    size === 'sm' ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-xs'
-  }`;
-  if (variant === 'white') return `${base} bg-white text-ink hover:bg-white/90`;
-  if (variant === 'clay') return `${base} bg-clay text-white hover:bg-clay-dark`;
-  return `${base} border-2 border-clay text-clay hover:bg-clay hover:text-white`;
-};
 
 /**
  * The contact channels for one person, in the order they're offered everywhere — the single place
@@ -91,9 +83,9 @@ export const ContactOpponentButton: React.FC<{
           rel="noopener noreferrer"
           title={`${c.label} ${name}`}
           aria-label={`${c.label} ${name}`}
-          className={`${pillButtonCls(size, 'white')} !px-1.5`}
+          className={cn(buttonCls('white', 'sm'), size === 'sm' ? 'size-7 px-0' : 'size-9 px-0')}
         >
-          <c.icon className="w-3.5 h-3.5" />
+          <c.icon className="size-3.5" />
         </a>
       ))}
     </span>

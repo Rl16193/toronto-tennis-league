@@ -67,6 +67,14 @@ export function useServicesCatalog() {
       return at === -1 ? PINNED_PROVIDERS.length : at;
     };
     cats.forEach((list) => list.sort((a, b) => rank(a) - rank(b)));
+    // Which offer a provider leads with (the one shown before "Show other options"): a stringer's
+    // most booked, cheapest on a tie; a coach's free class. Others keep catalog order.
+    const isFree = (r: Reward) => r.total_price === 0 && r.discount === 0 && r.points_cost === 0;
+    cats.forEach((list, category) => list.forEach((p) => p.offers.sort((a, b) => (
+      category === 'stringing' ? (b.booking_count ?? 0) - (a.booking_count ?? 0) || a.total_price - b.total_price
+        : category === 'coaching' ? Number(isFree(b)) - Number(isFree(a))
+        : 0
+    ))));
     return cats;
   }, [rewards]);
 

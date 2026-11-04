@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { collection, documentId, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { chunk, db } from '../../lib/firebase';
 import type { EventParticipant, TennisEvent } from '../../types';
 import { skillBand } from '../../utils/skillLevels';
 import { isGuest } from '../../utils/guest';
-import { choiceOf, choiceOfMatch, effectiveZone, resolveZoneConfig, zoneBucketFor } from './utils';
+import { choiceOf, choiceOfMatch } from './utils';
+import { effectiveZone, resolveZoneConfig, zoneBucketFor } from './drawGenerator';
 import type { TournamentMatch, UnplacedEntry } from './types';
 
 /**
@@ -32,8 +33,6 @@ export function useUnplacedParticipants({ events, enabled, refreshKey }: {
     if (myEvents.length === 0) { setUnplacedParticipants([]); return; }
 
     let alive = true;
-    const chunk = <T,>(xs: T[], n: number) =>
-      Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
     const ids = myEvents.map((e) => e.id);
     const titleById = new Map(myEvents.map((e) => [e.id, e.title ?? '']));
 
