@@ -148,7 +148,9 @@ exports.deleteAccount = onCall({ region: REGION, timeoutSeconds: 300 }, async (r
   // 4. Every other stored copy of their name, and where they stood.
   for (const d of await where('submissions', 'uid', '==', uid)) await w.update(d.ref, { user_name: FORMER });
   for (const d of await where('submissions', 'winner_uid', '==', uid)) await w.update(d.ref, { winner_name: FORMER });
+  const reportPhotos = []; // uid-less paths (court_reports/members/…): the prefix delete can't find them
   for (const d of await where('courts', 'uid', '==', uid)) {
+    if (d.data().category !== 'visit') reportPhotos.push(...(d.data().photo_paths || []));
     await w.update(d.ref, d.data().category === 'visit'
       ? { user_name: FORMER, lat: 0, lng: 0 }
       : { user_name: FORMER, photo_paths: [], photos_meta: [] });
@@ -175,6 +177,8 @@ exports.deleteAccount = onCall({ region: REGION, timeoutSeconds: 300 }, async (r
   const bucket = admin.storage().bucket();
   await Promise.all(STORAGE_FOLDERS.map((f) => bucket.deleteFiles({ prefix: `${f}/${uid}/` })
     .catch((err) => logger.warn('deleteAccount storage', { folder: f, err: err.message }))));
+  await Promise.all(reportPhotos.map((p) => bucket.file(p).delete({ ignoreNotFound: true })
+    .catch((err) => logger.warn('deleteAccount storage', { path: p, err: err.message }))));
 
   // 6. Each affected event's organizers hear what changed. No name: the member is gone.
   for (const [eventId, t] of byEvent) {

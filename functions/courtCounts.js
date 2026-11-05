@@ -30,17 +30,17 @@ const db = admin.firestore();
 const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
 
 async function computeCourtCounts() {
-  const [prefsSnap, statsSnap, usersSnap] = await Promise.all([
+  const [prefsSnap, statsSnap, contactsSnap] = await Promise.all([
     db.collection('preferences').get(),
     db.collection('stats').get(),
-    db.collection('users').get(),
+    db.collection('contacts').get(),
   ]);
 
   const points = new Map();
   statsSnap.forEach((d) => points.set(d.id, Number(d.data().leaguePoints) || 0));
 
   const lastActive = new Map();
-  usersSnap.forEach((d) => {
+  contactsSnap.forEach((d) => {
     const raw = d.data().lastActive;
     if (raw && typeof raw.toMillis === 'function') lastActive.set(d.id, raw.toMillis());
   });

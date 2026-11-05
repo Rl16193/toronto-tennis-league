@@ -446,7 +446,9 @@ exports.weeklyReminders = onSchedule(
   },
 );
 
-// Nightly cleanup: drop notifications older than 30 days (pages until the backlog is clear).
+// Nightly cleanup: drop notifications older than 30 days (pages until the backlog is clear), and
+// clear the coordinates of check-ins older than 30 days. Score visits already carry lat 0; dist_m
+// stays, so courtCounts can still tell a check-in from a score.
 exports.pruneNotifications = onSchedule(
   { schedule: '0 3 * * *', timeZone: TZ, region: REGION },
   async () => {
@@ -464,5 +466,14 @@ exports.pruneNotifications = onSchedule(
       if (old.size < PAGE) break;
     }
     if (deleted) logger.info(`Pruned ${deleted} notifications`);
+
+    const located = await db().collection('courts').where('category', '==', 'visit').where('lat', '>', 0).get();
+    const stale = located.docs.filter((d) => d.data().created_at?.toMillis?.() < cutoff.toMillis());
+    for (let i = 0; i < stale.length; i += PAGE) {
+      const batch = db().batch();
+      stale.slice(i, i + PAGE).forEach((d) => batch.update(d.ref, { lat: 0, lng: 0 }));
+      await batch.commit();
+    }
+    if (stale.length) logger.info(`Cleared the location of ${stale.length} check-ins`);
   },
 );

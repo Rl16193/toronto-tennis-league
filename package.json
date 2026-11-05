@@ -17,6 +17,8 @@
     "test:functions": "node scripts/run-emulator-tests.mjs \"functions/test/scoring.test.js functions/test/participantSeat.test.js\""
   },
   "dependencies": {
+    "@fontsource/josefin-sans": "^5.3.0",
+    "@fontsource/montserrat": "^5.3.0",
     "@intl-tel-input/react": "^29.1.2",
     "@tailwindcss/vite": "^4.2.4",
     "@vitejs/plugin-react": "^5.0.4",

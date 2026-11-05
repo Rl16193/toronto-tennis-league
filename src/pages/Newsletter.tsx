@@ -13,18 +13,14 @@ import {
 // Served Up: /newsletter (latest issue), /newsletter/:issue, /newsletter/:issue/:slug. Content is
 // in newsletter/issues.ts.
 
-const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Josefin+Sans:ital,wght@0,300..700;1,400&display=swap';
-
-// Josefin Sans is the issue's text face; loaded here so only newsletter readers fetch it.
-function useJosefinSans() {
-  useEffect(() => {
-    if (document.querySelector(`link[href="${FONT_HREF}"]`)) return;
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = FONT_HREF;
-    document.head.appendChild(link);
-  }, []);
-}
+// Josefin Sans is the issue's text face, bundled (no Google request). This page is lazy-loaded, so
+// only newsletter readers fetch it.
+import '@fontsource/josefin-sans/300.css';
+import '@fontsource/josefin-sans/400.css';
+import '@fontsource/josefin-sans/500.css';
+import '@fontsource/josefin-sans/600.css';
+import '@fontsource/josefin-sans/700.css';
+import '@fontsource/josefin-sans/400-italic.css';
 
 // Photo focus points live in newsletter/{issue number}; only the super admin may write them (rules).
 function usePhotoFocus(issue: number | undefined) {
@@ -48,7 +44,6 @@ function usePhotoFocus(issue: number | undefined) {
 
 export const Newsletter: React.FC = () => {
   const { issue: issueParam, slug } = useParams();
-  useJosefinSans();
 
   const issue = issueParam ? ISSUES.find((i) => String(i.number) === issueParam) : ISSUES[0];
   const item = issue && slug ? issue.items.find((i) => i.slug === slug) : undefined;

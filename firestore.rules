@@ -36,7 +36,7 @@ service cloud.firestore {
 
     // The full contacts shape — all owner data, no points, so every field is safely self-writable.
     function ownerContactFields() {
-      return ['email', 'phone', 'preferred_mode_of_contact', 'whatsapp_contact', 'contactable', 'updated_at', 'secondary_email', 'consent_at'];
+      return ['email', 'phone', 'preferred_mode_of_contact', 'whatsapp_contact', 'contactable', 'updated_at', 'secondary_email', 'consent_at', 'lastActive'];
     }
 
     // Order-independent id for a pair of players. MUST match pairId() in functions/connections.js
@@ -80,9 +80,9 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if true;
       allow create: if isOwner(userId) &&
-        request.resource.data.keys().hasOnly(['uid', 'name', 'avatar', 'bio', 'display_badges', 'created_at', 'lastActive']);
+        request.resource.data.keys().hasOnly(['uid', 'name', 'avatar', 'bio', 'display_badges', 'created_at']);
       allow update: if isOwner(userId) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'avatar', 'bio', 'display_badges', 'lastActive']);
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'avatar', 'bio', 'display_badges']);
       allow delete: if false;
     }
 

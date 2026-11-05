@@ -98,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           membership_status: roles.includes('organizer') ? 'organizer' : 'member',
         });
         // The welcome email is sent server-side when the users doc is created (sendWelcomeEmail).
-        updateDoc(doc(db, 'users', activeUser.uid), { lastActive: Timestamp.now() }).catch(() => {});
+        updateDoc(doc(db, 'contacts', activeUser.uid), { lastActive: Timestamp.now() }).catch(() => {});
       }
     } catch (error) {
       console.error("Error fetching user profile:", error);

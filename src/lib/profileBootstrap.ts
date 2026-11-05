@@ -15,6 +15,7 @@ export const emptyContacts = (): ContactData => ({
   updated_at: null,
   // When they last agreed to the Terms and Privacy Policy; null = never (ConsentSheet asks).
   consent_at: null,
+  lastActive: null,
 });
 
 // The full stats shape with every server-written counter at zero (firestore.rules requires it).
@@ -98,7 +99,6 @@ export const ensureUserProfileDocuments = async (user: User) => {
       bio: '',
       display_badges: [],
       created_at: now,
-      lastActive: now,
     };
     writes.push(setDoc(userRef, userData));
   }
@@ -108,7 +108,7 @@ export const ensureUserProfileDocuments = async (user: User) => {
 
   // Seeded with the auth email so notification emails work before the member touches their profile.
   if (!contactsSnap.exists()) {
-    writes.push(setDoc(contactsRef, { ...emptyContacts(), email: user.email || '', updated_at: now }));
+    writes.push(setDoc(contactsRef, { ...emptyContacts(), email: user.email || '', updated_at: now, lastActive: now }));
   }
 
   await Promise.all(writes);

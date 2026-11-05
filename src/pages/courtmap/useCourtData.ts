@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react';
 import { getDocs, getDoc, doc, collection } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { ActivityBreakdown, CourtWithCount, TennisProgram, PickleballOnlyCourt, CsvCourt } from './courtMapUtils';
-import { EMPTY_ACTIVITY, parseCourts, parsePrograms, getPickleballMappings, matchCourtName, NINETY_DAYS_MS } from './courtMapUtils';
+import { EMPTY_ACTIVITY, parseCourts, parsePrograms, getPickleballMappings, matchCourtName } from './courtMapUtils';
 import { courtKey } from '../../utils/courtKey';
-import { toMillis } from '../../utils/eventDates';
 
 // Shape of the `activity` half of site_stats/court_counts (functions/courtCounts.js).
 // byKey: court_key → { checkins, waiting_board, queue, condition }; byName: typed court name → scores.
@@ -166,30 +165,14 @@ export function useCourtData(): {
 
         // Fallback: the original in-browser computation. Kept so the page still works before the
         // Cloud Function is deployed, and if the aggregate doc is ever missing or empty.
-        const [prefsSnap, statsSnap, usersSnap] = await Promise.all([
-          withTimeout(getDocs(collection(db, 'preferences'))),
-          withTimeout(getDocs(collection(db, 'stats'))),
-          withTimeout(getDocs(collection(db, 'users'))),
-        ]);
+        // No 90-day activity filter here: lastActive is private (contacts), so a visitor can't read it.
+        const prefsSnap = await withTimeout(getDocs(collection(db, 'preferences')));
         if (cancelled) return;
 
-        const statsMap = new Map<string, number>();
-        statsSnap.forEach((d) => statsMap.set(d.id, (d.data().leaguePoints as number) || 0));
-
-        const lastActiveMap = new Map<string, number>();
-        usersSnap.forEach((d) => {
-          lastActiveMap.set(d.id, toMillis(d.data().lastActive));
-        });
-
-        const now = Date.now();
         const courtCountMap = new Map<string, number>();
         prefsSnap.forEach((d) => {
-          const uid = d.id;
           const preferred: string[] = d.data().preferred_courts || [];
           if (!preferred.length) return;
-          const points = statsMap.get(uid) ?? 0;
-          const lastActive = lastActiveMap.get(uid) ?? 0;
-          if (!points && now - lastActive >= NINETY_DAYS_MS) return;
           for (const pref of preferred) {
             const matched = matchCourtName(pref, byDropdown, byName);
             if (matched) courtCountMap.set(matched.dropdown, (courtCountMap.get(matched.dropdown) ?? 0) + 1);

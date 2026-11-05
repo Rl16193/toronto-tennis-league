@@ -661,6 +661,9 @@ functions; the next `aggregateCourtCounts` run (every 6h) then writes the held v
 (`releaseHeldVisits`, `lib/memberLocation.js`), and only then do `courtsVisited`, the zone tier
 and the court awards move. A same-day repeat overwrites the check-in or is skipped
 for a score, so it never counts twice, and "visited this court" is simply "a visit exists". `courtsVisited` counts distinct courts.
+A check-in's `lat`/`lng` are set to 0 once it is 30 days old (the nightly `pruneNotifications`, which reads
+only visits with `lat > 0`). `dist_m` is kept, so `courtCounts` still tells a check-in (`dist_m` > 0) from a
+score's visit (all three 0).
 
 ### GTA courts
 The roster CSV holds Toronto (182 rows) **and** 322 GTA courts in 24 municipalities across York,
@@ -940,9 +943,10 @@ fails CORS against a `localhost` page origin.
 
 ### Account deletion and consent
 
-**Consent** is `contacts.consent_at`, the one field added for it. It is stamped when a member ticks "I agree to
-the Terms of Service and Privacy Policy" at signup (Complete Profile stays disabled until ticked), or taps I agree
-on `ConsentSheet` (`src/components/ConsentSheet.tsx`, mounted in `App.tsx`). The sheet shows to any signed-in
+**Consent** is `contacts.consent_at`, the one field added for it. It is stamped when a member ticks "I am 17
+or older" and "I agree to the Terms of Service and Privacy Policy" at signup (Complete Profile stays disabled
+until both are ticked; the one stamp records both), or taps I agree on `ConsentSheet`, which also confirms the
+age, (`src/components/ConsentSheet.tsx`, mounted in `App.tsx`). The sheet shows to any signed-in
 member whose `consent_at` is `null` or earlier than `PRIVACY_EFFECTIVE` (`FooterElements.tsx`). Which version
 they agreed to is whichever was in effect at that stamp, so there is no version field: move the date forward
 with any material policy change and everyone is asked again. Closing the sheet only hides it until the next load.
@@ -959,13 +963,53 @@ with a booking still `lead`/`in_progress`.
   `event_participants` incl. partners' `partner_name`, `courts`, `bookings`, `task_claims`, `league_seasons`,
   `stats`). The uid stays because undo, points, awards and sweeps are keyed on it. `stats` is kept, so they stay
   on leaderboards as "Former member" — the owner's decision. Check-in `lat`/`lng` go to 0; their reports lose
-  their photos but keep the note.
+  their photos but keep the note. Report photos sit in the shared, uid-less `court_reports/members/`, so they
+  are deleted by each report's `photo_paths`, not by the folder prefix (which still clears older uploads).
 - **Matches:** unplayed tournament matches with a real opponent become walkovers through `recordScore` with
   the super admin as actor (`isOrganizer` always accepts it); the rest are blanked to Player Loading, the
   same as an organizer's removal. Registrations are withdrawn, never deleted. Unscored challenges and rallies
   are deleted. Each affected event's organizers get `organizer_account_deleted`, without the member's name.
 - **`onMatchConnection` skips a write that leaves the pair and status unchanged**, or anonymising a played
   match would re-create a connection to the deleted uid.
+
+### Privacy compliance (North America)
+
+**Scope: North American markets only** (owner, 2026-11-03): PIPEDA and CASL. The Privacy Policy
+(`PRIVACY_SECTIONS`, `StaticPages.tsx`) is written to PIPEDA, and nothing GDPR-specific is built. What is in
+place, and where:
+
+- **Age 17+**: a required tick at signup and the ConsentSheet text; the Terms' Eligibility says the same.
+  Recorded by `consent_at`, with no age field.
+- **Consent to be contacted at join**: a required tick in `JoinEventSheet` ("contacted about this event and
+  my contact details shared with my opponents"). It only enables Join and is **not stored**; the
+  registration is the record. An organizer's Add Player doesn't ask.
+- **Check-in coordinates cleared at 30 days** (see the courts section). Scores aren't touched.
+- **`lastActive` is private**: it lives on `contacts`, not the public `users` doc, and is written on every
+  sign-in. `courtCounts` reads it there; the client fallback in `useCourtData` can't (signed-out visitors), so
+  it has no 90-day filter. `scripts/move-last-active.mjs` moved the existing values.
+- **Report photos carry no uid**: `court_reports/members/` (signed in) and `court_reports/anon/`. Photos stay
+  public (owner's call).
+- **Fonts are bundled** (`@fontsource/montserrat` in `index.css`, `@fontsource/josefin-sans` in
+  `Newsletter.tsx`), so no request goes to Google's font servers. Don't add a Google Fonts link back.
+- **The Sheets export** leaves out `contacts`, `notifications` and `connections`.
+- **Newsletter unsubscribe** is handled by Brevo, which sends the newsletter and records who unsubscribed.
+- **The policy names every processor**: Firebase, Google Analytics, Resend, Twilio (and Meta for WhatsApp),
+  Brevo and Google Sheets. Add any new one, and bump `PRIVACY_EFFECTIVE`.
+
+**Open question: EU/UK members.** Whether to serve them is undecided. Until the owner decides, build none of
+the parked plan below.
+
+**Parked GDPR plan**, if that changes:
+- An opt-in consent banner before Google Analytics loads (it loads unconditionally today and sets the uid as
+  User-ID), and deleting a member's analytics data when they delete their account.
+- A legal basis for each purpose in the policy (contract, consent, legitimate interest).
+- The EU-US Data Privacy Framework or Standard Contractual Clauses for US storage.
+- An Art. 27 EU representative: a named person or company.
+- An EU/UK complaint route, and the rights to restriction, objection and portability (a machine-readable copy).
+- An opt-out from SMS/WhatsApp that doesn't require removing the number (the Contact Method switches are
+  ignored for them today).
+- A record of processing, data processing agreements with Google, Resend, Twilio and Brevo, and a breach
+  process.
 
 ### Text colour: two tiers, never grey
 Every piece of text uses the `--color-fg` token, which is **#143D34 dark green in light theme and

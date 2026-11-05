@@ -60,6 +60,7 @@ export const Signup: React.FC = () => {
   const { user, profile, loading: authLoading, refreshProfile } = useAuth();
   const [phase, setPhase] = useState<AuthPhase>('email');
   const [agreed, setAgreed] = useState(false);
+  const [ofAge, setOfAge] = useState(false);
   // Preferences is one screen now; these are the expandable cards on it, all open on arrival.
   const [openCards, setOpenCards] = useState<Set<string>>(
     () => new Set(['about', 'skill', 'courts', 'league']),
@@ -1096,7 +1097,16 @@ export const Signup: React.FC = () => {
                 </div>
               </Accordion>
 
-              {/* Required: Complete Profile stays disabled until ticked; the tick is stored as contacts.consent_at. */}
+              {/* Required: Complete Profile stays disabled until both are ticked; the ticks are stored as contacts.consent_at. */}
+              <label className="flex items-center justify-center gap-2.5 text-sm text-fg cursor-pointer px-2 pt-2 min-h-11">
+                <input
+                  type="checkbox"
+                  checked={ofAge}
+                  onChange={(e) => setOfAge(e.target.checked)}
+                  className="accent-clay w-4 h-4 shrink-0"
+                />
+                <span>I am 17 or older</span>
+              </label>
               <label className="flex items-center justify-center gap-2.5 text-sm text-fg cursor-pointer px-2 pt-2 min-h-11">
                 <input
                   type="checkbox"
@@ -1125,7 +1135,7 @@ export const Signup: React.FC = () => {
           {/* One screen now, so no Back/Next shuttle — just the single finishing action. */}
           {phase === 'preferences' && (
             <div className="flex justify-center items-center mt-4 pt-8 border-t border-fg/5">
-              <Button onClick={handleCompleteProfile} isLoading={loading} disabled={!isNameValid() || !agreed}>
+              <Button onClick={handleCompleteProfile} isLoading={loading} disabled={!isNameValid() || !agreed || !ofAge}>
                 Complete Profile
                 <CheckCircle2 className="w-5 h-5" />
               </Button>

@@ -84,9 +84,11 @@ export async function submitPhotoReport(args: {
   if (files.find((f) => !f.type.startsWith('image/'))) throw new Error('Please choose image files only.');
   if (files.find((f) => f.size > MAX_IMAGE_BYTES)) throw new Error('Each image must be under 5 MB.');
 
+  // No uid in the path: photos are public. Shared folders, so a random segment keeps names unique.
   const photoPaths = files.map((file, i) => {
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    return `court_reports/${uid ?? 'anon'}/${Date.now()}_${i}_${safeName}`;
+    const rand = Math.random().toString(36).slice(2, 8);
+    return `court_reports/${uid ? 'members' : 'anon'}/${Date.now()}_${i}_${rand}_${safeName}`;
   });
 
   const photosMeta = await Promise.all(files.map(extractPhotoMetadata));

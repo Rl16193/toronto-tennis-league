@@ -36,6 +36,15 @@
         { "fieldPath": "category", "order": "ASCENDING" },
         { "fieldPath": "created_at", "order": "ASCENDING" }
       ]
+    },
+    {
+      "//": "pruneNotifications (functions/notifications.js) — check-ins that still carry coordinates, cleared after 30 days.",
+      "collectionGroup": "courts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "lat", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

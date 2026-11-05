@@ -55,6 +55,14 @@ service firebase.storage {
         && request.resource.size < 5 * 1024 * 1024;
     }
 
+    // Members' report photos: a shared folder with no uid in the path, since every photo is public.
+    // Any signed-in member, images under 5 MB.
+    match /court_reports/members/{fileName} {
+      allow write: if request.auth != null
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.size < 5 * 1024 * 1024;
+    }
+
     // Anonymous "Report" photos (logged-out reporters) land under the fixed `anon/` prefix.
     // No auth required, still image-only and size-capped to limit abuse.
     match /court_reports/anon/{fileName} {

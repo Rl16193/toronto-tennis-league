@@ -15,7 +15,7 @@ export const WHATSAPP_URL = 'https://chat.whatsapp.com/Bh7OVww9e08GP4TuoFF5NX';
 export const DONATE_URL = '';
 /** The current Terms/Privacy Policy took effect on this date (local midnight). A member whose
  *  contacts.consent_at is earlier, or null, is asked to agree again (ConsentSheet). */
-export const PRIVACY_EFFECTIVE = new Date(2026, 9, 20);
+export const PRIVACY_EFFECTIVE = new Date(2026, 10, 3);
 
 const linkCls = (className: string) =>
   `inline-flex items-center gap-1.5 hover:text-clay transition-colors ${className}`;

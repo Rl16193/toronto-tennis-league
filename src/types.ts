@@ -24,6 +24,8 @@ export interface ContactData {
   updated_at?: Timestamp | null;
   /** Last agreement to the Terms and Privacy Policy; null = never. See PRIVACY_EFFECTIVE. */
   consent_at?: Timestamp | null;
+  /** Last sign-in; private here (it used to sit on the public `users` doc). */
+  lastActive?: Timestamp | null;
 }
 
 // Collection: users — publicly readable. Contact details live in `contacts`, never here.
@@ -35,7 +37,6 @@ export interface UserData {
   // Up to 3 badge ids the player has chosen to show on their profile and beside their name.
   display_badges?: string[];
   created_at: Timestamp | null;
-  lastActive?: Timestamp | null;
 }
 
 export type ClaimStatus = 'pending' | 'approved' | 'rejected' | 'none';

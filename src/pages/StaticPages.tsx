@@ -187,7 +187,7 @@ export const Terms: React.FC = () => (
       <section className="space-y-4">
         <h2 className="text-2xl font-bold text-fg">3. Eligibility</h2>
         <p className="text-fg leading-relaxed">
-          You must be at least 14 years old to use the Platform. If you are under the age of majority in your jurisdiction, you confirm that you have permission from a parent or legal guardian to use the Platform and participate in any activities arranged through it.
+          You must be at least 17 years old to use the Platform. If you are under the age of majority in your jurisdiction, you confirm that you have permission from a parent or legal guardian to use the Platform and participate in any activities arranged through it.
         </p>
       </section>
 
@@ -254,6 +254,12 @@ const PRIVACY_SECTIONS: { title: string; body: (string | string[])[] }[] = [
     ],
   },
   {
+    title: 'Who Can Use It',
+    body: [
+      'You must be 17 or older to create an account. You confirm your age when you sign up.',
+    ],
+  },
+  {
     title: 'What We Collect and Why',
     body: [
       'We collect only what we need to run the league and the community:',
@@ -271,6 +277,7 @@ const PRIVACY_SECTIONS: { title: string; body: (string | string[])[] }[] = [
     title: 'Consent',
     body: [
       'You agree to this policy when you create an account, and we record when you did. If we change it in a way that matters, we ask you again.',
+      'When you join an event, you agree to be contacted about it, by email, text or WhatsApp, and to have your contact details shared with your opponents so the event can go ahead.',
       'You can withdraw consent at any time by deleting your account (see "Your Rights"), or by turning off email notifications or unsubscribing from the newsletter, which we only send to people who signed up for it.',
     ],
   },
@@ -278,7 +285,7 @@ const PRIVACY_SECTIONS: { title: string; body: (string | string[])[] }[] = [
     title: 'What Is Public and Who Sees What',
     body: [
       [
-        'Public: your name, photo, bio, badges, results, league points and rankings, and the text of court-condition reports (without your name).',
+        'Public: your name, photo, bio, badges, results, league points and rankings, and the text and photos of court reports (without your name). When you were last active is not public.',
         'Members you play, partner with or book: your contact details, and only theirs. This includes doubles partners and players looking for a partner in the same event.',
         'Marketplace: while you have a listing, signed-in members can see your contact details.',
         'Organizers: what they need to run events and review results.',
@@ -289,7 +296,14 @@ const PRIVACY_SECTIONS: { title: string; body: (string | string[])[] }[] = [
   {
     title: 'Service Providers and Where Data Is Stored',
     body: [
-      'We use Google Firebase (sign-in, database, file storage, hosting and analytics), Resend (email), and Google Sheets (an internal copy for organizers, refreshed weekly). Your information is stored and processed in the United States, where it may be accessible to authorities under US law.',
+      'We use Google Firebase (sign-in, database, file storage and hosting), Google Analytics (how the site is used), Resend (email), Twilio (text and WhatsApp messages about your matches; WhatsApp is run by Meta), Brevo (the newsletter), and Google Sheets (an internal copy for organizers, refreshed weekly). Your information is stored and processed in the United States, where it may be accessible to authorities under US law.',
+    ],
+  },
+  {
+    title: 'Analytics and Cookies',
+    body: [
+      'Google Analytics sets cookies in your browser and records the pages you visit and what you do on them. When you are signed in, it links that activity to your account id (not your name or email). We use it only to understand how the site is used and to improve it.',
+      'You can block or delete these cookies in your browser settings, or with an ad or tracker blocker. The site works without them.',
     ],
   },
   {
@@ -298,6 +312,7 @@ const PRIVACY_SECTIONS: { title: string; body: (string | string[])[] }[] = [
       [
         'Your account, profile and contact details: until you delete your account.',
         'Match results and league points: kept for league history. When you delete your account they stay under "Former member", with your name removed.',
+        'Check-in location: the location you checked in from is cleared after 30 days. The visit itself, and any score you recorded, stays.',
         'Notifications: removed 24 hours after you read them, and after 30 days at the latest.',
         'Newsletter and volunteer sign-ups: until you unsubscribe or ask us to remove them.',
         'We keep no backups, so deleted information cannot be restored.',

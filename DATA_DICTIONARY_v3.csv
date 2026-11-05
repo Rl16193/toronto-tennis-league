@@ -6,7 +6,6 @@ users,uid,(all),(all),avatar,string,,'',no,profile + moderation function,Photo U
 users,uid,(all),(all),bio,string,,'',no,signup / profile,Free-text bio,final,
 users,uid,(all),(all),display_badges,string[],,[],no,signup / profile,Up to 3 badge ids shown beside the name,final,
 users,uid,(all),(all),created_at,timestamp,,(always set),no,signup / profile,Signup time,final,U4 envelope
-users,uid,(all),(all),lastActive,timestamp,,(always set),no,signup / profile,"Latest session, always a Timestamp",final,v2 note
 contacts,uid,,,(collection),,,,,owner via profile (ownerContactFields whitelist),"PII split out of users. Readable by owner, organizers, a connection holder, a public_contacts marker, or a fellow partner-pool member of the same event.",final,
 contacts,uid,(all),(all),email,string,,(always set),YES,owner via profile (ownerContactFields whitelist),Contact email,final,
 contacts,uid,(all),(all),phone,string,,'',YES,owner via profile (ownerContactFields whitelist),Contact phone,final,
@@ -16,6 +15,7 @@ contacts,uid,(all),(all),contactable,boolean,,false,no,owner via profile (ownerC
 contacts,uid,(all),(all),secondary_email,string,,'',YES,admin script,Set only by the account-merge admin script,final,
 contacts,uid,(all),(all),updated_at,timestamp,,(always set),no,owner via profile (ownerContactFields whitelist),Last contact edit,final,U4 envelope
 contacts,uid,(all),(all),consent_at,timestamp,,null,no,owner via signup / ConsentSheet (ownerContactFields whitelist),"Last agreement to the Terms and Privacy Policy; null = never. The version agreed is the one in effect then (PRIVACY_EFFECTIVE); an earlier stamp re-prompts",final,
+contacts,uid,(all),(all),lastActive,timestamp,,null,no,owner on sign-in (ownerContactFields whitelist),"Latest session. Private: moved off the public users doc (scripts/move-last-active.mjs)",final,
 stats,uid,,,(collection),,,,,commitPoints (points/results) · task triggers (counters) · weekly recount (after super-admin Apply) · rankSnapshot (rank) · owner (profile fields + self-reported booleans),"One doc per member: scoring record, task progress (tasks merged in) and points spent (offers merged in). Public read. A guest (stats/guest_…) gets a doc only when they play a match or receive walkover points; their points are parked there until linked to a member, and guests are left out of leaderboards, the rank snapshot and member counts.",final,Q&A: tasks + offers → stats
 stats,uid,(all),(all),uid,string,,(always set),no,commitPoints (points/results) · task triggers (counters) · weekly recount (after super-admin Apply) · rankSnapshot (rank) · owner (profile fields + self-reported booleans),Mirrors doc id,final,
 stats,uid,(all),(all),name,string,,(always set),no,owner,Read directly by leaderboards,final,

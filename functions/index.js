@@ -170,12 +170,13 @@ exports.sendWelcomeEmail = onDocumentCreated(
 // ─── Google Sheets Weekly Sync (Saturdays, midnight America/Toronto) ──────
 
 // Export-only mirror: one tab per collection, every field, rewritten each run (edits in these tabs
-// are wiped; work in other tabs). `contacts` and the archives are not exported. The mailing list and
-// volunteer sign-ups go out with their emails, so the sheet's sharing must stay organizer-only.
+// are wiped; work in other tabs). `contacts`, `notifications`, `connections` and the archives are not
+// exported. The mailing list and volunteer sign-ups go out with their emails, so the sheet's sharing
+// must stay organizer-only.
 const SHEET_COLLECTIONS = [
   'users', 'stats', 'preferences', 'providers', 'events', 'event_participants', 'matches', 'submissions',
-  'awards', 'league_seasons', 'courts', 'services', 'bookings', 'listings', 'task_claims', 'notifications',
-  'connections', 'public_contacts', 'mailing_list', 'volunteer_signups', 'site_stats', 'admin_stats',
+  'awards', 'league_seasons', 'courts', 'services', 'bookings', 'listings', 'task_claims',
+  'public_contacts', 'mailing_list', 'volunteer_signups', 'site_stats', 'admin_stats',
 ].map((name) => ({ tab: name, read: (db) => db.collection(name).get() }))
   .concat([
     { tab: 'rr_drafts', read: (db) => db.collectionGroup('rr_drafts').get() },

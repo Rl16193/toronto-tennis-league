@@ -36,6 +36,7 @@ export const ConsentSheet: React.FC = () => {
         <p className="text-sm text-fg leading-relaxed">
           It now says what we collect, what is public, how long we keep it, and how to delete your account.
         </p>
+        <p className="text-sm text-fg">By agreeing you also confirm you are 17 or older.</p>
         <p className="text-sm text-fg">
           Read the <Link to="/privacy" className="text-clay hover:underline">Privacy Policy</Link> and{' '}
           <Link to="/terms" className="text-clay hover:underline">Terms of Service</Link>.

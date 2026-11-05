@@ -596,6 +596,8 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
 
   // The picked partner, for the search box. The sheet remounts per event alongside the form reset.
   const [partnerPick, setPartnerPick] = useState<MemberPick | null>(null);
+  // Required consent to be contacted and have contacts shared; gates Join only, not stored.
+  const [contactOk, setContactOk] = useState(false);
 
   // No visible title — the event name already reads on the card behind this sheet. ariaLabel keeps
   // the dialog named for screen readers now that no heading is drawn.
@@ -701,12 +703,22 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
           </div>
         )}
 
+        <label className="flex items-start gap-2.5 text-sm text-fg cursor-pointer min-h-11">
+          <input
+            type="checkbox"
+            checked={contactOk}
+            onChange={(e) => setContactOk(e.target.checked)}
+            className="accent-clay w-4 h-4 shrink-0 mt-0.5"
+          />
+          <span>I agree to be contacted about this event and for my contact details to be shared with my opponents.</span>
+        </label>
+
         {joinError && <p className="text-xs font-semibold text-badge-loss">{joinError}</p>}
 
         <Button
           onClick={onSubmitJoin}
           isLoading={joining}
-          disabled={joining}
+          disabled={joining || !contactOk}
           className="w-full"
         >
           Join Event
