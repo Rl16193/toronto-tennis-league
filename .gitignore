@@ -22,7 +22,7 @@ analysis/
 
 # Generated handover/audit reports and their spreadsheet exports. Kept on disk locally,
 # deliberately out of the repo — they are session output, not part of the app. Listed by
-# name rather than as *.md/*.xlsx so CLAUDE.md and the public/ + data/ CSVs stay tracked.
+# name rather than as *.md/*.xlsx so the public/ + data/ CSVs stay tracked.
 Code_Conflicts_Audit.xlsx
 DATA_MIGRATION_REPORT.md
 FILE_MAP.md
@@ -44,3 +44,20 @@ public/2025League.xlsx
 
 # Generated walkthrough documents (screenshots contain member data)
 *.docx
+awards.md
+
+# One-off scripts stay local; only what npm run build and the test commands need is in git.
+scripts/*
+!scripts/build-programs-csv.mjs
+!scripts/build-seo-pages.mjs
+!scripts/run-emulator-tests.mjs
+
+# Ideas, documentation, one-off Resend sends and bug reports stay local.
+CLAUDE.md
+UI_UX_AUDIT.md
+DATA_DICTIONARY*
+INCORPORATION_*.md
+design files/
+competitor-profiles/
+functions/.resend*
+racquets-and-strings-bugs.csv
