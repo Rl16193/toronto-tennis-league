@@ -250,7 +250,7 @@ const PRIVACY_SECTIONS: { title: string; body: (string | string[])[] }[] = [
   {
     title: 'Who Is Responsible',
     body: [
-      `Racquets & Strings is responsible for the personal information it holds. Questions, requests and complaints go to our privacy contact at ${CONTACT_EMAIL}.`,
+      'Racquets & Strings is responsible for the personal information it holds. Our privacy contact is Rahul Tirath Lal: email rahultirath.lal@gmail.com, phone 416-697-4951. Questions, requests and complaints go to them.',
     ],
   },
   {
