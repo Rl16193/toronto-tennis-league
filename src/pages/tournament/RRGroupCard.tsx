@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Trash2, Trophy } from 'lucide-react';
 import { Button, buttonCls } from '../../components/Button';
 import { numCls, statTileCls, tableHeadCls } from '../../components/Input';
+import { RemoveTap } from "./TournamentElements";
+import { useTwoTap } from "../../lib/useTwoTap";
 import { SelectField } from '../../components/SelectField';
 import { RRStandingRow, TournamentMatch, TournamentPlayer } from './types';
 import { PLAYER_LOADING, PLAYER_LOADING_SENTINEL, byMatchNumber, formatPlayerName, formatSetScores, withSeed } from './utils';
@@ -75,6 +77,8 @@ export const RRGroupCard: React.FC<Props> = ({
   const unplayed = matches.filter((m) => m.status !== 'complete').length;
   const [pick, setPick] = useState('');
   const [naming, setNaming] = useState(false);
+  const [takeBackArmed, tapTakeBack] = useTwoTap();
+  const [nameArmed, tapName] = useTwoTap();
   const nameWinner = async (uid: string | null) => {
     if (!onSetChampion) return;
     setNaming(true);
@@ -152,10 +156,10 @@ export const RRGroupCard: React.FC<Props> = ({
                 <button
                   type="button"
                   disabled={naming}
-                  onClick={() => { if (window.confirm('Take back the winner? The event reopens.')) void nameWinner(null); }}
+                  onClick={() => tapTakeBack(() => void nameWinner(null))}
                   className="shrink-0 text-xs font-bold text-clay hover:underline disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
                 >
-                  Take back
+                  {takeBackArmed ? 'Sure? Event reopens' : 'Take back'}
                 </button>
               )}
             </div>
@@ -182,11 +186,10 @@ export const RRGroupCard: React.FC<Props> = ({
                 disabled={naming || leaders.length === 0 || (leaders.length > 1 && !pick)}
                 onClick={() => {
                   const uid = leaders.length > 1 ? pick : leaders[0].userId;
-                  const who = ranked.find((r) => r.userId === uid)?.name ?? '';
-                  if (window.confirm(`Name ${formatPlayerName(who)} as the winner? It's a title, no points.`)) void nameWinner(uid);
+                                    tapName(() => void nameWinner(uid));
                 }}
               >
-                Select Group Leader as Winner
+                {nameArmed ? 'Tap again: a title, no points' : 'Select Group Leader as Winner'}
               </Button>
             </div>
           )}
@@ -237,19 +240,11 @@ export const RRGroupCard: React.FC<Props> = ({
                     />
                   )}
                   {isCreator && editMode && onRemovePlayer && (
-                    <button
-                      type="button"
-                      aria-label={`Remove ${formatPlayerName(row.name)} from the draw`}
-                      title="Remove from draw"
-                      onClick={() => {
-                        if (window.confirm(`Remove ${formatPlayerName(row.name)} ?\n\nPlayer will be removed, matches played will be unaffected, and for future matches the opponent gets a walkover.`)) {
-                          onRemovePlayer(row.userId);
-                        }
-                      }}
+                    <RemoveTap
+                      name={formatPlayerName(row.name)}
+                      onRemove={() => onRemovePlayer(row.userId)}
                       className="shrink-0 mr-2 p-1.5 rounded-2xl text-fg/70 opacity-70 hover:opacity-100 hover:text-badge-loss hover:bg-red-500/10 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    />
                   )}
                   {!editMode && onWithdrawSelf && row.userId === currentUserId && !withdrawAsk && (
                     <button

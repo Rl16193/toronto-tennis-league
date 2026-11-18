@@ -1,9 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { AlertCircle, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, Pencil, Play, Settings2, Trash2, UserPlus, Users, X, XCircle } from 'lucide-react';
 import { EventCarousel } from '../../features/events/EventCarousel';
-import { DrawSlide, downloadSlide } from './bracketImage';
+import { DrawSlide, buildDrawSlides, downloadSlide, loadBrandMark } from './bracketImage';
+import { fetchPastResults, type PastDraw, type PastMatch, type PastResults } from '../../features/events/services/eventService';
 import { Button, buttonCls } from '../../components/Button';
+import { useTwoTap } from "../../lib/useTwoTap";
 import { Sheet } from '../../components/Sheet';
 import { SegmentedControl } from '../../components/SegmentedControl';
 import { SelectField } from '../../components/SelectField';
@@ -824,6 +827,101 @@ export const DrawSlideshow: React.FC<{
   </Sheet>
 );
 
+// ─── Past tournament draws (Events → Completed) ──────────────────────────────────────────────────
+
+const drawName = (d: PastDraw) => [d.division, d.skillGroup && d.skillGroup !== 'All' ? d.skillGroup : ''].filter(Boolean).join(' ');
+
+// A group whose players all sit in a bigger group was merged into it (its played matches keep the
+// old label), so it is shown under the bigger group's name: one group, not two.
+const mergedLabels = (ms: PastMatch[]) => {
+  const rosters = new Map<string, Set<string>>();
+  for (const m of ms.filter((x) => x.round === 'RR')) {
+    const r = rosters.get(m.group_label) ?? new Set<string>();
+    [m.player_1_uid, m.player_2_uid].forEach((u) => { if (u) r.add(u); });
+    rosters.set(m.group_label, r);
+  }
+  const into = new Map<string, string>();
+  for (const [label, r] of rosters) {
+    const host = [...rosters].find(([l, h]) => l !== label && h.size > r.size && [...r].every((u) => h.has(u)));
+    if (host) into.set(label, host[0]);
+  }
+  return (label: string) => into.get(label) ?? label;
+};
+
+// pastResults' matches in the shape the draw pictures read: the bracket and Results frames only
+// (no zone line, no group rosters).
+const slidesFor = (d: PastDraw, title: string, mark: string, deadlines: Record<string, string>) => {
+  const labelOf = mergedLabels(d.matches);
+  const matches = d.matches.map((m, i) => ({
+    ...m, id: `${d.key}_${m.match_id || i}`, group_label: labelOf(m.group_label),
+    result: m.result && {
+      set_1_player_1: m.result.sets[0][0], set_1_player_2: m.result.sets[0][1],
+      set_2_player_1: m.result.sets[1][0], set_2_player_2: m.result.sets[1][1],
+      set_3_player_1: m.result.sets[2][0], set_3_player_2: m.result.sets[2][1],
+    },
+  })) as unknown as TournamentMatch[];
+  return buildDrawSlides({
+    matches, eventTitle: title, division: drawName(d), brandMark: mark,
+    groups: [], groupLabels: [],
+    roundDeadlines: deadlines,
+    played: Object.fromEntries(matches.flatMap((m, i) => {
+      const r = d.matches[i].result;
+      return r ? [[m.id, { recordedAt: r.recordedAt, court: r.court || '', walkover: r.walkover }]] : [];
+    })),
+  });
+};
+
+/**
+ * Two finished draws of a completed tournament as the draw pictures, results included. A visitor
+ * sees players as "Player A", "Player B": names never leave the server for a signed-out caller.
+ */
+export const PastDrawsSheet: React.FC<{ eventId: string; signedIn: boolean; onClose: () => void }> = ({ eventId, signedIn, onClose }) => {
+  const [data, setData] = useState<PastResults | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [mark, setMark] = useState('');
+  useEffect(() => {
+    let live = true;
+    fetchPastResults(eventId).then((r) => { if (live) setData(r); }).catch(() => { if (live) setFailed(true); });
+    loadBrandMark().then((m) => { if (live) setMark(m); });
+    return () => { live = false; };
+  }, [eventId]);
+  const slides = useMemo(() => (data ? data.draws.map((d) => slidesFor(d, data.title, mark, data.roundDeadlines)) : []), [data, mark]);
+
+  return (
+    <Sheet onClose={onClose} title={data?.title ?? 'Past tournament'} maxWidthClassName="max-w-lg">
+      <div className="p-4 pt-1 space-y-6">
+        {!signedIn && data && (
+          <p className="text-sm text-fg/70">
+            <Link to="/login" className="font-semibold text-clay underline underline-offset-2">Log in</Link> to reveal player names.
+          </p>
+        )}
+        {failed ? (
+          <p className="text-sm text-fg/70 text-center py-10">Results for this tournament aren't available.</p>
+        ) : !data ? (
+          <div className="aspect-[4/5] rounded-2xl bg-fg/5 animate-pulse" />
+        ) : data.draws.map((d, i) => (
+          <section key={d.key} className="space-y-3">
+            <h3 className="text-lg font-bold text-fg">{drawName(d)}</h3>
+            {slides[i]?.length > 0 && (
+              <EventCarousel count={slides[i].length} fullBleed={false} alwaysPager itemLabel="picture">
+                {slides[i].map((s) => (
+                  <img key={s.id} src={`data:image/svg+xml;utf8,${encodeURIComponent(s.svg)}`} alt={s.label}
+                    className="w-full rounded-2xl border border-fg/10" />
+                ))}
+              </EventCarousel>
+            )}
+          </section>
+        ))}
+        {signedIn && data && (
+          <Link to={`/matches?mode=tournament&event=${eventId}`} className={`w-full ${buttonCls('secondary')}`}>
+            Open every draw
+          </Link>
+        )}
+      </div>
+    </Sheet>
+  );
+};
+
 // ─── Organizer header ─────────────────────────────────────────────────────────────────────────
 
 // One "Manage Draw" button opening a bottom sheet of every organizer action.
@@ -1282,5 +1380,21 @@ export const WithdrawSelf: React.FC<{ onWithdraw: (reason: RemovalReason) => Pro
         onCancel={() => setAsking(false)}
       />
     </div>
+  );
+};
+
+/** Trash button that asks twice instead of window.confirm: the first tap turns it into "Sure?". */
+export const RemoveTap: React.FC<{ name: string; className: string; onRemove: () => void }> = ({ name, className, onRemove }) => {
+  const [armed, tap] = useTwoTap();
+  return (
+    <button
+      type="button"
+      aria-label={armed ? `Confirm removing ${name} from the draw` : `Remove ${name} from the draw`}
+      title={armed ? "Tap again: matches played stay, future opponents get a walkover" : "Remove from draw"}
+      onClick={() => tap(onRemove)}
+      className={`${className}${armed ? " text-badge-loss bg-red-500/10 !opacity-100" : ""}`}
+    >
+      {armed ? <span className="px-1 text-xs font-bold">Sure?</span> : <Trash2 className="w-3.5 h-3.5" />}
+    </button>
   );
 };

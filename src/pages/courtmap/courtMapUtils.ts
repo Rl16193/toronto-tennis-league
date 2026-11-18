@@ -82,7 +82,6 @@ export type SuggestionItem =
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-export const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
 export const TORONTO_CENTER: [number, number] = [43.718, -79.38];
 
 const COURT_ALIASES: Record<string, string> = {

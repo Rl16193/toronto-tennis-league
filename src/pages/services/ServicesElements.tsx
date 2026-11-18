@@ -2,13 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import {
-  BadgeCheck, MapPin, Pencil, Plus, Search, Sparkles, Trash2, X,
+  BadgeCheck, Pencil, Plus, Sparkles, Trash2, X,
 } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/Button';
-import { field } from '../../components/Input';
 import { Fab } from '../../components/Fab';
 import { Sheet } from '../../components/Sheet';
 import { Tree, TreeGroup } from '../../components/Tree';
@@ -18,12 +17,10 @@ import { loadRoster } from '../../features/members/MemberSearchInput';
 import { fadeUp } from '../../lib/motion';
 import {
   BookingRow, CATEGORY_IMAGE, CATEGORY_LABEL, GROUP_LESSON_CAPACITY, MIN_REWARD_COST, OPEN_BOOKING_STATUSES, Provider,
-  Reward, ServiceCategory, areaCoords, bookingStage, isGroupLesson, money, useMyBookings, useProviderAvatars,
+  Reward, ServiceCategory, bookingStage, isGroupLesson, money, useMyBookings, useProviderAvatars,
   useProviderRole, useRedeemablePoints, useServicesCatalog,
 } from '../../features/services/useServices';
 import { useTasks } from '../../features/tasks/useTasks';
-import { geocodeQuery } from '../courtmap/courtMapUtils';
-import { haversineKm } from '../../utils/zones';
 import {
   bookService, cancelBooking, redeemReward, serviceErrorMessage,
 } from '../../features/services/servicesApi';
@@ -544,92 +541,6 @@ const BookingCard: React.FC<{ b: BookingRow; busy: boolean; onCancel: () => void
 
 // ─── The tab ────────────────────────────────────────────────────────────────────────────────
 
-// ─── Nearest-provider search ─────────────────────────────────────────────────────────────────────
-
-type Origin = { label: string; lat: number; lng: number };
-
-const kmLabel = (km: number) => (km < 1 ? 'under 1 km away' : `about ${Math.round(km)} km away`);
-
-/** Distance from the searched address to a provider, or null when their area isn't recognised. */
-const providerDistanceKm = (provider: Provider, origin: Origin | null): number | null => {
-  if (!origin) return null;
-  const at = areaCoords(provider.area);
-  return at ? haversineKm(origin.lat, origin.lng, at.lat, at.lng) : null;
-};
-
-/**
- * Address bar above the category cards. What's typed goes through the same geocoder the Court Map
- * uses, and providers are then ordered by distance from it.
- *
- * The distance is NEIGHBOURHOOD resolution, not door to door: a provider stores an area rather
- * than a street address (see AREA_COORDS in features/services/types.ts). That is why the area name
- * is always shown beside the figure and the figure itself is rounded — neither should read as a
- * measurement the data can't support. A provider whose area isn't recognised sorts to the end
- * rather than being placed somewhere invented.
- */
-const NearestSearch: React.FC<{
-  origin: Origin | null;
-  onOrigin: (origin: Origin | null) => void;
-}> = ({ origin, onOrigin }) => {
-  const [query, setQuery] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = query.trim();
-    if (!q || busy) return;
-    setBusy(true); setError('');
-    try {
-      const hit = await geocodeQuery(q);
-      if (!hit) {
-        setError('No match for that address. A street number or the nearest intersection usually finds it.');
-        return;
-      }
-      onOrigin({ label: q, ...hit });
-    } catch {
-      setError('Address lookup is unavailable right now. Try again in a moment.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="mb-4">
-      {/* Default flex alignment stretches the button to the input's height, so the two line up
-          without pinning either to a fixed size. */}
-      <form onSubmit={submit} className="flex gap-2">
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Your address or nearest intersection"
-          aria-label="Find services near an address"
-          className={field}
-        />
-        <Button type="submit" variant="primary" aria-label="Search" isLoading={busy} className="shrink-0 px-4">
-          <Search className="w-4 h-4" />
-        </Button>
-      </form>
-
-      {origin && (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-fg/70">
-          <MapPin className="w-3.5 h-3.5 shrink-0 text-clay" />
-          <span className="truncate">Nearest to {origin.label}</span>
-          <button
-            type="button"
-            onClick={() => { setQuery(''); setError(''); onOrigin(null); }}
-            className="ml-auto shrink-0 font-bold text-clay hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
-          >
-            Clear
-          </button>
-        </p>
-      )}
-      {error && <p className="mt-2 text-xs text-badge-loss">{error}</p>}
-    </div>
-  );
-};
-
 export const ServicesTab: React.FC = () => {
   const { user, profile } = useAuth();
   const { rewards, byCategory, loading: catalogLoading, reload: reloadCatalog } = useServicesCatalog();
@@ -656,8 +567,6 @@ export const ServicesTab: React.FC = () => {
   // push every other provider off the screen, so the member had to scroll to learn who else there
   // was. Keyed by the same `${cat}:${id}` as openProviders.
   const [allOffersFor, setAllOffersFor] = useState<Set<string>>(new Set());
-  // The address a member searched, if any. Unset is the normal state and keeps the pinned order.
-  const [origin, setOrigin] = useState<Origin | null>(null);
   const toggleSet = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) => (id: string) =>
     setter((cur) => {
       const next = new Set(cur);
@@ -716,20 +625,6 @@ export const ServicesTab: React.FC = () => {
     setOpenProviders(new Set((byCategory.get(cat) ?? []).map((p) => `${cat}:${p.id}`)));
   };
 
-  /**
-   * Default order is the pinned one set in useServices. A searched address replaces it outright —
-   * distance wins, and the pinned pair take their place in the ranking like everyone else.
-   * Providers whose area can't be placed go last rather than being ranked on a guess.
-   */
-  const providersFor = (cat: ServiceCategory): Provider[] => {
-    const list = byCategory.get(cat) ?? [];
-    if (!origin) return list;
-    return [...list].sort(
-      (a, b) =>
-        (providerDistanceKm(a, origin) ?? Infinity) - (providerDistanceKm(b, origin) ?? Infinity),
-    );
-  };
-
   return (
     <div>
       {/* Balance. Earned/spent totals deliberately omitted — what matters here is what you can
@@ -747,7 +642,7 @@ export const ServicesTab: React.FC = () => {
       </motion.div>
 
       <div className="h-1.5 rounded-full bg-fg/10 overflow-hidden mb-5">
-        <div className="h-full rounded-full bg-clay transition-all duration-500" style={{ width: `${pct}%` }} />
+        <div className="h-full rounded-full bg-clay transition-[width] duration-500" style={{ width: `${pct}%` }} />
       </div>
 
       {!user && (
@@ -797,8 +692,6 @@ export const ServicesTab: React.FC = () => {
               category slots in without relaying the row out. A category needs BOTH offers and a
               picture to appear — "Others" has no picture and is deliberately absent, which does
               mean anything filed under it is unreachable from here. */}
-          {/* Address search (NearestSearch) is off for now; render it here to bring it back. */}
-
           <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
             {categories.map((cat) => {
               const providers: Provider[] = byCategory.get(cat) ?? [];
@@ -812,7 +705,7 @@ export const ServicesTab: React.FC = () => {
                   onClick={() => selectCategory(cat)}
                   aria-pressed={active}
                   className={`relative shrink-0 w-40 aspect-square rounded-2xl overflow-hidden text-left
-                              transition-all focus-visible:outline-2 focus-visible:outline-offset-2
+                              transition-[opacity,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2
                               focus-visible:outline-clay ${active ? 'ring-2 ring-clay' : 'opacity-90 hover:opacity-100'}`}
                 >
                   <img
@@ -840,9 +733,8 @@ export const ServicesTab: React.FC = () => {
           {/* Nothing here until a card is chosen. */}
           {selectedCategory && (
             <Tree>
-              {providersFor(selectedCategory).map((p) => {
+              {(byCategory.get(selectedCategory) ?? []).map((p) => {
                 const cat = selectedCategory;
-                const distKm = providerDistanceKm(p, origin);
                 return (
                   <TreeGroup
                     key={p.id}
@@ -858,11 +750,8 @@ export const ServicesTab: React.FC = () => {
                             {p.name}
                             {p.certified && <BadgeCheck className="w-3.5 h-3.5 text-clay shrink-0" />}
                           </span>
-                          {/* Area always shows beside the distance: the figure is measured from
-                              the neighbourhood centre, not the provider's door. */}
                           <span className="block text-xs font-medium text-fg/70 mt-0.5">
                             {p.area}
-                            {distKm !== null && ` · ${kmLabel(distKm)}`}
                           </span>
                         </span>
                       </span>

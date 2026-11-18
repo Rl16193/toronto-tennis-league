@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Navbar } from './Navbar';
 import { BottomNav } from './BottomNav';
 import { motion, AnimatePresence } from 'motion/react';
+import { easeOut } from '../lib/motion';
 
 // Lives here rather than App.tsx now that the Suspense boundary it feeds does too.
 const RouteFallback: React.FC = () => (
@@ -23,7 +24,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isHome = location.pathname === '/';
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-dvh flex flex-col">
       <Navbar />
       {/* Suspense goes INSIDE <main>, never around it.
           Outside, the animated <main> is itself inside the boundary: a route chunk that suspends
@@ -38,13 +39,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <AnimatePresence mode="wait">
         <motion.main
           key={location.pathname}
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.22 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2, ease: easeOut }}
           // Full-height courts page reserves the top+bottom bars itself; every other page gets
           // top padding for the fixed top bar and bottom padding for the fixed bottom tab bar (below lg).
-          className={`flex-grow${isCourts ? '' : isHome ? ' pb-16 lg:pb-0' : ' pt-16 pb-16 lg:pb-0'}`}
+          className={`flex-grow${isCourts ? '' : isHome ? ' pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0' : ' pt-16 pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0'}`}
         >
           <Suspense fallback={<RouteFallback />}>
             {children}

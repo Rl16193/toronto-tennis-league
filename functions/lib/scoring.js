@@ -820,4 +820,5 @@ module.exports = {
   resetScore,
   settleDispute,
   awardIdForGroup,
+  drawKeyOf,
 };

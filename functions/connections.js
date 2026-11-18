@@ -42,7 +42,6 @@ async function linkPlayers(a, b, reason) {
 }
 
 exports.linkPlayers = linkPlayers;
-exports.pairId = pairId;
 
 /**
  * Marketplace sellers are a separate consent case: posting a listing IS an invitation to be

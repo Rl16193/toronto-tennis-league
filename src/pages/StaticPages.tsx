@@ -296,7 +296,7 @@ const PRIVACY_SECTIONS: { title: string; body: (string | string[])[] }[] = [
   {
     title: 'Service Providers and Where Data Is Stored',
     body: [
-      'We use Google Firebase (sign-in, database, file storage and hosting), Google Analytics (how the site is used), Resend (email), Twilio (text and WhatsApp messages about your matches; WhatsApp is run by Meta), Brevo (the newsletter), and Google Sheets (an internal copy for organizers, refreshed weekly). Your information is stored and processed in the United States, where it may be accessible to authorities under US law.',
+      'We use Google Firebase (sign-in, database, file storage and hosting), Google Analytics (how the site is used), Resend (email), Twilio (text and WhatsApp messages about your matches; WhatsApp is run by Meta), Brevo (the newsletter), Google Sheets (an internal copy for organizers, refreshed weekly), and Google Cloud Vision (checks uploaded photos for unsafe content). The court map loads its map from OpenFreeMap and looks up addresses you search for through OpenStreetMap, so those services receive your IP address and what you type in the search. Your information is stored and processed in the United States, where it may be accessible to authorities under US law.',
     ],
   },
   {

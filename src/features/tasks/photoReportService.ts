@@ -25,9 +25,6 @@ export type PhotoMetadata = {
   file_type: string;
   file_last_modified: Timestamp | null; // when the file was last saved on the device
   exif_taken_at: Timestamp | null;      // EXIF DateTimeOriginal (capture time), if present
-  exif_camera: string | null;        // "Apple iPhone 14", etc., if present
-  exif_gps_lat: number | null;
-  exif_gps_lng: number | null;
   exif_present: boolean;             // did the image carry any readable EXIF at all
 };
 
@@ -38,27 +35,15 @@ async function extractPhotoMetadata(file: File): Promise<PhotoMetadata> {
     file_type: file.type,
     file_last_modified: Number.isFinite(file.lastModified) ? Timestamp.fromMillis(file.lastModified) : null,
     exif_taken_at: null,
-    exif_camera: null,
-    exif_gps_lat: null,
-    exif_gps_lng: null,
     exif_present: false,
   };
   try {
-    const [tags, gps] = await Promise.all([
-      exifr.parse(file, ['DateTimeOriginal', 'CreateDate', 'Make', 'Model']).catch(() => null),
-      exifr.gps(file).catch(() => null),
-    ]);
+    // Capture time only: the photo's GPS and camera are never stored.
+    const tags = await exifr.parse(file, ['DateTimeOriginal', 'CreateDate']).catch(() => null);
     if (tags) {
       base.exif_present = true;
       const taken = (tags.DateTimeOriginal || tags.CreateDate) as Date | undefined;
       if (taken instanceof Date && !Number.isNaN(taken.getTime())) base.exif_taken_at = Timestamp.fromDate(taken);
-      const camera = [tags.Make, tags.Model].filter(Boolean).join(' ').trim();
-      if (camera) base.exif_camera = camera;
-    }
-    if (gps && Number.isFinite(gps.latitude) && Number.isFinite(gps.longitude)) {
-      base.exif_present = true;
-      base.exif_gps_lat = gps.latitude;
-      base.exif_gps_lng = gps.longitude;
     }
   } catch { /* no readable EXIF — keep the nulls */ }
   return base;

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Check, Send, Trash2 } from 'lucide-react';
+import { RemoveTap } from "./TournamentElements";
 import { SelectField } from '../../components/SelectField';
 import { TournamentMatch, TournamentPlayer } from './types';
 import { BYE, PLAYER_LOADING, formatPlayerName, getMatchDisplayFlags } from './utils';
@@ -152,19 +153,11 @@ export const PlayerSelect: React.FC<PlayerSelectProps> = ({ matchId, slot, curre
       {/* Removing takes the player out of the whole draw; the slot falls back to Player Loading so
           there's still somewhere visible to drop a replacement. */}
       {onRemovePlayer && currentUserId && currentName !== PLAYER_LOADING && (
-        <button
-          type="button"
-          aria-label={`Remove ${currentName} from the draw`}
-          title="Remove from draw"
-          onClick={() => {
-            if (window.confirm(`Remove ${currentName} ?\n\nPlayer will be removed, matches played will be unaffected, and for future matches the opponent gets a walkover.`)) {
-              onRemovePlayer(currentUserId);
-            }
-          }}
+        <RemoveTap
+          name={currentName}
+          onRemove={() => onRemovePlayer(currentUserId)}
           className="shrink-0 p-1 rounded text-fg/70 opacity-70 hover:opacity-100 hover:text-badge-loss hover:bg-red-500/10 transition-colors"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+        />
       )}
     </div>
   );

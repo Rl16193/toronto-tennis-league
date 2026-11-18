@@ -4,9 +4,12 @@ import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { SUPER_ADMIN_UID } from '../utils/eventTypes';
+import { subscribeVisitorToNewsletter, useMemberNewsletter } from '../lib/newsletter';
+import { Toast } from '../components/Toast';
+import { SubscribeSheet } from './home/HomeElements';
 import { ISSUES } from './newsletter/issues';
 import {
-  ArticleView, BackFooter, FrontPage, ImageView, MastBar, NotFound, PhotoFocus, PuzzleView, SANS, TableView,
+  ArticleView, BackFooter, FrontPage, ImageView, MastBar, NotFound, PhotoFocus, PuzzleView, SANS, SubscribeAction, TableView,
   type FocusMap,
 } from './newsletter/NewsletterElements';
 
@@ -49,6 +52,18 @@ export const Newsletter: React.FC = () => {
   const item = issue && slug ? issue.items.find((i) => i.slug === slug) : undefined;
   const photoFocus = usePhotoFocus(issue?.number);
 
+  // Subscribe in place, as on the homepage: a member with an email subscribes in one tap, everyone
+  // else gets the email sheet. The button hides once a member's row exists.
+  const { user, profile } = useAuth();
+  const newsletter = useMemberNewsletter(user?.uid, user?.email, profile?.user.name ?? '');
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const onSubscribe = async () => {
+    if (!user?.email) { setSheetOpen(true); return; }
+    try { await newsletter.subscribe(); } catch { setToast('Could not sign you up just now. Please try again.'); }
+  };
+  const showSubscribe = !user || newsletter.subscribed === false;
+
   useEffect(() => {
     document.title = `${item ? `${item.headline} · ` : ''}Served Up · Racquets & Strings`;
   }, [item]);
@@ -74,8 +89,14 @@ export const Newsletter: React.FC = () => {
   return (
     <div className={`${SANS} text-fg text-sm leading-normal px-4 sm:px-[3.5%] pt-5 pb-24`}>
       <PhotoFocus.Provider value={photoFocus}>
-        <div className={`${item ? 'max-w-[1100px]' : 'max-w-[1200px]'} mx-auto flex flex-col gap-6`}>{body}</div>
+        <SubscribeAction.Provider value={showSubscribe ? onSubscribe : undefined}>
+          <div className={`${item ? 'max-w-[1100px]' : 'max-w-[1200px]'} mx-auto flex flex-col gap-6`}>{body}</div>
+        </SubscribeAction.Provider>
       </PhotoFocus.Provider>
+      {sheetOpen && (
+        <SubscribeSheet onClose={() => setSheetOpen(false)} onSubscribe={subscribeVisitorToNewsletter} defaultEmail={user?.email ?? ''} />
+      )}
+      <Toast message={toast} onDismiss={() => setToast(null)} placement="top" />
     </div>
   );
 };

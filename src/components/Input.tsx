@@ -12,7 +12,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
  * it. Change it here and every field changes together.
  */
 export const field =
-  'w-full rounded-2xl bg-tennis-surface/50 border border-fg/25 px-4 py-3 text-fg placeholder-fg/70 transition-all duration-200 focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none';
+  'w-full rounded-2xl bg-tennis-surface/50 border border-fg/25 px-4 py-3 text-fg placeholder-fg/70 transition-[border-color,box-shadow] duration-200 focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none';
 
 /** The label above a field. Same reason as above — one copy, shared by Input and SelectField. */
 export const fieldLabelCls = 'block text-sm font-medium text-fg';

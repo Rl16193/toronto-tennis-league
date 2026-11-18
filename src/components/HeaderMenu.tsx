@@ -53,7 +53,7 @@ export const HeaderMenu: React.FC = () => {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="relative p-2 rounded-2xl text-fg hover:text-clay hover:bg-clay/5 transition-colors"
+        className="relative size-11 flex items-center justify-center rounded-2xl text-fg hover:text-clay hover:bg-clay/5 transition-colors"
         aria-label="Open menu"
       >
         <Menu className="w-5 h-5" />

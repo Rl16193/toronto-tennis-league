@@ -1,6 +1,7 @@
 import { Timestamp, addDoc, collection, doc, getDocs, query, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { db, storage } from '../../../lib/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions, storage } from '../../../lib/firebase';
 import { TennisEvent } from '../../../types';
 import { isCancelledEvent } from '../../../utils/eventTypes';
 import { sortEventsByStartDate, toDate, toMillis } from '../../../utils/eventDates';
@@ -118,6 +119,20 @@ export const fetchCompletedEvents = async (): Promise<CompletedEvent[]> =>
       when: toDate(d.data().start_date),
     }))
     .sort((a, b) => toMillis(b.when) - toMillis(a.when));
+
+/** One match of a past draw from `pastResults`: stand-in uids, names only for a signed-in caller. */
+export type PastMatch = {
+  match_id: string; round: string; group_label: string; format: string; drawsize: number;
+  next_match_id: string; status: string; winner_uid: string;
+  player_1_uid: string; player_1_name: string; player_2_uid: string; player_2_name: string;
+  result: { walkover: boolean; sets: [number, number][]; recordedAt: number; court: string } | null;
+};
+export type PastDraw = { key: string; division: string; skillGroup: string; zone: string; subCategory: string; matches: PastMatch[] };
+export type PastResults = { title: string; roundDeadlines: Record<string, string>; draws: PastDraw[] };
+
+/** Two finished draws of a completed tournament, picked at random (functions/scoring.js). */
+export const fetchPastResults = async (eventId: string): Promise<PastResults> =>
+  (await httpsCallable<{ eventId: string }, PastResults>(functions, 'pastResults')({ eventId })).data;
 
 export const uploadEventImage = async (userId: string, file: File) => {
   if (!file.type.startsWith('image/')) throw new Error('Please choose an image file.');

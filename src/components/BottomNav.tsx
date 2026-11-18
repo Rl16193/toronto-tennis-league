@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Calendar, ListChecks, MapPin, Store } from 'lucide-react';
 import { motion } from 'motion/react';
+import { easeOut } from '../lib/motion';
 import { useAuth } from '../context/AuthContext';
 import { RacquetIcon } from './RacquetIcon';
 
@@ -53,7 +54,6 @@ export const BottomNav: React.FC = () => {
               className={`min-h-14 flex flex-col items-center justify-center gap-1 transition-colors ${
                 active ? 'text-fg' : 'text-fg/70 hover:text-fg'
               }`}
-              aria-label={tab.name}
               aria-current={active ? 'page' : undefined}
             >
               <span className="relative flex items-center justify-center w-10 h-10">
@@ -61,7 +61,7 @@ export const BottomNav: React.FC = () => {
                   <motion.span
                     layoutId="bottom-nav-tennis-ball"
                     className="absolute inset-0 rounded-full clay-gradient shadow-lg shadow-clay/30"
-                    transition={{ type: 'spring', damping: 28, stiffness: 360 }}
+                    transition={{ duration: 0.25, ease: easeOut }}
                   />
                 )}
                 <tab.icon className="relative z-10 w-5 h-5" />

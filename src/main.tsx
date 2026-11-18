@@ -29,7 +29,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-tennis-dark px-4 text-center">
+        <div className="min-h-dvh flex items-center justify-center bg-tennis-dark px-4 text-center">
           <div className="space-y-4">
             <h1 className="text-2xl font-black text-white">Unable to load</h1>
             <p className="text-sm text-clay">Kindly refresh the page.</p>

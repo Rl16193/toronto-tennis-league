@@ -259,28 +259,6 @@ function buildChallengeAcceptedEmail(opponentName, ladderName) {
   });
 }
 
-/**
- * Weekly "you still have things to finish" digest. Shows the total only — the per-category
- * breakdown was dropped deliberately, so the caller no longer passes its `lines`.
- * `firstName` is optional; without it the greeting simply omits the name.
- */
-function buildIncompleteMatchesEmail(totalCount, firstName) {
-  const plural = totalCount === 1 ? '' : 'es';
-  const greeting = firstName
-    ? `Ready to hit the court, ${firstName}? &#127934;`
-    : 'Ready to hit the court? &#127934;';
-  return wrapEmail({
-    preheader: `You have ${totalCount} incomplete match${plural} waiting on you.`,
-    title: 'Incomplete Matches',
-    footerNote: "You're receiving this because you subscribed to weekly match reminders.",
-    bodyHtml: `
-      ${heading(greeting)}
-      ${mutedParagraph(`You currently have <strong>${totalCount}</strong><strong> incomplete match${plural}</strong> that need your action or attention. Log in to see the details and follow up with your opponents.`)}
-      ${ctaButton(LINK.profile, 'View My Matches')}
-    `,
-  });
-}
-
 function buildWelcomeEmail(firstName) {
   return wrapEmail({
     preheader: 'Get ready to play with these quick next steps.',
@@ -339,6 +317,5 @@ module.exports = {
   buildRallyAcceptedEmail,
   buildChallengeEmail,
   buildChallengeAcceptedEmail,
-  buildIncompleteMatchesEmail,
   buildWelcomeEmail,
 };

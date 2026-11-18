@@ -42,7 +42,7 @@ export const Navbar: React.FC = () => {
       // The border is /10 rather than /5 because `tennis-dark` IS the page background in both
       // themes, so without a visible edge the bar has no separation at all (worst in light,
       // where it's #EDEDE7 on #EDEDE7).
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-[background-color,padding,box-shadow,border-color] duration-300 ${
         scrolled
           ? 'bg-tennis-dark py-2 shadow-lg border-b border-fg/10'
           : 'bg-transparent py-4'
@@ -97,7 +97,7 @@ export const Navbar: React.FC = () => {
               <button
                 type="button"
                 onClick={toggleTheme}
-                className="p-2 rounded-2xl text-fg hover:text-clay hover:bg-clay/5 transition-colors"
+                className="size-11 flex items-center justify-center rounded-2xl text-fg hover:text-clay hover:bg-clay/5 transition-colors"
                 aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
               >
                 {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -105,7 +105,7 @@ export const Navbar: React.FC = () => {
               {user && (
                 <Link
                   to="/profile"
-                  className="p-2 rounded-2xl text-fg hover:text-clay hover:bg-clay/5 transition-colors"
+                  className="size-11 flex items-center justify-center rounded-2xl text-fg hover:text-clay hover:bg-clay/5 transition-colors"
                   aria-label="Profile"
                 >
                   {profile?.user.avatar && !avatarFailed ? (

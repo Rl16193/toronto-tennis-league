@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { easeOut } from '../../lib/motion';
 import { Calendar, Check, CheckCircle2, ChevronRight, ImageUp, MapPin, Pencil, Star, Trophy } from 'lucide-react';
-import { Button } from '../../components/Button';
+import { Button, buttonCls } from '../../components/Button';
 import { Sheet } from '../../components/Sheet';
 import { SelectField } from '../../components/SelectField';
 import { RacquetIcon } from '../../components/RacquetIcon';
@@ -10,7 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import { leagueDivision } from '../../utils/skillLevels';
 import { MemberSearchInput, type MemberPick } from '../members/MemberSearchInput';
 import { TennisEvent } from '../../types';
-import { isDoublesEvent, isLadderEvent, isRecurringWeekly, isSeasonOpener, isTournamentEvent } from '../../utils/eventTypes';
+import { GALA_RSVP_URL, isAwardsGala, isDoublesEvent, isLadderEvent, isRecurringWeekly, isSeasonOpener, isTournamentEvent } from '../../utils/eventTypes';
 import {
   getEventEndDate, getEventStartDate, parseEndInstant, parseValidDate,
 } from '../../utils/eventDates';
@@ -22,11 +23,11 @@ import {
 } from './services/eventService';
 
 /** One completed event, opening its draw read-only (Events → Completed, and History). */
-export const CompletedEventRow: React.FC<{ e: Pick<CompletedEvent, 'id' | 'title' | 'when'> }> = ({ e }) => (
-  <Link
-    to={`/matches?mode=tournament&event=${e.id}`}
-    className="flex items-center gap-3 px-4 py-3.5 hover:bg-fg/5 transition-colors"
-  >
+// A completed tournament opens its past draws (/events?past=ID); `onOpen` opens them in place.
+export const CompletedEventRow: React.FC<{ e: Pick<CompletedEvent, 'id' | 'title' | 'when'>; onOpen?: () => void }> = ({ e, onOpen }) => {
+  const cls = 'w-full text-left flex items-center gap-3 px-4 py-3.5 hover:bg-fg/5 transition-colors';
+  const body = (
+  <>
     <span className="w-8 h-8 shrink-0 rounded-2xl bg-clay/15 border border-clay/25 flex items-center justify-center">
       <Trophy className="w-4 h-4 text-clay" />
     </span>
@@ -39,8 +40,12 @@ export const CompletedEventRow: React.FC<{ e: Pick<CompletedEvent, 'id' | 'title
       )}
     </div>
     <ChevronRight className="w-4 h-4 text-fg/70 shrink-0" />
-  </Link>
-);
+  </>
+  );
+  return onOpen
+    ? <button type="button" onClick={onOpen} className={cls}>{body}</button>
+    : <Link to={`/events?past=${e.id}`} className={cls}>{body}</Link>;
+};
 
 // Events page presentation: event card, creator form, join sheet, schedule formatters.
 // Data access lives in ./services/eventService.ts and ./hooks/; shared form types in ./types.ts.
@@ -159,6 +164,9 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
   // Non-tournament events have no draw slots — late registration doesn't apply.
   const joinClosed = isHardClosed || (isLate && !isTournament);
 
+  // Signed out: sign in or sign up, then come back to this card.
+  const signUpHere = () => navigate(`/signup?intent=join-event&next=${encodeURIComponent(`/events?event=${event.id}`)}`);
+
   const buttonLabel = isJoined
     ? 'Joined'
     : joinClosed
@@ -166,16 +174,16 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
       : authLoading
         ? 'Loading...'
         : !isLoggedIn
-          ? 'Log In to Join'
+          ? 'Sign Up to Join'
           : isLate
             ? 'Late Registration'
             : 'Join Event';
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2, ease: easeOut }}
       // The Events page scrolls a deep-linked card into view by this id (/events?event=ID).
       id={`event-${event.id}`}
       className="bg-fg/5 rounded-2xl p-5 flex flex-col gap-3 transition-colors scroll-mt-24"
@@ -198,9 +206,11 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
           <span className="absolute top-2 left-2 px-2.5 py-0.5 rounded-2xl bg-tennis-dark/85 backdrop-blur-sm text-xs font-bold text-clay uppercase tracking-widest">
             {eventTypeLabel(event)}
           </span>
-          <span className="absolute top-2 right-2 rounded-full bg-clay px-3 py-1 text-xs font-bold text-white">
-            {event.private ? 'Invitation Only' : 'Free'}
-          </span>
+          {event.private && (
+            <span className="absolute top-2 right-2 rounded-full bg-clay px-3 py-1 text-xs font-bold text-white">
+              Invitation Only
+            </span>
+          )}
           {onEdit && (
             <button
               type="button"
@@ -220,7 +230,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
             {eventTypeLabel(event)}
           </span>
           <div className="flex items-center gap-2 shrink-0">
-            <span className="rounded-full bg-lime px-3 py-1 text-xs font-bold text-ink">{event.private ? 'Invitation Only' : 'Free'}</span>
+            {event.private && <span className="rounded-full bg-lime px-3 py-1 text-xs font-bold text-ink">Invitation Only</span>}
             {onEdit && (
               <button
                 type="button"
@@ -241,7 +251,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-base font-bold text-fg leading-snug flex items-center gap-1.5">
-            <span className="min-w-0">{event.title}</span>
+            <span className="min-w-0 break-words">{event.title}</span>
             {isJoined && <CheckCircle2 className="w-4 h-4 shrink-0 text-badge-win" aria-label="Joined" />}
           </h3>
           {isSeasonOpener(event) && (
@@ -250,21 +260,25 @@ export const EventCard: React.FC<EventCardProps> = ({ event, index, isJoined, au
         </div>
         <div className="shrink-0">
           {/* A private event has no action: its Invitation Only pill replaces Free above. */}
-          {event.private ? null : isLadder ? (
+          {event.private ? null : isAwardsGala(event) ? (
+            <a href={GALA_RSVP_URL} target="_blank" rel="noopener noreferrer" className={buttonCls('primary', 'sm')}>
+              Join Event
+            </a>
+          ) : isLadder ? (
             <Button
               variant="primary"
               size="sm"
-              onClick={() => navigate(isLoggedIn ? '/matches?mode=challenges' : '/login')}
+              onClick={() => (isLoggedIn ? navigate('/matches?mode=challenges') : signUpHere())}
               disabled={authLoading}
             >
               {isLoggedIn && <RacquetIcon className="w-3.5 h-3.5" />}
-              {isLoggedIn ? 'Challenge Now' : 'Log In to Challenge'}
+              {isLoggedIn ? 'Challenge Now' : 'Sign Up to Challenge'}
             </Button>
           ) : (
             <Button
               variant={isJoined ? 'secondary' : 'primary'}
               size="sm"
-              onClick={() => (isLoggedIn ? onJoin(event) : navigate('/signup?intent=join-event'))}
+              onClick={() => (isLoggedIn ? onJoin(event) : signUpHere())}
               disabled={isJoined || joinClosed || authLoading}
             >
               {buttonLabel}
@@ -333,7 +347,7 @@ type CreatorEventModalProps = {
 // Compact field chrome: smaller labels, tighter inputs, and short fields paired two-across so
 // the whole form fits in roughly one phone screen instead of eleven stacked full-width rows.
 const fieldCls =
-  'w-full rounded-2xl bg-tennis-dark/70 px-3.5 py-2.5 text-sm text-fg ' +
+  'w-full rounded-2xl bg-tennis-dark/70 px-3.5 py-2.5 text-base sm:text-sm text-fg ' +
   'placeholder-fg/70 outline-none focus:border-clay focus:ring-2 focus:ring-clay/20';
 const labelCls = 'block text-xs font-bold uppercase tracking-widest text-fg/70 mb-1.5';
 const req = <span className="text-clay">*</span>;
@@ -676,7 +690,7 @@ export const JoinEventSheet: React.FC<JoinEventSheetProps> = ({
                     value={joinForm.combinedSkill}
                     onChange={(e) => setJoinForm({ ...joinForm, combinedSkill: e.target.value })}
                     placeholder="e.g. 3.5"
-                    className="border border-fg/25 w-full rounded-2xl bg-tennis-dark/70 px-3 py-2.5 text-sm text-fg outline-none focus:border-clay"
+                    className="border border-fg/25 w-full rounded-2xl bg-tennis-dark/70 px-3 py-2.5 text-base sm:text-sm text-fg outline-none focus:border-clay"
                   />
                 </div>
               </>

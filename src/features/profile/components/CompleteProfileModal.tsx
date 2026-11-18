@@ -80,7 +80,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
               type="button"
               disabled={!league}
               onClick={() => setAgeCategory(ageCategory === 'Retired Pro' ? '' : 'Retired Pro')}
-              className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+              className={`px-4 py-2 rounded-full text-xs font-bold border transition-colors ${
                 !league
                   ? 'bg-fg/5 border-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
                   : ageCategory === 'Retired Pro'
@@ -94,7 +94,7 @@ export const CompleteProfileModal: React.FC<{ onClose: () => void; onDone: () =>
               type="button"
               disabled={!league}
               onClick={() => setAgeCategory(ageCategory === 'Juniors' ? '' : 'Juniors')}
-              className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+              className={`px-4 py-2 rounded-full text-xs font-bold border transition-colors ${
                 !league
                   ? 'bg-fg/5 border-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
                   : ageCategory === 'Juniors'

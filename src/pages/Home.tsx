@@ -59,10 +59,9 @@ function useCountUp(target: number, duration = 800) {
   return Math.round(display);
 }
 
-// Live figures come from the public site_stats/summary doc; these seed the strip so it never
-// flashes 0 and stays populated if the doc/rule isn't deployed. Courts matches the Court Map's
-// "Members Only" filter exactly — courts with a live count > 0 (via useCourtData).
-const COMMUNITY_BASELINE = { activePlayers: 100, matchesOrganized: 170, courts: 42 };
+// Live figures come from the public site_stats/summary doc; a tile shows a placeholder until its
+// figure arrives, never a made-up number. Courts matches the Court Map's "Members' courts" view —
+// courts with a live count > 0 (via useCourtData).
 
 const UPCOMING_EVENT_COUNT = 6;
 
@@ -77,10 +76,10 @@ const UPCOMING_EVENT_COUNT = 6;
 export const Home: React.FC = () => {
   const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const { courts } = useCourtData();
+  const { courts, loading: courtsLoading } = useCourtData();
 
-  const [activePlayers, setActivePlayers] = useState(COMMUNITY_BASELINE.activePlayers);
-  const [matchesOrganized, setMatchesOrganized] = useState(COMMUNITY_BASELINE.matchesOrganized);
+  const [activePlayers, setActivePlayers] = useState<number | null>(null);
+  const [matchesOrganized, setMatchesOrganized] = useState<number | null>(null);
   const [checkinStep, setCheckinStep] = useState<null | 'regular' | 'report'>(null);
   const [upcoming, setUpcoming] = useState<DisplayEvent[]>([]);
   const [subscribeOpen, setSubscribeOpen] = useState(false);
@@ -91,10 +90,8 @@ export const Home: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
-    // A transient failure (cold connection, brief network blip on first load) used to leave the
-    // hardcoded COMMUNITY_BASELINE seed stuck on screen forever with no retry — visitors would
-    // see stale placeholder numbers until they happened to reload at the right moment. Retry with
-    // backoff instead of giving up after one attempt.
+    // Retry with backoff: a cold connection or brief network blip on first load would otherwise
+    // leave the tiles on their placeholder.
     const load = async (attempt = 0) => {
       try {
         const summary = await getDoc(doc(db, 'site_stats', 'summary'));
@@ -192,21 +189,21 @@ export const Home: React.FC = () => {
 
   // Each stat tile is a shortcut: number + label + destination. Values count up to their
   // target rather than just appearing.
-  const activePlayersDisplay = useCountUp(activePlayers);
-  const matchesOrganizedDisplay = useCountUp(matchesOrganized);
-  const courtsWithMembers = courts.filter((c) => c.count > 0).length;
-  const courtsCoveredDisplay = useCountUp(courtsWithMembers || COMMUNITY_BASELINE.courts);
+  const courtsWithMembers = courtsLoading ? null : courts.filter((c) => c.count > 0).length;
+  const activePlayersDisplay = useCountUp(activePlayers ?? 0);
+  const matchesOrganizedDisplay = useCountUp(matchesOrganized ?? 0);
+  const courtsCoveredDisplay = useCountUp(courtsWithMembers ?? 0);
   const stats = [
-    { value: `${activePlayersDisplay}`, label: 'Players', to: '/leagues' },
-    { value: `${matchesOrganizedDisplay}`, label: 'Matches', to: '/events' },
-    { value: `${courtsCoveredDisplay}`, label: 'Courts', to: '/courts' },
+    { value: activePlayers === null ? null : `${activePlayersDisplay}`, label: 'Active players', to: '/leagues' },
+    { value: matchesOrganized === null ? null : `${matchesOrganizedDisplay}`, label: 'Matches played', to: '/events?past' },
+    { value: courtsWithMembers === null ? null : `${courtsCoveredDisplay}`, label: 'Courts we play', to: '/courts' },
   ];
 
   return (
     <div className="max-w-xl mx-auto px-4 sm:px-6 pb-20">
       <HomeHero signedIn={!!user} onCheckIn={onCheckIn} onReport={onReport} />
 
-      <div className="mt-5">
+      <div className="mt-5" data-float-avoid>
         <StatsStrip stats={stats} />
       </div>
 
@@ -214,12 +211,14 @@ export const Home: React.FC = () => {
       <SupportBand onVolunteer={() => setVolunteerOpen(true)} />
       <FaqSection />
 
-      <SiteFooterLine className="mt-8" />
+      <div className="mt-8" data-float-avoid>
+        <SiteFooterLine />
+      </div>
 
       {/* Portalled: Layout's animated <main> transforms on route change, and a transformed
           ancestor re-bases `position: fixed` — the same reason Sheet and Toast portal. */}
       {createPortal(
-        <FloatingCtaStack onSubscribe={showSubscribe ? onSubscribeClick : undefined} onCourtNote={user ? undefined : onReport} />,
+        <FloatingCtaStack onSubscribe={showSubscribe ? onSubscribeClick : undefined} />,
         document.body,
       )}
 

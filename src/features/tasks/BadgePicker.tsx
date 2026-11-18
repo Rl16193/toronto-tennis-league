@@ -73,7 +73,7 @@ export const BadgePicker: React.FC<{
                       aria-pressed={on}
                       onClick={() => toggle(b.id)}
                       title={b.requirement}
-                      className={`px-2.5 py-1 rounded-2xl text-xs font-bold border transition-all ${
+                      className={`px-2.5 py-1 rounded-2xl text-xs font-bold border transition-colors ${
                         on
                           ? 'bg-amber-500/15 text-badge border-amber-500/25'
                           : 'bg-fg/5 text-fg/70 border-fg/10 hover:text-fg'

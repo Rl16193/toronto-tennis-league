@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, Crosshair, Download } from 'lucide-react';
 import type { Article, Figure, ImageItem, Issue, Item, PuzzleItem, TableItem } from './issues';
 
 // The Served Up newspaper: the Claude Design "three-column gazette" (Option C), in the type of the
@@ -10,17 +11,13 @@ export const SANS = "font-['Josefin_Sans',sans-serif]";
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay';
 const KICKER = 'text-xs uppercase tracking-[0.08em] text-fg/70';
 const CARD = `block rounded-2xl bg-fg/5 p-4 text-fg ${FOCUS}`;
-const BTN = `inline-flex items-center justify-center gap-2 h-11 px-5 rounded-2xl text-sm font-bold ${FOCUS}`;
+const BTN = `inline-flex items-center justify-center gap-2 h-11 px-5 rounded-2xl text-sm font-bold transition-[background-color,scale] duration-150 active:scale-[0.97] [&_svg]:size-4 ${FOCUS}`;
+/** A card that is a link: hover and press, which a plain CARD (a div) must not have. */
+const LINK_CARD = `${CARD} transition-[background-color,scale] duration-150 hover:bg-fg/10 active:scale-[0.99]`;
 
 export const itemHref = (issue: Issue, item: Item) =>
   item.kind === 'article' && item.event ? `/events?event=${item.event}` : `/newsletter/${issue.number}/${item.slug}`;
 const issueNo = (n: number) => String(n).padStart(2, '0');
-
-const DownloadIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M12 4v11" /><path d="m7 10 5 5 5-5" /><path d="M5 20h14" />
-  </svg>
-);
 
 const Kicker: React.FC<{ children: React.ReactNode; centred?: boolean }> = ({ children, centred }) =>
   centred ? (
@@ -31,9 +28,14 @@ const Kicker: React.FC<{ children: React.ReactNode; centred?: boolean }> = ({ ch
 
 const NewPill = () => <span className="rounded-full bg-clay px-2 py-0.5 text-xs font-bold text-white">New</span>;
 
-const SubscribeLink: React.FC<{ className?: string }> = ({ className = '' }) => (
-  <Link to="/?subscribe" className={`${BTN} bg-lime text-ink ${className}`}>Subscribe</Link>
-);
+/** Newsletter.tsx provides the subscribe action; undefined hides the button (already subscribed). */
+export const SubscribeAction = createContext<(() => void) | undefined>(undefined);
+
+const SubscribeLink: React.FC<{ className?: string }> = ({ className = '' }) => {
+  const onSubscribe = useContext(SubscribeAction);
+  if (!onSubscribe) return null;
+  return <button type="button" onClick={onSubscribe} className={`${BTN} bg-lime hover:bg-lime-press text-ink ${className}`}>Subscribe</button>;
+};
 
 // ── Masthead ─────────────────────────────────────────────────────────────────
 
@@ -59,7 +61,7 @@ export const Masthead: React.FC<{ issue: Issue }> = ({ issue }) => (
       <div className="grid grid-cols-2 gap-3 lg:flex">
         <SubscribeLink />
         {issue.pdf && (
-          <a href={issue.pdf} download className={`${BTN} bg-clay text-white`}><DownloadIcon />Download PDF</a>
+          <a href={issue.pdf} download className={`${BTN} bg-clay hover:bg-clay-dark text-white`}><Download aria-hidden="true" />Download PDF</a>
         )}
       </div>
     </div>
@@ -69,7 +71,7 @@ export const Masthead: React.FC<{ issue: Issue }> = ({ issue }) => (
 /** Compact masthead on an item page. */
 export const MastBar: React.FC<{ issue: Issue }> = ({ issue }) => (
   <nav className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b-[3px] border-double border-fg">
-    <Link to={`/newsletter/${issue.number}`} className={`min-h-11 inline-flex items-center font-semibold text-fg ${FOCUS}`}>← Back to front page</Link>
+    <Link to={`/newsletter/${issue.number}`} className={`min-h-11 inline-flex items-center gap-1.5 font-semibold text-fg hover:text-clay transition-colors ${FOCUS}`}><ArrowLeft className="size-4" aria-hidden="true" />Back to front page</Link>
     <span className={`${SERIF} font-bold text-[32px] leading-none tracking-tight`}>Served Up</span>
     <span className={KICKER}>No. {issueNo(issue.number)} · {issue.date}</span>
   </nav>
@@ -78,7 +80,7 @@ export const MastBar: React.FC<{ issue: Issue }> = ({ issue }) => (
 export const BackFooter: React.FC<{ issue: Issue }> = ({ issue }) => (
   <>
     <div className="border-t-[3px] border-double border-fg" />
-    <Link to={`/newsletter/${issue.number}`} className={`${BTN} self-center bg-fg/5 text-fg font-semibold`}>← Back to front page</Link>
+    <Link to={`/newsletter/${issue.number}`} className={`${BTN} self-center bg-fg/5 hover:bg-fg/10 text-fg font-semibold`}><ArrowLeft aria-hidden="true" />Back to front page</Link>
   </>
 );
 
@@ -112,16 +114,16 @@ const Photo: React.FC<{ fig: Figure; className: string; eager?: boolean }> = ({ 
     e.preventDefault(); e.stopPropagation();
     nudge(key, clamp(x + dx), clamp(y + dy));
   };
-  const arrow = `w-9 h-9 rounded-2xl bg-tennis-dark/80 text-white text-sm font-bold ${FOCUS}`;
+  const arrow = `size-11 flex items-center justify-center rounded-2xl bg-tennis-dark/80 text-fg ${FOCUS}`;
   return (
     <div className="relative">
       {img}
       <div className="absolute bottom-2 right-2 grid grid-cols-3 gap-1">
-        <span /><button type="button" aria-label="Show more of the top" className={arrow} onClick={move(0, -STEP)}>↑</button><span />
-        <button type="button" aria-label="Show more of the left" className={arrow} onClick={move(-STEP, 0)}>←</button>
-        <button type="button" aria-label="Centre the photo" className={arrow} onClick={move(50 - x, 50 - y)}>•</button>
-        <button type="button" aria-label="Show more of the right" className={arrow} onClick={move(STEP, 0)}>→</button>
-        <span /><button type="button" aria-label="Show more of the bottom" className={arrow} onClick={move(0, STEP)}>↓</button><span />
+        <span /><button type="button" aria-label="Show more of the top" className={arrow} onClick={move(0, -STEP)}><ArrowUp className="size-4" /></button><span />
+        <button type="button" aria-label="Show more of the left" className={arrow} onClick={move(-STEP, 0)}><ArrowLeft className="size-4" /></button>
+        <button type="button" aria-label="Centre the photo" className={arrow} onClick={move(50 - x, 50 - y)}><Crosshair className="size-4" /></button>
+        <button type="button" aria-label="Show more of the right" className={arrow} onClick={move(STEP, 0)}><ArrowRight className="size-4" /></button>
+        <span /><button type="button" aria-label="Show more of the bottom" className={arrow} onClick={move(0, STEP)}><ArrowDown className="size-4" /></button><span />
       </div>
     </div>
   );
@@ -134,17 +136,17 @@ const Img: React.FC<{ fig: Figure; className: string }> = ({ fig, className }) =
 );
 
 const LeadBox: React.FC<{ a: Article; to: string }> = ({ a, to }) => (
-  <Link to={to} className={`${CARD} lg:p-5 flex flex-col gap-3.5`}>
+  <Link to={to} className={`${LINK_CARD} lg:p-5 flex flex-col gap-3.5`}>
     {a.image && <Img fig={a.image} className="h-64 lg:h-[400px]" />}
     <h2 className={`${SERIF} font-bold text-2xl leading-tight text-center text-balance`}>{a.headline}</h2>
     <p className="leading-relaxed">{a.sections[0]?.paragraphs[0] ?? a.dek}</p>
-    <span className="min-h-11 flex items-center justify-center font-semibold">Read the full story →</span>
+    <span className="min-h-11 flex items-center justify-center font-semibold gap-1.5">Read the full story<ArrowRight className="size-4" aria-hidden="true" /></span>
   </Link>
 );
 
 /** A small article: text with a thumbnail beside it. */
 const RowBox: React.FC<{ a: Article; to: string }> = ({ a, to }) => (
-  <Link to={to} className={`${CARD} flex gap-4 items-start`}>
+  <Link to={to} className={`${LINK_CARD} flex gap-4 items-start`}>
     {a.image && (
       <div className="order-last sm:order-first shrink-0 w-24 sm:w-44">
         <Photo fig={a.image} className="h-24 sm:h-44 rounded-2xl" />
@@ -160,7 +162,7 @@ const RowBox: React.FC<{ a: Article; to: string }> = ({ a, to }) => (
 );
 
 const StackBox: React.FC<{ a: Article; to: string }> = ({ a, to }) => (
-  <Link to={to} className={`${CARD} flex flex-col gap-2`}>
+  <Link to={to} className={`${LINK_CARD} flex flex-col gap-2`}>
     <Kicker>{a.kicker}</Kicker>
     {a.image && <Img fig={a.image} className="h-36" />}
     <h3 className={`${SERIF} font-bold text-lg leading-tight`}>{a.headline}</h3>
@@ -170,7 +172,7 @@ const StackBox: React.FC<{ a: Article; to: string }> = ({ a, to }) => (
 
 /** Court of the Month: a tall picture over a fact card. */
 const CourtBox: React.FC<{ a: Article; to: string }> = ({ a, to }) => (
-  <Link to={to} className={`${CARD} flex flex-col gap-2`}>
+  <Link to={to} className={`${LINK_CARD} flex flex-col gap-2`}>
     <div className="flex items-center gap-2">{a.isNew && <NewPill />}<Kicker>{a.kicker}</Kicker></div>
     {a.image && <Img fig={a.image} className="h-56 lg:h-72" />}
     <h3 className={`${SERIF} font-bold text-lg leading-tight`}>{a.headline}</h3>
@@ -184,7 +186,7 @@ const CourtBox: React.FC<{ a: Article; to: string }> = ({ a, to }) => (
 );
 
 const MemeBox: React.FC<{ m: ImageItem; to: string }> = ({ m, to }) => (
-  <Link to={to} className={`${CARD} flex flex-col gap-2`}>
+  <Link to={to} className={`${LINK_CARD} flex flex-col gap-2`}>
     <Kicker>{m.kicker}</Kicker>
     {/* Never cropped: a meme's joke can sit at any edge. */}
     <img src={m.image.src} alt={m.image.alt} loading="lazy" className="w-full h-auto rounded-2xl" />
@@ -207,16 +209,16 @@ const MiniGrid: React.FC<{ grid: string[] }> = ({ grid }) => {
 };
 
 const PuzzleBox: React.FC<{ p: PuzzleItem; to: string }> = ({ p, to }) => (
-  <Link to={to} className={`${CARD} flex flex-col gap-2.5`}>
+  <Link to={to} className={`${LINK_CARD} flex flex-col gap-2.5`}>
     <Kicker>{p.kicker}</Kicker>
     <h3 className={`${SERIF} font-bold text-lg leading-snug`}>{p.trivia.question}</h3>
     <MiniGrid grid={p.grid} />
-    <span className="font-semibold">Reveal answer · Play →</span>
+    <span className="inline-flex items-center gap-1.5 font-semibold">Reveal answer · Play<ArrowRight className="size-4" aria-hidden="true" /></span>
   </Link>
 );
 
 const EventsBox: React.FC<{ t: TableItem; to: string }> = ({ t, to }) => (
-  <Link to={to} className={`${CARD} flex flex-col gap-1`}>
+  <Link to={to} className={`${LINK_CARD} flex flex-col gap-1`}>
     <h2 className={`${SERIF} font-bold text-2xl leading-tight`}>{t.headline}</h2>
     <span className={`${KICKER} pb-1.5`}>{t.kicker}</span>
     {t.rows.slice(0, 4).map(([dates, name, level, loc, surface, watch]) => (
@@ -226,7 +228,7 @@ const EventsBox: React.FC<{ t: TableItem; to: string }> = ({ t, to }) => (
         <span className="text-xs text-fg/70">Watch: {watch}</span>
       </div>
     ))}
-    <span className="border-t border-fg/30 min-h-11 flex items-center font-semibold">Full table →</span>
+    <span className="border-t border-fg/30 min-h-11 flex items-center gap-1.5 font-semibold">Full table<ArrowRight className="size-4" aria-hidden="true" /></span>
   </Link>
 );
 
@@ -244,9 +246,25 @@ const FrontBox: React.FC<{ issue: Issue; item: Item }> = ({ issue, item }) => {
   }
 };
 
+/** The previous issue's articles, listed at the foot of the right column. */
+const PreviousBox: React.FC<{ issue: Issue }> = ({ issue }) => (
+  <div className={`${CARD} flex flex-col gap-1`}>
+    <h2 className={`${SERIF} font-bold text-2xl leading-tight`}>From the last issue</h2>
+    <span className={`${KICKER} pb-1.5`}>No. {issueNo(issue.number)} · {issue.date}</span>
+    {issue.items.filter((i) => i.kind === 'article').map((a) => (
+      <Link key={a.slug} to={itemHref(issue, a)} className={`border-t border-fg/30 py-2.5 flex flex-col gap-0.5 ${FOCUS}`}>
+        <Kicker>{a.kicker}</Kicker>
+        <span className={`${SERIF} font-bold text-lg leading-tight`}>{a.headline}</span>
+      </Link>
+    ))}
+  </div>
+);
+
 // ── Front page ───────────────────────────────────────────────────────────────
 
 export const FrontPage: React.FC<{ issue: Issue; issues: Issue[] }> = ({ issue, issues }) => {
+  // ISSUES is newest first, so the previous issue is the next entry.
+  const previous = issues[issues.findIndex((i) => i.number === issue.number) + 1];
   const col = (slots: Item['slot'][]) =>
     issue.items.filter((i) => slots.includes(i.slot)).map((i) => <FrontBox key={i.slug} issue={issue} item={i} />);
   return (
@@ -256,7 +274,7 @@ export const FrontPage: React.FC<{ issue: Issue; issues: Issue[] }> = ({ issue, 
       <div className="flex flex-col gap-5 lg:flex-row lg:gap-0 lg:items-stretch">
         <div className="order-2 lg:order-1 lg:w-1/4 min-w-0 flex flex-col gap-5 lg:pr-6 lg:pb-6">{col(['left'])}</div>
         <div className="order-1 lg:order-2 lg:w-1/2 min-w-0 flex flex-col gap-5 lg:px-6 lg:pb-6 lg:border-x border-fg/30">{col(['lead', 'centre'])}</div>
-        <div className="order-3 lg:w-1/4 min-w-0 flex flex-col gap-5 lg:pl-6 lg:pb-6">{col(['right'])}</div>
+        <div className="order-3 lg:w-1/4 min-w-0 flex flex-col gap-5 lg:pl-6 lg:pb-6">{col(['right'])}{previous && <PreviousBox issue={previous} />}</div>
       </div>
       <IssueFooter issue={issue} issues={issues} />
     </>
@@ -271,15 +289,11 @@ const IssueFooter: React.FC<{ issue: Issue; issues: Issue[] }> = ({ issue, issue
         <>
           <h2 className={`${SERIF} font-bold text-2xl`}>Past issues</h2>
           <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(220px,100%),1fr))]">
-            {others.map((o) => {
-              const lead = o.items.find((i) => i.slot === 'lead') ?? o.items[0];
-              return (
-                <Link key={o.number} to={`/newsletter/${o.number}`} className={`${CARD} flex flex-col gap-0.5`}>
-                  <span className="text-xs text-fg/70">No. {issueNo(o.number)} · {o.date}</span>
-                  <span className={`${SERIF} font-bold text-lg`}>{lead?.headline}</span>
-                </Link>
-              );
-            })}
+            {others.map((o) => (
+              <Link key={o.number} to={`/newsletter/${o.number}`} className={`${LINK_CARD} ${SERIF} font-bold text-lg`}>
+                No. {issueNo(o.number)} · {o.date}
+              </Link>
+            ))}
           </div>
         </>
       )}
@@ -309,7 +323,7 @@ const ItemHeader: React.FC<{ item: Item }> = ({ item }) => (
 );
 
 const FigureView: React.FC<{ fig: Figure; className?: string }> = ({ fig, className = '' }) => (
-  <figure className="flex flex-col gap-2">
+  <figure className="flex flex-col gap-2 w-full mx-auto" style={fig.maxWidth ? { maxWidth: fig.maxWidth } : undefined}>
     <Photo fig={fig} eager className={`rounded-2xl ${className}`} />
     <figcaption className="text-xs text-fg/70 text-center">{fig.caption}</figcaption>
   </figure>
@@ -331,7 +345,7 @@ export const ArticleView: React.FC<{ a: Article }> = ({ a }) => (
         {a.sections.map((s, i) => (
           <section key={i} className="mb-3.5">
             {s.heading && <h2 className={`${SERIF} font-bold text-lg leading-snug mb-1.5 break-after-avoid`}>{s.heading}</h2>}
-            {s.paragraphs.map((p, j) => <p key={j} className="mb-3.5 leading-relaxed">{p}</p>)}
+            {s.paragraphs.map((p, j) => <p key={j} className="mb-3.5 text-base leading-relaxed">{p}</p>)}
           </section>
         ))}
       </article>
@@ -352,8 +366,8 @@ export const ArticleView: React.FC<{ a: Article }> = ({ a }) => (
     {a.links && (
       <div className="flex flex-wrap justify-center gap-3">
         {a.links.map((l) => l.href.startsWith('/')
-          ? <Link key={l.href} to={l.href} className={`${BTN} bg-clay text-white`}>{l.label}</Link>
-          : <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer" className={`${BTN} bg-fg/5 text-fg`}>{l.label} ↗</a>)}
+          ? <Link key={l.href} to={l.href} className={`${BTN} bg-clay hover:bg-clay-dark text-white`}>{l.label}</Link>
+          : <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer" className={`${BTN} bg-fg/5 hover:bg-fg/10 text-fg`}>{l.label}<ArrowUpRight aria-hidden="true" /></a>)}
       </div>
     )}
   </>
@@ -491,8 +505,8 @@ const Crossword: React.FC<{ p: PuzzleItem }> = ({ p }) => {
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={() => setChecked(true)} className={`${BTN} bg-clay text-white`}>Check</button>
-        <button type="button" onClick={reveal} className={`${BTN} bg-fg/5 text-fg`}>Reveal</button>
+        <button type="button" onClick={() => setChecked(true)} className={`${BTN} bg-clay hover:bg-clay-dark text-white`}>Check</button>
+        <button type="button" onClick={reveal} className={`${BTN} bg-fg/5 hover:bg-fg/10 text-fg`}>Reveal</button>
         {solved && <span className="text-sm font-semibold text-badge-win">Solved!</span>}
       </div>
     </div>
@@ -509,7 +523,7 @@ export const PuzzleView: React.FC<{ p: PuzzleItem }> = ({ p }) => {
         <p className={`${SERIF} font-bold text-lg leading-snug`}>{p.trivia.question}</p>
         {shown
           ? <p className="text-sm font-semibold">{p.trivia.answer}</p>
-          : <button type="button" onClick={() => setShown(true)} className={`${BTN} self-start bg-fg/10 text-fg`}>Reveal answer</button>}
+          : <button type="button" onClick={() => setShown(true)} className={`${BTN} self-start bg-fg/10 hover:bg-fg/15 text-fg`}>Reveal answer</button>}
       </section>
       <section className="rounded-2xl bg-fg/5 p-4 flex flex-col gap-3">
         <span className={KICKER}>Mini crossword</span>

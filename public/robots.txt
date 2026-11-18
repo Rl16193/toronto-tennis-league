@@ -5,4 +5,27 @@ Disallow: /leagues
 Disallow: /profile
 Disallow: /players/
 
+# Training crawlers: no access. Search crawlers (Googlebot, Bingbot, OAI-SearchBot,
+# PerplexityBot, Claude-SearchBot, Applebot) are left under the rules above.
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: Meta-ExternalAgent
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
 Sitemap: https://www.racquetsandstrings.ca/sitemap.xml

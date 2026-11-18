@@ -67,6 +67,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', state.theme);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', state.theme === 'light' ? '#EDEDE7' : '#143D34');
     try {
       localStorage.setItem(STORAGE_KEY, state.theme);
       localStorage.setItem(UNTIL_KEY, String(state.until));

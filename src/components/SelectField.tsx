@@ -36,6 +36,8 @@ export const SelectField: React.FC<{
   error?: string;
   disabled?: boolean;
   className?: string;
+  /** Merged over the field look, for a trigger that sits somewhere other than a form (the map bar). */
+  triggerClassName?: string;
   /** Adds a search box above the options, matching label and hint (long lists, e.g. members). */
   searchable?: boolean;
 }> = ({
@@ -49,6 +51,7 @@ export const SelectField: React.FC<{
   error,
   disabled,
   className,
+  triggerClassName,
   searchable,
 }) => {
   const [open, setOpen] = useState(false);
@@ -85,6 +88,7 @@ export const SelectField: React.FC<{
           !chosen && 'text-fg/70',
           error && 'border-badge-loss',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay',
+          triggerClassName,
         )}
       >
         <span className="truncate">{chosen ? chosen.label : placeholder}</span>

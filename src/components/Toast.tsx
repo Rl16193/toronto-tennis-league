@@ -37,7 +37,7 @@ export const Toast: React.FC<Props> = ({ message, onDismiss, duration = 5000, pl
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: placement === 'top' ? -24 : 24 }}
           transition={{ type: 'spring', damping: 28, stiffness: 340 }}
-          className={`fixed inset-x-4 ${placement === 'top' ? 'top-20' : 'bottom-24 sm:bottom-8'} sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2
+          className={`fixed inset-x-4 ${placement === 'top' ? 'top-20' : 'bottom-[calc(6rem+env(safe-area-inset-bottom))] sm:bottom-8'} sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2
                      z-[110] sm:w-[22rem] flex items-center gap-3 rounded-2xl
                      bg-tennis-surface shadow-2xl px-4 py-3`}
         >
@@ -46,7 +46,7 @@ export const Toast: React.FC<Props> = ({ message, onDismiss, duration = 5000, pl
             type="button"
             onClick={onDismiss}
             aria-label="Dismiss"
-            className="shrink-0 text-fg hover:text-clay transition-colors"
+            className="shrink-0 -mr-2 size-11 flex items-center justify-center text-fg hover:text-clay transition-colors"
           >
             <X className="w-4 h-4" />
           </button>

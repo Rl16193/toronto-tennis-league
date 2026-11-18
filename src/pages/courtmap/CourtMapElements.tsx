@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Check, ChevronDown, Loader2, Snowflake } from 'lucide-react';
 import { tapScale } from '../../lib/motion';
 import { Sheet } from '../../components/Sheet';
-import { Button } from '../../components/Button';
+import { Button, buttonCls } from '../../components/Button';
 import type {
   ActivityBreakdown, CourtWithCount, NearestCourt, NearestProgram, PickleballEntry,
 } from './courtMapUtils';
@@ -14,13 +14,17 @@ import { formatDateRange, formatDist, getProgramStatus, hasPublicHours } from '.
 
 // ─── Badges and filter controls ───────────────────────────────────────────────────────────────
 
-export const Badge: React.FC<{ bg: string; color: string; children: React.ReactNode }> = ({ bg, color, children }) => (
-  <span style={{
-    background: bg, color,
-    padding: '2px 6px', borderRadius: 4,
-    fontSize: 10, fontWeight: 600, letterSpacing: '0.03em',
-    display: 'inline-block', lineHeight: 1.5,
-  }}>
+// Theme tokens only, so every pill reads in both themes (CLAUDE.md, "Text colour").
+const BADGE_TONES = {
+  neutral: 'bg-fg/10 text-fg',
+  muted: 'bg-fg/5 text-fg/70',
+  win: 'bg-badge-win/15 text-badge-win',
+  warn: 'bg-badge/15 text-badge',
+  clay: 'bg-clay/15 text-fg',
+} as const;
+
+export const Badge: React.FC<{ tone?: keyof typeof BADGE_TONES; children: React.ReactNode }> = ({ tone = 'neutral', children }) => (
+  <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold break-words ${BADGE_TONES[tone]}`}>
     {children}
   </span>
 );
@@ -30,7 +34,7 @@ const SEL_BG = 'var(--color-tennis-deep)';
 // All four map filters open the same pop-up list (a Sheet), so they behave alike. FilterSelect
 // picks one option; MultiFilterSelect ticks several and closes with Done.
 const FilterTrigger: React.FC<{ label: string; text: string; onOpen: () => void; disabled?: boolean }> = ({ label, text, onOpen, disabled }) => (
-  <div className={`flex flex-col gap-0.5 ${disabled ? 'opacity-35 pointer-events-none' : ''}`}>
+  <div className={`flex flex-col gap-0.5 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
     <span className="text-fg/70 text-xs uppercase tracking-wide">{label}</span>
     <button
       type="button"
@@ -39,8 +43,8 @@ const FilterTrigger: React.FC<{ label: string; text: string; onOpen: () => void;
       aria-haspopup="dialog"
       style={{ background: SEL_BG }}
       // Borderless: the filled background and focus ring carry the affordance instead.
-      className="w-full text-left text-xs text-fg rounded-md px-2 py-1.5 flex items-center justify-between
-                 focus:outline-none focus:ring-2 focus:ring-clay/40 cursor-pointer"
+      className="w-full min-h-11 text-left text-sm text-fg rounded-2xl px-3 py-2 flex items-center justify-between
+                 focus:outline-none focus:ring-2 focus:ring-clay/40 cursor-pointer disabled:cursor-not-allowed"
     >
       <span className="truncate">{text}</span>
       <ChevronDown className="w-3.5 h-3.5 ml-1 shrink-0 text-fg/70" aria-hidden="true" />
@@ -165,7 +169,7 @@ export const PickleballBadges = React.memo(function PickleballBadges({
           );
         }
         return (
-          <Badge key={idx} bg="#431407" color="#fb923c">{label}</Badge>
+          <Badge key={idx} tone="clay">{label}</Badge>
         );
       })}
     </>
@@ -322,7 +326,7 @@ export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ court
       {courts.length === 0 ? (
         <p className="text-fg/70 text-sm text-center py-8">No courts match the current filters.</p>
       ) : (
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-fg/10">
           {courts.map((c) => (
             // The row is a div, not one big button: Book Online and Programs are real controls
             // inside it, and nesting those in a button is invalid and swallows their clicks.
@@ -330,24 +334,25 @@ export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ court
               key={`${c.dropdown}-${c.lat}`}
               className="flex items-start justify-between gap-2 px-4 py-3 hover:bg-fg/5 transition-colors"
             >
+              <div className="flex-1 min-w-0">
               <motion.button
                 onClick={() => onSelectCourt(c)}
                 whileTap={tapScale.whileTap}
                 transition={tapScale.transition}
-                className="flex-1 min-w-0 text-left"
+                className="w-full text-left"
               >
                 <p className="font-semibold text-fg text-sm leading-snug mb-1">{c.dropdown || c.name}</p>
                 {c.address && <p className="text-fg text-xs mb-1.5">{c.address}</p>}
                 <div className="flex flex-wrap gap-1">
-                  <Badge bg="#2d2d3a" color="#d1d5db">{c.courtType.toUpperCase()}</Badge>
-                  {c.numCourts > 0 && <Badge bg="#2d2d3a" color="#d1d5db">{c.numCourts} CT</Badge>}
-                  {c.lights && <Badge bg="#422006" color="#fbbf24">LIGHTS</Badge>}
-                  {hasPublicHours(c) && <Badge bg="#1e3a5f" color="#93c5fd">PUBLIC HOURS</Badge>}
-                  {c.winterPlay && <Badge bg="#164e63" color="#a5f3fc">WINTER</Badge>}
-                  {c.bookingUrl && <Badge bg="#7c2d12" color="#fdba74">BOOKABLE</Badge>}
+                  <Badge tone="neutral">{c.courtType.toUpperCase()}</Badge>
+                  {c.numCourts > 0 && <Badge tone="neutral">{c.numCourts} CT</Badge>}
+                  {c.lights && <Badge tone="warn">LIGHTS</Badge>}
+                  {hasPublicHours(c) && <Badge tone="neutral">PUBLIC HOURS</Badge>}
+                  {c.winterPlay && <Badge tone="neutral">WINTER</Badge>}
+                  {c.bookingUrl && <Badge tone="clay">BOOKABLE</Badge>}
                   {showReports
-                    ? c.reportCount > 0 && <Badge bg="#14532d" color="#86efac">{c.reportCount} report{c.reportCount !== 1 ? 's' : ''}</Badge>
-                    : c.count > 0 && <Badge bg="#14532d" color="#86efac">{c.count} player{c.count !== 1 ? 's' : ''}</Badge>}
+                    ? c.reportCount > 0 && <Badge tone="win">{c.reportCount} report{c.reportCount !== 1 ? 's' : ''}</Badge>
+                    : c.count > 0 && <Badge tone="win">{c.count} player{c.count !== 1 ? 's' : ''}</Badge>}
                   <PickleballBadges entries={c.pickleballEntries} />
                 </div>
                 {c.clubInfo && <p className="text-fg text-xs mt-1 leading-snug">{c.clubInfo}</p>}
@@ -355,37 +360,37 @@ export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ court
                   <div className="flex flex-wrap gap-1 mt-1.5">
                     {ACTIVITY_PILLS.map(({ kind, label }) => {
                       const n = (activityWindow === 'd7' ? c.activityBreakdown7 : c.activityBreakdown30)[kind];
-                      return n > 0 ? <Badge key={kind} bg="#3b1f12" color="#fdba74">{label} {n}</Badge> : null;
+                      return n > 0 ? <Badge key={kind} tone="clay">{label} {n}</Badge> : null;
                     })}
                   </div>
                 )}
+              </motion.button>
                 {showReports && c.reports.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1 mt-1.5">
                     {(openReports === c.dropdown ? c.reports : c.reports.slice(0, 1)).map((note, i) => (
-                      <Badge key={i} bg="#3b1f12" color="#fdba74">{note}</Badge>
+                      <Badge key={i} tone="clay">{note}</Badge>
                     ))}
                     {c.reports.length > 1 && (
-                      // A span, not a button: the whole row is already a button.
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(ev) => { ev.stopPropagation(); setOpenReports((cur) => (cur === c.dropdown ? null : c.dropdown)); }}
-                        onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.stopPropagation(); setOpenReports((cur) => (cur === c.dropdown ? null : c.dropdown)); } }}
-                        className="text-xs font-bold text-clay cursor-pointer focus-visible:outline-2 focus-visible:outline-clay"
+                      // Outside the row button, so it is a real button of its own.
+                      <button
+                        type="button"
+                        onClick={() => setOpenReports((cur) => (cur === c.dropdown ? null : c.dropdown))}
+                        aria-expanded={openReports === c.dropdown}
+                        className="min-h-9 px-1 text-xs font-bold text-clay"
                       >
                         {openReports === c.dropdown ? 'Less' : `More (${c.reports.length - 1})`}
-                      </span>
+                      </button>
                     )}
                   </div>
                 )}
-              </motion.button>
+              </div>
               {/* Distance, then the same actions the map bubble offers, stacked beneath it. */}
               <div className="shrink-0 flex flex-col items-end gap-1">
                 {userCoords && <span className="text-clay font-medium text-xs">{formatDist(c.distKm)}</span>}
                 {c.bookingUrl && (
                   <a
                     href={c.bookingUrl} target="_blank" rel="noreferrer"
-                    className="rounded-2xl bg-clay px-2 py-0.5 text-xs font-bold text-white hover:bg-clay-dark transition-colors"
+                    className={buttonCls('clay', 'sm')}
                   >
                     Book Online
                   </a>
@@ -394,7 +399,7 @@ export const CourtResultsList: React.FC<CourtResultsProps> = React.memo(({ court
                   <button
                     type="button"
                     onClick={() => onViewPrograms(c)}
-                    className="rounded-2xl bg-fg/10 px-2 py-0.5 text-xs font-bold text-fg hover:bg-fg/20 transition-colors"
+                    className={buttonCls('secondary', 'sm')}
                   >
                     Programs
                   </button>
@@ -453,7 +458,7 @@ export const ProgramResultsList: React.FC<ProgramResultsProps> = React.memo(({
                 key={s.value || 'all'}
                 type="button"
                 onClick={() => onStatusChange(s.value)}
-                className={`rounded-2xl px-2 py-0.5 text-xs font-bold transition-colors ${
+                className={`min-h-9 rounded-2xl px-3 text-xs font-bold transition-colors ${
                   statusFilter === s.value ? 'bg-clay text-white' : 'bg-fg/10 text-fg hover:bg-fg/20'}`}
               >
                 {s.label}
@@ -465,7 +470,7 @@ export const ProgramResultsList: React.FC<ProgramResultsProps> = React.memo(({
       {programs.length === 0 ? (
         <p className="text-fg/70 text-sm text-center py-8">No programs match the current filters.</p>
       ) : (
-        <div className="divide-y divide-white/5">
+        <div className="divide-y divide-fg/10">
           {programs.map((p) => {
             const status = getProgramStatus(p.dateRange, today);
             return (
@@ -485,17 +490,16 @@ export const ProgramResultsList: React.FC<ProgramResultsProps> = React.memo(({
                   {/* Days and age are pills here rather than filter controls — the panel versions
                       were removed; you read them off the row instead. */}
                   <div className="flex flex-wrap items-center gap-1 min-w-0">
-                    {status === 'ongoing'  && <Badge bg="#14532d" color="#86efac">ONGOING</Badge>}
-                    {status === 'upcoming' && <Badge bg="#422006" color="#fbbf24">UPCOMING</Badge>}
-                    {status === 'past'     && <Badge bg="#1f2937" color="#6b7280">PAST</Badge>}
-                    {!!p.days && <Badge bg="#1e3a5f" color="#93c5fd">{p.days.toUpperCase()}</Badge>}
-                    {!!p.ageRange && <Badge bg="#2d2d3a" color="#d1d5db">{p.ageRange.toUpperCase()}</Badge>}
+                    {status === 'ongoing'  && <Badge tone="win">ONGOING</Badge>}
+                    {status === 'upcoming' && <Badge tone="warn">UPCOMING</Badge>}
+                    {status === 'past'     && <Badge tone="muted">PAST</Badge>}
+                    {!!p.days && <Badge tone="neutral">{p.days.toUpperCase()}</Badge>}
+                    {!!p.ageRange && <Badge tone="neutral">{p.ageRange.toUpperCase()}</Badge>}
                   </div>
                   {p.activityUrl && (
                     <a href={p.activityUrl} target="_blank" rel="noopener noreferrer"
                        onClick={(e) => e.stopPropagation()}
-                       className="shrink-0 inline-flex items-center rounded-2xl bg-clay px-2.5 py-1
-                                  text-xs font-bold text-white hover:bg-clay-dark transition-colors">
+                       className={`shrink-0 ${buttonCls('clay', 'sm')}`}>
                       View Activity
                     </a>
                   )}

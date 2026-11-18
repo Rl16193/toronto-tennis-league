@@ -34,43 +34,8 @@ export const CATEGORY_IMAGE: Record<ServiceCategory, string> = {
  * Providers pinned to the top of their category, in this order. Everyone else follows in catalog
  * order. Matched against the slug their offer ids start with (`fortyforty-…`), since a provider's
  * id is now their uid.
- *
- * This is the DEFAULT order only. Once a member searches an address the list sorts purely by
- * distance and the pins lose their place.
  */
 export const PINNED_PROVIDERS = ['fortyforty', 'karan'];
-
-/**
- * Approximate centres of the neighbourhoods providers give as their `area`.
- *
- * These are NOT street addresses. A provider carries no address and no coordinates today, so
- * "nearest" can only be answered at neighbourhood resolution — which is the precision the stored
- * data actually has. The UI shows the area name beside a rounded distance so nobody reads the
- * figure as door-to-door. When real addresses exist, geocode each once, store the result on the
- * provider, and prefer it over this table.
- */
-export const AREA_COORDS: Record<string, { lat: number; lng: number }> = {
-  downtown: { lat: 43.6532, lng: -79.3832 },
-  'downtown toronto': { lat: 43.6532, lng: -79.3832 },
-  midtown: { lat: 43.7064, lng: -79.3986 },
-  'midtown toronto': { lat: 43.7064, lng: -79.3986 },
-  'dufferin - west end': { lat: 43.66, lng: -79.435 },
-  'west end': { lat: 43.66, lng: -79.435 },
-  'north york': { lat: 43.7615, lng: -79.4111 },
-  scarborough: { lat: 43.7764, lng: -79.2318 },
-  etobicoke: { lat: 43.6205, lng: -79.5132 },
-  'east york': { lat: 43.69, lng: -79.33 },
-};
-
-/**
- * `area` is free text typed by whoever seeded the provider, so this matches loosely and returns
- * null rather than guessing. A provider we can't place sorts to the END of a distance search — an
- * invented position would rank them against members who are nowhere near them.
- */
-export const areaCoords = (area?: string): { lat: number; lng: number } | null => {
-  const key = (area ?? '').trim().toLowerCase();
-  return key ? AREA_COORDS[key] ?? null : null;
-};
 
 // Collection: services — the Services catalog. Bare slug ids, stable because bookings store them
 // in service_id. Organizers write it (the offer form); nothing else does.

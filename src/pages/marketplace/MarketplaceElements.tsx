@@ -301,7 +301,7 @@ export const ListingForm: React.FC<{ category: ListingCategory; editingListing?:
 
         {saving && progress > 0 && progress < 100 && (
           <div className="h-1 rounded-full bg-fg/10 overflow-hidden">
-            <div className="h-full bg-clay transition-all" style={{ width: `${progress}%` }} />
+            <div className="h-full bg-clay transition-[width]" style={{ width: `${progress}%` }} />
           </div>
         )}
 

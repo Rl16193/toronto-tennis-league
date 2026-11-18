@@ -48,7 +48,8 @@ export const EventCarousel: React.FC<{
     const el = trackRef.current;
     if (!el) return;
     const next = Math.max(0, Math.min(count - 1, index + delta));
-    el.scrollTo({ left: next * el.clientWidth, behavior: 'smooth' });
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollTo({ left: next * el.clientWidth, behavior: still ? 'auto' : 'smooth' });
   };
 
   if (!isMobile && !alwaysPager) return <div className="space-y-4">{children}</div>;

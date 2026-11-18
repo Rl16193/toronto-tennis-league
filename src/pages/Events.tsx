@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
 import { Plus } from 'lucide-react';
@@ -17,6 +17,11 @@ import {
 } from '../features/events/EventsElements';
 import { getEventEndDate, parseValidDate } from '../utils/eventDates';
 import { track } from '../lib/analytics';
+import { lazyWithRetry } from '../lib/lazyWithRetry';
+
+// Lazy: it pulls in the tournament draw pictures, needed only when a past tournament is opened.
+const PastDrawsSheet = lazyWithRetry(() =>
+  import('./tournament/TournamentElements').then((m) => ({ default: m.PastDrawsSheet })), 'PastDrawsSheet');
 import { resolveZoneConfig } from './tournament/drawGenerator';
 import { isSeniorsLeague, leagueDivision } from '../utils/skillLevels';
 import { isEventManager, isLadderEvent, isOrganizerProfile, isRecurringWeekly, isTournamentCategoryEvent, isTournamentCategoryType, isTournamentEvent } from '../utils/eventTypes';
@@ -38,8 +43,13 @@ export const Events: React.FC = () => {
     && resolveZoneConfig(selectedEvent.zone_draw_config).enabled
     && !profile?.preferences.preferred_courts?.length && !profile?.preferences.custom_courts?.length;
 
-  const [category, setCategory] = useState<EventCategory>('tournaments');
-  const [tab, setTab] = useState<EventsTab>('upcoming');
+  // `/events?category=socials` (the newsletter's Awards Gala link) opens on Socials.
+  const [category, setCategory] = useState<EventCategory>(() =>
+    new URLSearchParams(window.location.search).get('category') === 'socials' ? 'socials' : 'tournaments');
+  // `/events?past` opens Completed; `/events?past=ID` also opens that tournament's draws.
+  const [tab, setTab] = useState<EventsTab>(() =>
+    new URLSearchParams(window.location.search).has('past') ? 'completed' : 'upcoming');
+  const [pastId, setPastId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('past') || null);
   const [completedEvents, setCompletedEvents] = useState<CompletedEvent[]>([]);
   const [completedLoading, setCompletedLoading] = useState(false);
   const [showEventForm, setShowEventForm] = useState(false);
@@ -243,6 +253,12 @@ export const Events: React.FC = () => {
         </div>
       )}
 
+      {pastId && (
+        <Suspense fallback={null}>
+          <PastDrawsSheet eventId={pastId} signedIn={!!user} onClose={() => setPastId(null)} />
+        </Suspense>
+      )}
+
       {tab === 'completed' ? (
         completedLoading ? (
           <div className="space-y-2 max-w-xl">
@@ -253,13 +269,19 @@ export const Events: React.FC = () => {
             <p className="text-fg/70 text-sm">No completed events yet.</p>
           </div>
         ) : (
-          <div className="rounded-2xl bg-fg/5 overflow-hidden divide-y divide-white/5 max-w-xl">
-            {categoryCompletedEvents.map((e) => <CompletedEventRow key={e.id} e={e} />)}
+          <div className="rounded-2xl bg-fg/5 overflow-hidden divide-y divide-fg/10 max-w-xl">
+            {categoryCompletedEvents.map((e) => <CompletedEventRow key={e.id} e={e} onOpen={() => setPastId(e.id)} />)}
           </div>
         )
       ) : loading ? (
         <div className="space-y-4">
-          {[1, 2, 3].map((i) => <div key={i} className="h-48 bg-fg/5 rounded-2xl animate-pulse" />)}
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-fg/5 rounded-2xl p-5 space-y-3 animate-pulse">
+              <div className="aspect-video rounded-2xl bg-fg/5" />
+              <div className="h-5 w-2/3 rounded-full bg-fg/5" />
+              <div className="h-4 w-1/2 rounded-full bg-fg/5" />
+            </div>
+          ))}
         </div>
       ) : categoryEvents.length > 0 ? (
         // One card per screen with arrows on a phone; the plain stacked list everywhere else.

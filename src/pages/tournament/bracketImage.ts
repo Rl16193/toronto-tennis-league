@@ -273,6 +273,9 @@ export type DrawSlideInput = {
   bracketSeeds?: SeedMap;
   /** Data URI from loadBrandMark(); the frame falls back to a plain ring without it. */
   brandMark?: string;
+  /** Past tournaments only: match id → when its score was first recorded and where. Adds the
+   *  Results frames (every played match with its score, dates and court). */
+  played?: Record<string, { recordedAt: number; court: string; walkover: boolean }>;
 };
 
 const slugify = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -340,9 +343,12 @@ const bracketSlides = (input: DrawSlideInput, deadline?: string): DrawSlide[] =>
   if (knockout.length === 0) return [];
 
   const present = [...new Set(knockout.map((m) => m.round))].sort((a, b) => roundRank(a) - roundRank(b));
-  const currentIdx = Math.max(0, present.findIndex((r) =>
-    knockout.some((m) => m.round === r && m.status !== 'complete')));
-  const windowRounds = [present[currentIdx - 1], present[currentIdx], present[currentIdx + 1]]
+  const openIdx = present.findIndex((r) =>
+    // A BYE match is never scored, so it must not hold its round open.
+    knockout.some((m) => m.round === r && m.status !== 'complete' && m.player_1_name !== BYE && m.player_2_name !== BYE));
+  const currentIdx = Math.max(0, openIdx);
+  // A finished draw shows its last three rounds, ending on the final; a past tournament every round.
+  const windowRounds = (input.played ? present : openIdx === -1 ? present.slice(-3) : [present[currentIdx - 1], present[currentIdx], present[currentIdx + 1]])
     .filter((r): r is string => !!r)
     // A round nobody has been drawn into yet is not worth a column.
     .filter((r) => knockout.some((m) => m.round === r && (m.status === 'complete' || isRealMatch(m))));
@@ -358,7 +364,9 @@ const bracketSlides = (input: DrawSlideInput, deadline?: string): DrawSlide[] =>
   const pages = (half ? [0, 1] : [0]).map((h) =>
     byRound.map((ms) => (half ? ms.slice(h * Math.ceil(ms.length / 2), (h + 1) * Math.ceil(ms.length / 2)) : ms)));
 
-  const TOP = BODY_TOP + 34;
+  // A past tournament adds each round's closing date under its name.
+  const closedOf = (round: string) => (input.played ? formatDeadline(input.roundDeadlines?.[round]) : '');
+  const TOP = BODY_TOP + (windowRounds.some(closedOf) ? 52 : 34);
   const AREA = BODY_BOTTOM - TOP;
   const BLOCK_H = 58;
   const GAP = 16;
@@ -374,6 +382,8 @@ const bracketSlides = (input: DrawSlideInput, deadline?: string): DrawSlide[] =>
     let body = '';
     cols.forEach((ms, c) => {
       body += `<text x="${colX(c)}" y="${BODY_TOP + 20}" font-size="16" font-weight="900" fill="${C.clay}" letter-spacing="1.5">${escapeSvg(ROUND_TITLE[windowRounds[c]] ?? windowRounds[c])}</text>`;
+      const closed = closedOf(windowRounds[c]);
+      if (closed) body += `<text x="${colX(c)}" y="${BODY_TOP + 40}" font-size="13" font-weight="600" fill="${C.textMuted}">Closed ${escapeSvg(closed)}</text>`;
 
       ms.forEach((m, i) => {
         const y = centreY(c, i) - BLOCK_H / 2;
@@ -390,10 +400,13 @@ const bracketSlides = (input: DrawSlideInput, deadline?: string): DrawSlide[] =>
           const ty = y + 19 + r * (BLOCK_H / 2);
           const won = !!m.winner_uid && m.winner_uid === uid;
           const seed = input.bracketSeeds?.[uid];
-          const label = isRealSlot(name, uid) ? withSeed(shortName(name, seed ? 11 : 15), seed) : 'TBD';
+          // Five rounds side by side (a past 32 draw) leave less room per name.
+          const max = Math.min(15, Math.floor((colW - 70) / 9.5));
+          const label = isRealSlot(name, uid) ? withSeed(shortName(name, seed ? max - 4 : max), seed) : 'TBD';
           body += `<text x="${x + 12}" y="${ty}" font-size="15" font-weight="700" fill="${won ? C.clay : C.text}">${escapeSvg(label)}</text>`;
           if (m.status === 'complete') {
-            const score = games.filter((g) => g > 0).join(' ');
+            // A walkover has no games: "W/O" beside the player who went through.
+            const score = input.played?.[m.id]?.walkover ? (won ? 'W/O' : '') : games.filter((g) => g > 0).join(' ');
             if (score) body += `<text x="${x + colW - 12}" y="${ty}" text-anchor="end" font-size="13" font-weight="700" fill="${C.textMuted}">${escapeSvg(score)}</text>`;
           }
         });
@@ -465,6 +478,76 @@ const pendingSlides = (input: DrawSlideInput, deadline?: string): DrawSlide[] =>
   }));
 };
 
+/**
+ * Past tournaments: every played match, two cards across, with the round and the date it closed,
+ * both players (winner in clay) and their games, when the score was first recorded, and the court.
+ */
+const RESULT_CARD_H = 172;
+const resultSlides = (input: DrawSlideInput): DrawSlide[] => {
+  const played = input.played;
+  if (!played) return [];
+  const deadlines = input.roundDeadlines ?? {};
+  const done = input.matches
+    // Group-stage walkovers are left out; a knockout one stays, as it shows who went through.
+    .filter((m) => m.status === 'complete' && played[m.id] && !(m.round === 'RR' && played[m.id].walkover))
+    .sort((a, b) => ((a.round === 'RR' ? -1 : roundRank(a.round ?? '')) - (b.round === 'RR' ? -1 : roundRank(b.round ?? '')))
+      || (a.group_label ?? '').localeCompare(b.group_label ?? '') || byMatchNumber(a, b));
+  if (done.length === 0) return [];
+  const when = (ms: number) => new Date(ms).toLocaleString('en-CA', {
+    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+
+  const card = (m: TournamentMatch, col: number) => (y: number) => {
+    const x = PAD + col * (COL_W + 24);
+    const info = played[m.id];
+    const round = m.round === 'RR' ? (m.group_label ?? 'Group') : (ROUND_TITLE[m.round ?? ''] ?? m.round ?? '');
+    const closed = formatDeadline(deadlines[m.round ?? '']);
+    let out = `<rect x="${x}" y="${y}" width="${COL_W}" height="${RESULT_CARD_H - 16}" rx="14" fill="${C.card}" stroke="${C.cardStroke}" />`;
+    out += `<text x="${x + 20}" y="${y + 28}" font-size="13" font-weight="800" fill="${C.clay}" letter-spacing="1">${escapeSvg(truncate(round.toUpperCase(), 40))}</text>`;
+    const res = m.result;
+    const slots: [string, string, number[]][] = [
+      [m.player_1_name, m.player_1_uid, [res?.set_1_player_1 ?? 0, res?.set_2_player_1 ?? 0, res?.set_3_player_1 ?? 0]],
+      [m.player_2_name, m.player_2_uid, [res?.set_1_player_2 ?? 0, res?.set_2_player_2 ?? 0, res?.set_3_player_2 ?? 0]],
+    ];
+    slots.forEach(([name, uid, games], i) => {
+      const ty = y + 60 + i * 30;
+      const won = !!m.winner_uid && m.winner_uid === uid;
+      out += `<text x="${x + 20}" y="${ty}" font-size="18" font-weight="700" fill="${won ? C.clay : C.text}">${escapeSvg(shortName(name, 22))}</text>`;
+      const score = info.walkover ? (won ? 'W/O' : '') : games.filter((g, s) => g > 0 || slots[1 - i][2][s] > 0).join('  ');
+      if (score) out += `<text x="${x + COL_W - 20}" y="${ty}" text-anchor="end" font-size="16" font-weight="700" fill="${won ? C.clay : C.textMuted}">${escapeSvg(score)}</text>`;
+    });
+    const lines = [
+      closed && `Round closed ${closed}`,
+      info.recordedAt ? `Recorded ${when(info.recordedAt)}` : '',
+      info.court && `Court: ${info.court}`,
+    ].filter(Boolean) as string[];
+    lines.forEach((l, i) => {
+      out += `<text x="${x + 20}" y="${y + 112 + i * 18}" font-size="13" font-weight="600" fill="${C.textMuted}">${escapeSvg(truncate(l, 52))}</text>`;
+    });
+    return out;
+  };
+
+  const rows: Block[] = [];
+  for (let i = 0; i < done.length; i += 2) {
+    const pair = done.slice(i, i + 2).map((m, c) => card(m, c));
+    rows.push({ height: RESULT_CARD_H, render: (y) => pair.map((p) => p(y)).join('') });
+  }
+  const pages = paginate(rows);
+  return pages.map((page, i) => ({
+    id: `results-${i}`,
+    label: stageOf('Results', i, pages.length),
+    filename: `${slugify(input.division)}-results${pages.length > 1 ? `-${i + 1}` : ''}.png`,
+    svg: frame({
+      eventTitle: input.eventTitle,
+      division: input.division,
+      stage: stageOf('RESULTS', i, pages.length),
+      zone: input.zone,
+      mark: input.brandMark,
+      body: renderPage(page),
+    }),
+  }));
+};
+
 /** Every picture for the selected draw, in the order they are shown in the slideshow. */
 export const buildDrawSlides = (input: DrawSlideInput): DrawSlide[] => {
   // One deadline line for the whole frame: the round being played next is the one that matters.
@@ -472,12 +555,12 @@ export const buildDrawSlides = (input: DrawSlideInput): DrawSlide[] => {
   const nextRound = input.matches
     .filter((m) => m.status !== 'complete' && m.round)
     .sort((a, b) => roundRank(a.round ?? '') - roundRank(b.round ?? ''))[0]?.round;
-  const deadline = formatDeadline(deadlines[nextRound ?? '']) || undefined;
+  const deadline = input.played ? undefined : formatDeadline(deadlines[nextRound ?? '']) || undefined;
 
   return [
     ...groupSlides(input, deadline),
     ...bracketSlides(input, deadline),
-    ...pendingSlides(input, deadline),
+    ...(input.played ? resultSlides(input) : pendingSlides(input, deadline)),
   ];
 };
 

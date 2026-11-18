@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams, type NavigateFunction } from 'react-router-dom';
 import {
   createUserWithEmailAndPassword, updateProfile,
   signInWithEmailAndPassword, sendPasswordResetEmail,
@@ -88,9 +88,15 @@ export const Signup: React.FC = () => {
   const loginPasswordRef = React.useRef<HTMLInputElement>(null);
 
   const intent = searchParams.get('intent') || '';
+  // Where to land once signed in: a same-site path from `?next=` (an event card), else /profile.
+  const nextParam = searchParams.get('next') || '';
+  const afterSignIn = /^\/(?![/\\])/.test(nextParam) ? nextParam : '/profile';
+  // The OAuth hooks navigate to /profile or /login themselves; keep `next` on both.
+  const authNavigate = ((to: string) =>
+    navigate(to === '/profile' ? afterSignIn : to === '/login' ? `/login${window.location.search}` : to)) as NavigateFunction;
 
   const { handleGoogleSignIn } = useGoogleSignIn({
-    navigate,
+    navigate: authNavigate,
     setError,
     setLoading,
     onAccountExists: (email, credential) => {
@@ -102,7 +108,7 @@ export const Signup: React.FC = () => {
   });
 
   const { handleAppleSignIn } = useAppleSignIn({
-    navigate,
+    navigate: authNavigate,
     setError,
     setLoading,
     onAccountExists: (email, credential) => {
@@ -169,8 +175,8 @@ export const Signup: React.FC = () => {
     if (phase === 'account' || phase === 'preferences' || phase === 'done') return;
     const incomplete = !profile || profile.user.name.trim() === '';
     if (incomplete) { setPhase('preferences'); return; }
-    navigate('/profile');
-  }, [authLoading, user, profile, phase, navigate]);
+    navigate(afterSignIn);
+  }, [authLoading, user, profile, phase, navigate, afterSignIn]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -293,7 +299,7 @@ export const Signup: React.FC = () => {
         setPendingAppleCredential(null);
       }
       track('login', { method: 'email' });
-      navigate('/profile');
+      navigate(afterSignIn);
     } catch (err: any) {
       // Direction 2 — Google-first user trying email/password.
       // fetchSignInMethodsForEmail is deprecated and returns [] when Firebase email-enumeration
@@ -497,7 +503,7 @@ export const Signup: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen py-8 px-4 relative overflow-hidden">
+    <div className="min-h-dvh py-8 px-4 relative overflow-hidden">
       {/* Background Glows */}
       <div className="absolute top-0 right-0 w-96 h-96 bg-clay/5 blur-[120px] -z-10 rounded-full" />
       <div className="absolute bottom-0 left-0 w-96 h-96 bg-tennis-surface/20 blur-[100px] -z-10 rounded-full" />
@@ -518,7 +524,7 @@ export const Signup: React.FC = () => {
                 const stepNum = phase === 'account' ? 1 : 2;
                 return (
                   <div key={i} className="flex flex-col items-center space-y-2">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg transition-all duration-300 ${
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg transition-[color,background-color,box-shadow] duration-300 ${
                       stepNum >= i ? 'clay-gradient text-white shadow-lg shadow-clay/20' : 'bg-tennis-surface/50 text-fg'
                     }`}>
                       {stepNum > i ? <CheckCircle2 className="w-6 h-6" /> : i}
@@ -685,7 +691,7 @@ export const Signup: React.FC = () => {
                           onChange={(e) => setLoginPassword(e.target.value)}
                           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleLogin(); } }}
                           autoFocus
-                          className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 pr-10 text-fg placeholder-fg/70 transition-all duration-200 focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
+                          className="border border-fg/25 w-full rounded-2xl bg-tennis-surface/50 px-4 py-3 pr-10 text-fg placeholder-fg/70 transition-[border-color,box-shadow] duration-200 focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
                         />
                         <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-fg transition-colors" tabIndex={-1}>
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -788,7 +794,7 @@ export const Signup: React.FC = () => {
                         placeholder="••••••••"
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-10 text-fg placeholder-fg/70 transition-all duration-200 focus:ring-2 outline-none ${errors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-fg/10 focus:border-clay focus:ring-clay/20'}`}
+                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-10 text-fg placeholder-fg/70 transition-[border-color,box-shadow] duration-200 focus:ring-2 outline-none ${errors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : 'border-fg/10 focus:border-clay focus:ring-clay/20'}`}
                       />
                       <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-fg transition-colors" tabIndex={-1}>
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -807,7 +813,7 @@ export const Signup: React.FC = () => {
                         placeholder="••••••••"
                         value={formData.confirmPassword}
                         onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-10 text-fg placeholder-fg/70 transition-all duration-200 focus:ring-2 outline-none ${
+                        className={`w-full rounded-2xl bg-tennis-surface/50 border px-4 py-3 pr-10 text-fg placeholder-fg/70 transition-[border-color,box-shadow] duration-200 focus:ring-2 outline-none ${
                           (errors.confirmPassword || (formData.confirmPassword && formData.confirmPassword !== formData.password))
                             ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
                             : 'border-fg/10 focus:border-clay focus:ring-clay/20'
@@ -835,7 +841,7 @@ export const Signup: React.FC = () => {
               {/* Cross — closes the message and opens the app (Matches page). */}
               <button
                 type="button"
-                onClick={() => navigate('/profile')}
+                onClick={() => navigate(afterSignIn)}
                 aria-label="Close and continue to the app"
                 className="absolute top-4 right-4 text-fg/70 hover:text-fg transition-colors"
               >
@@ -851,7 +857,7 @@ export const Signup: React.FC = () => {
                 junk / spam folder if you don't see it.
               </p>
 
-              <Button size="lg" className="w-full mt-7" onClick={() => navigate('/profile')}>
+              <Button size="lg" className="w-full mt-7" onClick={() => navigate(afterSignIn)}>
                 Continue
               </Button>
             </div>
@@ -927,7 +933,7 @@ export const Signup: React.FC = () => {
                           key={level}
                           type="button"
                           onClick={() => { setFormData({ ...formData, skillLevel: level }); setSkillChosen(true); }}
-                          className={`py-2.5 rounded-2xl text-sm font-bold border-2 transition-all ${
+                          className={`py-2.5 rounded-2xl text-sm font-bold border-2 transition-colors ${
                             active ? 'bg-clay/10 text-clay border-clay' : 'bg-fg/5 text-fg border-transparent hover:bg-fg/10'
                           }`}
                         >
@@ -1012,7 +1018,7 @@ export const Signup: React.FC = () => {
                             key={zone}
                             type="button"
                             onClick={() => setFormData({ ...formData, preferredZone: zone, pendingZoneChoice: null })}
-                            className={`flex-1 py-2 px-3 rounded-2xl text-xs font-bold transition-all ${
+                            className={`flex-1 py-2 px-3 rounded-2xl text-xs font-bold transition-colors ${
                               formData.preferredZone === zone
                                 ? 'bg-clay text-white'
                                 : 'bg-fg/5 text-fg hover:bg-fg/10'
@@ -1050,7 +1056,7 @@ export const Signup: React.FC = () => {
                           key={league}
                           type="button"
                           onClick={() => setFormData({ ...formData, league })}
-                          className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                          className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${
                             formData.league === league
                               ? 'bg-clay text-white'
                               : 'bg-fg/5 text-fg hover:bg-fg/10'
@@ -1065,7 +1071,7 @@ export const Signup: React.FC = () => {
                         type="button"
                         disabled={!formData.league}
                         onClick={() => setFormData({ ...formData, retiredPro: !formData.retiredPro, juniors: false })}
-                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                        className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${
                           !formData.league
                             ? 'bg-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
                             : formData.retiredPro
@@ -1079,7 +1085,7 @@ export const Signup: React.FC = () => {
                         type="button"
                         disabled={!formData.league}
                         onClick={() => setFormData({ ...formData, juniors: !formData.juniors, retiredPro: false })}
-                        className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                        className={`px-4 py-2 rounded-full text-xs font-bold transition-colors ${
                           !formData.league
                             ? 'bg-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
                             : formData.juniors

@@ -1,6 +1,6 @@
 ﻿import React, { useMemo } from 'react';
 import { TournamentMatch, TournamentPlayer } from './types';
-import { PLAYER_LOADING, byMatchNumber, formatDeadline, isPreviewMatch } from './utils';
+import { BYE, PLAYER_LOADING, byMatchNumber, formatDeadline, isPreviewMatch } from './utils';
 import { getRoundLabels } from './bracketImage';
 import { MatchCard } from './MatchCard';
 
@@ -22,7 +22,10 @@ export const getRoundState = (roundMatches: TournamentMatch[]): 'preview' | 'loa
     (m) => m.player_1_name !== PLAYER_LOADING && m.player_2_name !== PLAYER_LOADING,
   );
   if (!anyReady) return 'preview';
-  if (real.every((m) => !!m.winner_uid)) return 'finished';
+  // A BYE match is never played or scored (its player is already in the next round), so it never
+  // gets a winner and must not hold the round open.
+  const toPlay = real.filter((m) => m.player_1_name !== BYE && m.player_2_name !== BYE);
+  if (toPlay.length > 0 && toPlay.every((m) => !!m.winner_uid)) return 'finished';
   return 'started';
 };
 

@@ -14,7 +14,7 @@ export const LoadingBar: React.FC<{
     <p className="text-fg font-semibold text-sm tracking-wide">{label}</p>
     <div className="w-56 h-1.5 bg-fg/10 rounded-full overflow-hidden">
       <div
-        className={`h-full ${barColorClassName} rounded-full transition-all duration-500 ease-out`}
+        className={`h-full ${barColorClassName} rounded-full transition-[width] duration-500 ease-out`}
         style={{ width: `${progress}%` }}
       />
     </div>

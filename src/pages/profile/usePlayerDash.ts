@@ -437,7 +437,7 @@ export function usePlayerDash({ joinedEvents, progress, counters, rsPoints }: {
           withdrawable: tournament && live,
           href: ladderEvent
             ? '/matches?mode=challenges'
-            : tournament ? `/matches?mode=tournament&event=${e.id}` : `/events?event=${e.id}`,
+            : tournament ? (e.completed_at ? `/events?past=${e.id}` : `/matches?mode=tournament&event=${e.id}`) : `/events?event=${e.id}`,
         };
       })
       .sort((a, b) => Number(b.live) - Number(a.live));

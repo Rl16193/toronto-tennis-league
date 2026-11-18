@@ -58,9 +58,10 @@ const hasPlayedAMatch = async (uid: string): Promise<boolean> => {
   return typeof played === 'number' && played > 0;
 };
 
-const alreadyClaimed = async (inviteeUid: string): Promise<boolean> => {
+// Only the member's own claims are readable; another inviter's claim is caught at approval (taskPoints.js).
+const alreadyClaimed = async (uid: string, inviteeUid: string): Promise<boolean> => {
   const snap = await getDocs(
-    query(collection(db, 'task_claims'), where('category', '==', 'ambassador'), where('invitee_uid', '==', inviteeUid)),
+    query(collection(db, 'task_claims'), where('uid', '==', uid), where('category', '==', 'ambassador'), where('invitee_uid', '==', inviteeUid)),
   );
   return snap.docs.some((d) => ['pending', 'approved'].includes(d.data().status));
 };
@@ -74,8 +75,8 @@ export async function createAmbassadorClaim(
   if (inviteeUid === uid) return 'You can’t invite yourself.';
   const played = await hasPlayedAMatch(inviteeUid);
   if (!played) return `${inviteeName} hasn’t played a match yet — you can claim this once they have.`;
-  const claimed = await alreadyClaimed(inviteeUid);
-  if (claimed) return `Someone has already claimed ${inviteeName}.`;
+  const claimed = await alreadyClaimed(uid, inviteeUid);
+  if (claimed) return `You have already claimed ${inviteeName}.`;
   await addDoc(collection(db, 'task_claims'), newClaim('ambassador', uid, name, { invitee_uid: inviteeUid, invitee_name: inviteeName }));
   return null;
 }

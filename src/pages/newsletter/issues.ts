@@ -13,6 +13,8 @@ export interface Figure {
   src: string;
   alt: string;
   caption: string;
+  /** Widest it is shown on its own page, in px: a small source image is never stretched past this. */
+  maxWidth?: number;
 }
 
 interface Base {
@@ -71,6 +73,185 @@ export interface Issue {
 const IMG = '/newsletter/img/';
 
 export const ISSUES: Issue[] = [
+  {
+    number: 2,
+    date: 'November 2026',
+    tagline: "L'œuf for the game",
+    pdf: '/newsletter/Served-Up-Issue-02.pdf',
+    credits: [
+      'Words & edit — Rahul Tirath Lal',
+      'Interview — Friends of Cedarvale',
+      'Archival image — City of Toronto Archives',
+    ],
+    items: [
+      {
+        kind: 'article',
+        slug: 'cedarvale-park',
+        slot: 'lead',
+        kicker: 'Court of the Month · 02',
+        headline: 'Cedarvale Park',
+        dek: 'From a gated community to a wooded ravine.',
+        image: { src: `${IMG}cedarvale-courts.jpg`, alt: 'Cedarvale Park tennis courts behind a chain-link fence, with a bench in the foreground', caption: 'The tennis courts at Cedarvale Park' },
+        facts: [
+          ['Courts', '4 tennis · hardcourt acrylic'],
+          ['Size', '80 acres'],
+          ['Lights', 'Yes'],
+          ['Established', 'Before 1999'],
+          ['Resurfacing', 'Around Spring 2012'],
+          ['Lights installed', 'Around 2022'],
+          ['Before the Park', 'A valley shaped by the Castle Frank Brook'],
+          ['Fun Fact', 'Line 1 tunnels run beneath the park'],
+          ['New playground', 'Summer 2027'],
+        ],
+        sections: [
+          {
+            paragraphs: [
+              'Located in Midtown, just south of Eglinton Avenue West, Cedarvale Park was once envisioned to be an exclusive gated community by Sir Henry Pellatt, the financier that built the Casa Loma, only to be halted by WWI and the great depression. The valley was then slated for the Spadina Expressway and its floor was cleared for it. The expressway was stopped and the subway tunnel was built beneath it instead. The forest has since grown back, as the southern part of the park drops into a wooded ravine, with an off-leash dog arena, a trail that runs to St.Clair West Station and a cattail wetland farther south.',
+              'The four tennis courts are in the open north end, with Phil White Arena and a cricket pitch. Among the 67 courts our members name, Cedarvale is home to 19 of our members.',
+              'A club ran here before 1999, when a City report noted that the outdoor clubs at Cedarvale and Smythe parks had been cancelled after memberships declined. In the spring of 2012, a group calling itself the Cedarvale Tennis Academy proposed running Cedarvale Park’s four public tennis courts as a membership club, with fees to pay for upkeep. Neighbours objected, in a fight to keep the courts public, Toronto Life reported.',
+              'Eglinton West station became Cedarvale station on December 7, 2025. Line 5 Eglinton opened there on February 8, 2026, so the station is now where Line 1 meets Line 5. Players coming from the south can take the ravine trail, which links St. Clair West station to the north end of the park.',
+              'Friends of Cedarvale is a small neighbourhood group dedicated to maintaining and improving Cedarvale Park and Ravine. Volunteers run Saturday stewardship sessions that pull invasive plants, a litter pickup team and guided nature walks.',
+            ],
+          },
+        ],
+        figures: [
+          { src: `${IMG}cedarvale-archive-1917.jpg`, alt: 'Archival photograph of the Cedarvale ravine in 1917', caption: 'Cedarvale Park Archival Image (1917)' },
+          { src: `${IMG}cedarvale-ravine.jpg`, alt: 'A walker on the Cedarvale ravine trail beneath the Glen Road bridge', caption: 'Cedarvale Park Ravine Trail' },
+        ],
+      },
+      {
+        kind: 'table',
+        slug: 'events',
+        slot: 'centre',
+        kicker: 'November 2026',
+        headline: 'Events to watch',
+        dek: 'ATP events and where to watch them in Canada.',
+        columns: ['Dates', 'Tournament', 'Level', 'Location', 'Surface', 'Where to watch'],
+        rows: [
+          ['Oct 26–Nov 1', 'Swiss Indoors Basel', 'ATP 500', 'Basel, Switzerland', 'Hard (indoor)', 'TSN, TSN Premium'],
+          ['Oct 26–Nov 1', 'Erste Bank Open', 'ATP 500', 'Vienna, Austria', 'Hard (indoor)', 'TSN Premium'],
+          ['Nov 2–8', 'Rolex Paris Masters', 'ATP 1000', 'Paris, France (La Défense Arena)', 'Hard (indoor)', 'TSN, TSN Premium'],
+          ['Nov 8–14', 'Stockholm Open', 'ATP 250', 'Stockholm, Sweden', 'Hard (indoor)', 'TSN Premium'],
+          ['Nov 15–22', 'Nitto ATP Finals', 'ATP Finals', 'Turin, Italy', 'Hard (indoor)', 'TSN, TSN Premium'],
+          ['Nov 24–29', 'Davis Cup Finals', 'Team event (ITF)', 'Bologna, Italy', 'Hard (indoor)', 'TSN, TSN Premium'],
+          ['Dec 9–13', 'Next Gen ATP Finals', 'ATP (under 21)', 'Reggio Calabria, Italy', 'Hard (indoor)', 'Not announced yet'],
+        ],
+        note: 'Broadcast listings are Canadian where available; check local rights before you commit the evening.',
+      },
+      {
+        kind: 'article',
+        slug: 'awards-gala',
+        slot: 'left',
+        kicker: 'Upcoming Event',
+        headline: 'Racquets And Strings Awards Gala',
+        dek: 'The perfect opportunity to dress up, meet fellow community members and learn what motivates people to play tennis.',
+        sections: [
+          {
+            paragraphs: ['The perfect opportunity to dress up, meet fellow community members and learn what motivates people to play tennis. We have a bunch of awards to give out including prizes for the tournament winners.'],
+          },
+        ],
+        facts: [
+          ['Dates', 'Tentatively the 3rd week of November or the 1st week of December'],
+          ['Venue', 'TBD'],
+          ['Awards', 'Including prizes for the tournament winners'],
+        ],
+        links: [{ label: 'View the event', href: '/events?category=socials' }],
+      },
+      {
+        kind: 'article',
+        slug: 'shadow-practice',
+        slot: 'left',
+        kicker: 'Level up your game',
+        headline: 'What is shadow practice?',
+        dek: 'Learn how to build perfect muscle memory, without a ball.',
+        sections: [
+          {
+            paragraphs: [
+              'Shadow practice is the rehearsal of your swings and footwork through the air without an actual ball or opponent. You perform full, controlled strokes, focusing entirely on clean mechanics, smooth weight transfer, and proper balance.',
+              'Do it too fast and you’ll just repeat your bad habits; omit the footwork and you won’t build a realistic kinetic chain. Watch any pro pacing the back of the court before a match and you’ll see them visualizing and shadow-swinging through their strokes.',
+            ],
+          },
+          {
+            heading: 'Drill to try this week: The Mirror Freeze',
+            paragraphs: ['Stand in front of a full-length mirror. Shadow-swing your forehand or backhand at 25% speed, and physically freeze your body exactly at the contact point. Check that your racket face is flush, your knees are bent, and your non-dominant hand is balanced. Do 20 controlled swings per side to lock in the feeling.'],
+          },
+        ],
+        links: [
+          { label: 'Shadow practice drill 1', href: 'https://www.youtube.com/watch?v=iKwvxSQ9spE' },
+          { label: 'Shadow practice drill 2', href: 'https://www.youtube.com/watch?v=rQrqvdkWvJA' },
+        ],
+      },
+      {
+        kind: 'image',
+        slug: 'meme',
+        slot: 'left',
+        kicker: 'Meme of the month',
+        headline: 'Trust or Communicate',
+        dek: 'What’s your weapon of choice?',
+        image: { src: `${IMG}meme-doubles.jpg`, alt: 'Two doubles players leaping apart in opposite directions on a clay court. Caption: My doubles partner and I *communicating*', caption: 'What’s your weapon of choice?' },
+      },
+      {
+        kind: 'puzzle',
+        slug: 'tie-break',
+        slot: 'left',
+        kicker: 'The Tie Break',
+        headline: 'Trivia & a mini crossword',
+        dek: 'What is the maximum number of career ATP Points collected by a tennis player without winning any Slams or ATP 1000 titles?',
+        trivia: {
+          question: 'What is the maximum number of career ATP Points collected by a tennis player without winning any Slams or ATP 1000 titles?',
+          answer: 'Gaël Monfils (34,753 ATP Points).',
+        },
+        grid: ['SMASH', 'P#C##', 'I#E##', 'N####'],
+        across: [{ num: 1, clue: 'A big overhead shot (5)' }],
+        down: [
+          { num: 1, clue: 'Rotation on the ball (4)' },
+          { num: 2, clue: 'A serve your opponent can’t touch (3)' },
+        ],
+      },
+      {
+        kind: 'article',
+        slug: 'night-tennis',
+        slot: 'right',
+        kicker: 'Night Tennis',
+        headline: 'Night Tennis in Toronto',
+        dek: 'A brief look at the landscape of night tennis in Toronto.',
+        image: { src: `${IMG}moss-park-lights.jpg`, alt: 'Moss Park tennis courts lit up at dusk', caption: 'Moss Park Tennis Courts Under Lights', maxWidth: 348 },
+        sections: [
+          {
+            paragraphs: [
+              'A 2016 City report put the tennis season at about April 1 to October 31. On the last day of that season the sun sets in Toronto at 6:10 p.m. The clocks go back the next day, and by the second week of November it sets before five.',
+              'Hours vary from court to court, but lit courts generally stay open until 10 p.m. Measured from sunset, a 10 p.m. closing gives lit courts 57 extra minutes on June 21, just over two hours on September 1, three on October 1 and almost four on October 31.',
+              'A March 2025 City report counted over 600 outdoor tennis courts in 185 parks, about one court for every 4,800 residents. Of those, 339 are operated as public facilities and 263 are operated by 61 not-for-profit community tennis clubs, many with long waitlists. The City’s 2017 Parks and Recreation Facilities Master Plan found an oversupply of public courts and set no target for adding more. It still recommended up to 20 new courts over 20 years in growth areas without court access, naming Downtown and North Scarborough.',
+              'The City’s 2025 to 2027 court improvements program which funds one park per ward covers 28 parks, with Cedarvale not among them. 24 programs have been completed. The City asked residents about lighting, fencing and surfaces. No park on the list shows lighting work. In the City’s survey of 19 parks, lighting was a top theme at 11, with at least 169 comments. Ramsden drew 45, High Park 35 and Norwood 24. At Ramsden, surfaces drew more than lighting, with 100 comments which is why the resurfacing was prioritized.',
+              'In our 2026 season review, 263 members named 67 Toronto courts as their preferred option with downtown-midtown covering 75% of our player base. Downtown has only one court with lights, Moss Park. The closest zone with night lights is the Etobicoke-Lakeshore, with 76% courts covered with lights, the second-highest share of lit public courts.',
+            ],
+          },
+        ],
+      },
+      {
+        kind: 'article',
+        slug: 'in-their-words',
+        slot: 'right',
+        kicker: 'In their words',
+        headline: 'Friends of Cedarvale on the park',
+        dek: 'John Cummings, chair, and Valentina Gastaldo, community member, on sharing the park and their wishlist.',
+        image: { src: `${IMG}friends-of-cedarvale.jpg`, alt: 'Botanical illustration of a pink flower cluster with green leaves', caption: 'John Cummings, chair · Valentina Gastaldo, community member', maxWidth: 224 },
+        sections: [
+          {
+            paragraphs: ['Friends of Cedarvale is a local community group known for documenting everyday life at Cedarvale Park and Ravine. John Cummings is a long-term resident and the chair of the community; Valentina Gastaldo is a community member.'],
+          },
+          {
+            heading: 'Cedarvale hosts diverse groups, tennis players, dog owners, trail runners and more. How do you see the public tennis courts fitting into the broader social fabric of the park?',
+            paragraphs: ['John said, “Cedarvale provides access to a bunch of sports: cricket, baseball, basketball, soccer, hockey, tennis, pickleball and more. They all fit in well to the ‘park’ section of the park. We also have a separate ‘ravine’ section of the park.” Val added, “I’d like to see additional support for a variety of sports, a full sized soccer field and basketball courts, as well as programming for youth.”'],
+          },
+          {
+            heading: 'Beyond tennis, what broader park or ravine enhancements are highest on your wishlist?',
+            paragraphs: ['John said, “Further eradication of non-native invasive species and its replacement with native species.” Val added, “Better washrooms, lighter picnic tables, more seating area to allow people to gather in the park.”'],
+          },
+        ],
+      },
+    ],
+  },
   {
     number: 1,
     date: 'October 2026',

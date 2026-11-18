@@ -262,7 +262,7 @@ export const PhotoSubmitModal: React.FC<{ onClose: () => void; initialType?: Rep
               )}
               {submitting && (
                 <div className="w-full h-1.5 rounded-full bg-fg/10 overflow-hidden">
-                  <div className="h-full bg-clay rounded-full transition-all duration-200" style={{ width: `${progress}%` }} />
+                  <div className="h-full bg-clay rounded-full transition-[width] duration-200" style={{ width: `${progress}%` }} />
                 </div>
               )}
             </div>

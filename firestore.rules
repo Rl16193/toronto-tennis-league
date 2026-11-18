@@ -122,7 +122,8 @@ service cloud.firestore {
       function customCourtsOk() {
         return !('custom_courts' in request.resource.data) || request.resource.data.custom_courts is list;
       }
-      allow read: if true;
+      // Members only: courts, availability and favourites together say where and when someone plays.
+      allow read: if isAuthenticated();
       allow create: if isOwner(userId) && customCourtsOk() &&
         request.resource.data.keys().hasOnly(['uid', 'preferred_courts', 'custom_courts', 'preferred_zone',
           'favourite_players', 'availability_tags', 'email_notifications']);
@@ -312,7 +313,8 @@ service cloud.firestore {
     // Courts — visits (one per player per court per day) and reports.
     // ===============================================================
     match /courts/{id} {
-      allow read: if isAuthenticated();
+      // Own rows and organizers only: a check-in says where a member was, and when.
+      allow read: if isOrganizerRole() || (isAuthenticated() && resource.data.uid == request.auth.uid);
       // A check-in visit: the member's own, near the court, on the {uid}_{courtKey}_{YYYYMMDD} id.
       allow create, update: if isAuthenticated() &&
         request.resource.data.category == 'visit' &&
@@ -432,7 +434,8 @@ service cloud.firestore {
     // Task Claims — one row per claim; organizers review.
     // ===============================================================
     match /task_claims/{id} {
-      allow read: if isAuthenticated();
+      // Own claims and organizers only (reviewer notes, invitee names).
+      allow read: if isOrganizerRole() || (isAuthenticated() && resource.data.uid == request.auth.uid);
       allow create: if isAuthenticated() &&
         request.resource.data.uid == request.auth.uid &&
         request.resource.data.category in ['volunteer', 'ambassador', 'host'] &&

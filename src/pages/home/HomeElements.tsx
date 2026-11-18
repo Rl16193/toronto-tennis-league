@@ -14,7 +14,7 @@ import { TennisEvent } from '../../types';
 import { getEventEndDate, parseValidDate } from '../../utils/eventDates';
 import { isLadderEvent, isRecurringWeekly } from '../../utils/eventTypes';
 import { eventTypeLabel, nextOccurrence } from '../../features/events/EventsElements';
-import { fadeUp } from '../../lib/motion';
+import { easeOut, tapScale } from '../../lib/motion';
 
 /**
  * Presentation for the landing page. Props in, callbacks out — every Firestore read and write
@@ -143,7 +143,7 @@ export const HomeHero: React.FC<{
   onCheckIn: () => void;
   onReport: () => void;
 }> = ({ signedIn, onCheckIn, onReport }) => (
-  <motion.div {...fadeUp} className="relative left-1/2 -ml-[50vw] w-screen h-[70vh] overflow-hidden">
+  <div className="relative left-1/2 -ml-[50vw] w-screen h-[70svh] overflow-hidden">
     <div className="absolute inset-0 dark-gradient" />
     <HeroBackdrop />
     {/* Bottom-weighted scrim — keeps the tagline and CTA legible against any photo. */}
@@ -153,6 +153,7 @@ export const HomeHero: React.FC<{
       {/* The one display-size exception on the site: a marketing headline at 24px reads as an
           undersized page. Everything else obeys the two-size scale. */}
       <h1 className="text-3xl font-black text-clay tracking-tight">L&apos;&OElig;UF FOR THE GAME</h1>
+      <p className="mt-2 text-sm text-fg">A Community Marketplace with organized Tennis Tournaments.</p>
 
       <div className="mt-5 max-w-md mx-auto">
         {signedIn ? (
@@ -171,35 +172,33 @@ export const HomeHero: React.FC<{
         )}
       </div>
     </div>
-  </motion.div>
+  </div>
 );
 
 // ── Stats strip ──────────────────────────────────────────────────────────────
-// Deliberately boxless: it blends into the page rather than sitting in a card. Hover/tap zoom is
+// Deliberately boxless: it blends into the page rather than sitting in a card. Tap feedback is
 // the only interactive cue.
 const MotionLink = motion.create(Link);
 
-export const StatsStrip: React.FC<{ stats: { value: string; label: string; to: string }[] }> = ({ stats }) => (
-  <motion.div
-    {...fadeUp}
-    transition={{ ...fadeUp.transition, delay: 0.1 }}
-    className="grid grid-cols-3 gap-2.5"
-  >
+/** A null value is still loading: a placeholder bar, never a made-up number. */
+export const StatsStrip: React.FC<{ stats: { value: string | null; label: string; to: string }[] }> = ({ stats }) => (
+  <div className="grid grid-cols-3 gap-2.5">
     {stats.map((s) => (
       <MotionLink
         key={s.label}
         to={s.to}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+        whileTap={tapScale.whileTap}
+        transition={tapScale.transition}
         className="min-h-11 p-3 flex flex-col items-center text-center gap-1 rounded-2xl
                    focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
       >
-        <span className="text-2xl font-black text-fg leading-none">{s.value}</span>
+        {s.value === null
+          ? <span className="h-6 w-12 rounded-full bg-fg/10 animate-pulse" aria-hidden="true" />
+          : <span className="text-2xl font-black text-fg leading-none">{s.value}</span>}
         <span className="text-xs font-bold uppercase tracking-widest text-fg/70">{s.label}</span>
       </MotionLink>
     ))}
-  </motion.div>
+  </div>
 );
 
 // ── Upcoming events ──────────────────────────────────────────────────────────
@@ -224,14 +223,14 @@ const typeChipCls = 'px-2 py-0.5 rounded-2xl text-xs font-bold uppercase trackin
 
 /**
  * The same card as the Events page, minus the two things a 240px column in a sideways scroll has
- * no room for: the description and the Join button. Tapping anywhere opens the Events page, where
- * the full card and the real Join control live.
+ * no room for: the description and the Join button. Tapping anywhere opens this event's card on
+ * the Events page (`/events?event=ID`), where the real Join control lives.
  */
 const UpcomingEventCard: React.FC<{ event: TennisEvent }> = ({ event }) => {
   const typeLabel = eventTypeLabel(event);
   return (
     <Link
-      to="/events"
+      to={`/events?event=${event.id}`}
       className="shrink-0 w-60 rounded-2xl bg-fg/5 overflow-hidden flex flex-col transition-colors
                  hover:bg-fg/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
     >
@@ -254,14 +253,10 @@ const UpcomingEventCard: React.FC<{ event: TennisEvent }> = ({ event }) => {
           <span className={`absolute top-2 left-2 ${typeChipCls} bg-tennis-dark/85 text-clay backdrop-blur-sm`}>
             {typeLabel}
           </span>
-          <span className="absolute top-2 right-2 rounded-full bg-clay px-2.5 py-1 text-xs font-bold text-white">
-            Free
-          </span>
         </div>
       ) : (
         <div className="flex items-center justify-between gap-2 mt-3 mx-3">
           <span className={`${typeChipCls} bg-clay/10 border border-clay/20 text-clay`}>{typeLabel}</span>
-          <span className="rounded-full bg-clay px-2.5 py-1 text-xs font-bold text-white">Free</span>
         </div>
       )}
 
@@ -269,7 +264,7 @@ const UpcomingEventCard: React.FC<{ event: TennisEvent }> = ({ event }) => {
           line up across cards whose titles wrap to different heights. */}
       <div className="flex-1 flex flex-col gap-2 p-3">
         {/* Small enough to show a full tournament name rather than truncating it. */}
-        <span className="text-sm font-bold text-fg leading-snug">{event.title}</span>
+        <span className="text-sm font-bold text-fg leading-snug break-words">{event.title}</span>
 
         {/* One row, never wrapping: the location truncates instead, so the date is always beside it. */}
         <div className="mt-auto flex items-center gap-1.5 min-w-0">
@@ -292,9 +287,7 @@ const UpcomingEventCard: React.FC<{ event: TennisEvent }> = ({ event }) => {
 export const UpcomingEventsStrip: React.FC<{ events: TennisEvent[] }> = ({ events }) => {
   if (events.length === 0) return null;
   return (
-    <motion.section
-      {...fadeUp}
-      transition={{ ...fadeUp.transition, delay: 0.2 }}
+    <section
       className="mt-8"
       aria-labelledby="upcoming-events-heading"
     >
@@ -319,7 +312,7 @@ export const UpcomingEventsStrip: React.FC<{ events: TennisEvent[] }> = ({ event
           See all events
         </Link>
       </div>
-    </motion.section>
+    </section>
   );
 };
 
@@ -353,9 +346,7 @@ const SupportRings: React.FC = () => (
 );
 
 export const SupportBand: React.FC<{ onVolunteer: () => void }> = ({ onVolunteer }) => (
-  <motion.section
-    {...fadeUp}
-    transition={{ ...fadeUp.transition, delay: 0.3 }}
+  <section
     className="relative mt-8 overflow-hidden rounded-2xl bg-fg/5 p-6 sm:p-8"
     aria-labelledby="support-heading"
   >
@@ -369,15 +360,14 @@ export const SupportBand: React.FC<{ onVolunteer: () => void }> = ({ onVolunteer
         Join our movement to make tennis more accessible.
       </h2>
       <p className="mt-3 text-sm text-fg/70">
-        Contributions cover new tennis balls, prizes for tournaments, group coaching classes for and more. Volunteering involves organizing matchdays or regular meetups on different courts and more.
+        Contributions cover new tennis balls, prizes for tournaments, group coaching classes and more. Volunteering involves organizing matchdays or regular meetups on different courts and more.
       </p>
 
       {/* Side by side wherever they fit, stacked and full width on a phone, where two pills need
-          about 310px and the card has under 300. Donate always shows, but while DONATE_URL is
-          empty there is no payment gateway behind it, so it renders disabled rather than as a
-          link that goes nowhere. It becomes a live link the moment the URL is filled in. */}
+          about 310px and the card has under 300. Contribute is hidden while DONATE_URL is empty
+          (no payment gateway yet) and appears the moment the URL is filled in. */}
       <div className="mt-5 flex flex-col sm:flex-row justify-center gap-3">
-        {DONATE_URL ? (
+        {DONATE_URL && (
           <a
             href={DONATE_URL}
             target="_blank"
@@ -386,16 +376,6 @@ export const SupportBand: React.FC<{ onVolunteer: () => void }> = ({ onVolunteer
           >
             <Heart className="w-4 h-4 shrink-0" />Contribute
           </a>
-        ) : (
-          <button
-            type="button"
-            disabled
-            aria-disabled="true"
-            title="Contributions open soon"
-            className={`${buttonCls('lime')} w-full sm:w-auto opacity-50 cursor-not-allowed pointer-events-none select-none`}
-          >
-            <Heart className="w-4 h-4 shrink-0" />Contribute
-          </button>
         )}
         <button
           type="button"
@@ -406,7 +386,7 @@ export const SupportBand: React.FC<{ onVolunteer: () => void }> = ({ onVolunteer
         </button>
       </div>
     </div>
-  </motion.section>
+  </section>
 );
 
 // ── FAQ ──────────────────────────────────────────────────────────────────────
@@ -434,9 +414,7 @@ const FAQ: { q: string; a: string }[] = [
 export const FaqSection: React.FC = () => {
   const [open, setOpen] = useState<number | null>(null);
   return (
-    <motion.section
-      {...fadeUp}
-      transition={{ ...fadeUp.transition, delay: 0.4 }}
+    <section
       className="mt-8"
       aria-labelledby="faq-heading"
     >
@@ -463,7 +441,7 @@ export const FaqSection: React.FC = () => {
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    transition={{ duration: 0.25, ease: easeOut }}
                     className="overflow-hidden"
                   >
                     <p className="px-4 pb-4 text-sm text-fg/70">{item.a}</p>
@@ -474,7 +452,7 @@ export const FaqSection: React.FC = () => {
           );
         })}
       </div>
-    </motion.section>
+    </section>
   );
 };
 
@@ -494,26 +472,31 @@ const FLOAT_W = 'w-48 sm:w-72 !px-4 text-sm sm:text-base';
 export const FloatingCtaStack: React.FC<{
   /** Hidden once a member is on the list. */
   onSubscribe?: () => void;
-  /** Visitors only — members report from the hero's Submit a Report. */
-  onCourtNote?: () => void;
-}> = ({ onSubscribe, onCourtNote }) => (
+}> = ({ onSubscribe }) => {
+  // Below `lg` the stack fades out while any `data-float-avoid` element (Home's stat tiles and
+  // footer) is on screen, so it never covers them. Pages without one are unaffected.
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    const targets = document.querySelectorAll('[data-float-avoid]');
+    if (targets.length === 0) return;
+    const wide = window.matchMedia('(min-width: 1024px)');
+    const onScreen = new Set<Element>();
+    const sync = () => setHidden(!wide.matches && onScreen.size > 0);
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => (e.isIntersecting ? onScreen.add(e.target) : onScreen.delete(e.target)));
+      sync();
+    });
+    targets.forEach((t) => io.observe(t));
+    wide.addEventListener('change', sync);
+    return () => { io.disconnect(); wide.removeEventListener('change', sync); };
+  }, []);
+
+  return (
   <div
-    className="fixed right-4 bottom-20 lg:bottom-8 z-40 flex flex-col items-end gap-3"
+    className={`fixed right-4 bottom-20 lg:bottom-8 z-40 flex flex-col items-end gap-3 transition-opacity duration-200 ${hidden ? 'opacity-0 pointer-events-none' : ''}`}
     style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+    inert={hidden}
   >
-    {/* Report a court sits above Subscribe. It needs no account on purpose — a passer-by who
-        spots a broken net should be able to say so. Donate lives in the support card on this
-        page; the profile page is where it appears as a floating button. */}
-    {onCourtNote && (
-      <button
-        type="button"
-        onClick={onCourtNote}
-        className={`${buttonCls('clay')} ${FLOAT_W} shadow-xl`}
-      >
-        <MapPin className="w-4 h-4 shrink-0" />
-        <span>Submit a Report</span>
-      </button>
-    )}
     {onSubscribe && (
       <button
         type="button"
@@ -526,7 +509,8 @@ export const FloatingCtaStack: React.FC<{
       </button>
     )}
   </div>
-);
+  );
+};
 
 // ── Newsletter sheet ─────────────────────────────────────────────────────────
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -665,7 +649,7 @@ export const VolunteerSheet: React.FC<{
                 maxLength={2000}
                 placeholder="e.g. I'd like to help organize events, socials, etc."
                 className="w-full rounded-2xl bg-tennis-surface/50 border border-fg/25 px-4 py-3 text-fg
-                           placeholder-fg/70 transition-all duration-200 resize-y
+                           placeholder-fg/70 transition-[border-color,box-shadow] duration-200 resize-y
                            focus:border-clay focus:ring-2 focus:ring-clay/20 outline-none"
               />
             </div>

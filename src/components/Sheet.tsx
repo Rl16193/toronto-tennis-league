@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { motion, useDragControls } from 'motion/react';
@@ -27,6 +27,32 @@ export const Sheet: React.FC<Props> = ({ onClose, title, ariaLabel, maxWidthClas
     () => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches,
   );
   const dragControls = useDragControls();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Focus moves into the sheet, Tab stays inside it, the page behind is inert, and focus goes
+  // back to whatever opened it on close.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    const root = document.getElementById('root');
+    const wasInert = root?.hasAttribute('inert') ?? true;
+    root?.setAttribute('inert', '');
+    panelRef.current?.focus();
+    const onTab = (e: KeyboardEvent) => {
+      const panel = panelRef.current;
+      if (e.key !== 'Tab' || !panel) return;
+      const items = panel.querySelectorAll<HTMLElement>('a[href], button:not(:disabled), input:not(:disabled), select, textarea, [tabindex]:not([tabindex="-1"])');
+      if (items.length === 0) return;
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === panel)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onTab);
+    return () => {
+      document.removeEventListener('keydown', onTab);
+      if (!wasInert) root?.removeAttribute('inert');
+      opener?.focus?.();
+    };
+  }, []);
 
   // Track viewport so drag-to-dismiss is mobile-only.
   useEffect(() => {
@@ -69,6 +95,8 @@ export const Sheet: React.FC<Props> = ({ onClose, title, ariaLabel, maxWidthClas
 
       {/* Panel — bottom sheet on mobile, centered dialog on desktop */}
       <motion.div
+        ref={panelRef}
+        tabIndex={-1}
         initial={{ opacity: 0, y: isMobile ? 96 : 24, scale: isMobile ? 1 : 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: isMobile ? 96 : 24, scale: isMobile ? 1 : 0.96 }}
@@ -80,8 +108,9 @@ export const Sheet: React.FC<Props> = ({ onClose, title, ariaLabel, maxWidthClas
         dragElastic={{ top: 0, bottom: 0.5 }}
         onDragEnd={(_, info) => { if (info.offset.y > 100 || info.velocity.y > 500) onClose(); }}
         className={`relative w-full ${maxWidthClassName} bg-tennis-surface border border-fg/10
-                    rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl
-                    max-h-[92vh] sm:max-h-[90vh] overflow-y-auto`}
+                    rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl outline-none
+                    max-h-[92dvh] sm:max-h-[90dvh] overflow-y-auto overscroll-contain`}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {/* Drag handle — mobile only; the sole drag trigger so form scrolling isn't hijacked */}
         <div
@@ -103,7 +132,7 @@ export const Sheet: React.FC<Props> = ({ onClose, title, ariaLabel, maxWidthClas
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="absolute top-3.5 right-4 sm:top-5 sm:right-5 z-30 w-9 h-9 bg-tennis-dark/50 hover:bg-tennis-dark rounded-full flex items-center justify-center text-fg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
+          className="absolute top-3.5 right-4 sm:top-5 sm:right-5 z-30 size-11 bg-tennis-dark/50 hover:bg-tennis-dark rounded-full flex items-center justify-center text-fg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-clay"
         >
           <X className="w-5 h-5" />
         </button>

@@ -42,6 +42,10 @@ export const isTournamentCategoryEvent = (event: Pick<TennisEvent, 'category'>) 
 
 export const isSeasonOpener = (event: TennisEvent) => event.title.toLowerCase().includes('season opener 2026');
 
+// The Awards Gala takes RSVPs on Partiful: its Join opens this link and saves no registration.
+export const GALA_RSVP_URL = 'https://partiful.com/e/tmXZZY4OyVQIjqfGapLb?f=1&photo=all';
+export const isAwardsGala = (event: TennisEvent) => event.title.toLowerCase().includes('awards gala');
+
 export const isWeekendMatchdaysEvent = (event: TennisEvent) => event.title.toLowerCase().includes('weekend matchdays');
 
 export const isTopspinMeetupEvent = (event: TennisEvent) => {

@@ -365,7 +365,7 @@ export const Tournament: React.FC<{
             onClick={() => { selectEvent(e.id); setScrollToMine(true); onPickEvent?.(); }}
             aria-pressed={active}
             className={`relative w-full aspect-square rounded-2xl overflow-hidden text-left bg-fg/5
-                        transition-all focus-visible:outline-2 focus-visible:outline-offset-2
+                        transition-[opacity,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2
                         focus-visible:outline-clay ${active ? 'ring-2 ring-clay' : 'opacity-90 hover:opacity-100'}`}
           >
             {imageOf(e) ? (

@@ -25,7 +25,7 @@ export const SkillEditor: React.FC<{
               key={level}
               type="button"
               onClick={() => setSkillDraft(level)}
-              className={`py-2.5 rounded-2xl text-sm font-bold border-2 transition-all ${
+              className={`py-2.5 rounded-2xl text-sm font-bold border-2 transition-colors ${
                 active ? 'bg-clay/10 text-clay border-clay' : 'bg-fg/5 text-fg border-transparent hover:bg-fg/10'
               }`}
             >
@@ -59,7 +59,7 @@ export const LeagueEditor: React.FC<{
               key={l}
               type="button"
               onClick={() => setLeagueDraft(l)}
-              className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+              className={`px-4 py-2 rounded-full text-xs font-bold border transition-colors ${
                 leagueDraft === l
                   ? 'bg-clay border-clay text-white shadow-lg shadow-clay/20'
                   : 'bg-fg/5 border-fg/5 text-fg hover:bg-fg/10'
@@ -74,7 +74,7 @@ export const LeagueEditor: React.FC<{
             type="button"
             disabled={!leagueDraft}
             onClick={() => setAgeCategoryDraft(ageCategoryDraft === 'Retired Pro' ? '' : 'Retired Pro')}
-            className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+            className={`px-4 py-2 rounded-full text-xs font-bold border transition-colors ${
               !leagueDraft
                 ? 'bg-fg/5 border-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
                 : ageCategoryDraft === 'Retired Pro'
@@ -88,7 +88,7 @@ export const LeagueEditor: React.FC<{
             type="button"
             disabled={!leagueDraft}
             onClick={() => setAgeCategoryDraft(ageCategoryDraft === 'Juniors' ? '' : 'Juniors')}
-            className={`px-4 py-2 rounded-full text-xs font-bold border transition-all ${
+            className={`px-4 py-2 rounded-full text-xs font-bold border transition-colors ${
               !leagueDraft
                 ? 'bg-fg/5 border-fg/5 text-fg/70 opacity-50 cursor-not-allowed'
                 : ageCategoryDraft === 'Juniors'

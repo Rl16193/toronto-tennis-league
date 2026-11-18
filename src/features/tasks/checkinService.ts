@@ -1,4 +1,4 @@
-import { Timestamp, collection, doc, getDocs, limit, orderBy, query, setDoc } from 'firebase/firestore';
+import { Timestamp, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { haversineKm } from '../../utils/zones';
 import { courtKey } from '../../utils/courtKey';
@@ -68,23 +68,17 @@ export async function checkIn(
   });
 }
 
-// Most-checked-in courts, computed from a bounded window of recent visits (newest 300 rows).
-// Best-effort "what's busy lately" list for the check-in start screen — not an all-time tally.
+// Most-checked-in courts over the last 30 days, from site_stats/court_counts (aggregateCourtCounts).
+// Members can't read each other's visits, so this never queries `courts`.
 export type TopCheckIn = { court: string; zone: string; count: number };
 export async function getTopCheckIns(max = 5): Promise<TopCheckIn[]> {
-  // Newest 300 docs in `courts`, then narrowed to visits in memory: the single-field `created_at`
-  // index keeps this free of a composite index, and filtering 300 rows is cheap.
-  const snap = await getDocs(query(collection(db, 'courts'), orderBy('created_at', 'desc'), limit(300)));
+  const [snap, list] = await Promise.all([getDoc(doc(db, 'site_stats', 'court_counts')), loadCourtList()]);
+  const byKey = (snap.data()?.activity?.d30?.byKey ?? {}) as Record<string, { checkins?: number }>;
   const counts = new Map<string, TopCheckIn>();
-  snap.docs.forEach((d) => {
-    const data = d.data();
-    if (data.category !== 'visit') return;
-    const court = (data.court_name as string) || '';
-    if (!court) return;
-    const cur = counts.get(court) ?? { court, zone: (data.zone as string) || '', count: 0 };
-    cur.count += 1;
-    counts.set(court, cur);
-  });
+  for (const c of list) {
+    const n = byKey[courtKey(c.dropdown)]?.checkins ?? 0;
+    if (n > 0 && !counts.has(c.dropdown)) counts.set(c.dropdown, { court: c.dropdown, zone: c.zone || '', count: n });
+  }
   return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, max);
 }
 

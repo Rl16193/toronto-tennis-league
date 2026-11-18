@@ -123,7 +123,7 @@ export const Matches: React.FC = () => {
         onClick={() => setMode(value)}
         aria-pressed={active}
         className={`relative w-full aspect-square rounded-2xl overflow-hidden text-left bg-fg/5
-                    transition-all focus-visible:outline-2 focus-visible:outline-offset-2
+                    transition-[opacity,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-2
                     focus-visible:outline-clay ${active ? 'ring-2 ring-clay' : 'opacity-90 hover:opacity-100'}`}
       >
         {image ? (
@@ -670,7 +670,7 @@ export const Matches: React.FC = () => {
       {/* Portalled above the bottom nav: Layout's animated <main> traps z-index, so z-50 here sat under it. */}
       {recordStep === 'players' && createPortal(
         <div className="fixed inset-0 z-[100] bg-black/50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Record a played match">
-          <div className="w-full max-w-sm rounded-2xl bg-tennis-surface p-5 max-h-[85vh] overflow-y-auto">
+          <div className="w-full max-w-sm rounded-2xl bg-tennis-surface p-5 max-h-[85dvh] overflow-y-auto overscroll-contain">
             <h2 className="text-lg font-bold text-fg mb-1">Record a played match</h2>
             <p className="text-xs text-fg/70 mb-4">
               It counts straight away. Neither player is asked to confirm it.

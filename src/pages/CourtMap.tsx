@@ -4,7 +4,7 @@ import { AnimatePresence } from 'motion/react';
 import MapGL, { Marker, Popup, NavigationControl, GeolocateControl, Source, Layer } from 'react-map-gl/maplibre';
 import type { GeolocateResultEvent, MapRef } from 'react-map-gl/maplibre';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { Search, Loader2, X, Layers } from 'lucide-react';
+import { Search, Loader2, X, Layers, ChevronDown, ChevronUp } from 'lucide-react';
 import { ZONE_NAMES, ZONE_COLORS, getZone, haversineKm, zoneOverlayGeoJSON } from '../utils/zones';
 import { GTA_ZONE_NAMES } from '../utils/gtaZones';
 
@@ -27,7 +27,8 @@ import { useAuth } from '../context/AuthContext';
 import { track } from '../lib/analytics';
 import { LoadingBar } from '../components/LoadingBar';
 import { Sheet } from '../components/Sheet';
-import { Button } from '../components/Button';
+import { SelectField } from '../components/SelectField';
+import { Button, buttonCls } from '../components/Button';
 import { lazyWithRetry } from '../lib/lazyWithRetry';
 
 // Lazy: this modal pulls in `exifr` for photo EXIF stripping (~87 KB), and it only ever renders
@@ -73,16 +74,15 @@ const PickleballMarker = React.memo<{ pb: PickleballOnlyCourt; onSelect: (p: Pic
 // every search keystroke), handing FilterSelect a new array identity each time.
 // FilterSelect renders its own "All" entry for the empty value, so it isn't listed here.
 // Every option except Pickleball is a tennis-court filter — see displayedPickleballOnly.
-// One button cycles the map's three views, so the order lives here rather than in the handler.
-// The activity button owns one idea and cycles through its own three states; Members Only / All
-// Courts is back to being a plain two-way toggle beside it.
-type ActivityWindow = '' | 'd7' | 'd30';
-const ACTIVITY_NEXT: Record<ActivityWindow, ActivityWindow> = { '': 'd7', d7: 'd30', d30: '' };
-const ACTIVITY_LABEL: Record<ActivityWindow, string> = {
-  '': 'Activity',
-  d7: '7D Activity',
-  d30: '30D Activity',
-};
+// The map bar's one View control: one view at a time.
+type MapView = 'all' | 'members' | 'd7' | 'd30' | 'reports';
+const VIEW_OPTIONS: { value: MapView; label: string; hint: string }[] = [
+  { value: 'all',     label: 'All courts',         hint: 'Every court on the map' },
+  { value: 'members', label: "Members' courts",    hint: 'Courts members play at' },
+  { value: 'd7',      label: 'Activity · 7 days',  hint: 'Check-ins, reports and matches this week' },
+  { value: 'd30',     label: 'Activity · 30 days', hint: 'Check-ins, reports and matches this month' },
+  { value: 'reports', label: 'Court reports',      hint: 'Courts with condition notes' },
+];
 
 const COURT_TYPE_OPTIONS = [
   { value: 'Tennis',     label: 'Tennis'                  },
@@ -144,10 +144,11 @@ export const CourtMap: React.FC = () => {
   // own idea: while it is on, only courts that saw a check-in, report or recorded result in the
   // chosen window are shown, ranked by how many. Pickleball-only sites belong to All Courts alone,
   // since activity is a narrowing view rather than a widening one.
-  const [showAllCourts, setShowAllCourts] = useState(true);
-  const [activityWindow, setActivityWindow] = useState<ActivityWindow>('');
   // Reports: only courts with court-condition notes, each row showing them as pills.
-  const [reportsOn, setReportsOn] = useState(false);
+  const [view, setView] = useState<MapView>('all');
+  const showAllCourts = view === 'all';
+  const activityWindow = view === 'd7' || view === 'd30' ? view : '';
+  const reportsOn = view === 'reports';
   const activityOf = (c: CourtWithCount) => (activityWindow === 'd7' ? c.activity7 : c.activity30);
 
 
@@ -529,7 +530,7 @@ export const CourtMap: React.FC = () => {
 
   // ── JSX ──────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-dvh pt-16 pb-16 lg:pb-0 bg-tennis-dark overflow-hidden">
+    <div className="flex flex-col h-dvh pt-16 pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0 bg-tennis-dark overflow-hidden">
 
       {/* MAP — full screen (mobile-only layout; wireframe 1j) */}
       <div className="flex-1 relative">
@@ -540,11 +541,11 @@ export const CourtMap: React.FC = () => {
         {/* Zone overlay toggle + legend — sits BELOW the Search/Members Only/Filters bar (which
             is top-3 left-3 right-3, full width) so the two don't paint on top of each other. That
             bar is two rows below `sm` (search on its own line), hence the taller offset there. */}
-        <div className="absolute top-28 sm:top-16 left-3 z-10 flex flex-col items-start gap-2">
+        <div className="absolute top-[7.5rem] sm:top-[4.25rem] left-3 z-10 flex flex-col items-start gap-2">
           <button
             type="button"
             onClick={() => { setShowZones((v) => !v); trackMap('filter', { filter_name: 'show_zones', filter_value: String(!showZones) }); }}
-            className={`inline-flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-bold shadow-lg transition-colors ${
+            className={`inline-flex min-h-11 items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-bold shadow-lg transition-colors ${
               showZones ? 'bg-clay text-white' : 'bg-white text-ink hover:bg-white/90'
             }`}
           >
@@ -689,7 +690,7 @@ export const CourtMap: React.FC = () => {
             of its own and the buttons sit under it. */}
         <div className="absolute top-3 left-3 right-3 z-10 flex flex-col gap-2 sm:flex-row sm:items-start">
           <div className="min-w-0 sm:flex-1">
-            <div className={`h-10 flex items-center gap-2 px-3 bg-tennis-dark/95 backdrop-blur shadow-xl transition-colors focus-within:border-clay/50 ${suggestions.length > 0 ? 'rounded-t-2xl' : 'rounded-2xl'}`}>
+            <div className={`h-11 flex items-center gap-2 px-3 bg-tennis-dark/95 backdrop-blur shadow-xl transition-colors focus-within:border-clay/50 ${suggestions.length > 0 ? 'rounded-t-2xl' : 'rounded-2xl'}`}>
               <Search className="w-3.5 h-3.5 text-fg/70 shrink-0 pointer-events-none" />
               <input
                 type="text"
@@ -697,7 +698,7 @@ export const CourtMap: React.FC = () => {
                 onChange={(e) => handleSearchInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(e); }}
                 placeholder="Search courts or an address…"
-                className="flex-1 bg-transparent text-fg placeholder-fg/70 text-sm outline-none min-w-0"
+                className="flex-1 bg-transparent text-fg placeholder-fg/70 text-base sm:text-sm outline-none min-w-0"
               />
               {searching
                 ? <Loader2 className="w-3.5 h-3.5 text-clay animate-spin shrink-0" />
@@ -726,43 +727,22 @@ export const CourtMap: React.FC = () => {
           </div>
           <div className="flex items-start gap-2 -my-2 py-2 overflow-x-auto no-scrollbar sm:contents">
 
-          <button
-            type="button"
-            onClick={() => setShowAllCourts((v) => !v)}
-            className={`h-10 shrink-0 px-3.5 rounded-2xl backdrop-blur border shadow-xl text-xs font-bold transition-colors ${
+          <SelectField
+            value={view}
+            options={VIEW_OPTIONS}
+            onChange={(v) => setView(v as MapView)}
+            title="View"
+            className="w-auto shrink-0 space-y-0"
+            triggerClassName={`h-11 py-0 px-3.5 gap-1.5 backdrop-blur shadow-xl text-xs font-bold ${
               showAllCourts
-                ? 'bg-clay/15 border-clay/40 text-clay'
-                : 'bg-tennis-dark/95 border-fg/10 text-fg hover:border-clay/50'
+                ? 'bg-tennis-dark/95 border-fg/10 text-fg hover:border-clay/50'
+                : 'bg-clay/15 border-clay/40 text-clay'
             }`}
-          >
-            {showAllCourts ? 'All Courts' : 'Members'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActivityWindow((v) => ACTIVITY_NEXT[v])}
-            className={`h-10 shrink-0 px-3.5 rounded-2xl backdrop-blur border shadow-xl text-xs font-bold transition-colors ${
-              activityWindow
-                ? 'bg-clay/15 border-clay/40 text-clay'
-                : 'bg-tennis-dark/95 border-fg/10 text-fg hover:border-clay/50'
-            }`}
-          >
-            {ACTIVITY_LABEL[activityWindow]}
-          </button>
-          <button
-            type="button"
-            onClick={() => setReportsOn((v) => !v)}
-            className={`h-10 shrink-0 px-3.5 rounded-2xl backdrop-blur border shadow-xl text-xs font-bold transition-colors ${
-              reportsOn
-                ? 'bg-clay/15 border-clay/40 text-clay'
-                : 'bg-tennis-dark/95 border-fg/10 text-fg hover:border-clay/50'
-            }`}
-          >
-            Reports
-          </button>
+          />
           <button
             type="button"
             onClick={() => setShowFiltersSheet(true)}
-            className="h-10 shrink-0 px-3.5 rounded-2xl bg-tennis-dark/95 backdrop-blur shadow-xl text-xs font-bold text-fg hover:border-clay/50 transition-colors"
+            className="h-11 shrink-0 px-3.5 rounded-2xl bg-tennis-dark/95 backdrop-blur shadow-xl text-xs font-bold text-fg hover:border-clay/50 transition-colors"
           >
             Filters
           </button>
@@ -779,7 +759,7 @@ export const CourtMap: React.FC = () => {
         {!user && !mobileResultsOpen && (
           <Link
             to="/signup"
-            className="pointer-events-auto mb-2.5 px-4 py-2 rounded-full bg-clay text-white text-xs font-bold shadow-lg shadow-clay/30 hover:bg-clay-dark transition-colors"
+            className={`pointer-events-auto mb-2.5 ${buttonCls('clay')}`}
           >
             Join
           </Link>
@@ -794,13 +774,14 @@ export const CourtMap: React.FC = () => {
             aria-expanded={mobileResultsOpen}
           >
             <span className="h-1.5 w-10 rounded-full bg-fg/20 mb-1.5" />
-            <span className="text-xs font-bold text-fg">
+            <span className="flex items-center gap-1 text-xs font-bold text-fg">
               {isPrograms ? `${displayedPrograms.length} programs` : `${displayedCourts.length} courts`}
-              {userCoords ? ' near you' : ''} {mobileResultsOpen ? '▾' : '▴'}
+              {userCoords ? ' near you' : ''}
+              {mobileResultsOpen ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
             </span>
           </button>
           {mobileResultsOpen && (
-            <div className="max-h-[45vh] overflow-y-auto border-t border-fg/5">{resultsBody}</div>
+            <div className="max-h-[45dvh] overflow-y-auto overscroll-contain border-t border-fg/5">{resultsBody}</div>
           )}
           {/* Legend + Report: always visible, open or closed. */}
               <div className="border-t border-fg/10 px-4 py-2.5 flex items-center justify-between gap-3">
@@ -813,7 +794,7 @@ export const CourtMap: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowSuggestModal(true)}
-                  className="shrink-0 px-3 py-1.5 rounded-2xl border border-clay/40 text-clay text-xs font-semibold hover:bg-clay/10 transition-colors"
+                  className={`shrink-0 ${buttonCls('secondary', 'sm')}`}
                 >
                   Report
                 </button>
